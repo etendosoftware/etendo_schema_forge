@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { ChevronDown, Scale } from 'lucide-react';
+import { Scale } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,6 +9,7 @@ import { formatDate } from '@/lib/formatSigned';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 import { ClearedItemsInline } from './ClearedItemsInline.jsx';
+import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 
 /**
  * Read-only list of the reconciliation documents of an account (ETP-4795) — Classic's
@@ -265,18 +266,15 @@ function ReconciliationRow({ row, currency, cellCtx, ui, open, onToggle }) {
         onClick={onToggle}
         data-testid={`reconciliation-row-${row.id}`}
       >
-        <button
-          type="button"
-          aria-label={open
+        <RowExpandToggle
+          expanded={open}
+          stopPropagation
+          label={open
             ? ui('financeAccountReconciliationsCollapseAria')
             : ui('financeAccountReconciliationsExpandAria')}
-          aria-expanded={open}
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-          style={{ transform: open ? 'rotate(180deg)' : undefined }}
-        >
-          <ChevronDown className="h-4 w-4" data-testid="ChevronDown__d80a75" />
-        </button>
+          onToggle={() => onToggle()}
+          iconTestId="ChevronDown__d80a75"
+          data-testid="RowExpandToggle__d80a75" />
         {COLUMNS.map((col) => {
           const renderer = CELL_RENDERERS[col.name];
           return (

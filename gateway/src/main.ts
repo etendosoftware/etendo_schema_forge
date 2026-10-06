@@ -9,11 +9,11 @@ import { buildPerEntityOpenApiPaths } from './openapi/build-per-entity-paths.ts'
 const gettingStartedDescription = `
 ## Getting started
 
-Etendo Go Public API provides curated access to Base-window resources through a stable, versioned REST API. The public contract is intentionally smaller than the internal ERP model: only resources and fields present in this document are available.
+Etendo Public API provides curated access to Base-window resources through a stable, versioned REST API. The public contract is intentionally smaller than the internal ERP model: only resources and fields present in this document are available.
 
 ### 1. Get an API key
 
-Create an owned public API key in Etendo Go. The provisioning endpoint requires the user's
+Create an owned public API key in Etendo. The provisioning endpoint requires the user's
 session JWT and accepts only public capabilities:
 
 \`\`\`bash
@@ -41,7 +41,7 @@ Open \`/api\` or \`/docs\`, select **Authorize**, and enter the credential as:
 \`\`\`
 
 Scalar sends it as \`Authorization: Bearer <clientId>:<clientSecret>\`. The Nest gateway exchanges
-the pair for a short-lived NEO token and forwards the request to Etendo Go; callers do not need
+the pair for a short-lived Etendo session token and forwards the request to Etendo; callers do not need
 to implement the OAuth2 \`client_credentials\` exchange themselves.
 
 ### 3. Make your first request
@@ -56,17 +56,17 @@ Use the operation list below to discover the available resources. Every response
 
 ### 4. Understand a resource
 
-Each resource corresponds to a business window in Etendo Go. The resource page explains what the window is used for, which operations are available, and which fields are public. The URL may use an internal entity name, but the documentation uses the functional name that users know.
+Each resource corresponds to a business window in Etendo. The resource page explains what the window is used for, which operations are available, and which fields are public. The URL may use an internal entity name, but the documentation uses the functional name that users know.
 
 ### 5. Create and update records
 
-Use \`POST\` on a collection to create a record. Use \`PUT\` or \`PATCH\` on \`/resource/{id}\` to update one. Use \`DELETE\` on \`/resource/{id}\` to remove one. Request fields must be writable in this document; unknown or read-only fields are rejected before the request reaches Etendo Go.
+Use \`POST\` on a collection to create a record. Use \`PUT\` or \`PATCH\` on \`/resource/{id}\` to update one. Use \`DELETE\` on \`/resource/{id}\` to remove one. Request fields must be writable in this document; unknown or read-only fields are rejected before the request reaches Etendo.
 
 Updates use optimistic concurrency. Include the \`updated\` value returned by a previous read when the resource requires it; a stale value returns \`409 Conflict\`.
 
 ### 6. Create lines for a document
 
-Document lines are addressed through their master resource: \`/api/v1/{master}/{masterId}/{line-resource}\`. For example, create a sales-invoice line with \`POST /api/v1/sales-invoice/{masterId}/lines\`. The gateway derives the master foreign key from the URL and sends it to Etendo Go as \`parentId\`; clients must not override that relationship in the request body. The same nested path supports \`GET\`, \`POST\`, \`PUT\`, \`PATCH\`, and \`DELETE\` when the document contract exposes those operations.
+Document lines are addressed through their master resource: \`/api/v1/{master}/{masterId}/{line-resource}\`. For example, create a sales-invoice line with \`POST /api/v1/sales-invoice/{masterId}/lines\`. The gateway derives the master foreign key from the URL and sends it to Etendo as \`parentId\`; clients must not override that relationship in the request body. The same nested path supports \`GET\`, \`POST\`, \`PUT\`, \`PATCH\`, and \`DELETE\` when the document contract exposes those operations.
 
 ### Responses and errors
 
@@ -76,7 +76,7 @@ Document lines are addressed through their master resource: \`/api/v1/{master}/{
 - \`403\`: the credential does not have the required scope or organization access.
 - \`404\`: the resource or record does not exist.
 - \`409\`: the record changed since it was read.
-- \`502\`: Etendo Go could not complete the upstream request.
+- \`502\`: Etendo could not complete the upstream request.
 
 ### Versioning
 
@@ -94,7 +94,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   const config = new DocumentBuilder()
-    .setTitle('Etendo Go Public API')
+    .setTitle('Etendo Public API')
     .setVersion('v1')
     .addBearerAuth()
     .build();
@@ -143,7 +143,7 @@ async function bootstrap() {
 <html lang="en"><head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Etendo Go Public API · Beta</title>
+  <title>Etendo Public API · Beta</title>
   <style>
     :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
     body { margin: 0; background: #f7f8fa; color: #20232a; }

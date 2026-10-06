@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/dashboard/FinancialTrendChart.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('react-router-dom', () => ({
@@ -347,5 +348,89 @@ describe('axisLabelStep — 64px minimum for day/week labels (ETP-5493)', () => 
     );
     const texts = xAxisTexts(container).map((t) => t.textContent);
     expect(texts[texts.length - 1]).toBe('Aug 30');
+  });
+});
+
+describe('FinancialTrendChart - single-bucket series', () => {
+  const PAD_X = 74;
+  const PAD_RIGHT = 4;
+  const CENTER_X = PAD_X + (869 - PAD_X - PAD_RIGHT) / 2;
+
+  const renderOne = (extra = {}) => {
+    const dates = makeDates(1, 'month');
+    return render(
+      <FinancialTrendChart labels={dates} values={[49000]} expenseValues={[260]} dates={dates} granularity="month" currencyLabel="EUR" {...extra} />,
+    );
+  };
+
+  it('draws a visible marker per series centered in the plot instead of an M-only path', () => {
+    const { container } = renderOne();
+    const income = container.querySelector('[data-testid="financial-trend-marker-income"]');
+    const expense = container.querySelector('[data-testid="financial-trend-marker-expense"]');
+    expect(Number(income.getAttribute('cx'))).toBe(CENTER_X);
+    expect(Number(expense.getAttribute('cx'))).toBe(CENTER_X);
+    const paths = [...container.querySelectorAll('svg path')].map((p) => p.getAttribute('d'));
+    expect(paths.filter((d) => /^M [\d.]+,[\d.]+$/.test(d))).toEqual([]);
+  });
+
+  it('draws only the income marker when there are no expenses', () => {
+    const { container } = renderOne({ expenseValues: [0] });
+    expect(container.querySelector('[data-testid="financial-trend-marker-income"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="financial-trend-marker-expense"]')).toBeNull();
+  });
+
+  it('aligns the axis label (middle-anchored), hover column and tooltip on the centered x', () => {
+    const { container } = renderOne();
+    const label = xAxisTexts(container)[0];
+    expect(Number(label.getAttribute('x'))).toBe(CENTER_X);
+    expect(label.getAttribute('text-anchor')).toBe('middle');
+
+    const [col] = hoverColumns(container);
+    expect(Number(col.getAttribute('x')) + Number(col.getAttribute('width')) / 2).toBe(CENTER_X);
+
+    fireEvent.mouseEnter(col);
+    const guide = container.querySelector('svg line[y1="0"][stroke="hsl(var(--muted-foreground))"]');
+    expect(Number(guide.getAttribute('x1'))).toBe(CENTER_X);
+  });
+
+  it('keeps the end-anchored last label for 2+ points', () => {
+    const dates = makeDates(3, 'month');
+    const { container } = render(
+      <FinancialTrendChart labels={dates} values={[1, 2, 3]} dates={dates} granularity="month" currencyLabel="EUR" />,
+    );
+    const texts = xAxisTexts(container);
+    expect(texts[texts.length - 1].getAttribute('text-anchor')).toBe('end');
+    expect(container.querySelector('[data-testid="financial-trend-marker-income"]')).toBeNull();
+  });
+
+  it('caps bar width with one point and leaves a dense series unchanged', () => {
+    localStorage.setItem('dashboard_chart_type', 'bar');
+    try {
+      const one = renderOne();
+      const barRects = (c) => [...c.querySelectorAll('svg rect[fill^="url(#bar-"]')];
+      const widths = barRects(one.container).map((r) => Number(r.getAttribute('width')));
+      expect(widths).toEqual([60, 60]);
+      one.unmount();
+
+      const dates = makeDates(30, 'day');
+      const dense = render(
+        <FinancialTrendChart labels={dates} values={dates.map(() => 100)} expenseValues={dates.map(() => 50)} dates={dates} granularity="day" currencyLabel="EUR" />,
+      );
+      const plotW = 869 - PAD_X - PAD_RIGHT;
+      const expected = (plotW / 30 * 0.78 - 4) / 2;
+      const w = Number(barRects(dense.container)[0].getAttribute('width'));
+      expect(w).toBeCloseTo(expected, 5);
+      expect(w).toBeLessThan(60);
+
+      // 12 income-only buckets at the default width: not capped (old formula).
+      const months = makeDates(12, 'month');
+      const twelve = render(
+        <FinancialTrendChart labels={months} values={months.map(() => 100)} dates={months} granularity="month" currencyLabel="EUR" />,
+      );
+      const w12 = Number(barRects(twelve.container)[0].getAttribute('width'));
+      expect(w12).toBeCloseTo((plotW / 12) * 0.78, 5);
+    } finally {
+      localStorage.removeItem('dashboard_chart_type');
+    }
   });
 });

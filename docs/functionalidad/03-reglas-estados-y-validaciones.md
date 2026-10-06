@@ -2,7 +2,8 @@
 
 ## Cuentas y contraseñas
 
-- **Fuerza de contraseña** [Hecho]: mínimo 8 caracteres, con mayúscula + minúscula + dígito + carácter especial (`PasswordPolicy.isStrong`, `PasswordPolicy.java:63-69`). Espejado client-side (`isStrongPassword` en `RegisterStep.jsx`) solo para UX — la validación real es server-side.
+- **Fuerza de contraseña** [Hecho]: mínimo 8 caracteres, con mayúscula + minúscula + dígito + carácter especial (`PasswordPolicy.isStrong`, `PasswordPolicy.java:63-69`). Espejado client-side (`isStrongPassword`, `passwordPolicy.js`) solo para UX — la validación real es server-side. Toda pantalla que define una contraseña nueva (registro, reset/set-password, cambio y alta de contraseña de una cuenta SSO, aceptación de invitación) muestra la checklist en vivo `PasswordStrengthChecklist` (etendo-go-core) y no habilita el submit hasta cumplir la política (ETP-5258).
+- **Errores de contraseña en el idioma de la UI** [Hecho]: los flujos de reset, forgot, cambio de contraseña e invitación traducen el error por `code` (`resolveAuthErrorMessage` / `AUTH_ERROR_UI_KEYS`) y nunca muestran el `userMessage` en inglés del backend. Un enlace de reset inválido o vencido devuelve `PASSWORD_RESET_INVALID` (ETP-5258).
 - **Unicidad de email** [Hecho]: `findActiveAccountByEmail` bloquea registro duplicado con `EMAIL_ALREADY_REGISTERED` (400).
 - **Anti-enumeración en recuperación de contraseña** [Hecho]: `POST /sws/go/password-reset/request` responde igual exista o no el email.
 - **TTL de token de reset** [Hecho]: 30 minutos (`PASSWORD_RESET_TTL_SECONDS`).

@@ -2,7 +2,7 @@ import { initObservability, track } from '../observability.js';
 import { OBSERVABILITY_EVENTS } from './events.js';
 import { createMixpanelProvider } from './providers/mixpanel.js';
 import { createRumProvider } from '../rum.js';
-import { createSentryProvider } from '../sentry.js';
+import { createDatadogProvider } from './providers/datadog.js';
 
 export function buildBrowserObservabilityConfig({
   env = import.meta.env,
@@ -27,9 +27,9 @@ export function buildBrowserObservabilityConfig({
       mockMode: env.VITE_MOCK === 'true',
     },
     providers: [
-      createSentryProvider({
-        dsn: env.VITE_SENTRY_DSN,
+      createDatadogProvider({
         env,
+        logger,
       }),
       createRumProvider({
         env,
