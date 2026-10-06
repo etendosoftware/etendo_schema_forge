@@ -1886,11 +1886,13 @@ describe('ReportViewer (viewer sub-component)', () => {
 // -------------------------------------------------------------------
 
 describe('ReportViewer breadcrumb published to the TopBar', () => {
-  // The viewer is the only producer here that publishes `onBack`; the catalog list does not.
+  // The viewer is the only producer here that publishes a structured (array) breadcrumb; the
+  // catalog list publishes a string or null. Not keyed on `onBack`: the viewer publishes none
+  // since ETP-5519.
   const lastViewerBreadcrumb = () => {
     const viewerCalls = useSetPageMeta.mock.calls
       .map(([meta]) => meta)
-      .filter((meta) => meta && typeof meta.onBack === 'function');
+      .filter((meta) => meta && Array.isArray(meta.breadcrumb));
     return viewerCalls.at(-1)?.breadcrumb;
   };
 
