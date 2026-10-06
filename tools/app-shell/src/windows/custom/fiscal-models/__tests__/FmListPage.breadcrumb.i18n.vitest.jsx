@@ -4,7 +4,7 @@
 // ETP-5584: the title, breadcrumb, record count and kebab are published to the app
 // TopBar through useSetPageMeta (same mechanism as a generated ListView) — the title is
 // the window's menu name ("Modelos Fiscales"), matching the breadcrumb's last segment;
-// "Declaraciones" is the heading of the declarations toolbar. Assertions read the
+// the content has no "Declaraciones" heading (removed at the user's request). Assertions read the
 // published meta through a PageMetaProvider probe.
 //
 // FmListPage.jsx used to render `Tesorería / {t('fm.list.title') ?? 'Declaraciones'}` —
@@ -116,32 +116,29 @@ describe('FmListPage — TopBar page meta and declarations heading (ETP-5584)', 
     expect(lastMeta.isFavorite).toBe(false);
   });
 
-  it('does not duplicate the title in the page content; "Declaraciones" heads the toolbar', () => {
+  it('renders neither the window title nor a "Declaraciones" heading in the page content', () => {
     activeUi = realUiEs;
     renderWithMeta(<FmListPage declarations={[]} {...defaultProps} />);
 
     expect(document.body.textContent).not.toContain('Modelos Fiscales');
-    const section = screen.getByTestId('fm-list-section-title');
-    expect(section.textContent).toBe('Declaraciones');
-    expect(section.closest('.fm-toolbar')).not.toBeNull();
+    expect(document.querySelector('.fm-toolbar').textContent).not.toContain('Declaraciones');
   });
 
-  it('en_US: TopBar title is "Fiscal Models", heading is "Declarations"', () => {
+  it('en_US: TopBar title is "Fiscal Models"', () => {
     activeUi = realUiEn;
     renderWithMeta(<FmListPage declarations={[]} {...defaultProps} />);
 
     expect(lastMeta.title).toBe('Fiscal Models');
-    expect(screen.getByTestId('fm-list-section-title').textContent).toBe('Declarations');
+    expect(document.querySelector('.fm-toolbar').textContent).not.toContain('Declarations');
   });
 
-  it('content order: actions row (right-aligned), KPI cards, then heading + filters + sort', () => {
+  it('content order: actions row (right-aligned), KPI cards, then right-aligned filters + sort', () => {
     activeUi = realUiEs;
     renderWithMeta(<FmListPage declarations={[]} {...defaultProps} />);
 
     const actionsRow = screen.getByTestId('fm-list-actions-row');
     const kpiRow = screen.getByTestId('fm-list-kpi-row');
-    const heading = screen.getByTestId('fm-list-section-title');
-    const toolbar = heading.closest('.fm-toolbar');
+    const toolbar = document.querySelector('.fm-toolbar');
     const follows = (x, y) => Boolean(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
 
     // Row 1 — page actions, right-aligned; no active models here, so only the catalog button
@@ -155,10 +152,9 @@ describe('FmListPage — TopBar page meta and declarations heading (ETP-5584)', 
       expect(card.style.width).toBe('');
       expect(card.style.flex).toBe('1 1 0%');
     });
-    // Row 3 — heading first, then the spacer, then filters and sort (right-aligned).
+    // Row 3 — the spacer first (no heading), then filters and sort, right-aligned.
     expect(follows(kpiRow, toolbar)).toBe(true);
-    expect(toolbar.firstElementChild).toBe(heading);
-    expect(heading.nextElementSibling.className).toBe('fm-toolbar__space');
+    expect(toolbar.firstElementChild.className).toBe('fm-toolbar__space');
     expect(toolbar.lastElementChild.querySelector('[aria-label]')).not.toBeNull();
     expect(toolbar.contains(screen.getByTestId('fm-list-catalog-button'))).toBe(false);
   });

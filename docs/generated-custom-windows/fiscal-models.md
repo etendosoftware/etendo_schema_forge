@@ -2805,17 +2805,18 @@ The page content, top to bottom (no bordered panels around any of it):
    above them; once they became the first content row they were glued to the TopBar (the card
    border touched the content container's top edge and read as clipped) and left the right third of
    the row empty.
-3. **Declarations toolbar** (`.fm-toolbar`) — left: the section heading **"Declaraciones"**
-   (`fm.list.title`, `data-testid="fm-list-section-title"`); right: the year/model/status
-   `FilterDropdown` filters and the **"Ordenar"** sort button (its popover is right-anchored, as the
+3. **Declarations toolbar** (`.fm-toolbar`) — no section heading (a "Declaraciones" heading was
+   tried here and removed at the user's request); right-aligned after the `.fm-toolbar__space`
+   spacer: the year/model/status `FilterDropdown` filters and the **"Ordenar"** sort button (its popover is right-anchored, as the
    button is the last item of the row). The filter triggers are sized like the app's standard list
    filter trigger (`ListFilterBar.jsx`: `h-9`, `px-3`, `12px`, normal weight, muted text when idle)
-   rather than the larger `14px` `.fm-toolbar__pill` default. The heading carries **no count
-   badge**: the same number is already the TopBar badge next to the title.
+   rather than the larger `14px` `.fm-toolbar__pill` default. The declarations count is shown
+   only as the TopBar badge next to the title.
 4. The declarations table.
 
 "Declaraciones" used to be the page title (in an in-content title bar); ETP-5584 moved the title to
-the TopBar as the window's menu name and made "Declaraciones" the table heading.
+the TopBar as the window's menu name. The `fm.list.title` locale key is no longer rendered anywhere
+in source (it is kept in the locale files).
 
 `FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The page actions (catalog, new declaration) live in the actions row and the filters/sort in the declarations toolbar, as described above. There is no search input — see "Sort and search" below.
 

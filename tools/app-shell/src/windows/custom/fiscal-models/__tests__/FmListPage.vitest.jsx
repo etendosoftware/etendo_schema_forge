@@ -202,9 +202,10 @@ describe('FmListPage — rendering', () => {
     expect(document.body).toBeTruthy();
   });
 
-  it('renders the list title key as the declarations table heading (ETP-5584)', () => {
+  it('renders no list title in the page content — the title lives in the TopBar (ETP-5584)', () => {
     render(<FmListPage declarations={[]} {...defaultProps} />);
-    expect(screen.getByTestId('fm-list-section-title').textContent).toBe('fm.list.title');
+    expect(document.body.textContent).not.toContain('fm.list.title');
+    expect(document.body.textContent).not.toContain('fm.breadcrumb.section');
   });
 
   it('publishes the declaration count as the TopBar record count (ETP-5584)', () => {

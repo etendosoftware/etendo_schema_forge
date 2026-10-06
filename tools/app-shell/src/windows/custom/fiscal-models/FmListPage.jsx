@@ -1213,17 +1213,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onFilterClick={handleKpiFilterClick}
           data-testid="KpiCardsRow__cb728e" />
       )}
-      {/* ── Content row 3 — "Declaraciones" heading on the left; filters + sort on the right ── */}
+      {/* ── Content row 3 — filters + sort, right-aligned (no section heading, ETP-5584) ── */}
       <div className="fm-toolbar">
-        {/* Section heading of the declarations table. No count badge here: the declarations
-            count is already the TopBar's record-count badge, next to the window title. */}
-        <span
-          data-testid="fm-list-section-title"
-          style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))', marginRight: 8 }}
-        >
-          {t('fm.list.title') ?? 'Declaraciones'}
-        </span>
-
         <div className="fm-toolbar__space" />
 
         <FilterDropdown
