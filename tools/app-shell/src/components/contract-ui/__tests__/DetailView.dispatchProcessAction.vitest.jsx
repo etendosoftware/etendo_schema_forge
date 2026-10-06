@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
 /**
  * Tests for `dispatchProcessAction`, the pure toolbar-process-button click
  * dispatcher. Covers the `confirmModal` override added alongside the
@@ -57,6 +58,23 @@ describe('dispatchProcessAction', () => {
     dispatchProcessAction({ style: 'ghost-danger', name: 'Reactivate' }, cb);
     expect(cb.setConfirmProcess).toHaveBeenCalledWith({ style: 'ghost-danger', name: 'Reactivate' });
     expect(cb.handleProcess).not.toHaveBeenCalled();
+  });
+
+  it('opens the confirm modal for style: primary-danger, same as ghost-danger', () => {
+    const cb = makeCallbacks();
+    const process = { style: 'primary-danger', name: 'Reactivate' };
+    dispatchProcessAction(process, cb);
+    expect(cb.setConfirmProcess).toHaveBeenCalledWith(process);
+    expect(cb.setParamDialogProcess).not.toHaveBeenCalled();
+    expect(cb.handleProcess).not.toHaveBeenCalled();
+  });
+
+  it('runs a primary-danger process directly when no confirm modal is configured', () => {
+    const cb = { ...makeCallbacks(), processConfirmModal: null };
+    const process = { style: 'primary-danger', name: 'Reactivate' };
+    dispatchProcessAction(process, cb);
+    expect(cb.setConfirmProcess).not.toHaveBeenCalled();
+    expect(cb.handleProcess).toHaveBeenCalledWith(process);
   });
 
   it('opens the confirm modal for confirmModal: true even when style is positive', () => {

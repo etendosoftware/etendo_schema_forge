@@ -205,7 +205,7 @@ def outcome_badge(probe: dict[str, Any]) -> str:
 #: schema as the harness verdict (§6.3) — one shape, shared between
 #: `runner/verdict.py` and `McpFeedbackVerdict.java` — so the UI renders them
 #: with the verdict renderer instead of dumping JSON at the reader.
-FEEDBACK_TOOL = "neo_feedback"
+FEEDBACK_TOOL = "etendo_feedback"
 
 _OUTCOMES = {"OKAY", "ERROR", "MIXED"}
 #: Checked only when present, which is what makes the same check accept a v1
@@ -214,7 +214,7 @@ _VERDICT_LISTS = ("frictions", "failures", "wastedCalls", "suggestions")
 
 
 def is_feedback_tool(tool: Any) -> bool:
-    """Tolerates an MCP namespace prefix (`mcp__server__neo_feedback`)."""
+    """Tolerates an MCP namespace prefix (`mcp__server__etendo_feedback`)."""
     if not isinstance(tool, str):
         return False
     name = tool.strip()
@@ -239,7 +239,7 @@ def looks_like_verdict(value: Any) -> bool:
 
 
 def parse_verdict_args(tool: Any, value: Any) -> dict[str, Any] | None:
-    """The verdict carried by a `neo_feedback` call's arguments, or None.
+    """The verdict carried by a `etendo_feedback` call's arguments, or None.
 
     `value` may be the decoded arguments or the raw preview string an event
     carries. A preview that was cut mid-JSON simply does not parse, and that is

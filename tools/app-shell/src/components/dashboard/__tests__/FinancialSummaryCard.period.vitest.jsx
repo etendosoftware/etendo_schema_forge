@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/dashboard/FinancialSummaryCard.jsx
 import { render, screen, within } from '@testing-library/react';
 
 vi.mock('react-router-dom', () => ({
@@ -236,5 +237,72 @@ describe('FinancialSummaryCard — expenses (lowerIsBetter) with the rounded dir
     expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-up/);
     expect(styleAttr(badgeOf(block))).toContain(DESTRUCTIVE_BG);
     expect(within(block).getByText(/^yoyUp/)).toBeInTheDocument();
+  });
+});
+
+describe('FinancialSummaryCard — headline when net is zero (ETP-5493)', () => {
+  const CHECK = '[data-testid="Check__81e75f"]';
+  const CROSS = '[data-testid="X__81e75f"]';
+
+  function zeroKpis({ revenue, expenses, net }) {
+    return [
+      { key: 'revenueThisMonth', value: revenue, trend: 0, hasPrevious: false },
+      { key: 'expensesThisMonth', value: expenses, trend: 0, hasPrevious: false },
+      { key: 'netProfit', value: net, trend: 0, hasPrevious: false },
+    ];
+  }
+
+  it('0 / 0 / 0 shows the no-activity headline, with neither check nor X', () => {
+    const { container } = render(
+      <FinancialSummaryCard kpis={zeroKpis({ revenue: 0, expenses: 0, net: 0 })} currencyLabel="EUR" range="mtd" />,
+    );
+    expect(screen.getByText('financialSummaryNoActivity{"period":"financialSummaryPeriodMtd"}')).toBeInTheDocument();
+    expect(container.textContent).not.toContain('financialSummaryPositive');
+    expect(container.textContent).not.toContain('financialSummaryNegative');
+    expect(container.querySelector(CHECK)).toBeNull();
+    expect(container.querySelector(CROSS)).toBeNull();
+  });
+
+  it('equal non-zero revenue and expenses shows the break-even headline, with neither check nor X', () => {
+    const { container } = render(
+      <FinancialSummaryCard kpis={zeroKpis({ revenue: 500, expenses: 500, net: 0 })} currencyLabel="EUR" range="mtd" />,
+    );
+    expect(screen.getByText('financialSummaryBreakEven{"period":"financialSummaryPeriodMtd"}')).toBeInTheDocument();
+    expect(container.textContent).not.toContain('financialSummaryPositive');
+    expect(container.querySelector(CHECK)).toBeNull();
+    expect(container.querySelector(CROSS)).toBeNull();
+  });
+
+  it('a positive net keeps the positive headline and the check', () => {
+    const { container } = render(
+      <FinancialSummaryCard kpis={zeroKpis({ revenue: 500, expenses: 200, net: 300 })} currencyLabel="EUR" range="mtd" />,
+    );
+    expect(screen.getByText('financialSummaryPositive{"period":"financialSummaryPeriodMtd"}')).toBeInTheDocument();
+    expect(container.querySelector(CHECK)).not.toBeNull();
+    expect(container.querySelector(CROSS)).toBeNull();
+  });
+
+  it('a negative net keeps the negative headline and the X', () => {
+    const { container } = render(
+      <FinancialSummaryCard kpis={zeroKpis({ revenue: 200, expenses: 500, net: -300 })} currencyLabel="EUR" range="mtd" />,
+    );
+    expect(screen.getByText('financialSummaryNegative{"period":"financialSummaryPeriodMtd"}')).toBeInTheDocument();
+    expect(container.querySelector(CROSS)).not.toBeNull();
+    expect(container.querySelector(CHECK)).toBeNull();
+  });
+
+  it('a near-zero float net (0.001) is treated as zero: break-even, not positive', () => {
+    const { container } = render(
+      <FinancialSummaryCard kpis={zeroKpis({ revenue: 500.001, expenses: 500, net: 0.001 })} currencyLabel="EUR" range="mtd" />,
+    );
+    expect(screen.getByText('financialSummaryBreakEven{"period":"financialSummaryPeriodMtd"}')).toBeInTheDocument();
+    expect(container.querySelector(CHECK)).toBeNull();
+  });
+
+  it('a near-zero negative float net (-0.003) with near-zero totals is treated as no activity', () => {
+    render(
+      <FinancialSummaryCard kpis={zeroKpis({ revenue: 0.001, expenses: 0.004, net: -0.003 })} currencyLabel="EUR" range="mtd" />,
+    );
+    expect(screen.getByText('financialSummaryNoActivity{"period":"financialSummaryPeriodMtd"}')).toBeInTheDocument();
   });
 });
