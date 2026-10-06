@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // ETP-5338 (PIVOT) — Modelo 303 "Guardar" button (handleSave).
 //
 // "Guardar" (`data-testid="FmModel303Page__save"`) replaced the earlier "Volver"
@@ -44,7 +45,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: () => null,

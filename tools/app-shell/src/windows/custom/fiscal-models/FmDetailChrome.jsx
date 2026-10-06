@@ -181,8 +181,8 @@ export function incidentsTabBadge(blocking, warning) {
 // "origin" filters — instead of each tab's own ad-hoc markup. The Justificante tab is the app's
 // shared AttachmentsTab, whose empty state is the attachments component's own.
 // `message`/`cta` keep the list page's historical call shapes working (FmCommon re-exports this
-// as `EmptyState`).
-export function FmEmptyState({ message, icon, title, sub, cta, testId }) {
+// as `EmptyState`). The caller's `data-testid` is forwarded to the root element.
+export function FmEmptyState({ message, icon, title, sub, cta, 'data-testid': testId }) {
   const ui = useUI();
   if (icon || title) {
     return (
@@ -210,7 +210,7 @@ export function FmEmptyState({ message, icon, title, sub, cta, testId }) {
 //               (precedent: financial-account's sync status); the badge is the same
 //               `.fm-model-badge` element the list's model column renders, not a lookalike.
 //   kebab       onAddToFavorites / isFavorite / onPageHelp — the exact two items the in-page
-//               kebab (FmCommon's MoreOptionsMenu) had: favourite "fiscal-models" + page help.
+//               kebab had (the removed FmCommon MoreOptionsMenu): favourite "fiscal-models" + page help.
 // The meta is withdrawn on unmount (useSetPageMeta's cleanup); the list re-publishes its own
 // when it becomes active again (FmListPage's `ListPageMeta`).
 export function useFmDetailPageMeta({ model, title, breadcrumb, favLabel }) {

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmTabContent.jsx
 // Vitest render tests for FmTabContent.jsx
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';

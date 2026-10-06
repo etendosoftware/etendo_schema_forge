@@ -31,7 +31,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -440,13 +439,10 @@ describe('FmModel303Page — tab click switching', () => {
   });
 });
 
-// ── Kebab / MoreOptionsMenu ────────────────────────────────────────────────
-// The old MoreOptionsMenu349-style dropdown (Comparar / Configuración / Generar)
-// was removed from this page — Comparar and Configuración are gone entirely;
-// Generar fichero moved to a standalone action-bar button (see describe block
-// below). A NEW, functional MoreOptionsMenu (favorites + help) was added later
-// (ETP-4755) — since FmCommon.jsx is mocked wholesale at the top of this file,
-// its real behavior is covered directly in FmCommon.vitest.jsx instead.
+// ── Kebab ────────────────────────────────────────────────────────────────────
+// The page has no in-page kebab: the old dropdowns (Comparar / Configuración / VIES / PDF
+// preview) were removed, and since ETP-5584 the favourites + help kebab is the app TopBar's own,
+// published through useFmDetailPageMeta (covered in this model's breadcrumb.i18n test file).
 
 // ── Standalone "Generar fichero" action-bar button ────────────────────────────
 

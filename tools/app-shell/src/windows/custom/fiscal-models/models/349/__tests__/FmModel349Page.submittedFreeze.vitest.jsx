@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 // ETP-5438 — "block re-presentation once already submitted... sigue tomando facturas aun
 // presentada (ocultar boton de generar fichero y que no se recalcule)".
 //
@@ -33,7 +34,6 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div', { className: 'test-kpi349', 'data-kpi-label': label },
     React.createElement('span', { className: 'test-kpi349-value' }, value),

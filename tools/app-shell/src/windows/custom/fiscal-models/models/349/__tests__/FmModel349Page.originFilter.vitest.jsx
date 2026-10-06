@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 // ETP-5027 — the 349 operators table's "Origen" column and the filter its link
 // installs on the destination tab.
 //
@@ -33,7 +34,6 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
     'div',

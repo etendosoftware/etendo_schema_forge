@@ -23,6 +23,9 @@ function formatCell(val, colType) {
   return colType === 'percent' ? formatPercent(val) : formatAmount(val);
 }
 
+// Radix Select item value standing for "no value" (Radix forbids '' as an item value).
+const EMPTY_OPTION = '__empty__';
+
 const COMPACT_SECTIONS = new Set(['iva_devengado', 'iva_deducible', 'resultado', 'info_adicional', 'resultado_final']);
 const TITLED_SECTIONS  = new Set(['iva_devengado', 'iva_deducible']);
 
@@ -193,35 +196,46 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   };
 
   // ETP-5584 — the app's Select (Radix, `@/components/ui/select`) instead of the browser's
-  // native <select>, so these dropdowns look like every other form field of the app. Radix
-  // reserves the empty string for "no value", so an unset field is passed as `undefined` and the
-  // "Seleccionar…" text is rendered as the trigger placeholder (not as an empty option).
-  const renderIdentSelectField = (f, compact = false) => (
-    <div key={f.id} className="fm-aeat-ident-inline-field">
-      <span className="fm-aeat-ident-inline-field__label">
-        {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
-      </span>
-      <Select
-        value={identification?.[f.id] || undefined}
-        onValueChange={value => onIdentChange?.(f.id, value)}
-        disabled={readOnly}
-      >
-        <SelectTrigger
-          className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}`}
-          aria-label={t(f.labelKey)}
-          data-field-id={f.id}
-          data-testid="FmBoxes303__identSelect"
+  // native <select>, so these dropdowns look like every other form field of the app. Same
+  // contract as the app's own optional selects (SelectorInput / EntityForm):
+  // - always CONTROLLED: an unset field is `''` (never `undefined` — a controlled->uncontrolled
+  //   flip swallows the first pick), rendered as the "Seleccionar..." placeholder;
+  // - an OPTIONAL field also offers the placeholder as a real item, so it can be cleared back to
+  //   '' like the native select's "Seleccionar..." option allowed. Radix forbids '' as an item
+  //   value, hence the `EMPTY_OPTION` sentinel, mapped back to '' on change.
+  const renderIdentSelectField = (f, compact = false) => {
+    const required = isFieldRequired(f, identification);
+    const placeholder = t('fm.ident.decl.placeholder');
+    return (
+      <div key={f.id} className="fm-aeat-ident-inline-field">
+        <span className="fm-aeat-ident-inline-field__label">
+          {t(f.labelKey)}{required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+        </span>
+        <Select
+          value={identification?.[f.id] ?? ''}
+          onValueChange={value => onIdentChange?.(f.id, value === EMPTY_OPTION ? '' : value)}
+          disabled={readOnly}
         >
-          <SelectValue placeholder={t('fm.ident.decl.placeholder')} data-testid="SelectValue__49d327" />
-        </SelectTrigger>
-        <SelectContent data-testid="SelectContent__49d327">
-          {f.options?.map(opt => (
-            <SelectItem key={opt.value} value={opt.value} data-option-value={opt.value} data-testid="SelectItem__49d327">{t(opt.labelKey)}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
+          <SelectTrigger
+            className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}`}
+            aria-label={t(f.labelKey)}
+            data-field-id={f.id}
+            data-testid="FmBoxes303__identSelect"
+          >
+            <SelectValue placeholder={placeholder} data-testid="SelectValue__49d327" />
+          </SelectTrigger>
+          <SelectContent data-testid="SelectContent__49d327">
+            {!required && (
+              <SelectItem value={EMPTY_OPTION} data-option-value="" data-testid="SelectItem__empty49d327">{placeholder}</SelectItem>
+            )}
+            {f.options?.map(opt => (
+              <SelectItem key={opt.value} value={opt.value} data-option-value={opt.value} data-testid="SelectItem__49d327">{t(opt.labelKey)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  };
 
   // Supports a single-field condition ({field, in:[...] | equals:...}) or an
   // OR-of-conditions shape ({ anyOf: [condition, ...] }) — kept minimal on

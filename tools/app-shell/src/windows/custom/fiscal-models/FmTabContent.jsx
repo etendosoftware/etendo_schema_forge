@@ -71,8 +71,7 @@ export function SourcesTab({ decl, t }) {
           icon={<ReceiptText size={28} strokeWidth={1.5} data-testid="ReceiptText__931756" />}
           title={t('fm.sources.empty') ?? 'Sin facturas'}
           sub={t('fm.sources.empty_sub')}
-          testId="fm-sources-empty"
-          data-testid="EmptyState__sources931756" />
+          data-testid="fm-sources-empty" />
       ) : (
         <div className="fm-table-wrap">
           <table className="fm-dtable fm-dtable--plain">
@@ -160,8 +159,7 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
         icon={<CircleCheck size={28} strokeWidth={1.5} data-testid="CircleCheck__incidentsEmpty" />}
         title={t('fm.incidents.empty') ?? 'Sin incidencias'}
         sub={t('fm.incidents.empty_sub')}
-        testId="fm-incidents-empty"
-        data-testid="EmptyState__incidents931756" />
+        data-testid="fm-incidents-empty" />
     );
   }
 

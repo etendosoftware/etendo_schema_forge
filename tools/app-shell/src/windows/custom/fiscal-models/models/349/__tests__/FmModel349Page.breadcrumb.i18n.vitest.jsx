@@ -47,7 +47,6 @@ vi.mock('../use349Pdf.js', () => ({
 
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: () => null,
   Tabs: () => null,
   Banner: () => null,

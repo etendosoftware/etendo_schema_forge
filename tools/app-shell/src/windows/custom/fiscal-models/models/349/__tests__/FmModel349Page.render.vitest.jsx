@@ -27,7 +27,6 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div',
     { className: 'test-kpi349' },
@@ -323,14 +322,10 @@ describe('FmModel349Page — totals card', () => {
   });
 });
 
-// ── Kebab / MoreOptionsMenu ──────────────────────────────────────────────────
-// The old MoreOptionsMenu349 (VIES + Vista previa PDF) was removed from this
-// page. PDF preview machinery (use349Pdf, DocumentPreview, showPdf) went with
-// it; Generar fichero already lives in its own standalone action-bar button
-// (see describe block below). A NEW, functional MoreOptionsMenu (favorites +
-// help) was added later (ETP-4755) — since FmCommon.jsx is mocked wholesale at
-// the top of this file, its real behavior is covered directly in
-// FmCommon.vitest.jsx instead.
+// ── Kebab ────────────────────────────────────────────────────────────────────
+// The page has no in-page kebab: the old dropdowns (Comparar / Configuración / VIES / PDF
+// preview) were removed, and since ETP-5584 the favourites + help kebab is the app TopBar's own,
+// published through useFmDetailPageMeta (covered in this model's breadcrumb.i18n test file).
 
 // ── Standalone "Generar fichero" action-bar button ─────────────────────────────
 

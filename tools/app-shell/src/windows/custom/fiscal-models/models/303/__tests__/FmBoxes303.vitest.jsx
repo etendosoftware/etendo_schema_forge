@@ -1104,6 +1104,38 @@ describe('FmBoxes303 — rectificativa section', () => {
     expect(onIdentChange).toHaveBeenCalledWith('motivo_rectificacion', 'R');
   });
 
+  // ETP-5584 (review W5) — the Radix Select stays controlled ('' when unset, never undefined) and
+  // an OPTIONAL field can be cleared again through its "Seleccionar…" item (the `__empty__`
+  // sentinel, mapped back to ''), like the native select allowed. A REQUIRED field offers no
+  // such item.
+  it('clears an optional select (motivo_rectificacion) back to \'\' through the placeholder item', () => {
+    const onIdentChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['rectificativa']}
+        identification={{ rectificativa: true, motivo_rectificacion: 'R' }}
+        onIdentChange={onIdentChange}
+      />
+    );
+    const select = container.querySelector('select');
+    expect(select.value).toBe('R');
+    const emptyItem = Array.from(select.querySelectorAll('option')).find(o => o.value === '__empty__');
+    expect(emptyItem.textContent).toBe('fm.ident.decl.placeholder');
+    fireEvent.change(select, { target: { value: '__empty__' } });
+    expect(onIdentChange).toHaveBeenCalledWith('motivo_rectificacion', '');
+  });
+
+  it('keeps an unset select controlled (value \'\') and offers no clear item on a required field', () => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{}} sectionIds={['identificacion']} identification={{}} />
+    );
+    const select = container.querySelector('[data-field-id="tipo_declaracion"]');
+    expect(select.value).toBe('');
+    expect(Array.from(select.querySelectorAll('option')).some(o => o.value === '__empty__')).toBe(false);
+  });
+
   it('renders section title key', () => {
     render(<FmBoxes303 {...BASE_PROPS} boxes={{}} sectionIds={['rectificativa']} />);
     expect(document.body.textContent).toContain('fm.section.rectificativa');

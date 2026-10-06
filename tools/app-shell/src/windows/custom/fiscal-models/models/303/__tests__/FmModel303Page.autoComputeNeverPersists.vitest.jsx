@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // ETP-5338 — the AUTOMATIC mount-time recompute must never persist anything.
 //
 // `handleCompute` (the raw recompute, no persistence) is shared by TWO callers:
@@ -39,7 +40,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: () => null,
@@ -63,6 +63,8 @@ vi.mock('../AeatSubmitFlow.jsx', () => ({
   isMissingDefaultIaeActivity: () => false,
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null,
   OctagonAlert: () => null, TriangleAlert: () => null, CircleCheck: () => null,
   ArrowLeftRight: () => null, Calculator: () => null, Loader2: () => null,

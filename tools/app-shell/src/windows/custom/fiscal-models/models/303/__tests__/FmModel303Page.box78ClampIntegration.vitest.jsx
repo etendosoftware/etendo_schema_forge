@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // ETP-5338 pt.2 (cycle 3) — box78 auto-clamp, end-to-end through the real FmBoxes303 grid.
 //
 // FmModel303Page.box78Clamp.vitest.jsx exercises `handleBoxChange`'s clamp math in isolation

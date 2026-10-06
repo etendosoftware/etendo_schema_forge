@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // Vitest tests for the ETP-4456 "Incidencias" tab wiring in FmModel303Page.jsx:
 // fetchDeclarationIncidents is called on mount when token/apiBaseUrl are present, its result
 // drives the incidents KPI/tab badge/IncidentsTab props, a fresh fetch fully replaces (not
@@ -31,7 +32,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -71,6 +71,8 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,

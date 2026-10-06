@@ -33,7 +33,6 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div',
     { className: 'test-kpi349', 'data-kpi-label': label },

@@ -104,8 +104,8 @@ the snapshot existed (legacy) have none and keep an earlier, weaker once-per-bro
 (see "Legacy fallback" below); by product decision there is no data-fix for them.
 
 **Trigger.** The same `SUBMITTED_STATUSES` set gates every layer, duplicated deliberately per
-language/file rather than shared (same tradeoff as `statusLabelKey` above — see "Duplicated,
-deliberately, in 4 places"): `{'submitted', 'submitted_ext', 'submitted_ack'}`. `submitted_ext` is
+language/file rather than shared (the same tradeoff `statusLabelKey` had before ETP-5584 made it
+one export of `FmDetailChrome.jsx`): `{'submitted', 'submitted_ext', 'submitted_ack'}`. `submitted_ext` is
 included even though it can no longer be newly selected from `PresentModal` — a legacy declaration
 that already carries it is just as frozen as one presented through either currently-selectable path.
 
@@ -293,7 +293,7 @@ that already carries it is just as frozen as one presented through either curren
   - Every action that could mutate or regenerate a submitted declaration is wrapped in
     `{!isSubmitted && (...)}` in the action bar: **Guardar**, **Calcular**, **"Generar fichero
     303"/"Generar fichero 349"**, and **"Registrar/Presentar"**. Once a declaration is submitted,
-    the action bar reduces to just **Cancelar** and the status pill. `handleGenerate` on both pages
+    the action bar reduces to just **Cancelar** and the status chip (`FmStatusChip`). `handleGenerate` on both pages
     also re-checks `isSubmitted` at its own top (belt-and-braces, same double-check pattern already
     used for `missingRequiredFields`) and toasts `fm.validation.already_submitted` if reached
     anyway — the real defense-in-depth for a direct/malformed call is server-side (see below).
@@ -430,9 +430,9 @@ call `handlePresent` already made; an explicit `"submissionMethod": null` in tha
 
 **Surfaced in the UI** as a small sub-label next to the "Presentado" badge — only when
 `submissionMethod` is present and only for `submitted`/`submitted_ack` (never `submitted_ext`,
-which predates this column and carries no method): the list row's status cell (`StatusText` in
-`FmListPage.jsx`) and the detail page's "Estado: …" pill (`FmModel303Page.jsx` /
-`FmModel349Page.jsx`). A legacy declaration with no `submissionMethod` shows the bare status badge,
+which predates this column and carries no method): the list row's status cell and the detail action bar's status
+chip — both the shared `FmStatusChip` (`FmDetailChrome.jsx`; under the chip in the list, on the
+same line in the detail). A legacy declaration with no `submissionMethod` shows the bare status badge,
 unchanged — no placeholder or error text.
 
 ### Status badge text — `submitted_ack` reads as "Presentado", not "Presentado con acuse" (`statusLabelKey`, ETP-4755)
@@ -467,20 +467,11 @@ resolves its label with `useLocale()` from `@/i18n`. About 48 fiscal-models page
 `@/i18n` with only `useUI`, so reusing it would break all of them. Only its box metrics are
 restated, as `DETAIL_PILL_STYLE`. Keep it in step with `DocumentStatusPill`'s `PILL_STYLE`.
 
-**Update (ETP-5584): now in 2 places, not 4.** The list chip (`StatusText`, formerly local to
-`FmListPage.jsx`) moved to `FmDetailChrome.jsx` as `FmStatusChip`, which exports `statusLabelKey`
-and is now rendered by the list's "Estado" column AND both detail action bars — so the local copies
-in `FmListPage.jsx`, `FmModel303Page.jsx` and `FmModel349Page.jsx` are gone. The remaining second
-copy is `FmCommon.jsx`'s (unused-by-pages) `StatusPill`. The paragraph below describes the
-pre-ETP-5584 state.
-
-**Duplicated, deliberately, in 4 places** — `FmListPage.jsx`, `FmCommon.jsx`, `FmModel303Page.jsx`,
-`FmModel349Page.jsx` — rather than exported once from `fiscalModelsUtils.js`. Adding it there would
-be the natural fix, but ~13 existing tests mock `fiscalModelsUtils.js` without expecting a new named
-export, and changing that surface just to dedupe 4 one-line functions was judged not worth the test
-churn. **Known maintainability tradeoff, logged as a follow-up, not fixed now:** a future 5th status
-value needs the same one-line edit applied in all 4 files, with nothing enforcing that they stay in
-sync.
+**One implementation (ETP-5584).** `statusLabelKey` and the chip live once, in
+`FmDetailChrome.jsx` (`statusLabelKey`, `FmStatusChip`), rendered by the list's "Estado" column
+and both detail action bars. The four former copies (`FmListPage.jsx`'s `StatusText`, the
+`FmModel303Page.jsx` / `FmModel349Page.jsx` "Estado: …" pills, and `FmCommon.jsx`'s unused
+`StatusPill`) are deleted. A future status value is one edit in `FmDetailChrome.jsx`.
 
 ## "Resultado" label — shared `deriveResultKind` (ETP-5187)
 
@@ -1989,10 +1980,10 @@ same `useSetPageMeta` the list uses:
 
 | TopBar slot | Value |
 |---|---|
-| `title` | "Modelo 303 - 2026/T1" — `` `${t('fm.config.m303.title')} - ${periodLabel}` `` (349: its own `periodLabel` format, unchanged; P9 will unify it) |
+| `title` | "Modelo 303 - 2026/T1", "Modelo 349 - 2026/T4" — `buildDeclTitle(modelTitle, decl, bcpLocale)`, the one format every model uses: `<model title> - <year>/<period>` via `formatDeclPeriod` (a monthly period shows its month name in the UI locale, e.g. "2024/octubre") |
 | `breadcrumb` (subtitle) | "Finanzas / Modelos Fiscales / Modelo 303 - 2026/T1" |
 | `titleExtra` (next to the title) | the model badge: the same `.fm-model-badge fm-model-badge--303` / `--349` element the list's model column renders |
-| kebab (⋮) | `onAddToFavorites` + `isFavorite` (favourite `fiscal-models`) and `onPageHelp` (support chat "Ayuda" tab) — the same two items the removed in-page `MoreOptionsMenu` had |
+| kebab (⋮) | `onAddToFavorites` + `isFavorite` (favourite `fiscal-models`) and `onPageHelp` (support chat "Ayuda" tab) — the same two items the old in-page kebab had (that component, `MoreOptionsMenu`, is deleted) |
 
 The badge uses `titleExtra` because it is the TopBar's only adornment slot for arbitrary content.
 `financial-account` uses the same slot for its sync status. `recordCount` was not used: it is a
@@ -2044,9 +2035,10 @@ be added to every one of those mocks before the pages render at all.
 
 ### Sticky sections while scrolling (ETP-5456, layout follow-up)
 
-The 303 and 349 detail pages both use "free-flow" scrolling — `.fm-page--freeflow` makes
-`.fm-page` itself (`overflow-y: auto`) the one real scrolling ancestor for the whole detail
-view, instead of each tab/panel scrolling independently. On both models, the tabs bar
+The 303 and 349 detail pages both use "free-flow" scrolling — `.fm-page--freeflow` makes one
+element (`overflow-y: auto`) the one real scrolling ancestor for the whole detail view (since
+ETP-5584 that element is `.fm-detail-scroll`, under the fixed action bar; before, it was
+`.fm-page` itself — read "`.fm-page`" below as "the scrolling element"), instead of each tab/panel scrolling independently. On both models, the tabs bar
 (`.fm-tabs-sticky`, `position: sticky; top: 0`, from the shared `Tabs` component in
 `FmCommon.jsx`) already stuck to the top of that scroll; the identification/liquidación
 navigation and the summary panels next to the tables did not, and would scroll away with the
@@ -2104,8 +2096,8 @@ stretches to match the table) — not a repeat of the padding/margin hack, which
 with `position: sticky` on a flex item.
 
 **If a future change reintroduces this bug class** (a sticky region that "isn't sticking"),
-check, in order: (1) every ancestor between it and `.fm-page` for `overflow` other than
-`.fm-page` itself, plus `transform`/`filter`/`contain` — any of those creates a new containing
+check, in order: (1) every ancestor between it and `.fm-detail-scroll` for `overflow` other than
+`.fm-detail-scroll` itself, plus `transform`/`filter`/`contain` — any of those creates a new containing
 block or scrollport and breaks `position: sticky`; (2) whether its flex-row parent has
 `alignItems: 'flex-start'` — `stretch` (the default) silently defeats sticky the same way; (3)
 whether any sibling sticky element's `top` value still accounts for the combined height of
@@ -2933,12 +2925,13 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
 ### Action bar and kebab menu
 
 **ETP-5584:** the 349 action bar uses the same shared header and button order as 303. **Left:**
-Cancelar and the status chip. **Right:** Calcular, Generar fichero 349, Guardar, and
-Registrar/Presentar, right-most. The title, breadcrumb, model badge and kebab are in the app
-TopBar, as on 303. The 349 title format is unchanged for now (P9). See "Detail page header, action
-bar and 1280×720 layout (ETP-5584)".
+Cancelar and the status chip. **Right:** Calcular, Generar fichero 349, Guardar, and the primary
+**"Registrar presentación"** (`fm.action.present`; 349 is register-only, see "349 popup is
+'Registrar presentación'"), right-most. The title, breadcrumb, model badge and kebab are in the app
+TopBar, as on 303, with the same title format (`buildDeclTitle`, P9): "Modelo 349 - 2026/T4". See
+"Detail page header, action bar and 1280×720 layout (ETP-5584)".
 
-The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10). Both buttons — along with "Guardar" and "Calcular" — are wrapped `{!isSubmitted && ...}` (ETP-5438): "Generar fichero 349" used to be unconditionally visible regardless of submission status, but is now gated on submission status exactly like "Registrar/Presentar", so the whole primary-action group disappears once the declaration reaches a submitted-family status. See "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard.
+The page has no in-page kebab. The old `MoreOptionsMenu349` (VIES + "Vista previa PDF") was removed: **"Validar VIES"** lives in the VIES banner (see "VIES banner and the 'Validar VIES' action"), the PDF preview went with the kebab, and "Generar fichero 349" is a standalone action-bar button (`onClick={() => setShowFilegen(true)}`). Every action except Cancelar is wrapped `{!isSubmitted && ...}` (ETP-5438), so the whole right-hand group disappears once the declaration reaches a submitted-family status. See "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard.
 
 ### PDF preview and file generation
 
@@ -3065,7 +3058,7 @@ block is rendered. The published meta is:
 | `title` | `ui('fm.breadcrumb.section')` — the window's menu name, "Modelos Fiscales" / "Fiscal Models" |
 | `recordCount` (badge next to the title) | `decls.length` — the declarations count |
 | `breadcrumb` (subtitle line) | `` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` `` — "Finanzas / Modelos Fiscales" |
-| kebab (⋮ next to the title) | `onAddToFavorites` → `toggleFavorite('fiscal-models', <window name>)` + `isFavorite`, and `onPageHelp` → the support chat "Ayuda" tab (`useSupportChatSafe`), i.e. the same two items `MoreOptionsMenu` offers on the detail pages |
+| kebab (⋮ next to the title) | `onAddToFavorites` → `toggleFavorite('fiscal-models', <window name>)` + `isFavorite`, and `onPageHelp` → the support chat "Ayuda" tab (`useSupportChatSafe`), the same two items the detail pages publish through `useFmDetailPageMeta` |
 
 **Hidden list, no meta.** `FiscalModelsPage` keeps `FmListPage` mounted (hidden with
 `display: none`) while a 303/349 detail page is shown, so auto-compute polling survives. It passes
@@ -3103,37 +3096,26 @@ in source (it is kept in the locale files).
 
 `FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The page actions (catalog, new declaration) live in the actions row and the filters/sort in the declarations toolbar, as described above. There is no search input — see "Sort and search" below.
 
-This is scoped to the list page's own toolbar. `ConfigDrawer` as a component still exists (in `FmOverlays.jsx`), but its only remaining caller is the model catalog drawer (`FmCatalogPage.jsx`, described below) — `FmModel303Page.jsx` no longer has a 3-dot menu at all; its former Comparar / Configuración / Generar kebab (`MoreOptionsMenu`, plus `CompareDrawer` and this page's own `ConfigDrawer` usage) was removed entirely (see "Modelo 303 detail page" below for where "Generar fichero" now lives). No config/demo functionality was removed from the app as a whole — only the redundant row-kebab entry point on the declarations list.
+This is scoped to the list page's own toolbar. `ConfigDrawer` as a component still exists (in `FmOverlays.jsx`), but its only remaining caller is the model catalog drawer (`FmCatalogPage.jsx`, described below) — `FmModel303Page.jsx` no longer has a 3-dot menu at all; its former Comparar / Configuración / Generar kebab (plus `CompareDrawer` and this page's own `ConfigDrawer` usage) was removed entirely (see "Modelo 303 detail page" below for where "Generar fichero" now lives). No config/demo functionality was removed from the app as a whole — only the redundant row-kebab entry point on the declarations list.
 
-### "More options" menu — favorites and help (`MoreOptionsMenu`, ETP-4755)
+### "More options" kebab — favorites and help (ETP-4755, TopBar since ETP-5584)
 
-(Since ETP-5584 no page renders `MoreOptionsMenu`. The list and both detail pages use the TopBar's
-own kebab, fed the same two actions through `useSetPageMeta`: see "List page header (app TopBar)
-and declarations toolbar" and "Detail page header, action bar and 1280×720 layout". The component
-is still exported from `FmCommon.jsx`.)
+Every surface of the window (the list and both detail pages) uses the app **TopBar's own kebab**
+(⋮ next to the title), fed through `useSetPageMeta` — the list from `ListPageMeta`
+(`FmListPage.jsx`), the detail pages from `useFmDetailPageMeta` (`FmDetailChrome.jsx`). It offers
+exactly 2 items:
 
-The page-title `MoreVertical` icon in all three surfaces — the list header, `FmModel303Page`, and
-`FmModel349Page` — used to render with no `onClick` at all, a leftover from the old kebabs described
-above and below. It now opens a real, shared `MoreOptionsMenu({ favKey, favLabel })` (`FmCommon.jsx`),
-rendering exactly 2 items:
+- **"Añadir/Quitar de favoritos"** — `onAddToFavorites` → `toggleFavorite('fiscal-models',
+  ui('fm.breadcrumb.section'))` + `isFavorite`, the real, server-synced `useFavorites()` context.
+  Every surface passes the same key, so there is one favourite for this window, not one per
+  surface.
+- **"Ayuda de esta página"** — `onPageHelp` → `useSupportChatSafe()`'s `actions.setTab('ayuda')` +
+  `actions.open()`, the real `SupportChatWidget` "Ayuda" tab.
 
-- **"Añadir/Quitar de favoritos"** — wired to the real, server-synced `useFavorites()` context
-  (`toggleFavorite`/`isFavorite`), not a local toggle. All three call sites pass the identical
-  `favKey="fiscal-models"` (and the same `favLabel`, the window name `ui('fm.breadcrumb.section')` —
-  ETP-5584, previously `t('fm.list.title')` "Declaraciones"), so favoriting from the
-  list header or from either detail page's header keeps all three in sync — there is one favorite
-  for this window, not one per surface.
-- **"Ayuda de esta página"** — wired to a new `useSupportChatSafe()` hook
-  (`components/support/SupportChatContext.jsx`), an additive, no-op-fallback sibling of the existing
-  `useSupportChat()` (same defensive pattern as `useFavorites()`): it calls `actions.setTab('ayuda')`
-  + `actions.open()`, landing on the real `SupportChatWidget` "Ayuda" tab.
-
-**Why not the generic `TopBar.jsx` kebab's `onPageHelp` prop:** a separate, already-logged finding
-(`docs/feedback.md`) found `onPageHelp` is dead app-wide — no window ever sets `meta.onPageHelp`, so
-`TopBar`'s own "Ayuda de esta página" item renders everywhere but does nothing. That gap predates
-this change and is out of scope for a window-level fix. This window's kebab deliberately bypasses it
-and calls the real support-chat mechanism (`useSupportChatSafe`) directly instead of reproducing the
-same dead wiring.
+History: ETP-4755 first turned a dead in-page `MoreVertical` icon into a working in-page kebab
+component (`MoreOptionsMenu` in `FmCommon.jsx`). ETP-5584 moved the titles into the TopBar,
+which already renders this kebab from `onAddToFavorites`/`onPageHelp`, so the in-page component
+became dead code and was deleted (with its `.fm-more-options-trigger` CSS).
 
 ### Model color tags — centralized as CSS custom properties (ETP-4755)
 
@@ -3163,8 +3145,10 @@ was formatted with a hardcoded `toLocaleDateString('es-ES')`, always rendering t
 (the same hook `components/ui/date-range-popover.jsx` uses) and formats with the BCP-47 tag
 derived from it.
 
-**Addendum — Modelo 349's `periodLabel` month name (ETP-5338).** A related but distinct bug found
-in the same sweep: `FmModel349Page.jsx`'s breadcrumb/page-title `periodLabel` (`"{year} / {month
+**Addendum — Modelo 349's `periodLabel` month name (ETP-5338).** (Since ETP-5584 both models build
+their title with `buildDeclTitle` / `formatDeclPeriod` in `FmDetailChrome.jsx`, format
+`"{year}/{month name}"`, with the same explicit-locale rule described here.) A related but distinct
+bug found in the same sweep: `FmModel349Page.jsx`'s breadcrumb/page-title `periodLabel` (`"{year} / {month
 name}"`) built its month name with `new Intl.DateTimeFormat(undefined, { month: 'long' })`. Passing
 `undefined` as the locale does not fall back to the app's UI locale — it resolves to the
 **runtime's/browser's default locale** (typically the OS language), so under an es-language OS the

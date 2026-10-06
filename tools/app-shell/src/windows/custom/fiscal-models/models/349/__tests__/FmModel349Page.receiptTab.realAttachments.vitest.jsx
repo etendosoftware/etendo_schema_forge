@@ -37,7 +37,6 @@ vi.mock('../../../fiscalModelsUtils.js', async () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
     'div',

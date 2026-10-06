@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmOverlays.jsx
 // Vitest component tests for FmOverlays.jsx — PresentModal and FileGenModal
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';

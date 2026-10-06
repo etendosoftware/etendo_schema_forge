@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // Vitest tests for the ETP-4456 wiring between PresentModal's 3rd
 // ("aeat_telematic") path and AeatSubmitFlow inside FmModel303Page.jsx.
 // Kept in its own file (rather than editing FmModel303Page.vitest.jsx) so
@@ -28,7 +29,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: () => null,

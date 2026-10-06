@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // Vitest tests for FmModel303Page's ETP-5187 required-field pre-flight gate:
 // blocks "Generar fichero 303" / "Marcar como Presentado" — including their
 // button-level pre-checks, which must stop the modal from even opening — when
@@ -43,7 +44,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -76,6 +76,8 @@ vi.mock('@/components/attachments', () => ({
   useAttachments: () => ({ upload: vi.fn() }),
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
   CircleCheck: () => null, Calculator: () => null, Loader2: () => null,
   TrendingUp: () => null, TrendingDown: () => null, ClipboardCheck: () => null,

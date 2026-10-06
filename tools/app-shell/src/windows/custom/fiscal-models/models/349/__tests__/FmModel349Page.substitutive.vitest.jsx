@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 // ETP-5456 — "349 sustitutivas": the "Sustitutiva" checkbox moved from FileGenModal
 // (generation-time popup) into the declaration form itself (`SubstitutiveSection`,
 // rendered inline next to the "Todas las claves" key filter on the Operadores tab
@@ -33,7 +34,6 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div',
     { className: 'test-kpi349' },

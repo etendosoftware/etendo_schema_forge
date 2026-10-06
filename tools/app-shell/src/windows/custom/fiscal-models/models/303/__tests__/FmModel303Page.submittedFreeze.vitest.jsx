@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // ETP-5438 — "en todos los modelos tiene que funcionar de la misma manera, una vez presentados
 // no se debe recalcular nada por mas que se agreguen quiten facturas, y el boton de generar
 // fichero no debe aparecer" — full cross-model parity follow-up to the original 349 fix.
@@ -42,7 +43,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: () => null,

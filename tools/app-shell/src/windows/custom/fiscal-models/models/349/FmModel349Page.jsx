@@ -500,8 +500,7 @@ function OriginFilterEmpty({ message, testId }) {
     <FmEmptyState
       icon={<Search size={28} strokeWidth={1.5} data-testid="Search__originFilterEmpty" />}
       title={message}
-      testId={testId}
-      data-testid="FmEmptyState__originFilter346dd5" />
+      data-testid={testId} />
   );
 }
 
@@ -566,8 +565,7 @@ function RectificationsTabContent({ rows, t, originFilter, onClearOriginFilter }
         icon={<FileEdit size={28} strokeWidth={1.5} data-testid="FileEdit__rectifEmpty" />}
         title={t('fm.m349.rectif.empty_title') ?? 'Sin rectificaciones'}
         sub={t('fm.m349.rectif.empty')}
-        testId="fm349-rectif-empty"
-        data-testid="FmEmptyState__rectif346dd5" />
+        data-testid="fm349-rectif-empty" />
     );
   }
 
@@ -1501,8 +1499,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                           ? (t('fm.m349.operators.empty') ?? 'Sin operadores')
                           : (t('fm.m349.operators.no_match') ?? 'Ningún operador coincide con el filtro')}
                         sub={operators.length === 0 ? t('fm.m349.operators.empty_sub') : undefined}
-                        testId="fm349-operators-empty"
-                        data-testid="FmEmptyState__operators346dd5" />
+                        data-testid="fm349-operators-empty" />
                     )}
                   </div>
                 </div>

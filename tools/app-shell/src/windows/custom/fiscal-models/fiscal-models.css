@@ -111,8 +111,7 @@
 }
 /* Overrides the generic .fm-toolbar__pill:hover (light background) — without this,
    hovering an active-dark pill left white text on a near-white background (invisible).
-   Matches .fm-toolbar__btn--primary:hover so every dark actionable pill/button in the
-   fiscal-models toolbar shares one hover treatment. */
+   Same accent-highlight hover as every other dark actionable button in this window. */
 .fm-toolbar__pill--active-dark:hover {
   background: hsl(var(--accent-highlight)); border-color: hsl(var(--accent-highlight));
   color: hsl(var(--accent-highlight-foreground));
@@ -123,20 +122,6 @@
 }
 .fm-toolbar__sep { width: 1px; height: 18px; background: var(--fm-border-1); flex-shrink: 0; margin: 0 2px; }
 .fm-toolbar__space { flex: 1; }
-.fm-toolbar__btn {
-  font: 500 12px/16px var(--fm-font-sans, system-ui, sans-serif);
-  padding: 5px 10px; border-radius: 8px;
-  border: 1px solid var(--fm-border-1); cursor: pointer;
-  background: var(--fm-bg-card, hsl(var(--card))); color: var(--fm-fg-2);
-  display: inline-flex; align-items: center; gap: 6px;
-  transition: background .1s, border-color .1s; white-space: nowrap;
-}
-.fm-toolbar__btn:hover { background: var(--fm-bg-subtle); border-color: var(--fm-border-2); }
-.fm-toolbar__btn--primary {
-  background: var(--fm-gray-900); color: hsl(var(--card));
-  border-color: var(--fm-gray-900); font-weight: 600;
-}
-.fm-toolbar__btn--primary:hover { background: hsl(var(--accent-highlight)); border-color: hsl(var(--accent-highlight)); color: hsl(var(--accent-highlight-foreground)); }
 /* legacy modifier — base already sets 14px/400 */
 .fm-toolbar__count-badge {
   display: inline-flex; align-items: center; justify-content: center;
@@ -340,25 +325,6 @@
 .fm-row-action-btn--danger { color: hsl(var(--destructive)); }
 .fm-row-action-btn--danger:hover { background: var(--status-destructive-bg); color: hsl(var(--destructive)); }
 
-/* ─── Status Pills ─────────────────────────────────────────────────── */
-/* Aligned with .fm-pill from fiscal-monitor */
-.fm-status-pill {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px; border-radius: 999px;
-  font: 500 11px/14px var(--fm-font-sans, system-ui); white-space: nowrap;
-}
-.fm-status-pill--grey    { background: var(--fm-bg-subtle);   color: var(--fm-fg-3); }
-.fm-status-pill--orange  { background: var(--fm-pending-bg);  color: var(--fm-pending-fg); }
-.fm-status-pill--blue    { background: var(--fm-info-bg);     color: var(--fm-info-fg); }
-.fm-status-pill--green   { background: var(--fm-success-bg);  color: var(--fm-success-fg); }
-.fm-status-pill--teal    { background: var(--fm-success-bg);  color: var(--fm-success-fg); }
-.fm-status-pill--violet  { background: var(--status-info-bg); color: var(--status-info-fg); }
-.fm-status-pill--emerald { background: var(--fm-success-bg);  color: var(--fm-success-fg); }
-
-/* Status dropdown */
-.fm-status-pill-menu { position: relative; display: inline-block; }
-.fm-status-pill-menu__trigger { background: none; border: none; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 2px; }
-.fm-status-pill-menu__caret { font-size: 10px; color: var(--fm-fg-3); }
 .fm-status-menu {
   position: absolute; top: 100%; left: 0; z-index: 50;
   background: var(--fm-bg-card, hsl(var(--card)));
@@ -751,15 +717,6 @@
    .fm-table td.strong, .fm-tabs__tab--active, etc.) rather than the heavier 700
    used for grand-total rows. */
 .fm-link-btn--bold { font-weight: 600 !important; }
-/* "More options" kebab trigger — list header + 303/349 detail headers (FmCommon.jsx MoreOptionsMenu) */
-.fm-more-options-trigger {
-  display: flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; padding: 2px; flex-shrink: 0;
-  background: transparent; border: none; border-radius: 8px; cursor: pointer;
-  color: hsl(var(--text-disabled));
-  transition: background .15s, color .15s;
-}
-.fm-more-options-trigger:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
 /* Pill buttons for config modal footer */
 .fm-btn--cancel-pill {
   font: 400 14px/20px var(--fm-font-sans, system-ui);

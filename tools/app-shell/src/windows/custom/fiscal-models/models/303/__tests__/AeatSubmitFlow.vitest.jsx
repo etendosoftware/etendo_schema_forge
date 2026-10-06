@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/AeatSubmitFlow.jsx
 // Vitest tests for AeatSubmitFlow — the ETP-4456 Phase 2 AEAT 303 electronic
 // submission flow. Covers the pure helpers (response-status branching,
 // NRC/test-mode body shape, error-code-to-message mapping) plus the

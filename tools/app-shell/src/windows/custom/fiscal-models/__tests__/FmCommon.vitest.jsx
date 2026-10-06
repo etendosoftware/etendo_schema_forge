@@ -4,26 +4,12 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 vi.mock('./fiscal-models.css', () => ({}));
 vi.mock('../fiscal-models.css', () => ({}));
-
-// Radix dropdown — passthrough wrappers so menu items render immediately
-// without needing portal/pointer-event plumbing (mirrors MovementRowKebab.vitest.jsx).
-vi.mock('@/components/ui/dropdown-menu.jsx', () => ({
-  DropdownMenu: ({ children }) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children }) => <div>{children}</div>,
-  DropdownMenuContent: ({ children }) => <div>{children}</div>,
-  DropdownMenuItem: ({ children, onClick, 'data-testid': dtid, ...rest }) => (
-    <button role="menuitem" onClick={onClick} data-testid={dtid} {...rest}>
-      {children}
-    </button>
-  ),
-}));
 
 const toggleFavorite = vi.fn();
 let mockIsFavorite = vi.fn(() => false);
@@ -38,9 +24,8 @@ vi.mock('@/components/support/SupportChatContext.jsx', () => ({
 }));
 
 import {
-  KpiWidget, StatusPill, Tabs, Banner,
+  KpiWidget, Tabs, Banner,
   EmptyState, Stepper, NumberedStepper, SectionCard, SidePanel,
-  MoreOptionsMenu,
 } from '../FmCommon.jsx';
 
 // ── KpiWidget ─────────────────────────────────────────────────────────────────
@@ -145,28 +130,6 @@ describe('KpiWidget — onClick/active (opt-in click-to-filter)', () => {
   it('does not throw when a key is pressed and onClick is omitted', () => {
     const { container } = render(<KpiWidget label="Test" value={1} />);
     expect(() => fireEvent.keyDown(container.firstChild, { key: 'Enter' })).not.toThrow();
-  });
-});
-
-// ── StatusPill ────────────────────────────────────────────────────────────────
-
-describe('StatusPill', () => {
-  it('renders the i18n key for the status', () => {
-    render(<StatusPill status="pending" />);
-    expect(document.body.textContent).toContain('fm.status.pending');
-  });
-
-  it('applies the color CSS class based on status', () => {
-    const { container } = render(<StatusPill status="draft" />);
-    const pill = container.querySelector('.fm-status-pill');
-    expect(pill).toBeTruthy();
-    expect(pill.className).toContain('fm-status-pill--blue');
-  });
-
-  it('applies grey for skipped status', () => {
-    const { container } = render(<StatusPill status="skipped" />);
-    const pill = container.querySelector('.fm-status-pill');
-    expect(pill.className).toContain('fm-status-pill--grey');
   });
 });
 
@@ -369,79 +332,5 @@ describe('SectionCard', () => {
   it('applies flush class when flush prop is true', () => {
     const { container } = render(<SectionCard flush>c</SectionCard>);
     expect(container.querySelector('.fm-section-card--flush')).toBeTruthy();
-  });
-});
-
-// ── MoreOptionsMenu ─────────────────────────────────────────────────────────
-// Real, functional kebab (favorites + help) — list header + 303/349 detail
-// headers (ETP-4755). Tested directly here since every page-level suite mocks
-// FmCommon.jsx wholesale and can't exercise the real component.
-
-describe('MoreOptionsMenu', () => {
-  beforeEach(() => {
-    toggleFavorite.mockClear();
-    supportSetTab.mockClear();
-    supportOpen.mockClear();
-    mockIsFavorite = vi.fn(() => false);
-  });
-
-  it('renders the trigger button', () => {
-    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
-    expect(screen.getByTestId('fm-more-options-trigger')).toBeTruthy();
-  });
-
-  it('renders a favorites item when favKey is provided', () => {
-    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
-    expect(screen.getByTestId('fm-more-options-favorite')).toBeTruthy();
-  });
-
-  it('does not render a favorites item when favKey is omitted', () => {
-    render(<MoreOptionsMenu />);
-    expect(screen.queryByTestId('fm-more-options-favorite')).toBeNull();
-  });
-
-  it('shows "add to favorites" wording when isFavorite is false', () => {
-    mockIsFavorite = vi.fn(() => false);
-    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
-    expect(document.body.textContent).toContain('addToFavorites');
-    expect(document.body.textContent).not.toContain('removeFromFavorites');
-  });
-
-  it('shows "remove from favorites" wording when isFavorite is true', () => {
-    mockIsFavorite = vi.fn(() => true);
-    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
-    expect(document.body.textContent).toContain('removeFromFavorites');
-    expect(document.body.textContent).not.toContain('addToFavorites');
-  });
-
-  it('calls toggleFavorite with favKey and favLabel when the favorites item is clicked', () => {
-    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
-    fireEvent.click(screen.getByTestId('fm-more-options-favorite'));
-    expect(toggleFavorite).toHaveBeenCalledWith('fiscal-models', 'Declaraciones');
-  });
-
-  it('calls isFavorite with favKey to decide the favActive state', () => {
-    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
-    expect(mockIsFavorite).toHaveBeenCalledWith('fiscal-models');
-  });
-
-  it('renders a help item', () => {
-    render(<MoreOptionsMenu />);
-    expect(screen.getByTestId('fm-more-options-help')).toBeTruthy();
-    expect(document.body.textContent).toContain('pageHelp');
-  });
-
-  it('calls setTab("ayuda") and open() when the help item is clicked', () => {
-    render(<MoreOptionsMenu />);
-    fireEvent.click(screen.getByTestId('fm-more-options-help'));
-    expect(supportSetTab).toHaveBeenCalledWith('ayuda');
-    expect(supportOpen).toHaveBeenCalledTimes(1);
-  });
-
-  it('works with userEvent click as well (favorites)', async () => {
-    const user = userEvent.setup();
-    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
-    await user.click(screen.getByTestId('fm-more-options-favorite'));
-    expect(toggleFavorite).toHaveBeenCalledWith('fiscal-models', 'Declaraciones');
   });
 });

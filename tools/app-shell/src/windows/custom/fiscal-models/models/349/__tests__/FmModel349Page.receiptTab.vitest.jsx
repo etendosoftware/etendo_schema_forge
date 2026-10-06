@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 // Vitest tests for the "Justificante" tab (AttachmentsTab bound to
 // ETGO_Fiscal_Decl) and the handlePresent acuse-de-recibo upload wiring in
 // FmModel349Page.jsx — ported from the equivalent Modelo 303 feature (see
@@ -28,7 +29,6 @@ vi.mock('../../../fiscalModelsUtils.js', async () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
     'div',

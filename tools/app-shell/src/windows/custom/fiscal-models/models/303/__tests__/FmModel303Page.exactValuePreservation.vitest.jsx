@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // ETP-5456 — a boundary-legal manual value (15 integer digits + 2 decimals, e.g.
 // "123456789012345.35") must be preserved EXACTLY through the real edit pipeline, not silently
 // corrupted by float64 precision loss (`Number('123456789012345.35')` alone, no arithmetic,

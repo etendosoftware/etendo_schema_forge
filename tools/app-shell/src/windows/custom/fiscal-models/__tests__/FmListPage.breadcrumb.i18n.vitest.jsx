@@ -62,7 +62,6 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: () => React.createElement('div', { className: 'fm-empty-state' }, 'empty'),
   KpiWidget: () => null,
