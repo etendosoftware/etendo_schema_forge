@@ -75,9 +75,12 @@ Consequences to plan around:
   and for a request belonging to another account. It deliberately never 404s and never reveals
   another account's payment or client name, so the "another user's status" scenario is verified
   by a non-disclosing `pending`, not by an error code.
-- A second onboarding call with an already-claimed `paymentToken` is refused with
-  `409 PROVISIONING_ALREADY_IN_PROGRESS`. That is the reload-during-provisioning guard; it also
-  means a spent token cannot create a second environment.
+- A second onboarding call with an already-claimed `paymentToken` is refused with a 409. While
+  the first call is still running the code is `PROVISIONING_ALREADY_IN_PROGRESS` (the
+  reload-during-provisioning guard). Once the request is final it says so instead:
+  `PROVISIONING_ALREADY_COMPLETED` for an environment already set up (a spent token cannot create
+  a second one) and `PROVISIONING_RETRY_NOT_ALLOWED` for a failure no retry can fix, such as
+  `CLIENT_NAME_IN_USE`.
 - `DERIVED_STATUS` is a computed column, not a stored one -- read it through the DAL or inline
   the expression from `AD_COLUMN.SQLLOGIC`. `SELECT derived_status` fails. It reports `DONE`,
   `IN_FLIGHT`, `ABANDONED`, `EXPIRED` or `STALLED`; **`STALLED` on a `PAID` row is the one that

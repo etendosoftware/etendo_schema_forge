@@ -71,6 +71,20 @@ describe('writeoffState', () => {
     });
   });
 
+  describe('limit echoed for the blocked hint (ETP-5558)', () => {
+    // NewPaymentEntryModal renders `writeoffInfo.limit` in "exceeds the limit of X". Before
+    // ETP-5558 writeoffState did not return it, so the hint read "0,00 €" whatever the account had.
+    it('returns the configured limit', () => {
+      assert.equal(writeoffState({ difference: 21, limit: 5 }).limit, 5);
+    });
+
+    it('returns null, never 0, when there is no limit', () => {
+      assert.equal(writeoffState({ difference: 21 }).limit, null);
+      assert.equal(writeoffState({ difference: 21, limit: 0 }).limit, null);
+      assert.equal(writeoffState({ difference: 0 }).limit, null);
+    });
+  });
+
   it('coerces a non-numeric difference to zero instead of producing NaN', () => {
     const s = writeoffState({ difference: undefined });
     assert.equal(s.amount, 0);

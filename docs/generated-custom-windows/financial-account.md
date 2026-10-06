@@ -213,7 +213,7 @@ else to `B`; the frontend `ACCOUNT_TYPE.CARD` is `'CA'`.
 
 ### Account form (FORM-BANK / FORM-CASH)
 
-- Bank mode fields: Name (required), Country (required, ETP-4896, see below), IBAN (optional, validated with `validateIban` + country-aware `validateIbanForCountry`), BIC/SWIFT (optional), Currency (required, populated from `fetchDefaults()` — restricted server-side to EUR/USD/GBP, see "Currencies" below). The currency field is `CreatableSearchSelect` (`@/components/contract-ui/CreatableSearchSelect`) with `staticOptions`, the same chip-style FK picker used across the app (Contacto, Tarifa, Dirección) and already used by `EditAccountModal.jsx`'s `statementGrouping` field: searchable text input while unselected, a removable `SelectorChip` (ISO code + ×) once a currency is chosen, click the chip to search again. Country uses the same `CreatableSearchSelect` component but in `serverSearch` mode over the live `C_Country_ID` selector (239 active countries, unlike the fixed ~3-currency list) — pre-filled with the organization's country, one-shot guarded (`countryDefaultedRef`) so it never snaps back after the user clears it.
+- Bank mode fields: Name (required), Country (required, ETP-4896, see below), IBAN (optional, validated with `validateIban` + country-aware `validateIbanForCountry`), BIC/SWIFT (optional), Currency (required, populated from `fetchDefaults()` — restricted server-side to EUR/USD/GBP, see "Currencies" below). The currency field is `CreatableSearchSelect` (`@/components/contract-ui/CreatableSearchSelect`) with `staticOptions`, the same chip-style FK picker used across the app (Contacto, Tarifa, Dirección) and already used by `EditAccountModal.jsx`'s `statementGrouping` field: searchable text input while unselected, a removable `SelectorChip` (ISO code + ×) once a currency is chosen, click the chip to search again. Country uses the same `CreatableSearchSelect` component but in `serverSearch` mode over the live `C_Country_ID` selector (239 active countries, unlike the fixed ~3-currency list) — pre-filled with the organization's country, one-shot guarded (`countryDefaultedRef`) so it never snaps back after the user clears it. The chip label is the matching `countryIbanRules[].name` (`displayValue={selectedCountry?.name}`), localized to the request language since ETP-5579 ("España" in es_ES, base name when the country has no translation) — see "`countryIbanRules` catalog" below.
 - Cash and Card mode fields: Name (required), Country (required, ETP-4896), Currency (required, same chip picker). No IBAN / BIC.
 - **Bank picker → Country (ETP-4896, Flujo A)**: the country the user filters Salt Edge providers by in the `BankPicker` step (the flag dropdown, `NewAccountWizard.jsx`) is lifted up and seeds the form's Country field once it lands on `FORM-BANK`/`FORM-CARD` — e.g. picking a German bank pre-fills Country=Germany instead of the organization's default. A `BANK_COUNTRIES` code with no matching active `C_Country` row falls back silently to the organization default.
 - This chip picker is scoped to **account creation** (`AccountFormStep.jsx`, used only by `NewAccountWizard.jsx`). `EditAccountModal.jsx` keeps its own separate, unrelated currency `<Select>` (line ~523) — out of scope for this fix.
@@ -245,7 +245,10 @@ editable** — it is the one field in this section that never migrates to the re
 bank link, since it is descriptive metadata rather than something that rewrites past balances.
 Unlike Currency's Radix `<Select>`, Country uses `CreatableSearchSelect` over the live
 `C_Country_ID` selector (239 options, no local dropdown fits that) — same widget and same
-`countryIbanRules`-backed IBAN cross-check as the New Account form.
+`countryIbanRules`-backed IBAN cross-check as the New Account form. Its initial label comes from
+`account.countryName`, which is localized to the request language since ETP-5579 ("España" in
+es_ES, "Spain" in en_US; base name when the country has no translation) — see the
+`financial-accounts-page` guide's "Backend contract".
 
 **BIC/SWIFT** (ETP-4896 QA follow-up) is also in this grid, right after IBAN. It was previously
 only on the New Account form, so the field could not be maintained from here at all. Gated on the
@@ -1132,7 +1135,7 @@ options available.
 | Archive | `PATCH` | `/sws/neo/financial-account/account/{id}` `{active: false}` | soft-archive (`IsActive='N'`); 409 if open reconciliations. ETP-4871: this used to be the `DELETE` verb (short-circuited into an archive) — DELETE now does a real delete instead, see below |
 | Delete | `DELETE` | `/sws/neo/financial-account/account/{id}` | **ETP-4871 — a real delete**, gated by `deletable`: every FK into `FIN_Financial_Account` is RESTRICT, so the row is only deletable with zero dependent records anywhere (movements, statements, reconciliations, payments, payment proposals, journal lines, bank-file exceptions, defaulting business partners, an active bank connection). 409 (with a human-readable message) if a dependency appeared since the row was loaded — defense-in-depth against the list-load/click race |
 | Currencies | `GET` | `/sws/neo/financial-account/account/selectors/C_Currency_ID` | generic FK selector (replaces `?action=defaults` currency list); restricted to EUR/USD/GBP by `CurrencyIsoAllowlistSelectorPolicy` (a `SelectorContextPolicy` keyed on the `Currency` target entity, registered in `NeoSelectorPolicy`) — applies to every Currency TableDir selector, not just this one |
-| Defaults | `GET` | `/sws/neo/financial-account/account/defaults` | generic defaults; `defaults.currency` = org currency, `defaults.country` = org country (ETP-4896, omitted entirely when it can't be resolved to a usable value — never the AD-seeded United States); the response also carries a `countryIbanRules` sibling (see below) |
+| Defaults | `GET` | `/sws/neo/financial-account/account/defaults` | generic defaults; `defaults.currency` = org currency, `defaults.country` = org country (ETP-4896, omitted entirely when it can't be resolved to a usable value — never the AD-seeded United States), with `defaults.country$_identifier` translated via `C_Country_Trl` in the request language (ETP-5579, base name as fallback); the response also carries a `countryIbanRules` sibling (see below) |
 
 **Hook behavior (`handle()` pre-phase):**
 - POST: validates `name` (required, max 60, unique per org → 409), `currency` (required, valid), `iBAN` ≤ 34 / `swiftCode` ≤ 20; normalises `type` (`'C'`/`'CA'` kept, anything else → `'B'`); then requires `country` (all types, see below) and validates the `(IBAN, country)` pair and a default `matchingAlgorithm` (first active) when absent, and returns `null` so the generic CRUD persists.
@@ -1302,7 +1305,9 @@ redirects there) with active accounts in two currencies, e.g. EUR + USD under an
   - **API/MCP callers:** when updating the IBAN of a Bank account whose stored record has no country, send `country` in the same body. A full-record PUT that re-sends the IBAN without a country is rejected with `A bank account with an IBAN must have a country.`
   - No data-fix: existing accounts stored without a country are left as they are.
 - **Validation** (`FinancialAccountCountrySupport.validateIbanCountryPair`, Java) runs whenever the body touches `iBAN` or `country` on a Bank account with a non-blank effective IBAN, mirroring trigger `FIN_FINANCIAL_ACCOUNT_TRG2`'s own `IF (:NEW.TYPE='B') ... IF (:NEW.IBAN IS NOT NULL)` guards so Cash/Card accounts and IBAN-less Bank accounts are never rejected. A mismatched pair now returns a **readable 400** instead of the trigger's raw `@20259@`/`@20257@`/`@COUNTRY_IBAN@` message, which `NeoErrorSanitizer` would otherwise flatten into a generic 500. The frontend runs the same checks client-side first (`@/lib/countryIban.js`'s `validateIbanForCountry`, mirrored against the `countryIbanRules` catalog) so the 400 is a safety net, not the primary UX.
-- **`countryIbanRules` catalog**: only ~45 of the 243 seeded countries carry IBAN metadata (`IBANCOUNTRY`/`IBANNODIGITS` on `C_Country`); the other ~198 (e.g. Argentina, United States) have none. For those, `validateIbanForCountry`'s prefix/length checks are **skipped, not failed** — only mod-97 applies — because the function receives an already-resolved catalog *row* and cannot tell "no country picked yet" from "picked one with no metadata". But the DB **does** reject an IBAN on such a country (`C_GET_IBAN_DISPLAYED_ACCOUNT` folds the null-metadata case into the same `@20259@` as a mismatch), so the QA follow-up added `countryLacksIbanConfig(countryId, countryIbanRules)`: callers synthesize a `noIbanConfig` error code from it, the same out-of-band pattern already used for `missingCountry`. Its **empty-catalog guard is load-bearing, not defensive noise** — `countryIbanRules` is legitimately `[]` on a non-ok `/defaults`, a network throw, a payload without the key, and on every render before the fetch resolves (both consumers start from `[]`), so an empty catalog means "unknown, defer to the backend" rather than "no country can hold an IBAN". The catalog (`{id, iso, name, ibanPrefix, ibanLength}`) is server-cached 24h and served as a sibling of `accounts`/`summary`/`defaults` from all three read surfaces the SPA uses: the `account/defaults` response, `financial-accounts-page`, and the spec W list GET. It is **not** the country picker's option list — the picker itself is the generic, searchable `C_Country_ID` selector (`CreatableSearchSelect`, `serverSearch`), since 239 active countries don't fit a `staticOptions` dropdown the way the ~20-currency picker does.
+- **`countryIbanRules` catalog**: only ~45 of the 243 seeded countries carry IBAN metadata (`IBANCOUNTRY`/`IBANNODIGITS` on `C_Country`); the other ~198 (e.g. Argentina, United States) have none. For those, `validateIbanForCountry`'s prefix/length checks are **skipped, not failed** — only mod-97 applies — because the function receives an already-resolved catalog *row* and cannot tell "no country picked yet" from "picked one with no metadata". But the DB **does** reject an IBAN on such a country (`C_GET_IBAN_DISPLAYED_ACCOUNT` folds the null-metadata case into the same `@20259@` as a mismatch), so the QA follow-up added `countryLacksIbanConfig(countryId, countryIbanRules)`: callers synthesize a `noIbanConfig` error code from it, the same out-of-band pattern already used for `missingCountry`. Its **empty-catalog guard is load-bearing, not defensive noise** — `countryIbanRules` is legitimately `[]` on a non-ok `/defaults`, a network throw, a payload without the key, and on every render before the fetch resolves (both consumers start from `[]`), so an empty catalog means "unknown, defer to the backend" rather than "no country can hold an IBAN". The catalog (`{id, iso, name, ibanPrefix, ibanLength}`) is server-cached 24h **per language** and served as a sibling of `accounts`/`summary`/`defaults` from all three read surfaces the SPA uses: the `account/defaults` response, `financial-accounts-page`, and the spec W list GET. It is **not** the country picker's option list — the picker itself is the generic, searchable `C_Country_ID` selector (`CreatableSearchSelect`, `serverSearch`), since 239 active countries don't fit a `staticOptions` dropdown the way the ~20-currency picker does. Since ETP-5579 each rule's `name` is the country's identifier translated through `C_Country_Trl` in the OBContext language (base name as fallback) — it is the text the New Account form's Country chip shows. Two consequences:
+  - **The cache is keyed per language**: `IBAN_RULES_CACHE` uses `"countryIbanRules:" + NeoLanguage.currentCode()` (bounded at 32 entries, 24h TTL). Before, a single JVM-wide entry meant the first language to fill it was served to everyone for 24h.
+  - **Ordering contract**: rules are ordered by the **base** (untranslated) name, not by `name`. Consumers look rules up by `id`/`iso`, so this does not matter today; anything that renders them as a list must sort client-side by `name`.
 - **Changing the country on an account with a stored IBAN is not free**: the (IBAN, country) pair must stay consistent, so changing one may require changing the other — this is the real, pre-existing DB constraint, not a new restriction.
 - **Salt Edge / "Conectar banco" is restricted to Spain** (ETP-4896 Test Cases 5–7). The service is contracted for Spain only, so an account whose stored country is not `ES` is never offered the connect action. The rule lives in **one** predicate — `components/financial-accounts/saltEdgeEligibility.js`'s `canConnectToSaltEdge(account)` — consumed by all three surfaces that expose the action, so they cannot drift apart:
 
@@ -1323,6 +1328,67 @@ Server-side IBAN/country validation helpers live in `FinancialAccountCountrySupp
 **MCP delete response + unknown-id status (ETP-5474, runtime change):** `FinancialAccountHandler.deleteAccount` answers a successful account `DELETE` with `204 No Content`, which `neo_delete` used to render as `{}` — so an agent read a successful delete as a failure. `McpToolRouter.handleDelete` now returns `{"deleted": true, "id": "<id>"}` for any handler 2xx (other than 202) with an empty body, the same shape as the generic delete path; REST and the SPA are unchanged (still 204). An **unknown** account id on `DELETE` now answers `404 not_found` ("Account not found") instead of 400; a blank id stays 400 and dependency blockers stay 409 with the reason sentence (e.g. "Cannot delete this account. This account has registered transactions. …"). No UI impact: `useBulkRowDelete`/`batchDelete` treat any 4xx as a refusal alike, and `useAccountMutations().deleteAccount` only special-cases 409. Out of scope: `guardArchive` (the `PATCH {active: false}` path) still answers 400 for a missing account. Verified live via MCP on 2026-09-28 (delete → confirmation and row gone; second delete → 404; "Caja", with transactions → 409 with reason, row kept). Platform reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.12.16.
 
 The spec + entity + field source-data records live in `src-db/database/sourcedata/ETGO_SF_SPEC.xml`, `ETGO_SF_ENTITY.xml` and `ETGO_SF_FIELD.xml` of `com.etendoerp.go` (regenerated by `push-to-neo financial-account` + `export.database`).
+
+## MCP / agent access to manual movements (ETP-5558)
+
+The Movements tab's manual movements — a deposit (*Entrada*, `BPD`) or a withdrawal (*Salida*,
+`BPW`) booked against a G/L item, recorded with *Nuevo movimiento* (`NewTransactionModal`) and then
+edited, processed, reactivated or deleted from the row kebab (`MovementRowKebab`) — are reachable
+from the MCP as **declared actions of the `account` entity**:
+
+```
+neo_action {spec:"financial-account", entity:"account", id:<financial account id>, action, parameters}
+```
+
+| Action | Kind | Parameters (required in **bold**) | What the UI allows, and so the action |
+|---|---|---|---|
+| `listMovements` | read | — | the Movements list: `transactions[]` (`processed`, `posted`, `paymentId`, `transferTxnId`, …) and `totals` |
+| `movementGlItems` | read | `search` | the G/L item picker |
+| `createMovement` | write | **`trxType`** (`BPD`\|`BPW`), **`amount`** (> 0), **`date`**, **`glItemId`**, `description` (≤ 255), `bpartnerId`, `projectId`, `costcenterId`, `productId`, `process` (`true` = *Confirmar*; default = *Guardar*, a draft) | no bank fee, a G/L item is mandatory, the date is also the accounting date |
+| `updateMovement` | write | **`movementId`** + only what changes | not on a posted movement nor on one of a payment/collection; a processed one takes only description, G/L item, contact and dimensions |
+| `processMovement` | write | **`movementId`** | drafts that belong to no payment |
+| `reactivateMovement` | write | **`movementId`** | processed movements; posting and reconciliation are undone first |
+| `deleteMovement` | write | **`movementId`** | any status (a processed one is reactivated and removed, as *Eliminar*); never a payment's movement nor a funds-transfer leg |
+
+The actions hand `FinancialAccountTransactionsHandler` the same body the SPA sends to
+`/sws/neo/financial-account-transactions?action=…`, so the business rules are the SPA's. Before that
+they check what the SPA settles in the browser: the movement must belong to the account in `id`
+(404 otherwise), the row gates above (409), the form's requirements (422 naming the field), and every
+referenced id must be readable by the tenant (422; the SPA's endpoint drops an unreadable one
+silently). `updateMovement` merges over the movement's own values, since the endpoint has no partial
+update. Each answer is the movement as it now is (`deleteMovement`: `{deleted:{…}}`). The SPA's
+endpoint is unchanged. Before ETP-5558 an agent had no way to record a movement: the endpoint is a
+report spec the MCP refuses, and `financial-account/transaction` refuses every MCP write — its 405
+now names these actions.
+
+**A movement is not a bank-statement line.** A movement is the account's own record of money in
+or out, and it moves the balance once processed. A statement line (`createStatement` /
+`importStatement` below) is what the bank reports, waiting to be matched to movements in a
+reconciliation. In blind run `20261001T1949-local-a00c` an agent asked to "record a deposit" created a
+statement line because no movement route existed.
+
+**Funds transfers (*Transferir*, `FundsTransferModal`)** are declared on the same entity, `id` =
+the source account:
+
+| Action | Kind | Parameters (required in **bold**) | What the UI allows, and so the action |
+|---|---|---|---|
+| `transferDestinations` | read | — | the destination dropdown: active accounts other than the source, in its organization tree; between two currencies, today's system rate (what the modal prefills) |
+| `transferFunds` | write | **`destinationAccountId`**, **`amount`** (> 0), **`glItemId`**, `conversionRate` (default today's system rate; required when there is none), `description` (≤ 255), `bankFeeFrom`, `bankFeeTo` | *Confirmar* needs a destination, a G/L item, an amount and, between currencies, a rate. The date is always **today**, as the modal books it |
+
+The action sends `?action=transfer` the modal's own body, so Classic `createTransfer` books both
+legs as it does for a person. A transfer cannot be deleted afterwards (each leg references the
+other; *Eliminar* answers 409 on both) — it is undone with a transfer back. Classic's *Funds
+Transfer* button (`aprmFundsTrans`) is now listed as withdrawn with `useInstead: transferFunds`.
+
+**Add payment from the account is not offered — to people or agents.** The endpoint
+(`?action=create-payment`, `AddPaymentService`) still exists, but its only SPA caller,
+`NewMovementWizard`, has been mounted nowhere since ETP-4500 replaced it with
+`NewTransactionModal`. Payments and collections are registered from the invoice
+(`registerPayment`), so the MCP does not declare it either.
+
+Posting stays on `financial-account/transaction` (`post` / `unpost`). Runtime reference:
+`com.etendoerp.go/docs/neo-headless.md` §4.12.1.4 (movements), §4.12.1.5 (transfers) and §4.12.9
+(differences with the SPA's route).
 
 ## MCP / agent access to bank statements (ETP-5447, ETP-5469)
 
@@ -1419,7 +1485,8 @@ required for loading*), and `NeoProcessService.buildBundleParams` aliases `docAc
 
 Agent prompts: `agent-prompts/financial-account/account.md` and
 `agent-prompts/financial-account/importedBankStatements.md` — short pointers only (the
-`bank-statements` spec and action names, reads via `neo_list`/`neo_get`, generic writes 405). The
+`bank-statements` spec and action names, reads via `neo_list`/`neo_get`, generic writes 405; and,
+since ETP-5558, the account's movement actions and how a movement differs from a statement line). The
 parameters are documented once, in the catalogue: `neo_schema({spec:"bank-statements", view:"actions"})`.
 
 ## New components
@@ -1521,6 +1588,7 @@ financeAccountsMenuArchive           "Archive account"
 - **"No field required" is an inference, not a confirmed product decision** (ETP-4872): the ticket's field tables carry no "required" marker for any of the 9 accounting fields, so the old `fINAssetAcct`-required validation was dropped entirely rather than moved to one of the new fields. This is flagged as pending product/PM confirmation in the implementation plan's Open Questions — do not treat it as permanently settled without checking whether that confirmation has since landed.
 - **New-account "Con conexión" path is NOT country-gated** (ETP-4896): the Spain-only restriction applies to *accounts*, which is what Test Cases 5–7 specify ("una cuenta … tiene como país X"). In the New Account wizard's CONNECTION step no account and no country exist yet — the account is created *from* whichever bank account Salt Edge returns — so there is nothing to gate on. Consequence worth knowing: a user can still reach Salt Edge from that step and pick a non-Spanish provider via the BankPicker's country filter (`BANK_COUNTRIES` offers ES/IT/FR/DE/PT/GB/NL/BE/IE/AT). Whether that filter should also be restricted to ES is a **product decision left open**, deliberately not assumed here.
 - **Backend error messages are translated in the SPA, not the backend** (ETP-4896 QA follow-up): `NeoResponse.error` carries only `{message, status}` — no machine-readable `code` — so this window routes `err.message` through the shared `lib/backendErrors.js#translateBackendError`, which recognises Etendo's English literals by text (exact-match table plus prefix/suffix matchers for the interpolated ones) and maps them to `backendError.*` locale keys. Both surfaces use it: `EditAccountModal` (which previously had its own ad-hoc one-entry table, now deleted) and `NewAccountWizard` (which previously showed raw English on create). **Consequence: the Java message literals in `FinancialAccountCountrySupport` are a de facto wire contract** — rewording one silently drops the user back to English, so its matcher and locale key must change in the same commit. The frontend pre-checks are meant to catch these before the request fires; this is the safety net for what slips past (a stale/empty `countryIbanRules`, a race with another tab, an API/MCP-shaped body). A stable `error.code` contract would be sturdier — there is precedent (`MISSING_REQUIRED_FIELDS` in `NeoCrudHandler` ↔ `useEntity`) — but it touches the wire format and its MCP/API consumers, so it stays a **follow-up option**, not part of this fix.
+- **Country name inside the IBAN validation messages is not localized** (known gap, out of ETP-5579's scope): `FinancialAccountCountrySupport.validateIbanCountryPair` builds its no-IBAN-config / prefix-mismatch / length-mismatch messages as English sentences around `country.getName()`. The SPA translates the sentence (`backendError.countryNoIbanConfig` / `ibanPrefixCountryMismatch` / `ibanCountryLengthMismatch`), but the interpolated `{country}` stays the base English name ("…el país seleccionado es Spain (ES)").
 - **SWIFT/BIC format validation** (ETP-4896): intentionally untouched. Classic has no SWIFT format validation either — no regex, no length check, no cross-check against country — only a presence check (`FIN_FINACC_SHOWSWIFT_CHK`) when "Using the SWIFT Code" is on, unrelated to this ticket's scope. This is why the ticket's Test Case 9 ("la validación del SWIFT se aplica según el país configurado") is not implementable as written: it asks an *existing* validation to start reading the Country field, and there is no existing rule to feed it into. The **field itself** is editable in both creation and edition (the QA follow-up added it to `EditAccountModal`); only the format rule is absent.
 
 ---
@@ -2408,7 +2476,10 @@ Four things are non-obvious:
   payload as top-level `writeoffDifference`.
 - **The limit diverges from Classic on purpose.** `FIN_Financial_Account.Writeofflimit` (now
   editable, surfaced in Edit account → reconciliation settings) caps the write-off, enforced both in
-  the UI and server-side in `ReconciliationHandler.assertWithinWriteoffLimit`. Classic only applies
+  the UI and server-side — for reconciliation in `ReconciliationWriteoffSupport.assertWithinWriteoffLimit`,
+  and since ETP-5558 also for the invoice payment registration (`registerPayment`, reached from the
+  invoice payment modal, MCP and direct REST) in `PaymentWriteoffLimitGuard`, same null/0 rule and
+  the same cent rounding as the SPA (see `sales-invoice.md`). Classic only applies
   it when the `WriteOffLimitPreference` preference is `'Y'`, and its comparison treats an unset or
   zero limit as "block everything". The column has no default, is not mandatory, and the preference
   does not exist in this instance — copying that literally would disable the feature on every
@@ -4342,7 +4413,7 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 
 - `components/financial-accounts/contractColumns.js` → `getContractGridColumns(entity)` reads `@generated/financial-account/contract.json` and returns the ordered, grid-flagged fields for an entity (`account`, `transaction`, `importedBankStatements`, `bankStatementLines`), forwarding `column`, `gridLabelKey`, `cellType` and `columnType` along with the name/label/type.
 - Field-level config lives in `artifacts/financial-account/decisions.json`. Per field: `grid` / `gridOrder` (which columns and in what order), `gridLabelKey` (the header's i18n key) and `cellType` (which renderer draws the cell). Edit decisions → `make regen ONLY=financial-account SKIP_EXTRACT=1` regenerates `contract.json`; the grids pick up the change with no JSX edits.
-- **`cellType` for this window resolves through `components/financial-accounts/accountCellTypes.jsx`**, a window-scoped registry (`accountName`, `accountType`, `currencyChip`, `accountCountry`, `accountBalance`, `reconcilePill`). The grid order has been renumbered twice: `accountCountry` (ETP-4896 follow-up) is the **País** column, first inserted at `gridOrder: 3` right after Tipo; ETP-5113 then inserted **Moneda** at 3, so the current order is Cuenta 1 · Tipo & IBAN 2 · Moneda 3 · País 4 · Saldo 5 · Por conciliar 6. The País cell renders `countryName`, falls back to `countryIso`, and shows an em dash for the (common) pre-ETP-4896 rows that carry no country at all; both keys are injected server-side per row by `FinancialAccountHandler.enrichRecord`, so no extra fetch is involved. It is deliberately NOT one of the shared registries: `contract-ui/listModalCells.jsx` is wired only to `ListModalWindow` (`layoutType: "list-modal"`), and `DataTable.cellRenderers.jsx` is keyed by column *type* and generic to every window, whereas these cells are account-specific (bank avatar, PSD2 affordance, chunked IBAN). What `cellType` makes declarative is the **binding** — which column gets which renderer — not the rendering itself; the cell components stay React.
+- **`cellType` for this window resolves through `components/financial-accounts/accountCellTypes.jsx`**, a window-scoped registry (`accountName`, `accountType`, `currencyChip`, `accountCountry`, `accountBalance`, `reconcilePill`). The grid order has been renumbered twice: `accountCountry` (ETP-4896 follow-up) is the **País** column, first inserted at `gridOrder: 3` right after Tipo; ETP-5113 then inserted **Moneda** at 3, so the current order is Cuenta 1 · Tipo & IBAN 2 · Moneda 3 · País 4 · Saldo 5 · Por conciliar 6. The País cell renders `countryName`, falls back to `countryIso`, and shows an em dash for the (common) pre-ETP-4896 rows that carry no country at all; both keys are injected server-side per row by `FinancialAccountHandler.enrichRecord`, so no extra fetch is involved. `countryName` is localized to the request language via `c_country_trl` since ETP-5579 (base name when untranslated), so the cell and the `countryLabel` filter projection show "España" in es_ES rather than the English `c_country.name`. It is deliberately NOT one of the shared registries: `contract-ui/listModalCells.jsx` is wired only to `ListModalWindow` (`layoutType: "list-modal"`), and `DataTable.cellRenderers.jsx` is keyed by column *type* and generic to every window, whereas these cells are account-specific (bank avatar, PSD2 affordance, chunked IBAN). What `cellType` makes declarative is the **binding** — which column gets which renderer — not the rendering itself; the cell components stay React.
 - **"Moneda" is `currency`, a real AD field rendered as a chip (ETP-5113).** The column is declared on `currency` (`C_Currency_ID`) — a genuine AD column — so the header sorts **server-side** through `_sortBy` like any other; but the cell body (`CurrencyCell` in `AccountsTable/accountColumns.jsx`, bound by `cellType: "currencyChip"`) paints `row.currencyIso`, the ISO code `FinancialAccountHandler` already injects into every list row. That split is exactly what **País** does (declared on `C_Country_ID`, cell reads `countryName`), and it is why no virtual field was needed: had `currencyIso` itself been declared as an `entities.account.virtualFields[]` entry, `appendVirtualFields`' closed whitelist would have stripped both `cellType` and `gridLabelKey` — the trap "Por conciliar" had to escape by becoming a stored computed column. Because `C_Currency`'s identifier **is** the ISO code, the server-side order agrees with what the chip shows.
 
   The chip is the shared `Tag` primitive (`@/components/ui/tag`, `variant="neutral"` — one colour for every currency, no ISO→colour map to maintain), with an em dash for the (contract-impossible, `required: true`) missing-ISO row. It is deliberately **not** a fourth hand-rolled pill: `ReconciliationSplitPanel.jsx` and `FundsTransferModal.jsx` each still carry their own `CurrencyBadge` copy that duplicates this styling without reusing `Tag`, and deduplicating those two onto `Tag` is an open follow-up.
@@ -4819,3 +4890,34 @@ Live verification against a real read-only-tier role was not done for the tabs (
 DB-confirmed, no role held a read-only grant on this window) — a deliberate scope call; coverage
 relies on unit tests. The accounts-list gap was later reproduced live with a real read-only role
 (`AD_Window_Access.IsReadWrite = 'N'`), which is what brought the list into ETP-5457.
+
+## MCP surface equals the window's — ETP-5558
+
+The `MCP_CONFIG` of three `financial-account` entities hides from agents what this window does not
+offer (REST and the SPA are unchanged; full tables in `com.etendoerp.go/docs/neo-headless.md`
+§4.12.6 and §4.12.9):
+
+- **`account` — no Core button is exposed.** `aPRMImportBankFile`, `aPRMMatchTransactions`,
+  `aPRMMatchTransactionsForce`, `aPRMReconcile`, `aprmAddMultiplePayments` and `aprmFundsTrans`
+  answer 405 and are not listed by `view:"actions"`: statements are created and imported with the
+  `bank-statements` actions and reconciled with the `bank-reconciliation` actions. The PSD2 buttons
+  (`pSD2GetBankstatement`, `pSD2GetConsent`, `psd2ReconnectFa`, `psd2GetConnections`,
+  `psd2RefreshConnections`) are excluded too: consent and reconnection need a person to authorize at
+  the bank (SCA). The account's own create, update and delete stay — the SPA uses them, and an agent
+  creates accounts with the same server-side rules (country required, see above).
+- **`transaction` — read-only through MCP.** Create, update and delete answer 405 (its
+  `view:"create"` had no field, and the UI never writes a movement through this entity: deposits,
+  withdrawals and transfers go through the account's movement flow, the
+  `financial-account-transactions` spec, which declares no agent actions). Recording a deposit,
+  withdrawal or funds transfer, and editing, processing, reactivating or deleting a movement, are
+  not available through MCP; they are done from the account's movements in the UI. The movement
+  buttons `etprReactivateTransaction`, `etprRemoveTransaction`, `posted` and `etblkpBulkposting` are
+  hidden (405, not listed). What stays is posting: `neo_action(spec:'financial-account',
+  entity:'transaction', id:<transactionId>, action:'post'|'unpost', parameters:{})`, served by the
+  `document-posting` qualifier (`DocumentPostingService`, as the SPA's kebab). They are
+  handler-served, so `view:"actions"` does not list them.
+- **`reconciliations` — read-only through MCP.** Create, update and delete answer 405 with the
+  hint `neo_action` on `bank-reconciliation` (`id` = the financial account).
+
+The agent-facing recipes are in `etendo-go-docs` → `agentic/finance/bank-reconciliation.md` and
+`agentic/finance/treasury.md`.

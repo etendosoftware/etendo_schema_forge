@@ -32,7 +32,7 @@ export function remoteDir() {
   return process.env.SF_REMOTE_DIR || path.join(os.homedir(), '.config', 'schema-forge', 'remote');
 }
 
-const PROFILE_KEYS = ['SSH_HOST', 'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'LOCAL_PORT'];
+const PROFILE_KEYS = ['SSH_HOST', 'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'LOCAL_PORT', 'GRADLE_PROPERTIES'];
 
 /** List saved profile names (files ending in .env), sorted. */
 export function listProfiles() {

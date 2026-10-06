@@ -105,6 +105,9 @@ Response shape (envelope `response.data`):
       "currencyId": "102",
       "currencyIso": "EUR",
       "iban": "ES12...",
+      "countryId": "106",
+      "countryIso": "ES",
+      "countryName": "España",
       "isDefault": true,
       "active": true,
       "pendingCount": 4
@@ -130,6 +133,7 @@ Response shape (envelope `response.data`):
 ```
 
 - `accounts` is filtered by `AD_Client_ID = current client` and the accessible organization tree from `OrganizationStructureProvider`. It returns **both active and archived** accounts; each row carries an `active` boolean (`IsActive`). The UI shows active accounts in the type views (Todas / Banco / Caja / Tarjeta) and archived ones only under the dedicated **Inactivas** filter.
+- `countryName` is localized to the request language (ETP-5579): `ACCOUNTS_SQL` LEFT JOINs `c_country_trl` on the GO language (`Accept-Language` → `OBContext` language, applied by `NeoAuthenticator`) and returns `COALESCE(ctryt.name, ctry.name)`, so the same account reads "España" in es_ES and "Spain" in en_US. A country with no translation row falls back to the base `c_country.name`; an account with no country emits `""` for all three `country*` keys (the UI shows "—"). Before ETP-5579 `countryName` was always the base English name. `loadAccounts()` is the single loader behind both this R spec and the W spec `financial-account` (`FinancialAccountHandler.enrichRecord`), so the País list column (`CountryCell`, advanced-filter `countryLabel`) and the Edit Account modal's Country label get the same localized value.
 - `pendingCount` counts active `FIN_Bank_Statement_Line` rows linked to the account (through `FIN_BankStatement`) whose `fin_finacc_transaction_id IS NULL`.
 - `summary.*` is computed over **active accounts only** — archived accounts never skew `totalBalance`, `byCurrency` or `accountsWithPending`.
 - `summary` is built by `FinancialAccountsPageHandler.buildSummary(accounts, resolveOrgCurrency())`, the same method the `financial-account` W spec uses for the live Cuentas sidebar, so the two cannot drift apart (ETP-5580). In short:
