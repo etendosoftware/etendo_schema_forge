@@ -1222,12 +1222,28 @@ over the **active** rows of this response only, as before):
   symbol, USD on the left. A test or page that never loads that config puts every symbol on the
   right ("2,50K $"); that is not what users see. Amounts under 1.000 stay uncompacted
   ("-357,99 €").
-- The font size comes from the dashboard's rule, `getDashboardValueTypography` in
-  `lib/dashboardValueTypography.js`, which both components share. The length is measured on the
-  compact string without the leading `-`: 12 or more characters → 20px/24px, 10 or more →
-  24px/28px, otherwise 30px/32px. The `≈ ` prefix is not counted (only the number is measured, as
-  on the dashboard). The widest 30px case, "≈ -999,99K €", is still about 200px of the 268px
-  usable width of the 292px column. The span is `min-w-0 whitespace-nowrap`, so it never wraps.
+- The font size comes from the shared helper `getDashboardValueTypography(value, thresholds)` in
+  `lib/dashboardValueTypography.js`, but the sidebar passes **its own cutoffs**,
+  `SIDEBAR_BALANCE_THRESHOLDS = { mediumFrom: 15, smallFrom: 19 }` (`balanceDisplay.js`). The
+  dashboard's `FinancialSummaryCard` calls it without thresholds and keeps the defaults
+  (`DASHBOARD_VALUE_THRESHOLDS`, 12 → 20px and 10 → 24px), tuned for its narrow 3-up KPI cells.
+  With those defaults an ordinary "≈ 87.542,31B €" dropped to 20px with most of the column empty.
+  The sidebar measures the **full displayed string, `≈ ` prefix included**, because the prefix
+  takes room in the column. A leading `-` is skipped only when it is the first character, so
+  after the prefix it counts too, which errs on the safe side. The cutoffs come from the 268px
+  usable width (292px column minus `px-3`), assuming every character is a tabular digit
+  (≈0.6em in Inter; `.`, `,` and the NBSP are ≈0.3em and only add slack): 30px fits 14
+  characters (268 / 18), 24px fits 18 (268 / 14.4), 20px fits 22 (268 / 12). So: under 15
+  characters → 30px/32px, 15–18 → 24px/28px, 19 or more → 20px/24px. Every realistic total stays
+  at 30px ("≈ 87.542,31B €" is 14 characters, about 216px; "≈ -999,99K €", "-357,99 €",
+  "$14,03M"). Only totals of 10^15 and up step down: "≈ -1.000.000,00B €" → 24px,
+  "≈ -1.000.000.000,00B €" (10^18) → 20px. The span is `min-w-0 whitespace-nowrap`, so it never
+  wraps.
+- **Breakdown rows** ("Detalle de saldos por moneda", `balance-by-currency-<ISO>`) show the exact
+  `formatCurrency` balance. The ISO label is `shrink-0`; the amount is a `TruncatedText`
+  (`balance-by-currency-<ISO>-amount`, `min-w-0 flex-1 text-right`), so an amount that does not
+  fit next to the label ellipsises and shows the exact value in a tooltip. One that fits shows no
+  tooltip.
 - The exact value (`formatCurrency`, with `≈ ` when approximate) is in the amount's `title`, shown
   on hover. The exact per-currency balances are in the breakdown card below. The formatting lives
   in `AccountsSidebar/balanceDisplay.js` (`buildBalanceDisplay`).
@@ -1252,7 +1268,9 @@ Tests:
     realistic currency-format config loaded ("$2,50K" / "$2.500,00" for USD, EUR on the right).
     It is a separate file so the loaded module-level config cannot leak into the default-config
     tests.
-  - `lib/__tests__/dashboardValueTypography.test.js`: the shared 30/24/20px thresholds.
+  - `lib/__tests__/dashboardValueTypography.test.js`: the shared 30/24/20px sizes, the dashboard
+    defaults (`DASHBOARD_VALUE_THRESHOLDS`, 10 / 12, frozen), the optional `thresholds` argument
+    with the sidebar's 15 / 19 shape, and the per-key fallback.
   - `components/dashboard/__tests__/financialSummaryCard-typography.test.js` (updated): it now
     exercises the real shared `getDashboardValueTypography` instead of an inline copy, and checks
     that `FinancialSummaryCard` imports it.
@@ -1272,12 +1290,24 @@ Known gaps and follow-ups (accepted, out of scope for ETP-5580):
   not the `balance-info-tooltip`. Vitest already covers it (`AccountsSidebar/__tests__/index.vitest.jsx`,
   "info tooltip"), so only the browser-level check is missing.
 - **Spanish "B" suffix:** `formatDashboardCompact` uses `K`/`M`/`B` with `B` = 10^9. In Spanish a
-  *billón* is 10^12, so "797,84B €" can be misread as a thousand times larger. The dashboard has
-  the same problem, since the formatter is shared, so the fix belongs in `formatDashboardCompact`
-  and covers both.
+  *billón* is 10^12, so "797,84B €" can be misread as a thousand times larger. For example,
+  "87.542,31B €" means 87,542 × 10^9, which is 87.5 trillion in English, or 87,5 *billones* in
+  Spanish usage. A Spanish reader can take it for 87.542 *billones* (about 8.75 × 10^16). The
+  dashboard has the same problem, since the formatter is shared, so the fix belongs in
+  `formatDashboardCompact` and covers both.
 - **Exact value only in `title`:** a hover `title` is not reachable on touch devices or by keyboard
   focus, and screen readers do not announce it reliably. Those users see only the compact total.
   The breakdown below still shows the exact per-currency balances, but not the converted total.
+- **Movement amounts clip without a tooltip:** in the account detail's movements table
+  (`MovementsTable.jsx`), the Importe and Saldo cells render `MoneyAmount` as a bare inline amount.
+  A huge value is clipped by the shared `TableCell` ellipsis, and nothing reveals the rest. The
+  Cuentas `BalanceCell` and the sidebar breakdown rows solved this with `TruncatedText`. The
+  clean fix here is a truncate option on `MoneyAmount` itself (`components/ui/money-amount.jsx`),
+  so every caller gets the ellipsis plus the exact-value tooltip, rather than wrapping each call
+  site by hand.
+- **Account-detail KPI strip can overflow:** `AccountSummaryStrip.jsx`'s `kpi-balance`,
+  `kpi-inflows` and `kpi-outflows` render a full `MoneyAmount` in `flex-1` sections, with no
+  truncation and no size step. With huge values the amounts can overflow their section.
 
 **Manual verification.** Open **Finanzas → Cuentas** (`/financial-account`; `/finance/accounts`
 redirects there) with active accounts in two currencies, e.g. EUR + USD under an EUR org:
@@ -1511,8 +1541,8 @@ parameters are documented once, in the catalogue: `neo_schema({spec:"bank-statem
 | File | Purpose |
 |------|---------|
 | `validateIban.js` (root `src/`) | `isValidIban(str)` — strips spaces, uppercases, rearranges, runs mod-97. Returns `true` for valid IBANs. Used by `AccountFormStep` to gate the submit button. |
-| `components/financial-accounts/AccountsSidebar/balanceDisplay.js` (ETP-5580) | `buildBalanceDisplay(currencyIso, total, { approximate, locale })` returns `{ text, title, style }` for the sidebar's "Saldo" total: `text` is always the dashboard's compact notation (`formatDashboardCompact`), with `≈ ` when approximate; `title` is the exact `formatCurrency` value (same prefix); `style` is the font size/line height from the shared `getDashboardValueTypography` (`lib/dashboardValueTypography.js`, also used by the dashboard's `FinancialSummaryCard`), measured on the number without the prefix. See "List summary — `response.summary` and its currency" above. |
-| `lib/dashboardValueTypography.js` (ETP-5580) | `getDashboardValueTypography(value)` returns the inline `{ fontSize, lineHeight }` for a headline amount already in compact notation, measured on the string without a leading `-`: 12+ characters → 20px/24px, 10+ → 24px/28px, otherwise 30px/32px. Shared by the dashboard's `FinancialSummaryCard` (which had the same rule inline as `getMetricValueTypography`) and the Cuentas "Saldo" total, so the two headline totals size the same way. It is a separate module rather than part of `dashboardNumberFormat.js`, so tests that mock the formatter module still get the real rule. |
+| `components/financial-accounts/AccountsSidebar/balanceDisplay.js` (ETP-5580) | `buildBalanceDisplay(currencyIso, total, { approximate, locale })` returns `{ text, title, style }` for the sidebar's "Saldo" total: `text` is always the dashboard's compact notation (`formatDashboardCompact`), with `≈ ` when approximate; `title` is the exact `formatCurrency` value (same prefix); `style` is the font size/line height from the shared `getDashboardValueTypography` (`lib/dashboardValueTypography.js`) called with the sidebar's own `SIDEBAR_BALANCE_THRESHOLDS` (`{ mediumFrom: 15, smallFrom: 19 }`) and measured on the full displayed string, prefix included. The file's header comment carries the glyph-width math. See "List summary — `response.summary` and its currency" above. |
+| `lib/dashboardValueTypography.js` (ETP-5580) | `getDashboardValueTypography(value, thresholds?)` returns the inline `{ fontSize, lineHeight }` for a headline amount already in compact notation, measured on the string without a leading `-`: `smallFrom`+ characters → 20px/24px, `mediumFrom`+ → 24px/28px, otherwise 30px/32px. `thresholds` is optional and defaults to `DASHBOARD_VALUE_THRESHOLDS` (`{ mediumFrom: 10, smallFrom: 12 }`); a missing key falls back to its default. The dashboard's `FinancialSummaryCard` (which had the same rule inline as `getMetricValueTypography`) uses the defaults; the Cuentas "Saldo" total passes its own, wider cutoffs because its column is much wider than a dashboard KPI cell. The three sizes are shared. It is a separate module rather than part of `dashboardNumberFormat.js`, so tests that mock the formatter module still get the real rule. |
 | `countryIban.js` (root `src/lib/`, ETP-4896) | `validateIbanForCountry(iban, country)` — layers a country-aware prefix/length cross-check on top of `isValidIban`, degrading gracefully (mod-97 only) for the ~198 countries with no IBAN metadata. `ibanPrefixFor`/`expectedIbanLength` read a `countryIbanRules` catalog entry (`{id, iso, name, ibanPrefix, ibanLength}`). Used by both `AccountFormStep` and `EditAccountModal`. |
 
 ## i18n keys — account management
@@ -1575,10 +1605,13 @@ financeAccountsMenuArchive           "Archive account"
 
 ## Not implemented yet (follow-up tasks)
 
-- **Cuentas "Saldo" total** (ETP-5580): three follow-ups are listed under "List summary —
-  `response.summary` and its currency" → "Known gaps and follow-ups": an E2E check for the ⓘ
-  tooltip (vitest already covers it), the ambiguous Spanish "B" suffix of `formatDashboardCompact` (shared with the
-  dashboard), and the exact value being reachable only through the hover `title`.
+- **Cuentas "Saldo" total and large amounts** (ETP-5580): five follow-ups are listed under "List
+  summary — `response.summary` and its currency" → "Known gaps and follow-ups":
+  - an E2E check for the ⓘ tooltip (vitest already covers it);
+  - the ambiguous Spanish "B" suffix of `formatDashboardCompact` (shared with the dashboard);
+  - the exact total being reachable only through the hover `title`;
+  - `MoneyAmount` clipping with no tooltip in the movements table (Importe/Saldo);
+  - the account-detail KPI strip overflowing with huge values.
 - **Bank connection / Connected mode** (T3): connection toggle is visible but both the "Connected" option and the Bank connection section in the edit modal are disabled.
 - **Real bank logos**: `bankCatalog.js` uses `<Landmark>` as a placeholder icon for all banks.
 - **Card accounts**: the CARD step shows a "Coming soon" placeholder — actual card creation requires a bank connection.
@@ -4534,6 +4567,14 @@ Narrower columns clip more text, so the cells that can overflow reveal the full 
 - `TypeCell`: the IBAN line (`account-row-iban-<id>`). Its `inline-flex` wrapper is
   `min-w-0 max-w-full` and the copy button is `shrink-0`, so only the IBAN text shrinks and the button
   keeps its size.
+- `BalanceCell` (ETP-5580): the **Saldo** column (`account-row-balance-<id>`). The balance is the exact
+  `formatCurrency` value, never compacted, so a huge one (e.g. `87.542.314.548.725,00 €`) does not fit
+  the 130px column. The clipping happens at the DataTable `<td>`: the shared `TableCell` is
+  `overflow-hidden text-ellipsis whitespace-nowrap`, so a bare inline span showed
+  "87.542.314.548.725,…" with no way to read the rest. The amount now renders through
+  `TruncatedText`, whose block span is bounded by that `<td>` under DataTable's `table-layout: fixed`
+  (same as `CountryCell`). It ellipsises and shows the exact value in a tooltip. It stays
+  `font-semibold tabular-nums`, right-aligned, and red when negative.
 
 A value that fits shows no tooltip.
 

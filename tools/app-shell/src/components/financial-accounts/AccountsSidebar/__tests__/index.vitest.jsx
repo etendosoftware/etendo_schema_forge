@@ -1,4 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+// @covers tools/app-shell/src/components/financial-accounts/AccountsSidebar/index.jsx
+// @covers tools/app-shell/src/components/financial-accounts/AccountsSidebar/balanceDisplay.js
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatDashboardCompact } from '@/lib/dashboardNumberFormat.js';
@@ -39,6 +41,11 @@ const compact = (iso, value) => formatDashboardCompact(value, { currencyLabel: i
 const SIZE_30 = { fontSize: '30px', lineHeight: '32px' };
 const SIZE_24 = { fontSize: '24px', lineHeight: '28px' };
 const SIZE_20 = { fontSize: '20px', lineHeight: '24px' };
+
+const setMetrics = (element, scrollWidth, clientWidth) => {
+  Object.defineProperty(element, 'scrollWidth', { configurable: true, value: scrollWidth });
+  Object.defineProperty(element, 'clientWidth', { configurable: true, value: clientWidth });
+};
 
 function expectStyle(element, { fontSize, lineHeight }) {
   expect(element.style.fontSize).toBe(fontSize);
@@ -340,7 +347,7 @@ describe('AccountsSidebar', () => {
       expect(card.className).toContain('whitespace-nowrap');
     });
 
-    it('keeps 30px for an approximate 9-char compact total (the prefix is not measured)', () => {
+    it('keeps 30px for an approximate 9-char compact total (11 chars with the prefix, under 15)', () => {
       render(
         <AccountsSidebar
           summary={{
@@ -355,7 +362,7 @@ describe('AccountsSidebar', () => {
       expectStyle(screen.getByTestId('balance-card'), SIZE_30);
     });
 
-    it('drops to 24px for an 11-char compact total, exact value in title', () => {
+    it('keeps 30px for an 11-char compact total (the dashboard would drop it to 24px)', () => {
       const total = 4456468760950.01;
       render(
         <AccountsSidebar
@@ -366,10 +373,10 @@ describe('AccountsSidebar', () => {
       const card = screen.getByTestId('balance-card');
       expect(card.textContent).toBe(`4.456,47B${NBSP}€`);
       expect(card).toHaveAttribute('title', formatCurrency('EUR', total));
-      expectStyle(card, SIZE_24);
+      expectStyle(card, SIZE_30);
     });
 
-    it('drops to 20px for a 12-char compact total, exact value in title', () => {
+    it('keeps 30px for a 14-char approximate total (the dashboard would drop it to 20px)', () => {
       const total = 44564687609500;
       render(
         <AccountsSidebar
@@ -384,6 +391,60 @@ describe('AccountsSidebar', () => {
       );
       const card = screen.getByTestId('balance-card');
       expect(card.textContent).toBe(`≈ 44.564,69B${NBSP}€`);
+      expect(card).toHaveAttribute('title', `≈ ${formatCurrency('EUR', total)}`);
+      expectStyle(card, SIZE_30);
+    });
+
+    it('keeps 30px for "≈ 87.542,31B €" (14 chars), exact value in title', () => {
+      const total = 87542310000000;
+      render(
+        <AccountsSidebar
+          summary={{ ...baseSummary, totalBalance: total, totalBalanceCurrencyIso: 'EUR', totalBalanceApproximate: true }}
+          loading={false}
+        />,
+      );
+      const card = screen.getByTestId('balance-card');
+      expect(card.textContent).toBe(`≈ 87.542,31B${NBSP}€`);
+      expect(card).toHaveAttribute('title', `≈ 87.542.310.000.000,00${NBSP}€`);
+      expectStyle(card, SIZE_30);
+    });
+
+    it('drops to 24px at 15 chars ("≈ 875.423,15B €" — the prefix counts)', () => {
+      render(
+        <AccountsSidebar
+          summary={{ ...baseSummary, totalBalance: 875423150000000, totalBalanceCurrencyIso: 'EUR', totalBalanceApproximate: true }}
+          loading={false}
+        />,
+      );
+      const card = screen.getByTestId('balance-card');
+      expect(card.textContent).toBe(`≈ 875.423,15B${NBSP}€`);
+      expectStyle(card, SIZE_24);
+    });
+
+    it('drops to 24px for 10^15, exact value in title', () => {
+      const total = 1e15;
+      render(
+        <AccountsSidebar
+          summary={{ ...baseSummary, totalBalance: total, totalBalanceCurrencyIso: 'EUR' }}
+          loading={false}
+        />,
+      );
+      const card = screen.getByTestId('balance-card');
+      expect(card.textContent).toBe(`1.000.000,00B${NBSP}€`);
+      expect(card).toHaveAttribute('title', formatCurrency('EUR', total));
+      expectStyle(card, SIZE_24);
+    });
+
+    it('drops to 20px for 10^18, exact value in title', () => {
+      const total = -1e18;
+      render(
+        <AccountsSidebar
+          summary={{ ...baseSummary, totalBalance: total, totalBalanceCurrencyIso: 'EUR', totalBalanceApproximate: true }}
+          loading={false}
+        />,
+      );
+      const card = screen.getByTestId('balance-card');
+      expect(card.textContent).toBe(`≈ -1.000.000.000,00B${NBSP}€`);
       expect(card).toHaveAttribute('title', `≈ ${formatCurrency('EUR', total)}`);
       expectStyle(card, SIZE_20);
     });
@@ -418,6 +479,45 @@ describe('AccountsSidebar', () => {
       // A currency without exchange rate is still listed with its real balance.
       const ars = screen.getByTestId('balance-by-currency-ARS');
       expect(ars.textContent).toContain(formatCurrency('ARS', 99999));
+    });
+
+    it('renders the exact amount through TruncatedText next to a non-shrinking ISO label', () => {
+      render(<AccountsSidebar summary={baseSummary} loading={false} />);
+      const row = screen.getByTestId('balance-by-currency-EUR');
+      const amount = screen.getByTestId('balance-by-currency-EUR-amount');
+      expect(row).toContainElement(amount);
+      expect(amount.textContent).toBe(formatCurrency('EUR', 1000));
+      expect(amount).toHaveClass('truncate', 'min-w-0', 'flex-1', 'text-right');
+      expect(within(row).getByText('EUR')).toHaveClass('shrink-0');
+    });
+
+    it('shows the exact amount in a tooltip when the row amount is clipped', () => {
+      const huge = 87542314548725.5;
+      render(
+        <AccountsSidebar
+          summary={{ ...baseSummary, byCurrency: [{ currencyIso: 'EUR', total: huge }] }}
+          loading={false}
+        />,
+      );
+      const amount = screen.getByTestId('balance-by-currency-EUR-amount');
+      setMetrics(amount, 260, 180);
+
+      fireEvent.focus(amount);
+
+      const tooltip = screen.getByTestId('balance-by-currency-EUR-amount-tooltip');
+      // textContent, not toHaveTextContent: the latter normalizes the NBSP of formatCurrency.
+      expect(tooltip.textContent).toContain(formatCurrency('EUR', huge));
+      expect(tooltip.textContent).toContain('87.542.314.548.725,50');
+    });
+
+    it('opens no tooltip when the row amount fits', () => {
+      render(<AccountsSidebar summary={baseSummary} loading={false} />);
+      const amount = screen.getByTestId('balance-by-currency-USD-amount');
+      setMetrics(amount, 60, 180);
+
+      fireEvent.focus(amount);
+
+      expect(screen.queryByTestId('balance-by-currency-USD-amount-tooltip')).not.toBeInTheDocument();
     });
   });
 

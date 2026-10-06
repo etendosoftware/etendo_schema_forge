@@ -248,13 +248,17 @@ tier (ETP-5205 / ETP-5457)".
   `lib/__tests__/` (`validateIban`). The sidebar's ETP-5580 tests live in
   `components/financial-accounts/AccountsSidebar/__tests__/` (`index.vitest.jsx`,
   `balanceDisplay.vitest.js`, `balanceDisplay.symbolSide.vitest.js`), plus
-  `lib/__tests__/dashboardValueTypography.test.js` for the typography rule shared with the
-  dashboard.
+  `lib/__tests__/dashboardValueTypography.test.js` for the typography helper shared with the
+  dashboard (the dashboard uses its default cutoffs; the sidebar passes its own,
+  `SIDEBAR_BALANCE_THRESHOLDS`, see `financial-account.md` → "Sidebar rendering").
 - E2E: `e2e/tests/flows/finance/financial-accounts-page.mocked.spec.js` covers the compact
   total with its exact `title`, the `≈` converted total and the missing-rate line.
-- See `financial-account.md` → "List summary" for the full list and the known gaps: an E2E check
-  for the ⓘ tooltip (vitest already covers it), the Spanish "B" suffix, and the exact value being
-  only in `title`.
+- See `financial-account.md` → "List summary" for the full list and the known gaps:
+  - an E2E check for the ⓘ tooltip (vitest already covers it);
+  - the Spanish "B" suffix;
+  - the exact total being only in `title`;
+  - `MoneyAmount` clipping with no tooltip in the movements table;
+  - the account-detail KPI strip overflowing with huge values.
 
 ## Deployment notes
 

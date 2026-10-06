@@ -8,8 +8,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { TruncatedText } from '@/components/ui/truncated-text.jsx';
 import { getDashboardValueTypography } from '@/lib/dashboardValueTypography.js';
-import { buildBalanceDisplay } from './balanceDisplay.js';
+import { buildBalanceDisplay, SIDEBAR_BALANCE_THRESHOLDS } from './balanceDisplay.js';
 
 /**
  * Cuentas sidebar — single column matching Figma frame `3012:25602`.
@@ -19,9 +20,12 @@ import { buildBalanceDisplay } from './balanceDisplay.js';
  *   2. Big balance number (30 / 32 / medium) — the total converted to the
  *      organization currency (ETP-5580): `≈` when a conversion was applied, a
  *      warning for currencies with no exchange rate. Always in the dashboard's
- *      compact K/M/B notation and sized like the dashboard's financial summary;
- *      the exact value is in the hover title (see `balanceDisplay.js`).
- *   3. Currency breakdown card (gray, rounded).
+ *      compact K/M/B notation, sized by the dashboard's helper with the
+ *      sidebar's own cutoffs (30px for every realistic total); the exact value
+ *      is in the hover title (see `balanceDisplay.js`).
+ *   3. Currency breakdown card (gray, rounded). Each row shows the exact
+ *      balance; when it does not fit next to the ISO label it ellipsises and
+ *      reveals the full amount in a tooltip (TruncatedText).
  *   4. Pending reconcile card (bordered, rounded).
  */
 function SyncPill({ ui }) {
@@ -53,16 +57,20 @@ function CurrencyBreakdown({ rows, primaryIso, ui }) {
             {idx > 0 ? (
               <div className="mb-2 h-px w-full bg-[hsl(var(--foreground) / 0.05)]" />
             ) : null}
+            {/* The ISO label keeps its width (`shrink-0`); the amount takes the rest
+                (`min-w-0 flex-1` bounds it, so TruncatedText can measure the clip) and
+                ellipsises with the exact value in a tooltip when it does not fit. */}
             <div
-              className="flex items-center justify-between"
+              className="flex items-center justify-between gap-2"
               data-testid={`balance-by-currency-${row.currencyIso}`}
             >
-              <span className="text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]">
+              <span className="shrink-0 text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]">
                 {row.currencyIso}
               </span>
-              <span className="text-sm font-medium leading-5 text-[hsl(var(--foreground))] tabular-nums">
-                {formatCurrency(row.currencyIso, row.total)}
-              </span>
+              <TruncatedText
+                text={formatCurrency(row.currencyIso, row.total)}
+                className="min-w-0 flex-1 text-right text-sm font-medium leading-5 text-[hsl(var(--foreground))] tabular-nums"
+                data-testid={`balance-by-currency-${row.currencyIso}-amount`} />
             </div>
           </div>
         ))}
@@ -131,7 +139,7 @@ function BalanceInfoButton({ ui }) {
   );
 }
 
-const LOADING_TYPOGRAPHY = getDashboardValueTypography('—');
+const LOADING_TYPOGRAPHY = getDashboardValueTypography('—', SIDEBAR_BALANCE_THRESHOLDS);
 
 export function AccountsSidebar({ summary, loading }) {
   const ui = useUI();

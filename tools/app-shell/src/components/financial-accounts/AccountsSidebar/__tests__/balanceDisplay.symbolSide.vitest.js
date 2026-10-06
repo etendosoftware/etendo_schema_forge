@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/financial-accounts/AccountsSidebar/balanceDisplay.js
 import { fetchCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 import { buildBalanceDisplay } from '../balanceDisplay.js';
 
