@@ -302,6 +302,10 @@ export async function refreshAccountIdentity(
     );
     if (!stillCurrent()) return undefined;
     if (accountId) await identify(accountId);
+    // `identify` may yield to a provider SDK. Logout or an account switch can
+    // happen during that await; never let the stale request restore the old
+    // tenant grouping after the identity has changed.
+    if (!stillCurrent()) return undefined;
     if (clientId) await group('account_id', clientId);
     return { accountId, accountEmail };
   } catch (error) {

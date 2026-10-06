@@ -14,9 +14,14 @@ import { renderHook, act, waitFor } from '@testing-library/react';
  */
 
 const trackMock = vi.fn();
+const identifyMock = vi.fn();
+const groupMock = vi.fn();
 vi.mock('@/lib/observability.js', () => ({
   track: (...args) => trackMock(...args),
   addFeatureFlagEvaluation: vi.fn(),
+  identify: (...args) => identifyMock(...args),
+  group: (...args) => groupMock(...args),
+  reset: vi.fn(),
 }));
 
 import { OpenFeature } from '@openfeature/web-sdk';
@@ -28,6 +33,8 @@ import {
   buildInMemoryConfiguration,
   buildEvaluationContext,
   readSessionContext,
+  refreshAccountIdentity,
+  clearAccountIdentity,
 } from '../bootstrap.js';
 import {
   PROOF_OF_CONCEPT_MENU,
@@ -190,6 +197,39 @@ describe('useFeatureFlag — GATE 3: provider down or unconfigured', () => {
     const { result, unmount } = renderHook(() => useFeatureFlag(PROOF_OF_CONCEPT_MENU));
     expect(result.current).toBe(true);
     expect(() => unmount()).not.toThrow();
+  });
+});
+
+describe('refreshAccountIdentity — stale telemetry guard', () => {
+  it('does not restore tenant grouping after logout during identify', async () => {
+    const deferred = () => {
+      let resolve;
+      const promise = new Promise(done => { resolve = done; });
+      return { promise, resolve };
+    };
+    const identifyStarted = deferred();
+    const releaseIdentify = deferred();
+    identifyMock.mockImplementationOnce(async () => {
+      identifyStarted.resolve();
+      await releaseIdentify.promise;
+    });
+    groupMock.mockResolvedValue(undefined);
+    setSessionIdentity({ username: 'ana', clientId: 'client-1' });
+
+    const refresh = refreshAccountIdentity({
+      fetchImpl: vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ accountId: 'ACC-1', accountEmail: 'ana@example.com' }),
+      }),
+      storage: globalThis.localStorage,
+    });
+    await identifyStarted.promise;
+
+    clearAccountIdentity(globalThis.localStorage);
+    releaseIdentify.resolve();
+    await refresh;
+
+    expect(groupMock).not.toHaveBeenCalled();
   });
 });
 
