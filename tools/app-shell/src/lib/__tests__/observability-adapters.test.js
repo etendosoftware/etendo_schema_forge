@@ -166,6 +166,9 @@ describe('Datadog observability adapter', () => {
     assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews);
     await provider.group('account_id', 'tenant-2');
     assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews + 1);
+    const accountIndex = calls.findLastIndex(([method, args]) => method === 'setAccount' && args.id === 'tenant-2');
+    const viewIndex = calls.findLastIndex(([method]) => method === 'startView');
+    assert.ok(accountIndex < viewIndex);
     await provider.reset();
     assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews + 1);
   });

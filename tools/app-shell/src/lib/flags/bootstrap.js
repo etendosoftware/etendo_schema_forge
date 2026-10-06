@@ -314,10 +314,16 @@ export async function refreshAccountIdentity(
       storage
     );
     if (!stillCurrent()) return undefined;
+    // A logout can begin after the context update. Wait for its provider reset
+    // to settle immediately before publishing the profile, then re-check the
+    // generation so stale telemetry cannot race the new identity.
+    await waitForIdentityReset();
+    if (!stillCurrent()) return undefined;
     if (accountId) await identify(accountId);
     // `identify` may yield to a provider SDK. Logout or an account switch can
     // happen during that await; never let the stale request restore the old
     // tenant grouping after the identity has changed.
+    await waitForIdentityReset();
     if (!stillCurrent()) return undefined;
     if (clientId) await group('account_id', clientId);
     return { accountId, accountEmail };

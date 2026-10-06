@@ -43,5 +43,8 @@ describe('Datadog provider', () => {
 
     await provider.group('account_id', 'tenant-b');
     expect(calls.filter(([method]) => method === 'startView').length).toBe(initialViews + 1);
+    const accountIndex = calls.findLastIndex(([method, args]) => method === 'setAccount' && args.id === 'tenant-b');
+    const viewIndex = calls.findLastIndex(([method]) => method === 'startView');
+    expect(accountIndex).toBeLessThan(viewIndex);
   });
 });

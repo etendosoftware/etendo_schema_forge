@@ -217,11 +217,11 @@ export function createDatadogProvider({
         // from the previous tenant cannot be attached to later events. The
         // first identity assignment has no previous tenant and stays in the
         // initial view; logout only clears the active identity below.
+        client.setAccount({ id });
         if (lastAccountId && lastAccountId !== nextAccountId) {
           client.startView({ name: currentRoute });
         }
         lastAccountId = nextAccountId;
-        client.setAccount({ id });
       }
     },
     async captureException(error, details) {
