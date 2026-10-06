@@ -121,7 +121,7 @@ export default function MonthGrid({ weeks, monthDate, events, colorBySource, loc
             colorBySource={colorBySource}
             locale={locale}
             todayKey={todayKey}
-          />
+            data-testid="WeekRow__2bece6" />
         ))}
       </div>
     </div>

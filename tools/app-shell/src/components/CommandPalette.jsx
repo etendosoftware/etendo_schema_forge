@@ -423,8 +423,11 @@ export function CommandPalette() {
           {/* Portaled (Radix) so the cmdk-root's overflow-hidden — the dialog is only as wide and
               as tall as the search box and its results — can never clip it; Radix flips/shifts it
               to stay inside the viewport. z-60: a dropdown above the z-50 palette. */}
-          <Popover open={isTargetPickerOpen} onOpenChange={setIsTargetPickerOpen}>
-          <PopoverTrigger asChild>
+          <Popover
+            open={isTargetPickerOpen}
+            onOpenChange={setIsTargetPickerOpen}
+            data-testid="Popover__73263e">
+          <PopoverTrigger asChild data-testid="PopoverTrigger__73263e">
           <button
             type="button"
             className="rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
