@@ -4775,7 +4775,7 @@ finished**, as relative time. Cash, offline/reconnectable and unconnected accoun
   stamped on an error, an expired consent, a connection that went inactive during the sync, a
   missing API key, an `Import To Date` skip, or when the account has no active connection.
 - **Where it is exposed:**
-  - `financial-accounts-page` (page endpoint): `accounts[].lastSyncDate` (ISO instant or null).
+  - `financial-accounts-page` (page endpoint): `accounts[].lastSyncDate`, see `financial-accounts-page.md`.
   - `GET bank-connection?action=status` and the `sync` response: `lastSyncDate`.
   - `financial-account` spec (R and W rows, entity `account`): field `pSD2LastSyncDate`,
     `readOnly`, hidden from grid and form in `decisions.json` (the UI renders it through the label
