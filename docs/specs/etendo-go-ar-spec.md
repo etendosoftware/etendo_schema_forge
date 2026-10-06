@@ -135,7 +135,7 @@ push: ## Push contract to NEO Headless. Usage: make push ONLY=purchase-order
 	sf-push-neo $(ONLY)
 
 validate: ## Run pipeline validator across all AR artifacts
-	sf-validate
+	sf-validate-pipeline
 
 uuid: ## Generate a new Etendo UUID (32-char uppercase hex)
 	node -e "import('node:crypto').then(c => console.log(c.randomUUID().replace(/-/g,'').toUpperCase()))"

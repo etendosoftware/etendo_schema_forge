@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DataTable } from '@/components/contract-ui';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { useWindowAccess } from '@/auth/AuthContext.jsx';
 import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow.js';
@@ -51,6 +52,12 @@ import BankConnectionDeleteConfirmModal from '@/windows/custom/financial-account
 
 /* eslint-disable react/prop-types */
 
+// AD_Window_IDs read by the access-tier gates below (ETP-5457). Same ids the generated pages
+// guard on: `AccountPage.jsx` (this window) and `EtgoMatchRuleHeaderPage.jsx` (the window the
+// "Reglas de matcheo" toolbar button navigates to) — both come from the artifacts' contract.json.
+const FINANCIAL_ACCOUNT_WINDOW_ID = '94EAA455D2644E04AB25D93BE5157B6D';
+const MATCH_RULE_WINDOW_ID = '24963D64E83B4543A7F6BD248CF944EE';
+
 // Per-column presentation the contract cannot express: the Figma layout pins these
 // widths, and the "Cuenta" header's left padding aligns it with the row avatar.
 // Consumed through DataTable's `col.headClass` / `col.cellClass`.
@@ -61,13 +68,26 @@ import BankConnectionDeleteConfirmModal from '@/windows/custom/financial-account
 // cell body and has to move with it. It was `pl-[84px]` while NameCell opened with a
 // 44px drag-grip slot (44 + 32px avatar + 8px padding); the grip is gone, so it is
 // now just the avatar plus its padding.
+//
+// WIDTHS: every column carries one, and together they are the grid's floor — the
+// `min-w` on the scrolling wrapper below equals their sum plus the selection (40px) and
+// actions (124px) cells. Under DataTable's `table-layout: fixed; width: 100%`
+// (getTableContainerStyle) that gives two regimes:
+//  - container wider than the floor → the browser spreads the extra width across all
+//    columns IN PROPORTION to these values, so Cuenta and Tipo & IBAN keep their balance
+//    instead of one of them absorbing everything;
+//  - container narrower (narrow window, app sidebar expanded) → the grid scrolls
+//    horizontally instead of squeezing any column.
+// Changing a width means changing the wrapper's `min-w` too. Keep each column's
+// headClass and cellClass in step. Clipped text is revealed on hover (TruncatedText in
+// accountColumns.jsx).
 const COLUMN_CHROME = {
-  name: { headClass: 'w-[480px] pl-[40px] pr-2', cellClass: 'w-[480px] p-0' },
-  type: { headClass: 'w-[340px] px-2', cellClass: 'w-[340px] px-2 py-2' },
-  currency: { headClass: 'w-[120px] px-2', cellClass: 'w-[120px] px-2 py-2' },
-  country: { headClass: 'w-[160px] px-2', cellClass: 'w-[160px] px-2 py-2' },
-  currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2' },
-  eTGOPendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
+  name: { headClass: 'w-[240px] pl-[40px] pr-2', cellClass: 'w-[240px] p-0' },
+  type: { headClass: 'w-[230px] px-2', cellClass: 'w-[230px] px-2 py-2' },
+  currency: { headClass: 'w-[80px] px-2', cellClass: 'w-[80px] px-2 py-2' },
+  country: { headClass: 'w-[150px] px-2', cellClass: 'w-[150px] px-2 py-2' },
+  currentBalance: { headClass: 'w-[130px] px-2', cellClass: 'w-[130px] px-2' },
+  eTGOPendingCount: { headClass: 'w-[140px] px-2', cellClass: 'w-[140px] px-2' },
 };
 
 // DataTable right-aligns any column whose `type` is in its NUMERIC_FIELD_TYPES set
@@ -128,6 +148,8 @@ function buildColumns(ui, locale, handlers) {
     ui,
     onConnect: (account) => handlers.onBankConnectionAction('connect', account),
     onReconcile: handlers.onReconcile,
+    // ETP-5457 — drops the name cell's inline "Conectar banco" CTA under the read-only tier.
+    windowReadOnly: handlers.windowReadOnly,
   };
 
   const dataColumns = getContractGridColumns('account').map((col) => {
@@ -213,6 +235,15 @@ export default function AccountsHeaderTable({
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
+  // ETP-5457 — the window's "read-only" access tier. Read from the SAME source the generated
+  // AccountPage uses to force `window.readOnly` onto ListView (which is what hides ListView's own
+  // bulk delete here), so the slot and the list cannot disagree. This slot does not receive
+  // `window` — ListView's tableProps do not forward it — hence the direct hook. UI only: the
+  // backend remains the boundary.
+  const windowReadOnly = useWindowAccess(FINANCIAL_ACCOUNT_WINDOW_ID) === 'read-only';
+  // "Reglas de matcheo" only navigates to ANOTHER window, which has its own guard. What decides
+  // whether to offer the link is this role's access to that window, not the tier on this one.
+  const canOpenMatchRules = useWindowAccess(MATCH_RULE_WINDOW_ID) !== 'none';
 
   const [typeFilter, setTypeFilter] = useState(null);
   const [search, setSearch] = useState('');
@@ -252,6 +283,8 @@ export default function AccountsHeaderTable({
   };
 
   const handleBankConnectionAction = async (action, account) => {
+    // Every bank action writes (connect, sync, reconnect, disconnect, delete connection).
+    if (windowReadOnly) return;
     if (action === 'connect') {
       bankConnectionFlow.startConnect(account);
       return;
@@ -305,7 +338,7 @@ export default function AccountsHeaderTable({
    * shared with other accounts is always unlinked even when a soft disconnect was requested.
    */
   const runDisconnect = async (account, permanentDeletion, clearTarget) => {
-    if (!account) return;
+    if (!account || windowReadOnly) return;
     setDisconnecting(true);
     try {
       const res = await disconnect(account.id, { permanentDeletion });
@@ -332,21 +365,27 @@ export default function AccountsHeaderTable({
     deleteConnectionTarget, true, () => setDeleteConnectionTarget(null),
   );
 
+  // ETP-5457 — defense in depth under the read-only tier: the entry points are not rendered,
+  // and a mutating handler reached anyway is a no-op. Navigation (open, reconcile pill) is not
+  // wrapped: it only leads to the detail, which applies the same tier itself.
+  const guardWrite = (fn) => (windowReadOnly ? () => {} : fn);
+
   const handlers = {
     onOpen: (account) => navigate(`/financial-account/${account.id}`),
     onReconcile: (account) => navigate(`/financial-account/${account.id}?tab=reconciliation&autoMatch=true`),
-    onNewMovement: (account) => navigate(`/financial-account/${account.id}?tab=movements&newMovement=true`),
-    onEdit: setEditAccount,
-    onArchive: setArchiveTarget,
-    onDelete: setDeleteTarget,
-    onTransfer: setTransferSource,
+    onNewMovement: guardWrite((account) => navigate(`/financial-account/${account.id}?tab=movements&newMovement=true`)),
+    onEdit: guardWrite(setEditAccount),
+    onArchive: guardWrite(setArchiveTarget),
+    onDelete: guardWrite(setDeleteTarget),
+    onTransfer: guardWrite(setTransferSource),
     onBankConnectionAction: handleBankConnectionAction,
+    windowReadOnly,
   };
 
   const columns = useMemo(
     () => buildColumns(ui, locale, handlers),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ui, locale],
+    [ui, locale, windowReadOnly],
   );
   // Resting order only. `sortAccounts` reproduces the retired page's
   // `ORDER BY fa.isdefault DESC, fa.name ASC`, which `listSortBy` cannot express — it parses
@@ -411,8 +450,12 @@ export default function AccountsHeaderTable({
           // Seeds the funnel's value pickers. Deliberately the pre-conditions list, and
           // projected — see the filterPickerRows note above.
           rows={filterPickerRows}
-          onNewAccount={() => setWizardOpen(true)}
+          onNewAccount={guardWrite(() => setWizardOpen(true))}
           onMatchingRules={() => navigate('/match-rule')}
+          // ETP-5457 — hides "Nueva cuenta" under the read-only tier; "Reglas de matcheo"
+          // follows the role's access to the match-rule window instead (see canOpenMatchRules).
+          windowReadOnly={windowReadOnly}
+          showMatchingRules={canOpenMatchRules}
           onRefresh={reload}
           // The "Ordenar por" control every other list gets from ListView's idle bar. This
           // window sets `hideListBar: true` and draws its own toolbar, so without rendering it
@@ -445,7 +488,14 @@ export default function AccountsHeaderTable({
             hand-assembled headerTable, no other `rowHoverStyle="elevated"` consumer
             has one — so it clips the shadow again at its own edge unless it also
             carries the same 24px of trailing room. */}
-        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'auto', paddingBottom: 24 }}>
+        {/* `[&_table]:min-w-[1134px]` is the grid's floor: the sum of COLUMN_CHROME's
+            widths (970px) plus the selection (40px) and actions (124px) cells. Above it the
+            extra width is spread proportionally; below it the grid scrolls horizontally.
+            Applied to every table inside so the sticky header table and the body table keep
+            identical widths and stay aligned. */}
+        <div
+          className="[&_table]:min-w-[1134px]"
+          style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'auto', paddingBottom: 24 }}>
           <DataTable
             {...props}
             data={visibleAccounts}
@@ -461,7 +511,8 @@ export default function AccountsHeaderTable({
             // so the checkbox column renders and ListView's standardized selection bar
             // ("Delete selected") becomes reachable. A hardcoded `selectable={false}`
             // here is what removed grid multi-select delete from this window; the story's
-            // scope table requires it (Cuentas financieras: F/GH/GM all ✅).
+            // scope table requires it (Cuentas financieras: F/GH/GM all ✅). The one exception is
+            // the read-only tier (ETP-5457, `selectable` below), where that delete does not exist.
             // Independently of selection, the account-specific hover actions use
             // DataTable's shared quick-actions cell. That is the same sticky-right
             // infrastructure used by Sales Invoice; only the cell contents stay
@@ -479,9 +530,15 @@ export default function AccountsHeaderTable({
             // that reading — the row as a raised card — is why DataTable takes a
             // hover style rather than this slot restyling rows on its own.
             rowHoverStyle="elevated"
+            // ETP-5457 — under the read-only tier the checkboxes go: their only use is ListView's
+            // bulk delete, which ListView itself already drops for a read-only `window`, so a
+            // selection would only raise an empty floating pill.
+            selectable={!windowReadOnly}
             rowQuickActions={{
               enabled: true,
-              buttonCount: 3,
+              // Edit + Sync + kebab, or just the kebab (reduced to "Abrir cuenta") under the
+              // read-only tier — the reserved width follows the real maximum.
+              buttonCount: windowReadOnly ? 1 : 3,
               render: (account) => (
                 <AccountRowActions
                   account={account}
@@ -492,6 +549,7 @@ export default function AccountsHeaderTable({
                   onBankConnectionAction={handlers.onBankConnectionAction}
                   onTransfer={handlers.onTransfer}
                   onNewMovement={handlers.onNewMovement}
+                  windowReadOnly={windowReadOnly}
                   data-testid="AccountRowActions__371f53" />
               ),
             }}
@@ -499,14 +557,16 @@ export default function AccountsHeaderTable({
         </div>
       </div>
 
+      {/* ETP-5457 — every write dialog below is kept shut under the read-only tier, whatever its
+          own state says, so nothing can mount it without its (hidden) trigger. */}
       <NewAccountWizard
-        open={wizardOpen}
+        open={wizardOpen && !windowReadOnly}
         onClose={() => setWizardOpen(false)}
         onCreated={reload}
         onConnectWithCreation={bankConnectionFlow.startCreate}
         data-testid="NewAccountWizard__accthdr" />
       <EditAccountModal
-        open={!!editAccount}
+        open={!!editAccount && !windowReadOnly}
         account={editAccount}
         onClose={() => setEditAccount(null)}
         onSaved={reload}
@@ -515,13 +575,13 @@ export default function AccountsHeaderTable({
         onConnect={(acc) => { setEditAccount(null); handleBankConnectionAction('connect', acc); }}
         data-testid="EditAccountModal__accthdr" />
       <ArchiveAccountDialog
-        open={!!archiveTarget}
+        open={!!archiveTarget && !windowReadOnly}
         account={archiveTarget}
         onClose={() => setArchiveTarget(null)}
         onArchived={reload}
         data-testid="ArchiveAccountDialog__accthdr" />
       <DeleteAccountDialog
-        open={!!deleteTarget}
+        open={!!deleteTarget && !windowReadOnly}
         account={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onDeleted={reload}
@@ -531,7 +591,7 @@ export default function AccountsHeaderTable({
           confirm button, and `...DisconnectBody` explains that this only deactivates the
           connection, keeping it reconnectable. */}
       <ConfirmDialog
-        open={!!disconnectTarget}
+        open={!!disconnectTarget && !windowReadOnly}
         onOpenChange={(o) => { if (!o) setDisconnectTarget(null); }}
         title={ui('financeAccountsBankConnectionDisconnectConfirm')}
         description={ui('financeAccountsBankConnectionDisconnectBody')}
@@ -541,7 +601,7 @@ export default function AccountsHeaderTable({
         onConfirm={handleConfirmDisconnect}
         data-testid="ConfirmDialog__accthdr" />
       {/* The irreversible half gets the full warning cartel, same as in the edit modal. */}
-      {deleteConnectionTarget ? (
+      {deleteConnectionTarget && !windowReadOnly ? (
         <BankConnectionDeleteConfirmModal
           onConfirm={handleConfirmDeleteConnection}
           onClose={() => setDeleteConnectionTarget(null)}
@@ -551,7 +611,7 @@ export default function AccountsHeaderTable({
           meant a transfer launched from this grid's row kebab left the balances on screen
           stale — the transfer itself was fine, which is what made it look like nothing had
           happened. (The modal mounts as open; it takes no `open`.) */}
-      {transferSource && (
+      {transferSource && !windowReadOnly && (
         <FundsTransferModal
           sourceAccountId={transferSource.id}
           onClose={() => setTransferSource(null)}

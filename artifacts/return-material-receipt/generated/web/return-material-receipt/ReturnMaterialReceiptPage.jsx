@@ -11,6 +11,7 @@ import RelatedDocuments from '../../../custom/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import ReturnMaterialReceiptBottomPanel from '../../../custom/ReturnMaterialReceiptBottomPanel';
 import ConfirmWithCreditButton from '@/windows/custom/return-material-receipt/ConfirmWithCreditButton';
+import ReturnMaterialReceiptInvoicedBadge from '../../../custom/ReturnMaterialReceiptInvoicedBadge';
 import catalogs from './mockCatalogs';
 
 
@@ -326,6 +327,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={ReturnMaterialReceiptBottomPanel}
         topbarRight={ConfirmWithCreditButton}
+        topbarExtra={ReturnMaterialReceiptInvoicedBadge}
         menuActions={({ data, status }) => [
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
           { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }

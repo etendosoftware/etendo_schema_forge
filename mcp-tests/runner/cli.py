@@ -23,6 +23,7 @@ import secrets
 import sys
 import traceback
 import webbrowser
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,8 @@ from .events import (
     PROBE_STARTED,
     RUN_FINISHED,
     RUN_STARTED,
+    SETUP_STEP,
+    TEARDOWN_STEP,
     EventWriter,
 )
 from .mcp_client import (
@@ -47,6 +50,7 @@ from .mcp_client import (
     mcp_session,
     preflight,
 )
+from .steps import StepError, resolve_refs, run_steps
 from .suite import Probe, Suite, interpolate, interpolate_args, load_suite
 
 HARNESS_ROOT = Path(__file__).resolve().parent.parent
@@ -58,7 +62,10 @@ RUNS_DIR = HARNESS_ROOT / "runs"
 #: keys are additive, but a consumer computing payload metrics (§6.6) must be
 #: able to tell "results were never recorded" from "the results were empty", and
 #: only the version says which.
-RUN_SCHEMA_VERSION = 2
+#: v3 adds `setup[]`, `teardown[]` and `teardownClean` (D41): the records of the
+#: deterministic calls the runner made around the agent. Never part of
+#: `toolCalls[]`, which stays the agent's own record.
+RUN_SCHEMA_VERSION = 3
 
 
 def _unwrap(exc: BaseException) -> BaseException:
@@ -205,6 +212,7 @@ async def _verify_effect(
     *,
     run_id: str,
     timestamp: str,
+    saved: dict[str, Any] | None = None,
 ) -> tuple[bool | None, dict[str, Any] | None, dict[str, Any] | None]:
     """Run a write probe's post-condition in a FRESH MCP session.
 
@@ -220,6 +228,11 @@ async def _verify_effect(
     call_args = interpolate_args(
         effect.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp
     )
+    try:
+        # A check may name what setup created (`{{steps.invoice.id}}`, D41).
+        call_args = resolve_refs(call_args, saved or {})
+    except StepError as exc:
+        return None, None, {"kind": "verification", "detail": f"effect check: {exc}"}
     try:
         # A session of its own, so nothing the agent's session held can reach it.
         async with mcp_session(target) as session:
@@ -238,6 +251,68 @@ async def _verify_effect(
     verified = rows >= 1 if effect.expect == "atLeastOne" else rows == 0
     detail = {"tool": effect.tool, "args": call_args, "expect": effect.expect, "rows": rows}
     return verified, detail, None
+
+
+class SetupFailed(RuntimeError):
+    """A probe's setup did not reach the state the probe needs (D41)."""
+
+
+async def _run_phase(
+    probe: Probe,
+    phase: str,
+    target: dict[str, Any],
+    *,
+    run_id: str,
+    timestamp: str,
+    saved: dict[str, Any],
+    max_result_chars: int,
+    events: Any,
+) -> list[dict[str, Any]]:
+    """Run a probe's setup or teardown in a session of its own (D41).
+
+    Never raises: a failure is a record with `ok: false`, so a session that
+    dies mid-teardown still leaves the steps it did run on file.
+    """
+    declared = probe.setup if phase == "setup" else probe.teardown
+    if not declared:
+        return []
+    steps = [
+        replace(
+            s,
+            args=interpolate_args(s.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp),
+        )
+        for s in declared
+    ]
+    event_type = SETUP_STEP if phase == "setup" else TEARDOWN_STEP
+    records: list[dict[str, Any]] = []
+
+    def on_record(rec: dict[str, Any]) -> None:
+        records.append(rec)
+        events.emit(
+            event_type,
+            probe=probe.id,
+            index=rec.get("index"),
+            tool=rec.get("tool"),
+            ok=rec["ok"],
+            ms=rec.get("ms"),
+            **({"error": rec["error"]} if not rec["ok"] else {}),
+        )
+
+    try:
+        async with mcp_session(target) as session:
+            await run_steps(
+                steps,
+                lambda tool, args: call_tool(session, tool, args),
+                phase=phase,
+                saved=saved,
+                stop_on_error=phase == "setup",
+                max_result_chars=max_result_chars,
+                on_record=on_record,
+            )
+    except Exception as exc:  # noqa: BLE001 - the session itself failed
+        on_record({"phase": phase, "index": None, "tool": None, "ok": False,
+                   "error": f"session: {type(exc).__name__}: {exc}"})
+    return records
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -390,7 +465,14 @@ async def _run(args: argparse.Namespace) -> int:
             # or not verifiable; never conflated with "verified absent".
             "effectVerified": None,
             "effectCheck": None,
+            "setup": [],
+            "teardown": [],
+            # None = the probe declares no teardown; False = something it
+            # created may still be on the server.
+            "teardownClean": None,
         }
+        saved: dict[str, Any] = {}
+        stop_run = False
 
         if preflight_error:
             result["harnessError"] = preflight_error
@@ -404,6 +486,19 @@ async def _run(args: argparse.Namespace) -> int:
             continue
 
         try:
+            result["setup"] = await _run_phase(
+                probe, "setup", target, run_id=run_id, timestamp=timestamp,
+                saved=saved, max_result_chars=max_result_chars, events=events,
+            )
+            failed = next((r for r in result["setup"] if not r["ok"]), None)
+            if failed:
+                raise SetupFailed(f"setup[{failed['index']}] {failed['tool']}: {failed['error']}")
+            try:
+                prompt = resolve_refs(prompt, saved)
+            except StepError as exc:
+                raise SetupFailed(f"prompt: {exc}") from exc
+            result["prompt"] = prompt
+
             # A fresh MCP session per probe: probes are fully independent (§3).
             async with mcp_session(target) as session:
                 outcome = await run_probe(
@@ -426,7 +521,7 @@ async def _run(args: argparse.Namespace) -> int:
             )
 
             verified, detail, check_error = await _verify_effect(
-                probe, target, run_id=run_id, timestamp=timestamp
+                probe, target, run_id=run_id, timestamp=timestamp, saved=saved
             )
             result["effectVerified"] = verified
             result["effectCheck"] = detail
@@ -455,6 +550,14 @@ async def _run(args: argparse.Namespace) -> int:
                     rows=None if detail is None else detail.get("rows"),
                 )
             tally[{"OKAY": "ok", "ERROR": "error", "MIXED": "mixed"}.get(verdict["outcome"], "error")] += 1
+        except SetupFailed as exc:
+            # The agent never ran: there is nothing to measure (D41).
+            result["harnessError"] = {"kind": "setup", "detail": str(exc)}
+            result["verdict"] = None
+            events.emit(PROBE_ABORTED, probe=probe.id, kind="setup", detail=str(exc), toolCalls=0)
+            tally["notMeasured"] += 1
+            print(f"    not measured (setup): {exc}", file=sys.stderr)
+            exit_code = 1
         except AuthError as exc:
             result["harnessError"] = {"kind": "auth", "detail": str(exc)}
             result["verdict"] = None
@@ -494,23 +597,33 @@ async def _run(args: argparse.Namespace) -> int:
             tally["notMeasured"] += 1
             print(f"    not measured: {detail}{salvage_note}", file=sys.stderr)
             exit_code = 1
-            if _is_provider_config_error(cause):
-                result["finishedAt"] = dt.datetime.now(dt.timezone.utc).strftime(
-                    "%Y-%m-%dT%H:%M:%SZ"
+            stop_run = _is_provider_config_error(cause)
+        finally:
+            # Always, whatever happened above — including a setup that got
+            # halfway: teardown is what keeps the tenant clean (D41).
+            if probe.teardown:
+                result["teardown"] = await _run_phase(
+                    probe, "teardown", target, run_id=run_id, timestamp=timestamp,
+                    saved=saved, max_result_chars=max_result_chars, events=events,
                 )
-                _write_json(run_dir / "probes" / f"{probe.id}.json", result)
-                finish_run()
-                print(
-                    f"\nStopping the run: the provider rejected model "
-                    f"{provider['model']!r} outright, so every remaining probe would "
-                    f"fail identically. Check the model in your config — the startup "
-                    f"banner above shows what was actually used.",
-                    file=sys.stderr,
-                )
-                return exit_code
+                result["teardownClean"] = all(r["ok"] for r in result["teardown"])
+                if not result["teardownClean"]:
+                    bad = sum(1 for r in result["teardown"] if not r["ok"])
+                    print(f"    teardown INCOMPLETE ({bad} failed step(s)): data may be left behind",
+                          file=sys.stderr)
 
         result["finishedAt"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         _write_json(run_dir / "probes" / f"{probe.id}.json", result)
+        if stop_run:
+            finish_run()
+            print(
+                f"\nStopping the run: the provider rejected model "
+                f"{provider['model']!r} outright, so every remaining probe would "
+                f"fail identically. Check the model in your config — the startup "
+                f"banner above shows what was actually used.",
+                file=sys.stderr,
+            )
+            return exit_code
 
     finish_run()
     print(f"done: {run_dir}")

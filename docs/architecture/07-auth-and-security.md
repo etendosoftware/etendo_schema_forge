@@ -170,7 +170,8 @@ React components should access it through `useApiFetch(baseUrl)`, which reads th
 
 Current response fields:
 - `currencyCode` -- ISO 4217 code resolved for the current organization.
-- `yourCompanyDocumentImageId` -- `AD_Image_ID` from `AD_ClientInfo.Your_Company_Document_Image` for the current client.
+- `yourCompanyDocumentImageId` -- `AD_Image_ID` of the company's document logo, resolved by `CompanyLogoResolver` (ETP-5541): the current organization's `AD_OrgInfo.Your_Company_Document_Image` (the logo the GO Organization screen uploads), then the first `AD_OrgInfo` of the client with a logo (ordered by `AD_Org_ID`), then `AD_ClientInfo.Your_Company_Document_Image` as the last resort. The customer portal's `GET /logo` uses the same resolver.
+- `brandingUpdated` -- ISO instant of the latest `updated` among `AD_Org`, `AD_OrgInfo`, its `C_Location` and the resolved logo `AD_Image` (ETP-5541). The PDF cache treats a cached printable written before it as stale (`lib/attachmentFreshness.js`). `null` when unknown.
 - `organization` -- issuer identity used in printable documents (invoice templates, etc.):
   - `name` -- `AD_Org.Name`.
   - `taxId` -- `AD_OrgInfo.TaxID`.

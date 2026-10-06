@@ -25,9 +25,33 @@ import { findFetchCall } from './findFetchCall.js';
 
 const BASE = '/sws/neo/bank-reconciliation';
 
+// ETP-5424 — the provider must keep the seeded session for the whole test. Left on the default
+// `auto` credential mode it probes `GET /sws/go/session` on mount; with a fetch mock that answers
+// every URL alike, that probe "restored" a different session mid-test (and a failed probe logs
+// out), so the POST's response was correctly discarded as superseded. The tests only passed while
+// the POST happened to settle before the probe did. `restoreSession={null}` removes the probe, so
+// there is no session swap to race against.
 const wrapper = ({ children }) => (
-  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+  <AuthProvider initialSession={{ token: 'test-token' }} restoreSession={null}>
+    {children}
+  </AuthProvider>
 );
+
+// ETP-5195 — the provider also fires a silent `GET /sws/neo/refreshtoken` on mount. Route it to a
+// 401 (which the refresh ignores, keeping the session) so only the hook's own action URL sees the
+// response under test — a refresh must never be fed the action's body.
+const AUTH_ENDPOINT = /\/sws\/(go\/session|neo\/refreshtoken)(\?|$)/;
+
+function mockAction(impl) {
+  globalThis.fetch.mockImplementation((url, init) => (
+    AUTH_ENDPOINT.test(String(url))
+      ? Promise.resolve({ ok: false, status: 401, json: async () => ({}) })
+      : impl(url, init)
+  ));
+}
+
+const mockActionResponse = (response) => mockAction(async () => response);
+const mockActionRejection = (error) => mockAction(async () => { throw error; });
 
 function getResponse(payload) {
   return { ok: true, json: async () => ({ response: { data: payload } }) };
@@ -262,7 +286,7 @@ describe('useAutoMatch (GET)', () => {
 
 describe('useReconcileGroup (POST via useNeoPost)', () => {
   it('posts the reconcileGroup action with the payload and returns response.data', async () => {
-    globalThis.fetch.mockResolvedValue(postResponse({ reconciledId: 'rec-1' }));
+    mockActionResponse(postResponse({ reconciledId: 'rec-1' }));
 
     const { result } = renderHook(() => useReconcileGroup(), { wrapper });
     expect(result.current.loading).toBe(false);
@@ -283,7 +307,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
   });
 
   it('returns {} when response.data is absent', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mockActionResponse({ ok: true, json: async () => ({}) });
 
     const { result } = renderHook(() => useReconcileGroup(), { wrapper });
     let returned;
@@ -294,7 +318,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
   });
 
   it('throws and sets error with the server message on a non-ok response', async () => {
-    globalThis.fetch.mockResolvedValue({
+    mockActionResponse({
       ok: false,
       status: 422,
       json: async () => ({ error: { message: 'Already reconciled', status: 'CONFLICT' } }),
@@ -311,7 +335,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
   });
 
   it('falls back to "HTTP <status>" when the error body cannot be parsed', async () => {
-    globalThis.fetch.mockResolvedValue({
+    mockActionResponse({
       ok: false,
       status: 500,
       json: async () => { throw new Error('not json'); },
@@ -326,7 +350,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
   });
 
   it('throws and sets error when the network rejects', async () => {
-    globalThis.fetch.mockRejectedValue(new Error('Network down'));
+    mockActionRejection(new Error('Network down'));
 
     const { result } = renderHook(() => useReconcileGroup(), { wrapper });
 
@@ -349,7 +373,7 @@ const UNRECONCILE_PAYLOAD = {
 
 describe('useRemoveOperation (POST via useNeoPost)', () => {
   it('posts the removeOperation action with the payload and returns response.data', async () => {
-    globalThis.fetch.mockResolvedValue(postResponse({ transactionIds: ['t1'] }));
+    mockActionResponse(postResponse({ transactionIds: ['t1'] }));
 
     const { result } = renderHook(() => useRemoveOperation(), { wrapper });
     expect(result.current.loading).toBe(false);
@@ -370,7 +394,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
   });
 
   it('returns {} when response.data is absent', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mockActionResponse({ ok: true, json: async () => ({}) });
 
     const { result } = renderHook(() => useRemoveOperation(), { wrapper });
     let returned;
@@ -381,7 +405,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
   });
 
   it('throws and sets error with the server message on a non-ok response', async () => {
-    globalThis.fetch.mockResolvedValue({
+    mockActionResponse({
       ok: false,
       status: 422,
       json: async () => ({ error: { message: 'Transaction not linked', status: 'CONFLICT' } }),
@@ -398,7 +422,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
   });
 
   it('falls back to "HTTP <status>" when the error body cannot be parsed', async () => {
-    globalThis.fetch.mockResolvedValue({
+    mockActionResponse({
       ok: false,
       status: 500,
       json: async () => { throw new Error('not json'); },
@@ -413,7 +437,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
   });
 
   it('throws and sets error when the network rejects', async () => {
-    globalThis.fetch.mockRejectedValue(new Error('Network down'));
+    mockActionRejection(new Error('Network down'));
 
     const { result } = renderHook(() => useRemoveOperation(), { wrapper });
 
@@ -427,7 +451,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
 
 describe('useReactivateSelected (POST via useNeoPost)', () => {
   it('posts the reactivateSelected action with the payload and returns response.data', async () => {
-    globalThis.fetch.mockResolvedValue(postResponse({ reactivated: true }));
+    mockActionResponse(postResponse({ reactivated: true }));
 
     const { result } = renderHook(() => useReactivateSelected(), { wrapper });
     expect(result.current.loading).toBe(false);
@@ -448,7 +472,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
   });
 
   it('returns {} when response.data is absent', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    mockActionResponse({ ok: true, json: async () => ({}) });
 
     const { result } = renderHook(() => useReactivateSelected(), { wrapper });
     let returned;
@@ -459,7 +483,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
   });
 
   it('throws and sets error with the server message on a non-ok response', async () => {
-    globalThis.fetch.mockResolvedValue({
+    mockActionResponse({
       ok: false,
       status: 422,
       json: async () => ({ error: { message: 'Already in draft', status: 'CONFLICT' } }),
@@ -476,7 +500,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
   });
 
   it('falls back to "HTTP <status>" when the error body cannot be parsed', async () => {
-    globalThis.fetch.mockResolvedValue({
+    mockActionResponse({
       ok: false,
       status: 500,
       json: async () => { throw new Error('not json'); },
@@ -491,7 +515,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
   });
 
   it('throws and sets error when the network rejects', async () => {
-    globalThis.fetch.mockRejectedValue(new Error('Network down'));
+    mockActionRejection(new Error('Network down'));
 
     const { result } = renderHook(() => useReactivateSelected(), { wrapper });
 
@@ -505,7 +529,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
 
 describe('useApplySuggestions (POST via useNeoPost)', () => {
   it('posts the applySuggestions action and returns parsed data', async () => {
-    globalThis.fetch.mockResolvedValue(postResponse({ applied: 2 }));
+    mockActionResponse(postResponse({ applied: 2 }));
 
     const { result } = renderHook(() => useApplySuggestions(), { wrapper });
     let returned;
@@ -521,7 +545,7 @@ describe('useApplySuggestions (POST via useNeoPost)', () => {
   });
 
   it('propagates errors from the apply action', async () => {
-    globalThis.fetch.mockResolvedValue({
+    mockActionResponse({
       ok: false,
       status: 400,
       json: async () => ({ error: { message: 'Bad groups' } }),
@@ -543,7 +567,7 @@ describe('useApplySuggestions (POST via useNeoPost)', () => {
 // `err.body` is the prerequisite for both flows.
 describe('useNeoPost error body (ETP-4965)', () => {
   it('attaches the parsed error body to the thrown error', async () => {
-    globalThis.fetch.mockResolvedValue({
+    mockActionResponse({
       ok: false,
       status: 400,
       json: async () => ({
@@ -576,7 +600,7 @@ describe('useNeoPost error body (ETP-4965)', () => {
   });
 
   it('exposes the 409 remainderLineId so the caller can retarget the pending sub-line', async () => {
-    globalThis.fetch.mockResolvedValue({
+    mockActionResponse({
       ok: false,
       status: 409,
       json: async () => ({
@@ -597,7 +621,7 @@ describe('useNeoPost error body (ETP-4965)', () => {
   });
 
   it('leaves body undefined (never throws) when the error payload is not JSON', async () => {
-    globalThis.fetch.mockResolvedValue({
+    mockActionResponse({
       ok: false,
       status: 500,
       json: async () => { throw new Error('not json'); },

@@ -6,6 +6,7 @@ import { DateField } from '@/components/ui/date-field';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { TruncatedText } from '@/components/ui/truncated-text';
+import GalleryGrid from '@/components/ui/gallery-grid';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import ProductSearchDrawer from '@/components/contract-ui/ProductSearchDrawer.jsx';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
@@ -1201,9 +1202,12 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
     setLoading(true);
     setError(null);
     try {
+      // ETP-5424 — a report render (here, the drill-down detail) is the longest request the
+      // app makes; opt out of the default timeout so a slow success never reads "try again".
       const res = await apiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
         body: JSON.stringify({ format, params: renderParams, locale }),
+        timeout: 0,
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -1501,12 +1505,25 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
     if (!autoParams.length) return;
     Promise.all(
       autoParams.map(p => {
-        // currencyId's autoDefault must follow the ACTIVE ORGANIZATION's currency
-        // (ad_org.c_currency_id, same field /organization shows as "Moneda"), not just
-        // the client's base currency — a multi-org client can have orgs in different
-        // currencies. report-api.js's 'currency' selector already prefers the org's
-        // currency in its ORDER BY when selectedOrgId is passed; without it, it falls
-        // back to the client's base currency.
+        // currencyId's autoDefault must follow the ACTIVE ORGANIZATION's currency, not just
+        // the client's base currency — a multi-org client can have orgs booked in different
+        // currencies. This `/sws/report-selectors/currency` call is served by TWO different
+        // backends depending on environment, and (ETP-5483) BOTH now honor selectedOrgId in
+        // their ORDER BY, though via slightly different notions of "the org's currency":
+        //   - dev (Vite): tools/app-shell/vite-plugins/report-api.js's 'currency' selector
+        //     prefers the org's own currency field (ad_org.c_currency_id, same field
+        //     /organization shows as "Moneda").
+        //   - a real Etendo deployment: this `/sws/` path is served by the Java
+        //     ReportSelectorsServlet (com.etendoerp.go), NOT the Node report-api.js/
+        //     report-server mock — whose buildCurrencyQuery() used to ignore selectedOrgId
+        //     entirely (always ordering by the client's currency only) despite the SPA
+        //     already sending it. It now prefers the org's general-ledger/accounting-schema
+        //     currency first (ad_org.c_acctschema_id -> c_acctschema.c_currency_id, falling
+        //     back to ad_org_acctschema) — the same precedence TaxReportHandler's own
+        //     currencyId default follows, so the report's filter default and the amounts it
+        //     actually converts to agree.
+        // Either way, without selectedOrgId this still falls back to the client's base
+        // currency.
         const orgParam = (p.selector === 'currency' && selectedOrgId)
           ? `&selectedOrgId=${encodeURIComponent(selectedOrgId)}`
           : '';
@@ -1554,10 +1571,12 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
     setLoading(true);
     setError(null);
     try {
+      // ETP-5424 — see the drill-down render above: renders opt out of the default timeout.
       const res = await apiFetch(`/api/reports/${report.id}/render`, {
         method: 'POST',
         baseUrl: '',
         body: JSON.stringify({ format, params: submitParams, locale }),
+        timeout: 0,
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -2020,7 +2039,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 {CATEGORY_LABELS[cat]?.[localeLangKey] || cat}
               </h2>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            <GalleryGrid data-testid="gallery-grid">
               {catReports.map(r => (
                 <ReportCard
                   key={r.id}
@@ -2028,7 +2047,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                   onRun={selectReport}
                   data-testid="ReportCard__3c998a" />
               ))}
-            </div>
+            </GalleryGrid>
           </div>
         ))}
       </div>

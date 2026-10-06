@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Check, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
+import { showSaveSuccessToast } from '@/hooks/useEntity';
 
 /**
  * The required-field gate shared by every primary persist button. ETP-4839 layers a
@@ -276,12 +277,36 @@ export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
  * `handleRoleAssignmentSave` in `windows/custom/user/index.jsx`, which already does.
  */
 export async function runAfterSaveHook(saved, { isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl }) {
-  await (isNew ? onAfterCreate : onAfterExistingSave)?.(saved, { token, apiBaseUrl });
+  return (isNew ? onAfterCreate : onAfterExistingSave)?.(saved, { token, apiBaseUrl });
 }
 
-export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
+/**
+ * ETP-5278 — the toolbar Save of an EXISTING record whose window declares
+ * `onAfterExistingSave` saves with `silent: true` (see `renderExistingRecordSaveAction`) and
+ * shows the single "saved" toast HERE, only once the hook has finished — so the user never sees
+ * "Registro guardado" while the follow-up write (e.g. the Users window's role assignment) is
+ * still running or has just failed (the contradictory success-then-error pair QA reported).
+ *
+ * Outcome contract: the hook resolves `{ ok: false }` when it failed AND already reported the
+ * failure itself (it must use `RECORD_SAVE_TOAST_ID`, so its error replaces rather than stacks);
+ * anything else (`undefined`, `{ ok: true }`) counts as success. A hook that throws is reported
+ * with the generic `savedButFollowUpActionFailed` toast — the record itself DID save.
+ */
+async function runAfterSaveHookWithFinalToast(saved, { isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }) {
+  let outcome;
+  try {
+    outcome = await runAfterSaveHook(saved, { isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl });
+  } catch (err) {
+    toast.error(ui?.('savedButFollowUpActionFailed', { detail: err?.message || '' }) || 'savedButFollowUpActionFailed');
+    return;
+  }
+  if (outcome?.ok !== false) showSaveSuccessToast(false, isNew, ui);
+}
+
+export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui, deferSaveToast = false }) {
   if (!saved) return;
-  await runAfterSaveHook(saved, { isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl });
+  const afterSave = deferSaveToast ? runAfterSaveHookWithFinalToast : runAfterSaveHook;
+  await afterSave(saved, { isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui });
   if (onAfterSave) {
     navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
   } else if (saved.id && isNew) {
@@ -399,14 +424,21 @@ function renderNewRecordSaveActions({
 function renderExistingRecordSaveAction({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
   ui, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, isDocumentReadOnly, blockSaveForBalance, saveGate = {},
+  saveBusy = false,
 }) {
+  // ETP-5278 — `saveBusy`: the window reports a save-related operation still in flight outside
+  // `hook` (e.g. the Users role assignment run by `onAfterExistingSave`, or promote/demote).
+  // Without it, Save re-enabled the moment `hook.handleSave` resolved, and a second click could
+  // overlap the still-running follow-up write. `deferSaveToast`: see runAfterSaveHookWithFinalToast.
+  const busy = hook.isSaving || saveBusy;
+  const deferSaveToast = !isNew && !!onAfterExistingSave;
   return (
-    <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} ${SECONDARY_SAVE_CLS}`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
+    <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} ${SECONDARY_SAVE_CLS}`} data-testid="action-save" disabled={isDocumentReadOnly || busy || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
       if (!(await flushPendingLines())) return;
-      const saved = await hook.handleSave(data);
-      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui });
+      const saved = await hook.handleSave({ silent: deferSaveToast });
+      await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui, deferSaveToast });
     }}>
-      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
       {ui('save')}
     </Button></GateTooltip>
   );

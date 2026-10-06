@@ -101,9 +101,24 @@ For each field below: if the ticket has it, use it. If it's **missing**, that's 
 | `McpAuthorizationService.java` | OAuth2 scope validation | scope rejections |
 | `McpHookExecutor.java` | Runs `NeoHandler` hooks | window-specific behavior |
 
-**Tests** live in `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/mcp/` (e.g. `McpToolRouterTest`, `ToolRegistryTest`, `McpServletTest`). Every fix needs a regression test here — delegate test authoring per project policy when appropriate, but the MCP layer is JUnit/OBBaseTest.
+**Tests** live in `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/mcp/` (e.g. `McpToolRouterTest`, `ToolRegistryTest`, `McpServletTest`). Every fix needs a regression test here. You write only the failing repro test for your own fix (inside the red-green loop); any further coverage goes to `tester-go`. Both follow `docs/testing/test-reuse-policy.md`: `make find-tests FILE=<Class>` first, extend the existing test class, `@covers` in the Javadoc, no ticket-named class. Mockito by default; `OBBaseTest` only when real DAL/persistence behavior is under test.
 
-**Generic-service rule (MANDATORY):** never add window/spec-specific branches to `NeoSelectorService`, `NeoDefaultsService`, `NeoCrudHandler`, `NeoServlet`, or the generic MCP router. Window-specific behavior goes in a dedicated `NeoHandler` CDI bean keyed by `ETGO_SF_ENTITY.Java_Qualifier` (`@Named("...")` only — NEVER `@ApplicationScoped`). See `docs/neo-headless-extensibility.md`.
+**Generic-service rule (MANDATORY):** never add window/spec-specific behavior to shared code. It goes in that entity's own customization.
+
+*Where it goes.* Two mechanisms, both live — prefer the first for anything new:
+- **`@NeoExtension(spec = "<spec>", entity = "<entity>")`** on the customization class, resolved by `NeoExtensionIndex` through the single `NeoExtensionDispatcher`. Proxy-safe, and it works on every surface (CRUD, DEFAULTS, ACTION, SELECTOR, CALLOUT, READ) and every channel (REST single, REST batch, MCP).
+- **`ETGO_SF_ENTITY.Java_Qualifier` + `@Named("<qualifier>")`** — the original binding, still resolved as the fallback. **`@Named` only, NEVER `@ApplicationScoped`** (or any normal scope): `@Named` is not `@Inherited`, so a normal-scoped bean resolves to a Weld client proxy whose subclass does not carry it and the lookup silently skips your handler.
+
+*What counts as shared code.* The list is longer than the obvious services, and being outside it is not a licence — ask "would another entity want this exact behaviour?" and if the honest answer is no, it is a customization:
+- the services: `NeoSelectorService`, `NeoDefaultsService`, `NeoCrudHandler`, `NeoServlet`, `NeoSubEndpointDispatcher`, the generic MCP router (`McpToolRouter`, `McpToolRouterSupport`);
+- **the batch path**: `BatchService` and its `OperationPreprocessor` hook;
+- **the write-path compensations and policies**: `McpLinePriceInjector`, `McpBillToInjector`, `McpWriteRequestSupport`, `NeoCommercialLinePolicy`, `DocTypeResolver`. These already hold behaviour selected by a property-name guard (`dalEntity.hasProperty(...)`) rather than by entity name. **Do not add a new one, and do not add an entity name to an existing one** — the existing guards are tolerated until migration M4, a new one is the defect.
+
+*The criterion.* Shared code may branch on **structure** — generic AD metadata that names no entity (is this AD column mandatory? updatable?). It must never branch on **identity** (is this `sales-order`? is this table `C_OrderLine`?). An identity literal in a shared class is a review-blocking finding, whatever it is guarding. A business property name (does this entity have a `unitPrice`? a `uOM`?) is identity in disguise: the behaviour goes in the customization of each entity that has it, calling a shared util explicitly if several share it (T12).
+
+*A divergence must be declared.* If two channels or two paths must genuinely behave differently, say so where it is enforced and record it — see `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.12.9, which lists the `neo_create` / `neo_batch` divergences that are deliberate. An undeclared divergence is how `neo_batch` came to persist order lines at price 0 while `neo_create` priced them correctly, with nothing in any response or log saying so.
+
+See `docs/neo-headless-extensibility.md`.
 
 **Upstream root causes:** sometimes the MCP only *surfaces* a defect whose real source is the generated contract (schema_forge). Example precedent: selectors needed `context.required` metadata (ETP-3955). If the fix belongs in `decisions.json` / the generators, fix it there (and `make regen`), not in the MCP. Decide where the root cause is before coding.
 
@@ -121,7 +136,7 @@ For each field below: if the ticket has it, use it. If it's **missing**, that's 
 4. **Classify the root cause** — one of the 6 categories (see rubric). Only **code-bug** and **upstream-config** are code fixes here; RBAC, missing-module, validator-side, and test-data-gap become feedback + escalation (validator-side has NO product fix at all — it's a defect in the bot).
 5. **Branch** — delegate branch creation to **Clerk** (`feature/ETP-XXXX`, shared across both repos per `docs/branch-workflow.md`). Never work on main/epic directly.
 6. **Fix at the right layer** — MCP Java (CDI `NeoHandler` for window-specific; generic service only for truly generic behavior) OR upstream generator/decisions. Follow the generic-service rule.
-7. **Test** — add/extend a regression test (JUnit in com.etendoerp.go for MCP; Vitest/Node for schema_forge generators). Per project policy, delegate substantial test authoring to the Tester agent.
+7. **Test** — write the failing repro test for the fix yourself, extending the existing test class found with `make find-tests` (JUnit in com.etendoerp.go for MCP). Every other test goes to the repo's tester: `tester-go` (JUnit) or `tester-functional` (Node / Vitest / Playwright in `etendo_schema_forge`).
 8. **Capture the feedback note** — fill the per-ticket entry in `docs/agentic-validation/ticket-feedback.md` (rubric gaps + the actual root-cause category). This is NOT optional.
 9. **Commit & PR** — delegate to Clerk. Commit message per Etendo Git Police (`Feature ETP-XXXX: ...`, ≤80 chars, no Co-Authored-By). PR references the ticket.
 10. **Remind** — if the fix changed `ETGO_SF_*` config or pushed to NEO, remind the user to run `./gradlew export.database` in Etendo root.
@@ -155,7 +170,7 @@ Before doing ANYTHING:
 4. **Jira state?** — Does a task exist for this ticket? (Clerk checks.) Create only if absent.
 5. **Reproduce-ability?** — Can you reconstruct the failing call from the ticket alone? Whatever you can't → feedback note + possibly a question to the user.
 6. **Root-cause layer?** — one of the 6 categories (code-bug / upstream-config / RBAC / missing-module / validator-side / test-data-gap). Decide before coding; categories 3–6 have no MCP code fix.
-7. **DB/IDs?** — Never guess spec/entity/window IDs; query via `cli/src/menu-cache.js` or the DB (`cli/src/db.js`).
+7. **DB/IDs?** — Never guess spec/entity/window IDs; query via `npx sf-menu-cache search` or the DB (`cli/src/db.js`).
 </orientation_checklist>
 
 <what_i_do>
@@ -165,7 +180,7 @@ Before doing ANYTHING:
 - Fix at the correct layer — MCP Java (`NeoHandler` CDI bean for window-specific, generic service for truly generic) or upstream generator/decisions — and add a regression test.
 - On EVERY ticket, record the feedback note in `docs/agentic-validation/ticket-feedback.md` (missing rubric fields + root-cause category + concrete advice for the bot team).
 - Keep the distilled rubric / recommended ticket template up to date as the hand-off artifact.
-- Delegate ALL Jira/branch/PR ops to Clerk and substantial test authoring to Tester.
+- Delegate ALL Jira/branch/PR ops to Clerk, and every test beyond your own repro to `tester-go` / `tester-functional`.
 - Maintain the internal knowledge base (`mcp-ticket-knowledge.md`) with durable MCP facts and recurring patterns.
 </what_i_do>
 
@@ -173,7 +188,8 @@ Before doing ANYTHING:
 - Deliver a fix without a feedback note (or an explicit "no gaps — exemplary ticket" entry).
 - Edit the external bot's prompt/code — we don't control it; we only produce a hand-off report.
 - Touch code before a Jira task exists for the ticket.
-- Add window/spec-specific branches to a generic MCP/NEO service (use a `NeoHandler` CDI bean, `@Named` only — never `@ApplicationScoped`).
+- Add window/spec-specific behavior to shared code — the services, `BatchService`, or the write-path injectors/policies. Use the entity's own customization (`@NeoExtension`, or `@Named` on a `Java_Qualifier` bean — never `@ApplicationScoped`). See the Generic-service rule.
+- Branch on entity **identity** (a spec name, a table name) inside shared code. Structure (a generic AD column flag) is allowed; identity is not, and a business property name (`hasProperty("unitPrice")`) counts as identity.
 - Manually edit generated files or contract.json — fix at the generator/decisions level and `make regen`.
 - Run `jira`, `git branch/checkout`, or `gh pr create` directly — always delegate to Clerk.
 - Work on main/epic directly, or create PRs targeting main.

@@ -33,6 +33,16 @@ import { buildTypesLabel } from './attachmentPolicy';
  *                       the header. Only present (non-undefined) while isNew.
  *   onGoToSavedRecord - (savedRecord) => void. Navigates to the just-saved
  *                       record with this tab re-opened. Only present while isNew.
+ *   readOnly          - When true, hides the single-row and "delete all" delete
+ *                       actions (download/upload stay available). Default false
+ *                       (every existing caller is unaffected). A window passes
+ *                       this when the owning record has left an editable/draft
+ *                       state — e.g. fiscal-models' "Justificante" tab, where an
+ *                       already-submitted declaration's receipt must not be
+ *                       deletable (ETP-5432 pt.3). This is a UI convenience only:
+ *                       the backend `DELETE /sws/neo/attachments/:id` endpoint has
+ *                       no per-record status check, so it does not stop a direct
+ *                       API call — see NeoAttachmentsHelper#handleDelete.
  *
  * ── Attaching before the header is saved (ETP-4315 QA follow-up) ───────────
  * A brand-new record has no persisted id, so `recordId` here is the literal
@@ -58,8 +68,19 @@ export default function AttachmentsTab({
   onSaveHeader,
   onGoToSavedRecord,
   isDocumentReadOnly,
+  readOnly = false,
 }) {
   const ui = useUI();
+  // ETP-5432/ETP-5205 merge fix: `isDocumentReadOnly` (generic, wired by DetailView
+  // from the document's own lock/processed state) and `readOnly` (explicit, for
+  // bespoke callers outside DetailView — e.g. fiscal-models' "Justificante" tab,
+  // which is not rendered through DetailView) are two independent signals; either
+  // one should suppress delete. Losing either source silently re-enables delete on
+  // a record that must not allow it — this exact regression shipped once already:
+  // a develop merge kept `isDocumentReadOnly` and dropped `readOnly`, so both
+  // FmModel303Page's and FmModel349Page's `readOnly={status !== 'draft'}` silently
+  // stopped doing anything.
+  const effectiveReadOnly = !!isDocumentReadOnly || !!readOnly;
   const saveBeforeAttach = !!config.saveBeforeAttach;
   const [isSavingBeforeAttach, setIsSavingBeforeAttach] = useState(false);
 
@@ -95,6 +116,7 @@ export default function AttachmentsTab({
 
   const {
     items,
+    count,
     loading,
     uploadingFiles,
     upload,
@@ -110,6 +132,8 @@ export default function AttachmentsTab({
     apiBaseUrl,
     isActive,
     config: effectiveConfig,
+    // ETP-5526: only a tab that reports a badge pays for the count request.
+    prefetchCount: Boolean(onCountChange),
   });
 
   const [deletingAttachment, setDeletingAttachment] = useState(null);
@@ -118,9 +142,15 @@ export default function AttachmentsTab({
 
   const onCountChangeRef = useRef(onCountChange);
   useEffect(() => { onCountChangeRef.current = onCountChange; });
+  // ETP-5526: report the real count as soon as the record opens — the hook
+  // fetches it from the lightweight count endpoint while the full list stays
+  // lazy (ETP-4564), and switches to the list length once the list is read.
+  // `null` when it is still unknown or cannot be fetched (e.g. an older
+  // backend without the endpoint): the badge then shows no number, never a
+  // fake 0 that reads as "the file was lost".
   useEffect(() => {
-    if (!loading) onCountChangeRef.current?.(items.length);
-  }, [items.length, loading]);
+    if (!loading) onCountChangeRef.current?.(count);
+  }, [count, loading]);
 
   const uploadToNewRecord = useCallback(async (file) => {
     if (!onSaveHeader) return;
@@ -150,13 +180,16 @@ export default function AttachmentsTab({
     }
   };
 
-  const onDeleteAll = !isDocumentReadOnly && items.length > 0 ? () => setConfirmDeleteAll(true) : undefined;
+  const onDeleteAll = !effectiveReadOnly && items.length > 0 ? () => setConfirmDeleteAll(true) : undefined;
 
   return (
     <div className="space-y-2" data-testid="attachments-tab-panel">
       <UploadDropzone
         onFiles={handleUpload}
         config={effectiveConfig}
+        // Upload stays gated by `isDocumentReadOnly` only — the bespoke `readOnly`
+        // prop is delete-only by contract (see JSDoc above: "download/upload stay
+        // available"), so it must not disable the dropzone.
         disabled={!recordId || isSavingBeforeAttach || isDocumentReadOnly}
         data-testid="UploadDropzone__281340" />
       <AttachmentsTable
@@ -164,7 +197,7 @@ export default function AttachmentsTab({
         loading={loading}
         uploadingFiles={uploadingFiles}
         onDownload={download}
-        onDelete={isDocumentReadOnly ? undefined : setDeletingAttachment}
+        onDelete={effectiveReadOnly ? undefined : setDeletingAttachment}
         onDownloadAll={items.length > 0 ? downloadAll : undefined}
         onDeleteAll={onDeleteAll}
         formatBytes={formatBytes}

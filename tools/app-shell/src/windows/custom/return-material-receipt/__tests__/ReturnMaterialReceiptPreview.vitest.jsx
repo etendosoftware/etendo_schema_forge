@@ -1,5 +1,7 @@
+// @covers tools/app-shell/src/windows/custom/return-material-receipt/ReturnMaterialReceiptPreview.jsx
 // Mocks must come before imports (Vitest hoisting)
 
+import { dateOnlyWithFormatter } from '@/test/dateOnlyMock.js';
 import React from 'react';
 
 vi.mock('@/i18n', () => ({
@@ -8,14 +10,9 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US' }),
 }));
 
-// Spread the REAL module and override only the formatter: an exhaustive factory
-// silently becomes wrong the moment anything in this tree reaches for another
-// `@/lib/dateOnly` export, and vitest reports that as a render-time
-// `No "<name>" export is defined on the "@/lib/dateOnly" mock` (ETP-5046).
-vi.mock('@/lib/dateOnly', async () => {
-  const actual = await vi.importActual('@/lib/dateOnly');
-  return { ...actual, formatCalendarDate: (val) => val || '-' };
-});
+// Keep every real `@/lib/dateOnly` export; stub only the formatter (see the helper).
+vi.mock('@/lib/dateOnly', async (importOriginal) =>
+  dateOnlyWithFormatter(importOriginal, (val) => val || '-'));
 
 const mockCapturedModalProps = { current: null };
 vi.mock('../../shared/GenericPreviewModal.jsx', () => ({
@@ -90,6 +87,7 @@ vi.mock('../../shared/pdfUtils.js', () => ({
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import ReturnMaterialReceiptPreview from '../ReturnMaterialReceiptPreview.jsx';
+import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
 
 const defaultReceipt = {
   id: 'rmr-1',
@@ -186,6 +184,13 @@ describe('ReturnMaterialReceiptPreview', () => {
     expect(screen.getByTestId('tab-general')).toBeInTheDocument();
     expect(screen.queryByTestId('tab-messages')).not.toBeInTheDocument();
     expect(screen.queryByTestId('tab-history')).not.toBeInTheDocument();
+  });
+
+  it('passes the shared return-material-receipt related-documents definition, not specs (ETP-5527)', () => {
+    renderPreview();
+    const args = mockBuildReturnPreviewContent.mock.calls.at(-1)[0];
+    expect(args.relatedDefinition).toBe(SALES_RELATED_DOCS['return-material-receipt']);
+    expect(args.specs).toBeUndefined();
   });
 
   it('title contains windowLabel and receipt documentNo', () => {

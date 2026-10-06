@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/goods-shipment/GoodsShipmentPreview.jsx
 // ETP-5069 — email-history wiring for the goods-shipment preview.
 //
 // This lives in its own file (mirroring OrderPreviewEmailLink.vitest.jsx) because
@@ -7,6 +8,8 @@
 // the two mock strategies cannot share a module registry.
 
 // Mocks must come before imports (Vitest hoisting)
+
+import { dateOnlyWithFormatter } from '@/test/dateOnlyMock.js';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -18,14 +21,9 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-// Spread the REAL module and override only the formatter: an exhaustive factory
-// silently becomes wrong the moment anything in this tree reaches for another
-// `@/lib/dateOnly` export, and vitest reports that as a render-time
-// `No "<name>" export is defined on the "@/lib/dateOnly" mock` (ETP-5046).
-vi.mock('@/lib/dateOnly', async () => {
-  const actual = await vi.importActual('@/lib/dateOnly');
-  return { ...actual, formatCalendarDate: (date) => date || '—' };
-});
+// Keep every real `@/lib/dateOnly` export; stub only the formatter (see the helper).
+vi.mock('@/lib/dateOnly', async (importOriginal) =>
+  dateOnlyWithFormatter(importOriginal, (date) => date || '—'));
 
 vi.mock('../useShipmentPdf.js', () => ({
   useShipmentPdf: vi.fn(() => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null })),

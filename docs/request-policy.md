@@ -73,6 +73,55 @@ Everything not listed here is forwarded to `fetch` untouched (`method`, `body`, 
 | `credentials` | overrides the default `'include'` |
 | `refreshVersion: false` | the call is a POST to an action endpoint (`/{spec}/{entity}/{id}/action/<name>`) that is a query in disguise — verified to NOT mutate the record it addresses. Skips the post-action re-read described below. Default `true`. See [Action endpoints re-read the record afterward](#action-endpoints-re-read-the-record-afterward-refreshversion-etp-5434) before setting this — the warning there is the important part |
 
+| `timeout` | ms to wait for a response before rejecting with a `NetworkError` (`reason: 'timeout'`). **Default: 60 s for a safe method (`GET`, `HEAD`, `OPTIONS`, or no method) and none for any other method.** An explicit value applies to any method; `0` disables it. Pass `timeout: 0` for a **long read** — see [Network failures and the timeout](#network-failures-and-the-timeout-etp-5424) |
+
+## Network failures and the timeout (ETP-5424)
+
+A request that never got an HTTP answer does not reach the call site as the browser's
+`TypeError('Failed to fetch')` anymore. `apiFetch` rejects with a `NetworkError`
+(`@etendosoftware/app-shell-core/auth`) whose `message` is **already translated**
+(`genericLabels.networkErrorRetry`), so any call site that shows `err.message` is correct
+without a special case.
+
+| Situation | What the call site receives |
+|---|---|
+| Offline, DNS, CORS, connection reset — `fetch` rejects with a `TypeError` | `NetworkError`, `reason: 'offline'`, original on `cause` |
+| A body reader (`json`, `text`, `blob`, …) rejects with a `TypeError` | `NetworkError`, `reason: 'offline'` |
+| No response within the timeout | `NetworkError`, `reason: 'timeout'` |
+| The caller's own `signal` aborts | the caller's `AbortError`, unchanged — a cancellation is not a failure |
+| A `SyntaxError` (bad JSON), a plain `Error` | unchanged |
+
+Detect it with `isNetworkError(err)`, never by matching `'Failed to fetch'` or
+`name === 'TypeError'`. A caller with more specific wording checks it first (the importer maps
+it to `importErrorConnection` / `importErrorTimeout`).
+
+**The translator** is registered once, by `installErrorTranslator` (`src/i18n/errorTranslator.js`)
+in an effect in `App.jsx`, with the rendered locale's dictionary — see `docs/i18n-guide.md`.
+
+**Why writes get no default timeout.** A read that is cut off can be retried safely. A write
+that is cut off may still commit on the server, and the user's "try again" is then a double
+submit — an order completed twice, a payment registered twice. So the 60 s default applies only
+to `GET`/`HEAD`/`OPTIONS`; a `POST`/`PUT`/`PATCH`/`DELETE` waits for its answer unless the
+caller passes a `timeout` explicitly. Some synchronous processes carry an explicit
+`timeout: 0` anyway (useEntity save-and-process and `handleProcess`, `useBatch`, year close,
+posting); it is redundant and documents intent.
+
+**Rule: pass `timeout: 0` for a long read.** The timer covers only until the response headers
+arrive, so what counts is how long the server takes to START answering. Opt out when the server
+builds the whole payload before replying:
+
+- a server-side export — `useCsvExport` (`export=csv|xlsx`, used by `ListExportButton` and the
+  financial-account exports);
+- a walk over thousands of rows — `ReportDrawer`'s `fetchAllRecords`;
+- an archive built on demand — the attachments `/zip` download.
+
+A plain list page, a single record, a selector or a file download (the bytes stream after the
+headers) keep the default.
+
+**A raw `fetch`** (the `/jsreport` container proxy) gets none of this: map a `TypeError` yourself
+with `new NetworkError({ reason: 'offline', cause: err })` — see `renderViaJsreport` in
+`ReportDrawer.jsx`.
+
 ## Updates carry a concurrency token (ETP-5073)
 
 `apiFetch` attaches an `updated` value to every `PATCH`/`PUT` whose target record this client has
@@ -207,6 +256,69 @@ loses its token, which covers the ambient (non-React) path too.
 
 That is why the local `@/auth/useApiFetch.js` **wraps** the core hook instead of re-exporting
 it: taking the core's own `useAuth().logout` would silently skip the clear.
+
+## Writes to child documents invalidate the parent order's cache (ETP-5525)
+
+The shared record cache (`@etendosoftware/app-shell-core/data`, 30 s `recordStaleTime`) is
+invalidated by `useEntity` for **its own spec only**. Some specs show values the backend derives
+from other specs' documents — the order header's `needsPrimaryDoc` / `needsInvoiceDoc` are computed
+from its shipments/receipts and invoices — so a write to a shipment left the order record "fresh"
+in the cache, and a client-side return to the order (a Related Documents chip, the back button)
+rendered the pre-write annotation until a full reload.
+
+The local `useApiFetch` therefore also runs `invalidateAfterWrite` from
+`tools/app-shell/src/lib/crossSpecCacheInvalidation.js` after every **successful non-GET**
+response: if the request URL has a path segment listed in `WRITE_INVALIDATES_SPECS`, every cached
+query of the dependent specs is marked stale (`cache.invalidate({ spec })`) and the next read
+refetches. The response itself is returned untouched, and without a `DataProvider` the hook
+returns the plain core client.
+
+A POST is not always a write: a URL whose **last** path segment is in `READ_ONLY_SUB_ENDPOINTS`
+— `evaluate-display` (fired on every record open) and `callout` (fired on field edits) — never
+invalidates anything (`isReadOnlySubEndpoint`). Without that rule a callout on a shipment field
+marked the sales order stale.
+
+| A write to | Marks stale |
+|---|---|
+| `goods-shipment`, `sales-invoice` | `sales-order` |
+
+The Purchase equivalent (`goods-receipt` / `purchase-invoice` → `purchase-order`) is intentionally
+not included yet: it is owned by the Purchase cell, and adding it is just those two map entries.
+
+Add a row there when a new spec starts displaying values derived from another spec's documents.
+Not covered: writes made through the plain-module `apiFetch` (`@etendosoftware/app-shell-core/auth/api`,
+e.g. `lib/batchDelete.js`), which has no access to the cache, and
+writes made in another tab or by another user — those still wait out `recordStaleTime`.
+Also not covered: hook-based writes made inside app-shell-core itself, which go through core's own
+`useApiFetch` rather than this wrapper, and the in-flight read race: an order GET already in flight
+when the child write completes can store pre-write data as fresh (the core cache only discards such
+a response on `clear()`). That race is rare in this flow, which is a navigation after the write.
+
+### Writes to Contactos invalidate every cached selector page (ETP-5571)
+
+Selector option pages (`CreatableSearchSelect`, `SelectorInput`) are cached under
+`entity: 'selector'` for `catalogStaleTime` (5 min), keyed by the selector URL of the document
+that renders them — they belong to no spec that `WRITE_INVALIDATES_SPECS` could name. Renaming a
+contact in Contactos therefore left the Contacto selector of every Sales/Purchase document serving
+the old name until a full reload: re-opening the selector goes through `fetchQuery`, which returns
+the cached page while it is still fresh.
+
+A second map in the same module, `WRITE_INVALIDATES_ENTITIES`, covers caches keyed by entity: a
+successful non-GET whose URL has a listed path segment marks every cached query of the dependent
+entities stale (`cache.invalidate({ entity })`). Matching is the same whole-path-segment rule,
+and the same read-only sub-endpoints are excluded: opening a contact POSTs `evaluate-display`, and
+counting it as a write wiped every cached selector page on each open.
+
+| A write to | Marks stale |
+|---|---|
+| `contacts` (any entity: `businessPartner`, `basicDiscount`, …) | every `selector` entry |
+
+The invalidation is intentionally broad — a selector entry does not record which table its options
+come from, so all selector pages are marked, at the cost of one extra GET the next time each is
+opened. Only `contacts` is declared; other master-data specs are added when a ticket needs them.
+
+Not covered: the Contacts CSV/XLSX import (`contactsImportDescriptor.js`) writes through the
+plain-module `apiFetch`, so selector pages still wait out `catalogStaleTime` after an import.
 
 ## Working without an AuthProvider
 

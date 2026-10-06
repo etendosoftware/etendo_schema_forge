@@ -1,8 +1,8 @@
 {
   "version": "0.4.0",
   "generatedAt": "2026-09-08T16:52:49.566Z",
-  "updatedAt": "2026-09-21T14:36:24.508Z",
-  "checksum": "06ca4005fbe9d457",
+  "updatedAt": "2026-09-28T18:01:56.640Z",
+  "checksum": "8da4349e96ceb1a5",
   "frontendContract": {
     "window": {
       "id": "112",
@@ -22,6 +22,7 @@
           "CurrentNext": "Próximo número"
         }
       },
+      "titleField": "name",
       "layoutType": "default"
     },
     "entities": {
@@ -213,7 +214,8 @@
           "StartNo": "Número inicial",
           "CurrentNext": "Próximo número"
         }
-      }
+      },
+      "titleField": "name"
     },
     "entities": {
       "sequence": {

@@ -171,7 +171,6 @@ describe('linesColumnWidth', () => {
         [{ type: 'quantity' },    1, 152],
         [{ type: 'integer' },     1, 152],
         [{ type: 'decimal' },     1, 152],
-        [{ type: 'percent' },     1, 152],
         [{ type: 'selector' },    1, 192],
         [{ type: 'search' },      1, 192],
         [{ type: 'foreignKey' },  1, 192],
@@ -191,6 +190,26 @@ describe('linesColumnWidth', () => {
         const flexBasis = basis(columnFlex(col, idx));
         assert.equal(px, flexBasis, `px and flex-basis must match for type=${col.type} idx=${idx}`);
       }
+    });
+
+    // Intentional divergence: `percent` is the ONE type where columnMinWidthPx (DataTable
+    // list mode: <col>, header th, body td) is narrower than the columnFlex basis. The list
+    // cell is a compact ProgressCircle, so it uses PERCENT_LIST_BASIS_PX (104), while
+    // InlineLinesPanel / add-row keep the 152px flex basis (FIXED_BASIS_PX.percent).
+    describe('percent list basis (intentional divergence from columnFlex)', () => {
+      it('columnMinWidthPx returns 104 for percent', () => {
+        assert.equal(columnMinWidthPx({ type: 'percent' }), 104);
+        assert.equal(columnMinWidthPx({ type: 'percent' }, 1), 104);
+      });
+
+      it('an explicit minWidth wins over the 104px percent default', () => {
+        assert.equal(columnMinWidthPx({ type: 'percent', minWidth: 200 }), 200);
+      });
+
+      it('columnFlex keeps the 152px basis for InlineLinesPanel / add-row', () => {
+        assert.equal(columnFlex({ type: 'percent' }, 1), '0 0 152px');
+        assert.equal(columnFlex({ type: 'percent', grow: true }, 1), '1 0 152px');
+      });
     });
 
     // ETP-5210 — same override guarantee as columnFlex above, for the

@@ -1,6 +1,10 @@
 // Mocks before imports
+const capturedRelatedProps = vi.hoisted(() => ({ current: null }));
 vi.mock('../RelatedDocumentsCard.jsx', () => ({
-  default: ({ documentId }) => <div data-testid="related-documents-card">{documentId}</div>,
+  default: (props) => {
+    capturedRelatedProps.current = props;
+    return <div data-testid="related-documents-card">{props.documentId}</div>;
+  },
 }));
 
 // ETP-5124 — EmailsCard is a heavier component (auth-aware fetching, i18n, StatusTag), so it is
@@ -74,6 +78,19 @@ describe('ReturnDocStatsPanel', () => {
     const related = screen.getByTestId('related-documents-card');
     expect(related).toBeInTheDocument();
     expect(related).toHaveTextContent('doc-1');
+  });
+
+  // ETP-5527 — with a relatedDefinition (return-material-receipt) the card renders that
+  // definition from the row itself; without one (return-to-vendor-shipment) it keeps `specs`.
+  it.each([
+    ['with relatedDefinition', { spec: 'return-material-receipt', sources: [] }],
+    ['without relatedDefinition', undefined],
+  ])('forwards definition/record/specs to the card %s', (_label, relatedDefinition) => {
+    render(<ReturnDocStatsPanel {...baseProps} relatedDefinition={relatedDefinition} />);
+    const props = capturedRelatedProps.current;
+    expect(props.definition).toBe(relatedDefinition);
+    expect(props.record).toBe(relatedDefinition ? baseDoc : undefined);
+    expect(props.specs).toBe(baseProps.specs);
   });
 
   // ── Billing status (invoiceStatus → invoicePercent) ──────────────────────────

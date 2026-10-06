@@ -10,14 +10,8 @@ import { downloadFromCachedAttachment } from './downloadFromCachedAttachment.js'
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
-import { fetchByCriteria } from '@/components/related-documents';
+import { SALES_RELATED_DOCS } from '@/components/related-documents';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
-
-// ── Quotation related-documents specs ────────────────────────────────────────
-
-const QUOTATION_SPECS = [
-  { key: 'sales-order', type: 'sales-order', fetch: (id, token, base) => fetchByCriteria('sales-order', 'header', 'quotation', id, token, base) },
-];
 
 // Statuses that mean the quotation is no longer editable
 
@@ -58,7 +52,8 @@ function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrency
         documentId={quotation.id}
         token={token}
         apiBaseUrl={apiBaseUrl}
-        specs={QUOTATION_SPECS}
+        // ETP-5527 — same definition as the form's RelatedDocuments section.
+        definition={SALES_RELATED_DOCS['sales-quotation']}
         data-testid="RelatedDocumentsCard__7eb018" />
     </div>
   );
@@ -66,7 +61,7 @@ function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrency
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function QuotationPreview({ quotation, token, apiBaseUrl, windowName, onClose, onEdit }) {
+export default function QuotationPreview({ quotation, token, apiBaseUrl, windowName, onClose, onEdit, readOnly = false }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const modalRef = useRef(null);
@@ -123,6 +118,8 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   // while still Draft (DR). Matches the Grid row quick-action and Form-view
   // topbar gates.
   const isSendable = quotation.documentStatus !== 'DR';
+  // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
+  const canSend = isSendable && !readOnly;
 
   const openEmailModal = () => {
     setSendModalClosing(false);
@@ -172,6 +169,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const attachmentConfig = !isDraft
     ? {
         storeCondition: true,
+        readOnly,
         sourceBlob: pdfBlob,
         autoFetch: true,
         recordUpdated: quotation?.updated ?? null,
@@ -198,7 +196,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
       label: ui('quotationPreviewGeneral'),
       content: <QuotationGeneralTab
         quotation={quotation}
-        onSend={isSendable ? openEmailModal : undefined}
+        onSend={canSend ? openEmailModal : undefined}
         token={token}
         apiBaseUrl={apiBaseUrl}
         orgCurrencyCode={orgCurrencyCode}
@@ -218,7 +216,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const actionButtons = (
     <PreviewActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
-      onEmail={isSendable ? openEmailModal : undefined}
+      onEmail={canSend ? openEmailModal : undefined}
       onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
       hasPdf={hasPdf}
       sendLabel={ui('quotationPreviewSend')}

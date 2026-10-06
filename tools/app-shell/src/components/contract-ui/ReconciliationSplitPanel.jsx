@@ -47,6 +47,11 @@ import { translateBackendError } from '@/lib/backendErrors.js';
 import { getDateBounds, toDateParam } from '@/lib/dateRangeBounds';
 import { formatDate, formatSigned } from '@/lib/formatSigned';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { useClientSort } from '@/hooks/useClientSort';
+import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
+import {
+  LINE_SORT_ACCESSORS, buildCandidateSortAccessors, candidateBaseAmount,
+} from './reconciliationSort.js';
 import {
   usePendingStatementLines,
   useCandidateOperations,
@@ -261,14 +266,17 @@ function DateCell({ date, bcpLocale, cellClassName }) {
 }
 
 /**
- * Right-aligned money cell shared by both panels. When `secondaryValue` is given (a foreign
- * candidate's account-currency equivalent), it renders as a smaller line underneath — the
- * "show the EUR total alongside the other currency" requirement.
+ * Right-aligned stack of one amount plus, optionally, its account-currency equivalent. Shared by
+ * `MoneyCell`, the reconciled-line amount cell and the partial-line "conciliado" block, so a
+ * foreign-currency document shows the same EUR-on-top / original-below pair everywhere (ETP-5450).
+ * `primaryClassName` overrides the prominent line's typography (the block uses a 13px size).
  */
-function MoneyCell({
-  value, currency, cellClassName, bold = false, secondaryValue, secondaryCurrency, baseOnTop = false,
+function DualAmount({
+  value, currency, bold = false, secondaryValue, secondaryCurrency, baseOnTop = false,
+  primaryClassName, baseTestId = 'recon-cand-amount-base',
 }) {
-  const primaryCls = cn('text-sm leading-5 text-[hsl(var(--foreground))]', bold ? 'font-semibold' : 'font-normal');
+  const primaryCls = primaryClassName
+    || cn('text-sm leading-5 text-[hsl(var(--foreground))]', bold ? 'font-semibold' : 'font-normal');
   const mutedCls = 'text-xs leading-4 text-[hsl(var(--muted-foreground))]';
   const hasBase = secondaryValue != null;
   // When `baseOnTop`, the account-currency (EUR) equivalent is shown ON TOP and prominent, with the
@@ -285,7 +293,7 @@ function MoneyCell({
   // MoneyAmount doesn't forward extra props (no data-testid), so the base testid goes on this
   // wrapping span (it always marks the account-currency amount, whichever position it's in).
   const baseLine = hasBase ? (
-    <span data-testid="recon-cand-amount-base">
+    <span data-testid={baseTestId}>
       <MoneyAmount
         value={Number(secondaryValue) || 0}
         currency={secondaryCurrency}
@@ -295,13 +303,24 @@ function MoneyCell({
     </span>
   ) : null;
   return (
+    <div className="flex flex-col items-end">
+      {baseOnTop && hasBase ? baseLine : foreignLine}
+      {baseOnTop && hasBase ? foreignLine : baseLine}
+    </div>
+  );
+}
+
+/**
+ * Right-aligned money cell shared by both panels. When `secondaryValue` is given (a foreign
+ * candidate's account-currency equivalent), it renders as a smaller line underneath — the
+ * "show the EUR total alongside the other currency" requirement.
+ */
+function MoneyCell({ cellClassName, ...amountProps }) {
+  return (
     <TableCell
       className={cn('h-[62px] px-3 text-right align-middle', cellClassName)}
       data-testid="TableCell__d0f4d5">
-      <div className="flex flex-col items-end">
-        {baseOnTop && hasBase ? baseLine : foreignLine}
-        {baseOnTop && hasBase ? foreignLine : baseLine}
-      </div>
+      <DualAmount {...amountProps} data-testid="DualAmount__d0f4d5" />
     </TableCell>
   );
 }
@@ -371,6 +390,7 @@ function ProgressCell({ line, currency, cellClassName }) {
 function StatementLinesPanel({
   lines, total, loading, currency, bcpLocale, selectedLineId, onSelectLine, search, onSearchChange,
   status, onStatusChange, statusCounts, dateRange, onDateRangeChange, onBack,
+  sortKey = null, sortDirection = 'asc', onSort,
 }) {
   const ui = useUI();
 
@@ -483,14 +503,49 @@ function StatementLinesPanel({
       headCells={(
         <>
           <TableHead className="w-8 px-0 pl-2" data-testid="TableHead__d0f4d5" />
-          <TableHead className="w-[108px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDate')}</TableHead>
-          <TableHead className="px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDescription')}</TableHead>
-          <TableHead className="w-[90px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColProgress')}</TableHead>
+          {/* The sort control sits INSIDE each header cell and never changes its width class:
+              the widths are load-bearing for `table-fixed` + `truncate` (see PanelTable). */}
+          <TableHead className="w-[108px] px-3" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColDate')}
+              sortKey="date"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
+          <TableHead className="px-3" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColDescription')}
+              sortKey="description"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
+          <TableHead className="w-[90px] px-3" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColProgress')}
+              sortKey="progress"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
           {/* Right-aligned to sit over its own figures: MoneyCell renders `text-right`, so a
               left-aligned header put the label at the opposite edge of the column from the
               amount it names — the same rule the generic DataTable applies to any numeric
               column, which this hand-rolled table does not inherit. */}
-          <TableHead className="w-[139px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
+          <TableHead className="w-[139px] px-3 text-right" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColAmount')}
+              sortKey="amount"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              align="right"
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
         </>
       )}
       data-testid="PanelShell__d0f4d5" />
@@ -518,7 +573,43 @@ function CurrencyBadge({ code }) {
  * collapses/expands the list of already-reconciled documents, each with an "unlink" (desvincular)
  * button. Rendered above the candidate filters; the bar is neutral (no green). See ETP-4502 it.5.
  */
-function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle }) {
+/**
+ * A matched transaction of a partial line is in another currency when the backend emitted its
+ * stored original (`foreignAmount`/`foreignCurrency`, ETP-5450) for a currency other than the
+ * account's. `t.amount` always stays in the account currency.
+ */
+function isForeignTxn(t, currency) {
+  return !!t.foreignCurrency && t.foreignCurrency !== currency && t.foreignAmount != null;
+}
+
+/**
+ * Amount of one matched transaction in the "conciliado" block: the account-currency amount alone,
+ * or — for a foreign-currency document — the account-currency amount on top with the original
+ * document amount underneath, like the candidate rows. Magnitudes only (the block is unsigned).
+ */
+function MatchedTxnAmount({ txn, currency }) {
+  const base = Math.abs(Number(txn.amount) || 0);
+  if (!isForeignTxn(txn, currency)) {
+    return (
+      <span className="text-[13px] font-semibold tabular-nums text-[hsl(var(--foreground))]">
+        {formatCurrency(currency, base)}
+      </span>
+    );
+  }
+  return (
+    <DualAmount
+      value={Math.abs(Number(txn.foreignAmount) || 0)}
+      currency={txn.foreignCurrency}
+      secondaryValue={base}
+      secondaryCurrency={currency}
+      baseOnTop
+      primaryClassName="text-[13px] font-semibold leading-5 tabular-nums text-[hsl(var(--foreground))]"
+      baseTestId={`recon-matched-amount-base-${txn.transactionId}`}
+      data-testid="DualAmount__matched" />
+  );
+}
+
+function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle, windowReadOnly = false }) {
   const ui = useUI();
   const txns = line.txns || [];
   if (txns.length === 0) {
@@ -566,22 +657,28 @@ function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle 
                     <span className="truncate text-[hsl(var(--muted-foreground))]">{t.contact}</span>
                   ) : null}
                 </div>
-                <StatusBadge kind="invoice" data-testid="StatusBadge__matched" />
+                <div className="flex items-center gap-1">
+                  <StatusBadge kind="invoice" data-testid="StatusBadge__matched" />
+                  {isForeignTxn(t, currency) ? (
+                    <CurrencyBadge code={t.foreignCurrency} data-testid="CurrencyBadge__matched" />
+                  ) : null}
+                </div>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-[13px] font-semibold tabular-nums text-[hsl(var(--foreground))]">
-                  {formatCurrency(currency, Math.abs(Number(t.amount) || 0))}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onRemove(t)}
-                  aria-label={ui('financeReconcileActionRemoveOne')}
-                  title={ui('financeReconcileActionRemoveOne')}
-                  data-testid={`recon-unlink-${t.transactionId}`}
-                  className="flex h-[26px] w-[26px] items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-                >
-                  <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
-                </button>
+                <MatchedTxnAmount txn={t} currency={currency} data-testid="MatchedTxnAmount__d0f4d5" />
+                {/* ETP-5457 — un-linking is a write; hidden under the read-only access tier. */}
+                {windowReadOnly ? null : (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(t)}
+                    aria-label={ui('financeReconcileActionRemoveOne')}
+                    title={ui('financeReconcileActionRemoveOne')}
+                    data-testid={`recon-unlink-${t.transactionId}`}
+                    className="flex h-[26px] w-[26px] items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+                  >
+                    <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -595,6 +692,10 @@ function CandidateOperationsPanel({
   line, candidates, loading, currency, bcpLocale, selectedIds, onToggle, search, onSearchChange,
   source, onSourceChange, sourceCounts = {}, dateRange, onDateRangeChange, footer, readOnly = false,
   onRemoveOperation, reconciledMode = false, differenceBanner = null,
+  sortKey = null, sortDirection = 'asc', onSort,
+  // ETP-5457 — the window's "read-only" access tier. NOT the same thing as `readOnly` above, which
+  // means "this line is already reconciled": this one hides the per-document un-link buttons.
+  windowReadOnly = false,
 }) {
   const ui = useUI();
   // Holded parity: while the "conciliado" block is expanded, the candidate list below is frozen for
@@ -661,8 +762,13 @@ function CandidateOperationsPanel({
               <span className="shrink-0 font-normal text-[hsl(var(--foreground))]">
                 {cand.documentNo || cand.description || '—'}
               </span>
+              {/* Same reveal-on-clip as the left panel's Descripción: the tooltip opens only when
+                  the partner name is actually cut off. */}
               {cand.partnerName ? (
-                <span className="truncate text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]">{cand.partnerName}</span>
+                <TruncatedText
+                  text={cand.partnerName}
+                  className="w-auto min-w-0 text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]"
+                  data-testid={`recon-cand-partner-${cand.id}`} />
               ) : null}
               {candForeign ? <CurrencyBadge code={cand.currency} data-testid="CurrencyBadge__d0f4d5" /> : null}
             </div>
@@ -681,24 +787,30 @@ function CandidateOperationsPanel({
           data-testid="MoneyCell__d0f4d5" />
         {reconciledMode ? (
           // Reconciled line: amount + a per-row individual un-link ("−"). cand.id is the transaction id.
+          // A linked foreign-currency document keeps its original amount + the final EUR equivalent
+          // stored on the transaction (ETP-5450), shown like a pending foreign row.
           (<TableCell className="h-[62px] w-[140px] px-3 text-right align-middle" data-testid="TableCell__d0f4d5">
             <div className="flex items-center justify-end gap-2">
-              <MoneyAmount
-                value={Number(cand.amount) || 0}
+              <DualAmount
+                value={cand.amount}
                 currency={candCurrency}
-                tone="neutral"
-                className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]"
-                data-testid="MoneyAmount__d0f4d5" />
-              <button
-                type="button"
-                onClick={() => onRemoveOperation({ transactionId: cand.id })}
-                aria-label={ui('financeReconcileActionRemoveOne')}
-                title={ui('financeReconcileActionRemoveOne')}
-                data-testid={`recon-unlink-${cand.id}`}
-                className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-              >
-                <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
-              </button>
+                bold
+                secondaryValue={candForeign ? cand.amountBase : undefined}
+                secondaryCurrency={cand.baseCurrency || currency}
+                baseOnTop={hasBase}
+                data-testid="DualAmount__d0f4d5" />
+              {windowReadOnly ? null : (
+                <button
+                  type="button"
+                  onClick={() => onRemoveOperation({ transactionId: cand.id })}
+                  aria-label={ui('financeReconcileActionRemoveOne')}
+                  title={ui('financeReconcileActionRemoveOne')}
+                  data-testid={`recon-unlink-${cand.id}`}
+                  className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+                >
+                  <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
+                </button>
+              )}
             </div>
           </TableCell>)
         ) : (
@@ -732,6 +844,7 @@ function CandidateOperationsPanel({
           onRemove={onRemoveOperation}
           open={matchedExpanded}
           onToggle={() => setMatchedExpanded((v) => !v)}
+          windowReadOnly={windowReadOnly}
           data-testid="ReconciledOperationsSection__d0f4d5" />
       ) : null}
       <ToolbarShell
@@ -767,12 +880,48 @@ function CandidateOperationsPanel({
       headCells={(
         <>
           <TableHead className="w-8 px-0 pl-2" data-testid="TableHead__d0f4d5" />
-          <TableHead className="w-[104px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDate')}</TableHead>
-          <TableHead className="px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColInfo')}</TableHead>
+          <TableHead className="w-[104px] px-3" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColDate')}
+              sortKey="date"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
+          <TableHead className="px-3" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColInfo')}
+              sortKey="info"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
           {/* Both money columns render through MoneyCell (`text-right`) — see the left panel's
-              own Importe header for why these follow it. */}
-          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColPendingBalance')}</TableHead>
-          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
+              own Importe header for why these follow it. They sort on the account-currency
+              equivalent, so a foreign-currency candidate is never ordered against a figure
+              denominated in another currency (see reconciliationSort.js). */}
+          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColPendingBalance')}
+              sortKey="pendingBalance"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              align="right"
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
+          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColAmount')}
+              sortKey="amount"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              align="right"
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
         </>
       )}
       data-testid="PanelShell__d0f4d5" />
@@ -783,6 +932,10 @@ function CandidateOperationsPanel({
 function ReconciliationActionBar({
   currency, selectedSum, remaining, canReconcile, isReconciledLine, reconcileCount, removeCount = 0,
   busy, onCancel, onReconcile, differenceNotice = null,
+  // ETP-5457 — the window's "read-only" access tier. The primary button is DISABLED rather than
+  // hidden (hiding it would leave Cancel alone and shift the bar's layout); Cancel stays usable,
+  // since clearing the selection is pure UI state.
+  windowReadOnly = false,
 }) {
   const ui = useUI();
   return (
@@ -837,7 +990,7 @@ function ReconciliationActionBar({
           onClick={onReconcile}
           // A reconciled line shows "Desconciliar (N)" acting on the checked documents (N = checked
           // count, disabled when none); a pending line gates "Conciliar" on a balanced selection.
-          disabled={busy || (isReconciledLine ? removeCount === 0 : !canReconcile)}
+          disabled={busy || windowReadOnly || (isReconciledLine ? removeCount === 0 : !canReconcile)}
           data-testid="recon-action-reconcile"
           className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
         >
@@ -881,6 +1034,26 @@ const WARNING_KEY = 'financeReconcileConfirmRemoveWarning';
 
 /** Stable no-op used to swallow the confirm while a request is already in flight. */
 const NOOP = () => {};
+
+/**
+ * ETP-5457 — defense in depth for the window's "read-only" access tier: `handler` itself, or
+ * {@link NOOP} when the tier is read-only. Every write entry point of the panel is already hidden
+ * or disabled under that tier and its dialogs are forced closed; wrapping each mutating handler as
+ * well means a control that ever slips through is a no-op instead of a write.
+ *
+ * Module-level on purpose — it is the same early return every handler would otherwise open with,
+ * and spelling that `if` out in the panel's handlers is what would push `ReconciliationSplitPanel`
+ * over Sonar's cognitive-complexity ceiling (javascript:S3776) — the same reason
+ * `notifyReconcileResult` and `resolveVisibleCandidates` live at module level.
+ *
+ * @template {Function} F
+ * @param {boolean} windowReadOnly
+ * @param {F} handler
+ * @returns {F}
+ */
+function guardWrite(windowReadOnly, handler) {
+  return windowReadOnly ? NOOP : handler;
+}
 
 /** One bullet per effect that actually applies to this selection. Order is part of the contract. */
 function resolveUnreconcileItems(ui, { hasAuto }) {
@@ -1077,6 +1250,44 @@ function resolveCandidateLineId(selectedLine) {
 }
 
 /**
+ * The toast for a successful reconcile (ETP-5472).
+ *
+ * A group that leaves part of the line uncovered splits it and answers `partial: true` +
+ * `pendingAmount` (signed like the line). Anything else — including a backend that predates these
+ * fields — keeps the plain success toast. Kept out of `submitReconcile` for Sonar S3776.
+ *
+ * @param {object|undefined} result the reconcile response data
+ * @param {function} ui the `useUI()` translator
+ * @param {string} currency the account's currency code
+ */
+function notifyReconcileResult(result, ui, currency) {
+  if (result?.partial === true) {
+    toast.info(ui('financeReconcileToastPartial', {
+      amount: formatCurrency(currency, Math.abs(Number(result.pendingAmount) || 0)),
+    }));
+    return;
+  }
+  toast.success(ui('financeReconcileToastSuccess'));
+}
+
+/**
+ * Rules 1 and 2 of `resolveVisibleCandidates` below — which candidates are shown — without the
+ * selected/suggested pinning. A user-chosen column sort orders THIS list: once the user picks a
+ * column, that order wins over the pin, so checking a row does not make it jump.
+ *
+ * @param {{ candidates: Array<object>, selectedLine: object|null, search: string }} args
+ * @returns {Array<object>}
+ */
+function filterCandidates({ candidates, selectedLine, search }) {
+  if (selectedLine?.status === 'reconciled') return candidates;
+  const q = search.trim().toLowerCase();
+  return q
+    ? candidates.filter((c) => [c.documentNo, c.partnerName, c.description]
+      .some((v) => (v || '').toLowerCase().includes(q)))
+    : candidates;
+}
+
+/**
  * Which candidate operations the right panel shows, and in what order.
  *
  * Three rules, in this order:
@@ -1100,11 +1311,7 @@ function resolveCandidateLineId(selectedLine) {
  */
 function resolveVisibleCandidates({ candidates, selectedLine, search, selectedOpIds }) {
   if (selectedLine?.status === 'reconciled') return candidates;
-  const q = search.trim().toLowerCase();
-  const filtered = q
-    ? candidates.filter((c) => [c.documentNo, c.partnerName, c.description]
-      .some((v) => (v || '').toLowerCase().includes(q)))
-    : candidates;
+  const filtered = filterCandidates({ candidates, selectedLine, search });
   return [...filtered].sort((a, b) => {
     const sel = (selectedOpIds.has(b.id) ? 1 : 0) - (selectedOpIds.has(a.id) ? 1 : 0);
     if (sel !== 0) return sel;
@@ -1122,7 +1329,7 @@ function resolveVisibleCandidates({ candidates, selectedLine, search, selectedOp
  * Composes the backend at /sws/neo/bank-reconciliation — it never reimplements
  * Etendo's reconciliation logic; the POST just hands the grouped ids over.
  *
- * @param {{ accountId: string|null, currency?: string, paymentMethods?: Array<object>, onBack?: () => void, onReconcileSuccess?: () => void }} props
+ * @param {{ accountId: string|null, currency?: string, paymentMethods?: Array<object>, onBack?: () => void, onReconcileSuccess?: () => void, windowReadOnly?: boolean }} props
  */
 export function ReconciliationSplitPanel({
   accountId, currency = 'EUR', paymentMethods = [], onBack, onReconcileSuccess,
@@ -1140,6 +1347,12 @@ export function ReconciliationSplitPanel({
   // The account's record version, echoed back when the setup dialog stores the difference account
   // (ETP-5073's optimistic-locking guard). Threaded from the host with glItemDifference.
   accountUpdated = null,
+  // ETP-5457 — the host window's "read-only" access tier (ETP-5205). Named `windowReadOnly`, never
+  // `readOnly`: in this file `readOnly` already means "the selected line is already reconciled".
+  // Under it every write path is closed — Conciliar / Desconciliar disabled, the per-document
+  // un-link and the difference post hidden, every confirmation dialog kept shut, and each mutating
+  // handler wrapped in `guardWrite`. Browsing, filtering and selecting stay available.
+  windowReadOnly = false,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -1282,10 +1495,30 @@ export function ReconciliationSplitPanel({
     [visibleLines],
   );
 
-  const visibleCandidates = useMemo(
+  // Column sort, in memory: both lists are fetched whole (no paging, no `_sortBy`), so ordering
+  // the loaded rows orders the dataset and never refetches. Purely presentational — selection,
+  // the footer total and the action bar's running totals are all order-independent.
+  const {
+    sorted: sortedLines, sortKey: lineSortKey, sortDirection: lineSortDirection,
+    toggleSort: toggleLineSort,
+  } = useClientSort(visibleLines, { accessors: LINE_SORT_ACCESSORS });
+
+  const filteredCandidates = useMemo(
+    () => filterCandidates({ candidates, selectedLine, search: rightSearch }),
+    [candidates, rightSearch, selectedLine],
+  );
+  const candidateSortAccessors = useMemo(() => buildCandidateSortAccessors(currency), [currency]);
+  const {
+    sorted: sortedCandidates, sortKey: candSortKey, sortDirection: candSortDirection,
+    toggleSort: toggleCandSort,
+  } = useClientSort(filteredCandidates, { accessors: candidateSortAccessors });
+  const pinnedCandidates = useMemo(
     () => resolveVisibleCandidates({ candidates, selectedLine, search: rightSearch, selectedOpIds }),
     [candidates, rightSearch, selectedOpIds, selectedLine],
   );
+  // No column chosen → the default selected-then-suggested pin. A chosen column wins outright, so
+  // the order the user asked for holds while they tick rows.
+  const visibleCandidates = candSortKey ? sortedCandidates : pinnedCandidates;
 
   // Pre-select the candidates the standard algorithm suggests, so a clean match
   // is one click away. Depends on the line id + loading state (not the candidates
@@ -1308,22 +1541,16 @@ export function ReconciliationSplitPanel({
   // Summing `amountBase` for foreign rows (and the plain amount for same-currency ones, which is
   // already in the account currency) lets one statement line match several invoices of different
   // currencies at once: the same greedy allocation the same-currency flow always used, generalized.
-  const candidateBaseAmount = (cand) => {
-    const isForeign = !!cand?.currency && cand.currency !== currency;
-    if (!isForeign) return Number(cand?.amount) || 0;
-    return cand?.amountBase != null ? Number(cand.amountBase) : null;
-  };
-
+  // `candidateBaseAmount` lives in reconciliationSort.js, shared with the Importe column's sort.
   const selectedSum = useMemo(() => {
     let sum = 0;
     for (const c of candidates) {
       if (!selectedOpIds.has(c.id)) continue;
-      const base = candidateBaseAmount(c);
+      const base = candidateBaseAmount(c, currency);
       if (base == null) continue; // unknown rate — excluded from the total, stays "remaining"
       sum += base;
     }
     return Number(sum.toFixed(2));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidates, selectedOpIds, currency]);
 
   // For a PARTIAL line the user reconciles the REMAINDER, not the full line: base the balance /
@@ -1432,7 +1659,7 @@ export function ReconciliationSplitPanel({
    *   confirmation modal. No `glItemId` counterpart: the accounting account is the financial
    *   account's own setting and the backend resolves it (`effectiveGlItemId`).
    */
-  const submitReconcile = async (methodId, description) => {
+  const submitReconcile = guardWrite(windowReadOnly, async (methodId, description) => {
     try {
       const payload = {
         // For a PARTIAL line, reconcile the remainder against its pending sub-line
@@ -1458,8 +1685,8 @@ export function ReconciliationSplitPanel({
       // Names the difference movement in Movimientos; without it the backend falls back to
       // `defaultDifferenceDescription`. Dropping it silently is what the read-only modal did.
       if (description) payload.description = description;
-      await reconcile(payload);
-      toast.success(ui('financeReconcileToastSuccess'));
+      const result = await reconcile(payload);
+      notifyReconcileResult(result, ui, currency);
       setSelectedLineSel(null);
       setSelectedOpIds(new Set());
       setMethodModalOpen(false);
@@ -1488,12 +1715,12 @@ export function ReconciliationSplitPanel({
       }
       toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
     }
-  };
+  });
 
   // Only ever bound to the "Conciliar" button, whose `disabled` is exactly `busy || !canReconcile`
   // (see the non-reconciled branch of ReconciliationActionBar) — so by the time this runs,
   // `canReconcile` is already guaranteed true; a runtime re-check here was unreachable dead code.
-  const handleReconcile = () => {
+  const handleReconcile = guardWrite(windowReadOnly, () => {
     // A pure existing-transaction match needs no method (each transaction already has one); only
     // creating new invoice payments requires picking one, and only when the account actually has
     // methods configured for this direction — otherwise fall back to the backend's auto-resolve.
@@ -1521,14 +1748,14 @@ export function ReconciliationSplitPanel({
       return;
     }
     submitReconcile(null);
-  };
+  });
 
   /**
    * Stores the chosen accounting account on the FINANCIAL ACCOUNT, then closes. Deliberately does
    * not chain into the reconciliation: the user confirms that separately, now seeing the read-only
    * destination in the difference modal.
    */
-  const confirmGlItemSetup = async (glItem) => {
+  const confirmGlItemSetup = guardWrite(windowReadOnly, async (glItem) => {
     if (!glItem?.id) return;
     setSavingGlItem(true);
     try {
@@ -1549,7 +1776,7 @@ export function ReconciliationSplitPanel({
     } finally {
       setSavingGlItem(false);
     }
-  };
+  });
 
   const confirmMethodAndReconcile = () => {
     submitReconcile(selectedMethodId);
@@ -1560,7 +1787,7 @@ export function ReconciliationSplitPanel({
    * sub-line), never the merged head. No amount is sent: the backend recomputes it and would ignore
    * one anyway.
    */
-  const confirmDifference = async ({ glItemId, description }) => {
+  const confirmDifference = guardWrite(windowReadOnly, async ({ glItemId, description }) => {
     try {
       await reconcileDifference({
         financialAccountId: accountId,
@@ -1577,7 +1804,7 @@ export function ReconciliationSplitPanel({
     } catch (err) {
       toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
     }
-  };
+  });
 
   // Whether any of the given transaction ids is an auto-created payment (drives the confirm hint that
   // the invoice returns to unpaid). Matched-doc auto-created flags live on selectedLine.txns.
@@ -1588,23 +1815,23 @@ export function ReconciliationSplitPanel({
 
   // Un-reconcile ("desvincular") — always confirmed (destructive: removes auto-created payments and
   // returns invoices to unpaid). One row (per-row "−") OR the bulk checked selection (bottom button).
-  const requestRemoveOne = (txn) => {
+  const requestRemoveOne = guardWrite(windowReadOnly, (txn) => {
     const id = txn?.transactionId;
     if (!selectedLine || !id) return;
     setRemoveRequest({ ids: [id], hasAuto: anyAutoCreated([id]), count: 1 });
-  };
+  });
 
   // Only bound to the "Desconciliar (N)" button, disabled whenever `removeCount` (= this same
   // `selectedOpIds.size`) is 0 — so `ids` is already guaranteed non-empty here.
-  const requestRemoveSelected = () => {
+  const requestRemoveSelected = guardWrite(windowReadOnly, () => {
     const ids = Array.from(selectedOpIds);
     setRemoveRequest({ ids, hasAuto: anyAutoCreated(ids), count: ids.length });
-  };
+  });
 
   // Only wired to RemoveOperationConfirmDialog's confirm button, itself only rendered while
   // `open={!!removeRequest}` — so `removeRequest` (and, transitively, `selectedLine`, which every
   // setter of it already required) is already guaranteed non-null here.
-  const confirmRemove = async () => {
+  const confirmRemove = guardWrite(windowReadOnly, async () => {
     try {
       const payload = {
         financialAccountId: accountId,
@@ -1644,7 +1871,7 @@ export function ReconciliationSplitPanel({
     } catch (err) {
       toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
     }
-  };
+  });
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -1656,7 +1883,10 @@ export function ReconciliationSplitPanel({
       ) : null}
       <div className="flex flex-1 overflow-hidden">
         <StatementLinesPanel
-          lines={visibleLines}
+          lines={sortedLines}
+          sortKey={lineSortKey}
+          sortDirection={lineSortDirection}
+          onSort={toggleLineSort}
           total={visibleTotal}
           loading={linesLoading}
           currency={currency}
@@ -1675,6 +1905,9 @@ export function ReconciliationSplitPanel({
         <CandidateOperationsPanel
           line={selectedLine}
           candidates={visibleCandidates}
+          sortKey={candSortKey}
+          sortDirection={candSortDirection}
+          onSort={toggleCandSort}
           loading={candLoading}
           currency={currency}
           bcpLocale={bcpLocale}
@@ -1683,12 +1916,14 @@ export function ReconciliationSplitPanel({
           onRemoveOperation={requestRemoveOne}
           reconciledMode={isReconciledLine}
           readOnly={isReconciledLine}
+          windowReadOnly={windowReadOnly}
           differenceBanner={
             <DifferenceBanner
               info={differenceInfo}
               currency={currency}
               onDismiss={() => setDiffDismissed(true)}
               onPost={() => setDiffModalOpen(true)}
+              windowReadOnly={windowReadOnly}
               data-testid="DifferenceBanner__d0f4d5" />
           }
           source={rightSource}
@@ -1711,6 +1946,7 @@ export function ReconciliationSplitPanel({
               onCancel={cancelSelection}
               onReconcile={isReconciledLine ? requestRemoveSelected : handleReconcile}
               differenceNotice={differenceNotice}
+              windowReadOnly={windowReadOnly}
               data-testid="ReconciliationActionBar__d0f4d5" />
           ) : null}
           data-testid="CandidateOperationsPanel__d0f4d5" />
@@ -1719,8 +1955,10 @@ export function ReconciliationSplitPanel({
           direction — the user pressed Conciliar on a match with a postable difference and the
           account has no concept configured, so the backend asked for one. Reused rather than
           duplicated: its `info` only needs {lineTotal, reconciled, remainder}. */}
+      {/* ETP-5457 — every dialog below leads to a write, so under the read-only tier they are kept
+          shut regardless of their own open state (same pattern as the host's EditAccountModal). */}
       <DifferenceModal
-        open={!!glItemPrompt}
+        open={!!glItemPrompt && !windowReadOnly}
         info={glItemPrompt}
         currency={currency}
         defaultGlItem={glItemDifference}
@@ -1732,13 +1970,13 @@ export function ReconciliationSplitPanel({
         onClose={() => setGlItemPrompt(null)}
         data-testid="DifferenceModal__gl-item-required" />
       <GlItemSetupDialog
-        open={glItemSetupOpen}
+        open={glItemSetupOpen && !windowReadOnly}
         busy={savingGlItem}
         onConfirm={confirmGlItemSetup}
         onClose={() => setGlItemSetupOpen(false)}
         data-testid="GlItemSetupDialog__d0f4d5" />
       <RemoveOperationConfirmDialog
-        open={!!removeRequest}
+        open={!!removeRequest && !windowReadOnly}
         count={removeRequest?.count ?? 0}
         hasAuto={!!removeRequest?.hasAuto}
         busy={removing}
@@ -1746,7 +1984,7 @@ export function ReconciliationSplitPanel({
         onClose={() => setRemoveRequest(null)}
         data-testid="RemoveOperationConfirmDialog__d0f4d5" />
       <PaymentMethodModal
-        open={methodModalOpen}
+        open={methodModalOpen && !windowReadOnly}
         methods={directionMethods}
         methodId={selectedMethodId}
         onSelect={setSelectedMethodId}
@@ -1760,7 +1998,7 @@ export function ReconciliationSplitPanel({
         isReceipt={lineAmount >= 0}
         data-testid="PaymentMethodModal__d0f4d5" />
       <DifferenceModal
-        open={diffModalOpen}
+        open={diffModalOpen && !windowReadOnly}
         info={differenceInfo}
         currency={currency}
         defaultGlItem={glItemDifference}

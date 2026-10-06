@@ -314,4 +314,137 @@ describe('NewAccountWizard', () => {
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('server down'));
   });
+  // ── ETP-5521: provider logo persisted from the offline bank picker ─────────
+
+  const SANTANDER_PROVIDER = {
+    code: 'santander_es',
+    name: 'Banco Santander',
+    logoUrl: 'https://d1uuj3mi6rzwpm.cloudfront.net/logos/providers/es/santander_es.svg',
+  };
+
+  it('sends providerCode, providerName and providerLogoUrl when a provider is picked (ETP-5521 CA1)', async () => {
+    fetchProviders.mockResolvedValue([SANTANDER_PROVIDER]);
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByTestId('new-account-type-B'));
+    await waitFor(() => expect(fetchDefaults).toHaveBeenCalled());
+    await user.click(screen.getByTestId('account-connection-offline'));
+
+    const tile = await screen.findByTestId('new-account-bank-santander_es');
+    await user.click(tile);
+    expect(screen.getByTestId('account-form')).toBeInTheDocument();
+
+    // The form pre-fills the name with the picked bank's name — replace it.
+    await user.clear(screen.getByTestId('account-form-name'));
+    await user.type(screen.getByTestId('account-form-name'), 'Santander');
+    await user.type(screen.getByTestId('account-form-iban'), 'ES9121000418450200051332');
+    await user.click(screen.getByTestId('account-form-submit'));
+
+    await waitFor(() => expect(createAccount).toHaveBeenCalledTimes(1));
+    expect(createAccount.mock.calls[0][0]).toMatchObject({
+      name: 'Santander',
+      type: 'B',
+      providerCode: 'santander_es',
+      providerName: 'Banco Santander',
+      providerLogoUrl: 'https://d1uuj3mi6rzwpm.cloudfront.net/logos/providers/es/santander_es.svg',
+    });
+  });
+
+  it('sends the provider keys for a card account too (ETP-5521)', async () => {
+    fetchProviders.mockResolvedValue([SANTANDER_PROVIDER]);
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByTestId('new-account-type-CA'));
+    await waitFor(() => expect(fetchDefaults).toHaveBeenCalled());
+    await user.click(screen.getByTestId('account-connection-offline'));
+    await user.click(await screen.findByTestId('new-account-bank-santander_es'));
+    expect(screen.getByTestId('account-form')).toBeInTheDocument();
+
+    // The form pre-fills the name with the picked bank's name — replace it.
+    await user.clear(screen.getByTestId('account-form-name'));
+    await user.type(screen.getByTestId('account-form-name'), 'Visa Santander');
+    await user.click(screen.getByTestId('account-form-submit'));
+
+    await waitFor(() => expect(createAccount).toHaveBeenCalledTimes(1));
+    expect(createAccount.mock.calls[0][0]).toMatchObject({
+      name: 'Visa Santander',
+      type: 'CA',
+      providerCode: SANTANDER_PROVIDER.code,
+      providerName: SANTANDER_PROVIDER.name,
+      providerLogoUrl: SANTANDER_PROVIDER.logoUrl,
+    });
+  });
+
+  it('sends no provider keys when the bank step is skipped (ETP-5521 CA2)', async () => {
+    fetchProviders.mockResolvedValue([SANTANDER_PROVIDER]);
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByTestId('new-account-type-B'));
+    await waitFor(() => expect(fetchDefaults).toHaveBeenCalled());
+    await user.click(screen.getByTestId('account-connection-offline'));
+    await screen.findByTestId('new-account-bank-santander_es');
+    await user.click(screen.getByTestId('new-account-bank-skip'));
+
+    await user.type(screen.getByTestId('account-form-name'), 'Cuenta sin banco');
+    await user.type(screen.getByTestId('account-form-iban'), 'ES9121000418450200051332');
+    await user.click(screen.getByTestId('account-form-submit'));
+
+    await waitFor(() => expect(createAccount).toHaveBeenCalledTimes(1));
+    const payload = createAccount.mock.calls[0][0];
+    expect(payload).not.toHaveProperty('providerCode');
+    expect(payload).not.toHaveProperty('providerName');
+    expect(payload).not.toHaveProperty('providerLogoUrl');
+  });
+  // ── QA edge cases (ETP-5521) ────────────────────────────────────────────────
+
+  it('sends no provider keys for a static-catalog bank (isProvider=false, ETP-5521)', async () => {
+    // Empty Salt Edge catalog (beforeEach) → the static bankCatalog list is shown; its banks are
+    // not Salt Edge providers, so nothing provider-related may reach the create payload.
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByTestId('new-account-type-B'));
+    await waitFor(() => expect(fetchDefaults).toHaveBeenCalled());
+    await user.click(screen.getByTestId('account-connection-offline'));
+    await user.click(screen.getByTestId('new-account-bank-santander'));
+    await user.click(screen.getByTestId('new-account-institution-santander-default'));
+
+    await user.clear(screen.getByTestId('account-form-name'));
+    await user.type(screen.getByTestId('account-form-name'), 'Santander estatico');
+    await user.type(screen.getByTestId('account-form-iban'), 'ES9121000418450200051332');
+    await user.click(screen.getByTestId('account-form-submit'));
+
+    await waitFor(() => expect(createAccount).toHaveBeenCalledTimes(1));
+    const payload = createAccount.mock.calls[0][0];
+    expect(payload).toMatchObject({ name: 'Santander estatico', type: 'B' });
+    expect(payload).not.toHaveProperty('providerCode');
+    expect(payload).not.toHaveProperty('providerName');
+    expect(payload).not.toHaveProperty('providerLogoUrl');
+  });
+
+  it('still creates with the provider when the picked provider has no logo (ETP-5521)', async () => {
+    fetchProviders.mockResolvedValue([{ code: 'nologo_es', name: 'Banco Sin Logo' }]);
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByTestId('new-account-type-B'));
+    await waitFor(() => expect(fetchDefaults).toHaveBeenCalled());
+    await user.click(screen.getByTestId('account-connection-offline'));
+    await user.click(await screen.findByTestId('new-account-bank-nologo_es'));
+
+    await user.clear(screen.getByTestId('account-form-name'));
+    await user.type(screen.getByTestId('account-form-name'), 'Sin logo');
+    await user.type(screen.getByTestId('account-form-iban'), 'ES9121000418450200051332');
+    await user.click(screen.getByTestId('account-form-submit'));
+
+    await waitFor(() => expect(createAccount).toHaveBeenCalledTimes(1));
+    const payload = createAccount.mock.calls[0][0];
+    expect(payload).toMatchObject({ providerCode: 'nologo_es', providerName: 'Banco Sin Logo' });
+    // undefined here; toDalBody drops it before the request (see useAccountMutations tests).
+    expect(payload.providerLogoUrl).toBeUndefined();
+    expect(toastError).not.toHaveBeenCalled();
+  });
 });

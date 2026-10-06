@@ -39,7 +39,7 @@ function isCreditNote(invoice) {
  *   - sales invoice, completed: managed by GenericPreviewModal (cached as a marked Attachment)
  *   - purchase invoice:         managed by GenericPreviewModal (drop zone → persisted)
  */
-function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf }) {
+function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf, readOnly = false }) {
   const ui = useUI();
   return (
     <>
@@ -64,7 +64,8 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
           {ui('sendToSif')}
         </Button>
       )}
-      <Button
+      {/* ETP-5205 — hidden (not just disabled) under the Solo-Lectura tier. */}
+      {!readOnly && <Button
         size="sm"
         variant="outline"
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
@@ -74,7 +75,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         data-testid="Button__cf88e6">
         <Wallet className="text-muted-foreground" data-testid="Wallet__cf88e6" />
         {ui(isSalesInvoice ? 'invoicePreviewAddCollection' : 'invoicePreviewAddPayment')}
-      </Button>
+      </Button>}
       {isSalesInvoice && (
         <Button
           size="sm"
@@ -102,7 +103,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, profile, territory, earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, emailsRefreshSignal }) {
+function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, profile, territory, earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, emailsRefreshSignal }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile, territory);
   // ETP-5229 (corrected): the status VALUE below still reads directly off the
@@ -122,18 +123,27 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
     invoice, specName, profile, territory,
     { sii: earliestSiiCutoverDate, tbai: earliestTbaiCutoverDate, verifactu: earliestVerifactuCutoverDate },
   );
+  // Legacy specs, used only when no `relatedDocs` definition is passed (purchase
+  // invoices). Sales invoices pass SALES_RELATED_DOCS['sales-invoice'] (ETP-5527).
   const invoiceRelatedSpecs = useMemo(() => {
     const orderId = invoice?.salesOrder;
-    if (!orderId) return [];
+    if (relatedDocs || !orderId) return [];
     return [
       { key: 'sales-order', type: 'sales-order', fetch: (_id, tok, base) => fetchById('sales-order', 'header', orderId, tok, base).then(r => r ? [r] : []) },
       { key: 'shipment',    type: 'shipment',     fetch: (_id, tok, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', orderId, tok, base) },
     ];
-  }, [invoice?.salesOrder]);
+  }, [invoice?.salesOrder, relatedDocs]);
 
 
   const latestDueDate = getLatestInstallmentDueDate(installments);
   const currencyCode = installments[0]?.['currency$_identifier'] || invoice?.['currency$_identifier'] || '';
+
+  // Same gating as OrderPreview: show the row whenever the backend sent a value.
+  // Sales invoices read "Delivered", purchase invoices "Received".
+  const isPurchaseInvoice = specName === 'purchase-invoice';
+  const deliveryPercent = invoice?.eTGODeliveryStatus != null && invoice.eTGODeliveryStatus !== ''
+    ? Number(invoice.eTGODeliveryStatus)
+    : undefined;
 
   return (
     <div className="pb-4">
@@ -145,6 +155,8 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         dueDate={latestDueDate ?? null}
         statusCode={invoice?.documentStatus}
         statusLabel={statusLabel}
+        deliveryPercent={Number.isFinite(deliveryPercent) ? deliveryPercent : undefined}
+        deliveryLabel={isPurchaseInvoice ? ui('previewCardReceivedPercent') : undefined}
         orgCurrencyCode={orgCurrencyCode}
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
@@ -209,19 +221,35 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
           refreshSignal={emailsRefreshSignal}
           data-testid="EmailsCard__cf88e6" />
       )}
-      <RelatedDocumentsCard
-        documentId={invoice?.id}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        specs={invoiceRelatedSpecs}
-        data-testid="RelatedDocumentsCard__cf88e6" />
+      {relatedDocs ? (
+        <RelatedDocumentsCard
+          documentId={invoice?.id}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          definition={relatedDocs}
+          // The detail record is reloaded when the invoice changes (payment, SIF send...).
+          docsRefreshSignal={invoice?.updated}
+          data-testid="RelatedDocumentsCard__cf88e6" />
+      ) : (
+        <RelatedDocumentsCard
+          documentId={invoice?.id}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          specs={invoiceRelatedSpecs}
+          data-testid="RelatedDocumentsCard__cf88e6" />
+      )}
     </div>
   );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName, specName = 'purchase-invoice', onClose, onEdit, onInvoiceUpdated = null }) {
+/**
+ * `relatedDocs` (optional, ETP-5527): a related-documents definition — the sales
+ * callers pass SALES_RELATED_DOCS['sales-invoice'] so the preview lists exactly what the
+ * sales-invoice form lists. Without it the card keeps its legacy specs (purchase invoice).
+ */
+export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName, specName = 'purchase-invoice', onClose, onEdit, onInvoiceUpdated = null, relatedDocs = null, readOnly = false }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const modalRef = useRef(null);
@@ -280,7 +308,12 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   // ETP-4717 — Send is only available once the invoice is Confirmed (CO),
   // matching the Grid row quick-action and Form-view topbar gates. The
   // existing purchase-invoice exclusion stays: this window never sends email.
-  const isSendable = specName !== 'purchase-invoice' && invoice?.documentStatus === 'CO';
+  const isDownloadable = specName !== 'purchase-invoice' && invoice?.documentStatus === 'CO';
+  // ETP-5205 — Solo-Lectura tier: Send, Add payment and Send-to-SIF are writes and are
+  // hidden; Download PDF stays (D1), and the stored document stays visible.
+  const isSendable = isDownloadable && !readOnly;
+  const canAddPayment = p.canAddPayment && !readOnly;
+  const canSendToSif = p.canSendToSif && !readOnly;
   // ETP-4315 — real, marked Attachment (C_Invoice, shared with purchase-invoice
   // below). Draft gate unchanged.
   const attachmentConfig = p.isSalesInvoice ? {
@@ -291,6 +324,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     // overwritten by this fresh pdfBlob. The purchase branch below deliberately omits it:
     // that slot holds the supplier's OWN document, which no edit of ours makes stale.
     recordUpdated: invoice?.updated ?? null,
+    readOnly,
     sourceBlob: !isDraft ? p.pdfBlob : null,
     autoFetch: true,
     token,
@@ -306,6 +340,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     documentId: invoice.id,
     tableName: 'C_Invoice',
     storeCondition: true,
+    readOnly,
     autoFetch: false,
     token,
     apiBaseUrl,
@@ -354,6 +389,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
       content: (
         <InvoiceGeneralTab
           invoice={p.displayInvoice}
+          relatedDocs={relatedDocs}
           partnerName={p.partnerName}
           badgeProps={p.badgeProps}
           statusLabel={p.statusLabel}
@@ -361,7 +397,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           payments={p.payments}
           loadingPayments={p.loadingPayments}
           totalOutstanding={p.totalOutstanding}
-          canAddPayment={p.canAddPayment}
+          canAddPayment={canAddPayment}
           addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}
           isDraft={p.isDraft}
           isFullyPaid={p.isFullyPaid}
@@ -394,14 +430,15 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     <InvoiceActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       onEmail={isSendable ? p.openEmailModal : undefined}
-      canSendToSif={p.canSendToSif}
+      canSendToSif={canSendToSif}
       onOpenSif={() => p.setShowSifModal(true)}
-      canAddPayment={p.canAddPayment}
+      canAddPayment={canAddPayment}
       addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}
       onAddPayment={() => p.setShowPaymentModal(true)}
       isSalesInvoice={p.isSalesInvoice}
-      onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
+      onDownloadPdf={isDownloadable ? handleDownloadPdf : undefined}
       hasPdf={hasPdf}
+      readOnly={readOnly}
       data-testid="InvoiceActionButtons__cf88e6" />
   );
 

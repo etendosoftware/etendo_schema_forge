@@ -4,6 +4,7 @@ import {
   listAttachments,
   fetchAttachmentBlob,
   fetchAttachmentBlobUrl,
+  fetchBrandingUpdated,
 } from '../listAttachments.js';
 
 describe('listAttachments', () => {
@@ -260,5 +261,50 @@ describe('fetchAttachmentBlobUrl', () => {
     await fetchAttachmentBlobUrl(params);
     assert.equal(urls.length, 2);
     assert.equal(urls[0], urls[1]);
+  });
+});
+
+describe('fetchBrandingUpdated (ETP-5541)', () => {
+  let originalFetch;
+  let originalWindow;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    originalWindow = globalThis.window;
+    globalThis.window = { location: { pathname: '/web/com.etendoerp.go/index.html' } };
+  });
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  });
+
+  it('GETs /sws/neo/session with the bearer token and returns its brandingUpdated', async () => {
+    let lastUrl;
+    let lastOptions;
+    globalThis.fetch = async (url, options) => {
+      lastUrl = String(url);
+      lastOptions = options;
+      return { ok: true, json: async () => ({ brandingUpdated: '2026-09-10T10:00:00Z' }) };
+    };
+    const result = await fetchBrandingUpdated({
+      token: 'tok', apiBaseUrl: 'http://host/sws/neo/sales-order',
+    });
+    assert.equal(lastUrl, 'http://host/sws/neo/session');
+    assert.equal(lastOptions.headers.Authorization, 'Bearer tok');
+    assert.equal(result, '2026-09-10T10:00:00Z');
+  });
+
+  it('returns null (never throws) whenever the value cannot be obtained', async () => {
+    const cases = [
+      ['non-2xx response', async () => ({ ok: false, status: 500 })],
+      ['network error', async () => { throw new Error('offline'); }],
+      ['unparseable body', async () => ({ ok: true, json: async () => { throw new SyntaxError('bad'); } })],
+      ['backend without the field', async () => ({ ok: true, json: async () => ({ user: {} }) })],
+    ];
+    for (const [label, fetchImpl] of cases) {
+      globalThis.fetch = fetchImpl;
+      assert.equal(await fetchBrandingUpdated({ token: 'tok' }), null, label);
+    }
   });
 });

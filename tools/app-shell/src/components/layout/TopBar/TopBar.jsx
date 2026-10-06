@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMenuLabel, useUI } from '@/i18n';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { useGuardedNavigate } from '@/hooks/useGuardedNavigate.js';
 import { isProductiveEnvironment } from '@/lib/environmentPresentation.js';
 import { useCopilot } from '@/components/CopilotContext';
 import { WalkthroughLauncher } from '@etendosoftware/app-shell-core/walkthrough';
@@ -26,15 +27,267 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover.jsx';
+import {
   Search,
   Mic,
   Sparkles,
   MoreVertical,
+  MoreHorizontal,
   Star,
   HelpCircle,
   ArrowLeft,
   X,
 } from 'lucide-react';
+import {
+  BREADCRUMB_SEPARATOR,
+  breadcrumbToText,
+  normalizeBreadcrumb,
+  splitBreadcrumb,
+} from './breadcrumb.js';
+
+/**
+ * ETP-5504 — below this viewport width the right-side quick actions collapse to Copilot +
+ * Tutorials + a "more actions" menu. UX has not confirmed the exact value yet (target is the
+ * 1280×720 minimum resolution); change it here and nowhere else.
+ *
+ * Why 1366: with the rail expanded (240px) the header gets `viewport - 240`. The search is
+ * centered in the bar (see HEADER_GRID), so each side column gets `(header - search 392 - 2 gaps
+ * 32) / 2`, and the actions get that minus their own 24px right inset: ~327px at 1366, enough for
+ * Tutorials/Copilot + 5 quick actions (~304px), but only ~284px at 1280. So 1280-class screens go
+ * compact and the common 1366 laptop keeps every action inline.
+ */
+export const TOPBAR_COMPACT_BELOW_PX = 1366;
+const COMPACT_MEDIA_QUERY = `(max-width: ${TOPBAR_COMPACT_BELOW_PX - 0.02}px)`;
+
+function getIsCompact() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return Boolean(window.matchMedia(COMPACT_MEDIA_QUERY)?.matches);
+}
+
+function useIsCompactTopBar() {
+  const [isCompact, setIsCompact] = useState(getIsCompact);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mql = window.matchMedia(COMPACT_MEDIA_QUERY);
+    if (!mql) return undefined;
+    const onChange = () => setIsCompact(Boolean(mql.matches));
+    onChange();
+    mql.addEventListener?.('change', onChange);
+    return () => mql.removeEventListener?.('change', onChange);
+  }, []);
+  return isCompact;
+}
+
+/**
+ * ETP-5509 — three-column grid: left (title block) | search | right (quick actions).
+ * The two side tracks are equal `1fr` tracks, so the `auto` search track sits at the exact
+ * center of the bar whatever the side contents are. The left track has a 0 minimum: it takes
+ * all the space beside the search and its title/breadcrumb elide inside it. The right track's
+ * minimum is its `max-content`: the icons are never cut; only if they ever needed more than half
+ * of the free space would the search shift left (instead of being overlapped). Each block is
+ * placed on an explicit column so the search stays in the middle when there is no left block.
+ * The header itself has no horizontal padding (the 24px right inset lives on the actions group,
+ * inside its own track), so the tracks span the whole visible bar and the search is centered on
+ * the header's border box, not on a padding-shifted content box.
+ */
+const HEADER_GRID = 'grid grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)]';
+
+function BreadcrumbLevel({ item, onNavigate, className }) {
+  const navigable = Boolean(item.href || item.onClick);
+  if (!navigable) {
+    return <span className={cn('min-w-0 truncate', className)}>{item.label}</span>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(item)}
+      className={cn('min-w-0 truncate hover:text-foreground hover:underline', className)}
+    >
+      {item.label}
+    </button>
+  );
+}
+
+function TopBarBreadcrumb({ breadcrumb, ui }) {
+  // Guarded: a breadcrumb click from a dirty record must raise the unsaved-changes prompt.
+  const navigate = useGuardedNavigate();
+  const items = normalizeBreadcrumb(breadcrumb);
+  const fullText = breadcrumbToText(breadcrumb);
+
+  const handleNavigate = (item) => {
+    if (item.onClick) item.onClick();
+    else if (item.href) navigate(item.href);
+  };
+
+  // Legacy: a React node breadcrumb is rendered as-is, only truncated.
+  if (!items) {
+    return (
+      <span className="text-xs text-topbar-breadcrumb truncate" data-testid="topbar-breadcrumb">
+        {breadcrumb}
+      </span>
+    );
+  }
+  if (items.length === 0) return null;
+
+  const { head, hidden, current } = splitBreadcrumb(items);
+  // ≤3 levels with nothing navigable: one plain line that elides at the end, exactly as before.
+  const plain = hidden.length === 0 && head.every((item) => !item.href && !item.onClick);
+  if (plain) {
+    return (
+      <Tooltip delayDuration={300} data-testid="Tooltip__topbar-breadcrumb">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__topbar-breadcrumb">
+          <span
+            className="text-xs text-topbar-breadcrumb truncate"
+            data-testid="topbar-breadcrumb"
+          >
+            {fullText}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent data-testid="TooltipContent__topbar-breadcrumb">{fullText}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  const separator = (
+    <span aria-hidden="true" className="shrink-0 whitespace-pre">{BREADCRUMB_SEPARATOR}</span>
+  );
+
+  return (
+    <Tooltip delayDuration={300} data-testid="Tooltip__topbar-breadcrumb">
+      <TooltipTrigger asChild data-testid="TooltipTrigger__topbar-breadcrumb">
+        <nav
+          aria-label={ui('topbarBreadcrumb')}
+          className="flex min-w-0 items-center text-xs leading-4 text-topbar-breadcrumb"
+          data-testid="topbar-breadcrumb"
+        >
+          {head.map((item, index) => (
+            <span key={`${item.label}-${index}`} className="flex min-w-0 shrink items-center">
+              <BreadcrumbLevel item={item} onNavigate={handleNavigate} data-testid="BreadcrumbLevel__topbar" />
+              {separator}
+            </span>
+          ))}
+          {hidden.length > 0 && (
+            <span className="flex shrink-0 items-center">
+              <DropdownMenu data-testid="DropdownMenu__topbar-breadcrumb-overflow">
+                <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__topbar-breadcrumb-overflow">
+                  <button
+                    type="button"
+                    aria-label={ui('more')}
+                    className="flex h-4 items-center rounded px-0.5 hover:bg-muted hover:text-foreground"
+                    data-testid="topbar-breadcrumb-overflow"
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" data-testid="MoreHorizontal__topbar-breadcrumb" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="max-w-xs"
+                  data-testid="topbar-breadcrumb-overflow-menu"
+                >
+                  {hidden.map((item, index) => (
+                    <DropdownMenuItem
+                      key={`${item.label}-${index}`}
+                      disabled={!item.href && !item.onClick}
+                      onSelect={() => handleNavigate(item)}
+                      data-testid="topbar-breadcrumb-overflow-item"
+                    >
+                      <span className="truncate">{item.label}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {separator}
+            </span>
+          )}
+          <span
+            className="min-w-0 truncate"
+            aria-current="page"
+            data-testid="topbar-breadcrumb-current"
+          >
+            {current.label}
+          </span>
+        </nav>
+      </TooltipTrigger>
+      <TooltipContent data-testid="TooltipContent__topbar-breadcrumb">{fullText}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function QuickActionButton({ action }) {
+  const Icon = action.icon;
+  return (
+    <Tooltip delayDuration={0} data-testid="Tooltip__topbar-quick-action">
+      <TooltipTrigger asChild data-testid="TooltipTrigger__topbar-quick-action">
+        <button
+          type="button"
+          onClick={action.onClick}
+          disabled={action.disabled}
+          aria-label={action.label}
+          className="flex h-10 w-10 items-center justify-center rounded-lg text-topbar-icon transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          data-testid={`topbar-quick-action-${action.id}`}
+        >
+          {Icon ? <Icon className="h-5 w-5" data-testid="Icon__133e64" /> : action.label}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" data-testid="TooltipContent__topbar-quick-action">{action.label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function QuickActionsOverflowMenu({ actions, extras, ui }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen} data-testid="Popover__topbar-quick-actions-overflow">
+      <PopoverTrigger asChild data-testid="PopoverTrigger__topbar-quick-actions-overflow">
+        <button
+          type="button"
+          aria-label={ui('quickAction.more')}
+          className="flex h-10 w-10 items-center justify-center rounded-lg text-topbar-icon transition-colors hover:bg-muted hover:text-foreground"
+          data-testid="topbar-quick-actions-overflow"
+        >
+          <MoreVertical className="h-5 w-5" data-testid="MoreVertical__topbar-quick-actions-overflow" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-56 p-1"
+        data-testid="topbar-quick-actions-overflow-menu"
+      >
+        {actions.map((action) => {
+          const Icon = action.icon;
+          return (
+            <button
+              key={action.id}
+              type="button"
+              disabled={action.disabled}
+              onClick={() => {
+                setOpen(false);
+                action.onClick?.();
+              }}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+              data-testid={`topbar-quick-action-${action.id}`}
+            >
+              {Icon && <Icon className="h-4 w-4 text-muted-foreground" data-testid="Icon__133e64" />}
+              <span className="truncate">{action.label}</span>
+            </button>
+          );
+        })}
+        {extras != null && extras !== false && (
+          <div
+            className="flex flex-wrap items-center gap-1 px-1 py-1"
+            data-testid="topbar-quick-actions-overflow-extras"
+          >
+            {extras}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function resolveSelectedScope(searchSelectionTargets, currentWindowScope, vectorSearchTargets, ui) {
   if (searchSelectionTargets === null) return currentWindowScope;
@@ -158,6 +411,7 @@ export default function TopBar({
   onSearchClick,
   searchPlaceholder,
   onAIClick,
+  quickActions,
   rightExtras,
   className,
 }) {
@@ -186,6 +440,14 @@ export default function TopBar({
   const handleAIClick = onAIClick ?? copilot?.toggle;
 
   const hasMenu = onAddToFavorites || onPageHelp || menuAction;
+
+  // ETP-5504 — right-side quick actions. Copilot and Tutorials are always inline; everything
+  // else (structured `quickActions` such as Notifications/New, plus any `rightExtras` node)
+  // is inline on wide screens and moves into the right "⋯" menu at the compact breakpoint.
+  const isCompact = useIsCompactTopBar();
+  const overflowActions = Array.isArray(quickActions) ? quickActions.filter(Boolean) : [];
+  const hasExtras = rightExtras != null && rightExtras !== false;
+  const showOverflowMenu = isCompact && (overflowActions.length > 0 || hasExtras);
 
   useEffect(() => {
     setIsCurrentWindowScopeEnabled(true);
@@ -229,13 +491,15 @@ export default function TopBar({
         <DemoTrialIndicator ui={ui} data-testid="DemoTrialIndicator__133e64" />
         <header
           className={cn(
-            'relative flex h-[62px] shrink-0 items-center gap-4 pl-0 pr-6 bg-page-bg',
+            'relative h-[62px] shrink-0 items-center gap-4 px-0 bg-page-bg',
+            HEADER_GRID,
             className
           )}
         >
-        {/* Left: back button + title + breadcrumb + 3-dot menu */}
+        {/* Left: back button + title + breadcrumb + 3-dot menu. Stretches over the whole left
+            column (min-w-0) so the title block can use all of it and shrink below it. */}
         {(title || onBack) && (
-          <div className="relative z-10 flex items-center gap-1 shrink-0 min-w-0">
+          <div className="relative z-10 col-start-1 flex min-w-0 items-center gap-1">
             {onBack && (
               <button
                 type="button"
@@ -247,17 +511,15 @@ export default function TopBar({
                 <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__133e64" />
               </button>
             )}
-            {/* max-w caps this block regardless of the wrapper's shrink-0 above (max-width still
-                clamps a flex item even when it won't shrink under sibling pressure) — without it,
-                `truncate` below never activates: the center search is `absolute`, so it applies
-                no flex pressure of its own, and a long title/breadcrumb (e.g. a bank account's
-                full name + IBAN) just grows underneath it instead of eliding.
-                No `items-start`: that made this column's children size to their own content
-                instead of stretching to the max-w cap, so the cap capped this box but never
-                propagated down to the title row / breadcrumb span for `truncate` to act on —
-                they simply overflowed the (non-clipping) parent. Text stays left-aligned either
-                way; only the box-stretch behavior needed to change. */}
-            <div className="flex flex-col justify-center min-w-0 h-12 max-w-[320px]">
+            {/* ETP-5509: no fixed width cap. This block is content-sized and shrinkable
+                (`min-w-0`), so it uses the whole left grid column when needed and a long
+                title/breadcrumb (e.g. a bank account's full name + IBAN) elides at the column
+                edge instead of pushing the search. No `items-start`: the title row and the
+                breadcrumb must stretch to this block's width for their `truncate` to act. */}
+            <div
+              className="flex flex-col justify-center min-w-0 h-12"
+              data-testid="topbar-title-block"
+            >
               <div className="flex min-w-0 items-center gap-2">
                 <Tooltip delayDuration={300} data-testid="Tooltip__topbar-title">
                   <TooltipTrigger asChild data-testid="TooltipTrigger__topbar-title">
@@ -277,9 +539,7 @@ export default function TopBar({
                 )}
               </div>
               {breadcrumb && (
-                <span className="text-xs text-topbar-breadcrumb truncate">
-                  {breadcrumb}
-                </span>
+                <TopBarBreadcrumb breadcrumb={breadcrumb} ui={ui} data-testid="TopBarBreadcrumb__133e64" />
               )}
             </div>
 
@@ -290,7 +550,7 @@ export default function TopBar({
                     type="button"
                     aria-label={ui('more')}
                     data-testid="topbar-more-actions"
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-topbar-icon hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-topbar-icon hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <MoreVertical className="h-4 w-4" data-testid="MoreVertical__133e64" />
                   </button>
@@ -337,10 +597,13 @@ export default function TopBar({
           </div>
         )}
 
-        {/* Center: search — absolutely centered so it never shifts with title width */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-6">
+        {/* Center: search — fixed 392px in the middle grid column (ETP-5509: exactly centered in
+            the bar, see HEADER_GRID). It used to be `absolute inset-0` over the whole header,
+            which ignored the Navigation Rail width and covered the title at 1280px. `min-w-0` +
+            `max-w-full` let it shrink instead of overlapping if the bar ever gets too narrow. */}
+        <div className="col-start-2 flex min-w-0 items-center justify-center" data-testid="topbar-search-slot">
           <div
-            className="pointer-events-auto relative flex h-11 w-full max-w-[min(48rem,calc(100vw-28rem))] items-center rounded-full border border-transparent bg-search-bg px-4 text-sm transition-colors hover:bg-search-bg/80 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
+            className="relative flex h-11 w-[392px] max-w-full items-center rounded-full border border-transparent bg-search-bg px-4 text-sm transition-colors hover:bg-search-bg/80 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
             onClick={(event) => {
               handleSearchClick(event);
               requestAnimationFrame(() => searchInputRef.current?.focus());
@@ -430,7 +693,7 @@ export default function TopBar({
         </div>
 
         {/* Right: action icons */}
-        <div className="ml-auto flex items-center gap-1 shrink-0">
+        <div className="col-start-3 flex items-center justify-self-end gap-1 shrink-0 pr-6" data-testid="topbar-quick-actions">
           {/* ETP-5144 — guided walkthroughs. Hardcoded here rather than passed
               via `rightExtras` (which comes from per-page PageMeta) so the
               entry point is reachable from every screen. Renders nothing when
@@ -451,7 +714,17 @@ export default function TopBar({
             <TooltipContent side="bottom" data-testid="TooltipContent__133e64">{ui('aiAssistant')}</TooltipContent>
           </Tooltip>
 
-          {rightExtras}
+          {!isCompact && overflowActions.map((action) => (
+            <QuickActionButton key={action.id} action={action} data-testid="QuickActionButton__133e64" />
+          ))}
+          {!isCompact && rightExtras}
+          {showOverflowMenu && (
+            <QuickActionsOverflowMenu
+              actions={overflowActions}
+              extras={hasExtras ? rightExtras : null}
+              ui={ui}
+              data-testid="QuickActionsOverflowMenu__133e64" />
+          )}
         </div>
         </header>
       </div>

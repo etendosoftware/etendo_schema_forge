@@ -234,7 +234,7 @@ regen: ## Regenerate contract + frontend for a window (ONLY=window-name)
 	@if [ "$(PUSH_TO_NEO)" = "1" ]; then sf-push-neo $(ONLY); fi
 
 validate: ## Run pipeline validator
-	sf-validate
+	sf-validate-pipeline
 
 push: ## Push contract to NEO Headless (ONLY=window-name)
 	sf-push-neo $(ONLY)

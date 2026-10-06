@@ -108,7 +108,7 @@ const FIXES_WITH_REPORT = new Set([
   // saying whether the Stripe ids were copied from a checkout request or deliberately left NULL.
   // It is therefore the one @report in the catalog that is NEVER empty on an APPLIED row — the
   // attestation branch is driven by ad_client, which always matches the target tenant.
-  '20260924T150000Z__R37-tenant-subscription-backfill',
+  '20261005T180000Z__R37-tenant-subscription-backfill',
   // R38 (ETP-5352) backfills AD_ORG.AD_LEGALENTITY_ORG_ID, but only on organizations that
   // finished provisioning (isready='Y'). Its @report lists the legal-entity orgs left
   // untouched because isready='N' — an org whose alta never completed is missing far more
@@ -165,6 +165,19 @@ const FIXES_WITH_REPORT = new Set([
   // @report lists an accounting schema that still cannot post it after @apply (row still inactive,
   // or no 800168 row at all) and is empty on every clean run.
   '20260923T120000Z__R40-internal-consumption-table-active',
+  // R41 (ETP-5502) backfills the owner of personal roles whose owner is provable. The @report
+  // lists the personal roles it had to leave without one (a deleted user's orphan, or a dormant
+  // role with zero or several candidate owners) so an operator can review them.
+  '20260928T140000Z__R41-personal-role-owner-backfill',
+  // R41 initializes the explicit legacy demo transition start timestamp. Its @report lists the
+  // preference created for the tenant so operators can verify the transition marker after apply.
+  '20260929T180000Z__R41-demo-legacy-trial-start',
+  // R42 reports the canonical productive preferences restored for paid provisioned tenants.
+  '20260929T190000Z__R42-paid-provisioning-commercial-metadata',
+  // R44 (ETP-5575, gap C4) opens the never-opened periods of DEMO tenants through October 2026.
+  // The @report lists the period-control rows it left untouched (closed by a user, permanently
+  // closed, or blocked by a future permanently closed year) and flags a calendar with no Oct-26.
+  '20261001T120000Z__R44-demo-periods-open-through-oct-2026',
 ]);
 
 async function loadCatalogFiles() {

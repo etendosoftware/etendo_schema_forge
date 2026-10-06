@@ -1,4 +1,7 @@
+// @covers tools/app-shell/src/windows/custom/goods-shipment/GoodsShipmentPreview.jsx
 // Mocks must come before imports (Vitest hoisting)
+
+import { dateOnlyWithFormatter } from '@/test/dateOnlyMock.js';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -10,23 +13,19 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-// Spread the REAL module and override only the formatter: an exhaustive factory
-// silently becomes wrong the moment anything in this tree reaches for another
-// `@/lib/dateOnly` export, and vitest reports that as a render-time
-// `No "<name>" export is defined on the "@/lib/dateOnly" mock` (ETP-5046).
-vi.mock('@/lib/dateOnly', async () => {
-  const actual = await vi.importActual('@/lib/dateOnly');
-  return { ...actual, formatCalendarDate: (date) => date || '—' };
-});
+// Keep every real `@/lib/dateOnly` export; stub only the formatter (see the helper).
+vi.mock('@/lib/dateOnly', async (importOriginal) =>
+  dateOnlyWithFormatter(importOriginal, (date) => date || '—'));
 
 vi.mock('../useShipmentPdf.js', () => ({
   useShipmentPdf: vi.fn(() => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null })),
 }));
 
-const capturedSpecs = { current: null };
+const capturedCardProps = { current: null };
 vi.mock('../../shared/preview-cards/RelatedDocumentsCard.jsx', () => ({
-  default: ({ documentId, specs }) => {
-    capturedSpecs.current = specs;
+  default: (props) => {
+    const { documentId } = props;
+    capturedCardProps.current = props;
     return <div data-testid="related-docs-card" data-doc-id={documentId} />;
   },
 }));
@@ -100,6 +99,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import GoodsShipmentPreview from '../GoodsShipmentPreview.jsx';
 import GenericPreviewModal from '../../shared/GenericPreviewModal.jsx';
 import { useShipmentPdf } from '../useShipmentPdf.js';
+import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
 import {
   expectPresenceGatedByStatus,
   expectDisabledGatedByStatus,
@@ -176,6 +176,16 @@ describe('GoodsShipmentPreview', () => {
     expect(card).toBeInTheDocument();
     expect(card.closest('[data-testid="tab-general"]')).toBeInTheDocument();
     expect(card.getAttribute('data-doc-id')).toBe('ship-1');
+  });
+
+  // ETP-5527 — the card renders the same shared definition as the form (the hook loads the
+  // detail record, where GoodsShipmentHeaderHandler injects linkedOrders/linkedInvoices/
+  // returnReceipts). No preview-local specs any more.
+  it('passes the shared goods-shipment related-documents definition to the card, not specs', () => {
+    renderGSPreview();
+    expect(capturedCardProps.current.definition).toBe(SALES_RELATED_DOCS['goods-shipment']);
+    expect(capturedCardProps.current.specs).toBeUndefined();
+    expect(capturedCardProps.current.record).toBeUndefined();
   });
 
   it('shows send modal when email button is clicked', () => {
@@ -273,124 +283,6 @@ describe('GoodsShipmentPreview', () => {
     renderGSPreview();
     const downloadBtn = screen.getByTestId('icon-download').closest('button');
     expect(downloadBtn).not.toBeDisabled();
-  });
-
-  describe('shipmentDocSpecs fetch functions', () => {
-    const shipmentId = 'ship-1';
-    const token = 'tok';
-    const base = '/api/goods-shipment';
-
-    function mockDetailFetch(detail) {
-      global.fetch = vi.fn(() =>
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ response: { data: [detail] } }),
-        }),
-      );
-    }
-
-    beforeEach(() => {
-      capturedSpecs.current = null;
-    });
-
-    it('orders spec fetches linkedOrders from the detail endpoint', async () => {
-      mockDetailFetch({ linkedOrders: [{ id: 'ord-1' }], linkedInvoices: [], returnReceipts: [] });
-      renderGSPreview();
-      const specs = capturedSpecs.current;
-      expect(specs).toHaveLength(3);
-      const result = await specs[0].fetch(shipmentId, token, base);
-      expect(result).toEqual([{ id: 'ord-1' }]);
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${base}/goodsShipment/${shipmentId}`,
-        expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${token}`, 'Accept-Language': 'es_ES' }) }),
-      );
-    });
-
-    it('invoices spec fetches linkedInvoices from the detail endpoint', async () => {
-      mockDetailFetch({ linkedOrders: [], linkedInvoices: [{ id: 'inv-1' }], returnReceipts: [] });
-      renderGSPreview();
-      const specs = capturedSpecs.current;
-      const result = await specs[1].fetch(shipmentId, token, base);
-      expect(result).toEqual([{ id: 'inv-1' }]);
-    });
-
-    it('returns spec fetches returnReceipts from the detail endpoint', async () => {
-      mockDetailFetch({ linkedOrders: [], linkedInvoices: [], returnReceipts: [{ id: 'ret-1' }] });
-      renderGSPreview();
-      const specs = capturedSpecs.current;
-      const result = await specs[2].fetch(shipmentId, token, base);
-      expect(result).toEqual([{ id: 'ret-1' }]);
-    });
-
-    // What this guards is the CACHE around the shipment detail endpoint: the three
-    // related-document specs all read from the same `${base}/goodsShipment/${id}` payload,
-    // so they must share ONE request instead of issuing three. Counting every `fetch` call
-    // used to be a good enough proxy for that, but stopped being one in ETP-5069 — the
-    // preview now renders the real EmailsCard, which issues its own unrelated
-    // `/documentemailhistory` request. So the assertion counts calls to the detail endpoint
-    // itself, which is what the test always meant: no duplication of THAT call.
-    it('all three specs share one HTTP call (caching)', async () => {
-      mockDetailFetch({ linkedOrders: [{ id: 'ord-1' }], linkedInvoices: [{ id: 'inv-1' }], returnReceipts: [] });
-      renderGSPreview();
-      const specs = capturedSpecs.current;
-      await Promise.all([
-        specs[0].fetch(shipmentId, token, base),
-        specs[1].fetch(shipmentId, token, base),
-        specs[2].fetch(shipmentId, token, base),
-      ]);
-      const detailUrl = `${base}/goodsShipment/${shipmentId}`;
-      const detailCalls = global.fetch.mock.calls.filter(([url]) => String(url) === detailUrl);
-      expect(detailCalls).toHaveLength(1);
-    });
-
-    it('returns empty arrays when the fetch response is missing fields', async () => {
-      mockDetailFetch({});
-      renderGSPreview();
-      const specs = capturedSpecs.current;
-      const [orders, invoices, returns] = await Promise.all([
-        specs[0].fetch(shipmentId, token, base),
-        specs[1].fetch(shipmentId, token, base),
-        specs[2].fetch(shipmentId, token, base),
-      ]);
-      expect(orders).toEqual([]);
-      expect(invoices).toEqual([]);
-      expect(returns).toEqual([]);
-    });
-
-    it('resolves to empty arrays when fetch rejects (error path)', async () => {
-      global.fetch = vi.fn(() => Promise.reject(new Error('Network error')));
-      renderGSPreview();
-      const specs = capturedSpecs.current;
-      const [orders, invoices, returns] = await Promise.all([
-        specs[0].fetch(shipmentId, token, base),
-        specs[1].fetch(shipmentId, token, base),
-        specs[2].fetch(shipmentId, token, base),
-      ]);
-      expect(orders).toEqual([]);
-      expect(invoices).toEqual([]);
-      expect(returns).toEqual([]);
-    });
-
-    it('resolves to empty arrays when fetch returns a non-ok response', async () => {
-      global.fetch = vi.fn(() =>
-        Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }),
-      );
-      renderGSPreview();
-      const specs = capturedSpecs.current;
-      const result = await specs[0].fetch(shipmentId, token, base);
-      expect(result).toEqual([]);
-    });
-
-    it('spec keys and types are set correctly', () => {
-      renderGSPreview();
-      const specs = capturedSpecs.current;
-      expect(specs[0].key).toBe('orders');
-      expect(specs[0].type).toBe('sales-order');
-      expect(specs[1].key).toBe('invoices');
-      expect(specs[1].type).toBe('sales-invoice');
-      expect(specs[2].key).toBe('returns');
-      expect(specs[2].type).toBe('return-material-receipt');
-    });
   });
 
   // ── ETP-4315: attachmentConfig wiring (real Attachment, M_InOut table) ────

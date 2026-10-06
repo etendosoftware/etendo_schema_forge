@@ -21,6 +21,7 @@ vi.mock('sonner', () => ({
 // without touching the network.
 const hookState = {
   items: [],
+  count: null,
   loading: false,
   error: null,
   uploadingFiles: new Map(),
@@ -34,8 +35,13 @@ const hookState = {
   formatBytes: (n) => `${n} B`,
 };
 
+// Options each render passed to the hook, so tests can assert what the tab asks for.
+const hookCalls = [];
 vi.mock('../useAttachments', () => ({
-  useAttachments: () => hookState,
+  useAttachments: (opts) => {
+    hookCalls.push(opts);
+    return hookState;
+  },
 }));
 
 // ETP-5038: the accepted types now come from GET /sws/neo/attachments/config. Pin them
@@ -67,7 +73,9 @@ const baseProps = {
 beforeEach(() => {
   vi.clearAllMocks();
   hookState.items = [];
+  hookState.count = null;
   hookState.loading = false;
+  hookCalls.length = 0;
   hookState.uploadingFiles = new Map();
 });
 
@@ -247,6 +255,39 @@ describe('AttachmentsTab', () => {
   });
 });
 
+// ETP-5526: the tab badge showed "0" before the lazy list was ever read. The
+// tab reports the hook's `count` as-is (null = unknown, never a fake 0), only
+// when not loading, and asks the hook for the count prefetch only when there
+// is a badge to feed.
+describe('AttachmentsTab — onCountChange reports the hook count (ETP-5526)', () => {
+  it.each([
+    ['unknown count → null (even with items on screen)', { count: null, items: [{ id: '1', name: 'a.pdf' }] }, null],
+    ['known count → that number', { count: 2, items: [] }, 2],
+    ['known zero → 0', { count: 0, items: [] }, 0],
+  ])('%s', (_label, state, expected) => {
+    Object.assign(hookState, state);
+    const onCountChange = vi.fn();
+    render(<AttachmentsTab {...baseProps} onCountChange={onCountChange} />);
+    expect(onCountChange).toHaveBeenLastCalledWith(expected);
+  });
+
+  it('does not report any count while the list is loading', () => {
+    Object.assign(hookState, { count: 1, loading: true, items: [{ id: '1', name: 'a.pdf' }] });
+    const onCountChange = vi.fn();
+    render(<AttachmentsTab {...baseProps} onCountChange={onCountChange} />);
+    expect(onCountChange).not.toHaveBeenCalled();
+  });
+
+  it('asks the hook to prefetch the count only when onCountChange is passed', () => {
+    const { unmount } = render(<AttachmentsTab {...baseProps} onCountChange={vi.fn()} />);
+    expect(hookCalls.at(-1).prefetchCount).toBe(true);
+    unmount();
+
+    render(<AttachmentsTab {...baseProps} />);
+    expect(hookCalls.at(-1).prefetchCount).toBe(false);
+  });
+});
+
 describe('AttachmentsTab — respects isDocumentReadOnly (ETP-5205)', () => {
   beforeEach(() => {
     hookState.items = [{ id: '1', name: 'first.pdf', size: 100 }];
@@ -270,6 +311,46 @@ describe('AttachmentsTab — respects isDocumentReadOnly (ETP-5205)', () => {
 
   it('regression: shows per-row delete and delete-all when isDocumentReadOnly is false/absent', () => {
     render(<AttachmentsTab {...baseProps} />);
+    expect(screen.getByTestId('attachment-delete-1')).toBeInTheDocument();
+    expect(screen.getByTestId('attachments-delete-all')).toBeInTheDocument();
+  });
+});
+
+// ETP-5432/ETP-5205 merge fix — `effectiveReadOnly = !!isDocumentReadOnly || !!readOnly`.
+// A develop merge had dropped the bespoke `readOnly` prop (kept only
+// `isDocumentReadOnly`), silently reopening delete for FmModel303Page/FmModel349Page's
+// own `readOnly={status !== 'draft'}` usage. These cases pin the OR gate itself —
+// each flag alone must hide delete, and upload stays gated by isDocumentReadOnly only.
+describe('AttachmentsTab — effectiveReadOnly OR gate (readOnly + isDocumentReadOnly, ETP-5432)', () => {
+  beforeEach(() => {
+    hookState.items = [{ id: '1', name: 'first.pdf', size: 100 }];
+  });
+
+  it('hides per-row delete and delete-all when readOnly=true but isDocumentReadOnly=false', () => {
+    render(<AttachmentsTab {...baseProps} readOnly isDocumentReadOnly={false} />);
+    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
+  });
+
+  it('does NOT disable the upload dropzone when only readOnly=true (upload is gated by isDocumentReadOnly alone)', () => {
+    render(<AttachmentsTab {...baseProps} readOnly isDocumentReadOnly={false} />);
+    expect(screen.getByTestId('attachments-dropzone').querySelector('[disabled]')).toBeFalsy();
+  });
+
+  it('hides per-row delete and delete-all when isDocumentReadOnly=true but readOnly=false', () => {
+    render(<AttachmentsTab {...baseProps} readOnly={false} isDocumentReadOnly />);
+    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
+  });
+
+  it('hides per-row delete and delete-all when BOTH readOnly and isDocumentReadOnly are true', () => {
+    render(<AttachmentsTab {...baseProps} readOnly isDocumentReadOnly />);
+    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
+  });
+
+  it('regression: shows per-row delete and delete-all when BOTH flags are false/absent', () => {
+    render(<AttachmentsTab {...baseProps} readOnly={false} isDocumentReadOnly={false} />);
     expect(screen.getByTestId('attachment-delete-1')).toBeInTheDocument();
     expect(screen.getByTestId('attachments-delete-all')).toBeInTheDocument();
   });

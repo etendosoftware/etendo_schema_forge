@@ -30,9 +30,14 @@ beforeAll(() => {
 // so an amount the call site passed is still assertable (real keys carry their `{placeholder}`s in
 // the locale VALUE, so a plain key echo would render nothing of what was passed).
 const uiCalls = [];
+//
+// ETP-5472: `backendError.*` keys resolve to `t:<key>` instead of echoing. `translateBackendError`
+// guards on `t(key) === key` (a missing translation keeps the original English), so a pure echo
+// would make a translated and an untranslated backend error indistinguishable here.
 vi.mock('@/i18n', () => ({
   useUI: () => (key, vars) => {
     uiCalls.push({ key, vars });
+    if (key.startsWith('backendError.')) return `t:${key}`;
     if (!vars) return key;
     const interpolated = key.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? `{${k}}`));
     const rendered = Object.entries(vars).map(([k, v]) => `${k}=${v}`).join(' ');
@@ -42,7 +47,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
+  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }),
 }));
 
 // The accounting-concept picker, stubbed to expose the real lookup options as buttons (same stub
@@ -109,6 +114,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
+import { formatCurrency } from '@/lib/formatCurrency';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 
@@ -207,6 +213,7 @@ beforeEach(() => {
   accountMutations.updateAccount = vi.fn().mockResolvedValue({ id: 'ACC-1' });
   toast.success.mockClear();
   toast.error.mockClear();
+  toast.info.mockClear();
   uiCalls.length = 0;
 });
 
@@ -570,7 +577,7 @@ describe('GL_ITEM_REQUIRED as a race fallback', () => {
     expect(accountMutations.updateAccount).not.toHaveBeenCalled();
   });
 
-  it('still surfaces an unrelated failure as an error, with no dialog', async () => {
+  it('still surfaces an unrelated failure as a translated error, with no dialog', async () => {
     candidatesState.candidates = [CAND_EXACT];
     const err = new Error('Statement line is already reconciled');
     err.status = 409;
@@ -581,8 +588,193 @@ describe('GL_ITEM_REQUIRED as a race fallback', () => {
     clickReconcile();
 
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith('Statement line is already reconciled'));
+      expect(toast.error).toHaveBeenCalledWith('t:backendError.statementLineAlreadyReconciled'));
     expect(screen.queryByTestId('recon-difference-dialog')).toBeNull();
     expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull();
+  });
+});
+
+// ── 7. partial reconciliation (ETP-5472) ──────────────────────────────────────
+//
+// A group that leaves part of the line uncovered makes the backend split the line and answer
+// `partial: true` + `pendingAmount` (signed like the line). The user must be told the line is NOT
+// fully reconciled — an info toast naming the pending amount (unsigned, formatted through the
+// canonical currency utility) instead of the plain success toast.
+
+describe('partial reconcile result (ETP-5472)', () => {
+  beforeEach(() => {
+    candidatesState.candidates = [CAND_EXACT];
+  });
+
+  async function reconcileWith(result) {
+    reconcileState.reconcile = vi.fn().mockResolvedValue(result);
+    renderPanel();
+    selectLine();
+    clickReconcile();
+    await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+  }
+
+  function partialCall() {
+    return uiCalls.find((c) => c.key === 'financeReconcileToastPartial');
+  }
+
+  it('shows the partial info toast with the unsigned formatted pending amount', async () => {
+    await reconcileWith({ reconciliationId: 'R1', partial: true, pendingAmount: -1838.15 });
+
+    await waitFor(() => expect(toast.info).toHaveBeenCalledTimes(1));
+    const expectedAmount = formatCurrency('EUR', 1838.15);
+    expect(partialCall()?.vars).toEqual({ amount: expectedAmount });
+    const [message] = toast.info.mock.calls[0];
+    expect(message).toContain('financeReconcileToastPartial');
+    expect(message).toContain(expectedAmount);
+    expect(message).not.toContain('-');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('accepts a pendingAmount sent as a numeric string', async () => {
+    await reconcileWith({ reconciliationId: 'R1', partial: true, pendingAmount: '-1838.15' });
+
+    await waitFor(() => expect(toast.info).toHaveBeenCalledTimes(1));
+    expect(partialCall()?.vars).toEqual({ amount: formatCurrency('EUR', 1838.15) });
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('keeps the plain success toast when the result carries no partial flag', async () => {
+    await reconcileWith({ reconciliationId: 'R1' });
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('financeReconcileToastSuccess'));
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(partialCall()).toBeUndefined();
+  });
+
+  it('keeps the plain success toast when partial is false', async () => {
+    await reconcileWith({ reconciliationId: 'R1', partial: false, pendingAmount: 0 });
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('financeReconcileToastSuccess'));
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it('keeps the plain success toast when reconcile resolves with no body', async () => {
+    await reconcileWith(undefined);
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('financeReconcileToastSuccess'));
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+});
+
+// ── 8. the window's "read-only" access tier (ETP-5457) ────────────────────────
+//
+// Every path in this file ends in a write (post a difference, reconcile with one, store the
+// account's concept). Under the host window's read-only tier the banner's post action is hidden,
+// Conciliar is disabled and the three dialogs are kept shut whatever their own open state says.
+// The forced-close cases open a dialog while writable and then re-render the SAME panel under the
+// tier — the only way to reach a set open state, since the tier hides every control that sets it.
+
+// A partially reconciled line with a 0,50 € remainder: inside the account's 5% tolerance, so the
+// "post the difference" banner is offered (same numbers as ReconciliationDifference.vitest.jsx).
+const LINE_PARTIAL_DIFF = {
+  id: 'LP1', date: '2026-05-13T00:00:00Z', description: 'Partial line',
+  status: 'pending', reconcileStatus: 'PARTIAL', partial: true,
+  amount: 12.5, reconciledAmount: 12, pendingAmount: 0.5, reconciledPct: 96,
+  matchGroupId: 'G1', remainderLineId: 'LP1-rem',
+  txns: [{ transactionId: 'T1', documentNo: '1000034', contact: 'ACME', amount: 12, autoCreated: false }],
+};
+
+/** Same props as renderPanel(), for `rerender` — which needs the full element again. */
+function panelElement(props = {}) {
+  return (
+    <ReconciliationSplitPanel
+      accountId="ACC-1"
+      currency="EUR"
+      amountTolerance={AMOUNT_TOLERANCE_PCT}
+      accountUpdated={ACCOUNT_UPDATED}
+      onReconcileSuccess={vi.fn()}
+      {...props}
+    />
+  );
+}
+
+describe('window read-only access tier (ETP-5457)', () => {
+  describe('difference banner inside the panel', () => {
+    beforeEach(() => {
+      linesState.lines = [LINE_PARTIAL_DIFF];
+      linesState.total = 1;
+      candidatesState.candidates = [];
+    });
+
+    it('keeps the banner and "Dejar pendiente" but hides the post action under read-only (ETP-5457)', () => {
+      renderPanel({ windowReadOnly: true });
+      selectLine('LP1');
+      expect(screen.getByTestId('recon-difference-banner')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-difference-dismiss')).toBeInTheDocument();
+      expect(screen.queryByTestId('recon-difference-open')).toBeNull();
+    });
+
+    it('renders the post action, which opens the confirmation, without read-only (ETP-5457)', async () => {
+      renderPanel();
+      selectLine('LP1');
+      fireEvent.click(screen.getByTestId('recon-difference-open'));
+      await screen.findByTestId('recon-difference-dialog');
+    });
+
+    it('"Dejar pendiente" still dismisses the banner under read-only — it changes no data (ETP-5457)', () => {
+      renderPanel({ windowReadOnly: true });
+      selectLine('LP1');
+      fireEvent.click(screen.getByTestId('recon-difference-dismiss'));
+      expect(screen.queryByTestId('recon-difference-banner')).toBeNull();
+      expect(reconcileDifferenceState.reconcileDifference).not.toHaveBeenCalled();
+    });
+
+    it('forces the difference confirmation shut once the tier turns read-only (ETP-5457)', async () => {
+      const { rerender } = render(panelElement());
+      selectLine('LP1');
+      fireEvent.click(screen.getByTestId('recon-difference-open'));
+      await screen.findByTestId('recon-difference-dialog');
+
+      rerender(panelElement({ windowReadOnly: true }));
+      await waitFor(() => expect(screen.queryByTestId('recon-difference-dialog')).toBeNull());
+      expect(reconcileDifferenceState.reconcileDifference).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Conciliar on a postable difference', () => {
+    it('disables Conciliar on the near match under read-only (ETP-5457)', () => {
+      renderPanel({ windowReadOnly: true, glItemDifference: GL_DIFFERENCE });
+      selectLine();
+      expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+      clickReconcile();
+      expect(screen.queryByTestId('recon-difference-dialog')).toBeNull();
+      expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull();
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    });
+
+    it('keeps Conciliar on the same near match enabled without read-only (ETP-5457)', () => {
+      renderPanel({ glItemDifference: GL_DIFFERENCE });
+      selectLine();
+      expect(screen.getByTestId('recon-action-reconcile')).not.toBeDisabled();
+    });
+
+    it('forces the account setup dialog shut once the tier turns read-only, storing nothing (ETP-5457)', async () => {
+      const { rerender } = render(panelElement());
+      selectLine();
+      clickReconcile();
+      await screen.findByTestId('recon-glitem-setup-modal');
+
+      rerender(panelElement({ windowReadOnly: true }));
+      await waitFor(() => expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull());
+      expect(accountMutations.updateAccount).not.toHaveBeenCalled();
+    });
+
+    it('forces the reconcile-with-difference confirmation shut once the tier turns read-only (ETP-5457)', async () => {
+      const { rerender } = render(panelElement({ glItemDifference: GL_DIFFERENCE }));
+      selectLine();
+      clickReconcile();
+      await screen.findByTestId('recon-difference-dialog');
+
+      rerender(panelElement({ glItemDifference: GL_DIFFERENCE, windowReadOnly: true }));
+      await waitFor(() => expect(screen.queryByTestId('recon-difference-dialog')).toBeNull());
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    });
   });
 });
