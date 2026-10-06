@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/useFiscalAutoCompute.js
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import useFiscalAutoCompute from '../useFiscalAutoCompute.js';
@@ -102,7 +103,7 @@ describe('useFiscalAutoCompute — initial compute', () => {
 
 describe('useFiscalAutoCompute — sessionStorage cache', () => {
   const CACHED_RESULT = { boxes: BOXES, summary: SUMMARY };
-  const CACHE_KEY = `fiscal_ac_v4_${DECL_A.id}`;
+  const CACHE_KEY = `fiscal_ac_v5_${DECL_A.id}`;
   const CACHED_AT = Date.now() - 60_000; // 1 minute ago
 
   // Stable array refs: prevent effect re-runs caused by a new array reference on
@@ -135,6 +136,24 @@ describe('useFiscalAutoCompute — sessionStorage cache', () => {
     );
     expect(computeFn).not.toHaveBeenCalled();
     expect(checkModifiedFn).toHaveBeenCalledWith(DECL_A, CACHED_AT, expect.any(Object));
+  });
+
+  it('ignores a payload cached under the previous v4 key and recomputes', async () => {
+    // v5 bump: a v4 349 payload predates one-row-per-(invoice, key) and must not be restored.
+    sessionStorage.setItem(`fiscal_ac_v4_${DECL_A.id}`, JSON.stringify({ result: CACHED_RESULT, computedAt: CACHED_AT }));
+    const freshBoxes = { 7: 555 };
+    const computeFn       = vi.fn().mockResolvedValue({ boxes: freshBoxes, summary: SUMMARY });
+    const checkModifiedFn = vi.fn().mockResolvedValue(false);
+
+    const { result } = renderHook(() =>
+      useFiscalAutoCompute(DECL_A_LIST, makeOpts({ computeFn, checkModifiedFn }))
+    );
+
+    await waitFor(() =>
+      expect(result.current.computedMap[DECL_A.id]).toMatchObject({ boxes: freshBoxes })
+    );
+    expect(computeFn).toHaveBeenCalledTimes(1);
+    expect(checkModifiedFn).not.toHaveBeenCalled();
   });
 
   it('recomputes when checkModifiedFn returns true despite cache', async () => {
