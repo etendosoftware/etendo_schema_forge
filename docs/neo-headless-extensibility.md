@@ -352,7 +352,7 @@ if (!(marker instanceof EmailChange)) {
 }
 ```
 
-Reference use: `UserRoleAssignmentHandler` (`com.etendoerp.go`) — `rejectEmailChange` marks an allowed email correction, `reinviteAfterEmailChange` re-invites only when the marker is there. Full write-up: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §5.3, "Handler behavior".
+Reference use: `UserRoleAssignmentHandler` (`com.etendoerp.go`) — `UserEmailCorrection#rejectEmailChange` marks an allowed email correction, `reinviteAfterEmailChange` re-invites only when the marker is there. Full write-up: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §5.3, "Handler behavior".
 
 ### 2.5 NeoResponse: Building Responses
 
