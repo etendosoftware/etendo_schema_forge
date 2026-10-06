@@ -2529,7 +2529,7 @@ kinds of AEAT justificante a declaration can end up with:
   touches `DeclarationStatus` or `DeclarationFileName`; no setter is called on the declaration and
   it is never saved. Because production signals via the status change but test mode has no such
   signal, the client can't rely on "a status change just succeeded" alone to know when to refresh
-  — see `onAttached`/`receiptRefreshTick` below for how the tab actually detects both cases.
+  — see `onAttached` below for how the tab and its counter detect both cases.
 - **Manual** — `PresentModal`'s "Presentación con Acuse de recibo" path (`submitted_ack`) lets the
   user upload their own acuse-de-recibo file. Previously this `acuseFile` was accepted by the UI but
   silently discarded (`FmModel303Page.handlePresent` only destructured `{ status: newStatus }` from
@@ -2579,14 +2579,15 @@ informational):** opening the "Justificante" tab fires its own GET on top of the
 `isActive: false` instance's discarded one — i.e. two GETs per detail-page visit where one is
 expected, pure amplification of the same root cause above, not a separate bug.
 
-**Refresh decoupled from `status` for test-mode successes.** The tab's `AttachmentsTab` remounts
-(forcing a fresh fetch) on `key={`${status}-${receiptRefreshTick}`}` instead of `key={status}`
-alone. `status` still covers production successes (`handleTelematicSuccess`). `receiptRefreshTick` is a
-counter bumped by `handleAeatAttached` (`FmModel303Page.jsx`), which `AeatSubmitFlow` calls via a new
-`onAttached` prop whenever the backend response carries `pdfBase64` — for both `SUCCESS` and
-`TEST_SUCCESS`. This lets a test-mode submission (which now also gets a PDF attached server-side)
-refresh the Justificante tab without changing the declaration's status, preserving the hard
-invariant that test mode never alters `status`.
+**Refresh decoupled from `status` for test-mode successes.**
+- `AeatSubmitFlow` calls `onAttached` whenever the backend response carries `pdfBase64`, for both
+  `SUCCESS` and `TEST_SUCCESS`.
+- 303's `handleAeatAttached` responds by announcing the attach on the attachments bus
+  (`notifyAttachmentsChanged`). The counter and, if it is mounted, the tab refresh without any
+  status change, so test mode still never alters `status`.
+- The tab also remounts on a status change (`key={status}`).
+- Until ETP-5584 this was a remount-key tick (`key={`${status}-${receiptRefreshTick}`}`). The tick
+  refreshed the tab, never its counter. See "Modelo 349 detail page › Tabs › Tab counters".
 
 **Other accepted, non-blocking findings from this increment's REVIEW/QA:**
 - **Client-side MIME gate is a UX hint only (Alex REVIEW, W1).** `config={{ allowedMimeTypes:
@@ -2735,9 +2736,21 @@ rules apply to both 303 and 349.
     counted blocking only, and both models hid the counter at 0.
   - **Justificante** reads the lightweight attachment count: `useAttachments({ isActive: false,
     prefetchCount: true })` in the page. The attachments bus keeps it fresh after an upload or a
-    delete. The attachment list itself is still fetched only when the tab opens. **Known gap:** a
-    server-side auto-attach after a successful AEAT filing is not announced on the bus, so 303's
-    counter shows it only after the page is reopened.
+    delete. The attachment list itself is still fetched only when the tab opens.
+  - **Receipts attached by the server (ETP-5584)** also update the counter right away. On a
+    successful telematic submission, both production SUCCESS and "Validar sin presentar"
+    TEST_SUCCESS, the backend attaches the AEAT receipt PDF itself. `AeatSubmitFlow` then calls
+    `onAttached`, and 303's `handleAeatAttached` announces the attach with
+    `notifyAttachmentsChanged({ tableName: 'ETGO_Fiscal_Decl', recordId })`. It passes no `source`,
+    so no view treats the attach as its own write.
+  - Each view then reloads through `useAttachments`' own `onExternalChange`. The page-level hook
+    invalidates the shared cache and re-reads `/count`, which updates the counter. A mounted
+    "Justificante" `AttachmentsTab` reloads its list.
+  - This replaced a remount-key tick (`receiptRefreshTick`) that refreshed only the tab, never the
+    counter. The tab still remounts on a status change (`key={status}`).
+  - A manual "Con acuse de recibo" registration needs nothing extra: the page uploads the file
+    through its own `useAttachments` instance, whose `upload()` re-reads the count itself.
+  - Only 303 has a telematic path; 349 is register-only.
 - **One empty state (P11).**
   - `FmEmptyState` (`FmDetailChrome.jsx`, re-exported by `FmCommon.jsx` as `EmptyState`) is the
     single icon + title + text block. Every tab that can be empty renders it:

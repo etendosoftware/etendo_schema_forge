@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // Vitest tests for the ETP-4456 "Justificante" tab (AttachmentsTab bound to
 // ETGO_Fiscal_Decl) and the handlePresent acuse-de-recibo upload fix in
 // FmModel303Page.jsx. Kept in its own file (rather than editing
@@ -37,7 +38,7 @@ vi.mock('../../../FmCommon.jsx', () => ({
     { role: 'tablist' },
     tabs.map(t => React.createElement(
       'button',
-      { key: t.id, role: 'tab', 'aria-selected': String(t.id === active), onClick: () => onSelect(t.id) },
+      { key: t.id, role: 'tab', 'aria-selected': String(t.id === active), 'data-badge': t.badge == null ? '' : String(t.badge), onClick: () => onSelect(t.id) },
       t.label
     ))
   ),
@@ -64,6 +65,7 @@ vi.mock('../AeatSubmitFlow.jsx', () => ({
 // Explicit per-icon mock (matching the sibling files' established pattern) rather
 // than a catch-all Proxy — see FmModel303Page.aeatFlow.vitest.jsx for why.
 vi.mock('lucide-react', () => ({
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
@@ -113,19 +115,32 @@ vi.mock('../../../FmOverlays.jsx', () => ({
 const uploadMock = vi.fn();
 const useAttachmentsMock = vi.fn(() => ({ upload: uploadMock }));
 let attachmentsTabMountCount = 0;
-vi.mock('@/components/attachments', () => ({
-  AttachmentsTab: (props) => {
-    attachmentsTabMountCount += 1;
-    return React.createElement('div', {
-      'data-testid': 'attachments-tab-mock',
-      'data-table-name': props.tableName,
-      'data-record-id': props.recordId,
-      'data-mime-types': JSON.stringify(props.config?.allowedMimeTypes ?? []),
-      'data-mount-count': attachmentsTabMountCount,
-    }, 'attachments-tab');
-  },
-  useAttachments: (...args) => useAttachmentsMock(...args),
-}));
+// ETP-5584 — what the backend's attachment `/count` currently answers. The useAttachments
+// double below re-reads it only when the REAL attachments bus announces a change for its record,
+// exactly like the real hook's `onExternalChange` (invalidate + refetch the count), so a test can
+// tell "the page announced the server-side attach" from "nothing happened".
+let serverReceiptCount = 0;
+vi.mock('@/components/attachments', async () => {
+  const bus = await vi.importActual('@/components/attachments/attachmentsBus');
+  return {
+    AttachmentsTab: (props) => {
+      attachmentsTabMountCount += 1;
+      return React.createElement('div', {
+        'data-testid': 'attachments-tab-mock',
+        'data-table-name': props.tableName,
+        'data-record-id': props.recordId,
+        'data-mime-types': JSON.stringify(props.config?.allowedMimeTypes ?? []),
+        'data-mount-count': attachmentsTabMountCount,
+      }, 'attachments-tab');
+    },
+    useAttachments: (args) => {
+      useAttachmentsMock(args);
+      const [count, setCount] = React.useState(serverReceiptCount);
+      bus.useAttachmentsChanged({ tableName: args.tableName, recordId: args.recordId }, () => setCount(serverReceiptCount));
+      return { upload: uploadMock, count };
+    },
+  };
+});
 
 import FmModel303Page from '../FmModel303Page.jsx';
 
@@ -149,6 +164,7 @@ function openPresentModal() {
 beforeEach(() => {
   vi.clearAllMocks();
   attachmentsTabMountCount = 0;
+  serverReceiptCount = 0;
 });
 
 describe('FmModel303Page — "Justificante" receipt tab (ETP-4456)', () => {
@@ -206,28 +222,28 @@ describe('FmModel303Page — "Justificante" tab remounts on status change (key={
   });
 });
 
-describe('FmModel303Page — "Justificante" tab remounts on a test-mode attach (receiptRefreshTick, ETP-4456 follow-up)', () => {
+describe('FmModel303Page — a test-mode attach refreshes the "Justificante" views (ETP-4456 follow-up, ETP-5584)', () => {
   // ETP-5338 pt.4 — `handlePresent` now `await`s `persistEditableFields()` (a flush of pending
   // `identChecks`/`manualOverrides` edits) before opening AeatSubmitFlow, so AeatSubmitFlow no
   // longer mounts synchronously off the 'aeat_telematic' click — wait for it via `findByTestId`.
-  it('remounts AttachmentsTab when AeatSubmitFlow calls onAttached, even though status does not change', async () => {
+  //
+  // ETP-5584 — this used to bump a remount key on the tab; the page now announces the
+  // server-side attach on the attachments bus, which reloads the tab's list (when loaded) AND
+  // the tab counter. Asserted here as the bus event for this record, with `status` untouched.
+  it('announces the attach on the attachments bus when AeatSubmitFlow calls onAttached, without any status change', async () => {
     const onStatusChange = vi.fn();
-    render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
-    const tabs = screen.getAllByRole('tab');
-    fireEvent.click(tabs.find(t => t.textContent.includes('fm.tab.receipt')));
-
-    const firstMountCount = Number(screen.getByTestId('attachments-tab-mock').getAttribute('data-mount-count'));
-    expect(firstMountCount).toBeGreaterThan(0);
-
-    // Open AeatSubmitFlow via the same 'aeat_telematic' sentinel path used by the AEAT wiring
-    // tests, then simulate a test-mode success that attaches a PDF (onAttached), which must
-    // never go through onStatusChange — `status` itself stays untouched.
-    openPresentModal();
-    fireEvent.click(screen.getByTestId('present-confirm-aeat'));
-    fireEvent.click(await screen.findByTestId('aeat-flow-attach'));
-
-    const secondMountCount = Number(screen.getByTestId('attachments-tab-mock').getAttribute('data-mount-count'));
-    expect(secondMountCount).toBeGreaterThan(firstMountCount);
+    const events = [];
+    const listener = (e) => events.push(e.detail);
+    window.addEventListener('etgo:attachments-changed', listener);
+    try {
+      render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
+      openPresentModal();
+      fireEvent.click(screen.getByTestId('present-confirm-aeat'));
+      fireEvent.click(await screen.findByTestId('aeat-flow-attach'));
+    } finally {
+      window.removeEventListener('etgo:attachments-changed', listener);
+    }
+    expect(events).toEqual([{ tableName: 'ETGO_Fiscal_Decl', recordId: BASE_DECL.id, source: null }]);
     expect(onStatusChange).not.toHaveBeenCalled();
   });
 });
@@ -299,5 +315,31 @@ describe('FmModel303Page — handlePresent uploads acuse-de-recibo (ETP-4456 fix
     expect(uploadMock).not.toHaveBeenCalled();
     // aeat_telematic is a sentinel, never a real status change.
     expect(onStatusChange).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-5584 — the "Justificante" counter must include the receipt the backend attaches on a
+// successful telematic submission (production SUCCESS or "Validar sin presentar" TEST_SUCCESS),
+// right away, without remounting the page. The attach happens server-side, so the page must
+// announce it on the attachments bus; that is what makes every view of the record (the counter's
+// count read and, if loaded, the tab's list) refresh.
+describe('FmModel303Page — "Justificante" counter after a telematic attach (ETP-5584)', () => {
+  const receiptBadge = () => screen.getAllByRole('tab')
+    .find(t => t.textContent.includes('fm.tab.receipt')).getAttribute('data-badge');
+
+  it('goes from N to N+1 when AeatSubmitFlow reports the attached receipt, without a remount', async () => {
+    serverReceiptCount = 2;
+    const { container } = render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    const page = container.firstChild;
+    expect(receiptBadge()).toBe('2');
+
+    openPresentModal();
+    fireEvent.click(screen.getByTestId('present-confirm-aeat'));
+    const attach = await screen.findByTestId('aeat-flow-attach');
+    serverReceiptCount = 3; // the backend attached the AEAT receipt
+    fireEvent.click(attach);
+
+    await waitFor(() => expect(receiptBadge()).toBe('3'));
+    expect(container.firstChild).toBe(page); // same page instance, no remount
   });
 });

@@ -27,6 +27,9 @@ import {
 import { getCachedFiscalCompute, setCachedFiscalCompute, invalidateFiscalComputeCache } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
+// Imported from the bus module itself (not the '@/components/attachments' barrel), so page tests
+// that mock the barrel with only AttachmentsTab/useAttachments keep working.
+import { notifyAttachmentsChanged } from '@/components/attachments/attachmentsBus';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // AD table name backing the AEAT justificante attachments store — both the
@@ -1069,15 +1072,16 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     onBack?.();
   }
 
-  // Bumped by AeatSubmitFlow's onAttached whenever the backend reports a
-  // PDF was returned for the submission — including TEST_SUCCESS, which
-  // deliberately does NOT go through handleStatusChange (test mode must
-  // never change the declaration's status). Combined into the "Justificante"
-  // tab's remount key below so a test-mode success also refreshes the tab,
-  // without misusing the status-change path for it.
-  const [receiptRefreshTick, setReceiptRefreshTick] = useState(0);
+  // AeatSubmitFlow's onAttached fires whenever the backend reports it attached the AEAT receipt
+  // PDF to this declaration — production SUCCESS and "Validar sin presentar" (TEST_SUCCESS) alike.
+  // That attach happens SERVER-side, so no attachments view on this page can see it by itself:
+  // announce it on the shared attachments bus (ETP-5584). Every view of this record then reloads
+  // through its own `onExternalChange` — the page-level `useAttachments` (the "Justificante" tab
+  // counter: cache invalidated + `/count` re-read) and, when it is mounted, the tab's
+  // AttachmentsTab (its list). No `source`: no view on this page wrote the file, so none skips it.
+  // This replaced a remount-key tick that refreshed only the tab, never the counter.
   function handleAeatAttached() {
-    setReceiptRefreshTick(t => t + 1);
+    notifyAttachmentsChanged({ tableName: FISCAL_DECL_TABLE, recordId: decl.id });
   }
 
   // ETP-5338 pt.4 — "processing a rectificativa un-checks the checkbox" root cause: unlike
@@ -1638,16 +1642,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                 data-testid="IncidentsTab__4f6c0d" />
             )}
             {activeTab === 'receipt' && (
-              // key={`${status}-${receiptRefreshTick}`}: `status` changes when a
-              // production submission succeeds (handleStatusChange) — AEAT's own
-              // auto-attach on a successful telematic submission happens
-              // server-side and is invisible to this component, so remounting
-              // AttachmentsTab (and its useAttachments instance) on a status
-              // change is how this tab notices the new file. `receiptRefreshTick`
-              // covers the case `status` can't: a TEST_SUCCESS submission also
-              // gets a PDF attached server-side now, but test mode must never
-              // change the declaration's status, so it can't ride the status-key
-              // remount — AeatSubmitFlow's onAttached bumps the tick instead.
+              // key={status}: `status` changes when a production submission succeeds
+              // (handleStatusChange), so the tab remounts on a filing. A server-side receipt
+              // attach (production or test mode) reaches the tab — and the tab counter —
+              // through the attachments bus instead: see handleAeatAttached.
               (<AttachmentsTab
                 tableName={FISCAL_DECL_TABLE}
                 recordId={decl.id}
@@ -1659,7 +1657,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                 // declaration is still a draft, same rule `FmRowActions`' own delete
                 // action already enforces for the declaration record itself.
                 readOnly={status !== 'draft'}
-                key={`${status}-${receiptRefreshTick}`}
+                key={status}
                 data-testid="AttachmentsTab__303receipt" />)
             )}
           </div>
