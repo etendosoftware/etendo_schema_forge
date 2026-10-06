@@ -38,7 +38,7 @@ export default function ContactsPeriodButton() {
   const selected = PERIOD_OPTIONS.find((o) => o.value === period) ?? PERIOD_OPTIONS[0];
 
   return (
-    <DropdownMenu modal={false}>
+    <DropdownMenu modal={false} data-testid="DropdownMenu__28b84a">
       <DropdownMenuTrigger className={TRIGGER_CLS} data-testid="ContactsPeriodButton__trigger">
         <Calendar
           className="h-4 w-4 text-icon-secondary shrink-0"
@@ -52,10 +52,17 @@ export default function ContactsPeriodButton() {
         align="end"
         sideOffset={8}
         className="min-w-[var(--radix-dropdown-menu-trigger-width)] p-0 py-1 rounded-lg border-border-control"
-      >
-        <DropdownMenuRadioGroup value={selected.value} onValueChange={setPeriod}>
+        data-testid="DropdownMenuContent__28b84a">
+        <DropdownMenuRadioGroup
+          value={selected.value}
+          onValueChange={setPeriod}
+          data-testid="DropdownMenuRadioGroup__28b84a">
           {PERIOD_OPTIONS.map((opt) => (
-            <DropdownMenuRadioItem key={opt.value} value={opt.value} className={OPTION_CLS}>
+            <DropdownMenuRadioItem
+              key={opt.value}
+              value={opt.value}
+              className={OPTION_CLS}
+              data-testid="DropdownMenuRadioItem__28b84a">
               <span>{ui(opt.labelKey)}</span>
               {opt.value === selected.value && (
                 <Check
