@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/useFiscalAutoCompute.js
 // ETP-5438 — "block re-presentation once already submitted... sigue tomando facturas aun
 // presentada (ocultar boton de generar fichero y que no se recalcule)".
 //
@@ -78,7 +80,7 @@ const defaultProps = {
 // Same cache key format as useFiscalAutoCompute.js's own sessionCacheKey() — not exported,
 // so mirrored here (the "v3" suffix bump reflects that module's own comment: 349's compute
 // payload gained per-operator `vies` and per-invoice `key`).
-const cacheKeyFor = (declId) => `fiscal_ac_v4_${declId}`;
+const cacheKeyFor = (declId) => `fiscal_ac_v5_${declId}`;
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -11,6 +11,7 @@ import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { useCopyPageLink } from '@/hooks/useCopyLinkAction.js';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import ReportDrawer from './ReportDrawer.jsx';
 import { ListExportButton } from './ListExportButton.jsx';
@@ -951,6 +952,7 @@ export function ListView({
     onAddToFavorites: favKey ? () => toggleFavorite(favKey, entityLabel || entity) : undefined,
     isFavorite: favActive,
   }, [favActive, hook.items.length, hideRecordCount]);
+  const copyPageLink = useCopyPageLink();
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
   // ETP-5387 — bumped only by the toolbar Refresh button and forwarded to the headerTable as
@@ -1200,6 +1202,10 @@ export function ListView({
     hoverRowActions,
     clearSelectionTrigger: clearSelectionCounter,
     userRefreshTrigger: userRefreshCounter,
+    // ETP-5593 — the same view-only flag that gates the toolbar's New/Print/bulk delete,
+    // so a custom table with its own inline edits (the chart-of-accounts status switch)
+    // can disable them. DataTable ignores it.
+    windowReadOnly,
     deselectTrigger,
     deselectRowIds,
     rowQuickActions: effectiveRowQuickActions,
@@ -1400,6 +1406,11 @@ export function ListView({
                 <div className="flex items-center gap-2">
                   {!(listViewOptions?.hideLink ?? hideLink) && (
                     <button
+                      type="button"
+                      onClick={copyPageLink}
+                      title={ui('copyLink')}
+                      aria-label={ui('copyLink')}
+                      data-testid="list-share-link"
                       className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
                       <Link2 className="h-4 w-4" data-testid="Link2__620cbc" />
                     </button>

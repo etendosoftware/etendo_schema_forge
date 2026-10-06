@@ -33,6 +33,8 @@ import { login } from '../../helpers/auth.js';
  *   5. The toolbar paints a bottom border (the toolbar/body separator).
  *   6. The toolbar ends at or above the top of the list body.
  */
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
+// @covers artifacts/chart-of-accounts/custom/ChartOfAccountsToolbarSlot.jsx
 
 const VIEWPORT_MIN = { width: 1280, height: 720 };
 const VIEWPORT_LARGE = { width: 1920, height: 1080 };
@@ -53,6 +55,9 @@ const SETTLE_MS = 300;
  *   warehouse         generated WarehousePage.jsx         entity="warehouse"
  *   payment-in        generated FinPaymentPage.jsx        entity="finPayment"
  *   payment-out       generated HeaderPage.jsx            entity="header"
+ *   chart-of-accounts generated ElementValuePage.jsx      entity="elementValue"
+ *                     (ETP-5593: the tree's controls — Expandir todo, Buscar, Tipo de
+ *                     cuenta — sit in the main row next to Share/Sort/Refresh/Print/New)
  *
  * `subsetTabs`  number of `filter-<key>` subset tabs the window declares.
  * `viewToggle`  which toolbar row hosts the list/gallery toggle, or null when
@@ -73,6 +78,7 @@ const WINDOWS = [
   { slug: 'warehouse', entity: 'warehouse', subsetTabs: 0, viewToggle: null, hasCreate: true, hasPrint: false },
   { slug: 'payment-in', entity: 'finPayment', subsetTabs: 0, viewToggle: null, hasCreate: false, hasPrint: false },
   { slug: 'payment-out', entity: 'header', subsetTabs: 0, viewToggle: null, hasCreate: false, hasPrint: false },
+  { slug: 'chart-of-accounts', entity: 'elementValue', subsetTabs: 0, viewToggle: null, hasCreate: true, hasPrint: true },
 ];
 
 const windowBySlug = (slug) => WINDOWS.find((w) => w.slug === slug);

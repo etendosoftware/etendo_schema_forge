@@ -31,13 +31,13 @@ class LoaderTest(unittest.TestCase):
                 mode: write
                 prompt: hi
                 setup:
-                  - tool: neo_create
+                  - tool: etendo_create
                     args: { spec: s, data: { description: "{{marker}}" } }
                     saveAs: invoice
                 teardown:
-                  - tool: neo_delete
+                  - tool: etendo_delete
                     args: { spec: s, id: "{{steps.invoice.id}}" }
-                  - tool: neo_action
+                  - tool: etendo_action
                     forEach: "{{steps.payments.items}}"
                     args: { id: "{{item.id}}" }
         """))
