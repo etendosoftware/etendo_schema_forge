@@ -1,6 +1,6 @@
 import { OpenFeature, TypedInMemoryProvider } from '@openfeature/web-sdk';
 import { FLAG_DEFAULTS } from './flag-keys.js';
-import { createFlagExposureHook } from './flag-exposure.js';
+import { createFlagExposureHook, resetExposureCache } from './flag-exposure.js';
 
 import { reset, identify, group } from '../observability.js';
 import { authHeaders, apiFetch } from '@etendosoftware/app-shell-core/auth/api';
@@ -52,6 +52,7 @@ let identityGeneration = 0;
 
 export function clearAccountIdentity(storage = globalThis.localStorage) {
   identityGeneration += 1;
+  resetExposureCache();
   clearSessionIdentity();
   const cleared = Promise.allSettled([reset(), OpenFeature.setContext({})]);
   try {

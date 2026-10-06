@@ -48,6 +48,7 @@ export function redactErrorText(value) {
     try { const url = new URL(raw); return `${url.origin}${url.pathname}${position}`; } catch { return '[url]'; }
   });
   return redactEmailAddresses(redactedUrls)
+    .replace(/\bBearer\s+[^\s&,;}]+/gi, 'Bearer [redacted]')
     .replace(/(authorization|token|password|secret|code)\s*[:=]\s*(?:bearer\s+)?[^\s&,;}]+/gi, '$1=[redacted]');
 }
 
@@ -175,6 +176,7 @@ export function createDatadogProvider({
     env.VITE_DATADOG_CLIENT_TOKEN && env.VITE_DATADOG_SITE && env.VITE_APP_ENV);
   let clientPromise;
   let currentRoute;
+  let lastAccountId;
   if (requested && !enabled) logger.warn('[observability] Datadog requires application ID, client token, site and environment');
 
   function getClient() {
@@ -207,7 +209,18 @@ export function createDatadogProvider({
     async identify(id) { (await getClient())?.setUser({ id }); },
     async group(key, id) {
       const client = await getClient();
-      if (key === 'account_id') client?.setAccount({ id });
+      if (key === 'account_id' && client) {
+        const nextAccountId = String(id);
+        // A tenant switch must start a new RUM view so feature-flag context
+        // from the previous tenant cannot be attached to later events. The
+        // first identity assignment has no previous tenant and stays in the
+        // initial view; logout only clears the active identity below.
+        if (lastAccountId && lastAccountId !== nextAccountId) {
+          client.startView({ name: currentRoute });
+        }
+        lastAccountId = nextAccountId;
+        client.setAccount({ id });
+      }
     },
     async captureException(error, details) {
       (await getClient())?.addError(error, sanitizeEventProperties(details));

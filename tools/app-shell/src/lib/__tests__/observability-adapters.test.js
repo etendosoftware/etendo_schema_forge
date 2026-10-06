@@ -139,6 +139,28 @@ describe('Datadog observability adapter', () => {
     assert.match(result, /Authorization=\[redacted\]/i);
     assert.ok(!result.includes('super-secret-token'));
   });
+
+  it('redacts standalone bearer credentials in error text', () => {
+    const result = redactErrorText('request failed with Bearer super-secret-token');
+    assert.match(result, /Bearer \[redacted\]/i);
+    assert.ok(!result.includes('super-secret-token'));
+  });
+
+  it('starts a fresh RUM view when the tenant changes, without doing so on logout', async () => {
+    const { calls, sdk } = sdkRecorder();
+    const provider = createDatadogProvider({ env: datadogEnv, loader: async () => ({ datadogRum: sdk }) });
+    await provider.init();
+    const initialViews = calls.filter(([method]) => method === 'startView').length;
+
+    await provider.group('account_id', 'tenant-1');
+    assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews);
+    await provider.reset();
+    assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews);
+    await provider.group('account_id', 'tenant-2');
+    assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews + 1);
+    await provider.reset();
+    assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews + 1);
+  });
 });
 
 describe('AWS RUM observability adapter', () => {

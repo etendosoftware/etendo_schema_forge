@@ -146,8 +146,6 @@ jobs:
           VITE_DATADOG_SERVICE: etendo-go-web
           VITE_DATADOG_TRACE_API_BASES: ${{ steps.target.outputs.datadog_trace_api_bases }}
           VITE_APP_VERSION: ${{ github.sha }}
-          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
-          DATADOG_SITE: ${{ vars.DATADOG_SITE || 'datadoghq.eu' }}
           # Mixpanel — token as secret, API host as variable
           VITE_MIXPANEL_ENABLED: "true"
           VITE_MIXPANEL_TOKEN: ${{ secrets.VITE_MIXPANEL_TOKEN }}

@@ -42,7 +42,7 @@ import {
   FLAG_DEFAULTS,
   defaultForFlag,
 } from '../flag-keys.js';
-import { resetExposureCache } from '../flag-exposure.js';
+import { createFlagExposureHook, resetExposureCache } from '../flag-exposure.js';
 import { clearSessionIdentity, setSessionIdentity } from '../../sessionIdentity.js';
 
 const FLAG_ON = JSON.stringify({ [PROOF_OF_CONCEPT_MENU]: true });
@@ -230,6 +230,20 @@ describe('refreshAccountIdentity — stale telemetry guard', () => {
     await refresh;
 
     expect(groupMock).not.toHaveBeenCalled();
+  });
+
+  it('allows the same flag value to be reported again for a new tenant', () => {
+    const hook = createFlagExposureHook();
+    const context = {
+      flagKey: PROOF_OF_CONCEPT_MENU,
+      providerMetadata: { name: 'ConfigCatWebProvider' },
+      context: { targetingKey: 'account-1' },
+    };
+    hook.after(context, { value: true, variant: 'on' });
+    clearAccountIdentity(globalThis.localStorage);
+    hook.after({ ...context, context: { targetingKey: 'account-2' } }, { value: true, variant: 'on' });
+
+    expect(trackMock).toHaveBeenCalledTimes(2);
   });
 });
 
