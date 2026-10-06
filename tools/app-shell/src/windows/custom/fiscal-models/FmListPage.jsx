@@ -5,7 +5,10 @@ import {
   LayoutGrid, ArrowUpDown,
   ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
 } from 'lucide-react';
-import { EmptyState, KpiWidget, MoreOptionsMenu } from './FmCommon.jsx';
+import { EmptyState, KpiWidget } from './FmCommon.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { useFavorites } from '@/components/layout/FavoritesContext';
+import { useSupportChatSafe } from '@/components/support/SupportChatContext.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
@@ -563,7 +566,7 @@ function resolveDeclTypeLabel(decl, t) {
   return t('fm.type.ordinary');
 }
 
-export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl }) {
+export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl, active = true }) {
   const ui = useUI();
   const t  = ui;
   const { locale: appLocale } = useLocaleSwitch();
@@ -1140,56 +1143,27 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     );
   }
 
+  // ── Top-bar page meta (ETP-5584) ─────────────────────────────────────────
+  // Same mechanism every generated list window uses (ListView.jsx): the app TopBar renders the
+  // title, the record-count badge, the breadcrumb subtitle and the kebab (favorites + page help).
+  // `active` is false while FiscalModelsPage shows a 303/349 detail page — this component stays
+  // mounted (hidden) for auto-compute polling, so it must publish an EMPTY meta then, or the
+  // "Modelos Fiscales" title/kebab would leak into the detail pages' top bar.
+  const windowTitle = ui('fm.breadcrumb.section');
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const { actions: supportActions } = useSupportChatSafe();
+  const favActive = isFavorite('fiscal-models');
+  useSetPageMeta(active ? {
+    title: windowTitle,
+    breadcrumb: `${ui('finance')} / ${windowTitle}`,
+    recordCount: decls.length,
+    onAddToFavorites: () => toggleFavorite('fiscal-models', windowTitle),
+    isFavorite: favActive,
+    onPageHelp: () => { supportActions.setTab('ayuda'); supportActions.open(); },
+  } : {}, [active, favActive, decls.length]);
+
   return (
     <div className="fm-page">
-      {/* ── Page header (ETP-5584) ───────────────────────────────
-          Title = the window's menu name (same key as the breadcrumb's last segment, so
-          the two can never disagree), breadcrumb below it, page actions on the right. */}
-      <div
-        data-testid="fm-list-page-header"
-        style={{
-          padding: '10px 20px', background: 'hsl(var(--card))', flexShrink: 0,
-          display: 'flex', alignItems: 'center', gap: 12,
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-          <span
-            data-testid="fm-list-page-title"
-            style={{ fontSize: 20, fontWeight: 600, lineHeight: '32px', color: 'hsl(var(--foreground))' }}
-          >
-            {ui('fm.breadcrumb.section')}
-          </span>
-          <div
-            data-testid="fm-list-breadcrumb"
-            style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}
-          >
-            {ui('finance')} / {ui('fm.breadcrumb.section')}
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <button
-            className="fm-toolbar__btn"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
-            onClick={() => setShowCatalog(true)}
-          >
-            <LayoutGrid size={14} strokeWidth={1.75} data-testid="LayoutGrid__cb728e" />
-            {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
-          </button>
-          {catalogLoaded && activeCount > 0 && (
-            <button
-              className="fm-toolbar__btn fm-toolbar__btn--primary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
-              onClick={() => setShowNewDecl(true)}
-            >
-              + {t('fm.action.new_declaration') ?? 'Nueva declaración'}
-            </button>
-          )}
-          <MoreOptionsMenu
-            favKey="fiscal-models"
-            favLabel={ui('fm.breadcrumb.section')}
-            data-testid="MoreOptionsMenu__cb728e" />
-        </div>
-      </div>
       {/* ── KPI cards row ─────────────────────────────────────── */}
       {catalogLoaded && (
         <KpiCardsRow
@@ -1199,28 +1173,18 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onFilterClick={handleKpiFilterClick}
           data-testid="KpiCardsRow__cb728e" />
       )}
-      {/* ── Declarations toolbar: section heading + count on the left, filters/sort on the
-          right (ETP-5584 — "Declaraciones" is the table's heading, not the page title). ── */}
+      {/* ── Declarations toolbar (ETP-5584): section heading + filters on the left; sort and
+          the page actions on the right, primary "+ Nueva declaración" right-most — the same
+          arrangement as a generated ListView toolbar. ── */}
       <div className="fm-toolbar">
+        {/* Section heading of the declarations table. No count badge here: the declarations
+            count is already the TopBar's record-count badge, next to the window title. */}
         <span
           data-testid="fm-list-section-title"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginRight: 8 }}
+          style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))', marginRight: 8 }}
         >
-          <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {t('fm.list.title') ?? 'Declaraciones'}
-          </span>
-          <span
-            data-testid="fm-list-count"
-            style={{
-              display: 'inline-flex', alignItems: 'center',
-              padding: '4px 8px', borderRadius: 8,
-              background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
-              fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
-            }}
-          >{decls.length}</span>
+          {t('fm.list.title') ?? 'Declaraciones'}
         </span>
-
-        <div className="fm-toolbar__space" />
 
         <FilterDropdown
           label={t('fm.filter.all_years') ?? 'Todos los años'}
@@ -1243,6 +1207,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onChange={setStatusFilter}
           data-testid="FilterDropdown__cb728e" />
 
+        <div className="fm-toolbar__space" />
+
         {/* "Ordenar" — field-selector popover (same mechanism as ListView.jsx's
             column sort used by the generated/Factura windows), not a bare toggle. */}
         <div className="fm-filter-select" ref={sortBtnRef} style={{ position: 'relative' }}>
@@ -1259,9 +1225,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             <ArrowUpDown size={16} strokeWidth={1.75} data-testid="ArrowUpDown__cb728e" />
           </button>
           {showSortMenu && (
-            // Right-anchored: the sort button is now the last item of the toolbar row, so a
-            // left-anchored menu would overflow the page edge (ETP-5584).
-            <div className="fm-status-select__menu" role="listbox" style={{ minWidth: 200, left: 'auto', right: 0 }}>
+            <div className="fm-status-select__menu" role="listbox" style={{ minWidth: 200 }}>
               <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
                 {t('sortBy')}
               </div>
@@ -1300,6 +1264,28 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             </div>
           )}
         </div>
+
+        {/* Page actions — Button styles copied from ListView.jsx (outline secondary, then the
+            dark primary "New" button, right-most). */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+          onClick={() => setShowCatalog(true)}
+          data-testid="fm-list-catalog-button"
+        >
+          <LayoutGrid className="h-3.5 w-3.5" data-testid="LayoutGrid__cb728e" />
+          {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
+        </Button>
+        {catalogLoaded && activeCount > 0 && (
+          <Button
+            className="ml-3 rounded-lg shadow-sm gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+            onClick={() => setShowNewDecl(true)}
+            data-testid="fm-list-new-declaration-button"
+          >
+            + {t('fm.action.new_declaration') ?? 'Nueva declaración'}
+          </Button>
+        )}
       </div>
       {/* ── Table ──────────────────────────────────────────────── */}
       <div className="fm-table-wrap">

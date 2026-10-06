@@ -5,6 +5,7 @@ import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-she
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { registerApiSession, resetApiSessionForTests } from '@/auth/api.js';
+import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -201,17 +202,19 @@ describe('FmListPage — rendering', () => {
     expect(document.body).toBeTruthy();
   });
 
-  it('renders the window name as page title and the list title key as the table heading (ETP-5584)', () => {
+  it('renders the list title key as the declarations table heading (ETP-5584)', () => {
     render(<FmListPage declarations={[]} {...defaultProps} />);
-    expect(screen.getByTestId('fm-list-page-title').textContent).toBe('fm.breadcrumb.section');
-    expect(screen.getByTestId('fm-list-section-title').textContent).toContain('fm.list.title');
+    expect(screen.getByTestId('fm-list-section-title').textContent).toBe('fm.list.title');
   });
 
-  it('shows declaration count badge', () => {
-    // The count badge reflects raw `decls.length`, unaffected by activeModels.
+  it('publishes the declaration count as the TopBar record count (ETP-5584)', () => {
+    // The count reflects raw `decls.length`, unaffected by activeModels. Since ETP-5584 it is
+    // the TopBar badge (useSetPageMeta.recordCount), not an in-content badge.
     const decls = [makeDecl(), makeDecl()];
-    render(<FmListPage declarations={decls} {...defaultProps} />);
-    expect(document.body.textContent).toContain('2');
+    let meta = null;
+    function Probe() { meta = usePageMeta(); return null; }
+    render(<PageMetaProvider><FmListPage declarations={decls} {...defaultProps} /><Probe /></PageMetaProvider>);
+    expect(meta.recordCount).toBe(2);
   });
 
   it('renders the table when declarations exist', async () => {

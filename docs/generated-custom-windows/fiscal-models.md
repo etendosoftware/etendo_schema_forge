@@ -30,8 +30,8 @@ debug contracts.
 
 - Route: `/fiscal-models` (list, `FmListPage`); model detail pages render inline within the same route (no separate URL) via `FmModel303Page`/`FmModel349Page`.
 - Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
-- Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`).
-- Page title — list page: **"Modelos Fiscales"** / "Fiscal Models", the window's menu name, resolved from the same `ui('fm.breadcrumb.section')` key as the breadcrumb's last segment so the title and the breadcrumb can never disagree (ETP-5584 — it used to read "Declaraciones", `fm.list.title`, while the menu and the breadcrumb said "Modelos Fiscales"). See "List page header and declarations toolbar" below for the layout.
+- Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`), shown as the TopBar subtitle (ETP-5584).
+- Page title — list page: **"Modelos Fiscales"** / "Fiscal Models", the window's menu name, resolved from the same `ui('fm.breadcrumb.section')` key as the breadcrumb's last segment so the title and the breadcrumb can never disagree (ETP-5584 — it used to read "Declaraciones", `fm.list.title`, while the menu and the breadcrumb said "Modelos Fiscales"). It is published to the app TopBar via `useSetPageMeta` — see "List page header (app TopBar) and declarations toolbar" below.
 - Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`).
 
 ## Auto-compute architecture (`useFiscalAutoCompute`)
@@ -2770,33 +2770,55 @@ sessionStorage cache-key bump) discovered while doing so.
 
 ## List page toolbar (`FmListPage`)
 
-### List page header and declarations toolbar (ETP-5584)
+### List page header (app TopBar) and declarations toolbar (ETP-5584)
 
-The list page is laid out top to bottom as:
+The list page's title follows the same format as every generated list window (e.g. Contactos):
+`FmListPage` publishes it to the app **TopBar** through `useSetPageMeta`
+(`components/layout/PageMetaContext`), the exact API `ListView.jsx` uses — no in-content title
+block is rendered. The published meta is:
 
-1. **Page header** (`data-testid="fm-list-page-header"`) — on the left, the page title
-   (`fm-list-page-title`, the window's menu name `ui('fm.breadcrumb.section')`: "Modelos Fiscales" /
-   "Fiscal Models") with the breadcrumb (`fm-list-breadcrumb`, "Finanzas / Modelos Fiscales") below
-   it; on the right, the page actions: **"Catálogo de modelos (N)"** (`N = activeCount`), **"+ Nueva
-   declaración"** (only when `catalogLoaded && activeCount > 0`) and the `MoreOptionsMenu` kebab.
-2. **KPI cards row** (`KpiCardsRow`) — unchanged.
-3. **Declarations toolbar** (`.fm-toolbar`) — on the left, the section heading **"Declaraciones"**
-   (`fm.list.title`, `data-testid="fm-list-section-title"`) with its count badge (`fm-list-count`,
-   `decls.length`); on the right, the year/model/status `FilterDropdown` filters and the **"Ordenar"**
-   sort button (its popover is right-anchored, since the button is now the last item of the row).
-4. The declarations table.
+| TopBar slot | Value |
+|---|---|
+| `title` | `ui('fm.breadcrumb.section')` — the window's menu name, "Modelos Fiscales" / "Fiscal Models" |
+| `recordCount` (badge next to the title) | `decls.length` — the declarations count |
+| `breadcrumb` (subtitle line) | `` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` `` — "Finanzas / Modelos Fiscales" |
+| kebab (⋮ next to the title) | `onAddToFavorites` → `toggleFavorite('fiscal-models', <window name>)` + `isFavorite`, and `onPageHelp` → the support chat "Ayuda" tab (`useSupportChatSafe`), i.e. the same two items `MoreOptionsMenu` offers on the detail pages |
 
-"Declaraciones" used to be the page title and the KPI cards sat between the toolbar and the table;
-ETP-5584 made the title match the menu and moved "Declaraciones" down to head the table. The
-container structure is unchanged — no extra bordered panels were introduced around the cards or the
-table. The page header stays in-content (not `useSetPageMeta`/`TopBar`) for consistency with the
-303/349 detail pages, which render their own in-content title bars too.
+**Hidden list, empty meta.** `FiscalModelsPage` keeps `FmListPage` mounted (hidden with
+`display: none`) while a 303/349 detail page is shown, so auto-compute polling survives. It passes
+`active={!inDetail}`, and an inactive `FmListPage` publishes an empty meta (`{}`); otherwise the
+"Modelos Fiscales" title, count and kebab would leak into the detail pages' TopBar. The detail pages
+publish no meta of their own and keep their in-content title bars (with `MoreOptionsMenu`) unchanged;
+their breadcrumbs are plain text, and going back to the list is the "Cancelar" button (`onBack`), which
+flips `active` back to `true` and republishes the list meta.
 
-`FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The page actions (catalog, new declaration) live in the page header and the filters/sort in the declarations toolbar, as described above. There is no search input — see "Sort and search" below.
+The page content, top to bottom:
+
+1. **KPI cards row** (`KpiCardsRow`) — unchanged.
+2. **Declarations toolbar** (`.fm-toolbar`) — left: the section heading **"Declaraciones"**
+   (`fm.list.title`, `data-testid="fm-list-section-title"`) followed by the year/model/status
+   `FilterDropdown` filters; right: the **"Ordenar"** sort button, **"Catálogo de modelos (N)"**
+   (`N = activeCount`, outline secondary `Button`, `fm-list-catalog-button`) and, right-most,
+   **"+ Nueva declaración"** (dark primary `Button`, `fm-list-new-declaration-button`, only when
+   `catalogLoaded && activeCount > 0`). Both buttons copy `ListView.jsx`'s Print/"New" button classes.
+   The heading carries **no count badge**: the same number is already the TopBar badge next to the
+   title, so showing it twice would be redundant.
+3. The declarations table.
+
+"Declaraciones" used to be the page title (in an in-content title bar) and the catalog/new buttons
+sat after the sort button; ETP-5584 moved the title to the TopBar as the window's menu name and made
+"Declaraciones" the table heading. The container structure is unchanged — no extra bordered panels
+were introduced around the cards or the table.
+
+`FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The filters, sort and page actions (catalog, new declaration) all live in the declarations toolbar, as described above. There is no search input — see "Sort and search" below.
 
 This is scoped to the list page's own toolbar. `ConfigDrawer` as a component still exists (in `FmOverlays.jsx`), but its only remaining caller is the model catalog drawer (`FmCatalogPage.jsx`, described below) — `FmModel303Page.jsx` no longer has a 3-dot menu at all; its former Comparar / Configuración / Generar kebab (`MoreOptionsMenu`, plus `CompareDrawer` and this page's own `ConfigDrawer` usage) was removed entirely (see "Modelo 303 detail page" below for where "Generar fichero" now lives). No config/demo functionality was removed from the app as a whole — only the redundant row-kebab entry point on the declarations list.
 
 ### "More options" menu — favorites and help (`MoreOptionsMenu`, ETP-4755)
+
+(Since ETP-5584 the list page no longer renders `MoreOptionsMenu`: its kebab is the TopBar's own,
+fed the same two actions through `useSetPageMeta` — see "List page header (app TopBar) and
+declarations toolbar" above. The detail pages still use `MoreOptionsMenu`.)
 
 The page-title `MoreVertical` icon in all three surfaces — the list header, `FmModel303Page`, and
 `FmModel349Page` — used to render with no `onClick` at all, a leftover from the old kebabs described
