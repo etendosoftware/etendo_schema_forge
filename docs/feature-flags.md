@@ -10,8 +10,10 @@ authorization boundary; backend access checks are independent.
 ## Provider precedence and configuration
 
 1. A nonempty boolean map in `VITE_FEATURE_FLAGS` selects deterministic
-   `TypedInMemoryProvider` values, merged over shipped defaults. It completely
-   bypasses Datadog, keeping development and E2E independent of remote settings.
+   `TypedInMemoryProvider` values, merged over shipped defaults. It bypasses
+   ConfigCat evaluation while remaining eligible for Datadog RUM exposure
+   context when Datadog RUM is enabled, keeping development and E2E independent
+   of remote settings.
 2. `VITE_CONFIGCAT_SDK_KEY` enables the official
    `@openfeature/config-cat-web-provider` with ConfigCat auto-polling. A missing
    key skips remote evaluation.

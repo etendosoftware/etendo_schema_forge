@@ -16,6 +16,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 const trackMock = vi.fn();
 vi.mock('@/lib/observability.js', () => ({
   track: (...args) => trackMock(...args),
+  addFeatureFlagEvaluation: vi.fn(),
 }));
 
 import { OpenFeature } from '@openfeature/web-sdk';

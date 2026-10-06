@@ -26,7 +26,7 @@ describe('ConfigCat control plane selection', () => {
   });
 
   it('creates ConfigCat with the SDK key and bounded polling options', async () => {
-    const provider = { metadata: { name: 'ConfigCatWebProvider' } };
+    const provider = { metadata: { name: 'minified_provider_name' } };
     const create = vi.fn(() => provider);
     const result = await createFlagProvider({ env, logger, loader: async () => ({ ConfigCatWebProvider: { create } }) });
     expect(result).toBe(provider);

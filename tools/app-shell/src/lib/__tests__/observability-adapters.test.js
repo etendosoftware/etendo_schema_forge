@@ -38,7 +38,12 @@ describe('Datadog observability adapter', () => {
       const provider = createDatadogProvider({ env, logger: { warn() {} }, loader: async () => {
         loads++; throw new Error('must not load');
       } });
-      await Promise.all([provider.init(), provider.track('record_saved', {}), provider.page('/sales-order')]);
+      await Promise.all([
+        provider.init(),
+        provider.track('record_saved', {}),
+        provider.addFeatureFlagEvaluation('sample_flag', true),
+        provider.page('/sales-order'),
+      ]);
       assert.equal(provider.enabled, false);
       assert.equal(loads, 0);
     }
@@ -127,6 +132,12 @@ describe('Datadog observability adapter', () => {
     assert.deepEqual(event.context, { component: 'header' });
     assert.deepEqual(event.usr, { id: 'account-1' });
     assert.deepEqual(event.account, { id: 'tenant-1' });
+  });
+
+  it('redacts bearer credentials in error text', () => {
+    const result = redactErrorText('request failed Authorization: Bearer super-secret-token');
+    assert.match(result, /Authorization=\[redacted\]/i);
+    assert.ok(!result.includes('super-secret-token'));
   });
 });
 
@@ -319,6 +330,21 @@ describe('private source-map release policy', () => {
     const upload = workflow.indexOf('datadog-ci sourcemaps upload');
     const remove = workflow.indexOf("find tools/app-shell/dist -name '*.map' -delete");
     assert.ok(upload >= 0 && remove > upload);
+  });
+
+  it('resolves Datadog credentials and trace bases per deployment target', () => {
+    const workflow = readFileSync(new URL('../../../../../.github/workflows/deploy-staging.yml', import.meta.url), 'utf8');
+    for (const target of ['PRODUCTION', 'STAGING', 'EXPERIMENTAL']) {
+      assert.match(workflow, new RegExp(`datadog_application_id=\\$\\{\\{ vars\\.VITE_DATADOG_APPLICATION_ID_${target} \\}\\}`));
+      assert.match(workflow, new RegExp(`datadog_client_token=\\$\\{\\{ vars\\.VITE_DATADOG_CLIENT_TOKEN_${target} \\}\\}`));
+      assert.match(workflow, new RegExp(`datadog_trace_api_bases=\\$\\{\\{ vars\\.VITE_DATADOG_TRACE_API_BASES_${target} \\}\\}`));
+    }
+    assert.match(workflow, /VITE_DATADOG_APPLICATION_ID: \$\{\{ steps\.target\.outputs\.datadog_application_id \}\}/);
+    assert.match(workflow, /VITE_DATADOG_CLIENT_TOKEN: \$\{\{ steps\.target\.outputs\.datadog_client_token \}\}/);
+    assert.match(workflow, /VITE_DATADOG_TRACE_API_BASES: \$\{\{ steps\.target\.outputs\.datadog_trace_api_bases \}\}/);
+    assert.match(workflow, /--minified-path-prefix "\$\{\{ steps\.target\.outputs\.public_origin \}\}\/"/);
+    assert.doesNotMatch(workflow, /VITE_DATADOG_APPLICATION_ID: \$\{\{ vars\.VITE_DATADOG_APPLICATION_ID \}\}/);
+    assert.doesNotMatch(workflow, /VITE_DATADOG_CLIENT_TOKEN: \$\{\{ vars\.VITE_DATADOG_CLIENT_TOKEN \}\}/);
   });
 });
 

@@ -272,6 +272,7 @@ export async function refreshAccountIdentity(
   if (typeof fetchImpl !== 'function') return undefined;
   try {
     const res = await fetchImpl(`${apiBase}/sws/neo/session`, {
+      baseUrl: '',
       headers: authHeaders(token),
     });
     if (!res?.ok) return undefined;

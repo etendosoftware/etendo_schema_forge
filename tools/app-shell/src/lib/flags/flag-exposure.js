@@ -1,4 +1,4 @@
-import { track } from '../observability.js';
+import { track, addFeatureFlagEvaluation } from '../observability.js';
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/events.js';
 
 /**
@@ -31,7 +31,6 @@ import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/
 
 /** Flag/value combinations already reported this session (page lifetime). */
 const reported = new Set();
-let rumClientPromise;
 
 /** Datadog RUM feature flag keys accept identifier characters only. */
 export function sanitizeRumFeatureFlagKey(flagKey) {
@@ -56,17 +55,6 @@ export function sanitizeRumFeatureFlagKey(flagKey) {
  * is available. The SDK buffers this call before RUM initialization, so the
  * hook can remain registered before the async provider bootstrap completes.
  */
-export function addDatadogRumFeatureFlagEvaluation(flagKey, value) {
-  if (!rumClientPromise) {
-    rumClientPromise = import('@datadog/browser-rum')
-      .then(({ datadogRum }) => datadogRum)
-      .catch(() => undefined);
-  }
-  return rumClientPromise
-    .then(rum => rum?.addFeatureFlagEvaluation(flagKey, value))
-    .catch(() => {});
-}
-
 /** Exposed for tests and for callers that deliberately reset session state. */
 export function resetExposureCache() {
   reported.clear();
@@ -89,7 +77,7 @@ export function buildExposureProperties(hookContext, evaluationDetails) {
 
 export function createFlagExposureHook({
   trackImpl = track,
-  rumEvaluationImpl = addDatadogRumFeatureFlagEvaluation,
+  rumEvaluationImpl = addFeatureFlagEvaluation,
 } = {}) {
   return {
     after(hookContext, evaluationDetails) {

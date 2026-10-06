@@ -48,7 +48,7 @@ export function redactErrorText(value) {
     try { const url = new URL(raw); return `${url.origin}${url.pathname}${position}`; } catch { return '[url]'; }
   });
   return redactEmailAddresses(redactedUrls)
-    .replace(/(authorization|token|password|secret|code)=([^\s&]+)/gi, '$1=[redacted]');
+    .replace(/(authorization|token|password|secret|code)\s*[:=]\s*(?:bearer\s+)?[^\s&,;}]+/gi, '$1=[redacted]');
 }
 
 function isEmailLocalCharacter(character) {
@@ -190,9 +190,12 @@ export function createDatadogProvider({
 
   return {
     name: 'datadog', enabled,
-    capabilities: ['analytics', 'errors', 'performance', 'identity'],
+    capabilities: ['analytics', 'errors', 'performance', 'identity', 'featureFlagTracking'],
     init: getClient,
     async track(name, properties) { (await getClient())?.addAction(name, properties); },
+    async addFeatureFlagEvaluation(key, value) {
+      (await getClient())?.addFeatureFlagEvaluation(key, value);
+    },
     async page(path) {
       const client = await getClient();
       const route = normalizeRoute(path);
