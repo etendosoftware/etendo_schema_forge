@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ensureFinancialAccountSetup } from './financial-account-helpers.js';
 import { apiAuthHeaders } from './auth.js';
+import { waitForLoadingIndicatorsGone } from './selectors.js';
 
 // ── Credentials ──────────────────────────────────────────────────────────────
 
@@ -37,9 +38,10 @@ export async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view'),
     'Detail view should be visible — page may not have loaded correctly',
   ).toBeVisible({ timeout: 20_000 });
-  // Wait for any loading indicator to disappear (covers late-appearing spinners)
-  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
-    .catch(() => {}); // OK if spinner never appeared
+  // Wait for EVERY loading indicator to disappear (covers late-appearing spinners
+  // and panels that load concurrently). Passes at once when none is shown; a
+  // still-visible indicator after the budget is tolerated, as before.
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
 }
 
 /**
@@ -140,15 +142,13 @@ export async function waitForLinesSettled(page, count, message) {
   // otherwise a slow initial load (a fresh navigation, or a reload) eats into
   // the same budget as the count check itself, and the two failures (still
   // loading vs. genuinely wrong count) become indistinguishable in the error.
-  await page.getByText(/cargando|loading/i).first()
-    .waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
 
   await expect(linesBtn,
     message || `Lines count should reach ${count}`,
   ).toBeVisible({ timeout: 30_000 });
 
-  const spinner = page.getByText(/cargando|loading/i);
-  await spinner.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
   await expect(linesBtn,

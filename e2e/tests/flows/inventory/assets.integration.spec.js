@@ -1,6 +1,9 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
-import { openSelectorField, selectorFieldDisplay } from '../../helpers/selectors.js';
+import {
+  openSelectorField, selectorFieldDisplay, waitForLoadingIndicatorsGone,
+} from '../../helpers/selectors.js';
 
 /**
  * Assets window — Test Plan "Activos y Amortizaciones" (REAL BACKEND).
@@ -79,8 +82,7 @@ async function openNewAsset(page) {
   await expect(page.getByTestId('action-new')).toBeVisible({ timeout: 15_000 });
   await page.getByTestId('action-new').click();
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
-    .catch(() => {}); // OK if spinner never appeared
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
 }
 
 /** Pick the real "Genérico" category in the Categoría de activo selector.

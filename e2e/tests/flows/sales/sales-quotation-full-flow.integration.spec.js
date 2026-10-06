@@ -9,6 +9,7 @@ import { login, navigateTo } from '../../helpers/auth.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
 import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../../helpers/inventory-helpers.js';
 import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../../helpers/product-helpers.js';
@@ -77,10 +78,7 @@ async function slow(page) {
 
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 20_000 });
-  const spinner = page.getByText(/cargando|loading/i);
-  if (await spinner.isVisible({ timeout: 500 }).catch(() => false)) {
-    await expect(spinner).toBeHidden({ timeout: 15_000 });
-  }
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 });
 }
 
 function expectSaveResponse(page) {
@@ -221,8 +219,7 @@ async function waitForLinesSettled(page, count, message) {
     message || `Lines count should reach ${count}`,
   ).toBeVisible({ timeout: 15_000 });
 
-  const spinner = page.getByText(/cargando|loading/i);
-  await spinner.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
   await expect(linesBtn,
