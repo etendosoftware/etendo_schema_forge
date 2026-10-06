@@ -111,7 +111,14 @@ function FilterDropdown({ label, value, options, onChange }) {
     <div className="fm-filter-select" ref={ref} style={{ position: 'relative' }}>
       <button
         className={`fm-toolbar__pill${active ? ' fm-toolbar__pill--active-dark' : ''}`}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        // ETP-5584 — sized like the app's standard list filter trigger (ListFilterBar.jsx:
+        // outline `Button size="sm"`, h-9 / px-3 / 12px / normal weight, muted text when idle)
+        // instead of the larger 14px `.fm-toolbar__pill` default.
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          height: 36, padding: '0 12px', fontSize: 12, lineHeight: '16px',
+          ...(active ? null : { color: 'hsl(var(--muted-foreground))' }),
+        }}
         onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -335,8 +342,11 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
   const incidentCount = useMemo(() => decls.filter(hasIncidents).length, [decls]);
 
   return (
-    <div style={{ display: 'flex', gap: 12, padding: '0 16px 8px', background: 'hsl(var(--card))', flexShrink: 0 }}>
-      <div style={{ width: 360, flexShrink: 0 }}>
+    // ETP-5584 — the three cards share the row (`flex: 1 1 0%`) instead of a fixed 360px each, and
+    // the row carries its own vertical padding: it no longer sits under the filters toolbar, so a
+    // zero top padding glued it to the row above.
+    <div data-testid="fm-list-kpi-row" style={{ display: 'flex', gap: 12, padding: '8px 16px 12px', background: 'hsl(var(--card))', flexShrink: 0 }}>
+      <div style={{ flex: '1 1 0%', minWidth: 0 }}>
         <KpiWidget
           icon={<Calendar size={20} strokeWidth={1.75} data-testid="Calendar__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
@@ -349,7 +359,7 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
           active={kpiFilter === 'upcoming'}
           data-testid="KpiWidget__cb728e" />
       </div>
-      <div style={{ width: 360, flexShrink: 0 }}>
+      <div style={{ flex: '1 1 0%', minWidth: 0 }}>
         <KpiWidget
           icon={<Clock size={20} strokeWidth={1.75} data-testid="Clock__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
@@ -362,7 +372,7 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
           active={kpiFilter === 'pending'}
           data-testid="KpiWidget__cb728e" />
       </div>
-      <div style={{ width: 360, flexShrink: 0 }}>
+      <div style={{ flex: '1 1 0%', minWidth: 0 }}>
         <KpiWidget
           icon={<TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
@@ -1164,7 +1174,37 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
 
   return (
     <div className="fm-page">
-      {/* ── KPI cards row ─────────────────────────────────────── */}
+      {/* ── Content row 1 — page actions, right-aligned (ETP-5584). Mirrors the first content
+          row of a generated ListView under the TopBar: outline secondary, then the dark
+          primary "New" button right-most (Button classes copied from ListView.jsx). ── */}
+      <div
+        data-testid="fm-list-actions-row"
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
+          padding: '12px 16px 4px', background: 'hsl(var(--card))', flexShrink: 0,
+        }}
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+          onClick={() => setShowCatalog(true)}
+          data-testid="fm-list-catalog-button"
+        >
+          <LayoutGrid className="h-3.5 w-3.5" data-testid="LayoutGrid__cb728e" />
+          {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
+        </Button>
+        {catalogLoaded && activeCount > 0 && (
+          <Button
+            className="ml-3 rounded-lg shadow-sm gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+            onClick={() => setShowNewDecl(true)}
+            data-testid="fm-list-new-declaration-button"
+          >
+            + {t('fm.action.new_declaration') ?? 'Nueva declaración'}
+          </Button>
+        )}
+      </div>
+      {/* ── Content row 2 — KPI cards, full width ── */}
       {catalogLoaded && (
         <KpiCardsRow
           decls={modelYearFiltered}
@@ -1173,9 +1213,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onFilterClick={handleKpiFilterClick}
           data-testid="KpiCardsRow__cb728e" />
       )}
-      {/* ── Declarations toolbar (ETP-5584): section heading + filters on the left; sort and
-          the page actions on the right, primary "+ Nueva declaración" right-most — the same
-          arrangement as a generated ListView toolbar. ── */}
+      {/* ── Content row 3 — "Declaraciones" heading on the left; filters + sort on the right ── */}
       <div className="fm-toolbar">
         {/* Section heading of the declarations table. No count badge here: the declarations
             count is already the TopBar's record-count badge, next to the window title. */}
@@ -1185,6 +1223,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         >
           {t('fm.list.title') ?? 'Declaraciones'}
         </span>
+
+        <div className="fm-toolbar__space" />
 
         <FilterDropdown
           label={t('fm.filter.all_years') ?? 'Todos los años'}
@@ -1207,8 +1247,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onChange={setStatusFilter}
           data-testid="FilterDropdown__cb728e" />
 
-        <div className="fm-toolbar__space" />
-
         {/* "Ordenar" — field-selector popover (same mechanism as ListView.jsx's
             column sort used by the generated/Factura windows), not a bare toggle. */}
         <div className="fm-filter-select" ref={sortBtnRef} style={{ position: 'relative' }}>
@@ -1225,7 +1263,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             <ArrowUpDown size={16} strokeWidth={1.75} data-testid="ArrowUpDown__cb728e" />
           </button>
           {showSortMenu && (
-            <div className="fm-status-select__menu" role="listbox" style={{ minWidth: 200 }}>
+            // Right-anchored: the sort button is the last item of the toolbar row (ETP-5584).
+            <div className="fm-status-select__menu" role="listbox" style={{ minWidth: 200, left: 'auto', right: 0 }}>
               <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
                 {t('sortBy')}
               </div>
@@ -1264,28 +1303,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             </div>
           )}
         </div>
-
-        {/* Page actions — Button styles copied from ListView.jsx (outline secondary, then the
-            dark primary "New" button, right-most). */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
-          onClick={() => setShowCatalog(true)}
-          data-testid="fm-list-catalog-button"
-        >
-          <LayoutGrid className="h-3.5 w-3.5" data-testid="LayoutGrid__cb728e" />
-          {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
-        </Button>
-        {catalogLoaded && activeCount > 0 && (
-          <Button
-            className="ml-3 rounded-lg shadow-sm gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
-            onClick={() => setShowNewDecl(true)}
-            data-testid="fm-list-new-declaration-button"
-          >
-            + {t('fm.action.new_declaration') ?? 'Nueva declaración'}
-          </Button>
-        )}
       </div>
       {/* ── Table ──────────────────────────────────────────────── */}
       <div className="fm-table-wrap">

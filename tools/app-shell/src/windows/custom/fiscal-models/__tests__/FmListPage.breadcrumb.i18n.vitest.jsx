@@ -134,16 +134,33 @@ describe('FmListPage — TopBar page meta and declarations heading (ETP-5584)', 
     expect(screen.getByTestId('fm-list-section-title').textContent).toBe('Declarations');
   });
 
-  it('places the catalog and new-declaration actions right-most in the toolbar, primary last', () => {
+  it('content order: actions row (right-aligned), KPI cards, then heading + filters + sort', () => {
     activeUi = realUiEs;
     renderWithMeta(<FmListPage declarations={[]} {...defaultProps} />);
 
-    const toolbar = screen.getByTestId('fm-list-section-title').closest('.fm-toolbar');
-    const catalog = screen.getByTestId('fm-list-catalog-button');
-    expect(toolbar.contains(catalog)).toBe(true);
-    // No active models in this fixture → the primary button is hidden (catalogLoaded && activeCount > 0).
+    const actionsRow = screen.getByTestId('fm-list-actions-row');
+    const kpiRow = screen.getByTestId('fm-list-kpi-row');
+    const heading = screen.getByTestId('fm-list-section-title');
+    const toolbar = heading.closest('.fm-toolbar');
+    const follows = (x, y) => Boolean(x.compareDocumentPosition(y) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    // Row 1 — page actions, right-aligned; no active models here, so only the catalog button
+    // (the primary one needs catalogLoaded && activeCount > 0).
+    expect(actionsRow.style.justifyContent).toBe('flex-end');
+    expect(actionsRow.contains(screen.getByTestId('fm-list-catalog-button'))).toBe(true);
     expect(screen.queryByTestId('fm-list-new-declaration-button')).toBeNull();
-    expect(toolbar.lastElementChild).toBe(catalog);
+    // Row 2 — KPI cards share the full row instead of a fixed 360px each.
+    expect(follows(actionsRow, kpiRow)).toBe(true);
+    [...kpiRow.children].forEach((card) => {
+      expect(card.style.width).toBe('');
+      expect(card.style.flex).toBe('1 1 0%');
+    });
+    // Row 3 — heading first, then the spacer, then filters and sort (right-aligned).
+    expect(follows(kpiRow, toolbar)).toBe(true);
+    expect(toolbar.firstElementChild).toBe(heading);
+    expect(heading.nextElementSibling.className).toBe('fm-toolbar__space');
+    expect(toolbar.lastElementChild.querySelector('[aria-label]')).not.toBeNull();
+    expect(toolbar.contains(screen.getByTestId('fm-list-catalog-button'))).toBe(false);
   });
 
   it('publishes an empty meta while inactive (hidden behind a 303/349 detail page) and restores it', () => {

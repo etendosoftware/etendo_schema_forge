@@ -2792,25 +2792,32 @@ publish no meta of their own and keep their in-content title bars (with `MoreOpt
 their breadcrumbs are plain text, and going back to the list is the "Cancelar" button (`onBack`), which
 flips `active` back to `true` and republishes the list meta.
 
-The page content, top to bottom:
+The page content, top to bottom (no bordered panels around any of it):
 
-1. **KPI cards row** (`KpiCardsRow`) — unchanged.
-2. **Declarations toolbar** (`.fm-toolbar`) — left: the section heading **"Declaraciones"**
-   (`fm.list.title`, `data-testid="fm-list-section-title"`) followed by the year/model/status
-   `FilterDropdown` filters; right: the **"Ordenar"** sort button, **"Catálogo de modelos (N)"**
-   (`N = activeCount`, outline secondary `Button`, `fm-list-catalog-button`) and, right-most,
-   **"+ Nueva declaración"** (dark primary `Button`, `fm-list-new-declaration-button`, only when
-   `catalogLoaded && activeCount > 0`). Both buttons copy `ListView.jsx`'s Print/"New" button classes.
-   The heading carries **no count badge**: the same number is already the TopBar badge next to the
-   title, so showing it twice would be redundant.
-3. The declarations table.
+1. **Actions row** (`data-testid="fm-list-actions-row"`, right-aligned, `12px` top padding like the
+   `py-3` first content row of a generated `ListView`) — **"Catálogo de modelos (N)"** (`N =
+   activeCount`, outline secondary `Button`, `fm-list-catalog-button`) and, right-most, **"+ Nueva
+   declaración"** (dark primary `Button`, `fm-list-new-declaration-button`, only when
+   `catalogLoaded && activeCount > 0`). Both copy `ListView.jsx`'s Print/"New" button classes.
+2. **KPI cards row** (`KpiCardsRow`, `fm-list-kpi-row`) — the three cards share the full width
+   (`flex: 1 1 0%` each, `min-width: 0`) with `8px`/`12px` vertical padding. They used to be a
+   fixed `360px` each with no top padding, which only looked right while the filters toolbar sat
+   above them; once they became the first content row they were glued to the TopBar (the card
+   border touched the content container's top edge and read as clipped) and left the right third of
+   the row empty.
+3. **Declarations toolbar** (`.fm-toolbar`) — left: the section heading **"Declaraciones"**
+   (`fm.list.title`, `data-testid="fm-list-section-title"`); right: the year/model/status
+   `FilterDropdown` filters and the **"Ordenar"** sort button (its popover is right-anchored, as the
+   button is the last item of the row). The filter triggers are sized like the app's standard list
+   filter trigger (`ListFilterBar.jsx`: `h-9`, `px-3`, `12px`, normal weight, muted text when idle)
+   rather than the larger `14px` `.fm-toolbar__pill` default. The heading carries **no count
+   badge**: the same number is already the TopBar badge next to the title.
+4. The declarations table.
 
-"Declaraciones" used to be the page title (in an in-content title bar) and the catalog/new buttons
-sat after the sort button; ETP-5584 moved the title to the TopBar as the window's menu name and made
-"Declaraciones" the table heading. The container structure is unchanged — no extra bordered panels
-were introduced around the cards or the table.
+"Declaraciones" used to be the page title (in an in-content title bar); ETP-5584 moved the title to
+the TopBar as the window's menu name and made "Declaraciones" the table heading.
 
-`FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The filters, sort and page actions (catalog, new declaration) all live in the declarations toolbar, as described above. There is no search input — see "Sort and search" below.
+`FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The page actions (catalog, new declaration) live in the actions row and the filters/sort in the declarations toolbar, as described above. There is no search input — see "Sort and search" below.
 
 This is scoped to the list page's own toolbar. `ConfigDrawer` as a component still exists (in `FmOverlays.jsx`), but its only remaining caller is the model catalog drawer (`FmCatalogPage.jsx`, described below) — `FmModel303Page.jsx` no longer has a 3-dot menu at all; its former Comparar / Configuración / Generar kebab (`MoreOptionsMenu`, plus `CompareDrawer` and this page's own `ConfigDrawer` usage) was removed entirely (see "Modelo 303 detail page" below for where "Generar fichero" now lives). No config/demo functionality was removed from the app as a whole — only the redundant row-kebab entry point on the declarations list.
 
