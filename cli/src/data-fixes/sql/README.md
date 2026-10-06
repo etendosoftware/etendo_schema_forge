@@ -112,7 +112,11 @@ physical-inventory correction first).
    R42 re-inserted it (R37 then retires it), or the paid upgrade's subscription write failed and
    `EtendoGoJwtServlet#applyPaidUpgradeSideEffects` fell back to `TenantPlanService#markProductive`
    as its safety net — the marker is then that tenant's only record of payment, and R37 backfills
-   it. "No productive
+   it **only while that tenant's data-fix watermark has not passed R37**. That holds for paid
+   onboarding today: a new tenant starts at the `ONBOARDING_PROVISIONED_THROUGH` cut, which is
+   older than R37, so R37 runs once for it after the upgrade. Once R37 is `PROCESSED` for a tenant
+   it never runs there again, so a subscription write that fails later leaves the marker to the
+   transitional fallback alone. "No productive
    preference" therefore no longer means "a free tenant" — increasingly it means "a paying tenant
    that has already been migrated". A fix keyed on the preference inverts its own intent, silently,
    on exactly the tenants that pay; for a fix that forces test mode (as R31 does) that routes real

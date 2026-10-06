@@ -276,7 +276,7 @@ describe('R37 data-fix — tenant isolation (no statement is unscoped)', () => {
   });
 });
 
-describe('R37 data-fix — @check (productive tenant without an active subscription row)', () => {
+describe('R37 data-fix — @check (productive tenant with no subscription row at all)', () => {
   it('requires an active ETGO_TenantPlan=productive marker', () => {
     assert.match(normCheck, /EXISTS \( SELECT 1 FROM ad_preference tp/);
     assert.match(normCheck, /tp\.isactive = 'Y'/);
