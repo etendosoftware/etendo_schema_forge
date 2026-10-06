@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/UserAvatarButton.jsx
+
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -44,6 +46,7 @@ const ROLE_NAME_TRANSLATIONS = {
   roleNameSales: 'Ventas',
   roleNamePurchasing: 'Compras',
   roleNameInventory: 'Inventario',
+  roleNameAdmin: 'Administrador',
 };
 
 vi.mock('@/i18n', () => ({
@@ -331,6 +334,54 @@ describe('UserAvatarButton', () => {
 
     expect(screen.getByText('A')).toBeInTheDocument();
     expect(screen.queryByText('F')).not.toBeInTheDocument();
+  });
+
+  // ETP-5329 (QA CP-6/CP-7). A tenant admin's default role IS the client-admin AD_Role: no
+  // composed templates and a tenant-specific raw name. Without the backend isClientAdmin flag the
+  // menu showed "Rol: Google SL Admin" instead of the localized admin label Settings > Users shows.
+  it('renders the localized admin label instead of the tenant-specific client-admin role name', () => {
+    authOverrides = {
+      selectedRole: { name: 'Google SL Admin', isClientAdmin: true },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Administrador')).toHaveAttribute('title', 'Administrador');
+    expect(screen.queryByText(/Google SL Admin/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/roleNameAdmin/)).not.toBeInTheDocument();
+  });
+
+  it('gives the client-admin flag precedence over effectiveRoleNames', () => {
+    authOverrides = {
+      selectedRole: { name: 'Google SL Admin', isClientAdmin: true, effectiveRoleNames: ['Sales'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Administrador')).toBeInTheDocument();
+    expect(screen.queryByText(/Ventas/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the existing label when isClientAdmin is false', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal – x', isClientAdmin: false, effectiveRoleNames: ['Sales'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Ventas')).toBeInTheDocument();
+    expect(screen.queryByText(/Administrador/)).not.toBeInTheDocument();
+  });
+
+  // The raw client-admin name starts with the tenant's company name ("G"oogle SL Admin); the badge
+  // follows the displayed admin label instead.
+  it('derives the client-admin role-initial badge from the admin label, not the raw tenant name', () => {
+    authOverrides = { selectedRole: { name: 'Google SL Admin', isClientAdmin: true } };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.queryByText('G')).not.toBeInTheDocument();
   });
 
   it('hides the language section when locale switching is unavailable', () => {
