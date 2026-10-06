@@ -21,7 +21,6 @@
     "@configcat/sdk": "^1.1.0",
     "@datadog/browser-rum": "^7.15.0",
     "@datadog/browser-rum-react": "^7.15.0",
-    "@datadog/openfeature-browser": "^2.0.0",
     "@etendosoftware/app-shell-core": "0.3.67",
     "@etendosoftware/etendo-go-core": "0.3.67",
     "@iconicapp/iconic-react": "^1.1.4",
