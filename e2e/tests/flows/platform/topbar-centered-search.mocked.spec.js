@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/layout/TopBar/TopBar.jsx
+// @covers tools/app-shell/src/pages/ReportViewerPage.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -7,8 +9,8 @@ import { login } from '../../helpers/auth.js';
  * `TopBar.jsx` lays the header out as a 3-column grid
  * (`minmax(0,1fr) | auto | minmax(max-content,1fr)`):
  *
- *   col 1  back button + `topbar-title-block` (title, count, breadcrumb) + kebab — shrinkable,
- *          its texts elide at the column edge
+ *   col 1  back button + `topbar-title-block` (title row with count + kebab, breadcrumb) —
+ *          shrinkable, its texts elide at the column edge
  *   col 2  `topbar-search-slot` holding the 392px `global-search-trigger`
  *   col 3  `topbar-quick-actions`, pushed to the right edge
  *
@@ -29,6 +31,14 @@ import { login } from '../../helpers/auth.js';
  * search sat 12px left of the bar center while still being centered on the content box — which
  * is why the content box is deliberately NOT what this spec measures against.
  *
+ * The grid gap is 20px (`gap-5`, ETP-5504 QA): the left column ends exactly 20px before the
+ * search, and a long title/breadcrumb block reaches that edge (the title kebab lives inside the
+ * title row, so it no longer stops the block a kebab's width short of it).
+ *
+ * Breadcrumb shrink priority (ETP-5504 QA): the structured breadcrumb is a one-row grid whose
+ * ancestor tracks are content-sized, so with short ancestors and a long current level ONLY the
+ * current level elides — every ancestor keeps its full text.
+ *
  * The fix must not move the sides either: the left column starts at the header's left edge (right
  * after the rail) and the last right action ends 24px inside the header's right edge.
  *
@@ -43,6 +53,8 @@ import { login } from '../../helpers/auth.js';
  * Each at 1280×720 and 1920×1080, with the navigation rail expanded and collapsed.
  */
 
+// Header column gap (`gap-5`): left column / title block end exactly this far before the search.
+const SEARCH_GAP_PX = 20;
 // Sub-pixel allowance for centers (rounding of the 1fr tracks).
 const CENTER_TOLERANCE_PX = 1;
 // Sub-pixel / border rounding allowance for edge comparisons.
@@ -62,7 +74,7 @@ const RAIL_STATES = [
 ];
 
 // Long enough to overflow the left column even at 1920px with the rail collapsed
-// (column ≈ (1920 - 56 - 24 - 392 - 2·16) / 2 ≈ 708px; this is far wider at text-xl and text-xs).
+// (column ≈ (1920 - 56 - 392 - 2·20) / 2 ≈ 716px; this is far wider at text-xl and text-xs).
 const LONG_DOCUMENT_NO = 'SO-2026-000123456789-PEDIDO-DE-VENTA-CON-UN-NUMERO-DE-DOCUMENTO-'
   + 'EXTRAORDINARIAMENTE-LARGO-PARA-FORZAR-EL-TRUNCADO-DEL-TITULO-Y-DEL-BREADCRUMB';
 const LONG_RECORD = {
@@ -95,6 +107,8 @@ const REPORT_MANIFEST = [
  * `expectedTitle`     text the TopBar title must show (waited for before measuring).
  * `long`              the title and breadcrumb must elide.
  * `back`              the back button is expected.
+ * `structuredBreadcrumb`  the page publishes an array breadcrumb with short ancestors and a long
+ *                     current level (rendered as the `<nav>` grid): only the current may elide.
  */
 const PAGES = [
   { name: 'list, short title', path: '/warehouse', expectedTitle: 'Almacén', long: false, back: false },
@@ -105,6 +119,7 @@ const PAGES = [
     expectedTitle: LONG_DOCUMENT_NO,
     long: true,
     back: false,
+    structuredBreadcrumb: true,
   },
   {
     name: 'report viewer, back button + long title + breadcrumb',
@@ -112,6 +127,7 @@ const PAGES = [
     expectedTitle: LONG_REPORT_TITLE,
     long: true,
     back: true,
+    structuredBreadcrumb: true,
   },
 ];
 
@@ -191,6 +207,17 @@ async function measureTopBar(page) {
       }
       : null);
 
+    // Ancestor levels of a structured breadcrumb: each `flex min-w-0` wrapper placed directly in
+    // the <nav> grid, and the label inside it (the "⋯" wrapper is `shrink-0`, the current level
+    // has no wrapper). Both the wrapper and the label must show their whole text.
+    const nav = byId('topbar-breadcrumb');
+    const breadcrumbIsGrid = nav?.tagName === 'NAV';
+    const breadcrumbAncestors = breadcrumbIsGrid
+      ? Array.from(nav.querySelectorAll(':scope > span.flex.min-w-0'))
+        .flatMap((wrapper) => [wrapper, wrapper.firstElementChild])
+        .map((el) => ({ text: el.textContent, ...overflowFacts(el) }))
+      : [];
+
     const quickActions = byId('topbar-quick-actions');
     const quickActionChildren = Array.from(quickActions.children)
       .filter((el) => el.getBoundingClientRect().width > 0)
@@ -208,6 +235,8 @@ async function measureTopBar(page) {
       titleBlock: titleBlock ? rect(titleBlock) : null,
       title: overflowFacts(titleText),
       breadcrumb: overflowFacts(breadcrumbText),
+      breadcrumbIsGrid,
+      breadcrumbAncestors,
       quickActions: rect(quickActions),
       quickActionChildren,
       page: {
@@ -262,6 +291,10 @@ for (const viewport of VIEWPORTS) {
           // width is guarded above): centering the search must not have shifted it.
           expect(Math.abs(m.leftColumn.left - m.header.left), 'left column does not start at the bar left edge')
             .toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
+          // The left column ends exactly the 20px grid gap before the search.
+          expect(Math.abs((m.search.left - m.leftColumn.right) - SEARCH_GAP_PX),
+            `left column must end ${SEARCH_GAP_PX}px before the search`)
+            .toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
 
           // 3. A long title / breadcrumb elides instead of overflowing.
           if (target.long) {
@@ -273,6 +306,21 @@ for (const viewport of VIEWPORTS) {
             expect(m.breadcrumb.textOverflow).toBe('ellipsis');
             expect(m.breadcrumb.scrollWidth, 'long breadcrumb must be truncated')
               .toBeGreaterThan(m.breadcrumb.clientWidth);
+            // The block that overflows fills the whole column: it reaches the 20px gap before the
+            // search, not a kebab's width short of it.
+            expect(Math.abs((m.search.left - m.titleBlock.right) - SEARCH_GAP_PX),
+              `long title/breadcrumb block must end ${SEARCH_GAP_PX}px before the search`)
+              .toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
+          }
+
+          // 3b. Shrink priority: short ancestors keep their whole text, only the current elides.
+          if (target.structuredBreadcrumb) {
+            expect(m.breadcrumbIsGrid, 'structured breadcrumb must render as the <nav> grid').toBe(true);
+            expect(m.breadcrumbAncestors.length, 'breadcrumb ancestors not found').toBeGreaterThan(0);
+            for (const ancestor of m.breadcrumbAncestors) {
+              expect(ancestor.scrollWidth, `ancestor "${ancestor.text}" must not be truncated`)
+                .toBeLessThanOrEqual(ancestor.clientWidth);
+            }
           }
 
           // 4. Right actions: inside the bar, on one line, clear of the search.
