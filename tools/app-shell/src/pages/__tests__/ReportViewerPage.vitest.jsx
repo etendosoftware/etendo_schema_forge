@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/ReportViewerPage.jsx
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { assertAllActionsDisabledWhileRequiredEmpty } from './reportViewerTestHelpers';
@@ -83,6 +84,7 @@ import ReportViewerPage, {
   applyProductSelectorScopeParams,
 } from '../ReportViewerPage.jsx';
 import { useWindowAccess } from '@/auth/AuthContext.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 
 describe('getSelectorPlaceholderLabel', () => {
   it('shows count when multi and items selected', () => {
@@ -962,6 +964,25 @@ describe('ReportViewer (viewer sub-component)', () => {
     expect(mockSetSearchParams).toHaveBeenCalled();
     const paramsArg = mockSetSearchParams.mock.calls.at(-1)[0];
     expect(paramsArg.has('report')).toBe(false);
+  });
+
+  // ETP-5519: the report view publishes no `onBack`, so the TopBar renders no ← (`topbar-back`
+  // only exists when the page meta carries `onBack`). The in-page Cancel is the way back.
+  it('publishes page meta without onBack (no TopBar back button)', async () => {
+    useSetPageMeta.mockClear();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
+    });
+    const viewerMetas = useSetPageMeta.mock.calls
+      .map(([meta]) => meta)
+      // The catalog publishes title 'Reports'; every other meta is the report viewer's.
+      .filter((meta) => meta && meta.title !== 'Reports');
+    expect(viewerMetas.length).toBeGreaterThan(0);
+    for (const meta of viewerMetas) {
+      expect(meta).not.toHaveProperty('onBack');
+      expect(meta.title).toBeTruthy();
+    }
   });
 
   it('renders ReportSidebar with parameter sections', async () => {
@@ -1855,6 +1876,103 @@ describe('ReportViewer (viewer sub-component)', () => {
     await waitFor(() => {
       expect(screen.getByText('running')).toBeInTheDocument();
     });
+  });
+});
+
+// -------------------------------------------------------------------
+// ReportViewer breadcrumb (ETP-5504 QA) — published through PageMeta as a structured array so
+// the TopBar can make the "Reports" level a link back to the catalog. The click itself is
+// covered against the TopBar in components/layout/TopBar/__tests__/TopBar.vitest.jsx.
+// -------------------------------------------------------------------
+
+describe('ReportViewer breadcrumb published to the TopBar', () => {
+  // The viewer is the only producer here that publishes a structured (array) breadcrumb; the
+  // catalog list publishes a string or null. Not keyed on `onBack`: the viewer publishes none
+  // since ETP-5519.
+  const lastViewerBreadcrumb = () => {
+    const viewerCalls = useSetPageMeta.mock.calls
+      .map(([meta]) => meta)
+      .filter((meta) => meta && Array.isArray(meta.breadcrumb));
+    return viewerCalls.at(-1)?.breadcrumb;
+  };
+
+  const waitForViewer = () => waitFor(() => {
+    expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
+  });
+
+  beforeEach(() => {
+    useSetPageMeta.mockClear();
+    mockSetSearchParams.mockClear();
+    mockReportsApiFetch();
+  });
+
+  afterEach(() => {
+    mockLocale = 'en_US';
+    vi.restoreAllMocks();
+  });
+
+  it('publishes category / Reports (catalog link of that category) / report title', async () => {
+    mockSearchParams = new URLSearchParams({ report: 'report-aging', category: 'finance' });
+    render(<ReportViewerPage />);
+    await waitForViewer();
+    expect(lastViewerBreadcrumb()).toEqual([
+      { label: 'Finance' },
+      { label: 'Reports', href: '/report-viewer?category=finance' },
+      { label: 'Aging Report' },
+    ]);
+  });
+
+  it('keeps the category level plain text (no href, no onClick)', async () => {
+    mockSearchParams = new URLSearchParams({ report: 'report-aging', category: 'finance' });
+    render(<ReportViewerPage />);
+    await waitForViewer();
+    const [category] = lastViewerBreadcrumb();
+    expect(category.label).toBe('Finance');
+    expect(category.href).toBeUndefined();
+    expect(category.onClick).toBeUndefined();
+  });
+
+  it('drops the category level and links Reports to the unfiltered catalog without a category', async () => {
+    mockSearchParams = new URLSearchParams({ report: 'report-aging' });
+    render(<ReportViewerPage />);
+    await waitForViewer();
+    expect(lastViewerBreadcrumb()).toEqual([
+      { label: 'Reports', href: '/report-viewer' },
+      { label: 'Aging Report' },
+    ]);
+  });
+
+  it('keeps the current level (the report title) non-navigable', async () => {
+    mockSearchParams = new URLSearchParams({ report: 'report-aging', category: 'finance' });
+    render(<ReportViewerPage />);
+    await waitForViewer();
+    const current = lastViewerBreadcrumb().at(-1);
+    expect(current).toEqual({ label: 'Aging Report' });
+  });
+
+  it('uses the report title of the active locale for the current level', async () => {
+    mockLocale = 'es_ES';
+    mockSearchParams = new URLSearchParams({ report: 'report-aging', category: 'finance' });
+    render(<ReportViewerPage />);
+    await waitForViewer();
+    expect(lastViewerBreadcrumb().at(-1)).toEqual({ label: 'Informe de Antigüedad' });
+  });
+
+  it('falls back to the report id as the current level when the report has no title', async () => {
+    const untitled = { ...SAMPLE_REPORT, title: undefined };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url === '/api/reports') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([untitled]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+    mockSearchParams = new URLSearchParams({ report: 'report-aging' });
+    render(<ReportViewerPage />);
+    await waitForViewer();
+    expect(lastViewerBreadcrumb()).toEqual([
+      { label: 'Reports', href: '/report-viewer' },
+      { label: 'report-aging' },
+    ]);
   });
 });
 

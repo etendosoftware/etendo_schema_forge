@@ -472,7 +472,7 @@ async function ensureVendorPaymentFieldsSet(page) {
  * is rendered as `count={childCount}` (buildInitialTabs() in
  * detailViewHelpers.jsx) and the DetailView only prints it once the related
  * records have actually finished fetching — `count != null` gates the whole
- * `<span>` (TabStripButton in DetailView.jsx). Sampling the tab's textContent
+ * `<span>` (TabStripButton.jsx). Sampling the tab's textContent
  * shortly after clicking it races that fetch: while it's still in flight the
  * badge span isn't in the DOM at all, so `(text.match(/(\d+)/) || ['0','0'])`
  * silently falls back to "0" even when the fixture already has an address —

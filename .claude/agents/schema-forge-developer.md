@@ -88,7 +88,7 @@ want this exact behaviour?" and if the honest answer is no, it is a customizatio
 **A divergence between paths must be declared, not discovered.** If your change makes one channel
 behave differently from another, record it in
 `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.12.9 in the same change. Precedent:
-`neo_batch` persisted order lines at price 0 while `neo_create` priced them correctly, for months —
+`etendo_batch` persisted order lines at price 0 while `etendo_create` priced them correctly, for months —
 the injection was present and simply ran too early to see the parent, and nothing in any response or
 log said so.
 

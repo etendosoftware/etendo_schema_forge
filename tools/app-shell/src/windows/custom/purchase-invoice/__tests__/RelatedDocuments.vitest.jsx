@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/purchase-invoice/RelatedDocuments.jsx
 // Mocks must come before imports (Vitest hoisting)
 
 vi.mock('@/i18n', () => ({
@@ -200,6 +201,22 @@ describe('RelatedDocuments (purchase-invoice)', () => {
     const callCountBefore = mockFetchChild.mock.calls.length;
 
     rerender(<RelatedDocuments {...DEFAULT_PROPS} docsRefreshSignal={1} />);
+
+    await waitFor(() =>
+      expect(mockFetchChild.mock.calls.length).toBeGreaterThan(callCountBefore)
+    );
+  });
+
+  // The follow-up flow (useFollowUpDocuments) announces a goods receipt created from this
+  // invoice with `purchase-invoice:document-created`; the chips must pick it up unprompted.
+  it('refetches when the follow-up flow announces purchase-invoice:document-created', async () => {
+    render(<RelatedDocuments {...DEFAULT_PROPS} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    const callCountBefore = mockFetchChild.mock.calls.length;
+
+    window.dispatchEvent(new CustomEvent('purchase-invoice:document-created', { detail: { recordId: 'inv-1' } }));
 
     await waitFor(() =>
       expect(mockFetchChild.mock.calls.length).toBeGreaterThan(callCountBefore)

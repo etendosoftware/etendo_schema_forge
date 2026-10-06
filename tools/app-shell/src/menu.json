@@ -574,6 +574,12 @@
           "label": "Quick Purchase Order",
           "favname": "Quick Purchase Order",
           "featureFlag": "proof-of-concept-menu"
+        },
+        {
+          "name": "unified-calendar",
+          "label": "Unified Calendar",
+          "favname": "Unified Calendar",
+          "featureFlag": "unified-calendar-poc"
         }
       ]
     },

@@ -412,7 +412,7 @@ def begin_authorization(
 
     _resource_meta, as_meta = discover(target["url"])
     scopes = target.get("scopes") or " ".join(
-        as_meta.get("scopes_supported", ["neo:read", "neo:write"])
+        as_meta.get("scopes_supported", ["etendo:read", "etendo:write"])
     )
 
     client = cache.get("client") or {}

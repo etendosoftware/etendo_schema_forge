@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Check, ArrowUp, ArrowDown, X, Plus } from 'lucide-react';
+import { Check, ArrowUp, ArrowDown, X, Plus, Minus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { formatDashboardCompact, localeFromUi } from '@/lib/dashboardNumberFormat.js';
@@ -11,6 +11,38 @@ import { resolveRangeCopySuffix } from '@/lib/dashboardRangeCopy.js';
 // shared with the trend chart (`lib/dashboardRangeCopy.js`). Mirrors the backend
 // (`WidgetKpisHandler`): a missing/blank range means year-to-date (the default), while an unknown
 // non-blank value is resolved like the other widgets, i.e. the rolling last 12 months.
+
+// ETP-5493: amounts below half a cent are floating noise, not a real profit or loss.
+const ZERO_EPSILON = 0.005;
+const isZero = (value) => Math.abs(value ?? 0) < ZERO_EPSILON;
+
+// Headline variants. `tone` drives icon + colours; `neutral` is used when net is zero, where
+// neither the green check nor the red X would be truthful.
+const HEADLINES = {
+  positive: { key: 'financialSummaryPositive', tone: 'positive' },
+  negative: { key: 'financialSummaryNegative', tone: 'negative' },
+  noActivity: { key: 'financialSummaryNoActivity', tone: 'neutral' },
+  breakEven: { key: 'financialSummaryBreakEven', tone: 'neutral' },
+};
+
+const HEADLINE_TONES = {
+  positive: { bg: 'var(--status-success-bg)', fg: 'var(--status-success-fg)', Icon: Check, testId: 'Check__81e75f' },
+  negative: { bg: 'var(--status-destructive-bg)', fg: 'hsl(var(--destructive))', Icon: X, testId: 'X__81e75f' },
+  neutral: { bg: 'hsl(var(--muted))', fg: 'hsl(var(--muted-foreground))', Icon: Minus, testId: 'Minus__81e75f' },
+};
+
+/**
+ * ETP-5011 + ETP-5493: picks the headline from the real net (`netProfit`). Zero is its own
+ * state: no income/expenses at all, or income equal to expenses.
+ */
+function pickHeadline({ revenue, expenses, profit }) {
+  // The netProfit KPI is the source of truth; if it is absent, derive net from the other two.
+  const net = profit?.value ?? ((revenue?.value ?? 0) - (expenses?.value ?? 0));
+  if (isZero(net)) {
+    return isZero(revenue?.value) && isZero(expenses?.value) ? HEADLINES.noActivity : HEADLINES.breakEven;
+  }
+  return net < 0 ? HEADLINES.negative : HEADLINES.positive;
+}
 
 /**
  * ETP-5493 — `range` is the period the `kpis` were fetched for; it only selects the copy
@@ -45,7 +77,9 @@ export function FinancialSummaryCard({
   // "positive" state regardless of the actual profit sign — a client whose
   // expenses exceeded revenue still saw a green checkmark saying revenue beat
   // expenses. Drive it off the real netProfit value instead.
-  const isProfitNegative = (profit?.value ?? 0) < 0;
+  const headline = pickHeadline({ revenue, expenses, profit });
+  const headlineTone = HEADLINE_TONES[headline.tone];
+  const HeadlineIcon = headlineTone.Icon;
 
   const metrics = [
     { key: 'revenueThisMonth',  kpi: revenue,  labelKey: 'financialSummaryIncome' },
@@ -164,19 +198,13 @@ export function FinancialSummaryCard({
               height: '20px',
               flexShrink: 0,
               padding: '0px',
-              backgroundColor: isProfitNegative ? 'var(--status-destructive-bg)' : 'var(--status-success-bg)',
+              backgroundColor: headlineTone.bg,
               borderRadius: '10px',
             }}
           >
-            {isProfitNegative ? (
-              <X
-                style={{ width: '12.5px', height: '12.5px', color: 'hsl(var(--destructive))' }}
-                data-testid="X__81e75f" />
-            ) : (
-              <Check
-                style={{ width: '12.5px', height: '12.5px', color: 'var(--status-success-fg)' }}
-                data-testid="Check__81e75f" />
-            )}
+            <HeadlineIcon
+              style={{ width: '12.5px', height: '12.5px', color: headlineTone.fg }}
+              data-testid={headlineTone.testId} />
           </div>
           <span
             style={{
@@ -187,13 +215,13 @@ export function FinancialSummaryCard({
               fontWeight: 400,
               fontSize: '12px',
               lineHeight: '16px',
-              color: isProfitNegative ? 'hsl(var(--destructive))' : 'var(--status-success-fg)',
+              color: headlineTone.fg,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
             }}
           >
-            {ui(isProfitNegative ? 'financialSummaryNegative' : 'financialSummaryPositive', { period: periodText })}
+            {ui(headline.key, { period: periodText })}
           </span>
         </div>
 
