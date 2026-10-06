@@ -2624,14 +2624,14 @@ describe('translateBackendError — OtherPostingProcessActive (ETP-5529)', () =>
   it('renders the es_ES copy from the identity, not the English prose', () => {
     assert.equal(
       translateBackendError(RAW_EN, localeTranslator('es_ES'), { messageKeys: ['OtherPostingProcessActive'] }),
-      'Este registro está siendo contabilizado por otro proceso. Inténtelo de nuevo en unos instantes.',
+      'Este registro está siendo contabilizado por otro proceso. Si el problema persiste, actualice el registro; puede que ya esté contabilizado.',
     );
   });
 
   it('renders the en_US copy from the identity', () => {
     assert.equal(
       translateBackendError(RAW_EN, localeTranslator('en_US'), { messageKeys: ['OtherPostingProcessActive'] }),
-      'This record is being posted by another process. Try again in a few moments.',
+      'This record is being posted by another process. If the problem persists, refresh the record; it may already be posted.',
     );
   });
 
