@@ -49,13 +49,25 @@ const ROLE_NAME_TRANSLATIONS = {
   roleNameAdmin: 'Administrador',
 };
 
+// The en_US counterpart of the map above (values mirror tools/app-shell/src/locales/en_US.json), so
+// a test can prove the admin label follows the active UI locale instead of being pinned to one.
+const ROLE_NAME_TRANSLATIONS_EN = {
+  roleNameFinance: 'Finance',
+  roleNameSales: 'Sales',
+  roleNamePurchasing: 'Purchasing',
+  roleNameInventory: 'Inventory',
+  roleNameAdmin: 'Administrator',
+};
+
+let uiTranslations = ROLE_NAME_TRANSLATIONS;
+
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => ROLE_NAME_TRANSLATIONS[key] ?? key,
+  useUI: () => (key) => uiTranslations[key] ?? key,
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock, ...localeOverrides }),
 }));
 
 vi.mock('@/i18n/index.js', () => ({
-  useUI: () => (key) => ROLE_NAME_TRANSLATIONS[key] ?? key,
+  useUI: () => (key) => uiTranslations[key] ?? key,
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock, ...localeOverrides }),
 }));
 
@@ -92,6 +104,7 @@ describe('UserAvatarButton', () => {
     localStorage.clear();
     authOverrides = {};
     localeOverrides = {};
+    uiTranslations = ROLE_NAME_TRANSLATIONS;
   });
 
   // ETP-5115. Six tests used to live here, all about a "Change Password" item this menu no longer
@@ -382,6 +395,31 @@ describe('UserAvatarButton', () => {
 
     expect(screen.getByText('A')).toBeInTheDocument();
     expect(screen.queryByText('G')).not.toBeInTheDocument();
+  });
+
+  // The admin label is resolved through `ui`, so under an en_US UI it reads in English — the es_ES
+  // cases above alone would also pass against a label hardcoded in Spanish.
+  it('renders the en_US admin label for a client-admin role under an en_US UI', () => {
+    uiTranslations = ROLE_NAME_TRANSLATIONS_EN;
+    authOverrides = { selectedRole: { name: 'Google SL Admin', isClientAdmin: true } };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Administrator')).toHaveAttribute('title', 'Administrator');
+    expect(screen.queryByText(/Google SL Admin/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Administrador/)).not.toBeInTheDocument();
+  });
+
+  // Rolling-deploy contract: a session persisted before the backend started sending isClientAdmin
+  // has no such key at all. It must fall back to the raw role name, not crash and not guess admin.
+  it('falls back to the raw role name for a stale session with no isClientAdmin key', () => {
+    authOverrides = { selectedRole: { name: 'Google SL Admin' } };
+
+    expect(() => render(<UserAvatarButton />)).not.toThrow();
+
+    expect(screen.getByText('role: Google SL Admin')).toHaveAttribute('title', 'Google SL Admin');
+    expect(screen.queryByText(/Administrador/)).not.toBeInTheDocument();
+    expect(screen.getByText('G')).toBeInTheDocument();
   });
 
   it('hides the language section when locale switching is unavailable', () => {
