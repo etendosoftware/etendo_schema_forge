@@ -449,6 +449,24 @@ badge text is identical for `submitted` and `submitted_ack`; only the `submissio
 (when present) still tells them apart. The now-orphaned `fm.status.submitted_ack` locale key was
 removed from `en_US.json`, `es_ES.json`, and `es_AR.json`.
 
+**Chip size = the invoice windows' chip (ETP-5584).** `FmStatusChip` has two variants:
+- **`list`**, the default, used in the "Estado" column. It renders core `StatusTag`, the very
+  component the generated invoice lists render (`DataTable.cellRenderers.jsx`): 12/16 text,
+  `4px 8px` padding and a pill radius. The `submissionMethod` sub-label sits under it.
+- **`detail`**, used in the 303/349 action bars. It copies the metrics of `DocumentStatusPill`,
+  the chip the generic DetailView shows next to Cancelar: 14/20 text, `4px 8px` padding, an 8px
+  radius, a `0 4px` label inset, and the tone's 16px `Check` icon for success only. The
+  sub-label sits to its right, on the same line.
+
+**Colours.** Both variants use the shared `TONE_STYLES` tokens (`status-tag-tokens.js`). A
+fiscal status maps onto an invoice tone through `fiscalStatusTone()`: `ready` and every
+submitted-family status are `success` (green), and everything else is `neutral` (grey).
+
+**Why the `detail` variant does not render `DocumentStatusPill` itself.** That component
+resolves its label with `useLocale()` from `@/i18n`. About 48 fiscal-models page tests mock
+`@/i18n` with only `useUI`, so reusing it would break all of them. Only its box metrics are
+restated, as `DETAIL_PILL_STYLE`. Keep it in step with `DocumentStatusPill`'s `PILL_STYLE`.
+
 **Update (ETP-5584): now in 2 places, not 4.** The list chip (`StatusText`, formerly local to
 `FmListPage.jsx`) moved to `FmDetailChrome.jsx` as `FmStatusChip`, which exports `statusLabelKey`
 and is now rendered by the list's "Estado" column AND both detail action bars — so the local copies

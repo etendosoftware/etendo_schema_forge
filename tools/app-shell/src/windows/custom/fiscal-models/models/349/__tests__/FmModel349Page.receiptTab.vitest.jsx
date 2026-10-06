@@ -43,6 +43,8 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
+  Check: () => null,
   ArrowLeft: () => null, Save: () => null,
   Download: () => null, CircleCheck: () => null, Search: () => null, Loader2: () => null,
   Globe: () => null, MoreVertical: () => null, ChevronDown: () => null, Users: () => null,

@@ -506,6 +506,18 @@ describe('FmModel349Page — no Historial tab', () => {
 // once submitted, same as its 303 counterpart.
 
 describe('FmModel349Page — Guardar button (ETP-5338 pt.5)', () => {
+  // ETP-5584 — the status reads exactly like the list's "Estado" chip: the bare status, no
+  // "Estado:" prefix, rendered by the shared FmStatusChip.
+  it('shows the bare status in the status chip, with no "Estado:" prefix', () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'draft' })} {...defaultProps} />);
+    const left = screen.getByTestId('FmDetailActionBar__left');
+    const chip = left.querySelector('.fm-status-chip');
+    expect(chip).toBeTruthy();
+    expect(chip.getAttribute('data-status')).toBe('draft');
+    expect(chip.textContent).toBe('fm.status.draft');
+    expect(left.textContent).not.toContain('fm.col.status');
+  });
+
   // ETP-5584 — Cancelar + status chip on the LEFT; on the RIGHT, in this order: Calcular,
   // Generar fichero, Guardar, and the primary Registrar/Presentar right-most.
   it('renders Cancelar + status chip on the left, and Calcular, Generar fichero, Guardar, Registrar/Presentar on the right', () => {

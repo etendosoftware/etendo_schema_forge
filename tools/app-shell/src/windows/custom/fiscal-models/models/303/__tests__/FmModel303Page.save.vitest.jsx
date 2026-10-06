@@ -81,6 +81,8 @@ vi.mock('../AeatSubmitFlow.jsx', () => ({
   isMissingDefaultIaeActivity: () => false,
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null,
   OctagonAlert: () => null, TriangleAlert: () => null, CircleCheck: () => null,
   ArrowLeftRight: () => null, Calculator: () => null, Loader2: () => null,

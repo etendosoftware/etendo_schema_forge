@@ -1392,7 +1392,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                 status={status}
                 submissionMethod={submissionMethod}
                 t={t}
-                methodPlacement="inline"
+                variant="detail"
                 data-testid="FmStatusChip__4f6c0d" />
             </>
           )}

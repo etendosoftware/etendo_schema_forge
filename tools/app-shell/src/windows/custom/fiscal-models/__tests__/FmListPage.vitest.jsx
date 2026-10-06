@@ -774,6 +774,19 @@ describe('FmListPage — active-models filtering (regression)', () => {
 // column) and never for a legacy row with no submissionMethod at all.
 
 describe('FmListPage — submissionMethod sub-label (ETP-4755)', () => {
+  // ETP-5584 — the Estado cell is the invoice lists' own chip (core StatusTag), toned like them.
+  it('renders the status as the invoice lists\' StatusTag, green for submitted and grey for draft', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decls = [
+      makeDecl({ id: 'st-1', status: 'submitted' }),
+      makeDecl({ id: 'st-2', status: 'draft', period: '2T' }),
+    ];
+    const { container } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    const tags = Array.from(container.querySelectorAll('tbody .status-tag'));
+    expect(tags.map(t => t.className).sort()).toEqual(['status-tag status-tag--neutral', 'status-tag status-tag--success']);
+  });
+
   it('renders the sub-label for a submitted_ack row with submissionMethod present', async () => {
     globalThis.fetch = mockCatalogFetch();
     const decl = makeDecl({ id: 'sm-1', status: 'submitted_ack', submissionMethod: 'manual_ack' });

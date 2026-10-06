@@ -64,6 +64,8 @@ vi.mock('@/components/attachments', () => ({
   useAttachments: () => ({ upload: vi.fn() }),
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
+  Check: () => null,
   Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
   CircleCheck: () => null, Calculator: () => null, Loader2: () => null,
   TrendingUp: () => null, TrendingDown: () => null, ClipboardCheck: () => null,

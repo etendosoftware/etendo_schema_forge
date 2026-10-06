@@ -79,6 +79,8 @@ vi.mock('../../../FmOverlays.jsx', () => ({
   ),
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
@@ -260,6 +262,39 @@ describe('FmModel303Page — action bar', () => {
 // needed to observe the PUT ordering.
 
 describe('FmModel303Page — Guardar button (ETP-5338 pivot)', () => {
+  // ETP-5584 — the status reads exactly like the list's "Estado" chip: the bare status, no
+  // "Estado:" prefix, rendered by the shared FmStatusChip.
+  it('shows the bare status in the status chip, with no "Estado:" prefix', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const left = screen.getByTestId('FmDetailActionBar__left');
+    const chip = left.querySelector('.fm-status-chip');
+    expect(chip).toBeTruthy();
+    expect(chip.getAttribute('data-status')).toBe('draft');
+    expect(chip.textContent).toBe('fm.status.draft');
+    expect(left.textContent).not.toContain('fm.col.status');
+  });
+
+  // ETP-5584 — same size as the invoice detail chip (DocumentStatusPill metrics: 14px text,
+  // 4px 8px padding, 8px radius) and the same tone icon rule (Check only for success).
+  it('renders the status chip with the invoice detail chip metrics and tone', () => {
+    const { unmount } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    let badge = screen.getByTestId('FmStatusChip__badge');
+    expect(badge.getAttribute('data-tone')).toBe('neutral');
+    expect(badge.style.fontSize).toBe('14px');
+    expect(badge.style.padding).toBe('4px 8px');
+    expect(badge.style.borderRadius).toBe('8px');
+    unmount();
+    render(<FmModel303Page decl={{ ...BASE_DECL, status: 'submitted_ack', submissionMethod: 'aeat_telematic' }} {...defaultProps} />);
+    badge = screen.getByTestId('FmStatusChip__badge');
+    // (lucide-react is mocked to render nothing in this file, so the Check icon itself is not
+    // asserted here — the tone that selects it is.)
+    expect(badge.getAttribute('data-tone')).toBe('success');
+    // the submissionMethod label stays on the same line, next to the chip
+    const chip = document.querySelector('.fm-status-chip');
+    expect(chip.style.flexDirection).toBe('row');
+    expect(chip.textContent).toContain('fm.present.method.aeat_telematic');
+  });
+
   // ETP-5584 — Cancelar + status chip on the LEFT; on the RIGHT, in this order: Calcular,
   // Generar fichero, Guardar, and the primary Registrar/Presentar right-most.
   it('renders Cancelar + status chip on the left, and Calcular, Generar fichero, Guardar, Registrar/Presentar on the right', () => {

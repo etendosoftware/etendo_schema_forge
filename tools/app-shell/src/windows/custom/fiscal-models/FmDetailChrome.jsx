@@ -3,11 +3,14 @@ import { Button } from '@/components/ui/button.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { useSupportChatSafe } from '@/components/support/SupportChatContext.jsx';
+import { StatusTag } from '@/components/ui/status-tag';
+import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
+import { Check } from 'lucide-react';
 
 // Shared chrome of the Modelo 303 / 349 detail pages (ETP-5584): the app top-bar meta (title,
 // breadcrumb, model badge, kebab), the status chip (also used by the list's "Estado" column), the
-// sticky action bar, and the action-bar button. Both detail pages render through these so their header, button sizes and button
-// order cannot drift apart again.
+// sticky action bar, and the action-bar button. Both detail pages render through these so their
+// header, button sizes and button order cannot drift apart again.
 //
 // Lives in its own module rather than in FmCommon.jsx on purpose: nearly every fiscal-models
 // page test mocks FmCommon.jsx with an explicit export list, and a new FmCommon export would
@@ -37,51 +40,94 @@ const STATUS_GREEN = new Set(['ready', 'submitted', 'submitted_ext', 'submitted_
 // server-side). submitted_ext (the removed "otra plataforma" path) never carries one.
 const SUBMISSION_METHOD_STATUSES = new Set(['submitted', 'submitted_ack']);
 
-const CHIP_STYLE = {
-  display: 'inline-flex', alignItems: 'center',
-  padding: '2px 8px', borderRadius: 6,
-  fontSize: 12, fontWeight: 400, lineHeight: '16px',
+// ── Status chip ──────────────────────────────────────────────────────────────
+// Sized exactly like the invoice windows' status chip (ETP-5584), in both places it appears:
+//
+// - LIST ("Estado" column): the very component the generated lists render — core `StatusTag`
+//   (DataTable.cellRenderers.jsx): 12/16 text, 4px 8px padding, pill radius.
+// - DETAIL (action bar): the metrics of `DocumentStatusPill`, the chip the generic DetailView
+//   renders next to Cancelar — 14/20 text, 4px 8px padding, 8px radius, the tone's 16px icon
+//   (Check for success, none for neutral) and a 0 4px label inset. NOT the component itself:
+//   it resolves its label with `useLocale()` from `@/i18n`, which ~48 fiscal-models page tests mock
+//   with `useUI` only, so rendering it would break every one of them. Colours come from the same
+//   shared `TONE_STYLES` tokens both invoice chips use, so only the box metrics are restated
+//   here (DETAIL_PILL_STYLE) — keep them in step with DocumentStatusPill's PILL_STYLE.
+//
+// Fiscal colour semantics map onto the invoice tones: every "presented" status (and `ready`) is
+// `success` (green), everything else — draft, pending, skipped — is `neutral` (grey).
+export function fiscalStatusTone(status) {
+  return STATUS_GREEN.has(status) ? 'success' : 'neutral';
+}
+
+const DETAIL_PILL_STYLE = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '4px 8px',
+  borderRadius: '8px',
+  fontFamily: 'Inter, system-ui, sans-serif',
+  fontSize: '14px',
+  lineHeight: '20px',
+  fontWeight: 400,
+  whiteSpace: 'nowrap',
+  letterSpacing: '-0.01em',
 };
 
+const DETAIL_ICON_COLOR = { success: 'var(--status-success-fg)' };
+
 const METHOD_STYLE = { fontSize: 11, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap' };
+
+function DetailStatusPill({ tone, label }) {
+  const palette = TONE_STYLES[tone] ?? TONE_STYLES.neutral;
+  return (
+    <span
+      data-testid="FmStatusChip__badge"
+      data-tone={tone}
+      style={{ ...DETAIL_PILL_STYLE, background: palette.background, color: palette.color }}
+    >
+      {tone === 'success' && (
+        <Check size={16} color={DETAIL_ICON_COLOR.success} aria-hidden="true" data-testid="FmStatusChip__icon" />
+      )}
+      <span style={{ padding: '0 4px' }}>{label}</span>
+    </span>
+  );
+}
 
 /**
  * @param {string} status            raw declaration status (`draft`, `submitted_ack`, …)
  * @param {string} [submissionMethod] optional ETP-4755 method, shown only for submitted statuses
  * @param {Function} t                useUI() translator
- * @param {'below'|'inline'} [methodPlacement='below'] where the submissionMethod sub-label goes:
- *   under the chip (list table cell) or to its right (detail action bar, single line).
+ * @param {'list'|'detail'} [variant='list'] `list` = the invoice list chip (StatusTag) with the
+ *   submissionMethod sub-label under it; `detail` = the invoice detail chip (DocumentStatusPill
+ *   metrics) with the sub-label to its right, on one line.
  */
-export function FmStatusChip({ status, submissionMethod, t, methodPlacement = 'below' }) {
+export function FmStatusChip({ status, submissionMethod, t, variant = 'list' }) {
   const label = STATUS_PLAIN_LABEL[status] ?? (t(`fm.status.${statusLabelKey(status)}`) ?? status);
-  const isGreen = STATUS_GREEN.has(status);
+  const tone = fiscalStatusTone(status);
   const methodLabel = submissionMethod && SUBMISSION_METHOD_STATUSES.has(status)
     ? t(`fm.present.method.${submissionMethod}`)
     : null;
-  const inline = methodPlacement === 'inline';
+  const detail = variant === 'detail';
   return (
     <span
       className="fm-status-chip"
       data-status={status}
+      data-variant={variant}
       style={{
         display: 'inline-flex',
-        flexDirection: inline ? 'row' : 'column',
-        alignItems: inline ? 'center' : 'flex-start',
-        gap: inline ? 6 : 2,
+        flexDirection: detail ? 'row' : 'column',
+        alignItems: detail ? 'center' : 'flex-start',
+        gap: detail ? 6 : 2,
       }}
     >
-      <span
-        data-testid="FmStatusChip__badge"
-        style={{
-          ...CHIP_STYLE,
-          background: isGreen ? 'var(--status-success-bg)' : 'hsl(var(--muted))',
-          color: isGreen ? 'var(--status-success-fg)' : 'hsl(var(--muted-foreground))',
-        }}
-      >
-        {label}
-      </span>
+      {detail
+        ? <DetailStatusPill tone={tone} label={label} />
+        : (
+          <span data-testid="FmStatusChip__badge" data-tone={tone} style={{ display: 'inline-flex' }}>
+            <StatusTag status={status} label={label} tone={tone} />
+          </span>
+        )}
       {methodLabel && (
-        <span style={inline ? METHOD_STYLE : { ...METHOD_STYLE, paddingLeft: 2 }}>
+        <span style={detail ? METHOD_STYLE : { ...METHOD_STYLE, paddingLeft: 2 }}>
           {methodLabel}
         </span>
       )}
