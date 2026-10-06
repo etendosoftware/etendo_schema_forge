@@ -2772,3 +2772,35 @@ describe('translateBackendError — draft reconciliation holds the line (ETP-547
     assert.equal(translateBackendError(HOLDS_RAW, (k) => k), HOLDS_RAW);
   });
 });
+
+// ETP-5194 — UserRoleAssignmentHandler#rejectEmailChange (com.etendoerp.go): the refusal outside
+// the email-correction window and the two rejections of a correction that is blank or malformed.
+describe('user email correction messages (UserRoleAssignmentHandler)', () => {
+  const CASES = [
+    {
+      raw: "Field 'email' can only be changed while the user's invitation has expired or could not be delivered",
+      key: 'backendError.userEmailLocked',
+    },
+    { raw: "Field 'email' is required", key: 'backendError.userEmailRequired' },
+    {
+      raw: "This user was never invited to Etendo GO (for example, a business partner contact person): edit its email through spec 'contacts', entity 'contact'",
+      key: 'backendError.userEmailNotAGoUser',
+    },
+    { raw: 'Invalid email format', key: 'backendError.userEmailInvalid' },
+  ];
+  const en = JSON.parse(readFileSync(new URL('../../locales/en_US.json', import.meta.url), 'utf8'));
+  const es = JSON.parse(readFileSync(new URL('../../locales/es_ES.json', import.meta.url), 'utf8'));
+  const lookup = (dict) => (k) => dict.genericLabels[k] ?? k;
+
+  for (const { raw, key } of CASES) {
+    it(`maps "${raw}" to ${key}`, () => {
+      assert.equal(translateBackendError(raw, (k) => (k === key ? 'translated' : k)), 'translated');
+    });
+
+    it(`has en_US and es_ES text for ${key}`, () => {
+      assert.notEqual(translateBackendError(raw, lookup(en)), raw);
+      assert.notEqual(translateBackendError(raw, lookup(es)), raw);
+    });
+  }
+});
+
