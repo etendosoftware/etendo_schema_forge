@@ -48,7 +48,7 @@ export function redactErrorText(value) {
     try { const url = new URL(raw); return `${url.origin}${url.pathname}${position}`; } catch { return '[url]'; }
   });
   return redactEmailAddresses(redactedUrls)
-    .replace(/(["'])(authorization|token|password|secret|code)\1\s*:\s*\1(?:bearer\s+)?[^"']*\1/gi,
+    .replace(/(["'])(authorization|token|password|secret|code)\1\s*:\s*\1(?:bearer\s+)?[^"'\r\n]{0,256}\1/gi,
       (match, quote, key) => `${quote}${key}${quote}: ${quote}[redacted]${quote}`)
     .replace(/\bBearer\s+[^\s&,;}]+/gi, 'Bearer [redacted]')
     .replace(/(authorization|token|password|secret|code)\s*[:=]\s*(?:bearer\s+)?[^\s&,;}]+/gi, '$1=[redacted]');
