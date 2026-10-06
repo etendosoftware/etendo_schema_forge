@@ -127,6 +127,45 @@ export function layoutWeekEvents(week, events) {
 }
 
 /**
+ * Counts how many segments cover each day column of a week.
+ */
+function countSegmentsPerDay(segments, columns) {
+  const perDay = Array.from({ length: columns }, () => 0);
+  for (const seg of segments) {
+    for (let c = seg.startCol; c < seg.startCol + seg.span; c += 1) perDay[c] += 1;
+  }
+  return perDay;
+}
+
+/**
+ * Cuts one segment into the pieces visible under the per-day lane limit, and
+ * counts every day it is hidden on into `hidden`. A cut edge is marked as
+ * continuing, like a week edge.
+ */
+function splitSegmentIntoVisiblePieces(seg, laneLimit, hidden) {
+  const pieces = [];
+  const end = seg.startCol + seg.span;
+  let runStart = null;
+  // One step past the segment end closes the last open run.
+  for (let c = seg.startCol; c <= end; c += 1) {
+    const visible = c < end && seg.lane < laneLimit[c];
+    if (c < end && !visible) hidden[c] += 1;
+    if (visible && runStart === null) runStart = c;
+    if (!visible && runStart !== null) {
+      pieces.push({
+        ...seg,
+        startCol: runStart,
+        span: c - runStart,
+        continuesBefore: runStart > seg.startCol || seg.continuesBefore,
+        continuesAfter: c < end || seg.continuesAfter,
+      });
+      runStart = null;
+    }
+  }
+  return pieces;
+}
+
+/**
  * Applies the per-day lane limit to a week layout.
  *
  * A day with at most `maxLanes` events shows them all; a day with more shows
@@ -138,33 +177,13 @@ export function layoutWeekEvents(week, events) {
  * Returns { pieces: segment[], overflow: [{ col, count }] }.
  */
 export function clipWeekToLanes(segments, maxLanes, columns = 7) {
-  const perDay = Array.from({ length: columns }, () => 0);
-  for (const seg of segments) {
-    for (let c = seg.startCol; c < seg.startCol + seg.span; c += 1) perDay[c] += 1;
-  }
+  const perDay = countSegmentsPerDay(segments, columns);
   const laneLimit = perDay.map((count) => (count > maxLanes ? maxLanes - 1 : maxLanes));
   const hidden = Array.from({ length: columns }, () => 0);
   const pieces = [];
 
   for (const seg of segments) {
-    const end = seg.startCol + seg.span;
-    let runStart = null;
-    // One step past the segment end closes the last open run.
-    for (let c = seg.startCol; c <= end; c += 1) {
-      const visible = c < end && seg.lane < laneLimit[c];
-      if (c < end && !visible) hidden[c] += 1;
-      if (visible && runStart === null) runStart = c;
-      if (!visible && runStart !== null) {
-        pieces.push({
-          ...seg,
-          startCol: runStart,
-          span: c - runStart,
-          continuesBefore: runStart > seg.startCol || seg.continuesBefore,
-          continuesAfter: c < end || seg.continuesAfter,
-        });
-        runStart = null;
-      }
-    }
+    pieces.push(...splitSegmentIntoVisiblePieces(seg, laneLimit, hidden));
   }
 
   const overflow = hidden
