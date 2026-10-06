@@ -431,10 +431,10 @@ public class NotPostedDocumentsHandler implements NeoHandler {
 ```
 
 **Why.** The MCP catalog drops a spec whose every included entity is handler-backed (no
-`AD_Tab`) — that is how the dashboard's widgets stay out of `neo_discover` and out of the CRUD
+`AD_Tab`) — that is how the dashboard's widgets stay out of `etendo_discover` and out of the CRUD
 tool enums, since the generic CRUD path cannot serve them. But "no `AD_Tab`" alone is too
 broad: a tab-less spec can still expose a genuine transactional action route, and
-`hasSpecAccess` gates `neo_action` too. So a tab-less spec is hidden only when it *also*
+`hasSpecAccess` gates `etendo_action` too. So a tab-less spec is hidden only when it *also*
 declares no action surface (`McpToolRouterSupport.isCatalogExcludedSpec` +
 `NeoActionSurface`). `ETGO_SF_ENTITY` has no action metadata, so the handler is the only
 authority.
@@ -461,7 +461,7 @@ public Map<String, NeoActionContract> actionContracts() {
 
 @Override
 public NeoResponse handle(NeoContext context) {
-  // Purely additive: only neo_action produces an ACTION context for this R spec; the SPA's
+  // Purely additive: only etendo_action produces an ACTION context for this R spec; the SPA's
   // ?action= requests carry no endpoint type and keep their own routing.
   if (NeoEndpointType.ACTION.equals(context.getEndpointType())) {
     return BankStatementAgentActions.dispatch(this, context);
@@ -474,7 +474,7 @@ public NeoResponse handle(NeoContext context) {
 
 - `NeoActionContract.write(name, description, Param...)` — an action that changes data;
   `NeoActionContract.read(name, description, Param...)` — one that never persists.
-- `withIdDescription(String)` — a copy stating what `neo_action`'s `id` identifies (e.g. "the
+- `withIdDescription(String)` — a copy stating what `etendo_action`'s `id` identifies (e.g. "the
   financial account id"), rendered as `idDescription`. Keeps window-specific wording out of the
   generic MCP classes.
 - `Param.required(name, type, desc)`, `Param.optional(name, type, desc)` (state the default in the
@@ -491,19 +491,19 @@ public NeoResponse handle(NeoContext context) {
   the MCP layer uses it to find the `entity` to pass.
 
 **What reads it — the MCP only.** Each declared entry renders as
-`{action, description, mutating, invokeVia:"neo_action", idDescription?, parameters:<JSON Schema>}`.
-What `neo_schema` does with them depends on the entity's **shape**, decided structurally by
+`{action, description, mutating, invokeVia:"etendo_action", idDescription?, parameters:<JSON Schema>}`.
+What `etendo_schema` does with them depends on the entity's **shape**, decided structurally by
 `McpReportActionsSchema.isActionOnlyEntity` (ETP-5535) — never by its name:
 
-| Entity shape | `neo_schema` answer | Examples |
+| Entity shape | `etendo_schema` answer | Examples |
 |---|---|---|
 | **Action-only** — declares actions and has **no** `ETGO_SF_FIELD` row (its AD tab exists only for role gating) | the declared catalog **replaces** the schema, for **every** `view` | `bank-statements`, `bank-reconciliation` (ETP-5468) |
 | **Window entity** — declares actions **and** has field rows | keeps its normal schema for every view; in `view:"actions"` the declared entries are **appended** after the AD buttons, counted in `invokableCount`, with a `declaredActionsHint` | `sales-quotation` header: `rejectQuotation`, `createRejectReason` (ETP-5535) |
 
-With nothing declared, `view:"actions"` is byte-for-byte unchanged. For R specs only, `neo_discover`
+With nothing declared, `view:"actions"` is byte-for-byte unchanged. For R specs only, `etendo_discover`
 also marks the spec `status:"actions_only"` with `actionEntity` and `actions[]`, and the spec joins
-the `neo_schema` / `neo_action` enums only (never `neo_list` / `neo_get`); a W spec is already in
-those enums. The call is `neo_action {spec, entity, id, action, parameters}`.
+the `etendo_schema` / `etendo_action` enums only (never `etendo_list` / `etendo_get`); a W spec is already in
+those enums. The call is `etendo_action {spec, entity, id, action, parameters}`.
 
 **Contracts are for discovery; the handler still owns its body.** A declaration tells the agent
 what to send — it does not, by itself, validate anything. The bank handlers call
@@ -517,7 +517,7 @@ what protects the write.
 
 **The dispatcher pattern** (both current implementations): validate the contract → require a
 non-blank `id` → check the same report-spec role gate the SPA passes (`POST` for mutating actions,
-`GET` for reads — `neo_action` itself is authorized as a read) → translate the call into the
+`GET` for reads — `etendo_action` itself is authorized as a read) → translate the call into the
 exact request the SPA sends and re-enter the unchanged engine, so every business rule is the UI's
 own → on success, flush the session to clean while the `OBContext` is still set (the MCP session
 scope flushes once and restores a null context).
@@ -539,12 +539,12 @@ serves it, with the parameters the engine reads. A declared-but-ignored action i
 lie as a declared-but-ignored report parameter. Named actions on W-spec handlers that are not
 declared this way — the order / shipment / invoice header handlers' `createDraftInvoice`,
 `listInvoices`, … — stay invisible in the catalog, and GET-only ones remain unreachable through
-`neo_action` (IMP-49).
+`etendo_action` (IMP-49).
 
 ### 2.7.2 `serverResolvedCreateFields()`: declare what the server derives on create (ETP-5535)
 
-`neo_schema({spec, entity, view:"create"})` learns what the server fills from two generic sources:
-what `neo_defaults` resolves without input, and the selector policies' wrapper fields. Neither can
+`etendo_schema({spec, entity, view:"create"})` learns what the server fills from two generic sources:
+what `etendo_defaults` resolves without input, and the selector policies' wrapper fields. Neither can
 see a value derived **from another field of the same body** — e.g. a line's tax, set by
 `SL_Order_Product` once the product is known. Without a declaration such a field is listed as
 `required`, and the agent goes looking for a value the server would have chosen differently.
@@ -563,14 +563,14 @@ public Set<String> serverResolvedCreateFields() {
   the customization found through `NeoExtensionDispatcher.resolveOnly` — so both `@NeoExtension`
   and `Java_Qualifier` bindings work. Nothing is invoked; only the declaration is read.
 
-**The rule — declare only fields the create callout cascade derives.** The `neo_create` mandatory
+**The rule — declare only fields the create callout cascade derives.** The `etendo_create` mandatory
 pre-check does **not** skip declared fields: it runs *after* the create callout cascade and
 *before* your `handle()` pre-hook. A field the cascade filled is not missing there; one filled only
 by your `handle()` would still be refused with a 422 `missingFields`, while the schema told the
 agent it was optional. If your pre-hook is the one that derives it, the field is not a candidate
 for this declaration.
 
-> **Related (ETP-5535), no declaration needed:** on `neo_create` / `neo_batch`, a child entity's
+> **Related (ETP-5535), no declaration needed:** on `etendo_create` / `etendo_batch`, a child entity's
 > FK given by name is resolved with its **parent record** as selector context (the child's own body
 > keys win; a parent outside the caller's tenant is ignored). See `com.etendoerp.go/docs/neo-headless.md`
 > §4.12.3 *Selector context*.
@@ -982,6 +982,17 @@ unconditional `NeoHandlerUtils.mirrorFieldValue`. Do not migrate them to
 `mirrorAccountingDateOnCreate` without first making their accounting date visible — see the
 javadoc on `mirrorAccountingDateOnCreate` for the explicit warning.
 
+> **⚠️ A body mirror into a hidden field survives POST but not PATCH/PUT.** On create,
+> `filterCreateRequest` lets a handler-supplied read-only value through. On update,
+> `NeoCrudHandler` runs `filterWriteRequest` **after** the pre-hook and drops every field that is
+> not writable — so a value the hook copied into a `system` field silently disappears, with no
+> error. The windows above only work on edits because `NeoCrudHandler` re-injects
+> **`accountingDate`** specifically after filtering (a shared, name-based carve-out tolerated until
+> M4 — do not add another one for a different field). For any other hidden target, write it on the
+> record inside the pre-hook instead; the CRUD update flushes it in the same transaction. Reference:
+> `GlJournalHeaderHandler#mirrorDocumentDateOnRecord` (ETP-5611 — `accountingDate → documentDate`;
+> the body-only version passed every unit test and was caught only by a live PATCH).
+
 The generic `blockCalloutFieldUpdate` helper (used today only by
 `blockCalloutCurrencyUpdate`/ETP-4029) and its three-entry-point coverage requirement above remain
 valid guidance for a genuine field-independence guard — a field whose value must stay decoupled
@@ -1015,7 +1026,7 @@ In both cases the symptom is the same: completing the document through NEO "work
    is**, not just `ProcessBundle`:
    - `ProcessBundle`-based process class (e.g. `FIN_AddPaymentFromJournal`, invoked as
      `new FIN_AddPaymentFromJournal().execute(bundle)`) — see
-     `GlJournalHeaderHandler#completeJournal`.
+     `GlJournalHeaderHandler#runDocumentAction`.
    - Plain CDI-injected utility class (e.g. `ProcessInvoiceUtil`, invoked as
      `processInvoiceUtil.process(...)`) obtained via
      `WeldUtils.getInstanceFromStaticBeanManager(ProcessInvoiceUtil.class)` — see
@@ -1054,7 +1065,20 @@ public NeoResponse handle(NeoContext ctx) {
 > `validateLineQtyBeforeComplete`; that guard was removed in ETP-5381 — see
 > `docs/generated-custom-windows/sales-invoice.md`.)
 
-Real implementations: `GlJournalHeaderHandler#completeJournal` (ETP-4244),
+> **⚠️ The classic process may read its action from the HTTP request, not from the bundle.**
+> `FIN_AddPaymentFromJournal` reads the document action with
+> `vars.getStringParameter("inpdocaction")` — a request parameter the Classic form posts — and
+> falls back to `CO` when it is absent. Under NEO the parameter is never there, so a Reactivate
+> (`RE`) request silently **completed** the journal again (ETP-5611). Set it on the request
+> wrapper before running the process: `RequestContext.get().setRequestParameter("inpdocaction",
+> docAction)`. Set it for **every** action, not only the non-default one: the parameter lives for
+> the rest of the HTTP request, so inside one `/sws/neo/batch` an earlier `RE` would turn a later
+> `CO` into a reactivate. Guard a missing request (non-HTTP channel) with a clear error instead of
+> running the process. Read the classic process before assuming its inputs come from
+> `bundle.getParams()`.
+
+Real implementations: `GlJournalHeaderHandler#runDocumentAction` (ETP-4244, Complete; Reactivate
+added in ETP-5611),
 `AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded` (ETP-4388, shared by
 `SalesInvoiceHeaderHandler` and `PurchaseInvoiceHeaderHandler`).
 

@@ -149,6 +149,9 @@ export const SALES_RELATED_DOCS = {
   'sales-invoice': {
     spec: 'sales-invoice',
     entity: 'header',
+    // ETP-5576 — dispatched by the follow-up flow (useFollowUpDocuments) after it creates
+    // the shipment; the record re-read that follows also refreshes `linkedShipments`.
+    refreshEvent: 'sales-invoice:document-created',
     depsKey: record => [
       record?.salesOrder ?? '',
       getArSubtype(record),

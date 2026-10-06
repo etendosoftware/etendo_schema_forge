@@ -64,6 +64,9 @@ const _BANK_RECTIFICATIVA_BRANCH = { allOf: [
 // Rationale (our reading): the record design attaches the Nota 3 pointer to exactly SWIFT-BIC,
 // IBAN and marca SEPA, and to none of Banco/Dirección/Ciudad/Código País, which only route a
 // rest-of-world transfer. Do not document or test this as an AEAT requirement.
+// ETP-5597 pt.2 — this escalation now drives VISIBILITY only. Requiredness follows the simpler
+// rule in `_BANK_REST_OF_WORLD` below (marca 1/2 → marca SEPA + IBAN; marca 3 → everything), so
+// under marca 2 SWIFT-BIC is shown but optional.
 // `bank_sepa` is a text input, so its value is a string; the numeric variants are defensive.
 const _SEPA_MARK_NEEDS_SWIFT = { field: 'bank_sepa', in: ['2', '3', 2, 3] };
 const _SEPA_MARK_NEEDS_FOREIGN_DETAILS = { field: 'bank_sepa', in: ['3', 3] };
@@ -190,23 +193,70 @@ const _BANK_IBAN_REQUIRED_WHEN = { anyOf: [
 // itself needs, but SWIFT-BIC and the Banco/Direccion/Ciudad/Pais block escalate with the marca
 // SEPA - see `_SEPA_MARK_NEEDS_SWIFT`/`_SEPA_MARK_NEEDS_FOREIGN_DETAILS` above for the decision
 // and its (non-normative) rationale.
-const _BANK_FULL_BLOCK_REQUIRED_WHEN = _BANK_RECTIFICATIVA_BRANCH;
-// Requiredness IS the Nota 3 branch plus the marca gate — the very same condition the visibility
-// constants embed, reused rather than restated so the two cannot drift apart. (Requiredness has
-// no tipo U/D/X branch at all: condition A requires IBAN only, per the ETP-5393 follow-up above.)
-const _BANK_SWIFT_REQUIRED_WHEN = _BANK_NOTA3_NEEDS_SWIFT;
-const _BANK_FOREIGN_DETAILS_REQUIRED_WHEN = _BANK_NOTA3_NEEDS_FOREIGN_DETAILS;
+// ETP-5597 — `_BANK_FULL_BLOCK_REQUIRED_WHEN` (= `_BANK_RECTIFICATIVA_BRANCH`, formerly what
+// `bank_sepa` carried) was removed: `bank_sepa` now uses `_BANK_SEPA_REQUIRED_WHEN` below.
+// ETP-5597 pt.2 — the marca SEPA is mandatory wherever it is shown (tipo D/V/X, or the Nota 3
+// branch), not only in the Nota 3 branch: the rule "marca 1/2 → marca SEPA + IBAN, marca 3 →
+// everything" presupposes a marca, and it is the selector that decides which of the other bank
+// fields are mandatory. Visibility is the same `_BANK_DVX_VW`, so it is required exactly when it
+// can be filled in (never for tipo U, where it is hidden).
+const _BANK_SEPA_REQUIRED_WHEN = _BANK_DVX_VW;
+// ETP-5597 pt.2 — requiredness of SWIFT-BIC and of the Banco/Dirección/Ciudad/Código País block
+// is driven by the marca SEPA alone, wherever those fields are on screen:
+//   marca 1 (Cuenta España) or 2 (Unión Europea SEPA) → only marca SEPA + IBAN are mandatory
+//   marca 3 (Resto Países)                           → every bank field is mandatory
+// This SUPERSEDES the ETP-5431 escalation above for requiredness only (marca 2 used to also
+// require SWIFT-BIC): under marca 2 SWIFT-BIC stays visible inside the Nota 3 branch (an EU
+// account may still carry a BIC, and `_BANK_SWIFT_VW` is unchanged) but it is optional.
+// `_BANK_DVX_VW` is the set of states in which these fields can be visible at all (tipo D/V/X, or
+// the Nota 3 branch), so the rule covers a plain refund to a rest-of-world account as well, not
+// only the Nota 3 case — a foreign account cannot be addressed by its number alone in either.
+// Tipo U (Domiciliación) never reaches it: `_BANK_DVX_VW` excludes it, the marca selector is
+// hidden there, and a stale `bank_sepa` left over from another tipo must not make anything
+// mandatory. Visibility (`_BANK_SWIFT_VW`/`_BANK_FOREIGN_DETAILS_VW`) is deliberately untouched.
+const _BANK_REST_OF_WORLD = { allOf: [_BANK_DVX_VW, _SEPA_MARK_NEEDS_FOREIGN_DETAILS] };
+const _BANK_SWIFT_REQUIRED_WHEN = _BANK_REST_OF_WORLD;
+const _BANK_FOREIGN_DETAILS_REQUIRED_WHEN = _BANK_REST_OF_WORLD;
+
+// ETP-5597 pt.3 — under marca 3 (Resto Países) position 23 carries a plain account number, not
+// an IBAN (see the "Position 23 is not always an IBAN" note in the window guide), so the field
+// is relabelled "Cuenta bancaria". Same scope as `_BANK_REST_OF_WORLD`, so a stale marca 3 left
+// over from another tipo cannot relabel the IBAN of a Domiciliación (tipo U).
+const _BANK_ACCOUNT_LABEL_WHEN = [{ when: _BANK_REST_OF_WORLD, labelKey: 'fm.ident.bank.account' }];
+
+// ETP-5597 pt.1 — the declaration types that settle a NEGATIVE result (compensación and every
+// devolución variant: D, V, X) cannot be chosen while casilla 69 is positive (an amount to pay).
+// AEAT semantics: a positive result is filed as Ingreso (I) or Domiciliación (U); only a negative
+// result can be compensated or refunded. `_box69Positive` is a synthetic key — box values live in
+// `liveBoxes`, not in `identification` — merged in by `withDerivedBoxFlags` (fiscalModelsUtils.js),
+// the same technique `_box111NonZero` uses. A missing box 69 (no compute yet) reads as "not
+// positive", so nothing is blocked before the first calculation.
+const _RESULT_69_POSITIVE = { field: '_box69Positive', equals: true };
+const _NEGATIVE_RESULT_OPTION = {
+  disabledWhen: _RESULT_69_POSITIVE,
+  disabledReasonKey: 'fm.ident.decl.disabled_positive_result',
+};
+
+// ETP-5597 pt.4 — casillas 70 ("A deducir") and 109 ("Devoluciones acordadas por la AEAT") only
+// apply to an autoliquidación rectificativa, so they are editable only while that check is set.
+// The pre-October-2024 layouts have a "complementaria" check instead of the rectificativa one
+// (`_COMPLEMENTARIA_RECTIF_OP`), and box 70 there is the complementaria's own "a deducir" amount
+// (Classic gates it on `IsComplementary`, which both checks set) — so those layouts gate on
+// `complementaria`, otherwise the boxes would be permanently locked in years that have no
+// rectificativa check at all. Unchecking clears both boxes: see `RECTIFICATION_ONLY_BOXES`.
+const _EDITABLE_WHEN_RECTIFICATIVA = { field: 'rectificativa', equals: true };
+const _EDITABLE_WHEN_COMPLEMENTARIA = { field: 'complementaria', equals: true };
 
 const TIPO_DECLARACION_FIELD = {
   id: 'tipo_declaracion', labelKey: 'fm.ident.tipo_declaracion', type: 'select', readOnly: false, required: true,
   options: [
-    { value: 'C', labelKey: 'fm.ident.decl.compensacion' },
-    { value: 'D', labelKey: 'fm.ident.decl.devolucion' },
+    { value: 'C', labelKey: 'fm.ident.decl.compensacion', ..._NEGATIVE_RESULT_OPTION },
+    { value: 'D', labelKey: 'fm.ident.decl.devolucion', ..._NEGATIVE_RESULT_OPTION },
     { value: 'I', labelKey: 'fm.ident.decl.ingreso' },
     { value: 'U', labelKey: 'fm.ident.decl.domiciliacion' },
     { value: 'N', labelKey: 'fm.ident.decl.resultado_cero' },
-    { value: 'V', labelKey: 'fm.ident.decl.dev_cta_corriente' },
-    { value: 'X', labelKey: 'fm.ident.decl.dev_transferencia_ext' },
+    { value: 'V', labelKey: 'fm.ident.decl.dev_cta_corriente', ..._NEGATIVE_RESULT_OPTION },
+    { value: 'X', labelKey: 'fm.ident.decl.dev_transferencia_ext', ..._NEGATIVE_RESULT_OPTION },
   ],
 };
 
@@ -284,11 +334,12 @@ const BASE = {
     },
     datos_bancarios: {
       sectionType: 'identificacion',
-      titleKeyFrom: 'tipo_declaracion',
-      titleKeyMap: {
-        D: 'fm.section.devolucion', X: 'fm.section.devolucion',
-        U: 'fm.section.domiciliacion',
-      },
+      // ETP-5597 — rendered WITHOUT a heading: the "Devolución"/"Domiciliación" title this
+      // section used to derive from `tipo_declaracion` (titleKeyFrom/titleKeyMap) was removed
+      // by product decision — the bank fields read as a continuation of the Identificación
+      // block. `untitled` keeps the section in getLayout303's output, whose filter otherwise
+      // drops any section with neither `titleKey` nor `titleKeyMap`.
+      untitled: true,
       // Only U (Domiciliación), D (Devolución) and X (Devolución transferencia
       // extranjero) may carry IBAN per AEAT error EDID065 — see IBAN_REQUIRED_TIPOS.
       // ALSO shown whenever 'rectificativa' is checked AND box 111 (rectificacion_importe)
@@ -337,7 +388,7 @@ const BASE = {
         // empezar por ES y únicamente se usan las primeras 24 posiciones" — 34 is the record
         // slot's own width, not the ES-IBAN's 24-char payload), SWIFT-BIC 11, Bank name 70,
         // Bank address 35, City 30, Country code 2.
-        { id: 'bank_iban', labelKey: 'fm.ident.bank.iban', type: 'text', readOnly: false, maxLength: 34,
+        { id: 'bank_iban', labelKey: 'fm.ident.bank.iban', labelKeyWhen: _BANK_ACCOUNT_LABEL_WHEN, type: 'text', readOnly: false, maxLength: 34,
           requiredWhen: _BANK_IBAN_REQUIRED_WHEN },
         // ETP-5431 — visibility AND requiredness now escalate with the marca SEPA (`bank_sepa`):
         // SWIFT-BIC from marca 2, and Banco/Dirección/Ciudad/País only for marca 3. A DESIGN
@@ -372,7 +423,7 @@ const BASE = {
         // rejected by AEAT303Report2024 with @AEAT303_sepa_mark_required_111@ (a missing param
         // resolves to null, which is not in SEPA_MARKS_VALID_FOR_BOX_111), so no option needs
         // hiding and no dynamic option logic exists.
-        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'select', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN,
+        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'select', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_SEPA_REQUIRED_WHEN,
           options: [
             { value: '1', labelKey: 'fm.ident.bank.sepa.spain' },
             { value: '2', labelKey: 'fm.ident.bank.sepa.eu_sepa' },
@@ -488,8 +539,8 @@ const BASE = {
           ],
           rows: [
             { id: 'resultado_69',          labelKey: 'fm.box.row.resultado_69',          cells: [69],  total: true },
-            { id: 'a_deducir',             labelKey: 'fm.box.row.a_deducir',             cells: [70], editable: true },
-            { id: 'devoluciones_at',       labelKey: 'fm.box.row.devoluciones_at',       cells: [109], editable: true },
+            { id: 'a_deducir',             labelKey: 'fm.box.row.a_deducir',             cells: [70], editableWhen: _EDITABLE_WHEN_RECTIFICATIVA },
+            { id: 'devoluciones_at',       labelKey: 'fm.box.row.devoluciones_at',       cells: [109], editableWhen: _EDITABLE_WHEN_RECTIFICATIVA },
             { id: 'resultado_declaracion', labelKey: 'fm.box.row.resultado_declaracion', cells: [71],  total: true },
             { id: 'importe_devolucion',    labelKey: 'fm.box.row.importe_devolucion',    cells: [null], rowVisibleWhen: { field: 'tipo_declaracion', in: ['D', 'V', 'X', 'C'] }, derivedValue: { box: 71, abs: true, subtractBox: 70, clampMin: 0 } },
             // ETP-5431 pt.2 — no longer editable: autocompleted by `computeBox111` above, applied
@@ -623,7 +674,7 @@ const _PRE2023_BICOLUMN_OP = { op: 'patchRow', section: 'resultado_final', row: 
   ],
   rows: [
     { id: 'resultado_69',          labelKey: 'fm.box.row.resultado_69_pre2023',          cells: [69],  total: true },
-    { id: 'a_deducir',             labelKey: 'fm.box.row.a_deducir',                      cells: [70], editable: true },
+    { id: 'a_deducir',             labelKey: 'fm.box.row.a_deducir',                      cells: [70], editableWhen: _EDITABLE_WHEN_COMPLEMENTARIA },
     { id: 'resultado_declaracion', labelKey: 'fm.box.row.resultado_declaracion_pre2023',  cells: [71],  total: true },
     { id: 'importe_devolucion',    labelKey: 'fm.box.row.importe_devolucion',              cells: [null], rowVisibleWhen: { field: 'tipo_declaracion', in: ['D', 'V', 'X', 'C'] }, derivedValue: { box: 71, abs: true, subtractBox: 70, clampMin: 0 } },
   ],
@@ -647,8 +698,8 @@ const _2024_COMPLEMENTARIA_OPS = [
     ],
     rows: [
       { id: 'resultado_69',          labelKey: 'fm.box.row.resultado_69_pre2023', cells: [69],  total: true },
-      { id: 'a_deducir',             labelKey: 'fm.box.row.a_deducir',            cells: [70],  editable: true },
-      { id: 'devoluciones_at',       labelKey: 'fm.box.row.devoluciones_at',      cells: [109], editable: true },
+      { id: 'a_deducir',             labelKey: 'fm.box.row.a_deducir',            cells: [70],  editableWhen: _EDITABLE_WHEN_COMPLEMENTARIA },
+      { id: 'devoluciones_at',       labelKey: 'fm.box.row.devoluciones_at',      cells: [109], editableWhen: _EDITABLE_WHEN_COMPLEMENTARIA },
       { id: 'resultado_declaracion', labelKey: 'fm.box.row.resultado_declaracion', cells: [71], total: true },
     ],
   }},
@@ -718,8 +769,8 @@ const PATCHES = {
       ],
       rows: [
         { id: 'resultado_69',          labelKey: 'fm.box.row.resultado_69',          cells: [69],  total: true },
-        { id: 'a_deducir',             labelKey: 'fm.box.row.a_deducir',             cells: [70],  editable: true },
-        { id: 'devoluciones_at',       labelKey: 'fm.box.row.devoluciones_at',       cells: [109], editable: true },
+        { id: 'a_deducir',             labelKey: 'fm.box.row.a_deducir',             cells: [70],  editableWhen: _EDITABLE_WHEN_RECTIFICATIVA },
+        { id: 'devoluciones_at',       labelKey: 'fm.box.row.devoluciones_at',       cells: [109], editableWhen: _EDITABLE_WHEN_RECTIFICATIVA },
         { id: 'resultado_declaracion', labelKey: 'fm.box.row.resultado_declaracion', cells: [71],  total: true },
       ],
     }},
@@ -831,7 +882,7 @@ export function applyPatch(ops) {
     }
   }
 
-  return { sections: sectionOrder.map(id => ({ id, ...sections[id] })).filter(s => s.titleKey || s.titleKeyMap) };
+  return { sections: sectionOrder.map(id => ({ id, ...sections[id] })).filter(s => s.titleKey || s.titleKeyMap || s.untitled) };
 }
 
 // ── Public API ────────────────────────────────────────────────────
@@ -898,6 +949,58 @@ export function isFieldRequired(f, identification) {
   return Boolean(f.required);
 }
 
+// ETP-5597 pt.3 — a field whose label depends on OTHER state declares `labelKeyWhen`, an ordered
+// list of `{ when: <visibility condition>, labelKey }`; the first matching entry wins, otherwise
+// the static `labelKey` applies. Shared by FmBoxes303's rendering and FmModel303Page's
+// missing-required-fields toast, so the label a user sees and the one an error names agree.
+export function resolveFieldLabelKey(f, identification) {
+  const hit = Array.isArray(f.labelKeyWhen)
+    ? f.labelKeyWhen.find(entry => matchesVisibility(entry.when, identification))
+    : null;
+  return hit?.labelKey ?? f.labelKey;
+}
+
+// ETP-5597 pt.1 — a select option may declare `disabledWhen` (a visibility condition): while it
+// matches, the option cannot be picked. `identification` must already carry the synthetic flags
+// the condition reads (see `withDerivedBoxFlags` in fiscalModelsUtils.js).
+export function isOptionDisabled(opt, identification) {
+  return Boolean(opt?.disabledWhen) && matchesVisibility(opt.disabledWhen, identification);
+}
+
+// Returns the option currently selected in a select field when that option is disabled right
+// now, or null. Shared by FmBoxes303's inline error and `getInvalidSelectedOptions` below.
+export function getInvalidSelectedOption(f, identification) {
+  if (f.type !== 'select' || !Array.isArray(f.options)) return null;
+  const val = identification?.[f.id];
+  if (val === undefined || val === null || val === '') return null;
+  const opt = f.options.find(o => o.value === val);
+  return opt && isOptionDisabled(opt, identification) ? opt : null;
+}
+
+/**
+ * ETP-5597 pt.1 — visible select fields whose CURRENT value is an option that is disabled in the
+ * current state (e.g. tipo "Compensación" selected and box 69 then becomes positive). The value is
+ * deliberately NOT cleared automatically: box 69 changes as a side effect of unrelated edits or a
+ * recalculation, and silently wiping the user's choice there would be surprising (and would undo
+ * itself badly when 69 turns negative again). Instead FmModel303Page blocks "Generar fichero" and
+ * "Registrar/Presentar" while this is non-empty, and FmBoxes303 shows the reason under the select.
+ * Returns `[{ field, option }]`.
+ */
+export function getInvalidSelectedOptions(year, period, identification) {
+  const layout = getLayout303(year, period);
+  const invalid = [];
+  for (const section of layout.sections) {
+    if (!Array.isArray(section.fields)) continue;
+    if (!isSectionVisible(section, identification)) continue;
+    for (const f of section.fields) {
+      if (f.visibleWhen && !matchesVisibility(f.visibleWhen, identification)) continue;
+      const option = getInvalidSelectedOption(f, identification);
+      if (option) invalid.push({ field: f, option });
+    }
+  }
+  return invalid;
+}
+
 // Field-level gate for getMissingRequiredFields below — same reasoning as isSectionVisible.
 function isRequiredFieldMissing(f, identification) {
   if (!isFieldRequired(f, identification)) return false;
@@ -943,7 +1046,7 @@ export function getLayout303(year, period) {
 
   const sections = ops
     ? applyPatch(ops).sections
-    : BASE.sectionOrder.map(id => ({ id, ...BASE.sections[id] })).filter(s => s.titleKey || s.titleKeyMap);
+    : BASE.sectionOrder.map(id => ({ id, ...BASE.sections[id] })).filter(s => s.titleKey || s.titleKeyMap || s.untitled);
 
   // Box 44 (prorrata definitiva) and the two last-period-only sections (tributacion_territorial,
   // info_adicional_ultimo_periodo — ETP-5391) are only applicable in the last period of the

@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/TabStripButton.jsx
+// @covers tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx
 /**
  * ETP-4404 — custom tab (placement 'tab') save-header-first wiring.
  *
@@ -16,9 +19,11 @@
  * Verified through a stub tab Component that records its props (harness
  * mirrors DetailView.processesAndBadges.vitest.jsx).
  */
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { toast } from 'sonner';
 import { DetailView } from '../DetailView.jsx';
+import ReversedInvoicesPanel from '@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx';
 
 const mockNavigate = vi.fn();
 // Mutable so each test can inject router state before rendering.
@@ -87,7 +92,25 @@ vi.mock('@/hooks/useLineGrossAmount', () => ({
 }));
 vi.mock('@/hooks/useDocumentAction', () => ({ useDocumentAction: () => ({ executeAction: vi.fn(), loading: false }) }));
 vi.mock('@/hooks/useNeoAction', () => ({ useNeoAction: () => ({ execute: vi.fn(), loading: false }) }));
-vi.mock('@/i18n', () => ({ useMenuLabel: () => (k) => k, useUI: () => (k) => k, useLabel: () => () => '' }));
+vi.mock('@/i18n', () => ({
+  useMenuLabel: () => (k) => k,
+  useUI: () => (k) => k,
+  useLabel: () => () => '',
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
+}));
+
+// Every request of DetailView and of the real ReversedInvoicesPanel goes through useApiFetch.
+// The picker lists one candidate invoice; anything else answers an empty NEO payload.
+const RECT_CANDIDATE = {
+  id: 'inv-orig-9', documentNo: '10000090', invoiceDate: '2026-05-01',
+  documentStatus: 'CO', 'businessPartner$_identifier': 'Cliente SL', grandTotalAmount: 50,
+};
+const mockApiFetch = vi.hoisted(() => vi.fn());
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
+function answerApiFetch(url) {
+  const data = String(url).includes('/header') ? [RECT_CANDIDATE] : [];
+  return Promise.resolve({ ok: true, status: 200, json: async () => ({ response: { data } }) });
+}
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: () => vi.fn() }));
 vi.mock('@/components/layout/FavoritesContext', () => ({
   useFavorites: () => ({ isFavorite: () => false, toggleFavorite: vi.fn() }),
@@ -172,6 +195,7 @@ beforeEach(() => {
   mockHook.primeSaved = vi.fn();
   setExistingRecordHook();
   globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) }));
+  mockApiFetch.mockImplementation(answerApiFetch);
 });
 
 describe('renderCustomTabPanels — save-header-first props', () => {
@@ -250,6 +274,41 @@ describe('renderCustomTabPanels — save-header-first props', () => {
 
     expect(saved).toBeNull();
     expect(mockHook.primeSaved).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    // A failed save already reported itself; no second toast.
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  // ETP-4683 / ETP-5602: a save that SUCCEEDED but yields no derivable id must be reported,
+  // not swallowed — the user would otherwise stay on /window/new with no feedback.
+  it('onSaveHeader reports an unnavigable save and still returns null when the saved record has no id', async () => {
+    setNewRecordHook();
+    mockHook.handleSave = vi.fn().mockResolvedValue({ documentNo: 'NC-NEW' });
+    await act(async () => {
+      renderView({ recordId: 'new' });
+    });
+
+    let saved;
+    await act(async () => {
+      saved = await stubProps.onSaveHeader();
+    });
+
+    expect(saved).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord');
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('onGoToSavedRecord reports an unnavigable save when the saved record has no id', async () => {
+    setNewRecordHook();
+    await act(async () => {
+      renderView({ recordId: 'new' });
+    });
+
+    await act(async () => {
+      stubProps.onGoToSavedRecord({ documentNo: 'NC-NEW' }, { reopenAdd: true });
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord');
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
@@ -376,5 +435,134 @@ describe('renderCustomTabPanels — passes isDocumentReadOnly through (ETP-5205)
     });
 
     expect(stubProps.isDocumentReadOnly).toBeFalsy();
+  });
+});
+
+// A custom tab whose Component declares `requiresSavedRecord` (e.g. Attachments
+// without `saveBeforeAttach`) renders its strip button disabled on a new record —
+// in both the main strip and the customTabsAfterBottom strip — and cannot become active.
+describe('custom tab that requires a saved record — disabled tab button', () => {
+  const GatedTab = () => <div data-testid="gated-custom-tab" />;
+  GatedTab.requiresSavedRecord = (props = {}) => !props.config?.saveBeforeAttach;
+  GatedTab.savedRecordHintKey = 'attachmentsSaveFirstHint';
+  const OtherTab = () => <div data-testid="other-custom-tab" />;
+
+  const GATED = { key: 'attachments', labelKey: 'attachments', placement: 'tab', Component: GatedTab, props: { config: {} } };
+  const OTHER = { key: 'pricing', label: 'Price', placement: 'tab', Component: OtherTab };
+
+  describe('main tab strip', () => {
+    it('new record: the tab is aria-disabled with the hint and clicking it does not activate it', async () => {
+      setNewRecordHook();
+      await act(async () => { renderView({ recordId: 'new', customTabs: [GATED] }); });
+
+      const btn = screen.getByTestId('tab-custom:attachments');
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('title', 'attachmentsSaveFirstHint');
+
+      await act(async () => { btn.click(); });
+      expect(screen.getByTestId('gated-custom-tab')).not.toBeVisible();
+      expect(screen.getByTestId('mock-detail-table')).toBeVisible();
+    });
+
+    it('saved record: the tab is enabled and clicking it activates its panel', async () => {
+      await act(async () => { renderView({ customTabs: [GATED] }); });
+
+      const btn = screen.getByTestId('tab-custom:attachments');
+      expect(btn).not.toHaveAttribute('aria-disabled');
+      expect(btn).not.toHaveAttribute('title');
+
+      await act(async () => { btn.click(); });
+      expect(screen.getByTestId('gated-custom-tab')).toBeVisible();
+    });
+
+    it('new record with saveBeforeAttach: the tab stays enabled and activates', async () => {
+      setNewRecordHook();
+      const ct = { ...GATED, props: { config: { saveBeforeAttach: true } } };
+      await act(async () => { renderView({ recordId: 'new', customTabs: [ct] }); });
+
+      const btn = screen.getByTestId('tab-custom:attachments');
+      expect(btn).not.toHaveAttribute('aria-disabled');
+      await act(async () => { btn.click(); });
+      expect(screen.getByTestId('gated-custom-tab')).toBeVisible();
+    });
+  });
+
+  describe('customTabsAfterBottom strip', () => {
+    it('new record: the tab is aria-disabled with the hint and clicking it keeps the other tab active', async () => {
+      setNewRecordHook();
+      await act(async () => {
+        renderView({ recordId: 'new', customTabs: [OTHER, GATED], customTabsAfterBottom: true });
+      });
+
+      const btn = screen.getByTestId('tab-custom:attachments');
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('title', 'attachmentsSaveFirstHint');
+      expect(screen.getByTestId('tab-custom:pricing')).not.toHaveAttribute('aria-disabled');
+
+      await act(async () => { btn.click(); });
+      expect(screen.getByTestId('gated-custom-tab')).not.toBeVisible();
+      expect(screen.getByTestId('other-custom-tab')).toBeVisible();
+    });
+
+    it('saved record: the tab is enabled and clicking it activates its panel', async () => {
+      await act(async () => {
+        renderView({ customTabs: [OTHER, GATED], customTabsAfterBottom: true });
+      });
+
+      const btn = screen.getByTestId('tab-custom:attachments');
+      expect(btn).not.toHaveAttribute('aria-disabled');
+      await act(async () => { btn.click(); });
+      expect(screen.getByTestId('gated-custom-tab')).toBeVisible();
+      expect(screen.getByTestId('other-custom-tab')).not.toBeVisible();
+    });
+  });
+});
+
+// The stub tab above calls onSaveHeader directly; this drives it through the real
+// rectifications tab of a new sales invoice: add, pick an invoice, save.
+describe('real reversedInvoices tab — id-less header save', () => {
+  const REAL_TAB = { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' };
+
+  async function saveFirstRectification() {
+    setNewRecordHook();
+    await act(async () => {
+      renderView({ recordId: 'new', customTabs: [REAL_TAB] });
+    });
+    fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
+    fireEvent.click(screen.getByText('rectifySelectInvoices'));
+    fireEvent.click(await screen.findByTestId(`invoice-picker-option-${RECT_CANDIDATE.id}`));
+    fireEvent.click(screen.getByTestId('invoice-picker-apply'));
+    fireEvent.click(screen.getByTestId('btn__saveNewLine'));
+    await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalledTimes(1));
+  }
+
+  const rectificationPosts = () => mockApiFetch.mock.calls
+    .filter(([url, opts]) => String(url).includes('/reversedInvoices') && opts?.method === 'POST');
+
+  it('reports a successful header save whose response has no id, and posts no rectification', async () => {
+    mockHook.handleSave = vi.fn().mockResolvedValue({ documentNo: 'NC-NEW' });
+
+    await saveFirstRectification();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord'));
+    // The header WAS created: the host's toast is the only one — no misleading rectSaveError.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(mockHook.primeSaved).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(rectificationPosts()).toHaveLength(0);
+  });
+
+  it('shows only the save failure the header save already reported', async () => {
+    // Like the real useEntity.handleSave: every failure path toasts its reason, then resolves null.
+    mockHook.handleSave = vi.fn(async () => { toast.error('requiredFieldsMissing'); return null; });
+
+    await saveFirstRectification();
+
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('requiredFieldsMissing');
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(rectificationPosts()).toHaveLength(0);
   });
 });

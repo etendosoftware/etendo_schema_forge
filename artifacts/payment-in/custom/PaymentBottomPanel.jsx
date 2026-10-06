@@ -3,6 +3,7 @@ import { useRecordRefreshSignal } from '@/windows/custom/shared/useRecordRefresh
 import { useUI } from '@/i18n';
 import { formatAmount } from '@/lib/formatAmount.js';
 import PaymentDraftBanner from './PaymentDraftBanner';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /* eslint-disable react/prop-types */
@@ -75,19 +76,36 @@ const METHOD_ICONS = {
 // specifically, not a deliberate palette change. Restored to `--muted-foreground`, matching the
 // original mid-gray label/icon colors and the sibling PaymentDetailSidebarBase.jsx, which already
 // used it correctly for the same kind of label text (found while verifying ETP-4797).
-function FieldItem({ label, children, icon }) {
+//
+// ETP-5519 (option A, 1280×720 with the rail expanded): the layout is unchanged, but a value
+// that does not fit now ellipsises through the shared `TruncatedText`, which shows the full
+// value in a tooltip only when it was actually clipped. `noTruncate` is for dates, which must
+// never be cut: the cell cannot shrink below its content (`minWidth: max-content`) and the
+// value never wraps or clips. A truncatable cell sets `contain: inline-size`, so its text adds
+// nothing to the intrinsic width of its grid column: a long Referencia sharing the date column
+// truncates instead of widening it (see DATOS_COLS).
+function FieldItem({ label, children, icon, noTruncate = false, 'data-testid': testId }) {
+  const valueStyle = { font: '600 16px/24px Inter', color: 'hsl(var(--foreground))' };
+  const empty = <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
+  let value;
+  if (!children) value = <span style={valueStyle}>{empty}</span>;
+  else if (noTruncate) value = <span style={{ ...valueStyle, whiteSpace: 'nowrap' }} data-testid={testId ? `${testId}-value` : undefined}>{children}</span>;
+  else value = <span style={{ ...valueStyle, flex: 1, minWidth: 0 }}><TruncatedText text={children} data-testid={testId ? `${testId}-value` : undefined} /></span>;
   return (
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+    <div style={{ minWidth: noTruncate ? 'max-content' : 0, contain: noTruncate ? undefined : 'inline-size', display: 'flex', flexDirection: 'column', gap: 0 }} data-testid={testId}>
       <span style={{ font: '400 12px/16px Inter', color: 'hsl(var(--muted-foreground))' }}>{label}</span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 0, minWidth: 0 }}>
         {icon && <span style={{ display: 'flex', alignItems: 'center' }}>{icon}</span>}
-        <span style={{ font: '600 16px/24px Inter', color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {children || <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>}
-        </span>
+        {value}
       </div>
     </div>
   );
 }
+
+// ETP-5519: both rows live in ONE 4-column grid so the columns stay aligned. Every column
+// gets an equal share (same as the former `flex: 1` cells) and may shrink to zero — except the
+// third (Fecha / Referencia), which never shrinks below the date's own width so it is never cut.
+const DATOS_COLS = 'minmax(0, 1fr) minmax(0, 1fr) minmax(max-content, 1fr) minmax(0, 1fr)';
 
 function DatosSection({ data, ui }) {
   const methodRaw = data?.['paymentMethod$_identifier'] || '';
@@ -98,19 +116,15 @@ function DatosSection({ data, ui }) {
         <div style={{ font: '600 14px/20px Inter', color: 'hsl(var(--foreground))' }}>{ui('paymentInDataTitle')}</div>
         <div style={{ font: '400 12px/16px Inter', color: 'hsl(var(--foreground))', marginTop: 4 }}>{ui('paymentInDataSub')}</div>
       </div>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <div style={{ display: 'flex', flexDirection: 'row', gap: 20 }}>
-          <FieldItem label={ui('docNo')}>{data?.documentNo}</FieldItem>
-          <FieldItem label={ui('Customer')}>{data?.['businessPartner$_identifier']}</FieldItem>
-          <FieldItem label={ui('date')} icon={<CalendarIcon />}>{fmtDate(data?.paymentDate)}</FieldItem>
-          <FieldItem label={ui('method')} icon={METHOD_ICONS[methodKey]}>{methodRaw}</FieldItem>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'row', gap: 20 }}>
-          <FieldItem label={ui('depositTo')}>{data?.['account$_identifier']}</FieldItem>
-          <FieldItem label={ui('assetsCurrencyLabel')}>{data?.['currency$_identifier'] || 'EUR'}</FieldItem>
-          <FieldItem label={ui('reference')}>{data?.referenceNo}</FieldItem>
-          <div style={{ flex: 1 }} />
-        </div>
+      <div style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: DATOS_COLS, gap: 20 }}>
+        <FieldItem label={ui('docNo')} data-testid="PaymentBottomPanel__field-docNo">{data?.documentNo}</FieldItem>
+        <FieldItem label={ui('Customer')} data-testid="PaymentBottomPanel__field-customer">{data?.['businessPartner$_identifier']}</FieldItem>
+        <FieldItem label={ui('date')} icon={<CalendarIcon />} noTruncate data-testid="PaymentBottomPanel__field-date">{fmtDate(data?.paymentDate)}</FieldItem>
+        <FieldItem label={ui('method')} icon={METHOD_ICONS[methodKey]} data-testid="PaymentBottomPanel__field-method">{methodRaw}</FieldItem>
+        <FieldItem label={ui('depositTo')} data-testid="PaymentBottomPanel__field-depositTo">{data?.['account$_identifier']}</FieldItem>
+        <FieldItem label={ui('assetsCurrencyLabel')} data-testid="PaymentBottomPanel__field-currency">{data?.['currency$_identifier'] || 'EUR'}</FieldItem>
+        <FieldItem label={ui('reference')} data-testid="PaymentBottomPanel__field-reference">{data?.referenceNo}</FieldItem>
+        <div />
       </div>
     </div>
   );

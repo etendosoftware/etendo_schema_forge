@@ -537,8 +537,16 @@ export function applyIdentParams(params, identChecks) {
 // POST /fiscal303/submit at all, so any manually-overridden box value reached "Generar
 // fichero 303" (which calls applyBoxParams) but never the AEAT telematic submission
 // itself — the two endpoints silently diverged. See AeatSubmitFlow.jsx's own import site.
-export function applyBoxParams(params, manualOverrides) {
+// ETP-5597 pt.4 — `identChecks` (optional, for backward compatibility) lets the send point itself
+// enforce that casillas 70/109 are never forwarded outside a rectificativa/complementaria, even
+// for a declaration persisted before that rule existed (its `manualOverrides` may still carry
+// them). Interactive unchecking already drops them from `manualOverrides` (FmModel303Page's
+// `handleIdentChange`); this is the defence at the one place both file generation and the AEAT
+// submission build their params.
+export function applyBoxParams(params, manualOverrides, identChecks) {
+  const skipRectificationBoxes = identChecks != null && !isRectificationAdjustmentActive(identChecks);
   for (const [boxNum, paramName] of Object.entries(BOX_PARAM_MAP)) {
+    if (skipRectificationBoxes && RECTIFICATION_ONLY_BOXES.includes(Number(boxNum))) continue;
     const v = manualOverrides[Number(boxNum)];
     if (v != null) params.set(paramName, String(v));
   }
@@ -606,7 +614,7 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
     const params = new URLSearchParams({ year: decl.year, period: decl.period, tipo });
 
     if (identChecks) applyIdentParams(params, identChecks);
-    if (manualOverrides) applyBoxParams(params, manualOverrides);
+    if (manualOverrides) applyBoxParams(params, manualOverrides, identChecks);
 
     const url = `${base}/fiscal303/generate?${params}`;
     const res = await apiFetch(url, { baseUrl: '', token });
@@ -1039,6 +1047,34 @@ export function getBoxValue(liveBoxes, num) {
 export function withBox111NonZeroFlag(identification, liveBoxes) {
   const box111 = getBoxValue(liveBoxes, 111);
   return { ...identification, _box111NonZero: box111 != null && Number(box111) !== 0 };
+}
+
+// ETP-5597 pt.1 — superset of `withBox111NonZeroFlag`: also merges `_box69Positive` (casilla 69,
+// "Resultado de la autoliquidación", strictly > 0 — an amount to pay), which fm303Layouts.js's
+// tipo_declaracion options read through `disabledWhen` to lock Compensación/Devolución types.
+// A missing box 69 (nothing computed yet) is `false`, so nothing is locked before the first
+// calculation. Use this wherever the identification object feeds the layout engine (rendering
+// and pre-flight gates); `withBox111NonZeroFlag` stays for callers that only need box 111.
+export function withDerivedBoxFlags(identification, liveBoxes) {
+  const box69 = getBoxValue(liveBoxes, 69);
+  return {
+    ...withBox111NonZeroFlag(identification, liveBoxes),
+    _box69Positive: box69 != null && Number(box69) > 0,
+  };
+}
+
+// ETP-5597 pt.4 — casillas 70 ("A deducir") and 109 ("Devoluciones acordadas por la AEAT") only
+// belong to an autoliquidación rectificativa (or, in the pre-October-2024 layouts, to a
+// complementaria — see `_EDITABLE_WHEN_COMPLEMENTARIA` in fm303Layouts.js). They are editable
+// only while that check is set, and their values are DROPPED when it is unset rather than kept
+// hidden: unlike the bank fields (where Classic's own blanking guarantees a correct file), Classic
+// writes box 109 unconditionally (`AEAT303Report2023#generatePage3` reads
+// `ReturnsPendingSettlement` with no rectificativa guard) and both boxes feed casilla 71 on
+// screen, so a stale value would silently change the declared result.
+export const RECTIFICATION_ONLY_BOXES = [70, 109];
+
+export function isRectificationAdjustmentActive(identChecks) {
+  return identChecks?.rectificativa === true || identChecks?.complementaria === true;
 }
 
 // Exported (ETP-5409) so FmModel303Page.jsx's parseBoxInput can reuse the same 2-decimal

@@ -45,7 +45,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - The curated onboarding dataset skips business partner rows and locations while still importing shared setup catalogs such as BP groups, payment terms, and accounting foundations.
   - If no environments exist, the page switches to the environment creation flow.
   - The login form includes a forgot-password action that calls `/sws/go/password-reset/request`; the UI always shows neutral "reset email sent" messaging when the request succeeds.
-  - Reset links open `/onboarding?resetToken=...`, render the reset-password form, call `/sws/go/password-reset/confirm`, clear any stored platform token on success, and show invalid/expired link errors inline when the backend rejects the token.
+  - Reset links open `/onboarding?resetToken=...`, render the reset-password form, call `/sws/go/password-reset/confirm`, clear any stored platform token on success, and show invalid/expired link errors inline when the backend rejects the token. The same form serves the SSO "set a password" link.
+  - Every new-password form (register, reset/set-password, the account-settings change/create password dialog, and the invitation fallback form) renders the shared live `PasswordStrengthChecklist` from etendo-go-core and keeps its submit disabled until `isStrongPassword` holds (ETP-5258).
+  - Reset, forgot-password, change-password and invitation errors are translated by backend `code` (`resolveAuthErrorMessage` / `AUTH_ERROR_UI_KEYS`); the backend's English `userMessage` is never rendered. An unknown/used/expired reset link returns `PASSWORD_RESET_INVALID` (ETP-5258).
   - Authenticated setup views include a change-password panel that calls `/sws/go/change-password`, requires the current password, stores the rotated platform token returned by the backend, and shows success or current-password errors inline.
   - Auth email UI calls never include provider payload fields such as `to`, `template`, `data`, sender, Reply-To, or provider metadata.
 - **Failure or edge behavior:**
@@ -61,7 +63,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - SSO accounts are born confirmed, and signing in through the identity provider clears any confirmation still pending on that address.
 - **Automated evidence:**
   - `../schema_forge_core/packages/etendo-go-core/test/onboardingOwnership.test.js` verifies the Core-owned API, state, SSO, password-policy, draft, and stream contracts. Schema Forge retains product composition coverage in `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx`.
-  - `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx` verifies forgot-password, reset-password, invalid reset link, change-password success, token refresh, and current-password failure states.
+  - `tools/app-shell/src/pages/__tests__/OnboardingPage.vitest.jsx` verifies forgot-password, reset-password, invalid reset link, change-password success, token refresh, and current-password failure states, plus the reset-view strength checklist, submit gating and code-translated reset errors (ETP-5258). `tools/app-shell/src/components/__tests__/ChangePasswordDialog.vitest.jsx` covers the dialog checklist and gating; `../schema_forge_core/packages/etendo-go-core/test/authErrorUiKeys.test.js` covers `resolveAuthErrorMessage`.
   - `tools/app-shell/test/pwa.test.js` verifies that `OnboardingPage.jsx` clears caches on environment login.
   - Route protection and onboarding branching are code-backed in `tools/app-shell/src/App.jsx` and `tools/app-shell/src/pages/OnboardingPage.jsx`, but are not covered by a full browser test.
   - `etendo_core/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/onboarding/OnboardingDefaultCustomerServiceTest.java` verifies the default customer seed behavior, and `EtendoGoJwtServletOnboardingDatasetTest.java` verifies the seed runs after sequence generation and fails honestly if customer creation fails.
@@ -217,7 +219,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Three blocks, one three-column grid** (ETP-5509): `grid-template-columns:
   minmax(0,1fr) auto minmax(max-content,1fr)` — title block (column 1) → search slot (column 2)
   → quick actions (column 3). Each block is placed on an explicit column, so the search stays in
-  the middle column even when a page has no title and no back button.
+  the middle column even when a page has no title and no back button. The column gap is **20px**
+  (`gap-5`, ETP-5504 QA): the left column ends exactly 20px before the search's left edge, and
+  symmetrically the right column starts 20px after its right edge.
   - **Search** (`topbar-search-slot` > `global-search-trigger`): fixed `w-[392px]`, **exactly
     centered in the visible bar** (the header's border box) whatever the width of the title block
     or of the actions — the two side tracks are equal `1fr` tracks and the header has no
@@ -229,10 +233,16 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     shift left instead of being overlapped (cannot happen at ≥1280px thanks to the compact
     breakpoint below).
   - **Title / breadcrumb** (`topbar-title-block`): no fixed width cap — it is content-sized and
-    can use the whole left column (half of the space beside the search). Title and breadcrumb
-    elide with an ellipsis at the column edge and show their full text in a tooltip; the count
-    badge, `titleExtra` and the title `⋯` never shrink.
+    can use the whole left column (half of the space beside the search), so its right edge stops
+    exactly 20px before the search when its content is long. Title and breadcrumb elide with an
+    ellipsis at the column edge and show their full text in a tooltip; the count badge,
+    `titleExtra` and the title `⋯` never shrink. The title `⋯` (`topbar-more-actions`) sits in the
+    title row, right after the title (and count / `titleExtra`), not beside the whole block, so it
+    no longer keeps a long breadcrumb a kebab's width short of the column edge.
   - **Back button** (`topbar-back`, `onBack` page meta) still renders to the left of the title.
+    The report viewer (`/report-viewer?report=<id>`, every category) does **not** pass `onBack`
+    since ETP-5519, so no ← button shows there; its in-page **Cancelar** button (`action-cancel`)
+    returns to the report catalog.
 - **Breadcrumb levels.** `breadcrumb` page meta accepts either the historical `' / '`-joined
   string or an array of `string | { label, href?, onClick? }`. Up to 3 levels render as-is. With
   more than 3: first level, `⋯` (`topbar-breadcrumb-overflow`), current page
@@ -240,9 +250,24 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   hidden intermediate levels (`topbar-breadcrumb-overflow-item`) — never the current page. Levels
   with `href`/`onClick` navigate through the guarded navigate (unsaved-changes prompt applies);
   levels without one (menu folders) render as plain text / disabled items.
+  - **Shrink priority** (ETP-5504 QA, OBS-1) of a structured breadcrumb (array, or any breadcrumb
+    with a navigable level / with `⋯`): when the trail does not fit, the **current page level
+    gives way first** (it elides down to a 4rem minimum) and the ancestor levels keep their own
+    width, each label capped at **160px** (`max-w-[160px]`, pending UX confirmation) beyond which
+    it elides; only once the current page is at its minimum do the ancestors shrink (equally). The
+    row is a one-line CSS grid (`minmax(0,max-content)` per ancestor, `max-content` for `⋯`,
+    `minmax(4rem,1fr)` for the current page), not a flex row: in a flex row every level takes a
+    share of the shortage, and even a sub-pixel share makes the ellipsis eat a short ancestor. So
+    `Configuración / Tarifa / Tarifa de venta princ…` instead of
+    `Configurac… / Tar… / Tarifa de venta princ…`. The full trail is always in the tooltip. A
+    plain ≤3-level string breadcrumb with no navigable level stays one line that elides at the end.
   - Producers: `DetailView` publishes an array via `getBreadcrumbItems` (menu path + record
     title, with the window level linking back to `/<window>`). Every other producer still
     publishes a string and gets the same overflow behavior with non-navigable levels.
+  - The report viewer (`ReportViewerPage` → `ReportViewer`) publishes an array too:
+    `<category> / Informes / <report>`, where **Informes links back to the report catalog of the
+    same category** (`/report-viewer?category=<category>`, or `/report-viewer` without one). The
+    category level (e.g. Finanzas) is a menu folder with no route and stays plain text.
   - `useSetPageMeta` depends on `breadcrumbKey(meta.breadcrumb)` (content-based), because an
     array breadcrumb is a new reference on every render.
 - **Quick actions** (`topbar-quick-actions`). Tutorials (`WalkthroughLauncher`) and Copilot are
@@ -253,8 +278,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   `topbar-quick-actions-overflow-menu`), which renders only when it has something to hold. This
   is a different control from the title `⋯` (`topbar-more-actions`: Favorites / Page help).
   - Why 1366: with the rail expanded (240px) each side column gets
-    `(header - 392 search - 32 gaps) / 2`, and the actions get that minus their 24px right
-    inset: ~327px at 1366, enough for every action inline (~304px), but only ~284px at 1280.
+    `(header - 392 search - 40 gaps) / 2`, and the actions get that minus their 24px right
+    inset: ~323px at 1366, enough for every action inline (~304px), but only ~280px at 1280.
     Pending UX confirmation.
 - **Automated evidence:** `tools/app-shell/src/components/layout/TopBar/__tests__/TopBar.vitest.jsx`
   — grid placement of the three blocks, title and breadcrumb tooltips (opened via focus), search not absolute, back button
@@ -268,7 +293,12 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
      the back button): the search stays at the exact horizontal center of the visible top bar.
   3. Open a record whose menu path is deeper than two folders: the breadcrumb shows first level /
      `⋯` / record, and `⋯` lists the hidden levels.
-  4. Widen past 1366px and confirm any page quick actions come back inline and the right `⋯`
+  4. Open Tarifa de venta principal (Configuración / Tarifa) or a contact with a long name at
+     1280px: the ancestor levels stay readable and only the current page elides; the gap between
+     the breadcrumb and the search is 20px.
+  5. Open a report from Finanzas / Informes: clicking Informes in the breadcrumb returns to the
+     catalog; Finanzas is plain text.
+  6. Widen past 1366px and confirm any page quick actions come back inline and the right `⋯`
      disappears.
 
 #### 3.3 What a First Steps row can do (ETP-5364)
@@ -366,7 +396,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **User goal / entry point:** Approve or deny an OAuth2 client connection at `/authorize`.
 - **Main path behavior:**
   - With `client_id`, `redirect_uri`, `code_challenge`, and `response_type=code`, the page renders a consent screen.
-  - Missing `scope` defaults to `neo:read neo:write`.
+  - Missing `scope` defaults to `etendo:read etendo:write`.
   - The consent screen includes an **Access duration** selector (`oauthTokenValidity`) that lets the user choose the issued access token's validity period. Presets: **1 day** (default), **1 week**, **1 month**, and **No expiration** (labels `oauthValidity1Day` / `oauthValidity1Week` / `oauthValidity1Month` / `oauthValidityNever`). A live expiry preview shows the resulting expiration timestamp, or "No expiration" when that option is selected.
   - Approve posts to `/oauth2/authorize` with the bearer token, the PKCE parameters, and `validity_seconds` (the selected duration in seconds; `0` for "No expiration"), then redirects to the returned `redirect_url`.
   - **Backend contract:** the server normalizes `validity_seconds` before issuing the token — absent/non-numeric falls back to the 1-day default, values are clamped to a MIN of 300s (5 min) and a MAX of 2,592,000s (30 days), and `0` is preserved as a never-expiring token. The granted validity is persisted and reused on `refresh_token` grants, so a never-expiring token stays never-expiring. Full backend rules: `com.etendoerp.go/docs/package-architecture.md` → "Authorize-grant token validity policy".
@@ -708,24 +738,33 @@ The `date` field in `AddPaymentModal` / `InvoicePaymentModal` now carries a red 
 
 ## Dashboard period filter — session-scoped, resets on new session — ETP-4492
 
-The Dashboard period filter (the range selector: "Último año", "Últimos 90 días", "Últimos 30 días", "Mes en curso", "Año en curso") is scoped to the browser session rather than persisted indefinitely.
+The Dashboard period filter (the range selector: "Últimos 12 meses", "Últimos 90 días", "Últimos 30 días", "Mes en curso", "Año en curso") is scoped to the browser session rather than persisted indefinitely.
 
 **Behavior:**
 - The selected range persists across module navigation **within the same session** (it is stored in `sessionStorage` under `dashboard_date_range`).
-- It resets to the default **"Último año" (`lastYear`)** whenever a **new session** starts — a browser/tab close-and-reopen, or a logout followed by re-login.
+- It resets to the default **"Últimos 12 meses" (`lastYear`)** whenever a **new session** starts — a browser/tab close-and-reopen, or a logout followed by re-login.
 - Logout explicitly clears the stored range through the `useLogout()` choke point (`clearStoredDateRange()`), so a subsequent login — including a different user on a shared browser — never inherits the previous session's filter. This applies to every logout path: the user-menu "Log out", the post-password-change flow, and the automatic 401 auto-logout.
 
 **Manual verification path:**
 1. Open `/dashboard`, change the period filter to e.g. "Mes en curso".
 2. Navigate to another module and back to `/dashboard` — confirm the filter is still "Mes en curso" (persists within the session).
-3. Log out and log back in — confirm the filter is back to "Último año".
-4. Alternatively, close the browser tab and reopen the app — confirm the filter is "Último año".
+3. Log out and log back in — confirm the filter is back to "Últimos 12 meses".
+4. Alternatively, close the browser tab and reopen the app — confirm the filter is "Últimos 12 meses".
 
 **Source files**
 - `tools/app-shell/src/components/dashboard/DashboardDateRangeContext.jsx` — `sessionStorage`-backed range, `lastYear` default, `clearStoredDateRange()` export (also purges the legacy `localStorage` key).
 - `tools/app-shell/src/auth/useLogout.js` — the single logout choke point that calls `clearStoredDateRange()` before the core `logout()`.
 
 Full auth/session design and the "route every logout through `useLogout()`" convention: [`../architecture/07-auth-and-security.md`](../architecture/07-auth-and-security.md#logout-choke-point-uselogout).
+
+## Dashboard financial widgets — single-bucket chart and zero-profit headline — ETP-5493
+
+**"Evolución financiera" — single-bucket period.** When the selected period yields a single bucket (e.g. "Mes en curso" on the 1st of the month, or "Año en curso" in January), the line view draws that point centered with a dot marker instead of an invisible zero-length line, and the bar width is capped so a lone bar does not stretch across the whole chart.
+
+**"Resumen financiero" — zero net profit.** When net profit is 0 the headline is neutral and shows a Minus icon:
+- With no income and no expenses it reads "Sin ingresos ni gastos {period}".
+- With equal non-zero income and expenses it reads "Tus ingresos y gastos se igualaron {period}".
+- Any other case keeps the existing positive or negative headline unchanged.
 
 ## Secondary tab strip — full-bleed divider — ETP-4605
 

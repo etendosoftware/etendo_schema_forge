@@ -62,7 +62,7 @@ def _run(fake_agent):
         return asyncio.run(agent.run_probe(session=None, provider={}, prompt="hola", max_steps=5))
 
 
-CALL = AIMessage("", tool_calls=[{"name": "neo_list", "args": {}, "id": "c1"}])
+CALL = AIMessage("", tool_calls=[{"name": "etendo_list", "args": {}, "id": "c1"}])
 RESULT = ToolMessage("[]", tool_call_id="c1")
 ANSWER = AIMessage("listo")
 EMPTY = AIMessage("")
