@@ -720,6 +720,56 @@
           }
         ]
       }
+    },
+    {
+      "id": "unified-calendar-poc",
+      "description": "PROOF OF CONCEPT. Unified Calendar page: one month view overlaying several event sources (purchase invoice due dates, holidays, employee vacations) toggled from a side panel driven by a pluggable source registry. All events are static mock data; the page makes no backend request. Exists to validate the UX before any real source is wired.",
+      "owner": "valenvivaldi",
+      "jira": "ETP-5309",
+      "created": "2026-10-05",
+      "flag": {
+        "key": "unified-calendar-poc",
+        "defaultValue": false,
+        "ttl": "2026-11-30",
+        "ttlNote": "Short PoC TTL. By this date the PoC is either killed (delete the owned paths) or replaced by a real feature with real sources (purchase-invoice EM_ETGO_Due_Date, C_NonBusinessDay, an HR source) under its own flag.",
+        "symbols": [
+          "unified-calendar-poc",
+          "UNIFIED_CALENDAR_POC",
+          "UnifiedCalendarPage",
+          "unified-calendar",
+          "Unified Calendar",
+          "ucal"
+        ],
+        "$symbolsComment": "UnifiedCalendarPage is how runtime-routes.jsx references the feature without naming the flag; `unified-calendar` is the menu.json item name, the route path and the navigationExpectations.js catalog entry; `Unified Calendar` is the menu label key in the ui section of en_US/es_ES/es_AR; `ucal` is the prefix of every genericLabels key this feature adds to the three locale files, none of which contains the flag key."
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/pages/UnifiedCalendarPage.jsx",
+          "tools/app-shell/src/pages/unified-calendar/"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Owned code only. menu.json, runtime-routes.jsx, SideMenu.jsx, CommandPalette.jsx, flag-keys.js, lib/flags/index.js, the three locale files and navigationExpectations.js are shared toggle points. The menu item sits in the Proof of Concept group, so it is visible only when BOTH proof-of-concept-menu (group gate in SideMenu.jsx) and this flag are on; retiring proof-of-concept-menu first would hide this page too.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/unified-calendar/__tests__/calendarGrid.vitest.js",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/UnifiedCalendarPage.vitest.jsx",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/layout/SideMenu/__tests__/SideMenu.vitest.jsx",
+            "expected": true,
+            "note": "Shared spec; the on/off case for the unified-calendar-poc item flag (independent of proof-of-concept-menu) is still to be added (item visible only with both proof-of-concept-menu and unified-calendar-poc on)."
+          }
+        ]
+      }
     }
   ]
 }

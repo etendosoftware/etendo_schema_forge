@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { useFeatureFlag, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS, PROOF_OF_CONCEPT_MENU } from '@/lib/flags';
+import { useFeatureFlag, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS, PROOF_OF_CONCEPT_MENU, UNIFIED_CALENDAR_POC } from '@/lib/flags';
 import { useVectorSearchContracts } from '@/hooks/useVectorSearchContracts.js';
 import { useRecentSearches } from '@/hooks/useRecentSearches.js';
 import { useVectorSearch } from '@/hooks/useVectorSearch.js';
@@ -97,6 +97,7 @@ export function CommandPalette() {
   const accountingProcessMonitorEnabled = useFeatureFlag(ACCT_PROCESS_MONITOR);
   const publicApiKeysEnabled = useFeatureFlag(PUBLIC_API_KEYS);
   const proofOfConceptMenuEnabled = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
+  const unifiedCalendarPocEnabled = useFeatureFlag(UNIFIED_CALENDAR_POC);
   const ui = useUI();
   const tMenu = useMenuLabel();
   const vectorSearchTargets = useMemo(
@@ -511,6 +512,7 @@ export function CommandPalette() {
             [ACCT_PROCESS_MONITOR]: accountingProcessMonitorEnabled,
             [PUBLIC_API_KEYS]: publicApiKeysEnabled,
             [PROOF_OF_CONCEPT_MENU]: proofOfConceptMenuEnabled,
+            [UNIFIED_CALENDAR_POC]: unifiedCalendarPocEnabled,
           };
           const visibleItems = group.items.filter(i => !i.hidden
             && (!i.featureFlag || featureFlagValues[i.featureFlag] === true)

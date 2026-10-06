@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
+//
 // Direct unit tests for the helper module extracted from DetailView (ETP-4730).
 //
 // The pre-existing DetailView.*Helpers suites reach these same functions through
@@ -45,6 +47,7 @@ import {
   runAddLineAction,
   resolveAddLineLabel,
   buildInitialTabs,
+  getCustomTabSaveFirstHint,
   buildLineRowClickHandler,
   maybeSaveBeforeProcess,
   maybeSaveBeforeConfirm,
@@ -756,6 +759,126 @@ describe('buildInitialTabs (ETP-4415 — cross-group tabOrder sort)', () => {
       ],
     }));
     expect(tabs.map(t => t.key)).toEqual(['custom:pricing', 'custom:attachments', 'accounting']);
+  });
+});
+
+// A 'tab'-placement custom component that cannot work on an unsaved record declares
+// `requiresSavedRecord` (true or a predicate over its props) and `savedRecordHintKey`.
+describe('getCustomTabSaveFirstHint', () => {
+  const ui = (key) => `t:${key}`;
+
+  function SavedOnly() { return null; }
+  SavedOnly.requiresSavedRecord = true;
+  SavedOnly.savedRecordHintKey = 'savedOnlyHint';
+
+  function Attachments() { return null; }
+  Attachments.requiresSavedRecord = (props = {}) => !props.config?.saveBeforeAttach;
+  Attachments.savedRecordHintKey = 'attachmentsSaveFirstHint';
+
+  function Plain() { return null; }
+
+  it('returns the translated hint for a new record when the static is true', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: SavedOnly }, true, ui)).toBe('t:savedOnlyHint');
+  });
+
+  it('returns null for a saved record', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: SavedOnly }, false, ui)).toBeNull();
+  });
+
+  it('returns null for a component without the static', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Plain }, true, ui)).toBeNull();
+  });
+
+  it('returns null for a tab entry without a Component', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x' }, true, ui)).toBeNull();
+    expect(getCustomTabSaveFirstHint(null, true, ui)).toBeNull();
+  });
+
+  it('evaluates a predicate static against the tab props: attachments without saveBeforeAttach is gated', () => {
+    const ct = { key: 'attachments', Component: Attachments, props: { config: {} } };
+    expect(getCustomTabSaveFirstHint(ct, true, ui)).toBe('t:attachmentsSaveFirstHint');
+  });
+
+  it('attachments with saveBeforeAttach: true is not gated (the tab saves the header itself)', () => {
+    const ct = { key: 'attachments', Component: Attachments, props: { config: { saveBeforeAttach: true } } };
+    expect(getCustomTabSaveFirstHint(ct, true, ui)).toBeNull();
+  });
+
+  it('passes an empty object to the predicate when the tab has no props', () => {
+    const predicate = vi.fn(() => true);
+    function Comp() { return null; }
+    Comp.requiresSavedRecord = predicate;
+    Comp.savedRecordHintKey = 'k';
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Comp }, true, ui)).toBe('t:k');
+    expect(predicate).toHaveBeenCalledWith({});
+  });
+
+  it('does not evaluate the predicate for a saved record', () => {
+    const predicate = vi.fn(() => true);
+    function Comp() { return null; }
+    Comp.requiresSavedRecord = predicate;
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Comp }, false, ui)).toBeNull();
+    expect(predicate).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty (non-null) hint when the static is set without a hint key, so the tab still disables', () => {
+    function Comp() { return null; }
+    Comp.requiresSavedRecord = true;
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Comp }, true, ui)).toBe('');
+  });
+});
+
+describe('buildInitialTabs — saveFirstHint on custom tab entries', () => {
+  function Attachments() { return null; }
+  Attachments.requiresSavedRecord = (props = {}) => !props.config?.saveBeforeAttach;
+  Attachments.savedRecordHintKey = 'attachmentsSaveFirstHint';
+  function Pricing() { return null; }
+
+  function makeProps(overrides = {}) {
+    return {
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      secondaryHooks: [],
+      panelCounts: {},
+      ui: (key) => `t:${key}`,
+      DetailTable: null,
+      detailLabel: 'Lines',
+      detailEntity: 'orderLine',
+      hook: { children: [] },
+      CustomLines: null,
+      customTabsAfterBottom: false,
+      tabCustomTabs: [
+        { key: 'pricing', label: 'Price', placement: 'tab', Component: Pricing },
+        { key: 'attachments', labelKey: 'attachments', placement: 'tab', Component: Attachments, props: { config: {} } },
+      ],
+      customTabCounts: {},
+      customTabVisibility: {},
+      ...overrides,
+    };
+  }
+
+  const byKey = (tabs) => Object.fromEntries(tabs.map(t => [t.key, t]));
+
+  it('new record: the gated custom tab carries the translated hint, the others carry null', () => {
+    const tabs = byKey(buildInitialTabs(makeProps({ isNew: true })));
+    expect(tabs['custom:attachments'].saveFirstHint).toBe('t:attachmentsSaveFirstHint');
+    expect(tabs['custom:pricing'].saveFirstHint).toBeNull();
+    expect(tabs.accounting.saveFirstHint).toBeUndefined();
+  });
+
+  it('saved record: no custom tab carries a hint', () => {
+    const tabs = byKey(buildInitialTabs(makeProps({ isNew: false })));
+    expect(tabs['custom:attachments'].saveFirstHint).toBeNull();
+    expect(tabs['custom:pricing'].saveFirstHint).toBeNull();
+  });
+
+  it('new record with saveBeforeAttach: the attachments tab stays enabled', () => {
+    const tabs = byKey(buildInitialTabs(makeProps({
+      isNew: true,
+      tabCustomTabs: [
+        { key: 'attachments', labelKey: 'attachments', placement: 'tab', Component: Attachments, props: { config: { saveBeforeAttach: true } } },
+      ],
+    })));
+    expect(tabs['custom:attachments'].saveFirstHint).toBeNull();
   });
 });
 

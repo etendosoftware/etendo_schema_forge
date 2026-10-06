@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/TabStripButton.jsx
 /**
  * ETP-4404 — custom tab (placement 'tab') save-header-first wiring.
  *
@@ -376,5 +378,85 @@ describe('renderCustomTabPanels — passes isDocumentReadOnly through (ETP-5205)
     });
 
     expect(stubProps.isDocumentReadOnly).toBeFalsy();
+  });
+});
+
+// A custom tab whose Component declares `requiresSavedRecord` (e.g. Attachments
+// without `saveBeforeAttach`) renders its strip button disabled on a new record —
+// in both the main strip and the customTabsAfterBottom strip — and cannot become active.
+describe('custom tab that requires a saved record — disabled tab button', () => {
+  const GatedTab = () => <div data-testid="gated-custom-tab" />;
+  GatedTab.requiresSavedRecord = (props = {}) => !props.config?.saveBeforeAttach;
+  GatedTab.savedRecordHintKey = 'attachmentsSaveFirstHint';
+  const OtherTab = () => <div data-testid="other-custom-tab" />;
+
+  const GATED = { key: 'attachments', labelKey: 'attachments', placement: 'tab', Component: GatedTab, props: { config: {} } };
+  const OTHER = { key: 'pricing', label: 'Price', placement: 'tab', Component: OtherTab };
+
+  describe('main tab strip', () => {
+    it('new record: the tab is aria-disabled with the hint and clicking it does not activate it', async () => {
+      setNewRecordHook();
+      await act(async () => { renderView({ recordId: 'new', customTabs: [GATED] }); });
+
+      const btn = screen.getByTestId('tab-custom:attachments');
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('title', 'attachmentsSaveFirstHint');
+
+      await act(async () => { btn.click(); });
+      expect(screen.getByTestId('gated-custom-tab')).not.toBeVisible();
+      expect(screen.getByTestId('mock-detail-table')).toBeVisible();
+    });
+
+    it('saved record: the tab is enabled and clicking it activates its panel', async () => {
+      await act(async () => { renderView({ customTabs: [GATED] }); });
+
+      const btn = screen.getByTestId('tab-custom:attachments');
+      expect(btn).not.toHaveAttribute('aria-disabled');
+      expect(btn).not.toHaveAttribute('title');
+
+      await act(async () => { btn.click(); });
+      expect(screen.getByTestId('gated-custom-tab')).toBeVisible();
+    });
+
+    it('new record with saveBeforeAttach: the tab stays enabled and activates', async () => {
+      setNewRecordHook();
+      const ct = { ...GATED, props: { config: { saveBeforeAttach: true } } };
+      await act(async () => { renderView({ recordId: 'new', customTabs: [ct] }); });
+
+      const btn = screen.getByTestId('tab-custom:attachments');
+      expect(btn).not.toHaveAttribute('aria-disabled');
+      await act(async () => { btn.click(); });
+      expect(screen.getByTestId('gated-custom-tab')).toBeVisible();
+    });
+  });
+
+  describe('customTabsAfterBottom strip', () => {
+    it('new record: the tab is aria-disabled with the hint and clicking it keeps the other tab active', async () => {
+      setNewRecordHook();
+      await act(async () => {
+        renderView({ recordId: 'new', customTabs: [OTHER, GATED], customTabsAfterBottom: true });
+      });
+
+      const btn = screen.getByTestId('tab-custom:attachments');
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('title', 'attachmentsSaveFirstHint');
+      expect(screen.getByTestId('tab-custom:pricing')).not.toHaveAttribute('aria-disabled');
+
+      await act(async () => { btn.click(); });
+      expect(screen.getByTestId('gated-custom-tab')).not.toBeVisible();
+      expect(screen.getByTestId('other-custom-tab')).toBeVisible();
+    });
+
+    it('saved record: the tab is enabled and clicking it activates its panel', async () => {
+      await act(async () => {
+        renderView({ customTabs: [OTHER, GATED], customTabsAfterBottom: true });
+      });
+
+      const btn = screen.getByTestId('tab-custom:attachments');
+      expect(btn).not.toHaveAttribute('aria-disabled');
+      await act(async () => { btn.click(); });
+      expect(screen.getByTestId('gated-custom-tab')).toBeVisible();
+      expect(screen.getByTestId('other-custom-tab')).not.toBeVisible();
+    });
   });
 });

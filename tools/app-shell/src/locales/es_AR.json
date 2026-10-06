@@ -16448,6 +16448,9 @@
     "Quick Purchase Order": {
       "label": "Compra Rápida"
     },
+    "Unified Calendar": {
+      "label": "Calendario unificado"
+    },
     "Connections": {
       "label": "Conexiones"
     },
@@ -16609,6 +16612,16 @@
     }
   },
   "genericLabels": {
+    "ucalSources": "Fuentes de eventos",
+    "ucalSourcesHint": "Elegí qué calendarios superponer.",
+    "ucalSourcePurchaseInvoices": "Vencimientos de facturas de compra",
+    "ucalSourceHolidays": "Feriados",
+    "ucalSourceVacations": "Vacaciones de empleados",
+    "ucalToday": "Hoy",
+    "ucalPrevMonth": "Mes anterior",
+    "ucalNextMonth": "Mes siguiente",
+    "ucalDayEvents": "{n} eventos",
+    "ucalMockNotice": "Prueba de concepto: datos de demostración, sin conexión con el sistema.",
     "acctProcessPageTitle": "Proceso contable",
     "acctProcessPageSubtitle": "Estado e historial de ejecuciones del proceso contable programado.",
     "acctProcessNoAccessTitle": "No tienes acceso a esta vista",
@@ -20877,6 +20890,7 @@
     "attachmentsDeleteAllError": "Error al eliminar todos los adjuntos",
     "attachmentsConfirmDelete": "¿Eliminar este adjunto?",
     "attachmentsEditDescription": "Editar descripción",
+    "attachmentsSaveFirstHint": "Guarda el documento antes de adjuntar archivos",
     "attachmentsDescription": "Descripción",
     "attachmentsNoFiles": "Aún no hay adjuntos",
     "attachmentsUploading": "Subiendo…",
