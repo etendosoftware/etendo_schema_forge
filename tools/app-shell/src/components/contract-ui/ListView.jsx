@@ -389,6 +389,35 @@ function buildEmptyListContext({ hook, narrowed, onCreate, onImport, importConfi
 
 // Extracted so the guard/try-finally doesn't add to ListView's own cognitive
 // complexity (S3776) — same rationale as the other top-level helpers above.
+// The New/import wiring below is computed through these helpers so their branches stay
+// out of ListView's own cognitive complexity (S3776) — same rationale as above.
+function canCreateRecords(hideCreate, windowReadOnly) {
+  return !hideCreate && !windowReadOnly;
+}
+
+function offersImportInNewMenu(canCreate, visibleNewActions) {
+  return canCreate && visibleNewActions.some((action) => action.opensImportDialog);
+}
+
+function emptyListEntryPoints({ canCreate, handleNew, importEnabled, openImportDialog }) {
+  return {
+    onCreate: canCreate ? handleNew : undefined,
+    onImport: importEnabled ? openImportDialog : undefined,
+  };
+}
+
+// Split group: each segment carries its own corners, so the wrapper must not clip —
+// overflow-hidden would cut the offset keyboard focus ring.
+function newButtonGroupClass(isSplitNew) {
+  const clip = isSplitNew ? '' : ' overflow-hidden';
+  return `inline-flex items-stretch rounded-lg shadow-sm ml-3${clip}`;
+}
+
+function newButtonClass(isSplitNew) {
+  const focusRing = isSplitNew ? ` ${SPLIT_NEW_FOCUS_RING}` : '';
+  return `rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors${focusRing}`;
+}
+
 async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }) {
   if (isPrinting) return;
   setIsPrinting(true);
@@ -1129,7 +1158,7 @@ export function ListView({
   const listBarHidden = listViewOptions?.hideListBar ?? hideListBar;
 
   // The New action, shared by the toolbar button and the empty-list context below.
-  const canCreate = !hideCreate && !windowReadOnly;
+  const canCreate = canCreateRecords(hideCreate, windowReadOnly);
   const handleNew = useCallback(
     () => (onNew ? onNew() : navigate(`/${windowName}/new`)),
     [onNew, navigate, windowName],
@@ -1143,13 +1172,12 @@ export function ListView({
   const importEnabled = Boolean(importConfig?.enabled);
   const visibleNewActions = newActions.filter((action) => !action.opensImportDialog || importEnabled);
   const isSplitNew = visibleNewActions.length > 0;
-  const importInNewMenu = canCreate && visibleNewActions.some((action) => action.opensImportDialog);
+  const importInNewMenu = offersImportInNewMenu(canCreate, visibleNewActions);
 
   const emptyListContext = buildEmptyListContext({
     hook,
     narrowed: hasUserNarrowing({ columnFilters, advancedFilterPart, subsetFilters, activeSubsetIndex, quickFilters, activeFilterIndices }),
-    onCreate: canCreate ? handleNew : undefined,
-    onImport: importEnabled ? openImportDialog : undefined,
+    ...emptyListEntryPoints({ canCreate, handleNew, importEnabled, openImportDialog }),
     importConfig,
   });
 
@@ -1478,11 +1506,9 @@ export function ListView({
                   )}
                   {/* Split "New" button */}
                   {canCreate && (
-                    // Split group: each segment carries its own corners, so the wrapper must not
-                    // clip — overflow-hidden would cut the offset keyboard focus ring.
-                    <div className={`inline-flex items-stretch rounded-lg shadow-sm ml-3${isSplitNew ? '' : ' overflow-hidden'}`}>
+                    <div className={newButtonGroupClass(isSplitNew)}>
                       <Button
-                        className={`rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors${isSplitNew ? ` ${SPLIT_NEW_FOCUS_RING}` : ''}`}
+                        className={newButtonClass(isSplitNew)}
                         data-testid="action-new"
                         onClick={handleNew}
                       >
