@@ -49,12 +49,22 @@ const ACCOUNT_EMAIL_KEY = 'sf_account_email';
  * runs on every session change including the automatic 401 logout.
  */
 let identityGeneration = 0;
+let identityResetBarrier = Promise.resolve();
+
+/** Serializes provider cleanup so a new identity cannot be assigned over a pending reset. */
+export function waitForIdentityReset() {
+  return identityResetBarrier;
+}
 
 export function clearAccountIdentity(storage = globalThis.localStorage) {
   identityGeneration += 1;
   resetExposureCache();
   clearSessionIdentity();
-  const cleared = Promise.allSettled([reset(), OpenFeature.setContext({})]);
+  const cleared = identityResetBarrier.then(() => Promise.allSettled([
+    reset(),
+    OpenFeature.setContext({}),
+  ]));
+  identityResetBarrier = cleared.catch(() => {});
   try {
     storage?.removeItem(ACCOUNT_ID_KEY);
     storage?.removeItem(ACCOUNT_EMAIL_KEY);
@@ -272,6 +282,8 @@ export async function refreshAccountIdentity(
   };
   if (typeof fetchImpl !== 'function') return undefined;
   try {
+    await waitForIdentityReset();
+    if (!stillCurrent()) return undefined;
     const res = await fetchImpl(`${apiBase}/sws/neo/session`, {
       baseUrl: '',
       headers: authHeaders(token),

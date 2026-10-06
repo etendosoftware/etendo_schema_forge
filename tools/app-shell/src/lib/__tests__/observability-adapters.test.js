@@ -146,6 +146,14 @@ describe('Datadog observability adapter', () => {
     assert.ok(!result.includes('super-secret-token'));
   });
 
+  it('redacts quoted JSON-like credential pairs in error text', () => {
+    const result = redactErrorText('{"authorization":"Bearer super-secret-token","token":"private"}');
+    assert.match(result, /"authorization": "\[redacted\]"/i);
+    assert.match(result, /"token": "\[redacted\]"/i);
+    assert.ok(!result.includes('super-secret-token'));
+    assert.ok(!result.includes('private'));
+  });
+
   it('starts a fresh RUM view when the tenant changes, without doing so on logout', async () => {
     const { calls, sdk } = sdkRecorder();
     const provider = createDatadogProvider({ env: datadogEnv, loader: async () => ({ datadogRum: sdk }) });
@@ -349,6 +357,8 @@ describe('private source-map release policy', () => {
     assert.match(workflow, /VITE_APP_VERSION: \$\{\{ github.sha \}\}/);
     assert.match(workflow, /--release-version "\$\{\{ github.sha \}\}"/);
     assert.match(workflow, /DATADOG_API_KEY: \$\{\{ secrets.DATADOG_API_KEY \}\}/);
+    assert.match(workflow, /if \[\[ -z "\$\{DATADOG_API_KEY:-\}" \]\]; then/);
+    assert.doesNotMatch(workflow, /if: \$\{\{ secrets\.DATADOG_API_KEY/);
     const upload = workflow.indexOf('datadog-ci sourcemaps upload');
     const remove = workflow.indexOf("find tools/app-shell/dist -name '*.map' -delete");
     assert.ok(upload >= 0 && remove > upload);

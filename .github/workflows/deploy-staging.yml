@@ -168,11 +168,14 @@ jobs:
         # .env.production (committed) provides VITE_MOCK=false and VITE_API_BASE=/etendo
 
       - name: Upload Datadog source maps
-        if: ${{ secrets.DATADOG_API_KEY != '' }}
         env:
           DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DATADOG_SITE: ${{ vars.DATADOG_SITE || 'datadoghq.eu' }}
         run: |
+          if [[ -z "${DATADOG_API_KEY:-}" ]]; then
+            echo "Datadog API key is not configured; skipping source-map upload."
+            exit 0
+          fi
           npx datadog-ci sourcemaps upload tools/app-shell/dist \
             --service etendo-go-web \
             --release-version "${{ github.sha }}" \

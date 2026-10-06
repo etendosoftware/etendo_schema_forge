@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource.js';
 import { setSessionIdentity } from '../sessionIdentity.js';
-import { clearAccountIdentity, refreshAccountIdentity } from './bootstrap.js';
+import { clearAccountIdentity, refreshAccountIdentity, waitForIdentityReset } from './bootstrap.js';
 
 /**
  * Resolves the account identity flags are targeted on, once per signed-in session, and publishes
@@ -37,6 +37,7 @@ export function useAccountIdentity() {
       // Clear the old account before starting the new lookup. If the request fails,
       // the previous tenant must never remain in ConfigCat, RUM, or Mixpanel context.
       if (switched) await clearAccountIdentity();
+      else await waitForIdentityReset();
       if (cancelled) return;
       setSessionIdentity(nextIdentity);
       await refreshAccountIdentity({ token, apiBase: getApiBase() });

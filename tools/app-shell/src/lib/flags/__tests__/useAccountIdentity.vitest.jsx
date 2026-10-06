@@ -6,7 +6,12 @@ vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => auth.current }));
 vi.mock('@/hooks/useNeoResource.js', () => ({ getApiBase: () => 'https://api' }));
 const refreshAccountIdentity = vi.hoisted(() => vi.fn());
 const clearAccountIdentityMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-vi.mock('../bootstrap.js', () => ({ refreshAccountIdentity, clearAccountIdentity: clearAccountIdentityMock }));
+const waitForIdentityResetMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('../bootstrap.js', () => ({
+  refreshAccountIdentity,
+  clearAccountIdentity: clearAccountIdentityMock,
+  waitForIdentityReset: waitForIdentityResetMock,
+}));
 
 import { useAccountIdentity } from '../useAccountIdentity.js';
 import { clearSessionIdentity, getSessionIdentity } from '../../sessionIdentity.js';
@@ -22,6 +27,8 @@ describe('useAccountIdentity (ETP-5455)', () => {
   beforeEach(() => {
     refreshAccountIdentity.mockReset();
     refreshAccountIdentity.mockResolvedValue({ accountId: 'ACC-1' });
+    waitForIdentityResetMock.mockReset();
+    waitForIdentityResetMock.mockResolvedValue(undefined);
     localStorage.clear();
   });
 
@@ -72,6 +79,19 @@ describe('useAccountIdentity (ETP-5455)', () => {
     await waitFor(() => expect(refreshAccountIdentity).toHaveBeenCalled());
     expect(getItem).not.toHaveBeenCalledWith('sf_platform_token');
     getItem.mockRestore();
+  });
+
+  it('waits for the logout reset before assigning a newly authenticated identity', async () => {
+    let releaseReset;
+    waitForIdentityResetMock.mockReturnValueOnce(new Promise(resolve => { releaseReset = resolve; }));
+    auth.current = { token: null, isAuthenticated: true, username: 'ana', clientId: 'client-1' };
+
+    renderHook(() => useAccountIdentity());
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(getSessionIdentity()).toEqual({});
+
+    releaseReset();
+    await waitFor(() => expect(getSessionIdentity()).toEqual({ username: 'ana', clientId: 'client-1' }));
   });
 });
 
