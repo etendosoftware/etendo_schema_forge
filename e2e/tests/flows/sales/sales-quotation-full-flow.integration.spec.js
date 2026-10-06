@@ -1,3 +1,7 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/DocumentTotalsPanel.jsx
+// @covers artifacts/sales-quotation/custom/SendToEvaluationModal.jsx
+// @covers artifacts/sales-quotation/custom/QuotationConfirmModal.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -149,16 +153,32 @@ async function readDocumentTotals(page) {
  * `qtyFieldKey` cell holds a negative value. Reading the actual cell value
  * (rather than pattern-matching the row's rendered text) avoids false
  * positives from unrelated hyphens in a product name/description.
+ *
+ * The returned locator is pinned to the matched row's own record id
+ * (`page.getByTestId('line-row-<id>')`), never to its position. A positional
+ * `rows.nth(i)` is re-resolved on every use, so when the lines list re-orders
+ * after the search (it does: right after a line is added the new row can
+ * render below the baseline line, then move above it), the caller's next read
+ * of "row i" lands on the other line — the qty read `-2` at nth(1) and, 11 ms
+ * later, `1` at the same nth(1). The ids and quantities are read in ONE
+ * in-page evaluation so the id/quantity pairing cannot be split by a re-render
+ * either, and the read is polled until a negative row is rendered.
  */
-async function findNegativeLineRow(page, qtyFieldKey) {
+async function findNegativeLineRow(page, qtyFieldKey, timeoutMs = 15_000) {
   const rows = page.locator('[data-testid^="line-row-"]');
-  const count = await rows.count();
-  for (let i = 0; i < count; i++) {
-    const row = rows.nth(i);
-    const qtyText = await row.locator(`[data-cell-key="${qtyFieldKey}"]`).textContent().catch(() => '');
-    if (parseAmount(qtyText) < 0) return row;
-  }
-  throw new Error(`No line row with a negative "${qtyFieldKey}" was found`);
+  let negativeRowTestId = null;
+  await expect.poll(async () => {
+    const snapshot = await rows.evaluateAll((els, key) => els.map((el) => ({
+      testId: el.dataset.testid,
+      qty: el.querySelector(`[data-cell-key="${key}"]`)?.textContent ?? '',
+    })), qtyFieldKey);
+    negativeRowTestId = snapshot.find((r) => parseAmount(r.qty) < 0)?.testId ?? null;
+    return negativeRowTestId;
+  }, {
+    message: `A line row with a negative "${qtyFieldKey}" should be rendered`,
+    timeout: timeoutMs,
+  }).not.toBeNull();
+  return page.getByTestId(negativeRowTestId);
 }
 
 /**

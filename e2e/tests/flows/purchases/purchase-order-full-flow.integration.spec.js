@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/DocumentTotalsPanel.jsx
 import { test, expect } from '@playwright/test';
 import { apiAuthHeaders, login, navigateTo } from '../../helpers/auth.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
@@ -44,16 +46,28 @@ const RUN_INTEGRATION = process.env.E2E_SALES_INTEGRATION === '1';
 /**
  * Locates the line row whose given quantity cell is negative. Mirrors the
  * identically-named helper in sales-quotation-full-flow.integration.spec.js.
+ *
+ * The returned locator is pinned to the matched row's record id
+ * (`line-row-<id>`), never to its position: a positional `rows.nth(i)` is
+ * re-resolved on every use, so a lines list that re-orders after the search
+ * makes the caller's next read land on the other line. Ids and quantities are
+ * read in one in-page evaluation, polled until a negative row is rendered.
  */
-async function findNegativeLineRow(page, qtyFieldKey) {
+async function findNegativeLineRow(page, qtyFieldKey, timeoutMs = 15_000) {
   const rows = page.locator('[data-testid^="line-row-"]');
-  const count = await rows.count();
-  for (let i = 0; i < count; i++) {
-    const row = rows.nth(i);
-    const qtyText = await row.locator(`[data-cell-key="${qtyFieldKey}"]`).textContent().catch(() => '');
-    if (parseAmount(qtyText) < 0) return row;
-  }
-  throw new Error(`No line row with a negative "${qtyFieldKey}" was found`);
+  let negativeRowTestId = null;
+  await expect.poll(async () => {
+    const snapshot = await rows.evaluateAll((els, key) => els.map((el) => ({
+      testId: el.dataset.testid,
+      qty: el.querySelector(`[data-cell-key="${key}"]`)?.textContent ?? '',
+    })), qtyFieldKey);
+    negativeRowTestId = snapshot.find((r) => parseAmount(r.qty) < 0)?.testId ?? null;
+    return negativeRowTestId;
+  }, {
+    message: `A line row with a negative "${qtyFieldKey}" should be rendered`,
+    timeout: timeoutMs,
+  }).not.toBeNull();
+  return page.getByTestId(negativeRowTestId);
 }
 
 /**
