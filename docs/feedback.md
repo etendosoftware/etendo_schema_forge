@@ -3073,3 +3073,33 @@ is flaky on `develop` too (2/5 failures with the ETP-5611 UI files reverted).
 
 **Lesson:** for any pre-hook that writes to the request body, test the PATCH path against a live
 backend, not only POST — the NEO update filter is invisible to handler unit tests.
+
+---
+
+## [2026-10-05] ETP-5597 — Modelo 303 rectificativa with box 111 ≠ 0 passes the Go bank-data gate but Classic rejects it (known gap, not fixed)
+
+**Component:** `tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js`
+(bank-block requiredness) vs. Classic `org.openbravo.module.aeat303.es`,
+`AEAT303Report2024#checkBox111MandatoryParams` / `#checkIsDeclarationRMandatoryParams`.
+
+**Symptom:** a Modelo 303 autoliquidación rectificativa with a non-zero box 111 and marca SEPA
+`1` (Cuenta España) or `2` (Unión Europea SEPA) passes every Go pre-flight check with only marca
+SEPA + IBAN filled, but "Generar fichero 303" (and the AEAT telematic submission, which builds the
+same file) fails with Classic's `@AEAT303_section_bank_empty@` — "Debe rellenar los datos de la
+sección Devolución."
+
+**Root cause:** ETP-5597 made bank-block requiredness depend on the marca SEPA alone (marca 1/2 →
+marca SEPA + IBAN; marca 3 → every bank field). Classic still requires SWIFT-BIC, Banco, Dirección,
+Ciudad and Código País for **any** rectificativa with box 111 ≠ 0, whatever the marca. The two
+layers now disagree on that one case.
+
+**Decision:** deliberately not changed (2026-10-05). Classic is not patched under ETP-5597; the
+functional rule stands on the Go side. Workaround: for such a rectificativa, fill SWIFT-BIC and the
+Banco/Dirección/Ciudad/País fields (switching to marca 3 shows them).
+
+**Lesson:** when the Go UI relaxes a requiredness rule whose final validator lives in Classic, check
+the Classic writer's own mandatory-parameter checks in the same change — otherwise the UI gate
+passes and the failure only surfaces at file generation.
+
+**Reference:** `docs/generated-custom-windows/fiscal-models.md` → "Tipo de declaración vs. casilla
+69, bank block requiredness and boxes 70/109 (ETP-5597)", part 2.
