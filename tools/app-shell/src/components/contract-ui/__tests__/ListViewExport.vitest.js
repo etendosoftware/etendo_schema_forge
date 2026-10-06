@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
+// @covers tools/app-shell/src/components/contract-ui/ListExportButton.jsx
+// @covers tools/app-shell/src/components/contract-ui/useWindowImportDialog.js
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -76,8 +79,12 @@ describe('ListView export wiring', () => {
     expect(exportSrc).toMatch(/data-testid="ListView__exportButton"/);
     expect(src).toMatch(/data-testid="ListView__importButton"/);
     // Both buttons hang off `import.enabled` — a window with no import template has no columns
-    // to export either.
-    expect(src.match(/importConfig\?\.enabled && \(/g) ?? []).toHaveLength(2);
+    // to export either. When the window offers import inside the split New menu
+    // (`newActions[].opensImportDialog`), only the standalone import icon is hidden; export
+    // stays on the plain import gate.
+    expect(src).toMatch(/const importEnabled = Boolean\(importConfig\?\.enabled\);/);
+    expect(src).toMatch(/\{importEnabled && !importInNewMenu && \(\s*<Button(?:(?!<\/Button>)[\s\S])*?data-testid="ListView__importButton"/);
+    expect(src).toMatch(/\{importConfig\?\.enabled && \(\s*<ListExportButton/);
   });
 
   it('SHELL-02: the arrow follows the data, not the file', () => {
