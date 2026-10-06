@@ -3459,7 +3459,7 @@ restart — but it argues for running this fix close to a restart.
   `769A5DE5…`, no marker) — so a closed-only row DOES exist locally even though no product code
   writes `END_DATE` yet (test fixture). R37 dry-run: 6 `WOULD_APPLY`, all branch (A).
 
-## ETP-5047 — S1 R37 backfill guard narrowed to "no active row": close-on-cancel made the R42 edge reachable (2026-10-06)
+## ETP-5047 — S1 R37 backfill guard narrowed to "no row at all": close-on-cancel made the R42 edge reachable (2026-10-06)
 
 - **Wrong assumption:** "R37 branch (A) keying on *no open row* is harmless, because nothing writes
   `END_DATE`." **Fact:** ETP-5047 closes the row on `customer.subscription.deleted` (and on an
@@ -3470,10 +3470,17 @@ restart — but it argues for running this fix close to a restart.
   `legacy-productive` row seeded `active` (no status preference on the row route): a canceled
   customer read as paying again.
 - **Apply:** branch (A) of `@check` and the guards of `@apply` statements 1-2 now require *no
-  active subscription row, open or closed* (`isactive = 'Y'`, `END_DATE` ignored) — the same rows
-  `SubscriptionService#findLatest` answers from, and the only case in which
-  `TenantPlanService#resolvePlan` still consults the marker. Such a tenant now takes branch (B)
-  only: marker retired, nothing inserted. A tenant whose only rows are inactive is still
-  backfilled (`findLatest` ignores them, so the marker decides for it today). R37 is edited in
-  place, which is safe in either release order: before ETP-5047 deploys no tenant can have a
-  closed row, so every tenant the old text reached gets the same outcome from the new one.
+  subscription row at all* — `isactive` and `END_DATE` both ignored, the same "any row" predicate
+  as branch (B) and the retirement DELETE, so a tenant is either backfilled and retired or retired
+  only. Such a tenant now takes branch (B) only: marker retired, nothing inserted.
+- **Inactive rows block the backfill too (product decision, ETP-5047).** No product code ever sets
+  `isactive = 'N'` on an `etgo_subscription` row, so an inactive row is an operator's deliberate
+  switch-off; `findLatest` ignores it, but a backfilled active row would silently undo the
+  decision. Accepted consequence: a tenant whose only rows are inactive loses its marker without a
+  backfill and reads as free until the operator restores the row.
+- **Idempotency is unchanged in kind:** the inserted row is itself "a row", so `@check` (A) turns
+  false after one apply, and the guard still covers every row `etgo_sub_open_envclient_uq` counts.
+- R37 is edited in place (it has not reached a shared environment). Before ETP-5047 deploys no
+  tenant can have a closed row, so the only tenants whose outcome differs from the ETP-5046 text
+  are those an operator deactivated by hand — exactly the case the decision above changes on
+  purpose.

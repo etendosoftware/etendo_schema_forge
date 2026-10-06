@@ -2,7 +2,7 @@
 -- @gap: S1
 -- @risk: medium
 -- @type: sql
--- @description: Backfill one open ETGO_SUBSCRIPTION row on the grandfathered legacy-productive plan for every tenant carrying the AD_Preference ETGO_TenantPlan='productive' marker but no active subscription row (open or closed), copying Stripe ids from its ETGO_CHECKOUT_REQUEST when one exists, and retire the ETGO_TenantPlan preference of every tenant that has any ETGO_SUBSCRIPTION row (backfilled here or not, open or closed) in the SAME transaction (ETP-5046)
+-- @description: Backfill one open ETGO_SUBSCRIPTION row on the grandfathered legacy-productive plan for every tenant carrying the AD_Preference ETGO_TenantPlan='productive' marker but no subscription row at all (active or not, open or closed), copying Stripe ids from its ETGO_CHECKOUT_REQUEST when one exists, and retire the ETGO_TenantPlan preference of every tenant that has any ETGO_SUBSCRIPTION row (backfilled here or not, open or closed) in the SAME transaction (ETP-5046)
 
 -- Why this file is dated 2026-10-05 (READ BEFORE RE-DATING IT)
 -- --------------------------------------------------------------------------------------------
@@ -73,13 +73,13 @@
 --   * end_date IS NULL OR end_date >= start_date          -- we always write end_date = NULL (open)
 --   * PARTIAL UNIQUE INDEX etgo_sub_open_envclient_uq
 --       ON etgo_subscription(environment_client_id) WHERE isactive='Y' AND end_date IS NULL
---     i.e. AT MOST ONE OPEN SUBSCRIPTION PER TENANT. The backfill's `NOT EXISTS (active
+--     i.e. AT MOST ONE OPEN SUBSCRIPTION PER TENANT. The backfill's `NOT EXISTS (any
 --     subscription row)` guard that appears in BOTH @check and @apply is therefore not
---     decoration: it covers every row that index counts (and, since ETP-5047, the active closed
---     rows too -- see "BACKFILL GUARD" below), so it is what keeps a re-run, a concurrent run, or a
---     tenant that got a real subscription in the meantime from hitting that index. It is also what
---     makes @check converge to 0 rows after a successful @apply (two-layer idempotency, README
---     rule 2).
+--     decoration: it covers every row that index counts and more (since ETP-5047 also closed and
+--     inactive rows -- see "BACKFILL GUARD" below), so it is what keeps a re-run, a concurrent run,
+--     or a tenant that got a real subscription in the meantime from hitting that index. It is also
+--     what makes @check converge to 0 rows after a successful @apply (two-layer idempotency,
+--     README rule 2): the inserted row is itself "a row".
 --
 -- Why @apply ABORTS instead of inserting nothing when the plan row is missing
 -- --------------------------------------------------------------------------------------------
@@ -147,8 +147,9 @@
 -- A tenant that HAS a subscription row is on the row model: the row is its plan record, and any
 -- ETGO_TenantPlan marker it carries is stale whatever it says. So @check selects a tenant on
 -- either of two independent grounds, and @apply retires the marker in both:
---   (A) BACKFILL     -- an active productive marker and NO active subscription row, open or
---                       closed (the original gap; narrowed by ETP-5047, see "BACKFILL GUARD");
+--   (A) BACKFILL     -- an active productive marker and NO subscription row at all, active or
+--                       not, open or closed (the original gap; narrowed by ETP-5047, see
+--                       "BACKFILL GUARD");
 --   (B) RETIREMENT   -- ANY ETGO_TenantPlan row visible at the tenant AND ANY subscription row.
 -- Branch (B) exists because of develop's
 -- 20260929T190000Z__R42-paid-provisioning-commercial-metadata.sql (ETP-5548, immutable). R42
@@ -167,24 +168,29 @@
 -- (only a plan change or a cancel closes one), and keeping a marker next to a closed row is
 -- precisely the configuration that resurrects a canceled tenant through the fallback.
 --
--- BACKFILL GUARD -- "no ACTIVE row", not "no OPEN row" (ETP-5047)
+-- BACKFILL GUARD -- "no row at all", not "no OPEN row" (ETP-5047)
 -- --------------------------------------------------------------------------------------------
--- Branch (A) and statements 1-2 of @apply key on "active productive marker AND no ACTIVE
--- subscription row, open or closed". Until ETP-5047 they keyed on "no OPEN row", which was
--- equivalent while nothing wrote END_DATE. ETP-5047 closes a row when its subscription is
--- canceled, and makes the closed row answer for its tenant: SubscriptionService#findLatest reads
--- the open row, else the latest closed ACTIVE row, and TenantPlanService#resolvePlan consults the
--- ETGO_TenantPlan fallback ONLY when that finds nothing. So for a tenant with an active closed row
--- the marker no longer decides anything at runtime -- the tenant reads canceled. With the old guard
--- such a tenant, once R42 had re-inserted its marker (see the ORDERING INVARIANT), was backfilled a
--- fresh OPEN 'legacy-productive' row, seeded 'active' when no ETGO_SubscriptionStatus preference
--- exists -- which is the normal case for a tenant on the row route, whose lifecycle events write
--- the row and never the preferences -- and a customer who had canceled read as paying again.
--- The guard therefore mirrors findLatest exactly (isactive = 'Y', END_DATE ignored): the backfill
--- fires precisely for the tenants whose access the marker still decides, and never improves
--- anyone's access. Such a tenant now takes branch (B) only: the marker is retired, nothing is
--- inserted, and it keeps reading as canceled. A tenant whose only rows are INACTIVE is still
--- backfilled -- findLatest ignores those rows, so the fallback is what decides for it today.
+-- Branch (A) and statements 1-2 of @apply key on "active productive marker AND no subscription row
+-- at all" -- isactive and END_DATE both ignored, the same "any row" predicate as branch (B) and
+-- statement 3. Until ETP-5047 they keyed on "no OPEN row", which was equivalent while nothing wrote
+-- END_DATE and nothing deactivated a row. Two kinds of row now exist that the old guard ignored:
+--   * CLOSED rows. ETP-5047 closes a row when its subscription is canceled, and makes the closed
+--     row answer for its tenant: SubscriptionService#findLatest reads the open row, else the latest
+--     closed active row, and TenantPlanService#resolvePlan consults the ETGO_TenantPlan fallback
+--     ONLY when that finds nothing. With the old guard such a tenant, once R42 had re-inserted its
+--     marker (see the ORDERING INVARIANT), was backfilled a fresh OPEN 'legacy-productive' row,
+--     seeded 'active' when no ETGO_SubscriptionStatus preference exists -- the normal case on the
+--     row route, whose lifecycle events write the row and never the preferences -- and a customer
+--     who had canceled read as paying again.
+--   * INACTIVE rows. No product code ever sets isactive = 'N' on an etgo_subscription row, so one
+--     means an operator deliberately switched that subscription off. findLatest ignores such a row,
+--     so the marker would decide for the tenant again -- but backfilling a fresh active row would
+--     silently undo the operator's decision.
+-- So the backfill fires ONLY for a tenant with no subscription row whatsoever: the pre-ETP-5046
+-- cohort this fix exists for. Every other tenant with a marker takes branch (B) only: the marker is
+-- retired and nothing is inserted. Accepted consequence (product decision, ETP-5047): a tenant
+-- whose only rows are inactive loses its productive marker and gets no row, so it reads as free --
+-- the operator who deactivated the row is the one to restore it.
 --
 -- WHY THE DELETE IGNORES the preference's own value and isactive flag. @check keys on an ACTIVE
 -- 'productive' row, but the DELETE removes EVERY ETGO_TenantPlan row visible at the tenant,
@@ -240,8 +246,8 @@
 -- the ETGO_SubscriptionStatus preference R42 also reads. So a tenant whose ONLY subscription row
 -- was closed by ETP-5047's close-on-cancel before its first post-ETP-5046 chain runs DOES get an
 -- R42 marker. Until ETP-5047 that was an accepted residual (branch (A) then backfilled a fresh open
--- 'legacy-productive' row); the "BACKFILL GUARD" above closes it: the tenant has an active row, so
--- it takes branch (B) only and its marker is retired without an insert.
+-- 'legacy-productive' row); the "BACKFILL GUARD" above closes it: the tenant has a row, so it
+-- takes branch (B) only and its marker is retired without an insert.
 --
 -- ==> ANY FUTURE FIX MUST KEY ON etgo_subscription, NOT ON ETGO_TenantPlan. After this fix, the
 --     preference is present ONLY for tenants the backfill has not reached, so "has no productive
@@ -259,16 +265,18 @@
 
 -- @check
 -- Returns >=1 row when the fix IS needed, on either of two grounds (see "WIDENED RETIREMENT"):
---   (A) BACKFILL   -- the tenant carries an active productive plan marker AND has no ACTIVE
---                     subscription row, open or closed (see "BACKFILL GUARD");
+--   (A) BACKFILL   -- the tenant carries an active productive plan marker AND has NO
+--                     subscription row at all, active or not, open or closed (see
+--                     "BACKFILL GUARD");
 --   (B) RETIREMENT -- the tenant carries ANY ETGO_TenantPlan row (any value, any isactive) AND
 --                     has ANY subscription row (open or closed, active or not). This is what
 --                     catches a marker develop's R42 re-inserted next to an existing row.
 -- 0 rows => SKIPPED_NOT_NEEDED, @apply never runs. Converges to 0 after a successful @apply: (A)
--- turns false because the inserted row is itself an open subscription AND statement 3 retires the
--- marker; (B) turns false because statement 3 retires every marker row of a subscribed tenant.
+-- turns false because the inserted row is itself a subscription row AND statement 3 retires the
+-- marker; (B) turns false because statement 3 retires every marker row of a tenant with any row.
 -- After @apply the only marker that can remain is an inactive or non-productive one on a tenant
--- with NO subscription row at all, and that tenant matches neither branch.
+-- with NO subscription row at all (statement 2 inserts only for an active productive marker), and
+-- that tenant matches neither branch.
 SELECT 1
 FROM ad_client c
 WHERE c.ad_client_id = :client_id
@@ -284,7 +292,6 @@ WHERE c.ad_client_id = :client_id
       AND NOT EXISTS (
         SELECT 1 FROM etgo_subscription s
         WHERE s.environment_client_id = :client_id
-          AND s.isactive = 'Y'
       )
     )
     OR (
@@ -326,7 +333,6 @@ WHERE c.ad_client_id = :client_id
   AND NOT EXISTS (
     SELECT 1 FROM etgo_subscription s
     WHERE s.environment_client_id = :client_id
-      AND s.isactive = 'Y'
   )
   AND NOT EXISTS (
     SELECT 1 FROM etgo_plan p
@@ -335,7 +341,7 @@ WHERE c.ad_client_id = :client_id
   );
 
 -- Statement 2 of 3 -- the backfill itself. One open row per productive tenant, on the
--- grandfathered plan, guarded by the same "no active row" NOT EXISTS as @check branch (A), which
+-- grandfathered plan, guarded by the same "no row at all" NOT EXISTS as @check branch (A), which
 -- covers every row the partial unique index counts.
 --
 -- STATUS AND GRACE ANCHOR ARE SEEDED FROM THE LIFECYCLE PREFERENCES (ETP-5443)
@@ -357,8 +363,9 @@ WHERE c.ad_client_id = :client_id
 -- row status the reader maps back to CURRENT is the closest entitled value the STATUS check
 -- constraint allows. A backfilled 'canceled' row is left OPEN (end_date NULL), deliberately --
 -- NOT closed the way ETP-5047 closes a subscription canceled live: there is no provider end
--- instant to close it at, and nothing is gained by inventing one. It reads as canceled either way (STATUS canceled -> EXPIRED; the row makes the tenant productive whatever
--- its ETGO_EnvironmentType marker says, TenantEnvironmentLifecycleService#resolve), and a later
+-- instant to close it at, and nothing is gained by inventing one. It reads as canceled either way
+-- (STATUS canceled -> EXPIRED; the row makes the tenant productive whatever its
+-- ETGO_EnvironmentType marker says, TenantEnvironmentLifecycleService#resolve), and a later
 -- checkout for the tenant closes it and opens a fresh row (SubscriptionService#openSubscription).
 --
 -- grace_anchor comes from ETGO_SubscriptionDueAt (ETP-5047: the grace anchor has its own column;
@@ -479,7 +486,6 @@ WHERE c.ad_client_id = :client_id
   AND NOT EXISTS (
     SELECT 1 FROM etgo_subscription s
     WHERE s.environment_client_id = :client_id
-      AND s.isactive = 'Y'
   );
 
 -- Statement 3 of 3 -- PER-TENANT RETIREMENT of the legacy plan marker (see the header section
@@ -496,10 +502,12 @@ WHERE c.ad_client_id = :client_id
 -- statement above just inserted one" -- so it is self-healing for a tenant that obtained its
 -- subscription by any other route, and it retires a marker develop's R42 re-inserted next to an
 -- existing row (@check branch (B), "WIDENED RETIREMENT" in the header). The guard is a strict
--- superset of the old open-row guard, so every tenant the old statement retired is still retired.
--- When the guard is false the tenant has no subscription row at all -- then statement 2 did not
--- fire either, so its marker is inactive or non-productive (the fallback reads it as free anyway)
--- -- and the statement removes nothing.
+-- superset of the old open-row guard, so every tenant the old statement retired is still retired,
+-- and it is the exact complement of the backfill guard of statements 1-2 ("no row at all"): a
+-- tenant is either backfilled and retired, or retired only -- never left with a marker next to a
+-- row. When the guard is false the tenant still has no subscription row at all -- statement 2 did
+-- not insert one, so its marker is inactive or non-productive (the fallback reads it as free
+-- anyway) -- and the statement removes nothing.
 --
 -- Idempotency: after this statement a subscribed tenant has no preference left, so neither branch
 -- of @check can match on any later run and @apply is never invoked again.

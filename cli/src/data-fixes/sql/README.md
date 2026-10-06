@@ -107,8 +107,12 @@ physical-inventory correction first).
    worked example.
 4. **Decide "paying or free" from `etgo_subscription`, never from the `ETGO_TenantPlan`
    preference.** Since ETP-5046's R37 backfill the preference is retired for every tenant that has
-   any subscription row, and a tenant paid after ETP-5046 has it only when develop's R42 re-inserted
-   it (R37 then retires it). "No productive
+   any subscription row (active or not, open or closed), and R37 backfills a row only for a tenant
+   that has none. A tenant paid after ETP-5046 carries the marker in exactly two cases: develop's
+   R42 re-inserted it (R37 then retires it), or the paid upgrade's subscription write failed and
+   `EtendoGoJwtServlet#applyPaidUpgradeSideEffects` fell back to `TenantPlanService#markProductive`
+   as its safety net — the marker is then that tenant's only record of payment, and R37 backfills
+   it. "No productive
    preference" therefore no longer means "a free tenant" — increasingly it means "a paying tenant
    that has already been migrated". A fix keyed on the preference inverts its own intent, silently,
    on exactly the tenants that pay; for a fix that forces test mode (as R31 does) that routes real
