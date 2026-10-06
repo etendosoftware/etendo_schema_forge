@@ -3039,3 +3039,37 @@ before picking a type keeps both filters").
 **Lesson:** a URL write that runs later (a timer, a debounce, an awaited request) must not trust
 the router's functional `prev`. Read the latest params from a ref. The rule is also recorded in
 `docs/ui-customization.md` → `Table.ToolbarQuickFilter`.
+
+## [2026-10-05] ETP-5611 — Manual journals: four platform gaps found while fixing the window
+
+Found while fixing `simple-g-l-journal` (window guide: `docs/generated-custom-windows/simple-g-l-journal.md`
+→ "Manual journal fixes — ETP-5611"). Two are fixed generically, two are only worked around.
+
+**Fixed generically:**
+
+1. **Child-tab lists came back in random order.** With no `_sortBy`, `DefaultJsonDataService`
+   orders by `id` (UUID), and NEO never read the AD tab's `HQL_OrderBy_Clause`. Every lines tab
+   (orders, invoices, shipments, journals…) jumped after a save. NEO now applies a plain-property
+   tab order-by when no sort is given, on both REST and MCP — `com.etendoerp.go/docs/neo-headless.md`
+   §6.1.
+2. **Classic processes that read their action from the HTTP request.** `FIN_AddPaymentFromJournal`
+   reads `inpdocaction`, falling back to `CO`, so a NEO Reactivate silently completed the journal
+   again. Pattern documented in `docs/neo-headless-extensibility.md` (classic-process intercept).
+
+**Worked around, still open:**
+
+3. **A pre-hook's copy into a hidden field is dropped on PATCH/PUT.** `filterWriteRequest` runs
+   after the pre-hook and only `accountingDate` has a carve-out. The body-only `accountingDate →
+   documentDate` mirror passed its unit tests and failed on the first live PATCH; the handler now
+   writes the record instead. See `docs/neo-headless-extensibility.md` (date-mirror section).
+4. **`hideDeleteWhenComplete` does not reach the generated list.** The generator only forwards
+   `window.rowQuickActions` to `ListView`, so the list-row Delete stays visible on completed
+   documents. Worked around per window with `rowQuickActions.actions.delete.visibleWhen`;
+   forwarding the flag belongs in `schema_forge_core`'s generator (follow-up).
+
+**Also observed, not touched:** deleting a processed record answers `500 "Document
+posted/processed"` instead of a 4xx; `e2e/tests/flows/finance/reconciliation-difference.mocked.spec.js`
+is flaky on `develop` too (2/5 failures with the ETP-5611 UI files reverted).
+
+**Lesson:** for any pre-hook that writes to the request body, test the PATCH path against a live
+backend, not only POST — the NEO update filter is invisible to handler unit tests.

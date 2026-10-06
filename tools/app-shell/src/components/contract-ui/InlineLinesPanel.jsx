@@ -905,6 +905,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
       <MaskedAmountInput
         bare
         grouping={isTwoDecimal}
+        clearZeroOnFocus
         inputMode={col.type === 'integer' ? 'numeric' : 'decimal'}
         inputRef={inputRef}
         value={value}

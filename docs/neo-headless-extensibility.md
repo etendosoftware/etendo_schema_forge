@@ -963,6 +963,17 @@ unconditional `NeoHandlerUtils.mirrorFieldValue`. Do not migrate them to
 `mirrorAccountingDateOnCreate` without first making their accounting date visible — see the
 javadoc on `mirrorAccountingDateOnCreate` for the explicit warning.
 
+> **⚠️ A body mirror into a hidden field survives POST but not PATCH/PUT.** On create,
+> `filterCreateRequest` lets a handler-supplied read-only value through. On update,
+> `NeoCrudHandler` runs `filterWriteRequest` **after** the pre-hook and drops every field that is
+> not writable — so a value the hook copied into a `system` field silently disappears, with no
+> error. The windows above only work on edits because `NeoCrudHandler` re-injects
+> **`accountingDate`** specifically after filtering (a shared, name-based carve-out tolerated until
+> M4 — do not add another one for a different field). For any other hidden target, write it on the
+> record inside the pre-hook instead; the CRUD update flushes it in the same transaction. Reference:
+> `GlJournalHeaderHandler#mirrorDocumentDateOnRecord` (ETP-5611 — `accountingDate → documentDate`;
+> the body-only version passed every unit test and was caught only by a live PATCH).
+
 The generic `blockCalloutFieldUpdate` helper (used today only by
 `blockCalloutCurrencyUpdate`/ETP-4029) and its three-entry-point coverage requirement above remain
 valid guidance for a genuine field-independence guard — a field whose value must stay decoupled
@@ -996,7 +1007,7 @@ In both cases the symptom is the same: completing the document through NEO "work
    is**, not just `ProcessBundle`:
    - `ProcessBundle`-based process class (e.g. `FIN_AddPaymentFromJournal`, invoked as
      `new FIN_AddPaymentFromJournal().execute(bundle)`) — see
-     `GlJournalHeaderHandler#completeJournal`.
+     `GlJournalHeaderHandler#runDocumentAction`.
    - Plain CDI-injected utility class (e.g. `ProcessInvoiceUtil`, invoked as
      `processInvoiceUtil.process(...)`) obtained via
      `WeldUtils.getInstanceFromStaticBeanManager(ProcessInvoiceUtil.class)` — see
@@ -1035,7 +1046,20 @@ public NeoResponse handle(NeoContext ctx) {
 > `validateLineQtyBeforeComplete`; that guard was removed in ETP-5381 — see
 > `docs/generated-custom-windows/sales-invoice.md`.)
 
-Real implementations: `GlJournalHeaderHandler#completeJournal` (ETP-4244),
+> **⚠️ The classic process may read its action from the HTTP request, not from the bundle.**
+> `FIN_AddPaymentFromJournal` reads the document action with
+> `vars.getStringParameter("inpdocaction")` — a request parameter the Classic form posts — and
+> falls back to `CO` when it is absent. Under NEO the parameter is never there, so a Reactivate
+> (`RE`) request silently **completed** the journal again (ETP-5611). Set it on the request
+> wrapper before running the process: `RequestContext.get().setRequestParameter("inpdocaction",
+> docAction)`. Set it for **every** action, not only the non-default one: the parameter lives for
+> the rest of the HTTP request, so inside one `/sws/neo/batch` an earlier `RE` would turn a later
+> `CO` into a reactivate. Guard a missing request (non-HTTP channel) with a clear error instead of
+> running the process. Read the classic process before assuming its inputs come from
+> `bundle.getParams()`.
+
+Real implementations: `GlJournalHeaderHandler#runDocumentAction` (ETP-4244, Complete; Reactivate
+added in ETP-5611),
 `AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded` (ETP-4388, shared by
 `SalesInvoiceHeaderHandler` and `PurchaseInvoiceHeaderHandler`).
 
