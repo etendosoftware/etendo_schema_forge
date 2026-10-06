@@ -171,10 +171,14 @@ export async function createFlagProvider({ env = import.meta.env, logger = conso
   }
   if (env.VITE_CONFIGCAT_SDK_KEY) {
     const { ConfigCatWebProvider } = await loader();
-    return ConfigCatWebProvider.create(env.VITE_CONFIGCAT_SDK_KEY, {
+    const provider = ConfigCatWebProvider.create(env.VITE_CONFIGCAT_SDK_KEY, {
       pollIntervalSeconds: resolvePollSeconds(env.VITE_CONFIGCAT_POLL_SECONDS, logger),
       maxInitWaitTimeSeconds: 4,
     });
+    // Pin metadata independently of the provider class name so minification cannot
+    // fragment exposure telemetry across builds.
+    provider.metadata = { ...(provider.metadata || {}), name: CONFIGCAT_PROVIDER_NAME };
+    return provider;
   }
   return new TypedInMemoryProvider(buildInMemoryConfiguration());
 }

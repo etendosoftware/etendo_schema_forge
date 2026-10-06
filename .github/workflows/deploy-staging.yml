@@ -129,9 +129,15 @@ jobs:
           VITE_APP_ENV: ${{ steps.target.outputs.env_label }}
           VITE_RUM_APP_MONITOR_ID: ${{ steps.target.outputs.rum_app_monitor_id }}
           VITE_RUM_IDENTITY_POOL_ID: ${{ steps.target.outputs.rum_identity_pool_id }}
-          # Sentry — DSN as variable (public, baked into JS bundle), token as secret
-          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          # Datadog RUM — client credentials are public by design; API key remains secret for source maps.
+          VITE_DATADOG_ENABLED: "true"
+          VITE_DATADOG_APPLICATION_ID: ${{ vars.VITE_DATADOG_APPLICATION_ID }}
+          VITE_DATADOG_CLIENT_TOKEN: ${{ vars.VITE_DATADOG_CLIENT_TOKEN }}
+          VITE_DATADOG_SITE: ${{ vars.VITE_DATADOG_SITE || 'datadoghq.eu' }}
+          VITE_DATADOG_SERVICE: etendo-go-web
+          VITE_APP_VERSION: ${{ github.sha }}
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_SITE: ${{ vars.DATADOG_SITE || 'datadoghq.eu' }}
           # Mixpanel — token as secret, API host as variable
           VITE_MIXPANEL_ENABLED: "true"
           VITE_MIXPANEL_TOKEN: ${{ secrets.VITE_MIXPANEL_TOKEN }}
@@ -152,6 +158,20 @@ jobs:
           VITE_CONFIGCAT_SDK_KEY: ${{ steps.target.outputs.configcat_sdk_key }}
           VITE_CONFIGCAT_POLL_SECONDS: "60"
         # .env.production (committed) provides VITE_MOCK=false and VITE_API_BASE=/etendo
+
+      - name: Upload Datadog source maps
+        if: ${{ secrets.DATADOG_API_KEY != '' }}
+        env:
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_SITE: ${{ vars.DATADOG_SITE || 'datadoghq.eu' }}
+        run: |
+          npx datadog-ci sourcemaps upload tools/app-shell/dist \
+            --service etendo-go-web \
+            --release-version "${{ github.sha }}" \
+            --minified-path-prefix "~/"
+
+      - name: Remove source maps from deployment package
+        run: find tools/app-shell/dist -name '*.map' -delete
 
       - name: Generate reports manifest
         run: npx sf-generate-reports-manifest

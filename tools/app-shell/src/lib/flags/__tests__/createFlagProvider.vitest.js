@@ -30,6 +30,7 @@ describe('ConfigCat control plane selection', () => {
     const create = vi.fn(() => provider);
     const result = await createFlagProvider({ env, logger, loader: async () => ({ ConfigCatWebProvider: { create } }) });
     expect(result).toBe(provider);
+    expect(result.metadata.name).toBe('ConfigCatWebProvider');
     expect(create).toHaveBeenCalledWith('configcat-sdk-1', { pollIntervalSeconds: 15, maxInitWaitTimeSeconds: 4 });
   });
 

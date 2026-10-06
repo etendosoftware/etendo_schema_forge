@@ -103,6 +103,20 @@ describe('Datadog observability adapter', () => {
     assert.deepEqual(calls.slice(-4), [['stopSession'], ['clearUser'], ['clearAccount'], ['setGlobalContext', {}]]);
   });
 
+  it('redacts nested error causes recursively', () => {
+    const event = { error: { message: 'outer person@example.com', stack: 'https://go.example/app.js?token=secret', causes: [
+      { message: 'inner user@example.com', stack: 'password=secret https://go.example/error.js?email=private' },
+      { message: 'deep', causes: [{ message: 'deep@example.com', stack: 'token=private' }] },
+    ] } };
+    assert.equal(redactDatadogEvent(event), true);
+    assert.ok(!event.error.message.includes('@example.com'));
+    assert.ok(!event.error.stack.includes('token=secret'));
+    assert.ok(!event.error.causes[0].message.includes('@example.com'));
+    assert.ok(!event.error.causes[0].stack.includes('password=secret'));
+    assert.ok(!event.error.causes[1].causes[0].message.includes('@example.com'));
+    assert.ok(!event.error.causes[1].causes[0].stack.includes('token=private'));
+  });
+
   it('redacts automatic resource/view URLs and user/account PII', () => {
     const event = { view: { url: '/sales-order/123?token=private', referrer: '/purchase-order/456?email=private' },
       resource: { url: '/sales-order/123?token=private' }, context: { component: 'header', password: 'secret' },
@@ -275,7 +289,7 @@ describe('browser observability config', () => {
 
     assert.deepEqual(config.context, {
       app: 'app-shell',
-      environment: 'test',
+      environment: 'go.staging.etendo.cloud',
       hostname: 'go.staging.etendo.cloud',
       mockMode: false,
     });

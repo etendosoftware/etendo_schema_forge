@@ -109,8 +109,13 @@ function normalizeEventRoutes(event) {
 
 function redactEventError(event) {
   if (!event.error) return;
-  event.error.message = redactErrorText(event.error.message);
-  if (event.error.stack) event.error.stack = redactErrorText(event.error.stack);
+  const redactCause = cause => {
+    if (!cause || typeof cause !== 'object') return;
+    if ('message' in cause) cause.message = redactErrorText(cause.message);
+    if ('stack' in cause) cause.stack = redactErrorText(cause.stack);
+    if (Array.isArray(cause.causes)) cause.causes.forEach(redactCause);
+  };
+  redactCause(event.error);
 }
 
 function sanitizeEventIdentity(event) {
