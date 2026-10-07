@@ -40,8 +40,8 @@ const TRANSACTIONS_API_PATH = '/sws/neo/financial-account-transactions';
 // Movements CSV columns (key:Label:type). The Classic-parity transforms (type
 // /status labels, deposit/withdrawal split, synthetic "Payment", processed flag)
 // are pre-derived server-side on the transaction rows, so the generic exporter
-// stays a dumb serializer. `foreignAmount`/`foreignCurrency` are not exposed yet
-// → those keys are absent on the row and render as empty cells (as in Classic).
+// stays a dumb serializer. `foreignAmount`/`foreignCurrency` are only on the rows of
+// foreign-currency transactions (ETP-5657); elsewhere the keys are absent and the cells empty.
 // ETP-5020: this whole column list is a hardcoded, unlocalized mirror of
 // Classic's own CSV export headers (by design — every label here, not just
 // "G/L Item", stays in Classic's English regardless of active UI locale).

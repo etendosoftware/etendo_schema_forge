@@ -19254,6 +19254,8 @@
     "financeAccountMovementsNoDimensions": "No accounting dimensions",
     "financeAccountMovementsDimOrganization": "Organization",
     "financeAccountMovementsDimBpartner": "Business partner",
+    "financeAccountMovementsForeignAmount": "Foreign currency amount",
+    "financeAccountMovementsForeignRate": "Exchange rate",
     "financeAccountMovementsDimProject": "Project",
     "financeAccountMovementsDimCostcenter": "Cost center",
     "financeAccountMovementsDimProduct": "Product",

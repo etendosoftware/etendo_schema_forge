@@ -19490,6 +19490,8 @@
     "financeAccountMovementsNoDimensions": "Sin dimensiones contables",
     "financeAccountMovementsDimOrganization": "Organización",
     "financeAccountMovementsDimBpartner": "Contacto",
+    "financeAccountMovementsForeignAmount": "Importe en moneda extranjera",
+    "financeAccountMovementsForeignRate": "Tipo de cambio",
     "financeAccountMovementsDimProject": "Proyecto",
     "financeAccountMovementsDimCostcenter": "Centro de costos",
     "financeAccountMovementsDimProduct": "Producto",
