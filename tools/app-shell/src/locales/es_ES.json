@@ -20880,6 +20880,7 @@
     "backendError.userEmailLocked": "El correo electrónico solo puede modificarse si la invitación del usuario caducó o no se pudo entregar.",
     "backendError.userEmailRequired": "El correo electrónico es obligatorio.",
     "backendError.userEmailNotAGoUser": "Este usuario nunca fue invitado a Etendo (por ejemplo, una persona de contacto de un tercero). Modifique su correo desde la ficha del contacto.",
+    "backendError.contactEmailIsGoUser": "Este contacto es un usuario de Etendo. Modifique su correo desde Configuración > Usuarios.",
     "backendError.userEmailInvalid": "La dirección de correo electrónico no es válida.",
     "backendError.accessDeniedToSpec": "No tienes acceso para realizar esta acción.",
     "backendError.fieldTooLong": "Este valor es demasiado largo. No puede superar los {maxLength} caracteres.",

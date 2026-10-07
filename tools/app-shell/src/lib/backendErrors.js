@@ -329,6 +329,10 @@ const BACKEND_ERROR_MAP = {
   ...sameKeyEntries('backendError.userEmailNotAGoUser',
     "This user was never invited to Etendo (for example, a business partner contact person): edit its email through spec 'contacts', entity 'contact'"),
   ...sameKeyEntries('backendError.userEmailInvalid', 'Invalid email format'),
+  // ContactHandler (com.etendoerp.go, ETP-5194) — an email change on a business partner's contact
+  // person that is actually an Etendo user (owner, or invited) must go through the Users window.
+  ...sameKeyEntries('backendError.contactEmailIsGoUser',
+    "This contact is an Etendo user: change its email through spec 'user', entity 'user'"),
   // NeoRequestRouter.java:132,191 (com.etendoerp.go) — hardcoded English literal sent on every
   // 403 for a spec/window/report the current role cannot access, regardless of session locale
   // (ETP-5205). Read-only-role users hit this whenever a control that should have been disabled

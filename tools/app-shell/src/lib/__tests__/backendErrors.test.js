@@ -2786,6 +2786,10 @@ describe('user email correction messages (UserRoleAssignmentHandler)', () => {
       raw: "This user was never invited to Etendo (for example, a business partner contact person): edit its email through spec 'contacts', entity 'contact'",
       key: 'backendError.userEmailNotAGoUser',
     },
+    {
+      raw: "This contact is an Etendo user: change its email through spec 'user', entity 'user'",
+      key: 'backendError.contactEmailIsGoUser',
+    },
     { raw: 'Invalid email format', key: 'backendError.userEmailInvalid' },
   ];
   const en = JSON.parse(readFileSync(new URL('../../locales/en_US.json', import.meta.url), 'utf8'));
