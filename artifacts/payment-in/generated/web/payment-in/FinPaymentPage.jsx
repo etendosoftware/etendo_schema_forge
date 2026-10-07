@@ -34,7 +34,7 @@ const extraBadges = [
 const processes = [
   { name: 'Payment Process', label: 'processConfirm', style: 'positive', columnName: 'aPRMProcessPayment',
     displayLogicRaw: "@status@ = 'RPAP'", confirmModal: true },
-  { name: 'etprReactivatePayment', label: 'processReactivate', style: 'ghost-danger', columnName: 'etprReactivatePayment',
+  { name: 'etprReactivatePayment', label: 'processReactivate', style: 'primary-danger', columnName: 'etprReactivatePayment',
     displayLogicRaw: "@status@ != 'RPAP'" },
 ];
 // @sf-generated-end processes:finPayment

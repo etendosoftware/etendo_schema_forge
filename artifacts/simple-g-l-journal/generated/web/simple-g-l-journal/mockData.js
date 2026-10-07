@@ -186,7 +186,6 @@ export const gLJournal = [
 export const gLJournalLine = [
   {
     "id": "mock-gLJournalLine-001",
-    "lineNo": 10,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "USD",
     "foreignCurrencyCredit": "USD",
@@ -200,7 +199,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-002",
-    "lineNo": 20,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "EUR",
     "foreignCurrencyCredit": "EUR",
@@ -214,7 +212,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-003",
-    "lineNo": 30,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "GBP",
     "foreignCurrencyCredit": "GBP",
@@ -228,7 +225,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-004",
-    "lineNo": 40,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "USD",
     "foreignCurrencyCredit": "USD",
@@ -242,7 +238,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-005",
-    "lineNo": 50,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "EUR",
     "foreignCurrencyCredit": "EUR",
@@ -256,7 +251,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-006",
-    "lineNo": 60,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "GBP",
     "foreignCurrencyCredit": "GBP",
@@ -270,7 +264,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-007",
-    "lineNo": 70,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "USD",
     "foreignCurrencyCredit": "USD",
@@ -284,7 +277,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-008",
-    "lineNo": 80,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "EUR",
     "foreignCurrencyCredit": "EUR",
@@ -298,7 +290,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-009",
-    "lineNo": 90,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "GBP",
     "foreignCurrencyCredit": "GBP",
@@ -312,7 +303,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-010",
-    "lineNo": 100,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "USD",
     "foreignCurrencyCredit": "USD",
@@ -326,7 +316,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-011",
-    "lineNo": 110,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "EUR",
     "foreignCurrencyCredit": "EUR",
@@ -340,7 +329,6 @@ export const gLJournalLine = [
   },
   {
     "id": "mock-gLJournalLine-012",
-    "lineNo": 120,
     "accountingCombination": "Sample accountingCombination",
     "foreignCurrencyDebit": "GBP",
     "foreignCurrencyCredit": "GBP",

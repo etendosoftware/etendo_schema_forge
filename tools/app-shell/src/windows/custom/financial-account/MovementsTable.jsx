@@ -1,5 +1,5 @@
 import { Fragment, useState, useEffect } from 'react';
-import { ArrowUpRight, ArrowLeftRight, ChevronDown } from 'lucide-react';
+import { ArrowUpRight, ArrowLeftRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -28,6 +28,7 @@ import { ChipSelect } from '@/components/forms/fields';
 import { useDimensionLookup } from '@/hooks/useMovementLookups';
 import { useUpdateMovement, buildDimensionUpdatePayload } from '@/hooks/useCreateMovement';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 
 // ETP-5101 — the "Más información" panel's editable dimension fields. Only these three:
 // FinancialAccountTransactionsHandler#applyEditableDimensions (the backend `update` action)
@@ -676,17 +677,12 @@ export function MovementsTable({
           {/* Expand chevron (circular button) */}
           <TableCell onClick={(e) => e.stopPropagation()} data-testid="TableCell__ae5a16">
             {rowCanExpand ? (
-              <button
-                type="button"
-                aria-label={ui('financeAccountMovementsMoreInfo')}
-                aria-expanded={expanded}
-                data-testid={`movement-expand-${movement.id}`}
-                onClick={() => toggleExpand(movement.id)}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-                style={{ transform: expanded ? 'rotate(180deg)' : undefined }}
-              >
-                <ChevronDown className="h-4 w-4" data-testid="ChevronDown__ae5a16" />
-              </button>
+              <RowExpandToggle
+                expanded={expanded}
+                label={ui('financeAccountMovementsMoreInfo')}
+                onToggle={() => toggleExpand(movement.id)}
+                iconTestId="ChevronDown__ae5a16"
+                data-testid={`movement-expand-${movement.id}`} />
             ) : null}
           </TableCell>
 

@@ -176,6 +176,50 @@ The result half was the later fix: the confirmation copy shipped purchase-aware 
   **Gotcha (must-read for this window):** `purchase-invoice/index.jsx` renders `<HeaderPage draftMode={draftModeOverride}>` where `draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference'] })` — a hand-built object from the shared `windows/custom/shared/useInvoiceWindow.js` helper — NOT the generated `draftMode` prop the pipeline produces from `decisions.json`. The `decisions.json`/`contract.json`/generated-`HeaderPage.jsx` value is correct but effectively dead for this window; the real behavior comes from `getInvoiceDraftMode`'s `keepSaveWhenCompletedFields` option. `sales-invoice/index.jsx` calls the same helper WITHOUT that option, so it is unaffected. See `docs/ui-customization.md` → "Gotcha — a hand-rolled index.jsx prop can silently shadow decisions.json" for the general pattern.
 - Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears only when exactly one row is selected — hidden with 0 or 2+ rows selected. In the detail topbar, `Copy link` is visible whenever the record has a persisted `recordId` (not the unsaved `'new'` sentinel), with no selection gate since detail always represents a single record. Both copy `{origin}/{windowName}/{recordId}` to the clipboard, show a `Link copied` / `Enlace copiado` toast, and display a `Copy link` / `Copiar enlace` tooltip on hover. The legacy dead link icon previously shown in the idle-state (no-selection) grid toolbar is now hidden via the `hideLink` prop passed to `<ListView>`.
 
+## Follow-up goods receipt after Confirm — ETP-5576
+
+Confirming an invoice that ends **Completed** with quantities still pending to receive no longer sends the
+user to the list: they stay on the invoice and see «¿Gestionar recepción?». The popup and the topbar
+button «Gestionar recepción» are the generic follow-up flow shared with sales-invoice (only texts and the
+generated document differ) — see `docs/ui-customization.md` §20.
+
+- **What is pending is decided by the backend.** The header GET carries
+  `followUp.available` (`["receipt"]` or `[]`) plus `followUp.receipt.pendingLines`. Credit notes,
+  returns and fully received invoices come back with an empty list → no popup, no button.
+- **Confirm** (`getInvoiceDraftMode(ui, { afterProcess })` in `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`):
+  `draftMode.afterProcess = createFollowUpAfterProcess('purchase-invoice', …)` runs after the process
+  succeeded. With a pending `receipt` it returns `{ stay: true }` and the modal opens on the
+  invoice; otherwise the previous behaviour stays (navigate to the list with the preview).
+- **Modal** (single follow-up → direct confirmation, no radio): title «¿Gestionar recepción?»
+  (`titleKey: 'followUpManageReceiptTitle'`; the topbar button keeps «Gestionar recepción» through its own
+  `buttonLabelKey: 'poManageReceipt'`), summary (Factura / Fecha / Contacto / Líneas / Total — «Líneas» is the pending line
+  count), the question «¿Qué vas a hacer con esta factura?» (`questionKey:
+  'followUpInvoiceQuestion'`), ONE static option card (icon, «Crear albarán de compra» + blue «Borrador» badge
+  — `badgeTone: 'info'` —, «Se generará en borrador con las N líneas pendientes de recepción.»,
+  singular variant for one line; not selectable, no Tab stop), footer Cancelar + «Crear recepción»
+  (label only, focused, so Enter creates). Cancel, the close icon, Esc and the
+  backdrop reject: the invoice stays Completed and nothing is created — there is no «Ahora no»
+  card. «Crear recepción» POSTs
+  `purchase-invoice/header/{id}/action/createGoodsReceipt`, which creates a **Draft** goods receipt (Albarán de Compra) with only
+  the pending lines; the result view links to it (`/goods-receipt/{id}`). Backend error codes
+  (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
+- **Warehouse asked when the backend cannot decide it.** The goods receipt needs a target warehouse. When
+  the backend cannot determine it on its own, `createGoodsReceipt` answers `409 FOLLOW_UP_WAREHOUSE_REQUIRED`
+  with an `input` block (`key: "warehouseId"` + the candidate warehouses). The modal then stays open,
+  without an error, and shows a required «Almacén» selector («Elige el almacén donde se creará el
+  documento.») under the option card; with a single candidate it is preselected but still shown.
+  «Crear recepción» stays disabled until a warehouse is chosen, and the retry POSTs
+  `{"warehouseId": "<id>"}`. A rejected id (`400 FOLLOW_UP_INVALID_INPUT`) shows «El valor
+  seleccionado ya no es válido…» and keeps the selector; a 409 with no candidates (no `input` block)
+  shows «No se pudo determinar el almacén del documento…». When the backend can decide the warehouse
+  itself, nothing is asked and the flow is the one above. The selector is generic (key and options
+  come from the backend) — see `docs/ui-customization.md` §20 «Input-required round-trip».
+- **Topbar button** `follow-up-document-button` in `PurchaseInvoiceTopbar.jsx`: shown on a completed invoice
+  while something is pending (never for a read-only window). After a creation the record is
+  re-read (the button disappears; a partial movement later offers only what is still missing)
+  and `purchase-invoice:document-created` refreshes `RelatedDocuments.jsx` (event listener).
+- Config: `PURCHASE_INVOICE_FOLLOW_UP` in `tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js`.
+
 ## Gap assessment
 
 - The UI clearly presents payable amounts and payment registration entry points, but the exact accounting consequences of adding or updating payments are not documented in this window evidence. Treat downstream posting semantics as backend behavior, not confirmed UI behavior here.
@@ -1465,7 +1509,7 @@ numeric/date/enum contract field that omits `filterMode`. Full reference:
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move this invoice through its
-workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+workflow over MCP. `etendo_schema` returns it with `invokeVia: "etendo_action"`, `actionValues` (the
 active AD list of the `C_Invoice.DocAction` reference — note `CO` is labelled **Complete** here,
 not Book) and `actionParameter: "docAction"`; its `agentPrompt` — defined in `decisions.json` ->
 `entities.header.fields.documentAction.agentPrompt` — states which transitions are legal and
@@ -1473,7 +1517,7 @@ their preconditions.
 
 Completing a draft invoice over MCP:
 
-    neo_action { spec: "purchase-invoice", entity: "header", id: "<invoiceId>",
+    etendo_action { spec: "purchase-invoice", entity: "header", id: "<invoiceId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
 Flow encoded in the prompt: `DR -> CO` completes (computes taxes/totals, creates the payment
@@ -1526,7 +1570,7 @@ header is dirty — skipping it entirely on a clean header. A failed save blocks
 surfaces the error instead of proceeding with stale data.
 
 This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
-line created before completion — because `neo_action` executes the entity's `NeoHandler` hooks
+line created before completion — because `etendo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
 
@@ -2167,8 +2211,8 @@ invoice's id and payment/credit ids taken from that invoice's own listings.
 
 An agent pays a purchase invoice through the same invoice-header actions the *Pagos de la factura*
 popup and the *Nuevo pago* modal call — never by writing a payment by hand. They are published to
-MCP as declared actions next to the AD buttons (`neo_schema(spec:'purchase-invoice',
-entity:'header', view:'actions')`, also named in `neo_discover`), with `id` = the invoice id and
+MCP as declared actions next to the AD buttons (`etendo_schema(spec:'purchase-invoice',
+entity:'header', view:'actions')`, also named in `etendo_discover`), with `id` = the invoice id and
 the same contracts as `sales-invoice` (see that guide's "MCP payment actions" section):
 `invoiceAccounts`, `invoicePaymentMethods`, `invoiceCreditSources`, `invoicePayments`,
 `currencyOptions` (`GET`), `registerPayment` (`process` `draft`\|`confirm`), `confirmPayment` and

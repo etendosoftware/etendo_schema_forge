@@ -95,7 +95,7 @@ Not all persisted client state lives in `localStorage`. UI preferences that shou
 | `sessionStorage` | `dashboard_date_range` — the Dashboard period filter (`lastYear` default; valid values `lastYear`, `last90d`, `last30d`, `mtd`, `ytd`) | Until the browser tab/session closes | Yes — cleared by `clearStoredDateRange()` |
 
 `src/components/dashboard/DashboardDateRangeContext.jsx` owns this value:
-- `readStoredRange()` falls back to the `lastYear` default when nothing valid is stored, so a new session always opens the Dashboard at "Último año".
+- `readStoredRange()` falls back to the `lastYear` default when nothing valid is stored, so a new session always opens the Dashboard at "Últimos 12 meses".
 - `clearStoredDateRange()` removes the `sessionStorage` key **and** the legacy `localStorage` key (the value lived in `localStorage` before the session-scoping migration), so no orphaned range survives a logout on an already-upgraded browser.
 
 ### Logout Choke Point (`useLogout`)
@@ -251,8 +251,8 @@ The security responsibilities remain deliberately split:
 
 - **Schema Forge** declares the contract surface: which specs, entities, fields, and optional
   capabilities are exposed. It does not mint or infer role grants.
-- **MCP** authenticates the token, enforces the OAuth scope axis (`neo:read`, `neo:write`,
-  `neo:process`, `neo:report`), and creates the `OBContext` from the token identity before tool
+- **MCP** authenticates the token, enforces the OAuth scope axis (`etendo:read`, `etendo:write`,
+  `etendo:process`, `etendo:report`; the legacy `neo:*` names are still accepted), and creates the `OBContext` from the token identity before tool
   discovery, resource access, or tool execution. Its `NeoAccessUtils` facade delegates role checks
   to the canonical runtime helper; it must not maintain a second permission model.
 - **NEO/Etendo runtime** remains the authority for `AD_Window_Access`, `AD_Process_Access`,

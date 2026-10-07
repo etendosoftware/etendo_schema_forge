@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/useFiscalAutoCompute.js
 // ETP-5438 — "en todos los modelos tiene que funcionar de la misma manera, una vez presentados
 // no se debe recalcular nada por mas que se agreguen quiten facturas, y el boton de generar
 // fichero no debe aparecer" — full cross-model parity follow-up to the original 349 fix.
@@ -5,7 +7,7 @@
 // These tests pin FmModel303Page's mount-time auto-compute effect's isSubmitted guard, mirroring
 // FmModel349Page.submittedFreeze.vitest.jsx exactly: once a declaration is in a submitted-family
 // status, opening its detail page computes AT MOST ONCE per browser session. A warm session cache
-// (`fiscal_ac_v4_<id>`, shared with FmListPage's submitted-family bucket) is applied with zero
+// (`fiscal_ac_v5_<id>`, shared with FmListPage's submitted-family bucket) is applied with zero
 // `computeBoxes303()` calls; a cold cache (new tab, reload, another browser) triggers exactly one
 // compute (`GET /fiscal303/boxes`, allowed server-side for submitted declarations since the
 // ETP-5438 follow-up), whose result is shown and written back to the same cache entry.
@@ -96,8 +98,8 @@ beforeEach(() => {
 
 describe('FmModel303Page — mount-time auto-compute runs at most once per session once submitted (ETP-5438)', () => {
   // Mirrors useFiscalAutoCompute.js's private sessionCacheKey() — keep the version suffix in
-  // sync with it (v4 since ETP-5456), otherwise every cache assertion reads a dead key.
-  const cacheKeyFor = (declId) => `fiscal_ac_v4_${declId}`;
+  // sync with it (v5 since ETP-5597), otherwise every cache assertion reads a dead key.
+  const cacheKeyFor = (declId) => `fiscal_ac_v5_${declId}`;
   const serverPayload = {
     boxes: { 27: 1309.98, 45: 36789.06, 46: -35479.08, 71: -35479.08 },
     summary: { accrued: 1309.98, deductible: 36789.06, result: -35479.08 },
@@ -213,7 +215,7 @@ describe('FmModel303Page — mount-time auto-compute runs at most once per sessi
 // no sessionStorage dependency. Legacy submitted declarations (no snapshot) keep the
 // once-per-session path pinned above.
 describe('FmModel303Page — submitted declaration with a persisted submission snapshot (ETP-5438)', () => {
-  const cacheKeyFor = (declId) => `fiscal_ac_v4_${declId}`;
+  const cacheKeyFor = (declId) => `fiscal_ac_v5_${declId}`;
   const snapshot = {
     boxes: { 27: 500, 29: 100, 45: 100, 46: 400, 71: 400 },
     summary: { accrued: 500, deductible: 100, result: 400 },
