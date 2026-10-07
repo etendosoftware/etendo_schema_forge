@@ -1728,6 +1728,64 @@ on one of the two paths. What remains is the typing, which is what
 - `src/lib/__tests__/matchOptionLabel.test.js` — still valid, but now exercises
   `src/lib/defaultCountry.js`'s consumption of `matchOptionByLabel`, not this popup.
 
+## OCR reader — create-product step defaults — ETP-5585
+
+When an invoice line from the OCR reader matches no product, the resolver popup offers
+"Create product" (`ProductCreateForm` in `ProductResolverPopup.jsx`). The form asks for name,
+search key, unit of measure and tax category, then POSTs to `/sws/neo/product/product`.
+
+Unit of measure and tax category are **prefilled** from `GET <productSpecUrl>/product/defaults`
+(`ProductDefaultsHandler`, ETP-4670) — the same defaults the product window uses (typically
+"Unidad" and "IVA Normal"). The form reads `uOM`/`uOM$_identifier` and
+`taxCategory`/`taxCategory$_identifier` from the response; no ids or names are hardcoded. The
+prefill never overwrites a value the user already picked (it only fills an empty selector), and if
+the defaults call fails the selectors stay empty and the existing required-field validation applies.
+
+Tests: `src/components/copilot/ocr/__tests__/ProductResolverPopup.vitest.jsx`.
+
+## OCR reader — receiver tax id validation — ETP-5585
+
+The OCR reader refuses to load an invoice that is addressed to a different tax id than the active
+organization's. The check runs in `useOcrFlow.jsx`, right after the extraction and **before** any
+modal, vendor lookup or batch; it is wired per document type through
+`ocrDocTypes.js → validateExtraction: 'receiverTaxId'`.
+
+**Extracted.** Two nested objects are requested next to the existing `vendor_name` / `tax_id`
+(unchanged): `issuer` and `receiver`, each `{ name, tax_id_raw, tax_id_label, tax_id_type }`, all
+nullable. `tax_id_type` (`vat | national_tax_id | company_registration | personal_id | unknown`) is
+**informational only** — the comparison runs whatever it says. `buildOcrSchema.js` supports the
+nested shape through a `kind: 'object'` field with `properties`.
+
+**Organization id.** `GET /sws/neo/session` → `organization.taxId` (`AD_OrgInfo.TaxID`), read
+lazily through `apiFetch` only when a receiver id was extracted. A blank or `?` value reads as "no tax id".
+A failed call (network, 401, 5xx) is a different case: it is not "no tax id configured", so it
+shows its own non-blocking warning (`ocrReceiverTaxIdUnverified`) and the load continues.
+
+**Normalization** (`receiverTaxIdCheck.js`): uppercase, keep `[A-Z0-9]`; a leading 2-letter prefix is
+stripped only if it is a known VAT prefix (AT BE BG CY CZ DE DK EE EL ES FI FR HR HU IE IT LT LU LV
+MT NL PL PT RO SE SI SK XI GB; `GR` = `EL`), so an NIE (`X1234567L`) or CIF is never cut. Ids match
+when the full strings or the prefix-stripped bodies are equal. No check-digit validation; leading
+zeros are kept.
+
+| Status | Condition | Result |
+|---|---|---|
+| `match` | ids equal after normalization | continue |
+| `mismatch` | receiver id present and different | **blocked**: error toast with both ids, flow stops |
+| `absent` | no receiver id | continue silently |
+| `same-as-issuer` | receiver id equals the issuer id (`issuer.tax_id_raw` or `tax_id`) | continue (OCR confusion) |
+| `no-org-tax-id` | organization has no tax id | continue + warning toast |
+| (session call failed) | the org tax id could not be read | continue + "could not verify" warning toast |
+
+Out of scope: a legal-entity child organization without its own `AD_OrgInfo.TaxID` is treated as
+`no-org-tax-id` (no inheritance from the parent).
+
+Messages use `toast` from sonner directly (`ocrReceiverTaxIdMismatch`, `ocrOrgTaxIdMissing`,
+`ocrReceiverTaxIdUnverified`), not `useBulkActionToast().showResult`, which reads `failed[0].message`
+while this flow passes `{ reason }` (pre-existing, not changed here).
+
+Tests: `src/components/copilot/ocr/__tests__/receiverTaxIdCheck.test.js`,
+`useOcrFlow.flow.vitest.jsx`, `buildOcrSchema.test.js`.
+
 ## OCR reader — lookups without `_neoWhere` (production WAF)
 
 Every lookup the OCR reader makes — vendor, vendor address, the vendor picker, product, tax,
