@@ -74,7 +74,7 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS } from '@/lib/flags';
+import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS, UNIFIED_CALENDAR_POC } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import {
   environmentCommercialLabel,
@@ -646,6 +646,7 @@ export default function SideMenu({
   // only: the route is registered unconditionally and SFAcctProcessMonitor enforces admin access.
   const showAcctProcessMonitor = useFeatureFlag(ACCT_PROCESS_MONITOR);
   const showPublicApiKeys = useFeatureFlag(PUBLIC_API_KEYS);
+  const showUnifiedCalendarPoc = useFeatureFlag(UNIFIED_CALENDAR_POC);
   // Unconditional since ETP-4966: owning more than one environment is a shipped
   // capability, so the switcher is always available. The hook already returns an
   // empty list for a session that cannot list environments, which is what keeps
@@ -673,7 +674,10 @@ export default function SideMenu({
     // with showProofOfConceptMenu's group-level gate above, or an item inside an unlocked
     // group would still be filtered out here as if the flag were unset.
     [PROOF_OF_CONCEPT_MENU]: showProofOfConceptMenu,
-  }), [showAcctProcessMonitor, showPublicApiKeys, showProofOfConceptMenu]);
+    // Unified Calendar PoC — item-level flag. It sits inside the Proof of Concept group, so it is
+    // visible only when BOTH proof-of-concept-menu (group gate above) and this flag are on.
+    [UNIFIED_CALENDAR_POC]: showUnifiedCalendarPoc,
+  }), [showAcctProcessMonitor, showPublicApiKeys, showProofOfConceptMenu, showUnifiedCalendarPoc]);
 
   // Applied to Favorites TOO. Favorites are rebuilt from the user's own saved list rather than
   // from menuGroups, so returning early for that group let a favourited flag-gated item stay

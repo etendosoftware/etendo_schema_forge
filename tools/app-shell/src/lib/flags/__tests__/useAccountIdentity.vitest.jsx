@@ -5,7 +5,13 @@ const auth = vi.hoisted(() => ({ current: {} }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => auth.current }));
 vi.mock('@/hooks/useNeoResource.js', () => ({ getApiBase: () => 'https://api' }));
 const refreshAccountIdentity = vi.hoisted(() => vi.fn());
-vi.mock('../bootstrap.js', () => ({ refreshAccountIdentity }));
+const clearAccountIdentityMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const waitForIdentityResetMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('../bootstrap.js', () => ({
+  refreshAccountIdentity,
+  clearAccountIdentity: clearAccountIdentityMock,
+  waitForIdentityReset: waitForIdentityResetMock,
+}));
 
 import { useAccountIdentity } from '../useAccountIdentity.js';
 import { clearSessionIdentity, getSessionIdentity } from '../../sessionIdentity.js';
@@ -21,6 +27,8 @@ describe('useAccountIdentity (ETP-5455)', () => {
   beforeEach(() => {
     refreshAccountIdentity.mockReset();
     refreshAccountIdentity.mockResolvedValue({ accountId: 'ACC-1' });
+    waitForIdentityResetMock.mockReset();
+    waitForIdentityResetMock.mockResolvedValue(undefined);
     localStorage.clear();
   });
 
@@ -71,5 +79,32 @@ describe('useAccountIdentity (ETP-5455)', () => {
     await waitFor(() => expect(refreshAccountIdentity).toHaveBeenCalled());
     expect(getItem).not.toHaveBeenCalledWith('sf_platform_token');
     getItem.mockRestore();
+  });
+
+  it('waits for the logout reset before assigning a newly authenticated identity', async () => {
+    let releaseReset;
+    waitForIdentityResetMock.mockReturnValueOnce(new Promise(resolve => { releaseReset = resolve; }));
+    auth.current = { token: null, isAuthenticated: true, username: 'ana', clientId: 'client-1' };
+
+    renderHook(() => useAccountIdentity());
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(getSessionIdentity()).toEqual({});
+
+    releaseReset();
+    await waitFor(() => expect(getSessionIdentity()).toEqual({ username: 'ana', clientId: 'client-1' }));
+  });
+});
+
+
+describe('identity switches', () => {
+  it('clears the previous account before resolving a switched tenant', async () => {
+    auth.current = { token: null, isAuthenticated: true, username: 'ana', clientId: 'client-1' };
+    const first = renderHook(() => useAccountIdentity());
+    await waitFor(() => expect(refreshAccountIdentity).toHaveBeenCalled());
+    clearAccountIdentityMock.mockClear();
+    auth.current = { token: null, isAuthenticated: true, username: 'bruno', clientId: 'client-2' };
+    first.rerender();
+    await waitFor(() => expect(clearAccountIdentityMock).toHaveBeenCalledTimes(1));
+    expect(clearAccountIdentityMock.mock.invocationCallOrder[0]).toBeLessThan(refreshAccountIdentity.mock.invocationCallOrder.at(-1));
   });
 });

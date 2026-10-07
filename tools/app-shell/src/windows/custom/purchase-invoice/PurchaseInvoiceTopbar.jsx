@@ -5,12 +5,17 @@ import { formatCurrency } from '@/lib/formatCurrency';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
+import FollowUpDocumentButton from '@/components/follow-up-documents/FollowUpDocumentButton.jsx';
+import { PURCHASE_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
 
 // ETP-5260 — Clone/SendToSif/Copy-link moved to the topbarSecondary slot
 // (PurchaseInvoiceSecondaryActions). This component now only renders the
 // payment-status badge (a primary/status indicator that belongs at the
 // extreme right, after Save/Confirm) and its modal.
-export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRefresh }) {
+//
+// ETP-5576 — plus the generic "Gestionar recepción" follow-up button + modal, the same
+// component sales-invoice uses (only the config differs, see shared/invoiceFollowUp.js).
+export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRefresh, windowReadOnly }) {
   const ui = useUI();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
@@ -44,6 +49,16 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
 
   return (
     <>
+      <FollowUpDocumentButton
+        data={data}
+        apiBaseUrl={apiBaseUrl}
+        spec={PURCHASE_INVOICE_FOLLOW_UP.spec}
+        options={PURCHASE_INVOICE_FOLLOW_UP.options}
+        summary={PURCHASE_INVOICE_FOLLOW_UP.summary}
+        questionKey={PURCHASE_INVOICE_FOLLOW_UP.questionKey}
+        onRefresh={onRefresh}
+        windowReadOnly={windowReadOnly}
+        data-testid="FollowUpDocumentButton__8addd1" />
       {isCompleted && (() => {
         if (badge.isCredit) {
           // Mirror the grid's "Saldo pendiente" cell for credit instruments: green

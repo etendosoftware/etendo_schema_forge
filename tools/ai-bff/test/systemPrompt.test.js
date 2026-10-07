@@ -22,9 +22,9 @@ test('default prompt is non-empty and differs per mode', () => withEnv(undefined
   assert.ok(chat.length > 0);
   assert.ok(help.length > 0);
   assert.notEqual(chat, help);
-  assert.match(chat, /neo_discover/);
-  assert.match(chat, /neo_schema/);
-  assert.doesNotMatch(help, /neo_discover/);
+  assert.match(chat, /etendo_discover/);
+  assert.match(chat, /etendo_schema/);
+  assert.doesNotMatch(help, /etendo_discover/);
   assert.equal(buildSystemPrompt(), chat);
 }));
 
@@ -66,7 +66,7 @@ test('chat prompt is grounded on the docs tool and uses the current product name
   assert.doesNotMatch(toolText, /Etendo Go|assistant/i);
 }));
 
-test('chat prompt targets end users, points only to functional docs and reports via neo_feedback', () => withEnv(undefined, () => {
+test('chat prompt targets end users, points only to functional docs and reports via etendo_feedback', () => withEnv(undefined, () => {
   const chat = buildSystemPrompt({ mode: 'chat' });
   const help = buildSystemPrompt({ mode: 'page-help' });
   const docsUrl = 'https://etendosoftware.github.io/etendo-docs/';
@@ -74,7 +74,7 @@ test('chat prompt targets end users, points only to functional docs and reports 
   assert.ok(help.includes(docsUrl));
   assert.match(chat, /end user/i);
   assert.match(chat, /Etendo support/);
-  assert.match(chat, /neo_feedback/);
+  assert.match(chat, /etendo_feedback/);
   assert.match(chat, /outcome/);
   assert.match(chat, /never in a loop/i);
   assert.match(chat, /Never send the user to technical or developer documentation/);
@@ -85,5 +85,5 @@ test('chat prompt targets end users, points only to functional docs and reports 
     assert.ok(urls.every((u) => u.startsWith(docsUrl)), `unexpected URL: ${urls}`);
     assert.doesNotMatch(prompt, /docs\.etendo\.software|wiki\.etendo|Etendo GO/i);
   }
-  assert.doesNotMatch(help, /neo_feedback/);
+  assert.doesNotMatch(help, /etendo_feedback/);
 }));

@@ -226,8 +226,8 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 
 ### Default values fix
 
-- `decisions.json`: `depreciate` field now has `defaultExpr: "Y"` — `neo_defaults` returns `depreciate: true` (boolean, coerced from Yes/No column). Previously returned null.
-- `decisions.json`: `calculateType` field now has `defaultExpr: "TI"` — `neo_defaults` returns `calculateType: "TI"` (Time-based). Previously returned `"PE"` (Percentage), which was the wrong default for the standard amortization flow.
+- `decisions.json`: `depreciate` field now has `defaultExpr: "Y"` — `etendo_defaults` returns `depreciate: true` (boolean, coerced from Yes/No column). Previously returned null.
+- `decisions.json`: `calculateType` field now has `defaultExpr: "TI"` — `etendo_defaults` returns `calculateType: "TI"` (Time-based). Previously returned `"PE"` (Percentage), which was the wrong default for the standard amortization flow.
 - Both values are written to `ETGO_SF_FIELD.DefaultValue` via `push-to-neo.js` and persisted to `src-db/database/sourcedata/ETGO_SF_FIELD.xml` via `export.database`.
 
 ### depreciationEndDate auto-computation (AssetsHandler)
@@ -254,7 +254,7 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 ### What this does NOT change
 
 - No UI behavior is affected. The flag is advisory metadata only: it surfaces in the
-  `neo_schema` MCP response (`businessCritical: true/false` per field) so that AI
+  `etendo_schema` MCP response (`businessCritical: true/false` per field) so that AI
   agents know which fields to ask for explicitly. The window renders identically.
 - `depreciationEndDate` is intentionally excluded — it is auto-computed by
   `AssetsHandler` from `depreciationStartDate + usableLifeMonths` and should not be
@@ -941,7 +941,7 @@ Three assertions in the existing test suite encoded the previous behavior and we
 
 ### What changed (MCP-only, derived from `preconditions`)
 
-`neo_schema` now derives a per-field `userRequired` signal from the **same** `ETGO_SF_ENTITY.preconditions` declaration that the runtime gate enforces (single source of truth — no separate `decisions.json` flag, no duplication). When a field is named in the entity's `preconditions`, the schema emits:
+`etendo_schema` now derives a per-field `userRequired` signal from the **same** `ETGO_SF_ENTITY.preconditions` declaration that the runtime gate enforces (single source of truth — no separate `decisions.json` flag, no duplication). When a field is named in the entity's `preconditions`, the schema emits:
 
 - `userRequired: true`
 - `requiredWhen: "<expr>"` — only when the rule is conditional, so the agent knows the requirement depends on other field values (e.g. `usableLifeMonths` is `@calculateType@ != 'PE' && @amortize@ != 'YE'`; `usableLifeYears` is `@amortize@ == 'YE'`; `currency` is unconditional, so no `requiredWhen`).
@@ -953,24 +953,24 @@ Three assertions in the existing test suite encoded the previous behavior and we
 
 | Layer | Where | When | Behavior |
 |-------|-------|------|----------|
-| Proactive hint (this change) | `neo_schema` → `userRequired`/`requiredWhen` | at schema discovery | advisory — tells the agent to fill the field |
+| Proactive hint (this change) | `etendo_schema` → `userRequired`/`requiredWhen` | at schema discovery | advisory — tells the agent to fill the field |
 | Reactive gate (ETP-4275) | `NeoProcessPreconditionValidator` | at process execution | enforcing — returns `PRECONDITIONS_UNMET` (400) |
 
 Both read `ETGO_SF_ENTITY.preconditions`. The hint is best-effort (the condition is dynamic and the client may ignore it); the gate is the guarantee. The proactive hint does **not** make the gate obsolete.
 
 ### Create → amortization flow (agent-facing)
 
-1. **schema** — `neo_schema` for the assets window now flags `usableLifeMonths`/`usableLifeYears` + `currency` as `userRequired` (with `requiredWhen` where conditional).
-2. **defaults** — `neo_defaults` resolves server-side defaults (e.g. `currency` from `@C_Currency_ID@`).
+1. **schema** — `etendo_schema` for the assets window now flags `usableLifeMonths`/`usableLifeYears` + `currency` as `userRequired` (with `requiredWhen` where conditional).
+2. **defaults** — `etendo_defaults` resolves server-side defaults (e.g. `currency` from `@C_Currency_ID@`).
 3. **selectors** — resolve foreign keys via the per-field selector endpoints (e.g. asset category, product, accounting dimensions).
-4. **create** — `neo_create` the asset with `depreciate` on and the depreciation setup filled.
+4. **create** — `etendo_create` the asset with `depreciate` on and the depreciation setup filled.
 5. **verify state / callouts** — re-read the record: the asset-category callout may change `calculateType`, which flips whether `usableLifeMonths` vs `usableLifeYears` applies (mirrors the reactive-behavior section above).
 6. **action `Processed`** — invoke the "Create Amortization" action. If a precondition is still unmet, the gate returns `PRECONDITIONS_UNMET` with the missing field names instead of an opaque PL/SQL error.
 7. **list `amortizationLine`** — read the generated schedule (child amortization lines, sorted by `sEQNoAsset asc`).
 
 ### Manual verification (ETP-4276)
 
-1. Call `neo_schema` for the assets window and confirm `usableLifeMonths`, `usableLifeYears` and `currency` carry `userRequired: true`; confirm `usableLifeMonths`/`usableLifeYears` also carry `requiredWhen` and `currency` does not.
+1. Call `etendo_schema` for the assets window and confirm `usableLifeMonths`, `usableLifeYears` and `currency` carry `userRequired: true`; confirm `usableLifeMonths`/`usableLifeYears` also carry `requiredWhen` and `currency` does not.
 2. Confirm a field **not** listed in `preconditions` carries no `userRequired` from this path (unchanged behavior).
 
 ## ETP-4984 — Name/Description overlong-save prevention + backend "too long" message translation

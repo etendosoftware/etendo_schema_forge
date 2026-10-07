@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
+//
 // Direct unit tests for the helper module extracted from DetailView (ETP-4730).
 //
 // The pre-existing DetailView.*Helpers suites reach these same functions through
@@ -48,11 +49,16 @@ import {
   runAddLineAction,
   resolveAddLineLabel,
   buildInitialTabs,
+  getCustomTabSaveFirstHint,
   buildLineRowClickHandler,
   maybeSaveBeforeProcess,
   maybeSaveBeforeConfirm,
   buildHeaderFormData,
   buildCustomAddModalOnSaved,
+  getButtonClass,
+  getProcessButtonVariant,
+  getDangerIconClass,
+  isDangerProcess,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -773,6 +779,126 @@ describe('buildInitialTabs (ETP-4415 — cross-group tabOrder sort)', () => {
   });
 });
 
+// A 'tab'-placement custom component that cannot work on an unsaved record declares
+// `requiresSavedRecord` (true or a predicate over its props) and `savedRecordHintKey`.
+describe('getCustomTabSaveFirstHint', () => {
+  const ui = (key) => `t:${key}`;
+
+  function SavedOnly() { return null; }
+  SavedOnly.requiresSavedRecord = true;
+  SavedOnly.savedRecordHintKey = 'savedOnlyHint';
+
+  function Attachments() { return null; }
+  Attachments.requiresSavedRecord = (props = {}) => !props.config?.saveBeforeAttach;
+  Attachments.savedRecordHintKey = 'attachmentsSaveFirstHint';
+
+  function Plain() { return null; }
+
+  it('returns the translated hint for a new record when the static is true', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: SavedOnly }, true, ui)).toBe('t:savedOnlyHint');
+  });
+
+  it('returns null for a saved record', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: SavedOnly }, false, ui)).toBeNull();
+  });
+
+  it('returns null for a component without the static', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Plain }, true, ui)).toBeNull();
+  });
+
+  it('returns null for a tab entry without a Component', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x' }, true, ui)).toBeNull();
+    expect(getCustomTabSaveFirstHint(null, true, ui)).toBeNull();
+  });
+
+  it('evaluates a predicate static against the tab props: attachments without saveBeforeAttach is gated', () => {
+    const ct = { key: 'attachments', Component: Attachments, props: { config: {} } };
+    expect(getCustomTabSaveFirstHint(ct, true, ui)).toBe('t:attachmentsSaveFirstHint');
+  });
+
+  it('attachments with saveBeforeAttach: true is not gated (the tab saves the header itself)', () => {
+    const ct = { key: 'attachments', Component: Attachments, props: { config: { saveBeforeAttach: true } } };
+    expect(getCustomTabSaveFirstHint(ct, true, ui)).toBeNull();
+  });
+
+  it('passes an empty object to the predicate when the tab has no props', () => {
+    const predicate = vi.fn(() => true);
+    function Comp() { return null; }
+    Comp.requiresSavedRecord = predicate;
+    Comp.savedRecordHintKey = 'k';
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Comp }, true, ui)).toBe('t:k');
+    expect(predicate).toHaveBeenCalledWith({});
+  });
+
+  it('does not evaluate the predicate for a saved record', () => {
+    const predicate = vi.fn(() => true);
+    function Comp() { return null; }
+    Comp.requiresSavedRecord = predicate;
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Comp }, false, ui)).toBeNull();
+    expect(predicate).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty (non-null) hint when the static is set without a hint key, so the tab still disables', () => {
+    function Comp() { return null; }
+    Comp.requiresSavedRecord = true;
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Comp }, true, ui)).toBe('');
+  });
+});
+
+describe('buildInitialTabs — saveFirstHint on custom tab entries', () => {
+  function Attachments() { return null; }
+  Attachments.requiresSavedRecord = (props = {}) => !props.config?.saveBeforeAttach;
+  Attachments.savedRecordHintKey = 'attachmentsSaveFirstHint';
+  function Pricing() { return null; }
+
+  function makeProps(overrides = {}) {
+    return {
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      secondaryHooks: [],
+      panelCounts: {},
+      ui: (key) => `t:${key}`,
+      DetailTable: null,
+      detailLabel: 'Lines',
+      detailEntity: 'orderLine',
+      hook: { children: [] },
+      CustomLines: null,
+      customTabsAfterBottom: false,
+      tabCustomTabs: [
+        { key: 'pricing', label: 'Price', placement: 'tab', Component: Pricing },
+        { key: 'attachments', labelKey: 'attachments', placement: 'tab', Component: Attachments, props: { config: {} } },
+      ],
+      customTabCounts: {},
+      customTabVisibility: {},
+      ...overrides,
+    };
+  }
+
+  const byKey = (tabs) => Object.fromEntries(tabs.map(t => [t.key, t]));
+
+  it('new record: the gated custom tab carries the translated hint, the others carry null', () => {
+    const tabs = byKey(buildInitialTabs(makeProps({ isNew: true })));
+    expect(tabs['custom:attachments'].saveFirstHint).toBe('t:attachmentsSaveFirstHint');
+    expect(tabs['custom:pricing'].saveFirstHint).toBeNull();
+    expect(tabs.accounting.saveFirstHint).toBeUndefined();
+  });
+
+  it('saved record: no custom tab carries a hint', () => {
+    const tabs = byKey(buildInitialTabs(makeProps({ isNew: false })));
+    expect(tabs['custom:attachments'].saveFirstHint).toBeNull();
+    expect(tabs['custom:pricing'].saveFirstHint).toBeNull();
+  });
+
+  it('new record with saveBeforeAttach: the attachments tab stays enabled', () => {
+    const tabs = byKey(buildInitialTabs(makeProps({
+      isNew: true,
+      tabCustomTabs: [
+        { key: 'attachments', labelKey: 'attachments', placement: 'tab', Component: Attachments, props: { config: { saveBeforeAttach: true } } },
+      ],
+    })));
+    expect(tabs['custom:attachments'].saveFirstHint).toBeNull();
+  });
+});
+
 // ETP-4542 — moved here from DetailView.jsx (growth-guarded, see
 // .claude/hooks/check-detailview-growth.mjs) alongside maybeSaveBeforeConfirm
 // below. DetailView.dispatchProcessAction.vitest.jsx already covers this
@@ -966,5 +1092,49 @@ describe('buildCustomAddModalOnSaved (ETP-5366)', () => {
     expect(() => onSaved()).not.toThrow();
     expect(secondaryHooks[0].handleSelect).toHaveBeenCalledWith(parent);
     expect(setCustomModalState).toHaveBeenCalledWith({ key: null, rowId: null });
+  });
+});
+
+describe('header process button styles (primary-danger / ghost-danger)', () => {
+  it('maps primary-danger to the design-system destructive variant', () => {
+    expect(getProcessButtonVariant({ style: 'primary-danger' })).toBe('destructive');
+  });
+
+  it('keeps positive as the default (filled) variant', () => {
+    expect(getProcessButtonVariant({ style: 'positive' })).toBe('default');
+  });
+
+  it('falls back to outline for every other style', () => {
+    expect(getProcessButtonVariant({ style: 'ghost-danger' })).toBe('outline');
+    expect(getProcessButtonVariant({ style: 'destructive' })).toBe('outline');
+    expect(getProcessButtonVariant({ style: 'outline' })).toBe('outline');
+    expect(getProcessButtonVariant({})).toBe('outline');
+  });
+
+  it('adds no colour classes for primary-danger, with or without salesTheme', () => {
+    const p = { style: 'primary-danger' };
+    const plain = getButtonClass(false, p, false);
+    const themed = getButtonClass(true, p, false);
+    expect(plain).toBe('font-medium');
+    // salesTheme would otherwise repaint a button amber (bg-status-warning).
+    expect(themed).toBe(plain);
+    expect(plain).not.toMatch(/\b(bg|text|border)-/);
+  });
+
+  it('still paints ghost-danger red (contrast with primary-danger)', () => {
+    expect(getButtonClass(false, { style: 'ghost-danger' }, false)).toContain('text-[hsl(var(--destructive))]');
+  });
+
+  it('colours the Undo icon red only on ghost-danger', () => {
+    expect(getDangerIconClass({ style: 'ghost-danger' })).toBe('mr-1 text-[hsl(var(--destructive))]');
+    expect(getDangerIconClass({ style: 'primary-danger' })).toBe('mr-1');
+    expect(getDangerIconClass({ style: 'positive' })).toBe('mr-1');
+  });
+
+  it('treats both danger styles, and only them, as danger processes', () => {
+    expect(isDangerProcess({ style: 'ghost-danger' })).toBe(true);
+    expect(isDangerProcess({ style: 'primary-danger' })).toBe(true);
+    expect(isDangerProcess({ style: 'destructive' })).toBe(false);
+    expect(isDangerProcess(null)).toBe(false);
   });
 });

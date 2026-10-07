@@ -3,12 +3,13 @@
   "window": {
     "category": "finance",
     "name": "Chart of Accounts",
-    "hideCreate": true,
+    "hideCreate": false,
     "hideListFilters": true,
     "hideRecordCount": true,
     "titleField": "searchKey",
     "customComponents": {
-      "headerTable": "AccountTreeView"
+      "headerTable": "AccountTreeView",
+      "newRecordComponent": "NewSubAccountCreateModal"
     },
     "menuActions": [
       { "key": "newSubAccount", "label": "New Sub-account", "labelKey": "newSubAccount", "component": "NewAccountModal" }
