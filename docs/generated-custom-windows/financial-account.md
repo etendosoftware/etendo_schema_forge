@@ -2199,7 +2199,9 @@ its own currency while booking the bank transaction(s) in the account currency:
   same greedy "first-come, first-served" allocation the same-currency flow always used, generalized.
   The panel's multi-select is no longer restricted to one foreign invoice; `selectedSum`/`remaining`
   in the action bar sum each candidate's account-currency equivalent (`candidateBaseAmount`), so the
-  same bar now doubles as the EUR-style total.
+  same bar now doubles as the EUR-style total. That stays true when the selection qualifies for a
+  bank-rate conversion; the bar then only adds one line with the exchange gain or loss reconciling
+  at the bank rate would book (see "Bank-rate conversion block" below).
 - **Partial line coverage (under-selection):** the selected invoices no longer have to fully cover
   the line — e.g. a 100 line matched to a single 60 invoice pays that invoice in full and leaves the
   line **split**: 60 reconciled, plus a new pending sub-line for the remaining 40 (for a future
@@ -2227,13 +2229,122 @@ its own currency while booking the bank transaction(s) in the account currency:
     line (the missed case). The two physical rows now always share a match group whenever a split
     actually happens, so they collapse back into one row regardless of how many operations caused
     the split. See "Partial-match display" below for how that collapsed row renders.
-- **Rate source:** the conversion rate comes from the **invoice's own exchange rate**
-  (`PaymentCurrencyConverter.resolveInvoiceRate`: the invoice's `ConversionRateDoc` document rate,
-  falling back to the general `C_Conversion_Rate` for the invoice date), not from the statement line.
-  The `FIN_Payment` is created for `invoice amount` (invoice currency); the `FIN_Finacc_Transaction`
-  is booked for `invoice amount × rate` (account currency). If that doesn't exactly match what the
-  bank sent, the difference is **not** posted as an exchange difference — it simply stays unreconciled
-  on the statement line (the existing "partial match, remainder reported" behavior).
+- **Rate source — two modes, decided by the selection:**
+  - **Bank rate (ETP-5657, Classic parity) — every selected invoice shares ONE currency that differs
+    from the account's.** The rate is the one the **bank** implied, exactly as Classic's Match
+    Statement → Add Payment does: the payment-method modal prefills *Converted amount* = the line's
+    pending amount, *Amount to collect/pay* = Σ outstanding of the selected invoices, and derives
+    *Rate* = converted ÷ amount (6 decimals, HALF_UP). For the reference case — a 27,87 € line
+    against FV1000024 for 40,91 USD — that is 40,91 / 0,681252 / 27,87, and the line ends **fully
+    reconciled**. All three figures are editable (see "Bank-rate conversion block" below). The
+    `FIN_Payment` carries the amount in the invoice currency plus `financialTransactionAmount` /
+    `financialTransactionConvertRate`; the movement gets its `Foreign_*` fields and both payment and
+    movement get a `C_Conversion_Rate_Document`. The gap against the invoice's own rate (a 0,04 € gain
+    in the example) is booked by **Core's accounting** (`AcctServer.convertAmount`) as a realized
+    exchange difference — this module posts nothing itself. **This reverses ETP-4502 iteration 2**,
+    which left that gap unreconciled on the line on purpose; the reversal, its backend contract and
+    its accepted risks are recorded as Iteration 6 in `docs/plans/ETP-4502-cross-domain.md`.
+  - **Invoice rate — anything else** (a mixed selection: two foreign currencies, or a foreign and a
+    same-currency invoice; also MCP/REST callers that send no conversion fields). Unchanged: the rate
+    comes from the **invoice's own exchange rate** (`PaymentCurrencyConverter.resolveInvoiceRate`: the
+    invoice's `ConversionRateDoc` document rate, falling back to the general `C_Conversion_Rate` for
+    the invoice date), not from the statement line. The `FIN_Payment` is created for `invoice amount`
+    (invoice currency); the `FIN_Finacc_Transaction` is booked for `invoice amount × rate` (account
+    currency). If that doesn't exactly match what the bank sent, the difference is **not** posted as
+    an exchange difference — it stays unreconciled on the statement line (the existing "partial
+    match, remainder reported" behavior). A mixed selection has no single rate to derive, so it keeps
+    this mode.
+- **Bank-rate conversion block (ETP-5657):** rendered inside `PaymentMethodModal` by
+  `components/contract-ui/ReconciliationConversionSection.jsx`; the state lives in
+  `useReconciliationConversion.js` and every rule in the pure `reconciliationConversionMath.js`
+  (node:test-importable, same arrangement as `writeoffMath.js`).
+  - **Fields:** `Importe del extracto` (read-only — for a PARTIAL line, its pending remainder),
+    `Importe a cobrar ({ccy})` / `Importe a pagar ({ccy})` by the line's sign (invoice currency),
+    `Cotización ({inv} → {acct})` (`MaskedAmountInput` with `grouping={false}`) and
+    `Importe convertido ({acct})`.
+  - **Edit rules (Classic):** editing the amount keeps the converted amount pinned to the statement and
+    re-derives the rate; editing the rate recomputes converted = round(amount × rate, 2) and makes the
+    rate the anchor (a later amount edit then recomputes the converted amount instead); editing the
+    converted amount re-derives the rate and pins the converted amount again. **An unusable value —
+    cleared, zero or negative — never propagates:** only the field the user changed takes it (and
+    shows its error, with Confirmar disabled); the other two keep their last values, so a field the
+    user did not touch is never blanked or corrupted (this also stops a half-typed `0` on the way to
+    `0,68` from flickering the others). The anchor is chosen so the next valid edit recomputes
+    sensibly: clearing the **amount** keeps the anchor as it was; clearing the **rate** pins the
+    converted amount (a later amount edit re-derives the rate from it); clearing the **converted
+    amount** anchors the rate (a later amount edit recomputes the converted amount from it).
+  - **Partial payment** is simply a lower amount to collect/pay: 21,34 USD against the same line
+    re-derives the rate to 1,305998, and the invoice keeps the rest outstanding. A typed amount is
+    rounded HALF_UP to 2 decimals before anything is derived from it (40,905 → 40,91), so the rate,
+    the display and the payload agree.
+  - **Validation (blocks Confirmar):** amount > 0 and ≤ Σ outstanding; rate > 0; converted > 0 and ≤
+    the line's pending amount **strictly** — no tolerance, because Core would book any excess as a
+    remainder of the opposite sign. A rate of exactly 1 is accepted: with `convertedAmount` present
+    the backend treats the rate as advisory, so a pegged pair (converted == amount) can be confirmed.
+  - **Reference (only when every selected candidate carries its `rate`):** the invoice rate of what is
+    being paid — the average of each candidate's unrounded `rate`, weighted by the share of the amount
+    each invoice receives (the amount spread over the invoices in request order, as the backend
+    allocates it; with everything paid this is the outstanding-weighted average) — and the exchange
+    difference = converted − the invoice-rate value of what is paid (each share rounded like
+    `amountBase`). The difference is **named, never shown as a bare sign** (`fxOutcome`), because
+    the sign alone does not say what Core books: on a receipt, collecting more account currency than
+    the invoices were worth is a **gain** ("Ganancia por diferencia de cambio 0,04 €", posted to the
+    gain account, 768 in the Spanish chart); on a payment, paying more than they were worth is a
+    **loss** ("Pérdida por diferencia de cambio 0,07 €", 668) — and the reverse when the bank amount
+    is below the invoice-rate value. The amount is unsigned. The row is hidden when the difference is
+    negligible (< 0,005, no "+0,00 €") and while the form is invalid. Both rows are informative
+    only: like Classic, there is no deviation warning and no way back to the invoice rate from this
+    modal — while the conversion applies the three fields are always sent.
+  - **Remainder hint:** when the converted amount is below the line, "Quedan {amount} pendientes en la
+    línea del extracto" — the line is split and the rest stays pending, as for any partial
+    match.[^conv-remainder] Hidden while the form is invalid: a negative amount or a zero rate would
+    otherwise produce a meaningless remainder.
+  - **Wire:** `reconcileGroup` gains top-level `actualPayment` (invoice currency), `conversionRate`
+    and `convertedAmount` (account currency) — unsigned dot-decimal strings, the rate sent verbatim
+    when the user typed it. Without them the backend behaves exactly as before. The backend fills the
+    invoices in request order with the amount to pay, splits the converted amount across them by
+    largest remainder (so the movements add up to it exactly) and gives each payment the rate that
+    reproduces its own share — with several invoices those per-payment rates differ slightly from the
+    one shown in the modal. Full contract: com.etendoerp.go `docs/neo-headless.md` §4.12.1.1,
+    *Explicit conversion on `reconcileGroup`*. Its refusals map to
+    `backendError.reconcileConversion*` in `lib/backendErrors.js` (including
+    `reconcileConversionActualRequired`, reachable only from an MCP/REST caller, since the modal
+    always sends `actualPayment`); a typed rate reuses the `backendError.conversionRate*` messages.
+  - **Footer (while selecting):** "Documentos seleccionados" / "Restante por conciliar" keep their
+    pre-ETP-5657 meaning — Σ `amountBase` at the **invoice** rate (`candidateBaseAmount`), so 27,83 €
+    selected and 0,04 € remaining in the example. The conversion only adds one muted line,
+    `recon-action-fx-notice` (prop `fxNotice` on `ReconciliationActionBar` — not `differenceNotice`,
+    which also recolors the remaining amount): "Al conciliar a la cotización del banco: ganancia por
+    diferencia de cambio {amount}" or "…: pérdida por diferencia de cambio {amount}"
+    (`financeReconcileBarFxGainAtBankRate` / `financeReconcileBarFxLossAtBankRate`), with the
+    unsigned difference of the **default** conversion = |line pending| − Σ invoice-rate value of the
+    selected invoices, named gain or loss by the same direction rule as the modal row (a 0,04 € gain
+    in the example; a 10 USD invoice against a 1.000 € line shows the large figure, which is the
+    point — the user sees something is off before opening the modal). It never reflects the modal's
+    edits, and it is absent when a selected candidate has no `rate` or the difference is negligible.
+  - **Edits are dropped** whenever the modal closes — opened, cancelled, after a successful
+    reconcile, on the `GL_ITEM_REQUIRED` hand-off to the accounting-account setup, on a 409 that
+    retargets the selection to the line's pending sub-line (the modal closes too: the selection it
+    was confirming is gone), and when the window's read-only tier force-closes it — so the next open
+    always starts from the defaults.
+    They are also tied to the selection they were made for (line pending amount, Σ outstanding and
+    the selected invoice ids): selecting another line or changing the selection falls back to fresh
+    defaults.
+  - **Known risk — a large deviation still defaults to full settlement (accepted, Classic
+    parity).** Whatever the gap, the modal opens prefilled to settle every selected invoice in full
+    at the bank-implied rate, and Confirmar stays enabled. A 27,75 € receipt against a 78,26 USD
+    invoice (53,24 € at its own rate) defaults to rate 0,354587 and books a **25,49 € exchange
+    loss** in one click. Like Classic, there is no deviation warning: the footer notice before the
+    modal opens, the reference rate ("Cotización de la factura") and the gain/loss row are the only
+    cues, and to avoid settling in full the user lowers the amount to pay (a partial payment) or
+    edits the rate. The backend has no deviation check either, so an MCP/REST caller gets no cue at
+    all. **Verified to match Classic** (same
+    DB): Add Payment for a +10,00 € line against a 106,72 USD invoice prefills 106,72 / 0,093703 /
+    10,00 with no warning, and confirming posts a 62,60 € exchange loss to 668. Classic prefills full
+    settlement only through its automatic selection when the currency is switched (a manual tick
+    keeps the Actual Payment already entered); GO always prefills it. Core's cent-level
+    posting effects of this mode, also verified identical or equivalent in Classic, are listed under
+    Iteration 6 in `docs/plans/ETP-4502-cross-domain.md`.
 - **Payment method modal:** invoices are no longer filtered by payment method — every unpaid invoice
   is a valid candidate. Instead, clicking "Conciliar" with invoices selected opens `PaymentMethodModal`
   — a `ChipSelect` picker (`@/components/forms/fields`, the same chip-style selector used for
@@ -2251,7 +2362,17 @@ its own currency while booking the bank transaction(s) in the account currency:
   fails with "Selected payment method doesn't exist"). Our version validates the invoice/BP method
   against the account actually being reconciled instead. If the account has no methods configured for
   the direction, the modal is skipped and the backend auto-resolves a default, same as before this
-  iteration. A cross-currency settlement additionally requires the resolved/chosen method to be
+  iteration — **except under a bank-rate conversion (ETP-5657)**: the modal then opens anyway,
+  because the conversion figures are confirmed there, with the method picker hidden, the title and
+  body switched to `financeReconcileConversionModalTitle` / `financeReconcileConversionModalBody`
+  ("Confirma la conversión de moneda"), no `paymentMethodId` in the payload, and the backend
+  auto-resolving the method as above. Confirmar is disabled while busy, while a shown picker has no
+  method, while the conversion is invalid, or — with no picker — while no conversion is active (that
+  modal exists only to confirm the conversion, so with none there is nothing to confirm; this closes
+  a race where a retargeted selection left the modal open with Confirmar enabled). With no method
+  for the direction, a single-currency
+  foreign selection whose invoices have nothing outstanding (conversion eligible but inactive) still
+  skips the modal. A cross-currency settlement additionally requires the resolved/chosen method to be
   multi-currency enabled (`payin/payout_ismulticurrency`), and is rejected with a clear error instead
   of a cryptic Core failure when it is not. **Since ETP-5084 a PSD2 bank-transfer method no longer
   trips this**: connecting an account to its bank used to clear those two flags on the transfer link
@@ -2285,6 +2406,12 @@ its own currency while booking the bank transaction(s) in the account currency:
   - The document number shown for a linked row is still the auto-created payment's, not the
     invoice's (out of scope).
 
+[^conv-remainder]: The hint simplifies. When the remainder falls within the account's amount
+    tolerance (`EM_ETGO_Amount_Tolerance`), the backend may post it to the account's difference
+    concept instead of leaving it pending — or answer `GL_ITEM_REQUIRED` when no concept is
+    configured, which closes the modal and opens the accounting-account setup — while the modal
+    still says "queda pendiente".
+
 #### Write off the invoice difference (ETP-4797)
 
 When the statement line settles an invoice for **less** than its outstanding amount — a 12,50 €
@@ -2312,6 +2439,11 @@ Four things are non-obvious:
   several invoices only the boundary one is settled partially and the invoices past the cut receive
   no payment at all. The "Σ invoices − line" figure would therefore overstate what actually gets
   written off, so the blocks stay hidden and the modal behaves as before.
+- **Never offered under a bank-rate conversion (ETP-5657).** When the selected invoices share one
+  foreign currency the modal shows the conversion block instead: the amount to collect/pay already
+  decides how much of the invoice is settled, so the write-off blocks are hidden and
+  `writeoffDifference` is never sent (the backend also refuses the combination). A write-off of the
+  remaining balance in that mode is a known follow-up, out of scope.
 - **Core does the work.** The whole backend change is threading a boolean into
   `PaymentRegistrationService.linkPSDsToPayment`, which had the flag hardcoded to `false`; it reaches
   `FIN_AddPayment.updatePaymentDetail`, whose create path either duplicates the schedule detail for

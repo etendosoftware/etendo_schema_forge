@@ -87,6 +87,24 @@ const BACKEND_ERROR_MAP = {
     'backendError.conversionRateMustDifferFromOne',
   'Invalid conversion rate format': 'backendError.conversionRateInvalidFormat',
   'Conversion rate must be greater than zero': 'backendError.conversionRateNotPositive',
+  // ETP-5657 — reconcileGroup with the bank-rate conversion fields (`actualPayment`,
+  // `conversionRate`, `convertedAmount`), refused by com.etendoerp.go
+  // ReconciliationConversionSupport. Plain English literals, no AD_MESSAGE: the Java text is the
+  // wire contract. The modal pre-checks the amount bounds, so these are mostly reached by a stale
+  // selection or an MCP client; a typed rate reuses the conversion-rate messages above. The modal
+  // always sends `actualPayment`, so the "required" refusal is mapped for MCP parity only.
+  'actualPayment is required when conversionRate or convertedAmount is sent':
+    'backendError.reconcileConversionActualRequired',
+  'Conversion fields require all selected invoices to share one currency different from the account currency':
+    'backendError.reconcileConversionCurrencyMismatch',
+  'Conversion fields cannot be combined with existing transactions or a write-off':
+    'backendError.reconcileConversionNotCombinable',
+  'The amount to pay must be greater than zero and not exceed the outstanding amount of the selected invoices':
+    'backendError.reconcileConversionActualOutOfRange',
+  'The converted amount must be greater than zero and not exceed the statement line amount':
+    'backendError.reconcileConversionConvertedOutOfRange',
+  'The converted amount is too small to allocate across the selected invoices':
+    'backendError.reconcileConversionTooSmall',
   'Country needed in an IBAN account.': 'backendError.countryIban',
   // ETP-4896 (FinancialAccountCountrySupport / FinancialAccountHandler). Same meaning as the DB's
   // 'Country needed in an IBAN account.' above, so it reuses that key rather than adding a second
