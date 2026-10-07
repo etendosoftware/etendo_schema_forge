@@ -18,6 +18,8 @@ import ReportViewerPage from './pages/ReportViewerPage.jsx';
 import BankConnectionCallbackPage from './pages/BankConnectionCallbackPage.jsx';
 import PisCallbackPage from './pages/PisCallbackPage.jsx';
 import ArtifactViewerPage from './pages/ArtifactViewerPage.jsx';
+import { useSupportSession } from './hooks/useSupportSession.js';
+import { isSupportRestrictedRoute } from './lib/supportSession.js';
 
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage.jsx'));
 const SmartScanPage = lazy(() => import('./pages/SmartScanPage.jsx'));
@@ -35,6 +37,7 @@ const InviteAcceptancePage = lazy(() => import('./pages/InviteAcceptancePage.jsx
 const DevLifecyclePage = import.meta.env.DEV
   ? lazy(() => import('./pages/DevLifecyclePage.jsx')) : null;
 const PortalPage = lazy(() => import('./pages/PortalPage.jsx'));
+const SupportAccessPage = lazy(() => import('./pages/SupportAccessPage.jsx'));
 
 const LOADING_FALLBACK = <div className="p-8 text-muted-foreground">Loading...</div>;
 
@@ -43,15 +46,27 @@ function RuntimeLogoutRoute() {
   return <LogoutRoute cleanup={logout} safeDestination="/login" data-testid="LogoutRoute__e8c60d" />;
 }
 
+// ETP-5351 — a support session never reaches account settings, billing or the screens that mint
+// long-lived credentials (`SUPPORT_RESTRICTED_ROUTES`). Hiding the entries is not enough: a typed
+// URL must land on the home page too, not on a screen whose every request the backend refuses.
+function SupportRestrictedRoute({ children }) {
+  const { isSupportMode } = useSupportSession();
+  if (isSupportMode) return <Navigate to="/dashboard" replace data-testid="Navigate__support-restricted" />;
+  return children;
+}
+
 function lazyRoute(path, Component, extraProps = {}) {
+  const page = (
+    <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d">
+      <Component {...extraProps} data-testid="Component__e8c60d" />
+    </Suspense>
+  );
   return {
     path,
     public: false,
-    element: (
-      <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d">
-        <Component {...extraProps} data-testid="Component__e8c60d" />
-      </Suspense>
-    ),
+    element: isSupportRestrictedRoute(path)
+      ? <SupportRestrictedRoute data-testid="SupportRestrictedRoute__e8c60d">{page}</SupportRestrictedRoute>
+      : page,
   };
 }
 
@@ -85,6 +100,11 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
         <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><OnboardingPage data-testid="OnboardingPage__e8c60d" /></Suspense>
       ) },
     { path: 'logout', public: true, element: <RuntimeLogoutRoute data-testid="RuntimeLogoutRoute__e8c60d" /> },
+    // ETP-5351 — Classic's support handoff (`#t=<ticket>`). Public: the visitor has no GO session
+    // yet, the ticket is the credential. A static path, so it outranks `:windowName` below.
+    { path: 'support-access', public: true, element: (
+        <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><SupportAccessPage data-testid="SupportAccessPage__e8c60d" /></Suspense>
+      ) },
     { path: 'financial-account/bank-connection-callback', public: true, element: <BankConnectionCallbackPage data-testid="BankConnectionCallbackPage__e8c60d" /> },
     { path: 'financial-account/pis-callback', public: true, element: <PisCallbackPage data-testid="PisCallbackPage__e8c60d" /> },
     { path: 'dashboard', public: false, element: <DashboardPage apiBaseUrl={apiBaseUrl} data-testid="DashboardPage__e8c60d" /> },

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/layout/AppLayout.jsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -234,6 +235,17 @@ vi.mock('@/components/ui/dropdown-menu.jsx', async () => {
   };
 });
 
+// ETP-5351 — the banner's own behaviour is covered in SupportSessionBanner.vitest.jsx; here only
+// where AppLayout mounts it. The stub follows the real store, like the banner does.
+vi.mock('@/components/layout/SupportSessionBanner.jsx', async () => {
+  const { useSupportSession } = await import('@/hooks/useSupportSession.js');
+  return {
+    SupportSessionBanner: () => (useSupportSession().isSupportMode
+      ? <div data-testid="support-mode-banner" />
+      : null),
+  };
+});
+
 vi.mock('@/components/webmcp/WebMcpEtendoGoTools.jsx', () => ({
   WebMcpEtendoGoTools: () => <div data-testid="webmcp-agent-tools" />,
 }));
@@ -247,6 +259,7 @@ import { buildMenuGroups } from '@/windows/registry.js';
 import { defaultNavigation, expectedNavigation, navigationPermissions, expectNavigation } from '@/windows/__tests__/navigationExpectations.js';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import AppLayout from '../AppLayout.jsx';
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 
 describe('AppLayout — normal mode', () => {
   const defaultProps = {
@@ -1174,5 +1187,49 @@ describe('AppLayout — environment access gate (ETP-5443 follow-up)', () => {
     render(<AppLayout {...defaultProps} />);
 
     expect(screen.getByTestId('BlockedAccessScreen__488148')).toBeInTheDocument();
+  });
+});
+
+// ETP-5351 — a support session: the banner is on screen, the help chat is not, and the menu
+// loses the entries a support session cannot use.
+describe('AppLayout — support session', () => {
+  const props = {
+    menuGroups: [{ group: 'Settings', items: [{ name: 'user', label: 'User' }, { name: 'oauth2-clients', label: 'OAuth2 Clients' }] }],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    applySupportSessionFromServer(
+      { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: '2026-10-05T11:00:00Z' },
+      { storage: localStorage },
+    );
+  });
+
+  afterEach(() => {
+    resetSupportSessionForTests();
+  });
+
+  it('shows the support banner and no help chat widget', () => {
+    render(<AppLayout {...props} />);
+
+    expect(screen.getByTestId('support-mode-banner')).toBeInTheDocument();
+    expect(screen.queryByTestId('support-chat-widget')).not.toBeInTheDocument();
+  });
+
+  it('drops the entries a support session cannot use from the menu it passes down', () => {
+    render(<AppLayout {...props} />);
+
+    const groups = screen.getByTestId('side-menu-groups').textContent;
+    expect(groups).toContain('"user"');
+    expect(groups).not.toContain('oauth2-clients');
+  });
+
+  it('brings the chat widget back and hides the banner once /me confirms there is no support session', () => {
+    applySupportSessionFromServer(null, { storage: localStorage });
+    render(<AppLayout {...props} />);
+
+    expect(screen.getByTestId('support-chat-widget')).toBeInTheDocument();
+    expect(screen.queryByTestId('support-mode-banner')).not.toBeInTheDocument();
   });
 });

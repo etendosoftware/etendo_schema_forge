@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { useSupportChatSafe } from '@/components/support/SupportChatContext.jsx';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
 import { STATUS_COLOR, STATUS_ICON } from './fiscalModelsUtils.js';
 import './fiscal-models.css';
 
@@ -25,6 +26,8 @@ export function MoreOptionsMenu({ favKey, favLabel }) {
   const ui = useUI();
   const { toggleFavorite, isFavorite } = useFavorites();
   const { actions: supportActions } = useSupportChatSafe();
+  // ETP-5351 — "help" opens the support chat, which a support session does not have.
+  const { isSupportMode } = useSupportSession();
   const favActive = favKey ? isFavorite(favKey) : false;
 
   const handleHelp = () => {
@@ -56,10 +59,12 @@ export function MoreOptionsMenu({ favKey, favLabel }) {
             {favActive ? ui('removeFromFavorites') : ui('addToFavorites')}
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onClick={handleHelp} data-testid="fm-more-options-help">
-          <HelpCircle className="h-4 w-4 mr-2 text-muted-foreground" data-testid="HelpCircle__fmcommon" />
-          {ui('pageHelp')}
-        </DropdownMenuItem>
+        {!isSupportMode && (
+          <DropdownMenuItem onClick={handleHelp} data-testid="fm-more-options-help">
+            <HelpCircle className="h-4 w-4 mr-2 text-muted-foreground" data-testid="HelpCircle__fmcommon" />
+            {ui('pageHelp')}
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -4,6 +4,14 @@ function isProviderEnabled(provider) {
   return provider && provider.enabled !== false;
 }
 
+// ETP-5351 — a product-analytics provider (Mixpanel) declares `analytics: true`. Those, and only
+// those, go quiet while analytics are suppressed (a support session): no SDK init, no event, no
+// identity call, no reset. Error and performance monitoring (Sentry, RUM) keeps running, because a
+// bug an operator hits while helping a customer is still a bug.
+function isAnalyticsProvider(provider) {
+  return provider?.analytics === true;
+}
+
 function getProviderName(provider) {
   return provider?.name || 'unknown-provider';
 }
@@ -20,6 +28,13 @@ export function createObservability(options = {}) {
   let context = {};
   let metadata = {};
   let initialized = false;
+  let analyticsSuppressed = false;
+  // Analytics providers skipped by an init that ran while suppressed; initialized if it lifts.
+  let deferredAnalytics = [];
+
+  function activeProviders() {
+    return analyticsSuppressed ? providers.filter(provider => !isAnalyticsProvider(provider)) : providers;
+  }
 
   async function callProvider(provider, methodName, args) {
     const method = provider?.[methodName];
@@ -48,10 +63,32 @@ export function createObservability(options = {}) {
       context = { ...(config.context ?? {}) };
       metadata = { ...(config.metadata ?? {}) };
       initialized = true;
+      deferredAnalytics = analyticsSuppressed ? providers.filter(isAnalyticsProvider) : [];
 
       await Promise.all(
-        providers.map(provider => callProvider(provider, 'init', [{ context: getContext() }]))
+        activeProviders().map(provider => callProvider(provider, 'init', [{ context: getContext() }]))
       );
+    },
+
+    /**
+     * ETP-5351 — the single switch for product analytics. Cutting here, and not at each event,
+     * is what makes "nothing reaches Mixpanel" hold for events nobody has written yet. Lifting it
+     * initializes the analytics providers an earlier init skipped.
+     */
+    async setAnalyticsSuppressed(suppressed) {
+      const next = Boolean(suppressed);
+      if (next === analyticsSuppressed) return;
+      analyticsSuppressed = next;
+      if (next || !initialized || deferredAnalytics.length === 0) return;
+      const pending = deferredAnalytics;
+      deferredAnalytics = [];
+      await Promise.all(
+        pending.map(provider => callProvider(provider, 'init', [{ context: getContext() }]))
+      );
+    },
+
+    isAnalyticsSuppressed() {
+      return analyticsSuppressed;
     },
 
     async track(eventName, properties = {}) {
@@ -59,7 +96,7 @@ export function createObservability(options = {}) {
       const payload = buildEventPayload({ properties, context, metadata });
 
       await Promise.all(
-        providers.map(provider =>
+        activeProviders().map(provider =>
           callProvider(provider, 'track', [eventName, payload, { context: getContext() }])
         )
       );
@@ -70,7 +107,7 @@ export function createObservability(options = {}) {
       const payload = buildEventPayload({ properties, context, metadata, route: path });
 
       await Promise.all(
-        providers.map(provider =>
+        activeProviders().map(provider =>
           callProvider(provider, 'page', [payload.route, payload, { context: getContext() }])
         )
       );
@@ -80,7 +117,7 @@ export function createObservability(options = {}) {
       if (!initialized || !userId) return;
 
       await Promise.all(
-        providers.map(provider =>
+        activeProviders().map(provider =>
           callProvider(provider, 'identify', [userId, { ...traits }, { context: getContext() }])
         )
       );
@@ -90,7 +127,7 @@ export function createObservability(options = {}) {
       if (!initialized || !groupKey || !groupId) return;
 
       await Promise.all(
-        providers.map(provider =>
+        activeProviders().map(provider =>
           callProvider(provider, 'group', [groupKey, groupId, { ...traits }, { context: getContext() }])
         )
       );
@@ -100,7 +137,7 @@ export function createObservability(options = {}) {
       if (!initialized || !groupKey || !groupId) return;
 
       await Promise.allSettled(
-        providers.map(provider =>
+        activeProviders().map(provider =>
           callProvider(provider, 'groupSet', [groupKey, groupId, { ...properties }, { context: getContext() }])
         )
       );
@@ -110,7 +147,7 @@ export function createObservability(options = {}) {
       if (!initialized || !error) return;
 
       await Promise.all(
-        providers.map(provider =>
+        activeProviders().map(provider =>
           callProvider(provider, 'captureException', [error, { ...details }, { context: getContext() }])
         )
       );
@@ -120,13 +157,13 @@ export function createObservability(options = {}) {
       if (!initialized) return;
 
       await Promise.all(
-        providers.map(provider => callProvider(provider, 'flush', [{ context: getContext() }]))
+        activeProviders().map(provider => callProvider(provider, 'flush', [{ context: getContext() }]))
       );
     },
 
     async reset() {
       await Promise.all(
-        providers.map(provider => callProvider(provider, 'reset', [{ context: getContext() }]))
+        activeProviders().map(provider => callProvider(provider, 'reset', [{ context: getContext() }]))
       );
     },
 
@@ -136,7 +173,7 @@ export function createObservability(options = {}) {
       if (!initialized) return;
 
       await Promise.all(
-        providers.map(provider => callProvider(provider, 'setContext', [getContext()]))
+        activeProviders().map(provider => callProvider(provider, 'setContext', [getContext()]))
       );
     },
 

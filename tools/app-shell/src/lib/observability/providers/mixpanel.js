@@ -112,6 +112,9 @@ export function createMixpanelProvider({
   return {
     name: 'mixpanel',
     enabled: providerEnabled,
+    // ETP-5351 — product analytics: silenced as a whole while a support session is active (see
+    // `setAnalyticsSuppressed` in ../core.js). Keep it on whatever replaces this provider.
+    analytics: true,
 
     async init() {
       // getClient() already performs the SDK's own init() plus the one-time

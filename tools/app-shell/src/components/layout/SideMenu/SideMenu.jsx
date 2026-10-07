@@ -76,6 +76,8 @@ import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
+import { isSupportRestrictedMenuItem } from '@/lib/supportSession.js';
 import {
   environmentCommercialLabel,
   environmentPlanLabelKey,
@@ -600,19 +602,21 @@ function ArtifactsLink({ expanded, isActive, tMenu }) {
   );
 }
 
-function SideMenuFooter({ expanded, onHelpClick, unreadCount, ui, isArtifactsActive, tMenu }) {
+function SideMenuFooter({ expanded, onHelpClick, unreadCount, ui, isArtifactsActive, tMenu, showHelp = true }) {
   return (
     <div className={cn(
       'flex flex-col shrink-0 pb-2',
       expanded ? 'px-2 gap-1 pt-2' : 'px-2 gap-1'
     )}>
       <div className={cn('border-t border-[hsl(var(--border-subtle))] mb-1', expanded ? 'mx-[-8px]' : 'w-10')} />
-      <HelpEntryPoint
-        expanded={expanded}
-        onOpenChat={onHelpClick}
-        unreadCount={unreadCount}
-        ui={ui}
-        data-testid="HelpEntryPoint__247c75" />
+      {showHelp && (
+        <HelpEntryPoint
+          expanded={expanded}
+          onOpenChat={onHelpClick}
+          unreadCount={unreadCount}
+          ui={ui}
+          data-testid="HelpEntryPoint__247c75" />
+      )}
       <div className={cn('flex items-center', expanded ? '' : 'justify-center')}>
         <UserAvatarButton expanded={expanded} data-testid="UserAvatarButton__247c75" />
       </div>
@@ -652,6 +656,10 @@ export default function SideMenu({
   // an account with a single company showing that company alone.
   const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch();
   const currentEnvironment = environments.find(env => env.clientId === currentClientId);
+  // ETP-5351 — a support session cannot change company (useEnvironmentSwitch already refuses to),
+  // so the company button stays as the label of where the operator is and does not open. It also
+  // hides the help entry point (see SideMenuFooter below).
+  const { isSupportMode } = useSupportSession();
 
   const favNameMap = useMemo(() => {
     const map = {};
@@ -687,11 +695,14 @@ export default function SideMenu({
       return {
         ...g,
         items: items.filter((item) => {
+          // ETP-5351 — Favorites again: AppLayout drops these entries from menuGroups, not from
+          // the saved favorites list.
+          if (isSupportMode && isSupportRestrictedMenuItem(item)) return false;
           const flag = item.featureFlag || MENU_ITEM_FEATURE_FLAGS[item.name];
           return flag == null || featureFlagValues[flag] === true;
         }),
       };
-    }), [menuGroups, favorites, showProofOfConceptMenu, featureFlagValues]);
+    }), [menuGroups, favorites, showProofOfConceptMenu, featureFlagValues, isSupportMode]);
 
   const activeGroup = findActiveGroup(resolvedMenuGroups, location.pathname, location.search);
   const tMenu = useMenuLabel();
@@ -750,12 +761,13 @@ export default function SideMenu({
               {/* data-testid="company-switcher" is the stable E2E hook for this button.
                   aria-label is ui('switchCompany') -> the TRANSLATED string ("Cambiar
                   empresa"), so it cannot serve as a language-independent selector. */}
-              <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__247c75">
+              <DropdownMenuTrigger asChild disabled={isSupportMode} data-testid="DropdownMenuTrigger__247c75">
                 <button
                   type="button"
                   aria-label={ui('switchCompany')}
+                  disabled={isSupportMode}
                   data-testid="company-switcher"
-                  className="flex flex-1 min-w-0 items-center gap-2 h-10 pl-1 pr-2 rounded-full hover:bg-muted/60 transition-colors"
+                  className="flex flex-1 min-w-0 items-center gap-2 h-10 pl-1 pr-2 rounded-full hover:bg-muted/60 transition-colors disabled:cursor-default disabled:hover:bg-transparent"
                 >
                   <img
                     src={logoSrc}
@@ -788,9 +800,11 @@ export default function SideMenu({
                       </span>
                     )}
                   </span>
-                  <ChevronDown
-                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                    data-testid="ChevronDown__247c75" />
+                  {!isSupportMode && (
+                    <ChevronDown
+                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                      data-testid="ChevronDown__247c75" />
+                  )}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -1036,6 +1050,9 @@ export default function SideMenu({
           ui={ui}
           isArtifactsActive={location.pathname.startsWith('/artifacts')}
           tMenu={tMenu}
+          // ETP-5351 — the operator in a support session IS support: no help chat, no
+          // "report a bug" portal, so the whole help entry point goes.
+          showHelp={!isSupportMode}
           data-testid="SideMenuFooter__247c75" />
       </nav>
       <Dialog open={helpOpen} onOpenChange={setHelpOpen} data-testid="Dialog__247c75">

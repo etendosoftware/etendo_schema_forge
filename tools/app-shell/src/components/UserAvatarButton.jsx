@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 import { useLogout } from '@/auth/useLogout.js';
 import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
 
 const LOCALES = [
   { code: 'en_US', flag: '🇺🇸', label: 'English' },
@@ -29,6 +30,9 @@ export function UserAvatarButton({ expanded = false }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale, setLocale } = useLocaleSwitch();
+  // ETP-5351 — the plan and the account (password, sign-in methods, email, subscription) belong to
+  // the customer; a support session leaves them alone, and its routes redirect home anyway.
+  const { isSupportMode } = useSupportSession();
   // ETP-5115: the menu used to decide whether to offer "change password" by reading a value
   // stashed in localStorage at login, which is why an SSO account saw no such option at all — not
   // disabled with a reason, simply absent. The account screen asks the server what the account
@@ -140,20 +144,24 @@ export function UserAvatarButton({ expanded = false }) {
           )}
 
           <div className="px-2 py-2">
-            <DropdownMenuItem
-              onSelect={() => navigate('/upgrade')}
-              data-testid="menu-tenant-upgrade"
-            >
-              <Rocket className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
-              {ui('upgradeMenuAction')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => navigate('/account')}
-              data-testid="menu-account"
-            >
-              <User className="h-3.5 w-3.5 mr-2" data-testid="User__menu-account" />
-              {ui('account')}
-            </DropdownMenuItem>
+            {!isSupportMode && (
+              <>
+                <DropdownMenuItem
+                  onSelect={() => navigate('/upgrade')}
+                  data-testid="menu-tenant-upgrade"
+                >
+                  <Rocket className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
+                  {ui('upgradeMenuAction')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => navigate('/account')}
+                  data-testid="menu-account"
+                >
+                  <User className="h-3.5 w-3.5 mr-2" data-testid="User__menu-account" />
+                  {ui('account')}
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuItem
               onClick={logout}
               className="text-destructive focus:text-destructive focus:bg-destructive/10 dark:focus:bg-destructive/20"

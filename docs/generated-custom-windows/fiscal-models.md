@@ -2789,6 +2789,8 @@ rendering exactly 2 items:
   (`components/support/SupportChatContext.jsx`), an additive, no-op-fallback sibling of the existing
   `useSupportChat()` (same defensive pattern as `useFavorites()`): it calls `actions.setTab('ayuda')`
   + `actions.open()`, landing on the real `SupportChatWidget` "Ayuda" tab.
+  Hidden in a support session (ETP-5351): the operator inside the tenant as "Soporte Etendo" has no
+  support chat, so the item is not rendered (`useSupportSession().isSupportMode`).
 
 **Why not the generic `TopBar.jsx` kebab's `onPageHelp` prop:** a separate, already-logged finding
 (`docs/feedback.md`) found `onPageHelp` is dead app-wide — no window ever sets `meta.onPageHelp`, so

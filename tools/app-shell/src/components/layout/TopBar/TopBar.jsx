@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMenuLabel, useUI } from '@/i18n';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
 import { useGuardedNavigate } from '@/hooks/useGuardedNavigate.js';
 import { isProductiveEnvironment } from '@/lib/environmentPresentation.js';
 import { useCopilot } from '@/components/CopilotContext';
@@ -309,6 +310,8 @@ function resolveScopeLabel(scope, tMenu) {
 function DemoTrialIndicator({ ui }) {
   const navigate = useNavigate();
   const { environments, currentClientId } = useEnvironmentSwitch();
+  // ETP-5351 — the trial state is useful context for support; paying for the customer is not.
+  const { isSupportMode } = useSupportSession();
   const environment = environments.find(item => item.clientId === currentClientId);
   if (!environment) return null;
   const productive = isProductiveEnvironment(environment);
@@ -365,14 +368,16 @@ function DemoTrialIndicator({ ui }) {
           />
         </div>
       </div>
-      <button
-        type="button"
-        onClick={() => navigate('/upgrade')}
-        className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
-        data-testid="topbar-go-to-payment"
-      >
-        {ui('upgradeGoToPayment')}
-      </button>
+      {!isSupportMode && (
+        <button
+          type="button"
+          onClick={() => navigate('/upgrade')}
+          className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+          data-testid="topbar-go-to-payment"
+        >
+          {ui('upgradeGoToPayment')}
+        </button>
+      )}
       {/* ETP-5364 — the two caveats a user has to read BEFORE paying: this environment never
           talks to Hacienda, and going productive carries over only contacts and products. They
           sit next to the button rather than inside the upgrade flow because by then the

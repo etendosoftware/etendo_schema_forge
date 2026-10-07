@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useSurveyEngine.js
 import { renderHook, act } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,10 @@ const neoResourceMocks = vi.hoisted(() => ({
   getApiBase: vi.fn(() => '/etendo'),
 }));
 
+const supportSessionMocks = vi.hoisted(() => ({
+  useSupportSession: vi.fn(() => ({ isSupportMode: false, supportSession: null })),
+}));
+
 // ---------------------------------------------------------------------------
 // Module mocks — must appear before any import of the hook
 // ---------------------------------------------------------------------------
@@ -57,6 +62,8 @@ vi.mock('@/lib/surveys/survey-state.js', () => surveyStateMocks);
 vi.mock('@/lib/surveys/survey-config.js', () => surveyConfigMocks);
 
 vi.mock('../useNeoResource.js', () => neoResourceMocks);
+
+vi.mock('../useSupportSession.js', () => supportSessionMocks);
 
 vi.mock('@/lib/observability.js', () => observabilityMocks);
 
@@ -92,6 +99,7 @@ const { track, identify } = observabilityMocks;
 const { buildObservabilityEvent, OBSERVABILITY_EVENTS } = observabilityEventsMocks;
 const { loadRemoteSurveyConfig, submitSurveyResponse } = surveyConfigMocks;
 const { getApiBase } = neoResourceMocks;
+const { useSupportSession } = supportSessionMocks;
 
 // ---------------------------------------------------------------------------
 // Suite
@@ -843,6 +851,49 @@ describe('useSurveyEngine', () => {
     // so the request MUST still go out. The old expectation encoded the guard that made
     // this call silently disappear for every authenticated user.
       expect(loadRemoteSurveyConfig).toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // ETP-5351 — a support session is not the customer: no NPS/CSAT is shown,
+  // loaded or marked as seen for it, on login or on a trigger.
+  // -------------------------------------------------------------------------
+
+  describe('in a support session', () => {
+    beforeEach(() => {
+      useSupportSession.mockReturnValue({
+        isSupportMode: true,
+        supportSession: { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: null },
+      });
+      useAuth.mockReturnValue(makeAuth({ isAuthenticated: true, username: 'Soporte Etendo' }));
+      selectNextSurvey.mockReturnValue(makeSurvey());
+    });
+
+    afterEach(() => {
+      useSupportSession.mockReturnValue({ isSupportMode: false, supportSession: null });
+    });
+
+    it('neither marks the login nor loads, selects or shows a survey', () => {
+      const { result } = renderHook(() => useSurveyEngine());
+      act(() => { vi.advanceTimersByTime(2500); });
+
+      expect(markFirstLogin).not.toHaveBeenCalled();
+      expect(loadRemoteSurveyConfig).not.toHaveBeenCalled();
+      expect(selectNextSurvey).not.toHaveBeenCalled();
+      expect(markSurveyShown).not.toHaveBeenCalled();
+      expect(track).not.toHaveBeenCalled();
+      expect(result.current.activeSurvey).toBeNull();
+    });
+
+    it('ignores a survey trigger event', () => {
+      const { result } = renderHook(() => useSurveyEngine());
+      act(() => {
+        window.dispatchEvent(new Event(SURVEY_TRIGGER_EVENT));
+        vi.advanceTimersByTime(1000);
+      });
+
+      expect(selectNextSurvey).not.toHaveBeenCalled();
+      expect(result.current.activeSurvey).toBeNull();
     });
   });
 });

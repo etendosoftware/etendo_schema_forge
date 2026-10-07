@@ -11,6 +11,7 @@ import { loadRemoteSurveyConfig, submitSurveyResponse } from '../lib/surveys/sur
 import { getApiBase } from './useNeoResource.js';
 import { track } from '../lib/observability.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '../lib/observability/events.js';
+import { useSupportSession } from './useSupportSession.js';
 
 function isAdminRole(selectedRole) {
   return selectedRole?.name?.toLowerCase().includes('admin') ?? false;
@@ -24,7 +25,11 @@ function trackSurveyEvent(eventDef, properties) {
 }
 
 export function useSurveyEngine() {
-  const { isAuthenticated, selectedRole, username, selectedOrg, token } = useAuth();
+  const { isAuthenticated: signedIn, selectedRole, username, selectedOrg, token } = useAuth();
+  // ETP-5351 — a support session is not the customer: no NPS/CSAT is shown, loaded or marked as
+  // seen for it, so the engine treats it like no session at all.
+  const { isSupportMode } = useSupportSession();
+  const isAuthenticated = signedIn && !isSupportMode;
   const [activeSurvey, setActiveSurvey] = useState(null);
 
   const userProps = useMemo(() => {

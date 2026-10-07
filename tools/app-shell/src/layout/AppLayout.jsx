@@ -38,6 +38,9 @@ import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 import { WalkthroughProvider } from '@etendosoftware/app-shell-core/walkthrough';
 import { WALKTHROUGH_FLOWS } from '@/walkthrough/flows';
 import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js';
+import { SupportSessionBanner } from '@/components/layout/SupportSessionBanner.jsx';
+import { useSupportSession } from '@/hooks/useSupportSession.js';
+import { hideSupportRestrictedMenuItems } from '@/lib/supportSession.js';
 
 /**
  * ETP-5144 — the engine's `onFinish`, bound to the flow list so the handler can
@@ -98,6 +101,7 @@ function NoAccessScreen() {
       className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
       data-testid="NoAccessScreen__488148"
     >
+      <SupportSessionBanner className="fixed inset-x-0 top-0 z-50" data-testid="SupportSessionBanner__488148" />
       <p className="text-base font-medium text-foreground" data-testid="no-access-title">
         {hasRole ? ui('noAccessRoleTitle') : ui('noAccessNoRoleTitle')}
       </p>
@@ -217,6 +221,9 @@ function BlockedAccessScreen({ decision }) {
   const logout = useLogout();
   const navigate = useNavigate();
   const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch();
+  // ETP-5351 — both CTAs (/upgrade, /account) are the customer's billing, which a support session
+  // does not touch; the explanation stays, so the operator knows why the tenant is blocked.
+  const { isSupportMode } = useSupportSession();
   const companies = [...new Map(
     environments.filter((env) => env.clientId).map((env) => [env.clientId, env])
   ).values()];
@@ -236,6 +243,7 @@ function BlockedAccessScreen({ decision }) {
       className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
       data-testid="BlockedAccessScreen__488148"
     >
+      <SupportSessionBanner className="fixed inset-x-0 top-0 z-50" data-testid="SupportSessionBanner__488148" />
       <p className="text-base font-medium text-foreground" data-testid="blocked-access-title">
         {ui(content.titleKey)}
       </p>
@@ -243,14 +251,16 @@ function BlockedAccessScreen({ decision }) {
         {ui(content.messageKey)}
       </p>
 
-      <Button
-        type="button"
-        className="mt-4"
-        onClick={() => navigate(content.ctaPath)}
-        data-testid="blocked-access-cta"
-      >
-        {ui(content.ctaKey)}
-      </Button>
+      {!isSupportMode && (
+        <Button
+          type="button"
+          className="mt-4"
+          onClick={() => navigate(content.ctaPath)}
+          data-testid="blocked-access-cta"
+        >
+          {ui(content.ctaKey)}
+        </Button>
+      )}
 
       {/* Same rationale as NoAccessScreen's own switcher: a blocked TENANT session does not
           mean a blocked ACCOUNT — the account may own other, unaffected environments. */}
@@ -339,6 +349,9 @@ function AppLayoutInner({ menuGroups, embedded }) {
   const meta = usePageMeta();
   const marginLeft = expanded ? EXPANDED_W : COLLAPSED_W;
   const { state: supportState, actions: supportActions } = useSupportChat();
+  // ETP-5351 — the operator in a support session IS support: no help chat (floating button and
+  // panel), and the provider below runs none of its conversation requests or polls.
+  const { isSupportMode } = useSupportSession();
 
   return (
     <>
@@ -356,6 +369,9 @@ function AppLayoutInner({ menuGroups, embedded }) {
         className="flex h-screen flex-col transition-[margin-left] duration-200 ease-in-out bg-page-bg"
         style={{ marginLeft: embedded ? 0 : marginLeft }}
       >
+        {/* ETP-5351 — first row of the content column, so it never covers the sidebar or the page
+            and stays in view on every route. Renders nothing outside a support session. */}
+        {!embedded && <SupportSessionBanner data-testid="SupportSessionBanner__488148" />}
         {!embedded && (
           <TopBar
             onBack={meta?.onBack}
@@ -392,7 +408,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
       </div>
       {!embedded && <CommandPalette data-testid="CommandPalette__488148" />}
       {!embedded && <CopilotWidget hideTrigger data-testid="CopilotWidget__488148" />}
-      {!embedded && <SupportChatWidget data-testid="SupportChatWidget__488148" />}
+      {!embedded && !isSupportMode && <SupportChatWidget data-testid="SupportChatWidget__488148" />}
     </>
   );
 }
@@ -434,6 +450,9 @@ function AppLayoutAccessGate({ menuGroups }) {
   // environment's commercial access cut off) is captured here, decoupled from AuthContext's
   // own windowAccess/capabilities/menuAccess shape.
   const environmentAccessDecision = useEnvironmentAccessGate();
+  // ETP-5351 — a support session drops the owner-only entries and the ones whose routes it cannot
+  // use (account, billing, long-lived credentials) before any other menu axis runs.
+  const { isSupportMode } = useSupportSession();
   // AppLayout is rendered inside AppShellRuntime's AuthProvider (same place
   // SideMenu below already calls useAuth() today), unlike App.jsx itself — see
   // the note in App.jsx. That's why role-filtering is applied here rather than
@@ -529,7 +548,7 @@ function AppLayoutAccessGate({ menuGroups }) {
   // fetch failure, fail-open per useRoleMenu.js) — never pass a stand-in
   // Set to filterMenuGroupsByAccess() below.
   const filteredMenuGroups = filterMenuGroupsByAccess(
-    menuGroups,
+    isSupportMode ? hideSupportRestrictedMenuItems(menuGroups) : menuGroups,
     allowedIds,
     capabilities,
     windowAccess,

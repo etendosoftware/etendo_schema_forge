@@ -1,5 +1,6 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmCommon.jsx
 // Vitest component tests for FmCommon.jsx
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -35,6 +36,7 @@ vi.mock('@/components/support/SupportChatContext.jsx', () => ({
   useSupportChatSafe: () => ({ actions: { setTab: supportSetTab, open: supportOpen } }),
 }));
 
+import { applySupportSessionFromServer, resetSupportSessionForTests } from '@/lib/supportSession.js';
 import {
   KpiWidget, StatusPill, Tabs, Banner,
   EmptyState, Stepper, NumberedStepper, SectionCard, SidePanel,
@@ -429,5 +431,28 @@ describe('MoreOptionsMenu', () => {
     render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
     await user.click(screen.getByTestId('fm-more-options-favorite'));
     expect(toggleFavorite).toHaveBeenCalledWith('fiscal-models', 'Declaraciones');
+  });
+});
+
+// ETP-5351 — the "help" item opens the support chat, which a support session does not have.
+describe('MoreOptionsMenu in a support session', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    applySupportSessionFromServer(
+      { clientId: 'CLIENT-ACME', clientName: 'Acme Corp', expiresAt: '2026-10-05T11:00:00Z' },
+      { storage: localStorage },
+    );
+  });
+
+  afterEach(() => {
+    resetSupportSessionForTests();
+  });
+
+  it('drops the help item and keeps favorites', () => {
+    render(<MoreOptionsMenu favKey="fiscal-models" favLabel="Declaraciones" />);
+
+    expect(screen.queryByTestId('fm-more-options-help')).not.toBeInTheDocument();
+    expect(screen.getByTestId('fm-more-options-favorite')).toBeInTheDocument();
+    expect(supportOpen).not.toHaveBeenCalled();
   });
 });

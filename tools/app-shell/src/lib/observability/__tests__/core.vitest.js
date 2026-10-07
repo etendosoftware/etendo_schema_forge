@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/observability/core.js
 import { createObservability } from '../core.js';
 
 function makeProvider(name = 'test', overrides = {}) {
@@ -363,5 +364,72 @@ describe('callProvider error handling', () => {
     const p = makeProvider('broken', { track: vi.fn().mockRejectedValue(new Error('x')) });
     await obs.initObservability({ providers: [p], logger: {} });
     await expect(obs.track('event')).resolves.toBeUndefined();
+  });
+});
+
+// ETP-5351 — a support session must send nothing to product analytics. The cut is one switch on
+// the core, so every event goes quiet, including ones nobody has written yet; error/performance
+// providers (no `analytics` flag) keep working.
+describe('setAnalyticsSuppressed', () => {
+  const METHODS = [
+    ['track', (obs) => obs.track('event', { a: 1 })],
+    ['page', (obs) => obs.page('/dashboard')],
+    ['identify', (obs) => obs.identify('user-1')],
+    ['group', (obs) => obs.group('account_id', 'acc-1')],
+    ['groupSet', (obs) => obs.groupSet('account_id', 'acc-1', { plan: 'x' })],
+    ['captureException', (obs) => obs.captureException(new Error('x'))],
+    ['flush', (obs) => obs.flush()],
+    ['reset', (obs) => obs.reset()],
+    ['setContext', (obs) => obs.setContext({ k: 'v' })],
+  ];
+
+  it('never initializes an analytics provider while suppressed, but does the others', async () => {
+    const obs = createObservability();
+    const analytics = makeProvider('mixpanel', { analytics: true });
+    const monitoring = makeProvider('rum');
+    await obs.setAnalyticsSuppressed(true);
+    await obs.initObservability({ providers: [analytics, monitoring] });
+
+    expect(analytics.init).not.toHaveBeenCalled();
+    expect(monitoring.init).toHaveBeenCalledTimes(1);
+    expect(obs.isAnalyticsSuppressed()).toBe(true);
+  });
+
+  it.each(METHODS)('keeps %s away from analytics providers while suppressed', async (method, call) => {
+    const obs = createObservability();
+    const analytics = makeProvider('mixpanel', { analytics: true, reset: vi.fn() });
+    const monitoring = makeProvider('rum', { reset: vi.fn() });
+    await obs.initObservability({ providers: [analytics, monitoring] });
+    await obs.setAnalyticsSuppressed(true);
+
+    await call(obs);
+
+    expect(analytics[method]).not.toHaveBeenCalled();
+    expect(monitoring[method]).toHaveBeenCalled();
+  });
+
+  it('initializes the skipped analytics providers once lifted, and delivers again', async () => {
+    const obs = createObservability();
+    const analytics = makeProvider('mixpanel', { analytics: true });
+    await obs.setAnalyticsSuppressed(true);
+    await obs.initObservability({ providers: [analytics] });
+    await obs.track('dropped');
+
+    await obs.setAnalyticsSuppressed(false);
+    await obs.track('delivered');
+
+    expect(analytics.init).toHaveBeenCalledTimes(1);
+    expect(analytics.track).toHaveBeenCalledTimes(1);
+    expect(analytics.track.mock.calls[0][0]).toBe('delivered');
+  });
+
+  it('does not initialize an analytics provider twice when it was already running', async () => {
+    const obs = createObservability();
+    const analytics = makeProvider('mixpanel', { analytics: true });
+    await obs.initObservability({ providers: [analytics] });
+    await obs.setAnalyticsSuppressed(true);
+    await obs.setAnalyticsSuppressed(false);
+
+    expect(analytics.init).toHaveBeenCalledTimes(1);
   });
 });

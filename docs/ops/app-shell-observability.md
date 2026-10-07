@@ -30,6 +30,28 @@ Mixpanel is opt-in. If `VITE_MIXPANEL_ENABLED=true` is set without
 `VITE_MIXPANEL_TOKEN`, the provider logs a warning and remains disabled. The SDK
 is lazy-loaded only when the provider is enabled and used.
 
+### Support sessions silence product analytics (ETP-5351)
+
+An Etendo operator can enter a tenant as "Soporte Etendo" from Classic (see
+`lib/supportSession.js`). Nothing that session does may count as the customer's activity, so
+while it lasts product analytics are suppressed as a whole:
+
+- A provider declares itself as product analytics with `analytics: true` (today only
+  Mixpanel). `createObservability().setAnalyticsSuppressed(true)` keeps every call away from
+  those providers — `init`, events, `page`, `identify`, `group`/`groupSet` (health score),
+  `flush`, `reset` — and an init that runs while suppressed skips them; they are initialized
+  only if the suppression is lifted. Sentry and RUM keep running: an error an operator hits
+  is still an error.
+- The switch is driven by the support-session store, wired once in `lib/observability.js`.
+  `main.jsx` calls `bootSupportSession()` before `initBrowserObservability()`, so a support
+  load never initializes the Mixpanel SDK at all: the store starts in support mode on the
+  handoff route and whenever the `sf_support_session` marker (written by the handoff and by
+  every `/me` that reports a `supportSession`) is still live.
+- NPS/CSAT surveys are off in the same session (`useSurveyEngine`), see `docs/surveys.md`.
+
+Whatever replaces the Mixpanel provider (the telemetry gateway adapters) must keep the
+`analytics: true` flag, or Mixpanel goes back to receiving support sessions.
+
 ## Environment Variables
 
 | Variable | Description |
