@@ -145,10 +145,12 @@ export default defineConfig(({ mode }) => {
   // Target Etendo instance for dev proxy. Override via ETENDO_URL in .env.local
   // if your instance uses a different context.name (e.g. ETENDO_URL=http://localhost:8080/mycontext)
   const ETENDO_URL = env.ETENDO_URL || process.env.ETENDO_URL || readEnvFile() || 'http://localhost:8080/etendo';
-  // jsreport base for the dev report API plugin. loadEnv(mode, cwd, '') already
-  // reads every key from .env, .env.local and .env.[mode](.local), so no
-  // readEnvFile() fallback is needed; a real exported JSREPORT_URL still wins
-  // over the default.
+  // jsreport base for the dev report API plugin and both `/jsreport` proxies
+  // (dev + preview). loadEnv(mode, cwd, '') already reads every key from .env,
+  // .env.local and .env.[mode](.local), so no readEnvFile() fallback is needed;
+  // a real exported JSREPORT_URL still wins over the default. A path-bearing
+  // value is fine for the proxies: the rewrite strips `/jsreport` and
+  // http-proxy prepends the target's path to what remains.
   const JSREPORT_URL = env.JSREPORT_URL || process.env.JSREPORT_URL || 'http://localhost:5488';
   // Origin only (no path) — `vite preview` proxies the built bundle's *relative*
   // VITE_API_BASE (e.g. "/etendo") verbatim to Tomcat, so the target here must not
@@ -387,7 +389,7 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
       },
       '/jsreport': {
-        target: 'http://localhost:5488',
+        target: JSREPORT_URL,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/jsreport/, ''),
       },
@@ -435,7 +437,7 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
       },
       '/jsreport': {
-        target: 'http://localhost:5488',
+        target: JSREPORT_URL,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/jsreport/, ''),
       },

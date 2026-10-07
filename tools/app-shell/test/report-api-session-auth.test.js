@@ -20,6 +20,8 @@
  * The jsreport base URL follows the same rule via the `jsreportUrl` option.
  *
  * @covers tools/app-shell/vite-plugins/report-api.js
+ * @covers tools/app-shell/vite.config.js
+ * @covers tools/app-shell/.env.production
  */
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { strict as assert } from 'node:assert';
@@ -33,6 +35,15 @@ import reportApiPlugin from '../vite-plugins/report-api.js';
 
 const PLUGIN_SRC = readFileSync(
   fileURLToPath(new URL('../vite-plugins/report-api.js', import.meta.url)),
+  'utf8',
+);
+
+const VITE_CONFIG_SRC = readFileSync(
+  fileURLToPath(new URL('../vite.config.js', import.meta.url)),
+  'utf8',
+);
+const ENV_PRODUCTION_SRC = readFileSync(
+  fileURLToPath(new URL('../.env.production', import.meta.url)),
   'utf8',
 );
 
@@ -477,6 +488,21 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       const reads = PLUGIN_SRC.match(/process\.env\.JSREPORT_URL/g) || [];
       assert.equal(reads.length, 1, 'only the factory fallback may read process.env.JSREPORT_URL');
       assert.doesNotMatch(PLUGIN_SRC, /const JSREPORT_URL = process\.env/);
+    });
+
+    it('vite.config.js points both /jsreport proxies at the resolved JSREPORT_URL (ETP-5666)', () => {
+      const proxies = [...VITE_CONFIG_SRC.matchAll(/'\/jsreport':\s*\{\s*target:\s*([^,]+),/g)]
+        .map((m) => m[1].trim());
+      assert.equal(proxies.length, 2, 'expected the dev and preview /jsreport proxy entries');
+      assert.deepEqual(proxies, ['JSREPORT_URL', 'JSREPORT_URL']);
+      const literals = VITE_CONFIG_SRC.match(/localhost:5488/g) || [];
+      assert.equal(literals.length, 1, 'the 5488 default may only appear in the JSREPORT_URL resolution');
+      assert.match(VITE_CONFIG_SRC,
+        /const JSREPORT_URL = env\.JSREPORT_URL \|\| process\.env\.JSREPORT_URL \|\| 'http:\/\/localhost:5488';/);
+    });
+
+    it('.env.production does not declare JSREPORT_URL — nothing in the build reads it (ETP-5666)', () => {
+      assert.doesNotMatch(ENV_PRODUCTION_SRC, /^\s*JSREPORT_URL\s*=/m);
     });
 
     it('the currency selector no longer branches on a possibly-null clientId (session guarantees it)', () => {
