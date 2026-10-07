@@ -77,9 +77,33 @@ describe('useFinancialAccounts', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.summary).toEqual({
       totalBalance: 0,
+      // ETP-5580: converted-total metadata; `null` ISO lets the sidebar fall back to byCurrency[0].
+      totalBalanceCurrencyIso: null,
+      totalBalanceApproximate: false,
+      missingRateCurrencies: [],
       byCurrency: [],
       pending: { accountsWithPending: 0, suggestionsReady: 0, byRule: 0 },
     });
+  });
+
+  it('passes the converted-total fields from the API through unchanged (ETP-5580)', async () => {
+    const summary = {
+      totalBalance: 1500,
+      totalBalanceCurrencyIso: 'EUR',
+      totalBalanceApproximate: true,
+      missingRateCurrencies: ['ARS'],
+      byCurrency: [
+        { currencyIso: 'USD', total: 500 },
+        { currencyIso: 'EUR', total: 1000 },
+      ],
+      pending: { accountsWithPending: 0, suggestionsReady: 0, byRule: 0 },
+    };
+    globalThis.fetch.mockResolvedValue(okResponse({ accounts: [], summary }));
+
+    const { result } = renderHook(() => useFinancialAccounts());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.summary).toEqual(summary);
   });
 
   it('re-fetches when reload() is invoked', async () => {

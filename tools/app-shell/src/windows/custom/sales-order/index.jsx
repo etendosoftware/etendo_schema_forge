@@ -166,13 +166,17 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
   // criterion: completed sales orders (Estado doc. = Completado) whose
   // delivery is not yet finished (Estado de entrega < 100). Mirrors the
   // `?filter=overdue`/`paymentsDue` pattern in purchase-invoice/index.jsx.
+  // The status condition MUST use the visible grid column (`eTGODeliveryStatus`, a stored
+  // computed column), not the core virtual column of the same concept: the
+  // virtual one is `grid: false`, so the advanced filter cannot resolve it and
+  // silently drops the condition, leaving only the doc-status clause (ETP-5632).
   const isPendingDelivery = searchParams.get('filter') === 'pendingDelivery';
   const initialAdvancedFilter = isPendingDelivery
     ? {
         rowOperator: 'and',
         conditions: [
           { field: 'documentStatus', operator: 'equals', value: 'CO' },
-          { field: 'deliveryStatus', operator: 'lessThan', value: 100 },
+          { field: 'eTGODeliveryStatus', operator: 'lessThan', value: 100 },
         ],
       }
     : null;

@@ -41,7 +41,7 @@
       "field": "uom",
       "label": {
         "en_US": "Unit of Measure",
-        "es_ES": "Unidad de medida"
+        "es_ES": "Unidad de Medida"
       },
       "type": "string",
       "width": "8%",
@@ -81,7 +81,7 @@
       "field": "warehouse",
       "label": {
         "en_US": "Warehouse",
-        "es_ES": "Almacen"
+        "es_ES": "Almacén"
       },
       "type": "string",
       "width": "14%",
@@ -103,7 +103,7 @@
       "field": "warehouse",
       "label": {
         "en_US": "Warehouse",
-        "es_ES": "Almacen"
+        "es_ES": "Almacén"
       }
     }
   ],
@@ -143,7 +143,7 @@
       "name": "M_Warehouse_ID",
       "label": {
         "en_US": "Warehouse",
-        "es_ES": "Almacen"
+        "es_ES": "Almacén"
       },
       "type": "search",
       "selector": "warehouse",
