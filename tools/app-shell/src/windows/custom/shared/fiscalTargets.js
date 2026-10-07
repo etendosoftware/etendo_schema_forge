@@ -1,7 +1,7 @@
 // Relative import (not the `@/lib/...` alias): this module is exercised by
 // `fiscalTargets.test.js` via plain `node --test` (see Makefile), which has no
 // alias resolution — only Vitest-run specs can use the `@` alias.
-import { parseCalendarDate } from '../../../lib/dateOnly.js';
+import { parseCalendarDate, parseWallClockInstant } from '../../../lib/dateOnly.js';
 
 /**
  * Which fiscal systems (SII / TicketBAI / VERI*FACTU) apply to a given document.
@@ -88,19 +88,30 @@ export function getInvoiceFiscalTargets(specName, profile, territory = null) {
  * (ETP-5122 follow-up correction — VERI*FACTU was originally, incorrectly,
  * wired through this same date-only gate on `invoiceDate`).
  *
- * Both sides compare the reference date **truncated to midnight** (it is a
- * date-only AD field) against the config's **full timestamp** (the adoption
- * date can carry a real time-of-day component — it is set at whatever moment
- * the org enabled the system). This is NOT a same-calendar-day comparison: a
- * document dated the same day the org adopted the system, but before the exact
- * adoption timestamp, is still ineligible — exactly like Classic.
+ * Both operands are read in the **same local frame**, which is what makes the
+ * result timezone-independent:
+ *   - `referenceDateRaw` is a date-only AD field, so `parseCalendarDate` gives it
+ *     local midnight.
+ *   - `adoptionDateRaw` is a wall-clock timestamp, so `parseWallClockInstant`
+ *     reads its `HH:mm:ss` literally and IGNORES any `Z`/offset on it.
  *
- * `referenceDateRaw` is parsed via `parseCalendarDate` (never a raw
- * `new Date(string)` on a date-only value — see `docs/i18n-guide.md`'s sibling
- * rule in CLAUDE.md on date-only parsing) so the calendar day is never shifted
- * by the host's timezone offset. `adoptionDateRaw` is a genuine timestamp (not
- * a date-only value), so parsing it with `new Date(...)` and comparing epoch
- * millis is safe — no local calendar getters are read off it.
+ * This is still NOT a same-calendar-day comparison: an adoption timestamp
+ * carrying a real time-of-day excludes a document dated that same day, exactly
+ * like Classic's `TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate`
+ * and exactly like the server-side `ETGO_GET_TBAI_STATUS`. Keeping that parity
+ * matters: the stored computed column drives the list badge while this function
+ * drives the send action, and the two must not disagree about the same invoice.
+ *
+ * **ETP-5046** — the adoption side used to be parsed with `new Date(...)`, which
+ * resolves a `Z` to a real UTC instant while the reference side was already local
+ * midnight. Two different reference frames, so the inclusive boundary flipped with
+ * the viewer's timezone: `referenceDateRaw='2026-01-01'` against
+ * `adoptionDateRaw='2026-01-01T00:00:00.000Z'` returned `true` in UTC and `false`
+ * in Europe/Madrid — hiding the send action from precisely the users these Spanish
+ * fiscal regimes exist for, while CI (UTC) stayed green. Reading the adoption wall
+ * clock literally fixes the timezone dependency without collapsing the
+ * time-of-day, so neither the boundary nor Classic parity is sacrificed. Same
+ * class of bug as ETP-4031 and ETP-4850 — see the date-only rule in CLAUDE.md.
  *
  * Fail-safe: with no config / no adoption date on file, or an unparsable
  * reference date, eligibility cannot be confirmed, so this returns `false`
@@ -120,8 +131,12 @@ export function isSifEligibleByDate(referenceDateRaw, adoptionDateRaw) {
   const referenceDay = parseCalendarDate(referenceDateRaw);
   if (!referenceDay) return false;
 
-  const adoptionInstant = new Date(adoptionDateRaw);
-  if (Number.isNaN(adoptionInstant.getTime())) return false;
+  // `parseWallClockInstant`, never `new Date(...)`: the adoption timestamp's `Z` is
+  // not a truthful UTC marker, and honouring it would put this operand in a different
+  // reference frame from `referenceDay` above, flipping the inclusive boundary with
+  // the host timezone — see the ETP-5046 note above. The time-of-day IS kept.
+  const adoptionInstant = parseWallClockInstant(adoptionDateRaw);
+  if (!adoptionInstant) return false;
 
   return referenceDay.getTime() >= adoptionInstant.getTime();
 }
@@ -143,11 +158,14 @@ export function isSifEligibleByDate(referenceDateRaw, adoptionDateRaw) {
  *
  * Both sides of this comparison are genuine timestamps (the invoice's `Created`
  * audit column and the config's adoption timestamp), so — unlike
- * {@link isSifEligibleByDate}, which truncates one side to a calendar day
- * because TBAI/SII compare against date-only business fields — neither side is
- * truncated here. `createdRaw` must be parsed as a full instant via
- * `new Date(...)`, never `parseCalendarDate` (which would incorrectly collapse
- * it to local midnight).
+ * {@link isSifEligibleByDate}, which truncates the reference side to a local
+ * calendar day because TBAI/SII compare against date-only business fields —
+ * neither side is truncated here. `createdRaw` and `adoptionDateRaw` must be
+ * parsed as full instants via `new Date(...)`, never `parseCalendarDate` (which
+ * would collapse them to local midnight) and never `parseWallClockInstant`
+ * (whose whole point is to discard a zone designator — here the `Z` is truthful
+ * and must be honoured). Comparing two epoch-milli instants is already
+ * timezone-independent, so the ETP-5046 mismatch cannot occur here.
  *
  * @param {string|null|undefined} createdRaw the invoice's `created` field
  *   (column `Created` — record creation timestamp, NOT `invoiceDate`)

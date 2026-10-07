@@ -3430,3 +3430,31 @@ restart — but it argues for running this fix close to a restart.
   **Apply:** R44 dry-run on the local DB (2026-10-01): 14 `WOULD_APPLY` / 105 `SKIPPED_NOT_NEEDED`;
   applied to Calendar1 (`A5C303F8CF314BBF85CDC90757C8DBD7`) → `APPLIED (430 rows)`, Jan–Oct all `'O'`,
   Nov/Dec `'N'` → re-run `SKIPPED_NOT_NEEDED — kept prior success state`.
+
+## ETP-5046 — S1 R37 retirement widened to every subscribed tenant: develop's R42 re-adds the plan marker (2026-10-05)
+
+- **Wrong assumption:** "once ETP-5046's paid upgrade stops writing `ETGO_TenantPlan`, no new tenant
+  ever carries the marker, so R37's retirement only needs to cover the tenants it backfills."
+  **Fact:** develop's `20260929T190000Z__R42-paid-provisioning-commercial-metadata.sql` (ETP-5548,
+  immutable) INSERTS an active `ETGO_TenantPlan='productive'` row (`ad_client_id='0'`, tenant in
+  `visibleat_client_id`) for every paid-provisioned owned tenant lacking one, decided from
+  `etgo_checkout_request` (`PROVISIONED`, `paid_at` set, no `REFUNDED/CANCELED/EXPIRED`), never from
+  `etgo_subscription`. With `ONBOARDING_PROVISIONED_THROUGH`=2026-09-02 it is a candidate for every
+  post-5046 paid tenant. Reproduced in a rolled-back tx: open row + no marker → R42 `@apply`
+  `INSERT:1` → old R37 `@check` = 0 (marker would survive forever).
+  **Apply:** R37 `@check` now has a branch (B) "any marker row visible at the tenant AND any
+  `etgo_subscription` row (no isactive/end_date filter)", and statement 3's DELETE guard is "any
+  subscription row". Any future fix that keys on the marker's ABSENCE has the same hazard — key on
+  `etgo_subscription` instead.
+- **Fact (runner ordering):** per tenant, the chain visits fixes in filename order and never looks
+  back below the watermark, so R42 (`20260929T190000Z`) always runs before R37 (`20261005T180000Z`),
+  including for tenants onboarded later (baseline 2026-09-02 < both). A FAILED R42 halts the chain
+  before R37 and the next run resumes at R42. Only `run.js --fix <R42>` (ignores order + watermark)
+  can run R42 after R37 — follow it with `--fix <R37> --client <tenant>`.
+- **Marker scoping re-verified:** the `ETGO_TenantPlan` marker is keyed by `VISIBLEAT_CLIENT_ID`
+  (R37 statement 3, `TenantPlanService#retireProductivePreference`, `TenantPlanPreferenceFallback`,
+  R42's INSERT). Only the lifecycle preferences (`ETGO_SubscriptionStatus/DueAt`) use `AD_CLIENT_ID`.
+- **Local DB (etendo_core3) 2026-10-05:** 6 markers, all active `productive`, none with a
+  subscription row; one `etgo_subscription` row, `canceled` with `end_date` set (E2E tenant
+  `769A5DE5…`, no marker) — so a closed-only row DOES exist locally even though no product code
+  writes `END_DATE` yet (test fixture). R37 dry-run: 6 `WOULD_APPLY`, all branch (A).

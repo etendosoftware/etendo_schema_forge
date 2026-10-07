@@ -41,7 +41,18 @@ set -Eeuo pipefail
 #
 #   status <id>
 #       Read-only. Prints the resolved ids, the live Stripe subscription
-#       detail, and the stored AD_Preference lifecycle values.
+#       detail, and the stored lifecycle state (see "Where the outcome is
+#       read from" below).
+#
+# Where the outcome is read from (ETP-5046):
+#   The webhook writes the lifecycle outcome to the tenant's OPEN
+#   ETGO_SUBSCRIPTION row when it has one (every purchase since ETP-5046, and
+#   every tenant backfilled by R37), and to the ETGO_SubscriptionStatus /
+#   ETGO_SubscriptionDueAt AD_Preference projection only when it has none.
+#   This script reads the same store: the row's STATUS (active / past_due /
+#   canceled, reported as CURRENT / PAST_DUE / EXPIRED so both stores compare
+#   alike) and CURRENT_PERIOD_END when the row exists, the preferences
+#   otherwise.
 #
 #   -h, --help
 #
@@ -368,14 +379,69 @@ get_preference_value() {
       where ad_client_id = '${CREATED_CLIENT_ID}' and attribute = '${attribute}' and isactive = 'Y';"
 }
 
-# poll_preference_value <attribute> <expected> [max_wait_seconds]
+# Prints the id of the tenant's open ETGO_SUBSCRIPTION row, or nothing.
+get_open_subscription_id() {
+  run_sql -At -c \
+    "select etgo_subscription_id from etgo_subscription
+      where environment_client_id = '${CREATED_CLIENT_ID}' and isactive = 'Y' and end_date is null
+      order by created desc
+      limit 1;"
+}
+
+# Prints where the lifecycle outcome lives for this tenant: "row" or "preference".
+lifecycle_store() {
+  if [[ -n "$(get_open_subscription_id)" ]]; then
+    echo "row"
+  else
+    echo "preference"
+  fi
+}
+
+# get_lifecycle_status: the stored status in the access-policy vocabulary
+# (CURRENT / PAST_DUE / EXPIRED), read from the open row when there is one
+# (active / past_due / canceled mapped over) and from ETGO_SubscriptionStatus
+# otherwise. An unknown row status is printed as-is so a mismatch stays visible.
+get_lifecycle_status() {
+  if [[ "$(lifecycle_store)" == "row" ]]; then
+    run_sql -At -c \
+      "select case lower(trim(status))
+                when 'active' then 'CURRENT'
+                when 'past_due' then 'PAST_DUE'
+                when 'canceled' then 'EXPIRED'
+                else status end
+         from etgo_subscription
+        where environment_client_id = '${CREATED_CLIENT_ID}' and isactive = 'Y' and end_date is null
+        order by created desc
+        limit 1;"
+  else
+    get_preference_value ETGO_SubscriptionStatus
+  fi
+}
+
+# get_lifecycle_due_at: the grace anchor -- the row's CURRENT_PERIOD_END when
+# there is a row, ETGO_SubscriptionDueAt otherwise. Empty when cleared.
+get_lifecycle_due_at() {
+  if [[ "$(lifecycle_store)" == "row" ]]; then
+    run_sql -At -c \
+      "select coalesce(to_char(current_period_end, 'YYYY-MM-DD\"T\"HH24:MI:SS'), '')
+         from etgo_subscription
+        where environment_client_id = '${CREATED_CLIENT_ID}' and isactive = 'Y' and end_date is null
+        order by created desc
+        limit 1;"
+  else
+    get_preference_value ETGO_SubscriptionDueAt
+  fi
+}
+
+# poll_lifecycle_status <expected> [max_wait_seconds]
 # Echoes the last-observed value regardless of outcome; returns 0 once it
-# matches <expected>, 1 if <max_wait_seconds> elapses first.
-poll_preference_value() {
-  local attribute="$1" expected="$2" max_wait="${3:-30}"
+# matches <expected>, 1 if <max_wait_seconds> elapses first. The store is
+# re-evaluated on every poll.
+poll_lifecycle_status() {
+  local expected="$1" max_wait="${2:-30}"
   local waited=0 val
   while true; do
-    val="$(get_preference_value "$attribute")"
+    val="$(get_lifecycle_status)"
     if [[ "$val" == "$expected" ]]; then
       echo "$val"
       return 0
@@ -427,10 +493,26 @@ print_resolved_ids() {
 }
 
 print_lifecycle_projection() {
-  echo "Stored lifecycle projection (AD_Preference, client $CREATED_CLIENT_ID):"
-  echo "  ETGO_SubscriptionStatus  : $(get_preference_value ETGO_SubscriptionStatus)"
-  echo "  ETGO_SubscriptionDueAt   : $(get_preference_value ETGO_SubscriptionDueAt)"
-  echo "  ETGO_SubscriptionEventAt : $(get_preference_value ETGO_SubscriptionEventAt)"
+  local subscription_id
+  subscription_id="$(get_open_subscription_id)"
+  if [[ -n "$subscription_id" ]]; then
+    echo "Stored lifecycle state (open ETGO_SUBSCRIPTION row $subscription_id, client $CREATED_CLIENT_ID):"
+    run_sql -At -F'|' -c \
+      "select status, coalesce(current_period_end::text, '')
+         from etgo_subscription where etgo_subscription_id = '${subscription_id}';" |
+      while IFS='|' read -r row_status row_period_end; do
+        echo "  STATUS                   : $row_status"
+        echo "  CURRENT_PERIOD_END       : ${row_period_end:-<empty>}"
+      done
+    echo "  ETGO_SubscriptionEventAt : $(get_preference_value ETGO_SubscriptionEventAt)" \
+      "(ordering watermark; stays a preference on both routes)"
+    echo "  (the ETGO_SubscriptionStatus / ETGO_SubscriptionDueAt preferences are not read once a row exists)"
+  else
+    echo "Stored lifecycle projection (AD_Preference, client $CREATED_CLIENT_ID -- no open subscription row):"
+    echo "  ETGO_SubscriptionStatus  : $(get_preference_value ETGO_SubscriptionStatus)"
+    echo "  ETGO_SubscriptionDueAt   : $(get_preference_value ETGO_SubscriptionDueAt)"
+    echo "  ETGO_SubscriptionEventAt : $(get_preference_value ETGO_SubscriptionEventAt)"
+  fi
 }
 
 cmd_status() {
@@ -675,9 +757,10 @@ cmd_fail() {
     echo "      Is 'stripe listen --forward-to <base>/sws/go/checkout/webhook' running and reachable?" >&2
   fi
 
-  local status_val due_val
-  status_val="$(poll_preference_value ETGO_SubscriptionStatus PAST_DUE 30)" || true
-  due_val="$(get_preference_value ETGO_SubscriptionDueAt)"
+  local status_val due_val store
+  status_val="$(poll_lifecycle_status PAST_DUE 30)" || true
+  due_val="$(get_lifecycle_due_at)"
+  store="$(lifecycle_store)"
 
   echo
   echo "=================== RESULT ==================="
@@ -685,13 +768,14 @@ cmd_fail() {
   echo "Subscription                  : $STRIPE_SUBSCRIPTION_ID"
   echo "Invoice                       : $INVOICE_ID"
   echo "invoice.payment_failed event  : ${ev_result:-<not found>}"
-  echo "ETGO_SubscriptionStatus       : ${status_val:-<not found>}"
-  echo "ETGO_SubscriptionDueAt        : ${due_val:-<empty>}"
+  echo "Lifecycle store               : $store"
+  echo "Lifecycle status              : ${status_val:-<not found>}"
+  echo "Due date (grace anchor)       : ${due_val:-<empty>}"
   if [[ "$ev_result" == "APPLIED" && "$status_val" == "PAST_DUE" && -n "$due_val" ]]; then
     echo "PASS: subscription lifecycle moved to PAST_DUE with a due date."
   else
     echo "FAIL: expected an APPLIED invoice.payment_failed event and" \
-      "ETGO_SubscriptionStatus=PAST_DUE with a non-empty due date."
+      "a PAST_DUE status with a non-empty due date (store: $store)."
     echo "================================================"
     exit 1
   fi
@@ -766,9 +850,10 @@ cmd_recover() {
     echo "      Is 'stripe listen --forward-to <base>/sws/go/checkout/webhook' running and reachable?" >&2
   fi
 
-  local status_val due_val
-  status_val="$(poll_preference_value ETGO_SubscriptionStatus CURRENT 30)" || true
-  due_val="$(get_preference_value ETGO_SubscriptionDueAt)"
+  local status_val due_val store
+  status_val="$(poll_lifecycle_status CURRENT 30)" || true
+  due_val="$(get_lifecycle_due_at)"
+  store="$(lifecycle_store)"
 
   echo
   echo "=================== RESULT ==================="
@@ -776,8 +861,9 @@ cmd_recover() {
   echo "Subscription             : $STRIPE_SUBSCRIPTION_ID"
   echo "Invoice                  : $INVOICE_ID"
   echo "invoice.paid event       : ${ev_result:-<not found>}"
-  echo "ETGO_SubscriptionStatus  : ${status_val:-<not found>}"
-  echo "ETGO_SubscriptionDueAt   : ${due_val:-<empty>}"
+  echo "Lifecycle store          : $store"
+  echo "Lifecycle status         : ${status_val:-<not found>}"
+  echo "Due date (grace anchor)  : ${due_val:-<empty>}"
   if [[ "$ev_result" == "APPLIED" && "$status_val" == "CURRENT" && -z "$due_val" ]]; then
     echo "PASS: subscription lifecycle recovered to CURRENT with the due date cleared."
     echo "================================================"
@@ -785,7 +871,7 @@ cmd_recover() {
     log "Removed recovery state $state_file"
   else
     echo "FAIL: expected an APPLIED invoice.paid event and" \
-      "ETGO_SubscriptionStatus=CURRENT with an empty due date."
+      "a CURRENT status with an empty due date (store: $store)."
     echo "================================================"
     exit 1
   fi

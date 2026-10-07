@@ -1,13 +1,16 @@
+// @covers tools/app-shell/src/windows/custom/shared/preview-cards/SummaryCard.jsx
 // Mocks before imports
+import { dateOnlyWithFormatter } from '@/test/dateOnlyMock.js';
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useMenuLabel: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (val) => (val ? `formatted:${val}` : '—'),
-}));
+// Keep every real `@/lib/dateOnly` export; stub only the formatter (see the helper).
+vi.mock('@/lib/dateOnly', async (importOriginal) =>
+  dateOnlyWithFormatter(importOriginal, (val) => (val ? `formatted:${val}` : '—')));
 
 vi.mock('@/lib/formatCurrency.js', () => ({
   // Include currency code in output so amount-display assertions can match on it

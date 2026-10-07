@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/windows/custom/shared/preview-cards/PaymentsCard.jsx
+import { dateOnlyWithFormatter } from '@/test/dateOnlyMock.js';
+
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
@@ -9,9 +12,9 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (_raw, _locale, _opts) => '1 Jan 2026',
-}));
+// Keep every real `@/lib/dateOnly` export; stub only the formatter (see the helper).
+vi.mock('@/lib/dateOnly', async (importOriginal) =>
+  dateOnlyWithFormatter(importOriginal, (_raw, _locale, _opts) => '1 Jan 2026'));
 
 vi.mock('@/lib/formatAmount.js', () => ({
   formatAmount: (n) => String(n),

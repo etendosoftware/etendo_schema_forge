@@ -11,6 +11,27 @@ sort equal to chronological execution order. The `fix_id` is the file name
 without `.sql`. Known onboarding-gap fixes carry their `Rn` label in `@id`,
 e.g. `20260611T143000Z__R3-periodcontrol.sql`.
 
+### Choosing the timestamp — the watermark trap
+
+The timestamp is not a label, it decides whether the fix runs at all. Per tenant, `../run.js`
+applies only fixes **strictly newer** than the newest fix that tenant has already processed
+(`APPLIED`, `MANUALLY_FIXED` or `SKIPPED_NOT_NEEDED`); anything at or before that watermark is
+skipped with no ledger row, no error and no report line. So:
+
+- **Use a timestamp later than the newest `.sql` in the target branch, and unique.** Sharing a
+  stamp with an existing fix is enough to be skipped wherever that fix already ran.
+- **Re-check it when the branch lands late.** A fix that waits on a branch while newer fixes merge
+  to `develop` is dead on arrival on every environment that ran them. Re-date it before merging;
+  renaming is allowed while the fix is unapplied (rule 3 below forbids it only once applied).
+  ETP-5046's `R37-tenant-subscription-backfill` was authored as `20260918T120000Z` — the same stamp
+  as `R38-org-legalentity-pointer` — and had to be re-dated to `20260924T150000Z`, then again to
+  `20261005T180000Z` when develop had moved past that.
+
+`cli/test/data-fixes-catalog-ordering.test.js` fails the build when two fixes share a timestamp
+prefix (seven already-applied pairs are frozen by exact file name; do not extend that allowlist,
+re-date the new file). It cannot detect a fix dated before the newest fix an environment has
+already processed — that check is the author's.
+
 ## File format
 
 ```sql
@@ -84,6 +105,20 @@ physical-inventory correction first).
    ship a new dated `.sql` for those. See
    `20260730T180000Z__R17-rectificativa-doctype-sequence.sql` (steps 0a/0b, ETP-4799) for a
    worked example.
+4. **Decide "paying or free" from `etgo_subscription`, never from the `ETGO_TenantPlan`
+   preference.** Since ETP-5046's R37 backfill the preference is retired per tenant as soon as the
+   tenant gains an open subscription, and a tenant paid after ETP-5046 never has it. "No productive
+   preference" therefore no longer means "a free tenant" — increasingly it means "a paying tenant
+   that has already been migrated". A fix keyed on the preference inverts its own intent, silently,
+   on exactly the tenants that pay; for a fix that forces test mode (as R31 does) that routes real
+   SII / TicketBAI / VeriFactu submissions to the tax authority's test endpoints. A tenant is paying
+   when it has a row with `environment_client_id = :client_id`, `end_date IS NULL`,
+   `isactive = 'Y'` and `status IN ('active', 'past_due')` — the same rule as
+   `TenantPlanService.resolvePlan`. The row itself is client `0`, so filter on
+   `environment_client_id`, never `ad_client_id` (R37's header explains how that still meets
+   rule 1). R31/R32 predate this and stay
+   safe only because the watermark keeps them from ever running after R37, and new tenants start
+   past them (`ONBOARDING_PROVISIONED_THROUGH`).
 
 ## Fixes that target the System pseudo-tenant (`--client 0`)
 

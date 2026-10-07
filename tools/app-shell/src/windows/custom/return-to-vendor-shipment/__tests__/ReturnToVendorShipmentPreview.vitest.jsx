@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/return-to-vendor-shipment/ReturnToVendorShipmentPreview.jsx
 // Mocks must come before imports (Vitest hoisting)
 //
 // ETP-5124 — the backend now registers a correctly-named email contract
@@ -16,6 +17,7 @@
 // the return shipment is Confirmado (CO). See the "Download PDF gating by
 // documentStatus (ETP-4789)" describe block below.
 
+import { dateOnlyWithFormatter } from '@/test/dateOnlyMock.js';
 import React from 'react';
 
 vi.mock('@/i18n', () => ({
@@ -24,9 +26,9 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US' }),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (val) => val || '-',
-}));
+// Keep every real `@/lib/dateOnly` export; stub only the formatter (see the helper).
+vi.mock('@/lib/dateOnly', async (importOriginal) =>
+  dateOnlyWithFormatter(importOriginal, (val) => val || '-'));
 
 const mockCapturedModalProps = { current: null };
 vi.mock('../../shared/GenericPreviewModal.jsx', () => ({

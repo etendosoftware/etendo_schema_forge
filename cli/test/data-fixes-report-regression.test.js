@@ -100,6 +100,15 @@ const FIXES_WITH_REPORT = new Set([
   // Invoice"). Its @report lists every such sequence plus the doctype that kept it alive — same
   // "flag, don't guess" pattern as R19.
   '20260916T120000Z__R37-deactivate-reversed-invoice-doctypes',
+  // R37 (ETP-5046) backfills one open ETGO_SUBSCRIPTION row for every tenant still carrying only
+  // the legacy ETGO_TenantPlan='productive' marker. Its @report is a THIRD flavour: not "skipped
+  // work" (R19) and not "ambiguity" (R35) but an OPERATOR-ATTESTATION report — it pins, verbatim
+  // in the ledger, the manual pre-check that must hold for the backfill to be safe (production
+  // Stripe checkout still not live since 2026-08-27), plus one line per created subscription
+  // saying whether the Stripe ids were copied from a checkout request or deliberately left NULL.
+  // It is therefore the one @report in the catalog that is NEVER empty on an APPLIED row — the
+  // attestation branch is driven by ad_client, which always matches the target tenant.
+  '20261005T180000Z__R37-tenant-subscription-backfill',
   // R38 (ETP-5352) backfills AD_ORG.AD_LEGALENTITY_ORG_ID, but only on organizations that
   // finished provisioning (isready='Y'). Its @report lists the legal-entity orgs left
   // untouched because isready='N' — an org whose alta never completed is missing far more

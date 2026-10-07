@@ -412,7 +412,7 @@ What the document actually pins down is the list below. As long as none of these
 | No card data and no full provider payloads in any table or log | PCI posture; also §12 |
 | The webhook signature verifier stays as it is | Correct today; a rewrite has no upside and real downside |
 | The paywall keeps its decision-versus-plan separation | ETP-4966 shipped charged accounts into demo environments precisely by inferring one from the other |
-| The amount charged has one source of truth; the displayed price is derived from the provider Price, never typed, and no fallback price exists | A fallback price is a price nobody reviewed, chosen exactly when configuration is missing |
+| The amount charged has one source of truth; the displayed price is derived from the provider Price, never typed, and no fallback price exists | A fallback price is a price nobody reviewed, chosen exactly when configuration is missing. *Amended by ETP-5046:* the pre-existing configured price survives as a transitional **legacy price fallback**, active only while no plan carries a provider price, quoted from Stripe and retired automatically by the first priced plan — see `com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §6 |
 | Tenant and period scoping is applied outside any configurable query fragment, and the fragment is always parenthesized | A fragment able to escape it would mis-bill every customer at once |
 | Configurable fragments are System-authored only, never tenant-editable | Reuses the `AD_TAB.whereclause` trust boundary; widening it is a different feature |
 | Absence of a quota row means unlimited; the limit mechanism ships inert | No default value may silently cap a resource at zero |
