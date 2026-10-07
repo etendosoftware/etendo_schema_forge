@@ -53,6 +53,21 @@ it had; `local-env up --fresh` replaces it with a seeded one.
 not start the SPA. In a worktree, `schema_forge_core` is an APFS clone of the main
 checkout's unless it is passed with `--repo`.
 
+The plugin always runs the **environment's** repos, `$ETENDO_ROOT/schema_forge` and
+`$ETENDO_ROOT/schema_forge_core`, not the ones next to the file it was loaded from;
+only when the environment has no such directory does it fall back to its own
+checkout. Two cases depend on this:
+
+- the plugin comes from another checkout (`LOCALENV_PLUGINS=<main>/schema_forge/local-env.d/plugins`,
+  e.g. for a branch that predates the plugin);
+- the environment's `schema_forge` is an adopted worktree (a `worktree.conf` line with
+  `adopt`: a symlink to a worktree someone else owns). From inside it `../` resolves
+  physically to that worktree's siblings, so the plugin passes
+  `SCHEMA_FORGE_CORE=$ETENDO_ROOT/schema_forge_core` to vite explicitly. It never runs
+  `make install` in an adopted worktree: if its `node_modules` are missing or stale it
+  warns and does not start the SPA. Note that `make dev-local-core` itself may still
+  write there (the AI BFF's `npm install`, vite's cache).
+
 ## Ports outside local-env
 
 `make dev` and `make dev-local-core` read `SPA_PORT` (default 3100) and `BFF_PORT`

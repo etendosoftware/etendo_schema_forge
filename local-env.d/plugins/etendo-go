@@ -17,7 +17,14 @@
 set -euo pipefail
 
 hook="${1:-}"
-SF="$(cd "$(dirname "$0")/../.." && pwd)"   # this schema_forge, inside the environment
+# The ENVIRONMENT's repos, not the ones this file was loaded from: with LOCALENV_PLUGINS
+# the plugin may come from another checkout, and an environment's schema_forge may be a
+# symlink to an adopted worktree, where ../ resolves physically to that worktree's
+# siblings. Falls back to this file's own checkout when the environment has none.
+SF="$ETENDO_ROOT/schema_forge"
+[[ -d "$SF" ]] || SF="$(cd "$(dirname "$0")/../.." && pwd)"
+CORE="$ETENDO_ROOT/schema_forge_core"
+[[ -d "$CORE" ]] || CORE="$SF/../schema_forge_core"
 GO_MODULE="$ETENDO_ROOT/modules/com.etendoerp.go"
 STATE="${LOCALENV_PLUGIN_STATE:?run by local-env only}"
 PIDF="$STATE/spa.pid"
@@ -77,16 +84,24 @@ case "$hook" in
   up)
     if [[ "${ETENDO_GO_SPA:-1}" == 0 ]]; then echo ">> ETENDO_GO_SPA=0: Etendo GO SPA not started"; exit 0; fi
     if [[ ! -d "$GO_MODULE" ]]; then echo ">> modules/com.etendoerp.go not in this checkout: Etendo GO SPA not started"; exit 0; fi
-    if [[ ! -d "$SF/../schema_forge_core/packages/app-shell-core/src" ]]; then
-      echo "WARNING: $(dirname "$SF")/schema_forge_core not found: Etendo GO SPA not started (make dev-local-core needs it)" >&2
+    if [[ ! -d "$CORE/packages/app-shell-core/src" ]]; then
+      echo "WARNING: $CORE not found: Etendo GO SPA not started (make dev-local-core needs it)" >&2
       exit 0
     fi
     if p="$(spa_pid)"; then echo ">> Etendo GO SPA already running: http://localhost:$SPA_PORT (pid $p, log $LOGF)"; exit 0; fi
     install=0; needs_install && install=1
+    # a symlinked schema_forge is a worktree adopted from someone else: never install into it
+    if [[ $install == 1 && -L "$ETENDO_ROOT/schema_forge" ]]; then
+      echo "WARNING: $SF is an adopted worktree whose node_modules are missing or stale: Etendo GO SPA not started (run make install there yourself)" >&2
+      exit 0
+    fi
     # own session (= own process group): Ctrl-C on Tomcat or closing the terminal does
     # not kill it, and stop_spa can signal the whole make/npm/node tree at once
     : > "$LOGF"
+    # SCHEMA_FORGE_CORE: vite would otherwise resolve ../schema_forge_core from its own
+    # physical path, which for an adopted worktree is not this environment's core
     SF="$SF" STAMP="$STATE/install.stamp" INSTALL=$install ETENDO_URL="$LOCALENV_URL" \
+      SCHEMA_FORGE_CORE="$CORE" \
       SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT" \
       perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' bash -c '
         cd "$SF"
