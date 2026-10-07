@@ -67,13 +67,16 @@ add_origins() {
   cat "$tmp" > "$f"; rm -f "$tmp"
 }
 
-needs_install() {   # node_modules missing, or the lockfile changed since the last install
-  local ref="$STATE/install.stamp"
-  [[ -d "$SF/node_modules" ]] || return 0
+# needs_install DIR STAMP: node_modules missing, or the lockfile changed since the last
+# install. local-env clones a repo's node_modules into a new worktree from the source
+# checkout, so they can lag the branch's own lockfile: the same check covers that.
+needs_install() {
+  local dir=$1 ref=$2
+  [[ -d "$dir/node_modules" ]] || return 0
   # never installed by this plugin: npm's own record of the last install is the reference
-  [[ -f "$ref" ]] || ref="$SF/node_modules/.package-lock.json"
+  [[ -f "$ref" ]] || ref="$dir/node_modules/.package-lock.json"
   [[ -f "$ref" ]] || return 0
-  [[ "$SF/package-lock.json" -nt "$ref" ]]
+  [[ "$dir/package-lock.json" -nt "$ref" ]]
 }
 
 stop_spa() {   # the process group of this environment's SPA + BFF only
@@ -122,21 +125,28 @@ case "$hook" in
       fi
     fi
     if p="$(spa_pid)"; then echo ">> Etendo GO SPA already running: http://localhost:$SPA_PORT (pid $p, log $LOGF)"; exit 0; fi
-    install=0; needs_install && install=1
-    # a symlinked schema_forge is a worktree adopted from someone else: never install into it
-    if [[ $install == 1 && -L "$ETENDO_ROOT/schema_forge" ]]; then
-      echo "WARNING: $SF is an adopted worktree whose node_modules are missing or stale: Etendo GO SPA not started (run make install there yourself)" >&2
-      exit 0
-    fi
+    install=0 core_install=0
+    needs_install "$SF" "$STATE/install.stamp" && install=1
+    needs_install "$CORE" "$STATE/core-install.stamp" && core_install=1
+    # a symlinked repo is a worktree adopted from someone else: never install into it
+    for r in schema_forge:$install schema_forge_core:$core_install; do
+      if [[ "${r#*:}" == 1 && -L "$ETENDO_ROOT/${r%%:*}" ]]; then
+        echo "WARNING: $ETENDO_ROOT/${r%%:*} is an adopted worktree whose node_modules are missing or stale: Etendo GO SPA not started (install there yourself)" >&2
+        exit 0
+      fi
+    done
     # own session (= own process group): Ctrl-C on Tomcat or closing the terminal does
     # not kill it, and stop_spa can signal the whole make/npm/node tree at once
     : > "$LOGF"
     # SCHEMA_FORGE_CORE: vite would otherwise resolve ../schema_forge_core from its own
     # physical path, which for an adopted worktree is not this environment's core
     SF="$SF" STAMP="$STATE/install.stamp" INSTALL=$install ETENDO_URL="$LOCALENV_URL" \
-      SCHEMA_FORGE_CORE="$CORE" \
+      SCHEMA_FORGE_CORE="$CORE" CORE_STAMP="$STATE/core-install.stamp" CORE_INSTALL=$core_install \
       SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT" \
       perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' bash -c '
+        # npm install, not `make install`: that target also sets core.hooksPath, git config
+        # the core repo shares with every worktree of it
+        if [[ $CORE_INSTALL == 1 ]]; then (cd "$SCHEMA_FORGE_CORE" && npm install) && touch "$CORE_STAMP" || exit 1; fi
         cd "$SF"
         if [[ $INSTALL == 1 ]]; then make install && touch "$STAMP" || exit 1; fi
         # command-line variables: they beat an ETENDO_URL / *_PORT in schema_forge/.env,
@@ -144,7 +154,7 @@ case "$hook" in
         exec make dev-local-core ETENDO_URL="$ETENDO_URL" SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT"' \
       >> "$LOGF" 2>&1 < /dev/null &
     echo $! > "$PIDF"
-    echo ">> Etendo GO SPA starting: http://localhost:$SPA_PORT -> $LOCALENV_URL$([[ $install == 1 ]] && echo ', after make install') (log: $LOGF)"
+    echo ">> Etendo GO SPA starting: http://localhost:$SPA_PORT -> $LOCALENV_URL$([[ $core_install == 1 ]] && echo ', after npm install in schema_forge_core')$([[ $install == 1 ]] && echo ', after make install') (log: $LOGF)"
     ;;
   status)
     if spa_pid >/dev/null; then st=running; else st=stopped; fi

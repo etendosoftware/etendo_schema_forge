@@ -18,7 +18,7 @@ the project skill [`.claude/skills/local-env/SKILL.md`](../.claude/skills/local-
 | `manifest` | prints `seed GOClient v1`, which becomes part of the DB fingerprint, so a DB with the GO sample client never shares a cached snapshot with one without it |
 | `db-seed` | prints the gradle invocations that load it, one per line: `import.sample.data -Pclient=GOClient`, then `prepareOnboardingSampledata --info`. local-env runs them right after `install`, against its own guarded DB, before the DB is snapshotted; every later DB comes from a snapshot that already carries the seed. A failed seed aborts `local-env up` |
 | `worktree-create` | reserves a free `SPA_PORT` (from 3101) and `BFF_PORT` (from 3401) for the new environment, skipping the ports other environments reserved and anything listening, and appends them to the environment's `build/local-env/env`, together with `ETGO_ALLOWED_ORIGINS` for that SPA port (see *Allowed origins* below). The main checkout keeps 3100 / 3400 |
-| `up` | in the background, in this environment's `schema_forge`: `make install` when `node_modules` is missing or `package-lock.json` changed since the last install, then `make dev-local-core ETENDO_URL=<this environment's Tomcat URL> SPA_PORT=… BFF_PORT=…`. Prints the SPA URL; log and pid in `build/local-env/plugins/etendo-go/` |
+| `up` | in the background: `npm install` in this environment's `schema_forge_core` and `make install` in its `schema_forge`, each only when its `node_modules` is missing or its `package-lock.json` is newer than the last install (local-env clones `node_modules` into new worktrees from the source checkout, so they can lag the branch); then, in `schema_forge`, `make dev-local-core ETENDO_URL=<this environment's Tomcat URL> SPA_PORT=… BFF_PORT=…`. Prints the SPA URL; log and pid in `build/local-env/plugins/etendo-go/` |
 | `status` | `SPA  http://localhost:<port> (running\|stopped)` |
 | `stop`, `off`, `worktree-rm` | stops this environment's SPA + BFF (one process group), nobody else's |
 | `sync` | nothing for now (it exits 0). `local-env sync` refuses to run while this SPA is up, since it runs from inside the environment: `local-env stop` first |
@@ -66,9 +66,9 @@ checkout. Two cases depend on this:
 - the environment's `schema_forge` is an adopted worktree (a `worktree.conf` line with
   `adopt`: a symlink to a worktree someone else owns). From inside it `../` resolves
   physically to that worktree's siblings, so the plugin passes
-  `SCHEMA_FORGE_CORE=$ETENDO_ROOT/schema_forge_core` to vite explicitly. It never runs
-  `make install` in an adopted worktree: if its `node_modules` are missing or stale it
-  warns and does not start the SPA. Note that `make dev-local-core` itself may still
+  `SCHEMA_FORGE_CORE=$ETENDO_ROOT/schema_forge_core` to vite explicitly. It never
+  installs into an adopted worktree (`schema_forge` or `schema_forge_core`): if its
+  `node_modules` are missing or stale it warns and does not start the SPA. Note that `make dev-local-core` itself may still
   write there (the AI BFF's `npm install`, vite's cache).
 
 ## Allowed origins

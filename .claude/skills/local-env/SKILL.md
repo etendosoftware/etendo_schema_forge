@@ -91,7 +91,7 @@ cd /Users/futit/Workspace/etendo_develop && local-env worktree rm <name>   # bra
 | SPA binds 3100/3400, clashing with the main checkout | That `schema_forge` branch has no `SPA_PORT` support | Free 3100/3400 first. `/api/ai` then hits the BFF on 3400 |
 | Login from the SPA: 403 "Origin not allowed" | The backend trusts only :3000/3100/4173/5173 plus `ETGO_ALLOWED_ORIGINS`, and this Tomcat started without the SPA's port in it | The plugin adds the line itself. If `up` warned that it added it while a Tomcat was already running, restart that Tomcat once (`pkill -f -- "-Dcatalina.base=<env>/"`, then `local-env up`). Check: `grep ETGO_ALLOWED_ORIGINS <env>/build/local-env/env` |
 | Tomcat: `UnknownHostException: host.docker.internal`, "El intento de conexión falló", 404 on `/etendo`, after an `up` that ran smartbuild | `docker_com.etendoerp.tomcat=true` in the user's `gradle.properties`: smartbuild's `tomcatDeploy` rewrote `bbdd.url` in `WEB-INF/Openbravo.properties` to `host.docker.internal` | Fixed in local-env (`up` forces the flag off and puts a wrong deployed `bbdd.url` back, with a warning). On an older local-env: set the flag to `false` in `<env>/gradle.properties` and `bbdd.url=jdbc:postgresql://localhost:<env PG port>` in `<env>/WebContent/WEB-INF/Openbravo.properties` and `<env>/build/local-env/catalina/webapps/etendo/WEB-INF/Openbravo.properties`, then restart Tomcat |
-| vite: `Failed to resolve import "write-excel-file/universal"` (or any core dep) | A git-worktree'd `schema_forge_core` has no `node_modules`; git does not carry ignored files. Known tool gap | `cp -cR /Users/futit/Workspace/etendo_develop/schema_forge_core/node_modules <env>/schema_forge_core/` |
+| vite: `Failed to resolve import "write-excel-file/universal"` (or any core dep) | `schema_forge_core` without `node_modules`, or with ones older than its branch's `package-lock.json`. local-env now clones the source repo's ignored content (`node_modules`, `.env`, outputs) into every new `--repo`/`--module` worktree, and the GO plugin runs `npm install` in `schema_forge_core` on `up` when its lockfile is newer than the last install | Environments created with an older local-env: `cp -cR /Users/futit/Workspace/etendo_develop/schema_forge_core/node_modules <env>/schema_forge_core/`, or let the next `up` install. An adopted `schema_forge_core` is never installed into: the plugin warns and skips the SPA; install there yourself |
 | Warning about `CATALINA_HOME` with an empty `conf/` | Broken local Tomcat install | Nothing: local-env skips it and uses a complete Tomcat 9 from its cache or `~/Downloads`, or downloads one |
 
 ## Limits
@@ -104,6 +104,6 @@ cd /Users/futit/Workspace/etendo_develop && local-env worktree rm <name>   # bra
 ## When another session asks for an environment
 
 Answer with the exact `local-env worktree` command for its branches, the ports it will
-get, and the caveats that apply (frozen copies, `schema_forge_core` `node_modules`,
+get, and the caveats that apply (frozen copies, carried `node_modules` that may lag the branch,
 `LOCALENV_PLUGINS` for old branches, no pgvector). Create it and run `up` only after
 the user approves.
