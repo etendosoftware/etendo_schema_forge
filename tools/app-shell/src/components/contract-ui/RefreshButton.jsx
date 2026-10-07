@@ -17,10 +17,10 @@ export function RefreshButton({ onRefresh, label }) {
       onClick={onRefresh}
       title={label}
       aria-label={label}
-      className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
+      className="h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:text-foreground transition-colors"
       data-testid="finance-refresh-button"
     >
-      <RefreshCw className="h-4 w-4" data-testid="RefreshCw__finance-refresh" />
+      <RefreshCw className="h-5 w-5" data-testid="RefreshCw__finance-refresh" />
     </button>
   );
 }

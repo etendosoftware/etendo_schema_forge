@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 /**
  * ListView — `meta` forwarded to a functional `headerContent` (ETP-4658 Fase 0).
  *
@@ -142,6 +143,18 @@ describe('ListView — headerContent({ meta })', () => {
 
     expect(screen.queryByTestId('header-slot')).not.toBeInTheDocument();
     expect(screen.getByTestId('mock-table')).toBeInTheDocument();
+  });
+});
+
+describe('ListView — headerContent wrapper collapse', () => {
+  it('marks the padded wrapper empty:hidden so a slot that renders null takes no space', () => {
+    const NullSlot = () => null;
+    render(<ListView {...defaultProps} headerContent={NullSlot} />);
+
+    const wrapper = document.querySelector('div.px-6.pt-4');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper).toBeEmptyDOMElement();
+    expect(wrapper).toHaveClass('empty:hidden');
   });
 });
 

@@ -30,7 +30,7 @@ The list uses `WarehouseCustomTable` in place of the default generated table. Co
 | **Location** | Resolved from `locationAddress$_identifier`, falls back to raw `locationAddress`. Not sortable. |
 | **Products** | Dynamic count cell (`WarehouseProductCountCell`): fetches storageBins then binContents per warehouse row, aggregates via `aggregateProducts`, displays count of products with `qty != 0` (includes negative stock, excludes exact zero — see "Stock filtering semantics" below). Shows `—` while loading or on error. Not sortable. |
 
-Print and Link buttons are hidden (`hidePrint`, `hideLink`). Custom sort and refresh icons match the Products window style (`SortIcon`, `RefreshIcon` from `@/components/ui/custom-icons`). List toolbar and table use 8 px horizontal/vertical padding throughout (`listbarPaddingX="px-2"`, `tablePaddingX="px-2"`, etc.).
+Print and Link buttons are hidden (`hidePrint`, `hideLink`). The sort and refresh toolbar icons are the default `ListView` icons, same as `/sales-order` (ETP-5601). List toolbar and table use 8 px horizontal/vertical padding throughout (`listbarPaddingX="px-2"`, `tablePaddingX="px-2"`, etc.).
 
 Search filters on `searchKey` and `name`.
 

@@ -1,9 +1,10 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 /**
  * ListView — idle toolbar layout (ETP-5509).
  *
- * The idle list bar is a column of up to two rows closed by a separator line:
+ * The idle list bar is a column of up to two rows (no bottom border):
  *
- *   list-toolbar            container, carries the bottom border
+ *   list-toolbar            container, 8px padding, no bottom border
  *   ├─ list-toolbar-main-row  quick filters, Table.ToolbarQuickFilter, the filters
  *   │                         section and the main actions
  *   └─ list-toolbar-tabs-row  the tab group (subset filters + list/gallery toggle),
@@ -12,8 +13,8 @@
  * These tests pin WHERE each control lives and WHEN the second row exists. They
  * assert structure through the stable test ids documented in
  * `docs/list-filters.md` ("Toolbar layout (ETP-5509)"), never through incidental
- * class strings — the one exception is the separator, where the border class IS
- * the behaviour.
+ * class strings — the one exception is the toolbar box (no bottom border, 8px
+ * padding), where the classes ARE the behaviour.
  *
  * `hasListToolbarTabs` is module-private, so its truth table is covered through
  * rendering (see "second row gating").
@@ -288,20 +289,29 @@ describe('ListView toolbar layout — main row contents', () => {
 // ─── Item 6 ─────────────────────────────────────────────────────────────────
 
 describe('ListView toolbar layout — separator', () => {
-  it('draws the bottom-border separator on the toolbar container', () => {
+  it('draws no bottom border on the toolbar container and pads it 8px on every side', () => {
     renderListView();
 
-    expect(screen.getByTestId('list-toolbar')).toHaveClass('border-b');
+    const toolbar = screen.getByTestId('list-toolbar');
+    expect(toolbar).not.toHaveClass('border-b');
+    // Figma: 56px bar = 8px padding all around + 40px controls.
+    expect(toolbar).toHaveClass('py-2');
+    expect(toolbar).toHaveClass('px-2');
+    expect(toolbar).not.toHaveClass('py-3');
   });
 
-  it('draws the separator on the container, not on a row, for a two-row toolbar', () => {
+  it('keeps every row of a two-row toolbar free of a border', () => {
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
-    expect(screen.getByTestId('list-toolbar')).toHaveClass('border-b');
-    // One line closing the whole bar — a border on either row would draw a
-    // second line between the rows.
+    expect(screen.getByTestId('list-toolbar')).not.toHaveClass('border-b');
     expect(mainRow()).not.toHaveClass('border-b');
     expect(tabsRow()).not.toHaveClass('border-b');
+  });
+
+  it('renders the main-row controls 40px tall (h-10)', () => {
+    renderListView();
+
+    expect(within(mainRow()).getByTestId('action-new')).toHaveClass('h-10');
   });
 
   it('renders no toolbar at all when the list bar is hidden via the hideListBar prop', () => {
@@ -326,7 +336,8 @@ describe('ListView toolbar layout — separator', () => {
   it('lets listViewOptions.hideListBar=false win over the hideListBar prop', () => {
     renderListView({ hideListBar: true, listViewOptions: { hideListBar: false } });
 
-    expect(screen.getByTestId('list-toolbar')).toHaveClass('border-b');
+    expect(screen.getByTestId('list-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('list-toolbar')).not.toHaveClass('border-b');
   });
 });
 
@@ -528,6 +539,16 @@ describe('ListView toolbar layout — main row holds every main action', () => {
     expectOnlyInMainRow(within(mainRow()).getByRole('button', { name: 'print' }));
     expect(within(tabsRow()).queryByRole('button', { name: 'print' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'print' })).toHaveLength(1);
+  });
+
+  it('renders the idle print button icon-only (aria-label, no visible text, 40x40)', () => {
+    renderListView();
+
+    const print = within(mainRow()).getByRole('button', { name: 'print' });
+    expect(print).toHaveAttribute('aria-label', 'print');
+    expect(print).toHaveTextContent('');
+    expect(print).toHaveClass('h-10');
+    expect(print).toHaveClass('w-10');
   });
 
   it('drops the print button from the toolbar when hidePrint is set', () => {

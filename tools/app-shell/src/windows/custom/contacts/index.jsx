@@ -11,7 +11,6 @@ import ContactsBusinessPartnerForm from './ContactsBusinessPartnerForm';
 import ContactsPeriodButton from './ContactsPeriodButton';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
 import { useUI } from '@/i18n';
-import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import { Trash2 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -157,8 +156,6 @@ export default function ContactsWindow(props) {
            toolbarPaddingX="px-2"
            newLabel={ui('newContact')}
            listbarPaddingX="px-2"
-           SortIconComponent={SortIcon}
-           RefreshIconComponent={RefreshIcon}
            iconButtonHover="hover:bg-[hsl(var(--muted))]"
            tablePaddingX="px-2"
            selectionBarSize="default"

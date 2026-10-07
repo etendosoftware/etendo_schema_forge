@@ -124,7 +124,7 @@ export function ListExportButton({ importConfig, importFieldLabel, apiBaseUrl, b
       variant="outline"
       size="sm"
       disabled={exporting}
-      className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+      className="gap-1.5 text-[#828FA3] font-normal h-10 px-3 rounded-lg bg-card [&_svg]:size-5"
       onClick={exportFormats.length > 1 ? undefined : () => handleExport(exportFormats[0] ?? 'csv')}
       aria-label={ui('export')}
       title={ui('export')}
@@ -132,7 +132,7 @@ export function ListExportButton({ importConfig, importFieldLabel, apiBaseUrl, b
     >
       {/* ETP-4997 (SHELL-02) — the arrow tracks the direction the DATA travels, not the file:
           export pushes records out (Upload), import pulls them in (Download). */}
-      <Upload className="h-3.5 w-3.5" data-testid="Upload__ListViewExport" />
+      <Upload className="h-5 w-5" data-testid="Upload__ListViewExport" />
     </Button>
   );
 

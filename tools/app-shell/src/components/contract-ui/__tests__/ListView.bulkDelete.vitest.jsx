@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 /**
  * ETP-4656 — ListView's "Delete selected" wiring (useBulkRowDelete integration).
  *
@@ -23,7 +24,7 @@
  *
  * Harness mirrors ListView.vitest.jsx (same Table-mock and useEntity-mock style).
  */
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
@@ -364,9 +365,9 @@ describe('ListView — bulk-toolbar Clone button respects windowReadOnly (ETP-52
 // (which bulk-prints only the selected rows via printDocuments). Fixed by
 // gating the idle button on `selectedRows.length === 0`. Both buttons share
 // the same `data-testid="Button__620cbc"` (pre-existing, unrelated to this
-// fix), so the two are distinguished structurally: the idle button renders a
-// visible "print" text node and no `title` attribute, while the
-// SelectionToolbar's button renders only an icon behind a `title`/aria-label.
+// fix), so the two are distinguished structurally: the idle button sits in the
+// `list-toolbar-main-row`, while the SelectionToolbar's button lives elsewhere.
+// Both are icon-only with a `title`/aria-label.
 describe('ListView — idle-toolbar Print button visibility vs. row selection', () => {
   const defaultProps = {
     entity: 'testEntity',
@@ -382,12 +383,14 @@ describe('ListView — idle-toolbar Print button visibility vs. row selection', 
   }
 
   function idlePrintButton() {
-    return screen.queryAllByTestId('Button__620cbc').find(
-      (btn) => !btn.hasAttribute('title') && btn.textContent.includes('print')
-    );
+    // Icon-only: identified by its accessible name inside the idle toolbar.
+    const toolbar = screen.queryByTestId('list-toolbar');
+    return toolbar ? within(toolbar).queryByRole('button', { name: 'print' }) : null;
   }
   function selectionPrintButton() {
-    return screen.queryByTitle('print');
+    // The idle button shares the title; it lives in the idle toolbar's main row, the selection bar's does not.
+    const mainRow = screen.queryByTestId('list-toolbar-main-row');
+    return screen.queryAllByTitle('print').find((btn) => !mainRow?.contains(btn)) ?? null;
   }
 
   it('shows the idle-toolbar Print button when no rows are selected', () => {

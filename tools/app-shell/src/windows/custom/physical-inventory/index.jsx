@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import InventoryTable from '@generated/physical-inventory/generated/web/physical-inventory/InventoryTable';
 import GeneratedApp from '@generated/physical-inventory/generated/web/physical-inventory/index.jsx';
-import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import BulkDocumentAction, { buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { useUI } from '@/i18n';
 import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
@@ -85,8 +84,6 @@ export default function PhysicalInventoryWindow(props) {
       {...props}
       Table={CustomInventoryTable}
       hideMoreMenu={hideMenuActions}
-      SortIconComponent={SortIcon}
-      RefreshIconComponent={RefreshIcon}
       bulkActions={InventoryBulkActions}
       rowQuickActions={rowQuickActions}
       refreshTrigger={refreshKey}

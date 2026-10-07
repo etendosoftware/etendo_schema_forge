@@ -3,7 +3,6 @@ import { useUI } from '@/i18n';
 import WarehousePage from '@generated/warehouse/generated/web/warehouse/WarehousePage';
 import WarehouseSummary from './WarehouseSummary';
 import WarehouseTransactionsTable from './WarehouseTransactionsTable';
-import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import WarehouseProductsTab from './WarehouseProductsTab';
 import WarehouseCustomTable from './WarehouseCustomTable';
 import AccountingTable from '@generated/warehouse/generated/web/warehouse/AccountingTable';
@@ -87,8 +86,6 @@ export default function WarehouseWindow(props) {
       listbarPaddingY="py-2"
       tablePaddingX="px-2"
       tablePaddingBottom="pb-2"
-      SortIconComponent={SortIcon}
-      RefreshIconComponent={RefreshIcon}
       toolbarPaddingX="px-2"
       tabsBarPaddingX="px-2"
       compactSidebarPadding

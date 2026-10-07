@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
+// @covers tools/app-shell/src/components/contract-ui/ListExportButton.jsx
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -83,8 +85,8 @@ describe('ListView export wiring', () => {
   it('SHELL-02: the arrow follows the data, not the file', () => {
     // Import pulls records IN (Download), export pushes them OUT (Upload). The import button
     // used to carry the outward arrow, which read as an export.
-    expect(src).toMatch(/<Download className="h-3\.5 w-3\.5" data-testid="Download__ListViewImport"/);
-    expect(exportSrc).toMatch(/<Upload className="h-3\.5 w-3\.5" data-testid="Upload__ListViewExport"/);
+    expect(src).toMatch(/<Download\b[^>]*data-testid="Download__ListViewImport"/);
+    expect(exportSrc).toMatch(/<Upload\b[^>]*data-testid="Upload__ListViewExport"/);
   });
 
   // ETP-4997 — a Contacts row is split across three records, but the header qualifier had only

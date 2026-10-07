@@ -27,7 +27,7 @@ Use this window to register stock consumed inside the organization rather than s
 - **Columns, in order:** Movement Date, Name, Status, Posted ("Fecha del movimiento", "Nombre", "Estado", "Contabilizado"). Status comes before Posted, consistent with the other document windows — driven by `gridOrder` 3 on `status` and 4 on `posted` in `decisions.json` (grid only; the form is unaffected).
 - **Posted badge:** `posted` is a read-only boolean badge — green **Posted / Contabilizado** or orange **Not posted / Sin contabilizar**. It is not a form field (`form: false`).
 - **Toolbar trimmed:** the per-row link icon (`hideLink`), the Print button (`hidePrint`), and the **All statuses** filter dropdown (`hideStatusFilter`) are all hidden. Only the date filter and **Filters** remain on the left; sort and refresh remain on the right.
-- **Custom toolbar icons:** sort and refresh use the same icon set as Contacts/Warehouse (`customListIcons`, which emits `SortIcon` / `RefreshIcon` from `@/components/ui/custom-icons`).
+- **Toolbar icons:** sort and refresh use the default `ListView` icons, same as `/sales-order` (ETP-5601; `customListIcons` is no longer set).
 - **Tighter padding:** the list toolbar and table use `px-2` (8 px) horizontal padding. `px-2` is now the global `ListView` default, so the window relies on the default rather than per-window overrides.
 - **No status dot on the date column:** `movementDate` sets `dot: false`, so the list does not render the red date indicator next to Movement Date.
 
@@ -93,7 +93,7 @@ Use this window to register stock consumed inside the organization rather than s
 ### List view
 1. Open `/internal-consumption` and confirm the toolbar shows the date filter and **Filters**, but no **All statuses** dropdown, no Print button, and no per-row link icon.
 2. Confirm the columns read Movement Date, Name, Status, Posted in that order, and that Posted shows a green **Contabilizado** or orange **Sin contabilizar** badge.
-3. Confirm the sort and refresh icons match the Contacts/Warehouse style, the toolbar/table padding is tight (8 px), and there is no red dot next to the Movement Date values.
+3. Confirm the sort and refresh icons are the default `ListView` icons (same as `/sales-order`), the toolbar/table padding is tight (8 px), and there is no red dot next to the Movement Date values.
 
 ### Detail view — draft and Confirm
 4. Create a new header; confirm Movement Date and Name are required and that the header fields render without a surrounding card border. Confirm there is no **Others** tab.
@@ -127,7 +127,7 @@ Use this window to register stock consumed inside the organization rather than s
 - `tools/app-shell/src/lib/__tests__/backendErrors.test.js` — `translateBackendError — document-level NotCalculatedCost (ETP-5445)` maps both the en_US and es_ES core literals to `backendError.costNotCalculated`.
 - `com.etendoerp.go`: `InternalConsumptionHeaderHandlerTest` (delegation to `DocumentPostingService`), `InternalConsumptionLineHandlerTest` (stock strip only on a product-triggered callout; conversion callout untouched), `DocumentPostingServiceTest` (cost pre-check for `M_Internal_Consumption`), `NotPostedDocumentsHandlerTest` (`"Internal Consumption"` → `800168` row enrichment).
 - `cli/test/data-fixes-r40-internal-consumption-table-active.test.js` — data-fix R40 shape and behavior.
-- `artifacts/internal-consumption/contract.json` and `generated/web/internal-consumption/InternalConsumptionPage.jsx` show the master-child structure, the Draft/Completed/Voided enum, the `draftMode` Save/Confirm workflow with `extraParams`, the `posted` status pill, the list-view trims (`hidePrint`, `hideLink`, `hideStatusFilter`, `customListIcons`), `noHeaderBorder`, the kebab `customMenuContent` + `menuActions` injection, child selectors, and the `processNow` action endpoint. `InternalConsumptionTable.jsx` shows the column order and the `posted` badge.
+- `artifacts/internal-consumption/contract.json` and `generated/web/internal-consumption/InternalConsumptionPage.jsx` show the master-child structure, the Draft/Completed/Voided enum, the `draftMode` Save/Confirm workflow with `extraParams`, the `posted` status pill, the list-view trims (`hidePrint`, `hideLink`, `hideStatusFilter`), `noHeaderBorder`, the kebab `customMenuContent` + `menuActions` injection, child selectors, and the `processNow` action endpoint. `InternalConsumptionTable.jsx` shows the column order and the `posted` badge.
 - `artifacts/internal-consumption/custom/InternalConsumptionActions.jsx` is the kebab Void action: it renders only when `status === 'CO'`, POSTs `{ action: 'VO' }` to the `processNow` endpoint, refreshes after success, disables while processing, and uses neutral styling.
 - `artifacts/internal-consumption/custom/InternalConsumptionBottomPanel.jsx` exposes the shared `LinesEmptyState` as its `linesEmptyState` static.
 - `tools/app-shell/src/components/contract-ui/__tests__/ListFilterBar.vitest.jsx` covers the generic `hideStatusFilter` behavior used by this window's list view.

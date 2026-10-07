@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -30,7 +31,8 @@ import { login } from '../../helpers/auth.js';
  *   3. Every visible main-row button sits inside the toolbar box and is not
  *      clipped; the create action is present exactly where the window has one.
  *   4. The main row's two clusters do not overlap.
- *   5. The toolbar paints a bottom border (the toolbar/body separator).
+ *   5. The toolbar paints NO bottom border and a single-row toolbar is 56px tall
+ *      with 40px main-row controls (Figma: 8px padding + 40px controls).
  *   6. The toolbar ends at or above the top of the list body.
  */
 
@@ -217,10 +219,15 @@ function expectMainRowFits(m) {
     .toBeLessThanOrEqual(actions.left + EDGE_TOLERANCE_PX);
 }
 
-/** Assertion 5 — the toolbar/body separator is painted. */
-function expectSeparator(m) {
-  expect(parseFloat(m.borderBottomWidth), 'toolbar must paint a bottom border').toBeGreaterThan(0);
-  expect(m.borderBottomStyle).not.toBe('none');
+/** Assertion 5 — no bottom border; a single-row toolbar is 56px with 40px controls. */
+function expectToolbarBox(m) {
+  expect(parseFloat(m.borderBottomWidth), 'toolbar must not paint a bottom border').toBe(0);
+  if (!m.tabsRow) {
+    expect(m.toolbar.height, 'single-row toolbar must be 56px tall').toBeCloseTo(56, 0);
+    for (const button of m.buttons) {
+      expect(button.height, `${button.name} must be 40px tall`).toBeLessThanOrEqual(40 + EDGE_TOLERANCE_PX);
+    }
+  }
 }
 
 /** Assertion 6 — the toolbar ends at or above the top of the list body. */
@@ -286,23 +293,22 @@ test.describe('List toolbar — 1280×720 minimum resolution (ETP-5509)', () => 
       }
 
       // ---------------------------------------------------------------
-      // 5 + 6. Separator painted; toolbar does not run into the body.
+      // 5 + 6. No border, 56px box; toolbar does not run into the body.
       // ---------------------------------------------------------------
-      expectSeparator(m);
+      expectToolbarBox(m);
       expectToolbarAboveBody(m);
     });
   }
 });
 
-test.describe('List toolbar — separator at a large resolution (ETP-5509)', () => {
-  // Payments In had NO separator before ETP-5509 (its table sits next to a
-  // sidebar and never drew its own line) — the line must be there at any
-  // width, not only at the minimum one.
-  test('payment-in keeps the separator and a fitting main row at 1920×1080', async ({ page }) => {
+test.describe('List toolbar — box at a large resolution (ETP-5509)', () => {
+  // The toolbar draws no bottom border at any width; Payments In keeps the
+  // toolbar/body separator as the body's own top edge (PaymentHeaderTableBase).
+  test('payment-in has no toolbar border and a fitting main row at 1920×1080', async ({ page }) => {
     await openList(page, windowBySlug('payment-in'), VIEWPORT_LARGE);
 
     const m = await measureToolbar(page);
-    expectSeparator(m);
+    expectToolbarBox(m);
     expectMainRowFits(m);
     expectToolbarAboveBody(m);
     await expect(page.getByTestId('list-toolbar-tabs-row')).toHaveCount(0);

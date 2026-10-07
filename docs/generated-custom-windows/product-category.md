@@ -16,7 +16,7 @@ Users should be able to:
 
 - **Route:** `/product-category`, `/product-category/:recordId`
 - **Visibility:** visible in the Inventory menu as **Product Category**
-- **Implementation type:** custom window — `registry.js` points to `tools/app-shell/src/windows/custom/product-category/index.jsx`, which wraps the generated `ProductCategoryPage` and injects custom icons and a custom header form
+- **Implementation type:** custom window — `registry.js` points to `tools/app-shell/src/windows/custom/product-category/index.jsx`, which wraps the generated `ProductCategoryPage` and injects a custom header form
 - **Window shape:** master + inline-editable detail; `productCategory` is the header entity and `accounting` is the detail entity rendered as an inline-editable grid
 - **List behavior:** the category list shows Search Key and Name and supports filtering by those same fields
 - **Record behavior:** opening a category record renders a detail view with the category header form plus the **Accounting** tab with `linesLayout="inlineEditable"`
@@ -49,7 +49,7 @@ The header form is rendered by `ProductCategoryCustomForm` (a custom component, 
 
 The custom form is section-aware: it returns `null` for any `section` prop other than `"principal"`, which suppresses the auto-generated *Más detalles* collapsible and the *Otros* tab that `DetailView` probes for.
 
-Custom icons `SortIcon` and `RefreshIcon` from `packages/app-shell-core/src/components/ui/custom-icons.jsx` are injected via the `index.jsx` wrapper.
+The list toolbar uses the default `ListView` sort/refresh icons, same as `/sales-order` (ETP-5601); the `index.jsx` wrapper no longer injects custom icons.
 
 ## Reactive behavior and dependencies
 
@@ -70,7 +70,7 @@ Custom icons `SortIcon` and `RefreshIcon` from `packages/app-shell-core/src/comp
 1. Open `/product-category` and confirm the list filters Search Key and Name.
 2. Open an existing category and confirm the header form shows Name (325 px) and Search Key (325 px) inline in the first row, the Configuración checkbox group on the right, and Description full-width below.
 3. Confirm **no** *Más detalles* collapsible and **no** *Otros* tab appear in the detail view.
-4. Confirm the toolbar shows the custom Sort and Refresh icons.
+4. Confirm the toolbar shows the default Sort and Refresh icons.
 5. Confirm the **Accounting** tab is the active detail tab and shows one row per accounting schema.
 6. Hover over an accounting row and confirm the pencil and trash icons appear.
 7. Click the pencil icon and confirm all five selector fields (including Invoice Price Variance) become editable inline within their column boundaries.
@@ -84,7 +84,7 @@ Custom icons `SortIcon` and `RefreshIcon` from `packages/app-shell-core/src/comp
 
 - `tools/app-shell/src/menu.json` places **Product Category** under the Inventory menu.
 - `tools/app-shell/src/windows/registry.js` registers the `product-category` slug pointing to the custom wrapper at `tools/app-shell/src/windows/custom/product-category/index.jsx`.
-- `tools/app-shell/src/windows/custom/product-category/index.jsx` wraps the generated `ProductCategoryPage` with `Form={ProductCategoryCustomForm}`, `SortIconComponent={SortIcon}`, and `RefreshIconComponent={RefreshIcon}`.
+- `tools/app-shell/src/windows/custom/product-category/index.jsx` wraps the generated `ProductCategoryPage` with `Form={ProductCategoryCustomForm}`.
 - `tools/app-shell/src/windows/custom/product-category/ProductCategoryCustomForm.jsx` renders the two-row header layout (Name + Search Key + checkboxes, then Description). Returns `null` for non-`"principal"` sections to hide the *Más detalles* collapsible and suppress the *Otros* probe.
 - `artifacts/product-category/contract.json` defines the window with `productCategory` as primary entity, `accounting` as detail entity with `linesLayout: "inlineEditable"`, and five ValidCombination selector fields (ETP-5222 added the fifth, Invoice Price Variance).
 - `artifacts/product-category/generated/web/product-category/ProductCategoryPage.jsx` renders `ListView` for the list route and `DetailView` with `linesLayout="inlineEditable"` and `DetailTable={AccountingTable}` for record routes.
@@ -119,6 +119,10 @@ Regenerated on 2026-06-09 as part of feature/ETP-4192.
 - Backend fix (NEO Headless): `SelectorDescriptorResolver.findIdentifierProperty` now returns `"combination"` for entities that have that property (e.g. `AccountingCombination`) before falling back to `"id"`.
 - Frontend fix (`InlineSearchCombo`): root wrapper div now has `w-full` so selector inputs fill the full column width in inline edit mode.
 - Frontend fix (`linesColumnWidth`): `columnFlex` for selector/search/foreignKey columns now honors `col.grow` to override the default `idx === 0` grow behavior.
+
+## Toolbar icons — ETP-5601
+
+- The `SortIcon` / `RefreshIcon` injection from the ETP-4190 wrapper was removed; the list uses the default `ListView` toolbar icons, same as `/sales-order`.
 
 ## Header field changes — ETP-4670
 

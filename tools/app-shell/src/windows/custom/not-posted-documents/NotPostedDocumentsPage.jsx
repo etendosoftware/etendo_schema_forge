@@ -79,7 +79,7 @@ function rowDocTypeLabel(row, ui, documentTypeLabels) {
 }
 
 // Same chrome as ListView's own link button, which these toolbar icons sit next to.
-const ICON_BUTTON_CLASS = 'h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors';
+const ICON_BUTTON_CLASS = 'h-10 w-10 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors';
 
 export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const ui = useUI();
