@@ -44,7 +44,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import FollowUpDocumentButton from '../FollowUpDocumentButton.jsx';
 import { buildSummary } from '../FollowUpDocumentModal.jsx';
-import { PURCHASE_INVOICE_FOLLOW_UP } from '@/windows/custom/shared/invoiceFollowUp.js';
+import { PURCHASE_INVOICE_FOLLOW_UP, SALES_INVOICE_FOLLOW_UP } from '@/windows/custom/shared/invoiceFollowUp.js';
 import { consumeFollowUpPrompt, requestFollowUpPrompt } from '../followUpDocuments.js';
 
 const SPEC = 'sales-invoice';
@@ -297,6 +297,39 @@ describe('FollowUpDocumentButton — creating the document', () => {
     expect(screen.getByTestId(BUTTON)).toHaveFocus();
   });
 
+  it('Esc on the result closes it without navigating', async () => {
+    const user = userEvent.setup();
+    renderButton();
+    await openFromButton(user);
+    await user.click(screen.getByTestId(PRIMARY));
+    expect(await screen.findByTestId('confirm-result-modal')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByTestId('confirm-result-modal')).toBeNull();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  // Purchase circuit with the real window config: the receipt option's result doc type
+  // ('entrada') labels the primary «Ver albarán» and the route uses the entry's targetSpec.
+  it('purchase invoice: «Ver albarán» on the result opens the created goods receipt', async () => {
+    const user = userEvent.setup();
+    mockApiFetch.mockResolvedValue(jsonResponse({ response: { data: { id: 'rc-1', documentNo: 'REC-0001' } } }, { status: 201 }));
+    renderButton({
+      spec: 'purchase-invoice',
+      apiBaseUrl: '/sws/neo/purchase-invoice',
+      options: PURCHASE_INVOICE_FOLLOW_UP.options,
+      summary: PURCHASE_INVOICE_FOLLOW_UP.summary,
+      data: withFollowUp({
+        available: ['receipt'],
+        receipt: { needed: true, pendingLines: 1, action: 'createReceipt', targetSpec: 'goods-receipt', targetEntity: 'goodsReceipt' },
+      }),
+    });
+    await openFromButton(user);
+    await user.click(screen.getByTestId(PRIMARY));
+    expect(await screen.findByText('REC-0001')).toBeInTheDocument();
+    await user.click(screen.getByText('poViewReceipt'));
+    expect(mockNavigate).toHaveBeenCalledWith('/goods-receipt/rc-1');
+  });
+
   it.each([
     ['a FOLLOW_UP_* error code', () => Promise.resolve(jsonResponse({ error: { code: 'FOLLOW_UP_DRAFT_IN_PROGRESS', message: 'raw' } }, { ok: false, status: 409 })), 'followUpErrorDraftInProgress'],
     ['an unknown error code', () => Promise.resolve(jsonResponse({ error: { code: 'BOOM', message: 'raw' } }, { ok: false, status: 500 })), 'followUpErrorGeneric'],
@@ -524,9 +557,12 @@ describe('FollowUpDocumentButton — input-required round-trip', () => {
 // QA ETP-5576 (Obs 3): the purchase popup showed the supplier reference (`orderReference`) in
 // the «Factura» column instead of the invoice's own number. Real window config, real builder.
 describe('FollowUpDocumentModal — summary document number', () => {
-  it('purchase invoice shows the internal documentNo, not the supplier orderReference', () => {
-    const record = { documentNo: 'FC1000000', orderReference: 'QA5576-C1' };
-    const { data } = buildSummary({ record, summary: PURCHASE_INVOICE_FOLLOW_UP.summary, single: null, ui: mockUi, locale: 'en_US' });
-    expect(data.document).toBe('FC1000000');
+  it.each([
+    ['purchase', PURCHASE_INVOICE_FOLLOW_UP, 'FC1000000'],
+    ['sales', SALES_INVOICE_FOLLOW_UP, 'F-0001'],
+  ])('%s invoice shows the internal documentNo, not the supplier orderReference', (_, config, documentNo) => {
+    const record = { documentNo, orderReference: 'QA5576-C1' };
+    const { data } = buildSummary({ record, summary: config.summary, single: null, ui: mockUi, locale: 'en_US' });
+    expect(data.document).toBe(documentNo);
   });
 });
