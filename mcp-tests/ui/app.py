@@ -112,7 +112,7 @@ def render_verdict(verdict: dict) -> None:
     """Render one verdict-shaped object (§6.3).
 
     ONE renderer, two callers: a probe's own verdict and the arguments of a
-    `neo_feedback` call, which carry the same schema on purpose (D27). A second
+    `etendo_feedback` call, which carry the same schema on purpose (D27). A second
     renderer for one schema is how two renderings drift apart.
 
     Total by construction: every field is optional at read time and a malformed
@@ -186,7 +186,7 @@ def _code(text: str, language: str | None = None) -> None:
     """A code block that WRAPS.
 
     Without this a single-line JSON blob renders as one unbroken line behind a
-    horizontal scrollbar, cut mid-token — which is how a `neo_feedback` report
+    horizontal scrollbar, cut mid-token — which is how a `etendo_feedback` report
     became unreadable in the first place.
     """
     st.code(text, language=language, wrap_lines=True)
@@ -197,7 +197,7 @@ def render_args(call: dict, *, full: bool) -> None:
 
     `full=True` means the probe file, where the arguments are complete;
     `full=False` means an event, where they may be a preview string. A
-    `neo_feedback` call is rendered as the report it is, with the raw JSON kept
+    `etendo_feedback` call is rendered as the report it is, with the raw JSON kept
     one click away — someone debugging the tool itself still needs to see
     exactly what went over the wire.
     """

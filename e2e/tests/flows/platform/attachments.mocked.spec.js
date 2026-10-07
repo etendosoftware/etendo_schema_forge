@@ -1,12 +1,17 @@
+// @covers tools/app-shell/src/components/attachments/AttachmentsTab.jsx
+// @covers tools/app-shell/src/components/contract-ui/TabStripButton.jsx
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
 /**
  * Attachments tab — E2E coverage (mocked).
  *
- * Covers two windows:
- *   • product     (master record, smoke — Suite E)
- *   • sales-order (transactional, tab in main strip alongside Lines — Suites F–I)
+ * Covers four windows:
+ *   • product          (master record, smoke — Suite E)
+ *   • sales-order      (transactional, tab in main strip alongside Lines — Suites F–I)
+ *   • purchase-order   (new record, no saveBeforeAttach → tab disabled — Suite J)
+ *   • purchase-invoice (new record, saveBeforeAttach → save header, then upload — Suite J)
  *
  * Payment In/Out set `attachments: false` in decisions.json (commit 5bd640b91) —
  * the tab is intentionally disabled for those windows, so this file no longer
@@ -424,5 +429,206 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     await page.getByTestId('attachments-download-all').click();
 
     await expect.poll(() => zipCalled, { timeout: 5_000 }).toBe(true);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// NEW RECORD — Suite J
+//
+// Nothing can be attached to a record that does not exist yet. A window WITHOUT
+// `saveBeforeAttach` (purchase-order) renders the Attachments tab disabled on
+// /new, with the save-first hint as its tooltip, and never POSTs against "new"
+// (it used to, and surfaced a raw backend 500). A window WITH `saveBeforeAttach`
+// (purchase-invoice) keeps the dropzone: dropping a file saves the header first,
+// then uploads against the id the save returned.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Both locales the app can boot in — the tooltip is the translated hint.
+const SAVE_FIRST_HINT = /^(Guarda el documento antes de adjuntar archivos|Save the document before attaching files)$/;
+
+/** Records every request to the attachments API (method + URL). */
+function trackAttachmentRequests(page) {
+  const requests = [];
+  page.on('request', (req) => {
+    if (req.url().includes('/sws/neo/attachments/')) {
+      requests.push({ method: req.method(), url: req.url() });
+    }
+  });
+  return requests;
+}
+
+test.describe('Suite J — new record (mocked)', () => {
+  test('J1: purchase-order /new — the Attachments tab is disabled with the hint and nothing is uploaded', async ({ page }) => {
+    await login(page);
+    const attachmentRequests = trackAttachmentRequests(page);
+
+    await page.route('**/sws/neo/purchase-order/header/defaults{/**,}**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ defaults: { documentStatus: 'DR' } }),
+      });
+    });
+
+    await page.goto('/purchase-order/new');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const tabBtn = page.getByTestId('tab-custom:attachments');
+    await tabBtn.waitFor({ state: 'visible', timeout: 15_000 });
+    await expect(tabBtn).toHaveAttribute('aria-disabled', 'true');
+    await expect(tabBtn).toHaveAttribute('title', SAVE_FIRST_HINT);
+
+    // Playwright's actionability check honours aria-disabled, so force the click
+    // through to prove the handler itself ignores it.
+    await expect(tabBtn).toBeDisabled();
+    await tabBtn.click({ force: true });
+    await expect(page.getByTestId('attachments-dropzone')).toBeHidden();
+    await expect(page.getByTestId('attachments-save-first-hint')).toBeHidden();
+
+    expect(attachmentRequests.filter((r) => r.method === 'POST')).toEqual([]);
+    expect(attachmentRequests.filter((r) => /\/new(\/|\?|$)/.test(r.url))).toEqual([]);
+  });
+
+  test('J2: purchase-invoice /new (saveBeforeAttach) — dropping a file saves the header, then uploads against the saved id', async ({ page }) => {
+    const SAVED_ID = '7A7A7A7A00000000000000000000A7A7';
+    const capture = { headerPosts: 0, uploadUrls: [] };
+
+    // Every required editable header field pre-filled so the client-side
+    // required-field guard passes and the header POST actually fires.
+    const defaults = {
+      transactionDocument: 'td-api-001', 'transactionDocument$_identifier': 'AP Invoice',
+      documentNo: 'FP-NEW-1',
+      invoiceDate: '2026-07-16',
+      accountingDate: '2026-07-16',
+      businessPartner: 'bp-att-001', 'businessPartner$_identifier': 'Proveedor Adjuntos S.L.',
+      partnerAddress: 'addr-att-001', 'partnerAddress$_identifier': 'Calle Adjuntos 1',
+      paymentMethod: 'pm-001', 'paymentMethod$_identifier': 'Transferencia',
+      paymentTerms: 'pt-001', 'paymentTerms$_identifier': '30 días',
+      currency: 'eur-001', 'currency$_identifier': 'EUR',
+      priceList: 'pl-001', 'priceList$_identifier': 'Tarifa compra',
+      documentStatus: 'DR', 'documentStatus$_identifier': 'Borrador',
+    };
+    const saved = {
+      ...defaults,
+      id: SAVED_ID,
+      processed: false,
+      posted: 'N',
+      grandTotalAmount: 0,
+      summedLineAmount: 0,
+    };
+
+    await login(page);
+    const attachmentRequests = trackAttachmentRequests(page);
+
+    await page.route('**/sws/neo/purchase-invoice/header{/**,}**', async (route) => {
+      const req = route.request();
+      const url = req.url();
+      const isSubPath = /\/header\/[^/?]+/.test(url);
+      if (req.method() === 'POST') {
+        // Sub-path POSTs (callout, evaluate-display) are not the header create.
+        if (isSubPath) {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+          return;
+        }
+        capture.headerPosts += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [saved] } }),
+        });
+        return;
+      }
+      if (req.method() === 'GET' && !isSubPath) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
+        });
+        return;
+      }
+      return route.fallback();
+    });
+
+    await page.route('**/sws/neo/purchase-invoice/header/defaults{/**,}**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ defaults }),
+      });
+    });
+
+    await page.route(`**/sws/neo/purchase-invoice/header/${SAVED_ID}{/**,}**`, async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [saved] } }),
+      });
+    });
+
+    for (const entity of ['lines', 'paymentPlan', 'reversedInvoices']) {
+      await page.route(`**/sws/neo/purchase-invoice/${entity}{/**,}**`, async (route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
+        });
+      });
+    }
+
+    let uploadedItems = [];
+    await page.route('**/sws/neo/attachments/**', async (route) => {
+      const req = route.request();
+      if (req.method() === 'POST') {
+        capture.uploadUrls.push(req.url());
+        const item = {
+          id: 'pi-att-new-1',
+          name: 'factura-proveedor.pdf',
+          size: 2048,
+          uploadedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          uploadedBy: { name: 'Admin' },
+        };
+        uploadedItems = [item];
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: item } }),
+        });
+        return;
+      }
+      if (req.method() === 'GET' && !req.url().includes('/file/') && !req.url().includes('/zip')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ items: uploadedItems }),
+        });
+        return;
+      }
+      return route.fallback();
+    });
+
+    await page.goto('/purchase-invoice/new');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const tabBtn = page.getByTestId('tab-custom:attachments');
+    await tabBtn.waitFor({ state: 'visible', timeout: 15_000 });
+    await expect(tabBtn).not.toHaveAttribute('aria-disabled', 'true');
+    await openAttachmentsTab(page, page.getByTestId('attachments-dropzone'));
+    await expect(page.getByTestId('attachments-save-first-hint')).toHaveCount(0);
+
+    await page.locator('[data-testid="attachments-file-input"]').setInputFiles({
+      name: 'factura-proveedor.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4 supplier invoice'),
+    });
+
+    await expect.poll(() => capture.headerPosts, { timeout: 10_000 }).toBe(1);
+    await expect.poll(() => capture.uploadUrls.length, { timeout: 10_000 }).toBe(1);
+    expect(capture.uploadUrls[0]).toMatch(new RegExp(`/sws/neo/attachments/C_Invoice/${SAVED_ID}(\\?|$)`));
+    expect(attachmentRequests.filter((r) => /\/new(\/|\?|$)/.test(r.url))).toEqual([]);
+
+    await expect(page).toHaveURL(new RegExp(`/purchase-invoice/${SAVED_ID}`), { timeout: 10_000 });
   });
 });

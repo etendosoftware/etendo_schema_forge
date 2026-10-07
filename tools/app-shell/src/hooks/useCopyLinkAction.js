@@ -2,16 +2,19 @@ import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 
-// Shared by both copy-link hooks below — builds the record URL, writes it to
-// the clipboard, and surfaces a success/error toast via the existing i18n keys.
-async function copyRecordUrl(id, windowName, ui) {
-  const url = `${window.location.origin}/${windowName}/${id}`;
+// Writes a URL to the clipboard and surfaces a success/error toast via the
+// existing i18n keys. Shared by every copy-link hook below.
+async function copyUrl(url, ui) {
   try {
     await navigator.clipboard.writeText(url);
     toast.success(ui('linkCopied'));
   } catch {
     toast.error(ui('copyFailed'));
   }
+}
+
+function copyRecordUrl(id, windowName, ui) {
+  return copyUrl(`${window.location.origin}/${windowName}/${id}`, ui);
 }
 
 // ListView.jsx's iconSizeClass() isn't exported, so re-implemented here.
@@ -50,4 +53,12 @@ export function useCopyRecordLinkAction({ recordId, windowName }) {
     visible,
     onCopyLink,
   };
+}
+
+// ETP-5593 — list-view (page) variant: copies the CURRENT page URL as-is, so any
+// state a window keeps in the query string (filters, search) travels with the link.
+// Backs ListView's toolbar "Share" button.
+export function useCopyPageLink() {
+  const ui = useUI();
+  return useCallback(() => copyUrl(window.location.href, ui), [ui]);
 }

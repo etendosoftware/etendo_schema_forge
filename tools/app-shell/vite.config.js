@@ -1,7 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { resolve } from 'path';
 import { readFileSync } from 'fs';
 import schemaApiPlugin from './vite-plugins/schema-api.js';
@@ -43,7 +42,7 @@ function buildWellKnownPayloads(base) {
   const protectedResource = {
     resource: `${base}/mcp`,
     authorization_servers: [base],
-    scopes_supported: ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'],
+    scopes_supported: ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', 'etendo:*'],
     bearer_methods_supported: ['header'],
   };
   const oauthServerMeta = {
@@ -51,7 +50,7 @@ function buildWellKnownPayloads(base) {
     authorization_endpoint: `${base}/authorize`,
     token_endpoint: `${base}/oauth2/token`,
     registration_endpoint: `${base}/oauth2/register`,
-    scopes_supported: ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'],
+    scopes_supported: ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', 'etendo:*'],
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'client_credentials', 'refresh_token'],
     token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
@@ -267,13 +266,6 @@ export default defineConfig(({ mode }) => {
         ],
       },
     })]),
-    sentryVitePlugin({
-      org: 'etendo-22',
-      project: 'schema_forge',
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-      telemetry: false,
-      silent: !process.env.SENTRY_AUTH_TOKEN,
-    }),
   ],
   build: {
     sourcemap: 'hidden',
@@ -291,6 +283,7 @@ export default defineConfig(({ mode }) => {
         // aliases before the generic catch-all (which handles onboarding/api|sso|state as-is).
         { find: /^@etendosoftware\/etendo-go-core$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'index.js') },
         { find: /^@etendosoftware\/etendo-go-core\/onboarding\/password-policy$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/passwordPolicy.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/password-strength-checklist$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/components/PasswordStrengthChecklist.jsx') },
         { find: /^@etendosoftware\/etendo-go-core\/onboarding\/oauth-return-to$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/oauthReturnTo.js') },
         { find: /^@etendosoftware\/etendo-go-core\/onboarding$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/index.js') },
         { find: /^@etendosoftware\/etendo-go-core\/(.*)$/, replacement: resolve(CORE_ETENDO_GO_SRC, '$1') },

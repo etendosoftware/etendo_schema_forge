@@ -30,7 +30,8 @@ The idle list bar is a column of up to two rows, closed by a separator line.
 
 - **Row 1** — quick filters, a custom table's `ToolbarQuickFilter`, the status / date-range
   filters and the "Filtros" button on the left; the main actions (link, sort, refresh,
-  import/export, print, "New …") on the right.
+  import/export, print, "New …") on the right. The link button (`list-share-link`) copies the
+  current page URL, query string included (ETP-5593; it had no handler before).
 - **Row 2 — the tab group** — the subset-filter segmented control and the list/gallery view
   toggle. It is rendered **only** when the window has one of them (`subsetFilters` with at least
   one entry, or a `galleryRenderer`); a window with neither (e.g. Warehouse) keeps a single-row

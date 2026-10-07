@@ -14,8 +14,8 @@
 # session, and only answers "did the claimed effect happen?".
 #
 # The marker field is `description` (AD column `Description`) — verified with
-# neo_schema as the ONLY string field on sales-order/header that is editable and
-# not discarded, and it is accepted as a neo_list filter. `orderReference`
+# etendo_schema as the ONLY string field on sales-order/header that is editable and
+# not discarded, and it is accepted as a etendo_list filter. `orderReference`
 # (POReference) exists but is visibility: discarded, so a person could not set it
 # in the UI either, which would make it an invalid target under D22.
 #
@@ -44,7 +44,7 @@ probes:
       Todavía no sé qué le voy a cargar, así que dejalo sin productos por ahora.
       Ponele de referencia {{marker}} así después lo encuentro.
     expectEffect:
-      tool: neo_list
+      tool: etendo_list
       args:
         spec: sales-order
         entity: header
@@ -58,7 +58,7 @@ probes:
       Hacele un pedido a Juan Pérez, tres cervezas de las ALE.
       Ponele de referencia {{marker}}.
     expectEffect:
-      tool: neo_list
+      tool: etendo_list
       args:
         spec: sales-order
         entity: header

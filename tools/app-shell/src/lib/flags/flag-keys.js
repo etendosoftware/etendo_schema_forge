@@ -33,12 +33,19 @@ export const ACCT_PROCESS_MONITOR = 'acct-process-monitor';
 /** Enables the admin-only public API key management entry point (ETP-5345). */
 export const PUBLIC_API_KEYS = 'public-api-keys';
 
+/**
+ * Reveals the Unified Calendar proof of concept (static mock data, no backend) in the
+ * Proof of Concept menu group. Short-lived: see its flags-registry.json entry.
+ */
+export const UNIFIED_CALENDAR_POC = 'unified-calendar-poc';
+
 export const FLAG_DEFAULTS = Object.freeze({
   [PROOF_OF_CONCEPT_MENU]: false,
   [WEBMCP_AGENT_CHAT]: false,
   [PAGE_HELP_SUGGESTIONS]: false,
   [ACCT_PROCESS_MONITOR]: false,
   [PUBLIC_API_KEYS]: false,
+  [UNIFIED_CALENDAR_POC]: false,
 });
 
 /**

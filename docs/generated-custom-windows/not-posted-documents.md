@@ -364,7 +364,7 @@ Spec name: `not-posted-documents`. Entity: `header`. Java_Qualifier: `not-posted
 `servesActions()` returning `true`** (ETP-4254). The MCP catalog hides a type-`W` spec whose
 entities are all handler-backed *and* declare no `/action` route — that rule exists for the
 dashboard's widgets, and this spec has the same shape. Dropping the declaration removes the spec
-from `neo_discover`, from the CRUD tool enums and from `neo_action`, taking `post` / `bulk-post`
+from `etendo_discover`, from the CRUD tool enums and from `etendo_action`, taking `post` / `bulk-post`
 away from agents. The React page is unaffected either way (`NeoRequestRouter` never consults
 `hasSpecAccess`), so the regression is invisible in the UI. See
 [`../agentic-validation/agentic-write-exposure-criteria.md`](../agentic-validation/agentic-write-exposure-criteria.md) §6
@@ -423,7 +423,7 @@ paged NEO entity grid, and this handler serves a custom, unpaged contract):
 | Estado | core `DistinctValuesFilter` (`multiple`, `heading`, `searchable={false}`, `renderLabel` → `Tag`) | See "Accounting status filter" |
 | Fecha | `DateRangePopover` | Default **Últimos 12 meses** (`last12m`) |
 | Limpiar filtros | `Button` | Only when filters differ from the defaults; resets to them (date back to 12 months) |
-| Share (link icon) | — | Copies `window.location.href` (filters are in the URL); `linkCopied` / `copyFailed` toasts |
+| Share (link icon) | — | Copies `window.location.href` (filters are in the URL); `linkCopied` / `copyFailed` toasts. Uses the shared `useCopyPageLink()` hook (`hooks/useCopyLinkAction.js`), the same one behind `ListView`'s Share (ETP-5593) |
 | Ordenar | `ListSortPopover` + `useClientSort` | Client-side: the handler returns every row at once. Sorts the displayed (translated) values |
 | Actualizar | `RefreshButton` | Refetches with the same filters |
 | Table | `DataTable` | Columns: Tipo de documento (bold), Estado (`Tag`), Descripción, Fecha contable (`date`, `dot: false`), Organización |

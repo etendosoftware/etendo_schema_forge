@@ -116,6 +116,37 @@ describe('track', () => {
   });
 });
 
+describe('addFeatureFlagEvaluation', () => {
+  it('forwards only to initialized providers with feature flag capability', async () => {
+    const obs = createObservability();
+    const datadog = makeProvider('datadog', {
+      capabilities: ['featureFlagTracking'],
+      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
+    });
+    const other = makeProvider('mixpanel', {
+      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
+    });
+    await obs.initObservability({ providers: [datadog, other] });
+
+    await obs.addFeatureFlagEvaluation('sample_flag', true);
+
+    expect(datadog.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
+    expect(other.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+  });
+
+  it('does not load or call providers before initialization', async () => {
+    const obs = createObservability();
+    const provider = makeProvider('datadog', {
+      capabilities: ['featureFlagTracking'],
+      addFeatureFlagEvaluation: vi.fn(),
+    });
+
+    await obs.addFeatureFlagEvaluation('sample_flag', true);
+
+    expect(provider.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+  });
+});
+
 describe('page', () => {
   it('calls provider.page with normalized route', async () => {
     const obs = createObservability();
@@ -421,6 +452,40 @@ describe('setAnalyticsSuppressed', () => {
     expect(analytics.init).toHaveBeenCalledTimes(1);
     expect(analytics.track).toHaveBeenCalledTimes(1);
     expect(analytics.track.mock.calls[0][0]).toBe('delivered');
+  });
+
+  it('keeps feature-flag exposure away from analytics providers while suppressed', async () => {
+    const obs = createObservability();
+    const analytics = makeProvider('mixpanel', {
+      analytics: true,
+      capabilities: ['featureFlagTracking'],
+      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
+    });
+    const monitoring = makeProvider('datadog', {
+      capabilities: ['featureFlagTracking'],
+      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
+    });
+    await obs.initObservability({ providers: [analytics, monitoring] });
+    await obs.setAnalyticsSuppressed(true);
+
+    await obs.addFeatureFlagEvaluation('sample_flag', true);
+
+    expect(analytics.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+    expect(monitoring.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
+  });
+
+  // Datadog lists `analytics` among its capabilities; that list is not the suppression flag, so
+  // its error and performance monitoring keeps running in a support session.
+  it('does not silence a provider that only lists the analytics capability', async () => {
+    const obs = createObservability();
+    const datadog = makeProvider('datadog', { capabilities: ['analytics', 'errors'] });
+    await obs.setAnalyticsSuppressed(true);
+    await obs.initObservability({ providers: [datadog] });
+
+    await obs.captureException(new Error('x'));
+
+    expect(datadog.init).toHaveBeenCalledTimes(1);
+    expect(datadog.captureException).toHaveBeenCalledTimes(1);
   });
 
   it('does not initialize an analytics provider twice when it was already running', async () => {

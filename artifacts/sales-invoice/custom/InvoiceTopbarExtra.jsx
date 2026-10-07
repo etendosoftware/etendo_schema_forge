@@ -1,11 +1,10 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import SendToSifButton from './SendToSifButton';
 import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
-import { getArSubtype } from './invoiceSubtype';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { TruncatedText } from '@/components/ui/truncated-text';
@@ -51,15 +50,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   const tMenu = useMenuLabel();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
-  const [showShipmentDialog, setShowShipmentDialog] = useState(false);
-  const [shipmentCreating, setShipmentCreating] = useState(false);
   const [installments, setInstallments] = useState([]);
   const [installmentsLoading, setInstallmentsLoading] = useState(true);
-
-  // Keep a ref to the latest data so the event listener (with [] deps) can
-  // check arInvoiceSubtype without a stale closure.
-  const dataRef = useRef(data);
-  useEffect(() => { dataRef.current = data; }, [data]);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
@@ -109,16 +101,17 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
 
   useEffect(() => { fetchInstallments(); }, [fetchInstallments]);
 
-  // Listen for DocAction process completion — set flags for send modal and
-  // (for standard FAC invoices only) shipment creation prompt.
+  // Listen for DocAction process completion — set the flag for the send modal.
+  // ETP-5576: the shipment prompt that used to ride on this listener is gone — it now lives
+  // in the generic follow-up flow (FollowUpDocumentButton in SalesInvoiceTopbar, opened by
+  // draftMode.afterProcess after Confirm). Note this listener only reacts to a `DocAction`
+  // process run through hook.handleProcess; the invoice's draftMode Confirm goes through
+  // handleSaveAndProcess, which does not emit `neo:processSuccess`, so the send-after-confirm
+  // flag below is kept exactly as it was (behaviour unchanged).
   useEffect(() => {
     const handler = (e) => {
       if (e.detail?.entity === 'header' && e.detail?.process?.columnName === 'DocAction' && e.detail?.recordId) {
         sessionStorage.setItem(`invoice:sendAfterConfirm:${e.detail.recordId}`, '1');
-        const subtype = getArSubtype(dataRef.current);
-        if (subtype === 'FAC') {
-          sessionStorage.setItem(`invoice:createShipment:${e.detail.recordId}`, '1');
-        }
       }
     };
     window.addEventListener('neo:processSuccess', handler);
@@ -137,7 +130,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     return () => window.removeEventListener('sales-invoice:open-send-modal', openSendModal);
   }, []);
 
-  // After the record re-fetches as CO, open queued modals in order.
+  // After the record re-fetches as CO, open the queued send modal.
   useEffect(() => {
     if (isCompleted && recordId) {
       const sendKey = `invoice:sendAfterConfirm:${recordId}`;
@@ -145,40 +138,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         sessionStorage.removeItem(sendKey);
         setShowSendModal(true);
       }
-      const shipKey = `invoice:createShipment:${recordId}`;
-      if (sessionStorage.getItem(shipKey)) {
-        sessionStorage.removeItem(shipKey);
-        setShowShipmentDialog(true);
-      }
     }
   }, [isCompleted, recordId]);
-
-  const handleCreateShipment = async () => {
-    setShipmentCreating(true);
-    try {
-      const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-      const res = await apiFetch(`${base}/sales-invoice/header/${recordId}/action/createShipment`, {
-        method: 'POST', body: JSON.stringify({}),
-      });
-      const json = await res.json();
-      const shipmentData = json?.response?.data;
-      if (res.ok && shipmentData?.documentNo) {
-        setShowShipmentDialog(false);
-        // Soft feedback — no hard toast dependency in topbar
-        window.dispatchEvent(new CustomEvent('neo:toast', {
-          detail: { type: 'success', message: `${ui('shipmentCreated')}: ${shipmentData.documentNo}` },
-        }));
-      } else {
-        const msg = json?.response?.error || ui('failedToImportLines');
-        window.dispatchEvent(new CustomEvent('neo:toast', { detail: { type: 'error', message: msg } }));
-        setShowShipmentDialog(false);
-      }
-    } catch {
-      setShowShipmentDialog(false);
-    } finally {
-      setShipmentCreating(false);
-    }
-  };
 
   // Derive badge status from installments (must be before any early return)
   const badgeInfo = useMemo(() => {
@@ -412,40 +373,6 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           pdfBlobLoading={pdfLoading}
           onClose={() => setShowSendModal(false)}
           data-testid="SendDocumentModal__329004" />
-      )}
-
-      {/* "¿Gestionar envío?" dialog — offered after confirming a standard invoice */}
-      {showShipmentDialog && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / 0.3)' }}
-          onClick={() => !shipmentCreating && setShowShipmentDialog(false)}
-        >
-          <div
-            style={{ background: 'hsl(var(--card))', borderRadius: 12, padding: '28px 32px', maxWidth: 360, width: '90%', boxShadow: '0 8px 32px hsl(var(--foreground) / 0.18)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <p style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))', marginBottom: 8 }}>{ui('manageShipment')}</p>
-            <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', marginBottom: 24 }}>{ui('createShipmentDraftHint')}</p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                disabled={shipmentCreating}
-                onClick={() => setShowShipmentDialog(false)}
-                style={{ padding: '8px 16px', borderRadius: 8, border: '0.5px solid hsl(var(--border-subtle))', background: 'transparent', fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', cursor: 'pointer' }}
-              >
-                {ui('skipShipment')}
-              </button>
-              <button
-                type="button"
-                disabled={shipmentCreating}
-                onClick={handleCreateShipment}
-                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: 'hsl(var(--foreground))', fontSize: 13, fontWeight: 500, color: 'hsl(var(--card))', cursor: shipmentCreating ? 'not-allowed' : 'pointer', opacity: shipmentCreating ? 0.7 : 1 }}
-              >
-                {shipmentCreating ? ui('creating') : ui('createShipmentDraft')}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </>
   );

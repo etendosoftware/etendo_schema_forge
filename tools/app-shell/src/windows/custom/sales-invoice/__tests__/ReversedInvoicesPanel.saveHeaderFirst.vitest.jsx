@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx
 // ETP-4404 — ReversedInvoicesPanel save-header-first flow (new invoice UX).
 //
 // Companion suite to ReversedInvoicesPanel.vitest.jsx (which covers the picker,
@@ -239,7 +240,9 @@ describe('save-header-first — child POST failure after header save', () => {
 // ---------------------------------------------------------------------------
 
 describe('save-header-first — header save failure', () => {
-  it('onSaveHeader returning null toasts rectSaveError and fires no POST', async () => {
+  // null means the host already told the user why (failed save, or saved but not openable):
+  // the panel must not add a second, contradicting toast.
+  it('onSaveHeader returning null adds no toast of its own and fires no POST', async () => {
     const onSaveHeader = vi.fn(async () => null);
     const onGoToSavedRecord = vi.fn();
     renderNewPanel({ onSaveHeader, onGoToSavedRecord, headerInvoices: [CANDIDATE] });
@@ -247,8 +250,9 @@ describe('save-header-first — header save failure', () => {
     await openAddAndPickCandidate();
     fireEvent.click(screen.getByTestId('btn__saveNewLine'));
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('rectSaveError'));
-    expect(toast.error).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onSaveHeader).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('btn__saveNewLine')).not.toBeDisabled());
+    expect(toast.error).not.toHaveBeenCalled();
     expect(screen.queryByTestId('text__saveError')).not.toBeInTheDocument();
     expect(postCalls()).toHaveLength(0);
     expect(onGoToSavedRecord).not.toHaveBeenCalled();

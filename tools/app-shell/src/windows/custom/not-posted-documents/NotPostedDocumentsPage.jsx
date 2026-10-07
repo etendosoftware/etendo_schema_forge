@@ -18,6 +18,7 @@ import { showBulkActionToast } from '@/hooks/useBulkActionToast';
 
 // ETP-5022: this page carried its own buildHeaders copy; header policy now has one home.
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useCopyPageLink } from '@/hooks/useCopyLinkAction.js';
 import {
   translateBackendError,
   extractBackendMessageKeys,
@@ -350,14 +351,8 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   }
 
   // ── Share: the page URL already carries the filters ──────────────────────────
-  async function copyPageLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success(ui('linkCopied'));
-    } catch {
-      toast.error(ui('copyFailed'));
-    }
-  }
+  // Same hook as ListView's toolbar Share (ETP-5593).
+  const copyPageLink = useCopyPageLink();
 
   useSetPageMeta({
     title: ui('notPostedDocuments'),

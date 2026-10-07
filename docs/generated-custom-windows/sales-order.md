@@ -304,14 +304,14 @@ controls the appearance.
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move this order through its
-workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+workflow over MCP. `etendo_schema` returns it with `invokeVia: "etendo_action"`, `actionValues` (the
 active AD list of the `C_Order.DocAction` reference) and `actionParameter: "docAction"`; its
 `agentPrompt` — defined in `decisions.json` -> `entities.header.fields.documentAction.agentPrompt`
 — states which transitions are legal and their preconditions.
 
 Booking a draft order over MCP:
 
-    neo_action { spec: "sales-order", entity: "header", id: "<orderId>",
+    etendo_action { spec: "sales-order", entity: "header", id: "<orderId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
 Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> RE` reactivates **only
@@ -319,7 +319,7 @@ while the order has no linked documents** (same condition as the Reactivate menu
 `visibleWhenFieldFalse: hasLinkedDocuments`), `CO -> CL` closes pending quantities.
 
 This runs `SalesOrderHeaderHandler` exactly as the UI does — including the pre-CO total-discount
-line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285). If you change
+line — because `etendo_action` executes the entity's `NeoHandler` hooks (ETP-4285). If you change
 this window's workflow rules, update the `agentPrompt` in the same change: it is the only thing
 telling the agent what is legal.
 

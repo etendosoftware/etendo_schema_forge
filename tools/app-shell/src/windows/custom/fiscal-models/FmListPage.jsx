@@ -21,6 +21,7 @@ import {
   applyOverrides, recomputeDerivedBoxes, getBoxValue, resolveResultColors,
   persistDeclarationStatus,
 } from './fiscalModelsUtils.js';
+import { getIncidentSeverity, getIncidentIndicator } from './incidentSeverity.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -315,7 +316,7 @@ function ResultText({ isComputing, error, result, t }) {
 // drift apart. Mirrors exactly how `IncidentsCell` reads the same field (`decl.incidents?.blocking`
 // / `.warning`, defaulting to 0).
 function hasIncidents(decl) {
-  return (decl.incidents?.blocking ?? 0) > 0 || (decl.incidents?.warning ?? 0) > 0;
+  return getIncidentSeverity(decl.incidents) !== 'none';
 }
 
 // KPI cards row — compact horizontal layout.
@@ -330,6 +331,14 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
   // STATUSES); this KPI has always effectively counted 'draft' only.
   const pendingCount  = useMemo(() => decls.filter(d => d.status === 'draft').length, [decls]);
   const incidentCount = useMemo(() => decls.filter(hasIncidents).length, [decls]);
+  // ETP-5597 — the badge reflects the worst severity across the counted declarations: red
+  // "Requiere revisión" if any has a blocking incident, amber "Advertencia" if only warnings.
+  // With no incidents at all it renders neutral (muted "Sin incidencias") — red is reserved for
+  // blocking incidents only.
+  const incidentIndicator = useMemo(
+    () => getIncidentIndicator(decls.map(d => d.incidents), t),
+    [decls, t],
+  );
 
   return (
     <div style={{ display: 'flex', gap: 12, padding: '0 16px 8px', background: 'hsl(var(--card))', flexShrink: 0 }}>
@@ -364,9 +373,9 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
           icon={<TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
           label={t('fm.m303.kpi.incidents') ?? 'Incidencias'}
-          badge={t('fm.kpi.incidents_sub') ?? 'Requiere revisión'}
-          badgeBg="var(--status-destructive-bg)"
-          badgeColor="hsl(var(--destructive))"
+          badge={incidentIndicator?.label ?? t('fm.incidents.none') ?? 'Sin incidencias'}
+          badgeBg={incidentIndicator?.badgeBg ?? 'hsl(var(--muted))'}
+          badgeColor={incidentIndicator?.badgeColor ?? 'hsl(var(--muted-foreground))'}
           value={incidentCount}
           onClick={() => onFilterClick('incidents')}
           active={kpiFilter === 'incidents'}

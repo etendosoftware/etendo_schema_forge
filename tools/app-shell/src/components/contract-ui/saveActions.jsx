@@ -131,6 +131,7 @@ async function runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook
     const saved = await hook.handleSaveAndProcess(draftMode);
     if (!saved) return;
     if (isNew && onAfterCreate) await onAfterCreate(saved, { token, apiBaseUrl });
+    if (await runAfterProcess({ draftMode, saved, isNew, hook, navigate, windowName })) return;
     if (onAfterSave) return navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
     if (saved.id && isNew) { hook.primeSaved?.(saved); return navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } }); }
     if (saved.id) return hook.fetchById?.(saved.id, { force: true });
@@ -138,6 +139,48 @@ async function runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook
   } finally {
     if (showProcessing) setShowProcessingModal(false);
   }
+}
+
+/**
+ * ETP-5576 — `draftMode.afterProcess(savedRecord)`: optional window hook run after the
+ * native draftMode Confirm (`hook.handleSaveAndProcess`) succeeded, BEFORE the usual
+ * post-Confirm navigation. `savedRecord` is the record re-read right after the process
+ * (handleSaveAndProcess's fresh GET), so it carries any server-side annotation of the
+ * completed document (e.g. `followUp`).
+ *
+ * Returning `{ stay: true }` keeps the user on the record instead of navigating to the list
+ * (`onAfterSave`) — the invoice windows use it to open the follow-up document modal in
+ * place. handleSaveAndProcess only refreshes `hook.selected`, while the form renders from
+ * `hook.editing`; staying without syncing it would leave the PRE-process record on screen
+ * (draft status, header "dirty" against the completed record → unsaved-changes prompt and
+ * the keepSaveWhenCompletedFields gate, no `followUp` annotation). So the fresh record is
+ * primed into BOTH (`hook.primeSaved`: setSelected + setEditing, no loading toggle) for new
+ * and existing records alike. `fetchById` is deliberately NOT used: its loading cycle could
+ * remount the topbar and drop the follow-up prompt it already consumed. Only a brand-new
+ * record then navigates, from `/new` to `/{id}`, exactly as the non-`onAfterSave` path does.
+ * Anything else (null/undefined, `{ stay: false }`) keeps the previous behaviour
+ * unchanged, and windows without `afterProcess` never get
+ * here. The toast, survey, telemetry and the Verifactu processing modal all run before
+ * this point and are unaffected. A throwing hook is logged and ignored: the document IS
+ * processed, so the normal navigation still happens.
+ *
+ * Returns true when the caller must stop (the user stays on the record).
+ */
+export async function runAfterProcess({ draftMode, saved, isNew, hook, navigate, windowName }) {
+  if (typeof draftMode?.afterProcess !== 'function') return false;
+  let outcome;
+  try {
+    outcome = await draftMode.afterProcess(saved);
+  } catch (err) {
+    console.error(`[saveActions] draftMode.afterProcess failed for '${windowName}'`, err);
+    return false;
+  }
+  if (!outcome?.stay) return false;
+  if (saved?.id) hook.primeSaved?.(saved);
+  if (isNew && saved?.id) {
+    navigate(`/${windowName}/${saved.id}`, { replace: true, state: { justSaved: saved } });
+  }
+  return true;
 }
 
 /**

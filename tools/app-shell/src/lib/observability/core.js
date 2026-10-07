@@ -6,8 +6,9 @@ function isProviderEnabled(provider) {
 
 // ETP-5351 — a product-analytics provider (Mixpanel) declares `analytics: true`. Those, and only
 // those, go quiet while analytics are suppressed (a support session): no SDK init, no event, no
-// identity call, no reset. Error and performance monitoring (Sentry, RUM) keeps running, because a
-// bug an operator hits while helping a customer is still a bug.
+// identity call, no reset. Error and performance monitoring (Datadog RUM, AWS RUM) keeps running,
+// because a bug an operator hits while helping a customer is still a bug. The `analytics` entry in
+// a provider's `capabilities` list (Datadog) is NOT this flag: only `analytics: true` silences.
 function isAnalyticsProvider(provider) {
   return provider?.analytics === true;
 }
@@ -99,6 +100,17 @@ export function createObservability(options = {}) {
         activeProviders().map(provider =>
           callProvider(provider, 'track', [eventName, payload, { context: getContext() }])
         )
+      );
+    },
+
+    async addFeatureFlagEvaluation(key, value) {
+      if (!initialized || !key) return;
+      // activeProviders(): a suppressed analytics provider was never initialized, and an exposure
+      // must not be what lazy-loads its SDK in a support session.
+      await Promise.all(
+        activeProviders()
+          .filter(provider => provider.capabilities?.includes('featureFlagTracking'))
+          .map(provider => callProvider(provider, 'addFeatureFlagEvaluation', [key, value]))
       );
     },
 

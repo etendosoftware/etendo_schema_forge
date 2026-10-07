@@ -1,3 +1,13 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/fiscalModelsUtils.js
+//
+// ETP-5597 pt.2 — requiredness was simplified on top of the history below: wherever the bank
+// fields can be visible (`_BANK_DVX_VW`: tipo D/V/X, or the Nota 3 branch) the marca SEPA itself
+// is mandatory, and the rest follows the marca alone — marca 1/2 → only marca SEPA + IBAN,
+// marca 3 → SWIFT-BIC, Banco, Dirección, Ciudad and País too. Visibility is unchanged (SWIFT-BIC
+// still appears from marca 2 inside Nota 3), so visibility and requiredness are asserted
+// separately here (MIN_MARCA vs MIN_REQUIRED_MARCA).
+//
 // ETP-5393 Bug E — bank_iban used to be `required: true` unconditionally inside the
 // `datos_bancarios` section, which made it mandatory even for a rectificativa whose box 111
 // (Rectificación - Importe) is 0 — a case AEAT303Report's checkBox111MandatoryParams does NOT
@@ -56,6 +66,16 @@ const MIN_MARCA = {
   bank_pais: '3',
 };
 const FOREIGN_DETAIL_IDS = ['bank_nombre', 'bank_direccion', 'bank_ciudad', 'bank_pais'];
+/** ETP-5597 pt.2 — lowest marca at which each field becomes REQUIRED (visibility: MIN_MARCA). */
+const MIN_REQUIRED_MARCA = {
+  bank_sepa: null, // required whenever visible, whatever its own value
+  bank_swift_bic: '3',
+  bank_nombre: '3',
+  bank_direccion: '3',
+  bank_ciudad: '3',
+  bank_pais: '3',
+};
+const MARCA_GATED_IDS = ['bank_swift_bic', ...FOREIGN_DETAIL_IDS];
 
 /**
  * Identification inside the Nota 3 case: a rectificativa with a non-zero box 111 and the
@@ -122,16 +142,52 @@ describe('bank_iban — required under condition A (tipo U/D/X alone) OR conditi
   });
 });
 
-describe.each(OTHER_BANK_FIELD_IDS)('fm303Layouts — %s requiredWhen (ETP-5393 follow-up, condition B ONLY)', (fieldId) => {
-  it('is NOT required for a plain devolución (tipo D, condition A alone) — manual-QA fix', () => {
-    const identification = withBox111NonZeroFlag(
-      { tipo_declaracion: 'D', rectificativa: false }, [{ num: 111, value: 0 }],
-    );
-    // The section (and this field, via _BANK_DVX_VW) is visible for tipo D, but it must NOT be
-    // required — only bank_iban is required under condition A alone.
-    const missing = getMissingRequiredFields(2026, 'T2', identification);
-    expect(findField(missing, fieldId)).toBeUndefined();
+describe.each(MARCA_GATED_IDS)('fm303Layouts — %s on a plain devolución (ETP-5597 pt.2, marca-driven)', (fieldId) => {
+  const plainD = (extra = {}) => withBox111NonZeroFlag(
+    { tipo_declaracion: 'D', rectificativa: false, ...extra }, [{ num: 111, value: 0 }],
+  );
+
+  it('is NOT required with no marca selected', () => {
+    expect(findField(getMissingRequiredFields(2026, 'T2', plainD()), fieldId)).toBeUndefined();
   });
+
+  it.each(['1', '2'])('is NOT required at marca %s (only marca SEPA + IBAN are)', (marca) => {
+    expect(findField(getMissingRequiredFields(2026, 'T2', plainD({ bank_sepa: marca })), fieldId)).toBeUndefined();
+  });
+
+  it('IS required at marca 3 (Resto Países) — a rest-of-world refund needs the full block', () => {
+    expect(findField(getMissingRequiredFields(2026, 'T2', plainD({ bank_sepa: '3' })), fieldId)).toBeDefined();
+  });
+
+  it('a stale marca 3 under tipo U (Domiciliación) makes nothing required — the field is hidden', () => {
+    const identification = withBox111NonZeroFlag({ tipo_declaracion: 'U', bank_sepa: '3' }, null);
+    expect(findField(getMissingRequiredFields(2026, 'T2', identification), fieldId)).toBeUndefined();
+  });
+});
+
+describe('bank_sepa — required wherever it is visible (ETP-5597 pt.2)', () => {
+  // Tipo V alone is excluded: the datos_bancarios SECTION gate is U/D/X, so nothing in it is demanded.
+  it.each(['D', 'X'])('IS required for a plain tipo %s with no marca (it decides the rest)', (tipo) => {
+    const identification = withBox111NonZeroFlag(
+      { tipo_declaracion: tipo, rectificativa: false }, [{ num: 111, value: 0 }],
+    );
+    expect(findField(getMissingRequiredFields(2026, 'T2', identification), 'bank_sepa')).toBeDefined();
+  });
+
+  it('is NOT required for tipo U (the selector is hidden there)', () => {
+    const identification = withBox111NonZeroFlag({ tipo_declaracion: 'U' }, null);
+    expect(findField(getMissingRequiredFields(2026, 'T2', identification), 'bank_sepa')).toBeUndefined();
+  });
+
+  it('is NOT required for tipo I/N/C outside the Nota 3 branch', () => {
+    for (const tipo of ['I', 'N', 'C']) {
+      const identification = withBox111NonZeroFlag({ tipo_declaracion: tipo, rectificativa: false }, null);
+      expect(findField(getMissingRequiredFields(2026, 'T2', identification), 'bank_sepa')).toBeUndefined();
+    }
+  });
+});
+
+describe.each(OTHER_BANK_FIELD_IDS)('fm303Layouts — %s requiredWhen (ETP-5393 follow-up, condition B ONLY)', (fieldId) => {
 
   it('is NOT required for tipo I with rectificativa checked but box 111 == 0', () => {
     const identification = withBox111NonZeroFlag(
@@ -145,7 +201,7 @@ describe.each(OTHER_BANK_FIELD_IDS)('fm303Layouts — %s requiredWhen (ETP-5393 
   // SEPA must also call for them. Supplying the lowest marca that does is what makes this the
   // same assertion it always was. (`bank_sepa` itself has MIN_MARCA null — condition B alone.)
   it('IS required for tipo I with rectificativa checked AND box 111 non-zero, at the marca that calls for it — condition B', () => {
-    const identification = identInNota3({ marca: MIN_MARCA[fieldId] ?? undefined });
+    const identification = identInNota3({ marca: MIN_REQUIRED_MARCA[fieldId] ?? undefined });
     const missing = getMissingRequiredFields(2026, 'T2', identification);
     expect(findField(missing, fieldId)).toBeDefined();
   });
@@ -160,7 +216,7 @@ describe.each(OTHER_BANK_FIELD_IDS)('fm303Layouts — %s requiredWhen (ETP-5393 
 
   it('is not reported as missing once it has a value', () => {
     const identification = identInNota3({
-      marca: MIN_MARCA[fieldId] ?? undefined, extra: { [fieldId]: 'some-value' },
+      marca: MIN_REQUIRED_MARCA[fieldId] ?? undefined, extra: { [fieldId]: 'some-value' },
     });
     const missing = getMissingRequiredFields(2026, 'T2', identification);
     expect(findField(missing, fieldId)).toBeUndefined();
@@ -214,20 +270,21 @@ describe('isFieldRequired', () => {
 // screen would contradict what is sent.
 
 describe('marca SEPA escalation inside the Nota 3 case (tipo I — no tipo gate of its own)', () => {
+  // marca → { fieldId: [visible, required] }. ETP-5597 pt.2 — marca 2 shows SWIFT-BIC but no
+  // longer requires it; only marca 3 requires anything beyond marca SEPA + IBAN.
   const EXPECTED = {
-    // marca → { fieldId: calledFor }
-    1: { bank_swift_bic: false, bank_nombre: false, bank_direccion: false, bank_ciudad: false, bank_pais: false },
-    2: { bank_swift_bic: true, bank_nombre: false, bank_direccion: false, bank_ciudad: false, bank_pais: false },
-    3: { bank_swift_bic: true, bank_nombre: true, bank_direccion: true, bank_ciudad: true, bank_pais: true },
+    1: { bank_swift_bic: [false, false], bank_nombre: [false, false], bank_direccion: [false, false], bank_ciudad: [false, false], bank_pais: [false, false] },
+    2: { bank_swift_bic: [true, false], bank_nombre: [false, false], bank_direccion: [false, false], bank_ciudad: [false, false], bank_pais: [false, false] },
+    3: { bank_swift_bic: [true, true], bank_nombre: [true, true], bank_direccion: [true, true], bank_ciudad: [true, true], bank_pais: [true, true] },
   };
 
   for (const marca of ['1', '2', '3']) {
-    for (const [fieldId, calledFor] of Object.entries(EXPECTED[marca])) {
-      it(`marca ${marca}: ${fieldId} is ${calledFor ? 'required AND visible' : 'neither required nor visible'}`, () => {
+    for (const [fieldId, [visible, required]] of Object.entries(EXPECTED[marca])) {
+      it(`marca ${marca}: ${fieldId} is ${visible ? 'visible' : 'hidden'} and ${required ? 'required' : 'optional'}`, () => {
         const identification = identInNota3({ marca });
         const missing = getMissingRequiredFields(2026, 'T2', identification);
-        expect(Boolean(findField(missing, fieldId))).toBe(calledFor);
-        expect(isVisible(fieldId, identification)).toBe(calledFor);
+        expect(Boolean(findField(missing, fieldId))).toBe(required);
+        expect(isVisible(fieldId, identification)).toBe(visible);
       });
     }
 

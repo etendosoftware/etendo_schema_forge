@@ -42370,7 +42370,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "8003a800a5a54c294a9f7af2314bfecd799face04f37b4f189e4264726a29113",
+      "checksum": "909b9730c3deb91ce92f8e2a40672ebb3b4276ff3f915c0b53f338d6551f0a1a",
       "params": [
         "143"
       ],
@@ -47582,7 +47582,7 @@
           "field_seq": "2190",
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Stores the total discount percentage set by the user in the Etendo GO interface. Etendo GO uses this value to insert a negative discount line on the document and to restore the discount panel when the document is reopened. This field is managed exclusively by Etendo GO — do not edit it manually in Classic, as doing so will not recalculate the discount line.",
+          "help_text": "Stores the total discount percentage set by the user in the Etendo app. Etendo uses this value to insert a negative discount line on the document and to restore the discount panel when the document is reopened. This field is managed automatically by the Etendo app — do not edit it manually in Classic, as doing so will not recalculate the discount line.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=true AND e.transactionDocument.return= false AND e.transactionDocument.sOSubType NOT LIKE 'OB'",
@@ -69396,7 +69396,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "eae3bbd2cc60e4cb7e273d08c8810143fd18dccdba7fb68d5b7086011abeacc3",
+      "checksum": "0c1710c834a0a11cdafc8e489df4933d943dc885047881207f5f59fa884ce7d1",
       "params": [
         "167"
       ],
@@ -76828,7 +76828,7 @@
           "field_seq": "2450",
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Stores the total discount percentage set by the user in the Etendo GO interface. Etendo GO uses this value to insert a negative discount line on the document and to restore the discount panel when the document is reopened. This field is managed exclusively by Etendo GO — do not edit it manually in Classic, as doing so will not recalculate the discount line.",
+          "help_text": "Stores the total discount percentage set by the user in the Etendo app. Etendo uses this value to insert a negative discount line on the document and to restore the discount panel when the document is reopened. This field is managed automatically by the Etendo app — do not edit it manually in Classic, as doing so will not recalculate the discount line.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=true and e.documentStatus <> 'TEMP'",
@@ -111814,7 +111814,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "fbe5ea22af28e6ed06e98161addea8bbc856f31e1ddef3343e044f254a626663",
+      "checksum": "58d36249c2b3d69db100cf38546c99dad0e9c832da990452e602969151edd4b7",
       "params": [
         "183"
       ],
@@ -117988,7 +117988,7 @@
           "field_seq": "2220",
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Stores the total discount percentage set by the user in the Etendo GO interface. Etendo GO uses this value to insert a negative discount line on the document and to restore the discount panel when the document is reopened. This field is managed exclusively by Etendo GO — do not edit it manually in Classic, as doing so will not recalculate the discount line.",
+          "help_text": "Stores the total discount percentage set by the user in the Etendo app. Etendo uses this value to insert a negative discount line on the document and to restore the discount panel when the document is reopened. This field is managed automatically by the Etendo app — do not edit it manually in Classic, as doing so will not recalculate the discount line.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=false and e.documentStatus <> 'TEMP'",
@@ -211530,7 +211530,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
-      "checksum": "e51894418db76b731694590774851104e0f6d58515d00e2e394f9a3fcf9fba70",
+      "checksum": "d7a507996ac06637847aa143217ad5e40e75e41d87b42bcadee8a706c3985786",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -215262,7 +215262,7 @@
           "field_seq": "2050",
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Stores the total discount percentage set by the user in the Etendo GO interface. Etendo GO uses this value to insert a negative discount line on the document and to restore the discount panel when the document is reopened. This field\n  is managed exclusively by Etendo GO — do not edit it manually in Classic, as doing so will not recalculate the discount line.",
+          "help_text": "Stores the total discount percentage set by the user in the Etendo app. Etendo uses this value to insert a negative discount line on the document and to restore the discount panel when the document is reopened. This field\n  is managed automatically by the Etendo app — do not edit it manually in Classic, as doing so will not recalculate the discount line.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=true AND e.transactionDocument.sOSubType LIKE 'OB'",
@@ -327986,7 +327986,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
-      "checksum": "d3022cbd7a8391bbd65a1b692a60292a712086c4e34d0c0d484df2317c80f80c",
+      "checksum": "f14bb7a83f3761a8016d8c31c49e8beb01bac07afa5b392279db3a40a2022d3b",
       "params": [
         "181"
       ],
@@ -332754,7 +332754,7 @@
           "field_seq": "2090",
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Stores the total discount percentage set by the user in the Etendo GO interface. Etendo GO uses this value to insert a negative discount line on the document and to restore the discount panel when the document is reopened. This field is managed exclusively by Etendo GO — do not edit it manually in Classic, as doing so will not recalculate the discount line.",
+          "help_text": "Stores the total discount percentage set by the user in the Etendo app. Etendo uses this value to insert a negative discount line on the document and to restore the discount panel when the document is reopened. This field is managed automatically by the Etendo app — do not edit it manually in Classic, as doing so will not recalculate the discount line.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=false AND e.transactionDocument.return=false",

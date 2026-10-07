@@ -304,7 +304,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
       // manually-overridden box (111, 70, 108, 109, ...) reached "Generar fichero 303" but
       // never the actual AEAT telematic submission, so the file the user reviewed and the
       // file AEAT actually received could silently diverge.
-      if (manualOverrides) applyBoxParams(params, manualOverrides);
+      if (manualOverrides) applyBoxParams(params, manualOverrides, identChecks);
       const res = await apiFetch(`/fiscal303/submit?${params}`, {
         method: 'POST',
         body: JSON.stringify(buildAeatSubmitBody({ testMode, nrc, presenterNif, presenterName })),

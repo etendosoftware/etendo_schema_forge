@@ -212,6 +212,58 @@ Verifactu config table. The other seven printables are untouched.
 The VERI\*FACTU logo is **not** rendered: art. 20.1.b requires the *phrase* «Factura verificable
 en la sede electrónica de la AEAT» **or** the «VERI\*FACTU» mark, and the phrase alone complies.
 
+## Follow-up shipment after Confirm — ETP-5576
+
+Confirming an invoice that ends **Completed** with quantities still pending to ship no longer sends the
+user to the list: they stay on the invoice and see «¿Gestionar envío?». The popup and the topbar
+button «Gestionar envío» are the generic follow-up flow shared with purchase-invoice (only texts and the
+generated document differ) — see `docs/ui-customization.md` §20.
+
+- **What is pending is decided by the backend.** The header GET carries
+  `followUp.available` (`["shipment"]` or `[]`) plus `followUp.shipment.pendingLines`. Credit notes,
+  returns and fully delivered invoices come back with an empty list → no popup, no button.
+- **Confirm** (`getInvoiceDraftMode(ui, { afterProcess })` in `tools/app-shell/src/windows/custom/sales-invoice/index.jsx`):
+  `draftMode.afterProcess = createFollowUpAfterProcess('sales-invoice', …)` runs after the process
+  succeeded. With a pending `shipment` it returns `{ stay: true }` and the modal opens on the
+  invoice; otherwise the previous behaviour stays (navigate to the list with the preview).
+- **Modal** (single follow-up → direct confirmation, no radio): title «¿Gestionar envío?»
+  (`titleKey: 'followUpManageShipmentTitle'`; the topbar button keeps «Gestionar envío» through its own
+  `buttonLabelKey: 'soManageShipment'`), summary (Factura / Fecha / Contacto / Líneas / Total — «Líneas» is the pending line
+  count), the question «¿Qué vas a hacer con esta factura?» (`questionKey:
+  'followUpInvoiceQuestion'`), ONE static option card (icon, «Crear albarán de venta» + blue «Borrador» badge
+  — `badgeTone: 'info'` —, «Se generará en borrador con las N líneas pendientes de envío.»,
+  singular variant for one line; not selectable, no Tab stop), footer Cancelar + «Crear albarán»
+  (label only, focused, so Enter creates). Cancel, the close icon, Esc and the
+  backdrop reject: the invoice stays Completed and nothing is created — there is no «Ahora no»
+  card. «Crear albarán» POSTs
+  `sales-invoice/header/{id}/action/createShipment`, which creates a **Draft** sales shipment (Albarán de Venta) with only
+  the pending lines; the result view links to it (`/goods-shipment/{id}`). Backend error codes
+  (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
+- **Warehouse asked when the backend cannot decide it.** The shipment needs a target warehouse. When
+  the backend cannot determine it on its own, `createShipment` answers `409 FOLLOW_UP_WAREHOUSE_REQUIRED`
+  with an `input` block (`key: "warehouseId"` + the candidate warehouses). The modal then stays open,
+  without an error, and shows a required «Almacén» selector («Elige el almacén donde se creará el
+  documento.») under the option card; with a single candidate it is preselected but still shown.
+  «Crear albarán» stays disabled until a warehouse is chosen, and the retry POSTs
+  `{"warehouseId": "<id>"}`. A rejected id (`400 FOLLOW_UP_INVALID_INPUT`) shows «El valor
+  seleccionado ya no es válido…» and keeps the selector; a 409 with no candidates (no `input` block)
+  shows «No se pudo determinar el almacén del documento…». When the backend can decide the warehouse
+  itself, nothing is asked and the flow is the one above. The selector is generic (key and options
+  come from the backend) — see `docs/ui-customization.md` §20 «Input-required round-trip».
+- **Topbar button** `follow-up-document-button` in `SalesInvoiceTopbar.jsx`: shown on a completed invoice
+  while something is pending (never for a read-only window). After a creation the record is
+  re-read (the button disappears; a partial movement later offers only what is still missing)
+  and `sales-invoice:document-created` refreshes the related documents (`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`).
+- Config: `SALES_INVOICE_FOLLOW_UP` in `tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js`.
+
+The previous ad-hoc «¿Gestionar envío?» dialog in `artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`
+(armed by a `neo:processSuccess` listener + `sessionStorage['invoice:createShipment:{id}']`) was
+removed: that event is never emitted by the draftMode Confirm (`handleSaveAndProcess`), and the
+Confirm navigated to the list anyway, so the dialog was unreachable. The sibling
+`invoice:sendAfterConfirm:{id}` flag on the same listener is kept untouched — it has the same
+limitation (it only reacts to a `DocAction` process run through `hook.handleProcess`, which this
+window does not expose), so its behaviour is unchanged.
+
 ## Known issues / Open bugs
 
 | ID | Severity | Window | Description | Status |
@@ -1611,7 +1663,7 @@ Verifactu have no equivalent stored column and keep their own unconditional clie
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move this invoice through its
-workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+workflow over MCP. `etendo_schema` returns it with `invokeVia: "etendo_action"`, `actionValues` (the
 active AD list of the `C_Invoice.DocAction` reference — note `CO` is labelled **Complete** here,
 not Book) and `actionParameter: "docAction"`; its `agentPrompt` — defined in `decisions.json` ->
 `entities.header.fields.documentAction.agentPrompt` — states which transitions are legal and
@@ -1619,7 +1671,7 @@ their preconditions.
 
 Completing a draft invoice over MCP:
 
-    neo_action { spec: "sales-invoice", entity: "header", id: "<invoiceId>",
+    etendo_action { spec: "sales-invoice", entity: "header", id: "<invoiceId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
 Flow encoded in the prompt: `DR -> CO` completes (assigns the final document number, computes
@@ -1703,7 +1755,7 @@ Both `sifSending.js` and `SiiSendHandler.java` are shared between sales-invoice 
 purchase-invoice — see `purchase-invoice.md` for this window's mirror of the same fix.
 
 This runs `SalesInvoiceHeaderHandler` exactly as the UI does — including the `ProcessInvoiceHook`
-routing on completion — because `neo_action` executes the entity's `NeoHandler` hooks
+routing on completion — because `etendo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
 
@@ -1816,7 +1868,7 @@ Three constraints worth knowing:
   zero limit means *no limit* — a deliberate divergence from Classic, documented in
   `financial-account.md`.
 - **Enforced server-side too (ETP-5558).** Until ETP-5558 the limit lived only in the SPA, so an MCP
-  `neo_action registerPayment` or a direct REST call with `writeoffDifference:true` could write off
+  `etendo_action registerPayment` or a direct REST call with `writeoffDifference:true` could write off
   any amount. `PaymentWriteoffLimitGuard` (called from `doRegisterPaymentAdvanced` before the draft,
   the consumed credit or a PIS transfer exists) now refuses it with a 400 and the
   `ETGO_WriteoffLimitExceeded` AD_Message (English only — the module ships no message
@@ -2088,8 +2140,8 @@ invoice's id and payment/credit ids taken from that invoice's own listings.
 
 An agent collects an invoice through the same invoice-header actions the *Cobros de la factura*
 popup and the *Nuevo cobro* modal call — never by writing a collection by hand. They are published
-to MCP as declared actions next to the AD buttons (`neo_schema(spec:'sales-invoice',
-entity:'header', view:'actions')`, also named in `neo_discover`), with `id` = the invoice id:
+to MCP as declared actions next to the AD buttons (`etendo_schema(spec:'sales-invoice',
+entity:'header', view:'actions')`, also named in `etendo_discover`), with `id` = the invoice id:
 
 | Action | What it does |
 |---|---|

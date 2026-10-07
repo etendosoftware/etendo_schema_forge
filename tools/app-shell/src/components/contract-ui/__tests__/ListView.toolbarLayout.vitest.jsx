@@ -18,6 +18,7 @@
  * `hasListToolbarTabs` is module-private, so its truth table is covered through
  * rendering (see "second row gating").
  */
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -264,6 +265,19 @@ describe('ListView toolbar layout — main row contents', () => {
 
     expect(within(mainRow()).getByTestId('list-filter-bar')).toBeInTheDocument();
     expect(within(tabsRow()).queryByTestId('list-filter-bar')).not.toBeInTheDocument();
+  });
+
+  // ETP-5593 — the Share button used to be decorative (no handler) on every list.
+  it('holds the Share button, which copies the current page URL', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    renderListView();
+
+    const share = within(mainRow()).getByTestId('list-share-link');
+    expect(share).toHaveAttribute('aria-label', 'copyLink');
+    await userEvent.click(share);
+
+    expect(writeText).toHaveBeenCalledWith(window.location.href);
   });
 
   it('holds the create action', () => {

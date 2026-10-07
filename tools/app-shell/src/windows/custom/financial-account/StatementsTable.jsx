@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { ChevronDown, FileText, Pencil, Trash2 } from 'lucide-react';
+import { FileText, Pencil, Trash2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,6 +11,7 @@ import { StatementRowKebab } from './StatementRowKebab';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 import { isDraftStatement } from './statementStatus.js';
+import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout — grid (NOT <table>) so the expanded accordion row can span all cols.
@@ -483,16 +484,13 @@ function StatementRow({
         className={computeStatementRowClassName({ selected, open })}
         onClick={onToggle}
       >
-        <button
-          type="button"
-          aria-label={open ? ui('financeAccountStatementsCollapseAria') : ui('financeAccountStatementsExpandAria')}
-          aria-expanded={open}
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-          style={{ transform: open ? 'rotate(180deg)' : undefined }}
-        >
-          <ChevronDown className="h-4 w-4" data-testid="ChevronDown__3acaeb" />
-        </button>
+        <RowExpandToggle
+          expanded={open}
+          stopPropagation
+          label={open ? ui('financeAccountStatementsCollapseAria') : ui('financeAccountStatementsExpandAria')}
+          onToggle={() => onToggle()}
+          iconTestId="ChevronDown__3acaeb"
+          data-testid="RowExpandToggle__3acaeb" />
         <span onClick={(e) => e.stopPropagation()}>
           {/* ETP-5457 — selection only feeds the bulk delete, so it is not offered under read-only.
               The cell stays to keep the grid aligned. */}

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/purchase-invoice/index.jsx
 // Coverage-recovery suite (ETP-4346 batch 2): a genuine render smoke test for
 // the purchase-invoice custom window wrapper. The existing index.test.js is a
 // source-reading suite (regex-only, per this project's convention for thin
@@ -158,6 +159,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
 import PurchaseInvoiceWindow from '../index.jsx';
+import { consumeFollowUpPrompt } from '@/components/follow-up-documents/followUpDocuments.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -221,6 +223,18 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
     expect(lastHeaderPageProps.summary.map((s) => s.key)).toEqual([
       'summedLineAmount', 'grandTotalAmount', 'totalPaid', 'outstandingAmount',
     ]);
+  });
+
+  // Confirm → draftMode.afterProcess: this window stays on the invoice (and queues the
+  // follow-up prompt) only for ITS follow-up key; anything else keeps the list navigation.
+  it.each([
+    ['its own pending follow-up', 'receipt', 'createReceipt', { stay: true }],
+    ['a follow-up it does not configure', 'shipment', 'createShipment', null],
+  ])('wires draftMode.afterProcess for %s', (_, key, action, expected) => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    const processed = { id: 'inv-1', followUp: { available: [key], [key]: { needed: true, pendingLines: 1, action } } };
+    expect(lastHeaderPageProps.draftMode.afterProcess(processed)).toEqual(expected);
+    expect(Boolean(consumeFollowUpPrompt('purchase-invoice', 'inv-1'))).toBe(expected !== null);
   });
 
   it('applies the DOC_TYPE_LABELS transformRecord for AP Invoice → Factura', () => {

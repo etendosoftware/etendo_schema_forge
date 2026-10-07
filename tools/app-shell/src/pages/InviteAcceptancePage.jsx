@@ -5,8 +5,14 @@ import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AuthShell, LoginStep, RegisterStep } from '@etendosoftware/etendo-go-core/onboarding';
-import { fetchEnvironments, loginAccount } from '@etendosoftware/etendo-go-core/onboarding/api';
+import {
+  AuthShell,
+  LoginStep,
+  RegisterStep,
+  PasswordStrengthChecklist,
+  isStrongPassword,
+} from '@etendosoftware/etendo-go-core/onboarding';
+import { fetchEnvironments, loginAccount, AUTH_ERROR_UI_KEYS } from '@etendosoftware/etendo-go-core/onboarding/api';
 import { LAST_ENVIRONMENT_KEY } from '@etendosoftware/etendo-go-core/onboarding/state';
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -482,11 +488,9 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) {
-        setActionError(
-          data.code === 'WEAK_PASSWORD'
-            ? ui('onboardingCredentialsMustMatch') || data.message
-            : data.message || ui('invitePageInvalidDescription')
-        );
+        // ETP-5258 — translate by code only: `data.message` is the backend's English text, and
+        // WEAK_PASSWORD used to show the unrelated "passwords must match" copy.
+        setActionError(ui(AUTH_ERROR_UI_KEYS[data.code] || 'invitePageInvalidDescription'));
         setSubmitting(false);
         return;
       }
@@ -544,7 +548,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     });
   };
 
-  const companyName = invitationData?.clientName || successData?.clientName || 'Etendo Go';
+  const companyName = invitationData?.clientName || successData?.clientName || 'Etendo';
   const invitedEmail = invitationData?.email || invitationData?.maskedEmail || '';
   // Whether there is a tenant to stay in. Resolved by the effect above rather than read from
   // storage on every render, but for the same reason the storage read was unconditional: the
@@ -556,7 +560,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   // The marketing shell is identical on every full-page state; the pre-existing states below
   // spell it out inline, the ETP-5202 states share this bag rather than copying it three times.
   const shellProps = {
-    brandLabel: 'Etendo Go',
+    brandLabel: 'Etendo',
     marketingTitle: ui('onboardingMarketingTitle'),
     marketingDescription: ui('onboardingMarketingDescription'),
     featureLabels: [
@@ -571,7 +575,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   if (loading) {
     return (
       <AuthShell
-        brandLabel="Etendo Go"
+        brandLabel="Etendo"
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={[
@@ -678,7 +682,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         <LoginStep
           config={{
             apiBase,
-            brandLabel: 'Etendo Go',
+            brandLabel: 'Etendo',
             localeCodes: ['es_ES', 'en_US'],
           }}
           stepData={{ email: invitationData.email }}
@@ -697,7 +701,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         <RegisterStep
           config={{
             apiBase,
-            brandLabel: 'Etendo Go',
+            brandLabel: 'Etendo',
             localeCodes: ['es_ES', 'en_US'],
           }}
           stepData={{ email: invitationData.email }}
@@ -713,7 +717,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   if (!loading && errorState) {
     return (
       <AuthShell
-        brandLabel="Etendo Go"
+        brandLabel="Etendo"
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={[
@@ -748,7 +752,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   if (!loading && !errorState && successData) {
     return (
       <AuthShell
-        brandLabel="Etendo Go"
+        brandLabel="Etendo"
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={[
@@ -832,7 +836,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   if (!loading && !errorState && !successData && invitationData?.branch === 'existing_account' && existingAuthenticated) {
     return (
       <AuthShell
-        brandLabel="Etendo Go"
+        brandLabel="Etendo"
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={[
@@ -924,7 +928,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         {/* State: Success */}
         {!loading && !errorState && successData && (
           <AuthShell
-            brandLabel="Etendo Go"
+            brandLabel="Etendo"
             marketingTitle={ui('onboardingMarketingTitle')}
             marketingDescription={ui('onboardingMarketingDescription')}
             featureLabels={[
@@ -1092,10 +1096,16 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
                 </div>
               </div>
 
+              <PasswordStrengthChecklist
+                password={password}
+                testIdPrefix="invite-password"
+                className="space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-sm"
+                data-testid="PasswordStrengthChecklist__fa3cd9" />
+
               <Button
                 type="submit"
                 className="w-full gap-2 pt-2"
-                disabled={submitting || !name.trim() || !password}
+                disabled={submitting || !name.trim() || !isStrongPassword(password)}
                 data-testid="action-register-accept"
               >
                 {submitting ? (

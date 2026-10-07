@@ -6,49 +6,8 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
-import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
-import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
-
-const TAB_ICONS = {
-  'custom:attachments': AttachmentIcon,
-  'custom:sif': Shield,
-  'custom:pricing': PricingIcon,
-  'products': WarehouseProductsIcon,
-};
-
-function TabStripButton({
-  iconKey, label, count, isActive, onClick,
-  paddingY = 'py-2.5', showHoverLine = false, indicatorCls, tMenu, testId,
-}) {
-  const defaultCls = 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full';
-  return (
-    <button
-      onClick={onClick}
-      data-testid={testId}
-      className={[
-        `${showHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${paddingY} text-sm font-medium transition-colors relative`,
-        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-      ].join(' ')}
-    >
-      {React.createElement(TAB_ICONS[iconKey] ?? List, { className: 'h-4 w-4' })}
-      {tMenu(label)}
-      {count != null && (
-        <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground">
-          {count}
-        </span>
-      )}
-      {showHoverLine ? (
-        <span className={[
-          'absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-colors',
-          isActive ? 'bg-foreground' : 'bg-transparent group-hover:bg-muted-foreground/30',
-        ].join(' ')} />
-      ) : (
-        isActive && <span className={indicatorCls || defaultCls} />
-      )}
-    </button>
-  );
-}
+import { X, Check, Save, Printer, Mail, Trash2, Loader2, Lock, Undo2 } from 'lucide-react';
+import TabStripButton from './TabStripButton.jsx';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
@@ -119,7 +78,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 // wherever it happens.
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, buildCustomAddModalOnSaved, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, buildCustomAddModalOnSaved, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -2048,7 +2007,7 @@ export function DetailView({
   const handleAddLineClick = useCallback(async () => {
     if (isNew) {
       const saved = await hook.handleSave();
-      if (!saved?.id) return;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return; }
       hook.primeSaved?.(saved);
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
@@ -2070,7 +2029,7 @@ export function DetailView({
         setEditingChild(null);
       },
     });
-  }, [isNew, hook, navigate, windowName, addingLine]);
+  }, [isNew, hook, navigate, windowName, addingLine, ui]);
 
   // Save header first (if new → navigate with flag; if existing → save in place), then open import modal.
   // modalType ('order' | 'invoice') is forwarded in navigation state so the destination component
@@ -2079,7 +2038,7 @@ export function DetailView({
     if (isNew) {
       // Concurrent clicks share one create — see handleAddLineClick.
       const saved = await hook.handleSave();
-      if (!saved?.id) return false;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return false; }
       hook.primeSaved?.(saved);
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
@@ -2089,7 +2048,7 @@ export function DetailView({
     }
     await hook.handleSave();
     return true;
-  }, [isNew, hook, navigate, windowName]);
+  }, [isNew, hook, navigate, windowName, ui]);
 
   // ETP-5147: shared runSecondaryAddLineFlow saves-and-navigates for a brand-new
   // requireSavedRecord tab, otherwise gates on a dirty header before onOpen.
@@ -2679,7 +2638,7 @@ export function DetailView({
   const tabs = buildInitialTabs({
     secondaryTabs, secondaryHooks, panelCounts, DetailTable, detailLabel, detailEntity,
     hook, detailTabIndex, detailTabOrder, CustomLines, customLinesLabel, customLinesCount,
-    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities,
+    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities, isNew,
   });
 
   // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
@@ -2766,15 +2725,15 @@ export function DetailView({
       if (prev[ct.key] === count) return prev;
       return { ...prev, [ct.key]: count };
     });
-    // Save-header-first support for custom tabs (child rows need a persisted
-    // parent FK). The tab decides WHEN: onSaveHeader({ navigateAfter: false })
-    // just persists and returns the saved record (the tab keeps its in-progress
-    // form and posts the child row itself), then calls onGoToSavedRecord to land
-    // on the saved record with this tab re-opened. The default (navigateAfter
-    // true) mirrors handleAddLineClick: save, navigate, re-open the add form.
+    // Save-header-first support for custom tabs (child rows need a persisted parent FK). The tab
+    // decides WHEN: onSaveHeader({ navigateAfter: false }) persists and returns the saved record,
+    // or null once the user has already been told why — the tab must not toast again. The tab keeps
+    // its in-progress form, posts the child row itself, then calls onGoToSavedRecord to land on the
+    // saved record with this tab re-opened. The default (navigateAfter true) mirrors
+    // handleAddLineClick: save, navigate, re-open the add form.
     const saveHeaderForCustomTab = async ({ navigateAfter = true } = {}) => {
       const saved = await hook.handleSave();
-      if (!saved?.id) return null;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return null; }
       hook.primeSaved?.(saved);
       if (navigateAfter) {
         navigate(`/${windowName}/${saved.id}`, {
@@ -2785,7 +2744,7 @@ export function DetailView({
       return saved;
     };
     const goToSavedRecord = (saved, { reopenAdd = false, draft = null, error = null } = {}) => {
-      if (!saved?.id) return;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return; }
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
         state: {
@@ -3030,7 +2989,7 @@ export function DetailView({
                   return (
                     <Button
                       key={p.name}
-                      variant={isPrimary ? 'default' : 'outline'}
+                      variant={getProcessButtonVariant(p)}
                       size="default"
                       className={`${btnClass} ${saveBtnCls}`.trim()}
                       disabled={isRunning}
@@ -3061,7 +3020,7 @@ export function DetailView({
                         )
                         : (
                           <>
-                            {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[hsl(var(--destructive))]" data-testid="Undo2__fa3275" />}{p.style === 'positive' && <Check size={16} className="mr-1" data-testid="Check__process" />}
+                            {isDangerProcess(p) && <Undo2 size={16} className={getDangerIconClass(p)} data-testid="Undo2__fa3275" />}{p.style === 'positive' && <Check size={16} className="mr-1" data-testid="Check__process" />}
                             {tMenu(resolveProcessLabel(p, data))}
                           </>
                         )}
@@ -3221,8 +3180,7 @@ export function DetailView({
                     if (!parentId) return;
                     // ETP-5378 — a line write can change the header column the grid shows.
                     hook.invalidateEntityCache?.();
-                    hook.fetchChildren?.(parentId, { force: true });
-                    hook.fetchById?.(parentId, { force: true });
+                    hook.fetchById?.(parentId, { force: true }); // forced: re-reads the lines too
                   },
                   onRefreshChildren: () => hook.fetchChildren?.(data?.id || recordId, { force: true }),
                 };
@@ -3396,6 +3354,7 @@ export function DetailView({
                                 indicatorCls={tabIndicatorCls}
                                 tMenu={tMenu}
                                 testId={`tab-${tab.key}`}
+                                disabledHint={tab.saveFirstHint}
                                 data-testid="TabStripButton__fa3275" />
                             );
                           })}
@@ -3436,8 +3395,7 @@ export function DetailView({
                                 apiBaseUrl={apiBaseUrl}
                                 onRefresh={() => {
                                   hook.invalidateEntityCache?.();
-                                  hook.fetchChildren?.(data?.id || recordId, { force: true });
-                                  hook.fetchById?.(data?.id || recordId, { force: true });
+                                  hook.fetchById?.(data?.id || recordId, { force: true }); // forced: re-reads the lines too
                                 }}
                                 onSave={handleImportClick}
                                 forceOpen={forceOpenImport}
@@ -3642,8 +3600,7 @@ export function DetailView({
                                         apiBaseUrl={apiBaseUrl}
                                         onRefresh={() => {
                                           hook.invalidateEntityCache?.();
-                                          hook.fetchChildren?.(data?.id || recordId, { force: true });
-                                          hook.fetchById?.(data?.id || recordId, { force: true });
+                                          hook.fetchById?.(data?.id || recordId, { force: true }); // forced: re-reads the lines too
                                         }}
                                         onSave={handleImportClick}
                                         forceOpen={forceOpenImport}
@@ -3853,7 +3810,7 @@ export function DetailView({
                               catalogs={catalogs}
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
-                              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
+                              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                               isNew={isNew}
                               onSave={async () => {
                                 const saved = await hook.handleSave(data);
@@ -4149,6 +4106,7 @@ export function DetailView({
                                 onClick={() => setActiveCustomBelowTab(idx)}
                                 tMenu={tMenu}
                                 testId={`tab-${customTabKey(ct)}`}
+                                disabledHint={getCustomTabSaveFirstHint(ct, isNew, ui)}
                                 data-testid="TabStripButton__fa3275" />
                             );
                           })}

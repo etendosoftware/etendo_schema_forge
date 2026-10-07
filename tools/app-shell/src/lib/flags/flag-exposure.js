@@ -1,4 +1,4 @@
-import { track } from '../observability.js';
+import { track, addFeatureFlagEvaluation } from '../observability.js';
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/events.js';
 
 /**
@@ -32,6 +32,29 @@ import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/
 /** Flag/value combinations already reported this session (page lifetime). */
 const reported = new Set();
 
+/** Datadog RUM feature flag keys accept identifier characters only. */
+export function sanitizeRumFeatureFlagKey(flagKey) {
+  const source = String(flagKey ?? '');
+  let sanitized = '';
+  for (const character of source.split('')) {
+    const code = character.charCodeAt(0);
+    const allowed = code === 95 || (code >= 48 && code <= 57) ||
+      (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+    sanitized += allowed ? character : '_';
+  }
+  let start = 0;
+  while (sanitized[start] === '_') start += 1;
+  let end = sanitized.length;
+  while (end > start && sanitized[end - 1] === '_') end -= 1;
+  sanitized = sanitized.slice(start, end).slice(0, 100);
+  return sanitized || 'flag';
+}
+
+/**
+ * Sends a real OpenFeature evaluation to Datadog RUM when the browser provider
+ * is available. The SDK buffers this call before RUM initialization, so the
+ * hook can remain registered before the async provider bootstrap completes.
+ */
 /** Exposed for tests and for callers that deliberately reset session state. */
 export function resetExposureCache() {
   reported.clear();
@@ -52,7 +75,10 @@ export function buildExposureProperties(hookContext, evaluationDetails) {
   };
 }
 
-export function createFlagExposureHook({ trackImpl = track } = {}) {
+export function createFlagExposureHook({
+  trackImpl = track,
+  rumEvaluationImpl = addFeatureFlagEvaluation,
+} = {}) {
   return {
     after(hookContext, evaluationDetails) {
       try {
@@ -71,6 +97,14 @@ export function createFlagExposureHook({ trackImpl = track } = {}) {
         // Fire-and-forget: an unresolved or rejected track must not surface
         // inside flag resolution.
         Promise.resolve(trackImpl(event.name, event.properties)).catch(() => {});
+        // The startup no-op provider is useful for business exposure telemetry,
+        // but it is not a real assignment and must not enter RUM flag context.
+        const normalizedProvider = String(provider || '').toLowerCase();
+        const isNoOpProvider = normalizedProvider === 'no op provider' ||
+          normalizedProvider === 'no-op provider' || normalizedProvider === 'noop provider';
+        if (!isNoOpProvider) {
+          Promise.resolve(rumEvaluationImpl(sanitizeRumFeatureFlagKey(flagKey), value)).catch(() => {});
+        }
       } catch {
         // Reporting is best-effort; evaluation continues regardless.
       }

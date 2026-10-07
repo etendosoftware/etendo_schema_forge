@@ -1715,7 +1715,11 @@ export function useEntity(entity, childEntity, {
                 }
                 setSelected(row);
                 setEditing({ ...row });
-                fetchChildren(row.id);
+                // ETP-5602: a forced re-read follows a server-side change (a document action,
+                // a process), which may have rewritten the lines too — reactivating an invoice
+                // bumps UPDATED on every line. Serving the cached lines kept their old version,
+                // so the first line edit failed with 409 stale_record.
+                fetchChildren(row.id, { force });
                 setLoading(false);
             })
             .catch(err => {
@@ -2582,7 +2586,7 @@ export function useEntity(entity, childEntity, {
         // invalidate the shared cache before refetching — otherwise fetchById (which
         // reads through the cache) could serve the pre-process record.
         invalidateEntityCache();
-        fetchById(selected?.id);
+        fetchById(selected?.id, { force: true });
         refresh();
     }, [entity, specName, selected, fetchById, refresh, ui, invalidateEntityCache]);
 

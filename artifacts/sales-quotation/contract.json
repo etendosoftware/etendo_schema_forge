@@ -1,8 +1,8 @@
 {
-  "version": "0.27.0",
+  "version": "0.28.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-09-24T10:36:53.659Z",
-  "checksum": "e9ed4323f22c0891",
+  "updatedAt": "2026-10-05T19:24:13.071Z",
+  "checksum": "bfd80f66609db10e",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -1939,6 +1939,30 @@
             "column": "EM_ETGO_Currency_Rate",
             "type": "string",
             "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "eTGODeliveryStatus",
+            "apiKey": "eTGODeliveryStatus",
+            "column": "EM_ETGO_Delivery_Status",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGODelivStatusPurchase",
+            "apiKey": "eTGODelivStatusPurchase",
+            "column": "EM_ETGO_Deliv_Status_Purchase",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOInvoiceStatus",
+            "apiKey": "eTGOInvoiceStatus",
+            "column": "EM_ETGO_Invoice_Status",
+            "type": "integer",
+            "visibility": "system",
             "required": false
           }
         ],
@@ -4459,6 +4483,30 @@
         "description": "System field 'dropShipPartner' should exist in backend but not frontend for quotation"
       },
       {
+        "id": "t-system-field-quotation-eTGODeliveryStatus",
+        "category": "system-field",
+        "entity": "quotation",
+        "field": "eTGODeliveryStatus",
+        "runner": "node",
+        "description": "System field 'eTGODeliveryStatus' should exist in backend but not frontend for quotation"
+      },
+      {
+        "id": "t-system-field-quotation-eTGODelivStatusPurchase",
+        "category": "system-field",
+        "entity": "quotation",
+        "field": "eTGODelivStatusPurchase",
+        "runner": "node",
+        "description": "System field 'eTGODelivStatusPurchase' should exist in backend but not frontend for quotation"
+      },
+      {
+        "id": "t-system-field-quotation-eTGOInvoiceStatus",
+        "category": "system-field",
+        "entity": "quotation",
+        "field": "eTGOInvoiceStatus",
+        "runner": "node",
+        "description": "System field 'eTGOInvoiceStatus' should exist in backend but not frontend for quotation"
+      },
+      {
         "id": "t-system-field-quotation-eTPRRemovePayment",
         "category": "system-field",
         "entity": "quotation",
@@ -5402,7 +5450,7 @@
       }
     ],
     "summary": {
-      "total": 303,
+      "total": 306,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 2,
@@ -5416,11 +5464,11 @@
         "rule-declared": 8,
         "searchable-filters": 6,
         "selector-endpoint": 9,
-        "system-field": 152,
+        "system-field": 155,
         "visibility": 2
       },
       "byRunner": {
-        "node": 303,
+        "node": 306,
         "junit": 0
       }
     }

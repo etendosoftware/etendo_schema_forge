@@ -6,7 +6,6 @@ const OBSERVABILITY_CHANNEL_VALUES = Object.freeze({
   NPS: 'nps',
   BACKEND: 'backend',
   RUM: 'rum',
-  SENTRY: 'sentry',
   SQL: 'sql',
 });
 

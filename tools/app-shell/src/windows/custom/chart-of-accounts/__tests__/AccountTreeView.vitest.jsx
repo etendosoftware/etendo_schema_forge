@@ -1,4 +1,9 @@
 // @vitest-environment jsdom
+// @covers artifacts/chart-of-accounts/custom/AccountTreeView.jsx
+// @covers artifacts/chart-of-accounts/custom/ChartOfAccountsToolbarSlot.jsx
+// @covers artifacts/chart-of-accounts/custom/NewSubAccountCreateModal.jsx
+// @covers artifacts/chart-of-accounts/custom/chartOfAccountsTreeStore.js
+// @covers artifacts/chart-of-accounts/custom/chartOfAccountsFilters.js
 
 // --- Mocks (before imports) ---
 
@@ -38,11 +43,66 @@ vi.mock('@generated/chart-of-accounts/custom/NewAccountModal', () => ({
 
 // --- Import under test ---
 
+import { useState } from 'react';
 import { render, screen, within, fireEvent, waitFor, act } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from 'sonner';
 import AccountTreeView from '@generated/chart-of-accounts/custom/AccountTreeView.jsx';
+import NewSubAccountCreateModal from '@generated/chart-of-accounts/custom/NewSubAccountCreateModal.jsx';
+import { resetChartOfAccountsTreeStore } from '@generated/chart-of-accounts/custom/chartOfAccountsTreeStore.js';
+import { SEARCH_DEBOUNCE_MS } from '@generated/chart-of-accounts/custom/ChartOfAccountsToolbarSlot.jsx';
 import { ELEMENT_LEVEL_UI_KEYS } from '@generated/chart-of-accounts/custom/accountTypeLabels';
+
+// --- Harness ---
+//
+// ETP-5593: the tree's controls moved into ListView's toolbar row
+// (`AccountTreeView.ToolbarQuickFilter`) and "Nueva subcuenta" became ListView's New
+// button (`newRecordComponent: NewSubAccountCreateModal`). The harness mounts those
+// three siblings the way ListView + the generated page do — under one Router, sharing
+// the window-local store — with a plain button standing in for ListView's New.
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location-search">{location.search}</span>;
+}
+
+function TreeHarness({ children }) {
+  const [creating, setCreating] = useState(false);
+  const Slot = AccountTreeView.ToolbarQuickFilter;
+  return (
+    <>
+      <Slot />
+      <button type="button" data-testid="open-create" onClick={() => setCreating(true)}>new</button>
+      {children}
+      {creating && (
+        <NewSubAccountCreateModal token="test-token" apiBaseUrl={TEST_API_BASE_URL} onClose={() => setCreating(false)} />
+      )}
+      <LocationProbe />
+    </>
+  );
+}
+
+function renderTree(ui, { entry = '/chart-of-accounts' } = {}) {
+  const wrap = (node) => (
+    <MemoryRouter initialEntries={[entry]}>
+      <TreeHarness>{node}</TreeHarness>
+    </MemoryRouter>
+  );
+  const utils = render(wrap(ui));
+  return { ...utils, rerender: (next) => utils.rerender(wrap(next)) };
+}
+
+// The search box writes the URL after a pause (SEARCH_DEBOUNCE_MS); type, then let the
+// pause elapse, so the tree has re-filtered when the helper returns.
+function typeIntoSearch(value) {
+  vi.useFakeTimers();
+  try {
+    fireEvent.change(screen.getByTestId('coa-search-input'), { target: { value } });
+    act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
+  } finally {
+    vi.useRealTimers();
+  }
+}
 
 // --- Fixtures ---
 
@@ -134,6 +194,7 @@ describe('AccountTreeView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    resetChartOfAccountsTreeStore();
   });
 
   afterEach(() => {
@@ -141,14 +202,14 @@ describe('AccountTreeView', () => {
   });
 
   it('shows the empty state when there are no accounts', () => {
-    render(<AccountTreeView {...defaultProps} data={[]} />);
+    renderTree(<AccountTreeView {...defaultProps} data={[]} />);
     expect(screen.getByText('accountTreeNoAccounts')).toBeInTheDocument();
     // Toolbar still renders, but no group rows
     expect(screen.queryByTestId('account-tree-row-group-4000')).not.toBeInTheDocument();
   });
 
   it('groups accounts by parentCode4, collapsed by default', () => {
-    render(<AccountTreeView {...defaultProps} />);
+    renderTree(<AccountTreeView {...defaultProps} />);
     // Group headers are visible…
     expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
     expect(screen.getByTestId('account-tree-row-group-5000')).toBeInTheDocument();
@@ -159,7 +220,7 @@ describe('AccountTreeView', () => {
   });
 
   it('expanding a group reveals its children', () => {
-    render(<AccountTreeView {...defaultProps} />);
+    renderTree(<AccountTreeView {...defaultProps} />);
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
     expect(screen.getByTestId('account-tree-row-acc-40000001')).toBeInTheDocument();
@@ -169,7 +230,7 @@ describe('AccountTreeView', () => {
   });
 
   it('sorts children within a group by searchKey', () => {
-    render(<AccountTreeView {...defaultProps} />);
+    renderTree(<AccountTreeView {...defaultProps} />);
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     const rows = screen.getAllByRole('row').map((r) => r.getAttribute('data-testid'));
     const idxUS = rows.indexOf('account-tree-row-acc-40000000'); // 40000001
@@ -178,7 +239,7 @@ describe('AccountTreeView', () => {
   });
 
   it('shows only SearchKey, Name and Account Type — no Debit/Credit/Balance', () => {
-    render(<AccountTreeView {...defaultProps} />);
+    renderTree(<AccountTreeView {...defaultProps} />);
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     const row = screen.getByTestId('account-tree-row-acc-40000001');
     expect(row.textContent).toContain('40000002');
@@ -190,7 +251,7 @@ describe('AccountTreeView', () => {
   });
 
   it('renders the Account Type label for each leaf row', () => {
-    render(<AccountTreeView {...defaultProps} />);
+    renderTree(<AccountTreeView {...defaultProps} />);
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-5000'));
     const revenueRow = screen.getByTestId('account-tree-row-acc-40000000');
@@ -201,7 +262,7 @@ describe('AccountTreeView', () => {
   });
 
   it('collapsing an already-expanded group hides its children without affecting other groups', () => {
-    render(<AccountTreeView {...defaultProps} />);
+    renderTree(<AccountTreeView {...defaultProps} />);
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-5000'));
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
@@ -213,7 +274,7 @@ describe('AccountTreeView', () => {
 
   it('toggling a group chevron does not select the row or call onNavigate', () => {
     const onNavigate = vi.fn();
-    render(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
+    renderTree(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
     expect(onNavigate).not.toHaveBeenCalled();
@@ -222,7 +283,7 @@ describe('AccountTreeView', () => {
 
   it('clicking a leaf row selects it and calls onNavigate with the item', () => {
     const onNavigate = vi.fn();
-    render(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
+    renderTree(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     fireEvent.click(screen.getByTestId('account-tree-row-acc-40000000'));
 
@@ -232,7 +293,7 @@ describe('AccountTreeView', () => {
 
   it('clicking a virtual group row selects it but does not call onNavigate', () => {
     const onNavigate = vi.fn();
-    render(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
+    renderTree(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
     fireEvent.click(screen.getByTestId('account-tree-row-group-4000'));
 
     expect(onNavigate).not.toHaveBeenCalled();
@@ -240,15 +301,15 @@ describe('AccountTreeView', () => {
   });
 
   it('is collapsed by default on first-ever load (no persisted state)', () => {
-    render(<AccountTreeView {...defaultProps} />);
+    renderTree(<AccountTreeView {...defaultProps} />);
     expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
     expect(screen.queryByTestId('account-tree-row-acc-50000001')).not.toBeInTheDocument();
   });
 
   it('"Contraer" (collapse all) hides every group\'s children', () => {
-    render(<AccountTreeView {...defaultProps} />);
-    fireEvent.click(screen.getByText('expand'));
-    fireEvent.click(screen.getByText('collapse'));
+    renderTree(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('coa-toggle-expand-all'));
+    fireEvent.click(screen.getByTestId('coa-toggle-expand-all'));
 
     expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
     expect(screen.queryByTestId('account-tree-row-acc-50000001')).not.toBeInTheDocument();
@@ -256,8 +317,8 @@ describe('AccountTreeView', () => {
   });
 
   it('"Expandir" (expand all) reveals every group\'s children', () => {
-    render(<AccountTreeView {...defaultProps} />);
-    fireEvent.click(screen.getByText('expand'));
+    renderTree(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('coa-toggle-expand-all'));
 
     expect(screen.getByTestId('account-tree-row-acc-40000000')).toBeInTheDocument();
     expect(screen.getByTestId('account-tree-row-acc-50000001')).toBeInTheDocument();
@@ -265,30 +326,30 @@ describe('AccountTreeView', () => {
 
   describe('expand/collapse persistence across remounts', () => {
     it('restores previously expanded folders after unmount + remount (navigate away and back)', () => {
-      const { unmount } = render(<AccountTreeView {...defaultProps} />);
+      const { unmount } = renderTree(<AccountTreeView {...defaultProps} />);
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
       expect(screen.getByTestId('account-tree-row-acc-40000000')).toBeInTheDocument();
       unmount();
 
-      render(<AccountTreeView {...defaultProps} />);
+      renderTree(<AccountTreeView {...defaultProps} />);
       expect(screen.getByTestId('account-tree-row-acc-40000000')).toBeInTheDocument();
       // The group that was never expanded stays collapsed.
       expect(screen.queryByTestId('account-tree-row-acc-50000001')).not.toBeInTheDocument();
     });
 
     it('restores a fully collapsed state after unmount + remount', () => {
-      const { unmount } = render(<AccountTreeView {...defaultProps} />);
+      const { unmount } = renderTree(<AccountTreeView {...defaultProps} />);
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000')); // re-collapse
       unmount();
 
-      render(<AccountTreeView {...defaultProps} />);
+      renderTree(<AccountTreeView {...defaultProps} />);
       expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
     });
 
     it('ignores corrupt persisted state and falls back to collapsed', () => {
       localStorage.setItem('sf.chartOfAccounts.expandedFolderIds', 'not valid json');
-      render(<AccountTreeView {...defaultProps} />);
+      renderTree(<AccountTreeView {...defaultProps} />);
       expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
     });
   });
@@ -304,14 +365,14 @@ describe('AccountTreeView', () => {
         summaryLevel: 'N',
       },
     ];
-    render(<AccountTreeView {...defaultProps} data={data} />);
+    renderTree(<AccountTreeView {...defaultProps} data={data} />);
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-9900'));
     expect(screen.getByTestId('account-tree-row-acc-x')).toBeInTheDocument();
   });
 
   it('calls onColumnsReady with the tree column definitions', () => {
     const onColumnsReady = vi.fn();
-    render(<AccountTreeView {...defaultProps} onColumnsReady={onColumnsReady} />);
+    renderTree(<AccountTreeView {...defaultProps} onColumnsReady={onColumnsReady} />);
     expect(onColumnsReady).toHaveBeenCalled();
     const cols = onColumnsReady.mock.calls.at(-1)[0];
     expect(cols.map((c) => c.key)).toEqual([
@@ -320,32 +381,31 @@ describe('AccountTreeView', () => {
       'elementLevel',
       'accountType',
       'active',
-      'ytdDebit',
-      'ytdCredit',
-      'ytdBalance',
     ]);
+    // ETP-5593 — only Código and Nombre are offered by the toolbar's Sort popover.
+    expect(cols.filter((c) => c.sortable !== false).map((c) => c.key)).toEqual(['searchKey', 'name']);
   });
 
   it('opens the New Sub-account modal with no current record when nothing is selected', () => {
-    render(<AccountTreeView {...defaultProps} />);
-    fireEvent.click(screen.getByText('+ newSubAccount'));
+    renderTree(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('open-create'));
 
     expect(screen.getByTestId('new-account-modal-stub')).toBeInTheDocument();
     expect(screen.getByTestId('modal-current-record-id')).toHaveTextContent('none');
   });
 
   it('opens the modal with the selected row as the current record', () => {
-    render(<AccountTreeView {...defaultProps} />);
+    renderTree(<AccountTreeView {...defaultProps} />);
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     fireEvent.click(screen.getByTestId('account-tree-row-acc-40000000'));
-    fireEvent.click(screen.getByText('+ newSubAccount'));
+    fireEvent.click(screen.getByTestId('open-create'));
 
     expect(screen.getByTestId('modal-current-record-id')).toHaveTextContent('acc-40000000');
   });
 
   it('closes the modal via onClose without side effects', () => {
-    render(<AccountTreeView {...defaultProps} />);
-    fireEvent.click(screen.getByText('+ newSubAccount'));
+    renderTree(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('open-create'));
     fireEvent.click(screen.getByTestId('modal-close'));
 
     expect(screen.queryByTestId('new-account-modal-stub')).not.toBeInTheDocument();
@@ -353,8 +413,8 @@ describe('AccountTreeView', () => {
 
   it('closes the modal and calls onDataMutated when a new account is saved', () => {
     const onDataMutated = vi.fn();
-    render(<AccountTreeView {...defaultProps} onDataMutated={onDataMutated} />);
-    fireEvent.click(screen.getByText('+ newSubAccount'));
+    renderTree(<AccountTreeView {...defaultProps} onDataMutated={onDataMutated} />);
+    fireEvent.click(screen.getByTestId('open-create'));
     fireEvent.click(screen.getByTestId('modal-save'));
 
     expect(screen.queryByTestId('new-account-modal-stub')).not.toBeInTheDocument();
@@ -365,7 +425,7 @@ describe('AccountTreeView', () => {
 
   describe('full ancestor-chain hierarchy', () => {
     it('builds one nested folder per ancestor level instead of a flat 4-digit group', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
       // Root folder "A" is a real group node (top-level, visible but collapsed)…
       expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
@@ -375,7 +435,7 @@ describe('AccountTreeView', () => {
     });
 
     it('expanding the full ancestor chain reveals both leaves sharing that path', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
       // Walk down every level, expanding each as we go — nothing is auto-expanded.
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
@@ -392,8 +452,8 @@ describe('AccountTreeView', () => {
     });
 
     it('"Expandir" (expand all) reveals every nested level, not just the first two', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
-      fireEvent.click(screen.getByText('expand'));
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      fireEvent.click(screen.getByTestId('coa-toggle-expand-all'));
 
       // Every intermediate folder down the full A → A.A → A.A.I → 200 → 2000 chain
       // must be expanded, not just the root "A" and its immediate child "A.A".
@@ -406,7 +466,7 @@ describe('AccountTreeView', () => {
     });
 
     it('collapsing an intermediate folder hides deeper levels', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A'));
 
@@ -420,12 +480,12 @@ describe('AccountTreeView', () => {
 
   describe('Element Level column (ETP-5399)', () => {
     it('shows the Element Level header in the column header row', () => {
-      render(<AccountTreeView {...defaultProps} />);
+      renderTree(<AccountTreeView {...defaultProps} />);
       expect(screen.getByText('accountTreeFilterElementLevel')).toBeInTheDocument();
     });
 
     it('renders the Element Level label for a leaf row', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
       expandFullAncestorChain();
       // acc-20000000 has elementLevel: 'S' → elementLevelSubaccount.
       const row = screen.getByTestId('account-tree-row-acc-20000000');
@@ -433,14 +493,14 @@ describe('AccountTreeView', () => {
     });
 
     it('renders the Element Level label for a virtual folder/heading row', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
       // Root folder "A" is visible without expanding; its ancestor entry carries elementLevel: 'E'.
       const row = screen.getByTestId('account-tree-row-group-A');
       expect(within(row).getByText('elementLevelHeading')).toBeInTheDocument();
     });
 
     it('keeps folder rows on the same column grid as leaf rows (empty active cell)', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
       expandFullAncestorChain();
       const folder = screen.getByTestId('account-tree-row-group-A');
       const leaf = screen.getByTestId('account-tree-row-acc-20000000');
@@ -455,7 +515,7 @@ describe('AccountTreeView', () => {
 
     it('falls back to the raw code when elementLevel has no mapped label', () => {
       const data = [{ ...DATA[0], elementLevel: 'Z' }];
-      render(<AccountTreeView {...defaultProps} data={data} />);
+      renderTree(<AccountTreeView {...defaultProps} data={data} />);
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
       const row = screen.getByTestId('account-tree-row-acc-40000001');
       expect(within(row).getByText('Z')).toBeInTheDocument();
@@ -463,7 +523,7 @@ describe('AccountTreeView', () => {
 
     it('renders without crashing and shows no mapped label when elementLevel is missing', () => {
       const data = [{ ...DATA[0], elementLevel: undefined }];
-      render(<AccountTreeView {...defaultProps} data={data} />);
+      renderTree(<AccountTreeView {...defaultProps} data={data} />);
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
       const row = screen.getByTestId('account-tree-row-acc-40000001');
       expect(row).toBeInTheDocument();
@@ -493,11 +553,9 @@ describe('AccountTreeView', () => {
         },
       ];
 
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} data={data} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} data={data} />);
 
-      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
-        target: { value: '430A' },
-      });
+      typeIntoSearch('430A');
 
       const matchingFolder = screen.getByTestId('account-tree-row-group-430A');
       expect(within(matchingFolder).getByText('430A')).toBeInTheDocument();
@@ -507,11 +565,9 @@ describe('AccountTreeView', () => {
     });
 
     it('filters leaves by code or name and auto-expands their ancestors', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
-      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
-        target: { value: 'aplicada' },
-      });
+      typeIntoSearch('aplicada');
 
       // The match (20000001, "Investigación aplicada.") is visible without any
       // manual expand click — every ancestor folder auto-expanded.
@@ -521,24 +577,16 @@ describe('AccountTreeView', () => {
     });
 
     it('hides branches with no matching descendant at any depth', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
-      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
-        target: { value: 'no-such-account' },
-      });
+      typeIntoSearch('no-such-account');
 
       expect(screen.queryByTestId('account-tree-row-group-A')).not.toBeInTheDocument();
       expect(screen.getByText('noResultsFound')).toBeInTheDocument();
     });
 
     it('filters by account type independently of the text filter', () => {
-      render(<AccountTreeView {...defaultProps} data={DATA} />);
-      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
-      fireEvent.click(screen.getByTestId('account-tree-toggle-group-5000'));
-
-      fireEvent.change(screen.getByTestId('account-tree-filter-type'), {
-        target: { value: 'E' },
-      });
+      renderTree(<AccountTreeView {...defaultProps} data={DATA} />, { entry: '/chart-of-accounts?accountType=E' });
 
       // "Purchases US" (accountType 'E') matches; the two 'R' (Revenue) leaves
       // under 4000 do not, so that whole branch disappears.
@@ -547,16 +595,12 @@ describe('AccountTreeView', () => {
     });
 
     it('clearing the filter reverts to the manual expand/collapse state, not the auto-expanded one', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
       // No manual expansion at all — tree is fully collapsed.
-      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
-        target: { value: 'aplicada' },
-      });
+      typeIntoSearch('aplicada');
       expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
 
-      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
-        target: { value: '' },
-      });
+      typeIntoSearch('');
 
       // Back to fully collapsed — the filter's auto-expand must not leak into
       // the persisted manual `expanded` state.
@@ -578,17 +622,15 @@ describe('AccountTreeView', () => {
   // folder nodes, not just leaves.
   describe('currentRecordForModal resolves against the unfiltered tree (ETP-5399)', () => {
     it('hands the modal the real (unfiltered) children of a selected folder while a filter is active', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
       // Matches only "20000001" ("Investigación aplicada.") — filterTree prunes
       // the innermost "2000" folder's children down to that single leaf, while
       // auto-expanding every ancestor folder (including "2000" itself) so it is
       // visible and selectable without any manual toggle.
-      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
-        target: { value: 'aplicada' },
-      });
+      typeIntoSearch('aplicada');
       fireEvent.click(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I|200|2000'));
-      fireEvent.click(screen.getByText('+ newSubAccount'));
+      fireEvent.click(screen.getByTestId('open-create'));
 
       expect(screen.getByTestId('modal-current-record-id'))
         .toHaveTextContent('group-A|A.A|A.A.I|200|2000');
@@ -598,14 +640,14 @@ describe('AccountTreeView', () => {
     });
 
     it('still resolves the correct node with no filter active (baseline, no regression)', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A'));
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I'));
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I|200'));
       fireEvent.click(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I|200|2000'));
-      fireEvent.click(screen.getByText('+ newSubAccount'));
+      fireEvent.click(screen.getByTestId('open-create'));
 
       expect(screen.getByTestId('modal-current-record-id'))
         .toHaveTextContent('group-A|A.A|A.A.I|200|2000');
@@ -613,13 +655,11 @@ describe('AccountTreeView', () => {
     });
 
     it('selecting a real leaf row while filtered still resolves that same leaf (leaves are never cloned)', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
-      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
-        target: { value: 'aplicada' },
-      });
+      typeIntoSearch('aplicada');
       fireEvent.click(screen.getByTestId('account-tree-row-acc-20000001'));
-      fireEvent.click(screen.getByText('+ newSubAccount'));
+      fireEvent.click(screen.getByTestId('open-create'));
 
       expect(screen.getByTestId('modal-current-record-id')).toHaveTextContent('acc-20000001');
     });
@@ -641,7 +681,7 @@ describe('AccountTreeView', () => {
         { ...DATA[0], active: true },
         { ...DATA[1], active: false },
       ];
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
       await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
@@ -657,7 +697,7 @@ describe('AccountTreeView', () => {
         { ...DATA[0], active: 'Y' },
         { ...DATA[1], active: 'N' },
       ];
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
       await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
@@ -667,7 +707,7 @@ describe('AccountTreeView', () => {
 
     it('PATCHes elementValue/{id} with { active: checked } on toggle', async () => {
       const data = [{ ...DATA[0], active: true }];
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
       await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
@@ -685,7 +725,7 @@ describe('AccountTreeView', () => {
     it('rolls back the toggle and shows an error toast when the PATCH fails', async () => {
       mockFetchPatch({ ok: false });
       const data = [{ ...DATA[0], active: true }];
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
       await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
@@ -696,8 +736,30 @@ describe('AccountTreeView', () => {
       expect(toast.error).toHaveBeenCalled();
     });
 
+    // ETP-5593 QA — a read-only user must not be able to flip a sub-account's status.
+    it('disables every status toggle and sends no PATCH when the window is read-only', async () => {
+      const data = [{ ...DATA[0], active: true }, { ...DATA[1], active: false }];
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} windowReadOnly />);
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
+      const on = screen.getByTestId('account-tree-active-toggle-acc-40000001');
+      const off = screen.getByTestId('account-tree-active-toggle-acc-40000000');
+      expect(on).toBeDisabled();
+      expect(off).toBeDisabled();
+      // The state is still shown.
+      expect(on).toHaveAttribute('aria-checked', 'true');
+      expect(off).toHaveAttribute('aria-checked', 'false');
+
+      fireEvent.click(on);
+      expect(globalThis.fetch).not.toHaveBeenCalledWith(
+        expect.stringContaining('/elementValue/acc-40000001'),
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+
     it('disables the toggle for a protected 0000-suffixed placeholder leaf', async () => {
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={HIERARCHY_DATA} />);
       await waitFor(() => expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument());
       expandFullAncestorChain();
 
@@ -705,7 +767,7 @@ describe('AccountTreeView', () => {
     });
 
     it('never renders a toggle on a virtual folder row', async () => {
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={DATA} />);
       await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
       expect(screen.queryByTestId('account-tree-active-toggle-group-4000')).not.toBeInTheDocument();
     });
@@ -714,27 +776,18 @@ describe('AccountTreeView', () => {
   // ── Shared table/button styling (ETP-4884 item 3, token-alignment slice) ──
 
   describe('shared table/button styling', () => {
-    it('keeps the controls sticky with all tree actions and filters, without local scrolling', () => {
-      render(<AccountTreeView {...defaultProps} />);
-      const controls = screen.getByTestId('account-tree-controls');
+    it('renders no toolbar of its own — its controls are the ListView toolbar slot (ETP-5593)', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      const tree = screen.getByTestId('account-tree');
 
-      expect(controls.className).toContain('sticky');
-      expect(controls.className).toContain('top-0');
-      expect(controls.className).toContain('z-20');
-      expect(controls.className).toContain('bg-card');
-      expect(within(controls).getByTestId('account-tree-expand-button')).toHaveTextContent('expand');
-      expect(within(controls).getByTestId('account-tree-collapse-button')).toHaveTextContent('collapse');
-      expect(within(controls).getByTestId('account-tree-new-subaccount-button')).toHaveTextContent('newSubAccount');
-      expect(within(controls).getByTestId('account-tree-filter-text')).toBeInTheDocument();
-      expect(within(controls).getByTestId('account-tree-filter-type')).toBeInTheDocument();
-
-      const utilityClasses = Array.from(controls.querySelectorAll('[class]'))
-        .flatMap((element) => element.className.split(/\s+/));
-      expect(utilityClasses.some((className) => /^(?:overflow|overscroll)-|^max-h-/.test(className))).toBe(false);
+      expect(within(tree).queryByTestId('coa-toolbar')).not.toBeInTheDocument();
+      expect(within(tree).queryByRole('textbox')).not.toBeInTheDocument();
+      expect(within(tree).queryByRole('searchbox')).not.toBeInTheDocument();
+      expect(screen.getByTestId('coa-toolbar')).toBeInTheDocument();
     });
 
     it('renders column headers in the standard sentence-case style, not an uppercase shaded band', () => {
-      render(<AccountTreeView {...defaultProps} />);
+      renderTree(<AccountTreeView {...defaultProps} />);
       const codeHeader = screen.getByText('accountTreeCode');
 
       expect(codeHeader.className).toContain('text-sm');
@@ -743,27 +796,22 @@ describe('AccountTreeView', () => {
     });
 
     it('uses the standard muted/50 hover on tree rows, not a full-opacity hover', () => {
-      render(<AccountTreeView {...defaultProps} />);
+      renderTree(<AccountTreeView {...defaultProps} />);
       const row = screen.getByTestId('account-tree-row-group-4000');
 
-      expect(row.className).toContain('hover:bg-[hsl(var(--muted))]/50');
+      // The shared ui/table row (same as DataTable).
+      expect(row.tagName).toBe('TR');
+      expect(row.className).toContain('hover:bg-muted/50');
     });
 
     it('uses the standard plain muted selected-row color, not the info-blue tint', () => {
-      render(<AccountTreeView {...defaultProps} />);
+      renderTree(<AccountTreeView {...defaultProps} />);
       fireEvent.click(screen.getByTestId('account-tree-row-group-4000'));
       const row = screen.getByTestId('account-tree-row-group-4000');
 
-      expect(row.className).toContain('bg-[hsl(var(--muted))]');
+      expect(row).toHaveAttribute('data-state', 'selected');
+      expect(row.className).toContain('data-[state=selected]:bg-muted');
       expect(row.className).not.toContain('--status-info-bg');
-    });
-
-    it('renders "+ New Sub-account" using the shared Button component (rounded-md), not a hand-rolled pill', () => {
-      render(<AccountTreeView {...defaultProps} />);
-      const trigger = screen.getByText('+ newSubAccount');
-
-      expect(trigger.className).toContain('rounded-md');
-      expect(trigger.className).not.toContain('rounded-full');
     });
   });
 
@@ -780,20 +828,20 @@ describe('AccountTreeView', () => {
 
   describe('protected 0000-suffixed leaves are not editable', () => {
     it('shows a lock icon on the leaf whose code ends in 0000', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
       expandFullAncestorChain();
       expect(screen.getByTestId('account-tree-locked-acc-20000000')).toBeInTheDocument();
     });
 
     it('does not show a lock icon on a real subaccount not ending in 0000', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
       expandFullAncestorChain();
       expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
       expect(screen.queryByTestId('account-tree-locked-acc-20000001')).not.toBeInTheDocument();
     });
 
     it('never shows a lock icon on a virtual folder node', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
       expect(screen.queryByTestId('account-tree-locked-group-A')).not.toBeInTheDocument();
     });
 
@@ -802,14 +850,14 @@ describe('AccountTreeView', () => {
       const data = [
         { ...HIERARCHY_DATA[0], protectedParentLikeSubaccount: undefined },
       ];
-      render(<AccountTreeView {...defaultProps} data={data} />);
+      renderTree(<AccountTreeView {...defaultProps} data={data} />);
       expandFullAncestorChain();
       expect(screen.getByTestId('account-tree-locked-acc-20000000')).toBeInTheDocument();
     });
 
     it('a protected leaf remains clickable/navigable — only editing is blocked server-side', () => {
       const onNavigate = vi.fn();
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} onNavigate={onNavigate} />);
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} onNavigate={onNavigate} />);
       expandFullAncestorChain();
       fireEvent.click(screen.getByTestId('account-tree-row-acc-20000000'));
       expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-20000000' }));
@@ -848,7 +896,7 @@ describe('AccountTreeView', () => {
     it('fetches the complete dataset from apiBaseUrl/token on mount', async () => {
       mockFetchOnce({ response: { data: FULL_DATASET } });
 
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[]} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[]} />);
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
         `${TEST_API_BASE_URL}/elementValue?_startRow=0&_endRow=9999`,
@@ -860,7 +908,7 @@ describe('AccountTreeView', () => {
       mockFetchOnce({ response: { data: FULL_DATASET } });
 
       // `data` (ListView's first page) only carries 2 of the 4 roots.
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[FULL_DATASET[0], FULL_DATASET[1]]} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[FULL_DATASET[0], FULL_DATASET[1]]} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
@@ -873,7 +921,7 @@ describe('AccountTreeView', () => {
     it('does not attempt to self-fetch when apiBaseUrl is absent, and renders the data prop as-is', () => {
       globalThis.fetch = vi.fn();
 
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} />);
 
       expect(globalThis.fetch).not.toHaveBeenCalled();
       expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
@@ -885,7 +933,7 @@ describe('AccountTreeView', () => {
       // render right after mount, before the fetch has settled.
       globalThis.fetch = vi.fn(() => new Promise(() => {}));
 
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[]} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[]} />);
 
       expect(screen.getByTestId('account-tree-skeleton')).toBeInTheDocument();
       expect(screen.queryByTestId('account-tree-row-group-4000')).not.toBeInTheDocument();
@@ -895,7 +943,7 @@ describe('AccountTreeView', () => {
     it('shows the skeleton even when the paginated data prop already has rows', () => {
       globalThis.fetch = vi.fn(() => new Promise(() => {}));
 
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={DATA} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={DATA} />);
 
       expect(screen.getByTestId('account-tree-skeleton')).toBeInTheDocument();
       expect(screen.queryByTestId('account-tree-row-group-4000')).not.toBeInTheDocument();
@@ -904,7 +952,7 @@ describe('AccountTreeView', () => {
     it('replaces the skeleton with the full tree in one shot once the fetch resolves — no partial-tree frame', async () => {
       mockFetchOnce({ response: { data: FULL_DATASET } });
 
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[FULL_DATASET[0], FULL_DATASET[1]]} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[FULL_DATASET[0], FULL_DATASET[1]]} />);
 
       expect(screen.getByTestId('account-tree-skeleton')).toBeInTheDocument();
 
@@ -920,7 +968,7 @@ describe('AccountTreeView', () => {
     it('when apiBaseUrl is absent, no skeleton ever appears', () => {
       globalThis.fetch = vi.fn();
 
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} />);
 
       expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument();
       expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
@@ -929,7 +977,7 @@ describe('AccountTreeView', () => {
     it('falls back to the data prop and shows an error toast when the full fetch fails', async () => {
       globalThis.fetch = vi.fn(() => Promise.reject(new Error('network down')));
 
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} />);
 
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('accountTreeFetchError'));
       // Original paginated data prop still renders — the tree didn't crash or go blank.
@@ -939,12 +987,12 @@ describe('AccountTreeView', () => {
 
     it('refetches the full dataset after a new sub-account is saved, without re-showing the skeleton', async () => {
       mockFetchOnce({ response: { data: DATA } });
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} />);
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument());
       expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
 
-      fireEvent.click(screen.getByText('+ newSubAccount'));
+      fireEvent.click(screen.getByTestId('open-create'));
       fireEvent.click(screen.getByTestId('modal-save'));
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
@@ -956,7 +1004,7 @@ describe('AccountTreeView', () => {
 
     it('when the FIRST fetch fails and a LATER refetch is triggered, the skeleton does not come back', async () => {
       globalThis.fetch = vi.fn(() => Promise.reject(new Error('network down')));
-      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} />);
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} />);
 
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('accountTreeFetchError'));
       // Fallback tree from the `data` prop is showing, not the skeleton.
@@ -964,7 +1012,7 @@ describe('AccountTreeView', () => {
       expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
 
       // Trigger a retry (save flow bumps fetchGeneration); still fails.
-      fireEvent.click(screen.getByText('+ newSubAccount'));
+      fireEvent.click(screen.getByTestId('open-create'));
       fireEvent.click(screen.getByTestId('modal-save'));
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
@@ -986,7 +1034,7 @@ describe('AccountTreeView', () => {
     }
 
     async function renderLoaded(fetchCtl, props = {}) {
-      const utils = render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} userRefreshTrigger={0} {...props} />);
+      const utils = renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} userRefreshTrigger={0} {...props} />);
       await act(async () => fetchCtl.resolveLast(FULL_DATASET));
       await waitFor(() => expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument());
       return utils;
@@ -1030,7 +1078,7 @@ describe('AccountTreeView', () => {
 
     it('ignores a Refresh press when there is no apiBaseUrl (nothing to refetch, no stuck skeleton)', () => {
       globalThis.fetch = vi.fn();
-      const { rerender } = render(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} userRefreshTrigger={0} />);
+      const { rerender } = renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} userRefreshTrigger={0} />);
       rerender(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} userRefreshTrigger={1} />);
 
       expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -1038,11 +1086,302 @@ describe('AccountTreeView', () => {
       expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
     });
 
+    it('keeps its own test id when mounted with the generic one ListView passes to every table', () => {
+      renderTree(<AccountTreeView {...defaultProps} data-testid="Table__620cbc" />);
+      expect(screen.getByTestId('account-tree')).toBeInTheDocument();
+      expect(screen.queryByTestId('Table__620cbc')).not.toBeInTheDocument();
+    });
+
     it('never forwards userRefreshTrigger to the DOM', async () => {
       const fetchCtl = deferredFetch();
       await renderLoaded(fetchCtl, { userRefreshTrigger: 2 });
       expect(screen.getByTestId('account-tree')).not.toHaveAttribute('userrefreshtrigger');
       expect(screen.getByTestId('account-tree')).not.toHaveAttribute('userRefreshTrigger');
+    });
+  });
+
+  // ── ETP-5593: unified toolbar, sort, filter × expansion ─────────
+
+  describe('ETP-5593 unified toolbar', () => {
+    // Two roots (4000 → 2 leaves, 5000 → 1 leaf) from DATA, plus a nested hierarchy.
+    const rowIds = () => screen.getAllByRole('row')
+      .map((r) => r.getAttribute('data-testid'))
+      .filter((id) => id?.startsWith('account-tree-row-'));
+
+    it('exposes the toolbar slot as a static ToolbarQuickFilter (ETP-5188 convention)', () => {
+      expect(typeof AccountTreeView.ToolbarQuickFilter).toBe('function');
+    });
+
+    it('the expand button reads expandAll until any shown folder opens, then collapseAll', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      const button = screen.getByTestId('coa-toggle-expand-all');
+      expect(button).toHaveTextContent('expandAll');
+
+      // Opening one folder by its own chevron also flips the label.
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      expect(button).toHaveTextContent('collapseAll');
+
+      fireEvent.click(button); // collapse all
+      expect(button).toHaveTextContent('expandAll');
+      expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
+    });
+
+    it('ignores persisted ids of folders that no longer exist when choosing the label', () => {
+      localStorage.setItem('sf.chartOfAccounts.expandedFolderIds', JSON.stringify(['group-gone']));
+      renderTree(<AccountTreeView {...defaultProps} />);
+      expect(screen.getByTestId('coa-toggle-expand-all')).toHaveTextContent('expandAll');
+    });
+
+
+    it('sorts siblings at every level by name when ListView sorts by name', () => {
+      renderTree(<AccountTreeView {...defaultProps} sortColumn="name" sortDirection="asc" />);
+      fireEvent.click(screen.getByTestId('coa-toggle-expand-all'));
+      // Roots by name: "Purchases" (5000) before "Sales" (4000); inside 4000, "Sales EU"
+      // (40000002) before "Sales US" (40000001) — the opposite of code order.
+      expect(rowIds()).toEqual([
+        'account-tree-row-group-5000',
+        'account-tree-row-acc-50000001',
+        'account-tree-row-group-4000',
+        'account-tree-row-acc-40000001',
+        'account-tree-row-acc-40000000',
+      ]);
+    });
+
+    it('sorts by code descending at every level', () => {
+      renderTree(<AccountTreeView {...defaultProps} sortColumn="searchKey" sortDirection="desc" />);
+      fireEvent.click(screen.getByTestId('coa-toggle-expand-all'));
+      expect(rowIds()).toEqual([
+        'account-tree-row-group-5000',
+        'account-tree-row-acc-50000001',
+        'account-tree-row-group-4000',
+        'account-tree-row-acc-40000001',
+        'account-tree-row-acc-40000000',
+      ]);
+    });
+
+    it('keeps code order for a sort column the tree does not offer (ListView default)', () => {
+      renderTree(<AccountTreeView {...defaultProps} sortColumn="creationDate" sortDirection="desc" />);
+      fireEvent.click(screen.getByTestId('coa-toggle-expand-all'));
+      expect(rowIds()).toEqual([
+        'account-tree-row-group-4000',
+        'account-tree-row-acc-40000000',
+        'account-tree-row-acc-40000001',
+        'account-tree-row-group-5000',
+        'account-tree-row-acc-50000001',
+      ]);
+    });
+
+    it('a search seeds the expansion, but the user can still collapse a folder', () => {
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      typeIntoSearch('aplicada');
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
+      expect(screen.queryByTestId('account-tree-row-acc-20000001')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
+    });
+
+    it('"Contraer todo" works while a filter is active', () => {
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      typeIntoSearch('aplicada');
+      expect(screen.getByTestId('coa-toggle-expand-all')).toHaveTextContent('collapseAll');
+
+      fireEvent.click(screen.getByTestId('coa-toggle-expand-all'));
+      expect(screen.queryByTestId('account-tree-row-acc-20000001')).not.toBeInTheDocument();
+    });
+
+    it('does not persist the expansion a filter seeds', () => {
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
+      const persisted = localStorage.getItem('sf.chartOfAccounts.expandedFolderIds');
+
+      typeIntoSearch('aplicada');
+      expect(localStorage.getItem('sf.chartOfAccounts.expandedFolderIds')).toBe(persisted);
+    });
+
+    it('restores the pre-filter expansion when the search is cleared', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-5000'));
+      typeIntoSearch('Sales');
+      expect(screen.getByTestId('account-tree-row-acc-40000000')).toBeInTheDocument();
+
+      typeIntoSearch('');
+      expect(screen.getByTestId('account-tree-row-acc-50000001')).toBeInTheDocument(); // 5000 still open
+      expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument(); // 4000 closed again
+    });
+
+    it('debounces the search: the box updates at once, the URL and the tree after a pause', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      vi.useFakeTimers();
+      try {
+        const input = screen.getByTestId('coa-search-input');
+        fireEvent.change(input, { target: { value: 'Sal' } });
+        fireEvent.change(input, { target: { value: 'Sales' } });
+        expect(input).toHaveValue('Sales');
+        expect(screen.getByTestId('location-search')).toHaveTextContent('');
+        expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
+
+        act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS - 1); });
+        expect(screen.getByTestId('location-search')).toHaveTextContent('');
+
+        act(() => { vi.advanceTimersByTime(1); });
+        // Only the last value is written, once.
+        expect(screen.getByTestId('location-search')).toHaveTextContent('?q=Sales');
+        expect(screen.getByTestId('account-tree-row-acc-40000000')).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // QA BUG-1 — the timer's write used the params of the render where the user typed and
+    // wiped an account type picked during the pause.
+    it('a pending search write keeps an account type picked during the pause', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      vi.useFakeTimers();
+      try {
+        fireEvent.change(screen.getByTestId('coa-search-input'), { target: { value: 'Sales' } });
+        fireEvent.click(screen.getByTestId('coa-filter-account-type'));
+        fireEvent.click(within(screen.getByTestId('PopoverContent__cd3aa9')).getByText('accountTypeRevenue'));
+        act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
+
+        const search = screen.getByTestId('location-search').textContent;
+        expect(search).toContain('q=Sales');
+        expect(search).toContain('accountType=R');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // QA BUG-2 — leaving the box (to press Share, open the type picker…) writes at once.
+    it('leaving the search box writes the pending search immediately', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      vi.useFakeTimers();
+      try {
+        const input = screen.getByTestId('coa-search-input');
+        fireEvent.change(input, { target: { value: 'Sales' } });
+        fireEvent.blur(input);
+        expect(screen.getByTestId('location-search')).toHaveTextContent('?q=Sales');
+
+        // The flushed timer must not write again later.
+        fireEvent.click(screen.getByTestId('coa-filter-account-type'));
+        fireEvent.click(within(screen.getByTestId('PopoverContent__cd3aa9')).getByText('accountTypeRevenue'));
+        act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
+        expect(screen.getByTestId('location-search').textContent).toContain('accountType=R');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('drops a pending search write when the toolbar unmounts', () => {
+      const { unmount } = renderTree(<AccountTreeView {...defaultProps} />);
+      vi.useFakeTimers();
+      try {
+        fireEvent.change(screen.getByTestId('coa-search-input'), { target: { value: 'Sales' } });
+        unmount();
+        expect(() => act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); })).not.toThrow();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps the search and the account type in the URL (shareable)', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      typeIntoSearch('Sales');
+      expect(screen.getByTestId('location-search')).toHaveTextContent('q=Sales');
+
+      fireEvent.click(screen.getByTestId('coa-filter-account-type'));
+      fireEvent.click(screen.getByText('accountTypeExpense'));
+      expect(screen.getByTestId('location-search')).toHaveTextContent('accountType=E');
+      // Text "Sales" AND type Expense → nothing matches.
+      expect(screen.getByText('noResultsFound')).toBeInTheDocument();
+    });
+
+    it('a filter that arrives in the URL before the accounts seeds the expansion once they load', async () => {
+      globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ response: { data: HIERARCHY_DATA } }) }));
+      renderTree(
+        <AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[]} />,
+        { entry: '/chart-of-accounts?q=aplicada' },
+      );
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument());
+      expect(screen.getByTestId('coa-search-input')).toHaveValue('aplicada');
+    });
+
+    // Review W1 — ListView's partial page can arrive before the full self-fetch.
+    it('a URL filter re-seeds once the full dataset replaces the partial first page', async () => {
+      let resolveFetch;
+      globalThis.fetch = vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; }));
+      const partial = [HIERARCHY_DATA[0]]; // only 20000000 — its match is not on this page
+      const full = [
+        ...HIERARCHY_DATA,
+        {
+          id: 'acc-57000001', searchKey: '57000001', name: 'Caja aplicada', accountType: 'A',
+          summaryLevel: 'N', ancestors: [{ value: 'B', name: 'OTROS', elementLevel: 'E' }], hasChildren: false,
+        },
+      ];
+      renderTree(
+        <AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={partial} />,
+        { entry: '/chart-of-accounts?q=aplicada' },
+      );
+      await act(async () => resolveFetch({ ok: true, json: async () => ({ response: { data: full } }) }));
+
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument());
+      expect(screen.getByTestId('account-tree-row-acc-57000001')).toBeInTheDocument();
+    });
+
+    // Review W2 — the store outlives the tree; a filter's temporary expansion must not.
+    it('a remount without a filter shows the persisted expansion, not the last filter\'s', () => {
+      const { unmount } = renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      typeIntoSearch('aplicada');
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+      unmount();
+
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      expect(screen.queryByTestId('account-tree-row-acc-20000001')).not.toBeInTheDocument();
+      expect(screen.getByTestId('coa-toggle-expand-all')).toHaveTextContent('expandAll');
+    });
+
+    it('clearing a filter that came back with the URL restores the persisted expansion', () => {
+      const { unmount } = renderTree(<AccountTreeView {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-5000')); // persisted: {5000}
+      typeIntoSearch('Sales'); // seeds 4000, not persisted
+      unmount();
+
+      // Back to the list with the filter still in the URL, then clear it.
+      renderTree(<AccountTreeView {...defaultProps} />, { entry: '/chart-of-accounts?q=Sales' });
+      typeIntoSearch('');
+      expect(screen.getByTestId('account-tree-row-acc-50000001')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
+      expect(JSON.parse(localStorage.getItem('sf.chartOfAccounts.expandedFolderIds'))).toEqual(['group-5000']);
+    });
+
+    it('ignores an unknown account type in the URL (shows every type)', () => {
+      renderTree(<AccountTreeView {...defaultProps} />, { entry: '/chart-of-accounts?accountType=ZZ' });
+      expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-5000')).toBeInTheDocument();
+      expect(screen.getByTestId('coa-filter-account-type')).toHaveTextContent('allAccountTypes');
+    });
+
+    it('lists the account types after "all", sorted by their translated label', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('coa-filter-account-type'));
+      const popover = screen.getByTestId('PopoverContent__cd3aa9');
+      const options = within(popover).getAllByRole('button').map((o) => o.textContent.trim());
+      expect(options).toEqual([
+        'allAccountTypes',
+        'accountTypeAsset',
+        'accountTypeExpense',
+        'accountTypeLiability',
+        'accountTypeMemo',
+        'accountTypeOwnersEquity',
+        'accountTypeRevenue',
+      ]);
+      expect(within(popover).getByText('accountTreeFilterType')).toBeInTheDocument(); // heading
+    });
+
+    it('renders codes in the dedicated code font (Space Mono, font-code)', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      expect(within(screen.getByTestId('account-tree-row-group-4000')).getByText('4000'))
+        .toHaveClass('font-code');
     });
   });
 });

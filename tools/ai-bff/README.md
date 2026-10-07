@@ -165,7 +165,7 @@ The default rules address an end user with little technical knowledge (plain
 language, no tool names), ground answers in the MCP tools, and point only to the
 functional docs (https://etendosoftware.github.io/etendo-docs/) plus Etendo
 support when the agent cannot answer. In that case the chat variant also calls
-the MCP `neo_feedback` tool once, silently, so the team can review the gap.
+the MCP `etendo_feedback` tool once, silently, so the team can review the gap.
 
 For local experiments set `AI_BFF_SYSTEM_PROMPT_FILE=/path/to/prompt.md`: if the
 file is readable and non-empty, its content replaces the default for both modes.
@@ -208,8 +208,8 @@ the full model history (`src/historyCache.js`) in memory, keyed by the
 
 ## Tracing a conversation
 
-Both halves of the loop are traced, and both are needed: MCP tools (`neo_list`,
-`neo_get`, ...) execute **inside this process** and never reach the browser,
+Both halves of the loop are traced, and both are needed: MCP tools (`etendo_list`,
+`etendo_get`, ...) execute **inside this process** and never reach the browser,
 while browser tools (`navigate_to`, `open_form`, ...) execute in the page and
 never reach this process.
 
@@ -221,7 +221,7 @@ never reach this process.
 Silence them with `AI_BFF_TRACE=off` (server) or
 `window.__ETENDO_COPILOT_TRACE__ = false` (browser). Server payloads are
 truncated to `AI_BFF_TRACE_MAX` characters (default 1500) because a single
-`neo_list` result is far larger than a readable log line.
+`etendo_list` result is far larger than a readable log line.
 
 Note this process has **no hot reload** (`npm run start`, not `--watch`), so a
 change here needs a restart of `make dev` before the model sees it.
