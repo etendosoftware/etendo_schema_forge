@@ -156,14 +156,13 @@ describe('useReconciliationConversion', () => {
         actual: 40.91,
         rate: 0.681252,
         converted: 27.87,
-        reference: 0.680286,
-        fxDifference: 0.04,
-        fxOutcome: { kind: 'gain', amount: 0.04 },
         remainder: 0,
         errors: { actual: false, rate: false, converted: false },
       });
-      // Classic parity: no deviation figure at all, whatever the rate.
-      expect(fields).not.toHaveProperty('deviation');
+      // Classic parity: no deviation, reference rate or gain/loss figure in the modal.
+      for (const removed of ['deviation', 'reference', 'fxDifference', 'fxOutcome']) {
+        expect(fields).not.toHaveProperty(removed);
+      }
       expect(result.current.payloadFields).toEqual(DEFAULT_PAYLOAD);
     });
   });
@@ -183,7 +182,6 @@ describe('useReconciliationConversion', () => {
         candidates: [{ ...CAND_USD, amount: -40.91, pendingBalance: -40.91, amountBase: -27.83 }],
       });
       expect(result.current.fields.isReceipt).toBe(false);
-      expect(result.current.fields.fxOutcome).toEqual({ kind: 'loss', amount: 0.04 });
       expect(result.current.footer.fxNotice).toBe(lossNotice(0.04));
       expect(result.current.payloadFields).toEqual(DEFAULT_PAYLOAD);
     });
@@ -214,21 +212,18 @@ describe('useReconciliationConversion', () => {
       expect(result.current.footer.fxNotice).toBe(lossNotice(4));
     });
 
-    it('shows nothing — and no outcome in the modal — when the gap is negligible', () => {
+    it('shows nothing when the gap is negligible', () => {
       // At 0,681252 the invoice is worth exactly what the bank sent.
       const { result } = renderConversion({ candidates: [{ ...CAND_USD, rate: 0.681252 }] });
-      expect(result.current.fields.fxDifference).toBe(0);
-      expect(result.current.fields.fxOutcome).toBeNull();
       expect(result.current.footer.fxNotice).toBeNull();
+      expect(result.current.payloadFields).toEqual(DEFAULT_PAYLOAD);
     });
 
-    it('shows nothing — and no reference in the modal — when a candidate lacks its rate', () => {
+    it('shows nothing when a candidate lacks its rate, and still sends the three fields', () => {
       const { result } = renderConversion({ candidates: [{ ...CAND_USD, rate: undefined }] });
       expect(result.current.active).toBe(true);
-      expect(result.current.fields.reference).toBeNull();
-      expect(result.current.fields.fxDifference).toBeNull();
-      expect(result.current.fields.fxOutcome).toBeNull();
       expect(result.current.footer.fxNotice).toBeNull();
+      expect(result.current.payloadFields).toEqual(DEFAULT_PAYLOAD);
     });
 
     it('shows nothing when only one of several selected invoices lacks its rate', () => {
@@ -244,13 +239,10 @@ describe('useReconciliationConversion', () => {
     // A rate of 0 (or negative) is an unknown rate, not a free invoice: measured against it the
     // whole line would read as an exchange gain.
     for (const rate of [0, -1]) {
-      it(`treats a candidate rate of ${rate} as unknown: no notice, no reference, no outcome, payload intact`, () => {
+      it(`treats a candidate rate of ${rate} as unknown: no notice, payload intact`, () => {
         const { result } = renderConversion({ candidates: [{ ...CAND_USD, rate }] });
         expect(result.current.active).toBe(true);
         expect(result.current.footer.fxNotice).toBeNull();
-        expect(result.current.fields.reference).toBeNull();
-        expect(result.current.fields.fxDifference).toBeNull();
-        expect(result.current.fields.fxOutcome).toBeNull();
         expect(result.current.valid).toBe(true);
         // The conversion itself does not depend on the invoice rate: the three fields still go.
         expect(result.current.payloadFields).toEqual(DEFAULT_PAYLOAD);
@@ -275,8 +267,6 @@ describe('useReconciliationConversion', () => {
       expect(result.current.fields.actual).toBe(21.34);
       expect(result.current.fields.converted).toBe(27.87);
       expect(result.current.fields.rate).toBe(1.305998);
-      // The modal's own difference DOES follow the edit (27,87 − 14,52).
-      expect(result.current.fields.fxDifference).toBe(13.35);
       expect(result.current.payloadFields).toEqual({
         actualPayment: '21.34', conversionRate: '1.305998', convertedAmount: '27.87',
       });
@@ -303,7 +293,6 @@ describe('useReconciliationConversion', () => {
       act(() => result.current.handlers.onConvertedChange('27', 27));
       expect(result.current.fields.rate).toBe(0.659985);
       expect(result.current.fields.remainder).toBe(0.87);
-      expect(result.current.fields.fxDifference).toBe(-0.83);
     });
 
     it('a converted amount over the line is invalid', () => {
@@ -313,42 +302,39 @@ describe('useReconciliationConversion', () => {
       expect(result.current.fields.errors.converted).toBe(true);
     });
 
-    it('a cleared converted amount is invalid on its own field only, and has no difference to show', () => {
+    it('a cleared converted amount is invalid on its own field only, and leaves no remainder', () => {
       const { result } = renderConversion();
       act(() => result.current.handlers.onConvertedChange('', null));
       expect(result.current.valid).toBe(false);
       expect(result.current.fields.errors).toEqual({ actual: false, rate: false, converted: true });
       expect(result.current.fields.actual).toBe(40.91);
       expect(result.current.fields.rate).toBe(0.681252);
-      expect(result.current.fields.fxDifference).toBeNull();
-      expect(result.current.fields.fxOutcome).toBeNull();
       expect(result.current.fields.remainder).toBe(0);
     });
 
-    it('a negative amount keeps the other figures and hides the difference and the remainder', () => {
+    it('a negative amount keeps the other figures and hides the remainder', () => {
       const { result } = renderConversion();
       act(() => result.current.handlers.onConvertedChange('27', 27));
-      expect(result.current.fields.fxOutcome).toEqual({ kind: 'loss', amount: 0.83 });
       expect(result.current.fields.remainder).toBe(0.87);
 
       act(() => result.current.handlers.onActualChange('-5', -5));
       expect(result.current.fields).toMatchObject({
         actual: -5, rate: 0.659985, converted: 27,
         errors: { actual: true, rate: false, converted: false },
-        fxDifference: null, fxOutcome: null, remainder: 0,
+        remainder: 0,
       });
-      // The invoice rate is still shown; only what derives from the invalid form is hidden.
-      expect(result.current.fields.reference).toBe(0.680286);
+      // The footer notice comes from the defaults, so an invalid form does not touch it.
+      expect(result.current.footer.fxNotice).toBe(gainNotice(0.04));
     });
 
-    it('a zero rate keeps the other figures and hides the difference and the remainder', () => {
+    it('a zero rate keeps the other figures and hides the remainder', () => {
       const { result } = renderConversion();
       act(() => result.current.handlers.onConvertedChange('27', 27));
       act(() => result.current.handlers.onRateChange('0', 0));
       expect(result.current.fields).toMatchObject({
         actual: 40.91, rate: '0', converted: 27,
         errors: { actual: false, rate: true, converted: false },
-        fxDifference: null, fxOutcome: null, remainder: 0,
+        remainder: 0,
       });
       // The converted amount is the anchor meanwhile: the next amount re-derives the rate from it.
       act(() => result.current.handlers.onActualChange('21.34', 21.34));
@@ -465,7 +451,7 @@ const valid = () => screen.getByTestId('harness-valid').textContent === 'true';
 
 /**
  * Classic parity: the section offers no advisory about the chosen rate — no action of any kind, no
- * alert. Only the three fields, the reference block and (when relevant) the remainder hint.
+ * alert. Only the statement, the three fields and (when relevant) the remainder hint.
  */
 function expectNoAdvisory() {
   const section = screen.getByTestId('recon-conversion-section');
@@ -473,12 +459,15 @@ function expectNoAdvisory() {
   expect(within(section).queryByRole('alert')).not.toBeInTheDocument();
 }
 
-/** The modal's exchange-difference row: a gain/loss label and an UNSIGNED EUR amount. */
-function expectFxRow(labelKey, amount) {
-  const row = screen.getByTestId('recon-conversion-fx-difference');
-  expect(row).toHaveTextContent(labelKey);
-  expect(row).toHaveTextContent(ws(formatCurrency('EUR', amount)));
-  expect(row.textContent).not.toMatch(/[+-]\s?\d/);
+/**
+ * Classic parity: the modal shows no invoice reference rate and no gain/loss row — that cue lives
+ * only in the panel footer's notice.
+ */
+function expectNoReferenceBlock() {
+  for (const id of ['recon-conversion-reference', 'recon-conversion-reference-rate',
+    'recon-conversion-fx-difference']) {
+    expect(screen.queryByTestId(id)).not.toBeInTheDocument();
+  }
 }
 
 describe('ReconciliationConversionSection', () => {
@@ -493,10 +482,13 @@ describe('ReconciliationConversionSection', () => {
     expect(screen.queryByTestId('recon-conversion-section')).not.toBeInTheDocument();
   });
 
-  it('shows the statement amount and the three prefilled figures', () => {
+  it('shows the statement amount as a disabled field, and the three prefilled figures', () => {
     renderSection();
-    expect(screen.getByTestId('recon-conversion-statement'))
-      .toHaveTextContent(ws(formatCurrency('EUR', 27.87)));
+    const statement = screen.getByTestId('recon-conversion-statement');
+    expect(statement.tagName).toBe('INPUT');
+    expect(statement).toHaveValue(formatCurrency(undefined, 27.87));
+    expect(statement).toBeDisabled();
+    expect(screen.getByText('financeReconcileConversionStatement [currency=EUR]')).toBeInTheDocument();
     expect(input('actual')).toHaveValue(formatCurrency(undefined, 40.91));
     expect(input('rate')).toHaveValue(formatPlainDecimal(0.681252));
     expect(input('converted')).toHaveValue(formatCurrency(undefined, 27.87));
@@ -509,6 +501,22 @@ describe('ReconciliationConversionSection', () => {
     expect(screen.getByText('financeReconcileConversionConverted [currency=EUR]')).toBeInTheDocument();
   });
 
+  it('shows the unsigned pending amount in the statement field on a payment line', () => {
+    renderSection({
+      lineAmount: -27.87,
+      candidates: [{ ...CAND_USD, amount: -40.91, pendingBalance: -40.91 }],
+    });
+    expect(screen.getByTestId('recon-conversion-statement')).toHaveValue(formatCurrency(undefined, 27.87));
+    expect(screen.getByTestId('recon-conversion-statement')).toBeDisabled();
+  });
+
+  it('shows the pending remainder, not the full line, for a PARTIAL line', () => {
+    // The panel passes the PARTIAL line's pending amount (12,50 of a 100 € line) as lineAmount.
+    renderSection({ lineAmount: 12.5 });
+    expect(screen.getByTestId('recon-conversion-statement')).toHaveValue(formatCurrency(undefined, 12.5));
+    expect(input('converted')).toHaveValue(formatCurrency(undefined, 12.5));
+  });
+
   it('labels the amount "to pay" on a payment line', () => {
     renderSection({
       lineAmount: -27.87,
@@ -518,49 +526,31 @@ describe('ReconciliationConversionSection', () => {
     expect(screen.queryByText(/financeReconcileConversionActualReceipt/)).not.toBeInTheDocument();
   });
 
-  it('shows the invoice rate and names the exchange difference a gain, with no remainder', () => {
-    renderSection();
-    expect(screen.getByTestId('recon-conversion-reference-rate'))
-      .toHaveTextContent(formatPlainDecimal(0.680286));
-    expectFxRow('financeReconcileConversionFxGain', 0.04);
-    expect(screen.queryByTestId('recon-conversion-remainder')).not.toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  });
-
-  it('names the same difference a loss ("Pérdida") on a payment line', () => {
-    renderSection({
-      lineAmount: -27.87,
-      candidates: [{ ...CAND_USD, amount: -40.91, pendingBalance: -40.91 }],
+  // Whatever the candidates' own rates — gain, loss, negligible, missing or 0 — the modal never
+  // renders a reference rate or a gain/loss row.
+  for (const [label, overrides] of [
+    ['a receipt gain', {}],
+    ['a payment loss', { lineAmount: -27.87, candidates: [{ ...CAND_USD, amount: -40.91, pendingBalance: -40.91 }] }],
+    ['a negligible difference', { candidates: [{ ...CAND_USD, rate: 0.681252 }] }],
+    ['a missing invoice rate', { candidates: [{ ...CAND_USD, rate: undefined }] }],
+    ['an invoice rate of 0', { candidates: [{ ...CAND_USD, rate: 0 }] }],
+  ]) {
+    it(`renders no reference rate and no gain/loss row for ${label}`, () => {
+      renderSection(overrides);
+      expect(screen.getByTestId('recon-conversion-section')).toBeInTheDocument();
+      expectNoReferenceBlock();
+      expect(screen.queryByText(/financeReconcileConversion(FxGain|FxLoss|ReferenceRate)/)).not.toBeInTheDocument();
     });
-    expectFxRow('financeReconcileConversionFxLoss', 0.04);
-    expect(screen.queryByText(/financeReconcileConversionFxGain/)).not.toBeInTheDocument();
-  });
+  }
 
-  it('shows no exchange-difference row for a negligible default difference', () => {
-    // At 0,681252 the invoice is worth exactly what the bank sent.
-    renderSection({ candidates: [{ ...CAND_USD, rate: 0.681252 }] });
-    expect(screen.getByTestId('recon-conversion-reference-rate')).toBeInTheDocument();
-    expect(screen.queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
-  });
-
-  it('hides the reference block when a candidate carries no rate', () => {
-    renderSection({ candidates: [{ ...CAND_USD, rate: undefined }] });
-    expect(screen.getByTestId('recon-conversion-section')).toBeInTheDocument();
-    expect(screen.queryByTestId('recon-conversion-reference')).not.toBeInTheDocument();
-  });
-
-  it('hides the reference block and the difference row for a candidate rate of 0, and still sends the three fields', () => {
+  it('still sends the three fields for a candidate rate of 0, before and after an edit', () => {
     renderSection({ candidates: [{ ...CAND_USD, rate: 0 }] });
-    expect(screen.getByTestId('recon-conversion-section')).toBeInTheDocument();
-    expect(screen.queryByTestId('recon-conversion-reference')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
     expect(input('rate')).toHaveValue(formatPlainDecimal(0.681252));
     expect(valid()).toBe(true);
     expect(payload()).toEqual(DEFAULT_PAYLOAD);
 
-    // Edits keep working without a reference: still no difference row, still three fields.
     fireEvent.change(input('actual'), { target: { value: '21,34' } });
-    expect(screen.queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
+    expectNoReferenceBlock();
     expect(payload()).toEqual({
       actualPayment: '21.34', conversionRate: '1.305998', convertedAmount: '27.87',
     });
@@ -572,7 +562,7 @@ describe('ReconciliationConversionSection', () => {
 
     expect(input('rate')).toHaveValue(formatPlainDecimal(1.305998));
     expect(input('converted')).toHaveValue(formatCurrency(undefined, 27.87));
-    expectFxRow('financeReconcileConversionFxGain', 13.35);
+    expectNoReferenceBlock();
     expectNoAdvisory();
     expect(valid()).toBe(true);
     expect(payload()).toEqual({
@@ -587,10 +577,8 @@ describe('ReconciliationConversionSection', () => {
       candidates: [{ ...CAND_USD, amount: 78.26, pendingBalance: 78.26, amountBase: 53.24 }],
     });
     expect(input('rate')).toHaveValue(formatPlainDecimal(0.354587));
-    expect(screen.getByTestId('recon-conversion-reference-rate'))
-      .toHaveTextContent(formatPlainDecimal(0.680286));
-    // 27,75 € collected for invoices worth 53,24 €: a loss, shown as such — and nothing else.
-    expectFxRow('financeReconcileConversionFxLoss', 25.49);
+    // Nothing compares it with the invoice rate inside the modal.
+    expectNoReferenceBlock();
     expectNoAdvisory();
     expect(valid()).toBe(true);
     expect(payload()).toEqual({
@@ -669,9 +657,7 @@ describe('ReconciliationConversionSection', () => {
       for (const other of ['actual', 'rate', 'converted'].filter((f) => f !== field)) {
         expect(input(other)).toHaveValue(DEFAULT_DISPLAY[other]);
       }
-      // Figures derived from an invalid form are hidden; the invoice rate itself stays.
-      expect(screen.getByTestId('recon-conversion-reference-rate')).toBeInTheDocument();
-      expect(screen.queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
+      // A remainder derived from an invalid form is hidden.
       expect(screen.queryByTestId('recon-conversion-remainder')).not.toBeInTheDocument();
     }
 
@@ -719,35 +705,29 @@ describe('ReconciliationConversionSection', () => {
     }
   });
 
-  it('hides the exchange-difference row and the remainder while the amount is negative, and brings them back', () => {
+  it('hides the remainder while the amount is negative, and brings it back', () => {
     renderSection();
     fireEvent.change(input('converted'), { target: { value: '27' } });
-    expectFxRow('financeReconcileConversionFxLoss', 0.83);
     expect(screen.getByTestId('recon-conversion-remainder')).toBeInTheDocument();
 
     fireEvent.change(input('actual'), { target: { value: '-5' } });
-    expect(screen.getByTestId('recon-conversion-reference-rate')).toBeInTheDocument();
-    expect(screen.queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
     expect(screen.queryByTestId('recon-conversion-remainder')).not.toBeInTheDocument();
 
     fireEvent.change(input('actual'), { target: { value: '40,91' } });
-    expectFxRow('financeReconcileConversionFxLoss', 0.83);
     expect(screen.getByTestId('recon-conversion-remainder')).toBeInTheDocument();
   });
 
-  it('hides the exchange-difference row and the remainder while the rate is 0, and brings them back', () => {
+  it('hides the remainder while the rate is 0, and brings it back', () => {
     renderSection();
     fireEvent.change(input('converted'), { target: { value: '27' } });
     fireEvent.change(input('rate'), { target: { value: '0' } });
-    expect(screen.getByTestId('recon-conversion-reference-rate')).toBeInTheDocument();
-    expect(screen.queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
     expect(screen.queryByTestId('recon-conversion-remainder')).not.toBeInTheDocument();
     expect(input('converted')).toHaveValue(formatCurrency(undefined, 27));
 
     // round2(40,91 × 0,66 = 27,0006) = 27,00 → 0,87 € still on the line.
     fireEvent.change(input('rate'), { target: { value: '0,66' } });
-    expect(screen.getByTestId('recon-conversion-remainder')).toBeInTheDocument();
-    expectFxRow('financeReconcileConversionFxLoss', 0.83);
+    expect(screen.getByTestId('recon-conversion-remainder')).toHaveTextContent(ws(
+      `financeReconcileConversionRemainder [amount=${formatCurrency('EUR', 0.87)}]`));
   });
 
   it('shows the remainder hint when the converted amount is lowered', () => {

@@ -248,7 +248,7 @@ iteration-2 behavior unchanged.
 | `backend:etendo-go` | `ReconciliationPaymentService.java`, `ReconciliationHandler.java` | Javadoc / comment only (the two modes) |
 | `window:financial-account` | `reconciliationConversionMath.js`, `useReconciliationConversion.js`, `ReconciliationConversionSection.jsx` (all new, `components/contract-ui/`) | Pure Classic-parity math (node:test-importable), the hook holding the user's edits over computed defaults, and the conversion block of the payment-method modal |
 | `window:financial-account` | `ReconciliationSplitPanel.jsx` | Wires the hook: conversion block + gates in `PaymentMethodModal` (opens even with no method for the direction), write-off hidden, payload merge, `fxNotice` footer line, edits reset on open/close/success/`GL_ITEM_REQUIRED` |
-| `app-shell` | `lib/backendErrors.js`; `locales/{en_US,es_ES,es_AR}.json` | Six `backendError.reconcileConversion*` literal mappings; 15 `financeReconcile{BarFx*,Conversion*}` keys (2 `BarFx*` + 13 `Conversion*`) |
+| `app-shell` | `lib/backendErrors.js`; `locales/{en_US,es_ES,es_AR}.json` | Six `backendError.reconcileConversion*` literal mappings; 13 `financeReconcile{BarFx*,Conversion*}` keys (2 `BarFx*` + 11 `Conversion*`) |
 | `docs` | `docs/generated-custom-windows/financial-account.md`; com.etendoerp.go `docs/neo-headless.md` §4.12.1.1 | "Rate source — two modes" + "Bank-rate conversion block"; the `reconcileGroup` explicit-conversion contract |
 
 ### Key design decisions
@@ -266,13 +266,16 @@ iteration-2 behavior unchanged.
 - **Partial payment** is the "Importe a cobrar / pagar" field alone: 21,34 USD against the same
   27,87 € line re-derives the rate to 1,305998 and leaves 19,57 USD outstanding on the invoice. No
   per-row amount.
-- **No deviation warning and no invoice-rate reset (Classic parity).** Like Classic's Add Payment,
-  the modal never warns about how far the rate is from the invoices' own rate and offers no
-  one-click fallback to it. In conversion mode the three fields are **always** sent. The cues the
-  user does get are the reference "Cotización de la factura" row, the gain/loss row in the modal and
-  the footer notice. A warning above a fixed 5 % threshold, with a "Usar cotización de la factura"
-  reset that sent no fields, was briefly prototyped and dropped at the user's request, because the
-  threshold had no basis. To pay at the invoice rate, the user types the reference rate. With several
+- **No deviation warning, no invoice-rate reset, no reference rows (Classic parity).** Like
+  Classic's Add Payment, the modal never warns about how far the rate is from the invoices' own rate
+  and offers no one-click fallback to it. In conversion mode the three fields are **always** sent.
+  The block shows only the statement amount (a standard read-only field), the three fields, their
+  errors and the remainder hint;
+  the only exchange cue is the footer notice, shown before the modal opens. Two things were briefly
+  prototyped and dropped at the user's request: a warning above a fixed 5 % threshold, with a "Usar
+  cotización de la factura" reset that sent no fields (the threshold had no basis), and a reference
+  block in the modal — the invoices' paid-weighted "Cotización de la factura" plus a gain/loss row.
+  To pay at the invoice rate, the user types the invoice's own rate. With several
   invoices at different rates that books one blended rate, which shows up as small offsetting
   per-invoice differences.
 - **Footer.** "Documentos seleccionados" / "Restante por conciliar" keep their invoice-rate meaning
@@ -317,9 +320,8 @@ iteration-2 behavior unchanged.
   parity).** Whatever the gap, the modal opens prefilled to settle every selected invoice in full at
   the bank-implied rate, and Confirmar stays enabled. A 27,75 € receipt against a 78,26 USD invoice
   (53,24 € at its own rate) defaults to rate 0,354587 and books a **−25,49 € exchange loss in one
-  click**. As in Classic there is no warning: the cues are the reference "Cotización de la
-  factura" row (≈ 0,680296 against 0,354587 here), the gain/loss row in the modal and the footer
-  notice. Neither the SPA nor the backend checks the deviation, so an MCP/REST caller gets no cue at
+  click**. As in Classic there is no warning: the only cue is the footer gain/loss notice, shown
+  before the modal opens. Neither the SPA nor the backend checks the deviation, so an MCP/REST caller gets no cue at
   all. Documented as a "Known risk" in
   `financial-account.md`. **Verified live in Classic (same DB):** Add Payment for a +10,00 € line
   against a 106,72 USD invoice prefills Actual 106,72 / Converted 10,00 / rate 0,093703 /
@@ -370,7 +372,7 @@ iteration-2 behavior unchanged.
   `ReconciliationFlowSupportForeignInvoiceTest` (`loadInstallment`, schedule of another invoice on
   the default path) and `ReconciliationHandlerTest` (end-to-end: equal to the line closes it, below
   it leaves a remainder, payment-out line, within-tolerance difference).
-- node:test: `reconciliationConversionMath.test.js` — rounding helpers, eligibility, reference rate,
+- node:test: `reconciliationConversionMath.test.js` — rounding helpers, eligibility,
   defaults, the three edit rules (unusable values included), validation bounds, FX difference /
   gain-or-loss naming, remainder, payload fields.
 - Vitest: `ReconciliationConversionSection.vitest.jsx` (hook + section);

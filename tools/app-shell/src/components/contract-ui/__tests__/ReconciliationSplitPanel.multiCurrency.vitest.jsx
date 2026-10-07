@@ -186,6 +186,9 @@ const CAND_TRANSACTION = {
   amount: 100, pendingBalance: 100, status: 'pending', suggested: false,
 };
 
+/** The approximate marker the unreconciled account-currency equivalent carries. */
+const APPROX = '\u2248';
+
 const PM_RECEIPT_DEFAULT = { id: 'pm-1', name: 'Wire', isDefault: true, payinAllow: true, payoutAllow: false };
 const PM_RECEIPT_OTHER = { id: 'pm-2', name: 'Cash', isDefault: false, payinAllow: true, payoutAllow: false };
 const PM_PAYOUT_ONLY = { id: 'pm-3', name: 'Check', isDefault: false, payinAllow: false, payoutAllow: true };
@@ -327,6 +330,66 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       // Still gets the currency badge (it IS foreign) but no base-amount secondary line.
       expect(within(row).getByTestId('recon-cand-currency-badge')).toBeInTheDocument();
       expect(within(row).queryByTestId('recon-cand-amount-base')).not.toBeInTheDocument();
+      // …and so nothing to mark as approximate.
+      expect(row.textContent).not.toContain(APPROX);
+    });
+
+    // While a candidate is unreconciled its amountBase is a preview at the invoice's own rate, not
+    // what the bank booked: both cells mark it "≈", with a title hint and a screen-reader copy.
+    it('marks the account-currency equivalent of an unreconciled foreign candidate as approximate', () => {
+      setLines([LINE_EUR]);
+      setCandidates([CAND_FOREIGN_USD]);
+      renderPanel({ currency: 'EUR' });
+      selectLine('L27');
+
+      const bases = within(screen.getByTestId('recon-cand-row-C-USD')).getAllByTestId('recon-cand-amount-base');
+      expect(bases).toHaveLength(2);
+      for (const base of bases) {
+        expect(base).toHaveAttribute('title', 'financeReconcileCandApproxAmount');
+        // The visible sign is aria-hidden and glued to the amount by a no-break space…
+        const sign = base.querySelector('[aria-hidden="true"]');
+        expect(sign.textContent).toBe(`${APPROX}\u00A0`);
+        // …and the meaning is spelled out for screen readers instead.
+        expect(base.querySelector('.sr-only')).toHaveTextContent('financeReconcileCandApproxAmount');
+        expect(base.textContent).toContain(formatCurrency('EUR', 27));
+        expect(base.textContent.indexOf(APPROX)).toBeLessThan(base.textContent.indexOf(formatCurrency('EUR', 27)));
+      }
+    });
+
+    it('marks it in invoice mode too, once the candidate is selected', () => {
+      setLines([LINE_EUR]);
+      setCandidates([CAND_FOREIGN_USD]);
+      renderPanel({ currency: 'EUR' });
+      selectLine('L27');
+      switchToSalesInvoices();
+      fireEvent.click(screen.getByTestId('recon-cand-check-C-USD'));
+
+      const bases = within(screen.getByTestId('recon-cand-row-C-USD')).getAllByTestId('recon-cand-amount-base');
+      expect(bases).toHaveLength(2);
+      bases.forEach((base) => expect(base.textContent).toContain(APPROX));
+    });
+
+    it('puts no "≈" on a same-currency row', () => {
+      setLines([LINE_EUR]);
+      setCandidates([CAND_SAME]);
+      renderPanel({ currency: 'EUR' });
+      selectLine('L27');
+
+      const row = screen.getByTestId('recon-cand-row-C-EUR');
+      expect(row.textContent).not.toContain(APPROX);
+      expect(within(row).queryByTitle('financeReconcileCandApproxAmount')).not.toBeInTheDocument();
+    });
+
+    it('marks only the foreign row in a mixed list', () => {
+      setLines([LINE_MULTI]);
+      setCandidates([CAND_FOREIGN_USD, CAND_SAME, CAND_FOREIGN_NO_BASE]);
+      renderPanel({ currency: 'EUR' });
+      selectLine('LM');
+
+      expect(screen.getByTestId('recon-cand-row-C-USD').textContent).toContain(APPROX);
+      expect(screen.getByTestId('recon-cand-row-C-EUR').textContent).not.toContain(APPROX);
+      expect(screen.getByTestId('recon-cand-row-C-NOBASE').textContent).not.toContain(APPROX);
+      expect(screen.getAllByTitle('financeReconcileCandApproxAmount')).toHaveLength(2);
     });
   });
 
@@ -682,6 +745,9 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       const section = screen.getByTestId('recon-conversion-section');
       expect(within(section).queryByRole('button')).not.toBeInTheDocument();
       expect(within(section).queryByRole('alert')).not.toBeInTheDocument();
+      // Nor a reference rate or gain/loss row: Classic shows neither.
+      expect(within(section).queryByTestId('recon-conversion-reference')).not.toBeInTheDocument();
+      expect(within(section).queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
     }
     const footerRow = (key) => screen.getByText(key).closest('div').textContent;
 
@@ -693,6 +759,9 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
 
     it('shows the conversion block inside the method modal, prefilled with the Classic defaults', () => {
       openConversionModal();
+      // The statement amount is a disabled field showing the line's pending amount.
+      expect(screen.getByTestId('recon-conversion-statement')).toHaveValue(formatCurrency(undefined, 27.87));
+      expect(screen.getByTestId('recon-conversion-statement')).toBeDisabled();
 
       const dialog = screen.getByTestId('recon-payment-method-dialog');
       expect(within(dialog).getByTestId('recon-conversion-section')).toBeInTheDocument();
@@ -702,6 +771,24 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       expect(conversionInput('actual')).toHaveValue(formatCurrency(undefined, 40.91));
       expect(conversionInput('converted')).toHaveValue(formatCurrency(undefined, 27.87));
       expect(screen.getByTestId('recon-payment-method-confirm')).not.toBeDisabled();
+    });
+
+    it('on a PARTIAL line the statement field and the defaults use the pending remainder, sent to the sub-line', async () => {
+      const partial = {
+        id: 'LCPART', date: '2026-05-14T00:00:00Z', description: 'USD wire, partly matched',
+        status: 'pending', reconcileStatus: 'PARTIAL', amount: 100, pendingAmount: 27.87,
+        reconciledAmount: 72.13, reconciledPct: 72, matchGroupId: 'GCP', remainderLineId: 'LCPART-rem',
+        partial: true,
+        txns: [{ transactionId: 'TXP', documentNo: 'PAY-1', contact: 'ACME', amount: 72.13, autoCreated: false }],
+      };
+      openConversionModal({ line: partial });
+
+      expect(screen.getByTestId('recon-conversion-statement')).toHaveValue(formatCurrency(undefined, 27.87));
+      expect(screen.getByTestId('recon-conversion-statement')).toBeDisabled();
+      expect(conversionInput('converted')).toHaveValue(formatCurrency(undefined, 27.87));
+
+      const payload = await confirmAndGetPayload();
+      expect(payload).toMatchObject({ statementLineId: 'LCPART-rem', ...DEFAULT_CONVERSION });
     });
 
     it('confirms the defaults with the three conversion fields and the chosen method', async () => {
@@ -760,9 +847,8 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       expect(screen.getByTestId('recon-conversion-section')).toBeInTheDocument();
       expect(screen.queryByTestId('recon-payment-method-value')).not.toBeInTheDocument();
       expect(screen.getByText('financeReconcileConversionActualPayment')).toBeInTheDocument();
-      // Paying 27,87 € for invoices worth 27,83 € is a LOSS on a payment, in the modal and the footer.
-      expect(screen.getByTestId('recon-conversion-fx-difference'))
-        .toHaveTextContent('financeReconcileConversionFxLoss');
+      // Paying 27,87 € for invoices worth 27,83 € is a LOSS on a payment — told by the footer only.
+      expect(screen.queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
       expect(screen.getByTestId('recon-action-fx-notice'))
         .toHaveTextContent('financeReconcileBarFxLossAtBankRate');
 
@@ -832,8 +918,9 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       // 27,75 / 78,26 = 0,354587 against the invoice's 0,680286 — Classic books it as asked.
       expect(conversionInput('rate')).toHaveValue(formatPlainDecimal(0.354587));
       expectNoAdvisory();
-      expect(screen.getByTestId('recon-conversion-fx-difference'))
-        .toHaveTextContent('financeReconcileConversionFxLoss');
+      // The 25,49 € loss is announced by the footer, not inside the modal.
+      expect(screen.getByTestId('recon-action-fx-notice'))
+        .toHaveTextContent('financeReconcileBarFxLossAtBankRate');
       expect(screen.getByTestId('recon-payment-method-confirm')).not.toBeDisabled();
 
       const payload = await confirmAndGetPayload();
@@ -901,7 +988,7 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       expect(screen.queryByTestId('recon-action-fx-notice')).not.toBeInTheDocument();
     });
 
-    it('shows no footer line and no modal row for a negligible difference', () => {
+    it('shows no footer line for a negligible difference', () => {
       // At 0,681252 the invoice is worth exactly the 27,87 € the bank sent.
       setLines([LINE_CONV]);
       setCandidates([{ ...CAND_CONV_USD, amountBase: 27.87, rate: 0.681252 }]);
@@ -910,8 +997,7 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       expect(screen.queryByTestId('recon-action-fx-notice')).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByTestId('recon-action-reconcile'));
-      expect(screen.getByTestId('recon-conversion-reference-rate')).toBeInTheDocument();
-      expect(screen.queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
+      expect(screen.getByTestId('recon-conversion-section')).toBeInTheDocument();
     });
 
     it('the footer ignores the modal edits', () => {
@@ -1309,6 +1395,18 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
         expect(within(importeCell).getByTestId('recon-cand-amount-base')).toBe(bases[1]);
       });
 
+      it('puts no "≈" on a reconciled line\'s linked foreign document — that amount was booked', () => {
+        setLines([LINE_RECONCILED_FOREIGN]);
+        setCandidates([RECON_CAND_FOREIGN]);
+        renderPanel({ currency: 'EUR' });
+        selectLine('LRF');
+
+        const row = screen.getByTestId('recon-cand-row-TF');
+        expect(within(row).getAllByTestId('recon-cand-amount-base')).toHaveLength(2);
+        expect(row.textContent).not.toContain(APPROX);
+        expect(within(row).queryByTitle('financeReconcileCandApproxAmount')).not.toBeInTheDocument();
+      });
+
       it('per-row unlink of a foreign reconciled document un-reconciles that transaction', async () => {
         setLines([LINE_RECONCILED_FOREIGN]);
         setCandidates([RECON_CAND_FOREIGN]);
@@ -1386,6 +1484,21 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
         expectEurOnTopForeignBelow(
           within(row).getByTestId('recon-matched-amount-base-TXF'), EUR_29(), USD_42());
         expect(within(row).getByTestId('recon-unlink-TXF')).toBeInTheDocument();
+      });
+
+      it('puts no "≈" on a matched transaction of the "conciliado" block', () => {
+        setLines([partialLine([TXN_FOREIGN])]);
+        renderPanel({ currency: 'EUR' });
+        selectLine('LPF');
+        expandMatchedBlock();
+
+        const row = screen.getByTestId('recon-matched-row-TXF');
+        const base = within(row).getByTestId('recon-matched-amount-base-TXF');
+        expect(base.textContent).toBe(EUR_29());
+        expect(base).not.toHaveAttribute('title');
+        expect(row.textContent).not.toContain(APPROX);
+        // The block header total is the booked amount too.
+        expect(screen.getByTestId('recon-matched-toggle').textContent).not.toContain(APPROX);
       });
 
       it('shows magnitudes only for a foreign matched payment (the block is unsigned)', () => {

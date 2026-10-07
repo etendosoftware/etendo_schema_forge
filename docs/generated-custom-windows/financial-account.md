@@ -2188,7 +2188,15 @@ its own currency while booking the bank transaction(s) in the account currency:
   `CurrencyBadge`, its amounts render in the **invoice** currency, and a smaller secondary line
   (`data-testid="recon-cand-amount-base"`) shows the account-currency (e.g. EUR) equivalent —
   `amountBase`, emitted by `ReconciliationHandler.appendAccountEquivalent` using the same rate the
-  reconciliation itself would use. Same-currency candidates look unchanged.
+  reconciliation itself would use. Same-currency candidates look unchanged. **Since ETP-5657 that
+  account-currency figure is prefixed with "≈"** ("≈ 27,83 €" over "$40,91", in both "Saldo
+  pendiente" and "Importe"): it is a preview at the invoice's own rate, and a bank-rate conversion
+  may book a different amount. The sign comes from `DualAmount`'s `approximate` prop, set only for an
+  unreconciled foreign candidate with `amountBase`; it carries a `title` and an `sr-only` hint
+  (`financeReconcileCandApproxAmount`, "Importe aproximado a la cotización de la factura"). It is
+  never shown on a reconciled line's linked documents or on matched transactions (their EUR figure
+  is the amount actually booked, from `Foreign_*`), nor on same-currency rows or the left statement
+  list.
 - **Scope:** one statement line can match **any mix of invoices in any currencies**, not just one —
   `ReconciliationFlowSupport.createInvoicePayments` greedily allocates the line (in account currency)
   across the selected invoices **in the order they're listed** (oldest invoice date first — the same
@@ -2258,8 +2266,11 @@ its own currency while booking the bank transaction(s) in the account currency:
   `components/contract-ui/ReconciliationConversionSection.jsx`; the state lives in
   `useReconciliationConversion.js` and every rule in the pure `reconciliationConversionMath.js`
   (node:test-importable, same arrangement as `writeoffMath.js`).
-  - **Fields:** `Importe del extracto` (read-only — for a PARTIAL line, its pending remainder),
-    `Importe a cobrar ({ccy})` / `Importe a pagar ({ccy})` by the line's sign (invoice currency),
+  - **Fields:** `Importe del extracto ({acct})` — read-only (for a PARTIAL line, its pending
+    remainder), rendered as the app's standard read-only field: the same `MaskedAmountInput` box and
+    symbol placement as the editable fields, `disabled`, so it takes the shared `Input`'s disabled
+    tokens exactly like a read-only field of an invoice header (`data-testid="recon-conversion-statement"`
+    is on that input) — then `Importe a cobrar ({ccy})` / `Importe a pagar ({ccy})` by the line's sign (invoice currency),
     `Cotización ({inv} → {acct})` (`MaskedAmountInput` with `grouping={false}`) and
     `Importe convertido ({acct})`.
   - **Edit rules (Classic):** editing the amount keeps the converted amount pinned to the statement and
@@ -2281,20 +2292,11 @@ its own currency while booking the bank transaction(s) in the account currency:
     the line's pending amount **strictly** — no tolerance, because Core would book any excess as a
     remainder of the opposite sign. A rate of exactly 1 is accepted: with `convertedAmount` present
     the backend treats the rate as advisory, so a pegged pair (converted == amount) can be confirmed.
-  - **Reference (only when every selected candidate carries its `rate`):** the invoice rate of what is
-    being paid — the average of each candidate's unrounded `rate`, weighted by the share of the amount
-    each invoice receives (the amount spread over the invoices in request order, as the backend
-    allocates it; with everything paid this is the outstanding-weighted average) — and the exchange
-    difference = converted − the invoice-rate value of what is paid (each share rounded like
-    `amountBase`). The difference is **named, never shown as a bare sign** (`fxOutcome`), because
-    the sign alone does not say what Core books: on a receipt, collecting more account currency than
-    the invoices were worth is a **gain** ("Ganancia por diferencia de cambio 0,04 €", posted to the
-    gain account, 768 in the Spanish chart); on a payment, paying more than they were worth is a
-    **loss** ("Pérdida por diferencia de cambio 0,07 €", 668) — and the reverse when the bank amount
-    is below the invoice-rate value. The amount is unsigned. The row is hidden when the difference is
-    negligible (< 0,005, no "+0,00 €") and while the form is invalid. Both rows are informative
-    only: like Classic, there is no deviation warning and no way back to the invoice rate from this
-    modal — while the conversion applies the three fields are always sent.
+  - **No reference or exchange-difference rows (Classic parity).** The block shows the statement
+    amount, the three fields, their errors and the remainder hint — nothing else. There is no
+    invoice-rate reference, no gain/loss row and no deviation warning, and no way back to the invoice
+    rate from this modal: while the conversion applies the three fields are always sent. The only
+    exchange cue is the footer notice, shown before the modal opens (see "Footer" below).
   - **Remainder hint:** when the converted amount is below the line, "Quedan {amount} pendientes en la
     línea del extracto" — the line is split and the rest stays pending, as for any partial
     match.[^conv-remainder] Hidden while the form is invalid: a negative amount or a zero rate would
@@ -2318,10 +2320,15 @@ its own currency while booking the bank transaction(s) in the account currency:
     diferencia de cambio {amount}" or "…: pérdida por diferencia de cambio {amount}"
     (`financeReconcileBarFxGainAtBankRate` / `financeReconcileBarFxLossAtBankRate`), with the
     unsigned difference of the **default** conversion = |line pending| − Σ invoice-rate value of the
-    selected invoices, named gain or loss by the same direction rule as the modal row (a 0,04 € gain
+    selected invoices (each invoice at its own `rate`, rounded like `amountBase`). It is **named,
+    never shown as a bare sign** (`fxOutcome`), because the sign alone does not say what Core books:
+    on a receipt, collecting more account currency than the invoices were worth is a **gain**
+    (posted to 768 in the Spanish chart); on a payment, paying more than they were worth is a
+    **loss** (668) — and the reverse when the bank amount is below the invoice-rate value (a 0,04 € gain
     in the example; a 10 USD invoice against a 1.000 € line shows the large figure, which is the
     point — the user sees something is off before opening the modal). It never reflects the modal's
-    edits, and it is absent when a selected candidate has no `rate` or the difference is negligible.
+    edits, and it is absent when a selected candidate has no usable `rate` (missing, zero or
+    negative) or the difference is negligible (< 0,005, no "+0,00 €").
   - **Edits are dropped** whenever the modal closes — opened, cancelled, after a successful
     reconcile, on the `GL_ITEM_REQUIRED` hand-off to the accounting-account setup, on a 409 that
     retargets the selection to the line's pending sub-line (the modal closes too: the selection it
@@ -2334,10 +2341,9 @@ its own currency while booking the bank transaction(s) in the account currency:
     parity).** Whatever the gap, the modal opens prefilled to settle every selected invoice in full
     at the bank-implied rate, and Confirmar stays enabled. A 27,75 € receipt against a 78,26 USD
     invoice (53,24 € at its own rate) defaults to rate 0,354587 and books a **25,49 € exchange
-    loss** in one click. Like Classic, there is no deviation warning: the footer notice before the
-    modal opens, the reference rate ("Cotización de la factura") and the gain/loss row are the only
-    cues, and to avoid settling in full the user lowers the amount to pay (a partial payment) or
-    edits the rate. The backend has no deviation check either, so an MCP/REST caller gets no cue at
+    loss** in one click. Like Classic, there is no deviation warning: the footer gain/loss notice,
+    shown before the modal opens, is the only cue, and to avoid settling in full the user lowers the
+    amount to pay (a partial payment) or edits the rate. The backend has no deviation check either, so an MCP/REST caller gets no cue at
     all. **Verified to match Classic** (same
     DB): Add Payment for a +10,00 € line against a 106,72 USD invoice prefills 106,72 / 0,093703 /
     10,00 with no warning, and confirming posts a 62,60 € exchange loss to 668. Classic prefills full

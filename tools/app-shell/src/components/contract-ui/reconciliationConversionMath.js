@@ -103,8 +103,8 @@ function toNumberOrNull(raw) {
 
 /**
  * A candidate's own invoice rate, or null when it is unknown. Missing, blank, zero and negative all
- * count as unknown — one rule for the reference rate and the invoice-rate equivalent, so the
- * footer notice and the gain/loss row can never show a difference measured against a rate of 0.
+ * count as unknown, so the footer's gain/loss notice can never show a difference measured against
+ * a rate of 0.
  *
  * @param {object} cand
  * @returns {number|null}
@@ -178,32 +178,6 @@ export function allocateGreedy(invoices, actual) {
     left = roundHalfUp(left - pay, NOISE_DECIMALS);
     return pay;
   });
-}
-
-/**
- * The invoices' own rate for what is being paid: the average of each candidate's UNROUNDED `rate`
- * (the rate reconciling it at the invoice rate would use, `appendAccountEquivalent`), weighted by
- * the amount each invoice receives when `actual` is spread with {@link allocateGreedy} — or by its
- * outstanding amount when no `actual` is given. With everything paid both weightings coincide.
- * Null when any selected candidate has no rate — the reference rate and the gain/loss row are then
- * hidden.
- *
- * @param {Array<object>} invoices in request order
- * @param {number|null} [actual] the amount to pay
- * @returns {number|null}
- */
-export function referenceRate(invoices, actual = null) {
-  if (!invoices?.length) return null;
-  const weights = actual > 0 ? allocateGreedy(invoices, actual) : invoices.map(outstandingOf);
-  let weighted = 0;
-  let total = 0;
-  for (const [i, c] of invoices.entries()) {
-    const rate = knownRate(c);
-    if (rate == null) return null;
-    weighted += weights[i] * rate;
-    total += weights[i];
-  }
-  return total > 0 ? weighted / total : null;
 }
 
 /** `converted / actual` at {@link RATE_DECIMALS}, or null when either side is unusable. */

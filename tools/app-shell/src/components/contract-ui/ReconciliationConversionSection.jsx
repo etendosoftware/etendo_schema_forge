@@ -1,8 +1,6 @@
 import { useUI } from '@/i18n';
-import { cn } from '@/lib/utils';
 import { MaskedAmountInput } from '@/components/forms/fields';
-import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency';
-import { RATE_DECIMALS, roundHalfUp } from './reconciliationConversionMath.js';
+import { formatCurrency } from '@/lib/formatCurrency';
 
 /**
  * Bank-rate conversion block of the reconciliation payment-method modal (ETP-5657).
@@ -16,9 +14,9 @@ import { RATE_DECIMALS, roundHalfUp } from './reconciliationConversionMath.js';
  *  - the conversion rate, prefilled with the rate the bank implied;
  *  - the converted amount, in the account currency, prefilled with the statement amount.
  *
- * Below them, when every invoice carries its own rate: the invoice rate and the exchange gain or
- * loss Core's accounting will book. Like Classic there is no deviation warning — those two rows are
- * the only cues; the user lowers the amount (partial payment) or edits the rate.
+ * Below them only the remainder hint. Like Classic there is no reference rate, gain/loss row or
+ * deviation warning in the modal; the only cue is the panel footer's gain/loss notice, shown before
+ * the modal opens. The user lowers the amount (partial payment) or edits the rate.
  *
  * Built with the panel's own Tailwind dialog style rather than reusing `NewPaymentEntryModal`'s
  * `ConversionFields`, which is tied to that modal's inline styles and private helpers.
@@ -36,17 +34,15 @@ export function ReconciliationConversionSection({ conversion }) {
 
   return (
     <section className="flex flex-col gap-3 pb-2" data-testid="recon-conversion-section">
-      <div
-        className="flex items-center justify-between gap-3 rounded-lg border border-[hsl(var(--border-subtle))] px-3.5 py-2.5"
-        data-testid="recon-conversion-statement"
-      >
-        <span className="text-[13px] leading-[18px] text-[hsl(var(--muted-foreground))]">
-          {ui('writeoffBreakdownStatement')}
-        </span>
-        <span className="text-[13px] font-bold leading-[18px] tabular-nums text-[hsl(var(--foreground))]">
-          {formatCurrency(accountCurrency, fields.statementAmount)}
-        </span>
-      </div>
+      {/* Read-only, rendered as the app's standard read-only field — the shared Input in its
+          disabled state, as EntityForm renders a read-only header field — so it reads as one of
+          the block's fields (label on top, same box and symbol placement), just not editable. */}
+      <MaskedAmountInput
+        label={ui('financeReconcileConversionStatement', { currency: accountCurrency })}
+        value={fields.statementAmount}
+        currency={accountCurrency}
+        disabled
+        data-testid="recon-conversion-statement" />
 
       <ConversionField
         error={errors.actual
@@ -94,8 +90,6 @@ export function ReconciliationConversionSection({ conversion }) {
           data-testid="recon-conversion-converted-input" />
       </ConversionField>
 
-      <ReferenceBlock fields={fields} data-testid="ReferenceBlock__recon-conversion" />
-
       {fields.remainder > 0 && (
         <p
           className="text-xs leading-4 text-[hsl(var(--muted-foreground))]"
@@ -119,57 +113,6 @@ function ConversionField({ error, testId, children }) {
           {error}
         </p>
       )}
-    </div>
-  );
-}
-
-/** Row label per outcome: the difference is named as a gain or a loss, never as a bare sign. */
-const FX_ROW_LABEL_KEY = {
-  gain: 'financeReconcileConversionFxGain',
-  loss: 'financeReconcileConversionFxLoss',
-};
-
-/**
- * The invoices' own rate and the resulting exchange difference. Absent when any selected invoice
- * carries no rate: there is then nothing to compare against. The difference row is shown only for
- * a valid form and a non-negligible amount, named as the gain or loss it books (see `fxOutcome`).
- */
-function ReferenceBlock({ fields }) {
-  const ui = useUI();
-  if (fields.reference == null) return null;
-  return (
-    <div
-      className="overflow-hidden rounded-lg border border-[hsl(var(--border-subtle))]"
-      data-testid="recon-conversion-reference">
-      <ReferenceRow
-        label={ui('financeReconcileConversionReferenceRate')}
-        value={formatPlainDecimal(roundHalfUp(fields.reference, RATE_DECIMALS))}
-        testId="recon-conversion-reference-rate"
-        data-testid="ReferenceRow__recon-conversion-rate" />
-      {fields.fxOutcome && (
-        <ReferenceRow
-          label={ui(FX_ROW_LABEL_KEY[fields.fxOutcome.kind])}
-          value={formatCurrency(fields.accountCurrency, fields.fxOutcome.amount)}
-          testId="recon-conversion-fx-difference"
-          emphasis
-          data-testid="ReferenceRow__recon-conversion-fx" />
-      )}
-    </div>
-  );
-}
-
-function ReferenceRow({ label, value, testId, emphasis = false }) {
-  return (
-    <div
-      className={cn(
-        'flex items-center justify-between gap-3 border-b border-[hsl(var(--border-subtle))] px-3.5 py-2 last:border-b-0',
-        emphasis && 'bg-[hsl(var(--muted))]',
-      )}
-      data-testid={testId}>
-      <span className="text-[13px] leading-[18px] text-[hsl(var(--muted-foreground))]">{label}</span>
-      <span className="text-[13px] font-bold leading-[18px] tabular-nums text-[hsl(var(--foreground))]">
-        {value}
-      </span>
     </div>
   );
 }

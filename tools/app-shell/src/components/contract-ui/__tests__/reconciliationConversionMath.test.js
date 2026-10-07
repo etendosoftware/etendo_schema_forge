@@ -32,7 +32,6 @@ import {
   onRateEdit,
   outstandingOf,
   outstandingSum,
-  referenceRate,
   remainderAmount,
   roundHalfUp,
   validateConversion,
@@ -91,7 +90,7 @@ describe('roundHalfUp', () => {
     assert.equal(roundHalfUp(1e-7, 2), 0);
   });
 
-  it('derives the reference rate at 6 decimals', () => {
+  it('derives the default bank rate at 6 decimals (27,87 / 40,91)', () => {
     assert.equal(roundHalfUp(LINE / OUTSTANDING, RATE_DECIMALS), 0.681252);
   });
 
@@ -191,78 +190,6 @@ describe('conversionEligibility', () => {
       });
     });
   }
-});
-
-describe('referenceRate', () => {
-  it('is the invoice rate for a single invoice', () => {
-    assert.equal(referenceRate(INVOICES), INVOICE_RATE);
-  });
-
-  it('is the outstanding-weighted average of each invoice rate', () => {
-    // (10 × 0.5 + 30 × 0.7) / 40 = 0.65
-    const rate = referenceRate([
-      { pendingBalance: 10, rate: 0.5 },
-      { pendingBalance: 30, rate: 0.7 },
-    ]);
-    assert.ok(Math.abs(rate - 0.65) < 1e-12, `expected 0.65, got ${rate}`);
-  });
-
-  it('is null when any selected candidate lacks a rate', () => {
-    assert.equal(referenceRate([usdInvoice(), usdInvoice({ id: 'C2', rate: undefined })]), null);
-  });
-
-  it('is null when a rate is zero or negative', () => {
-    assert.equal(referenceRate([usdInvoice({ rate: 0 })]), null);
-    assert.equal(referenceRate([usdInvoice({ rate: -0.5 })]), null);
-    assert.equal(referenceRate([usdInvoice({ rate: -1 })]), null);
-  });
-
-  it('is null for a zero or negative rate whatever the amount to pay, even beside a valid one', () => {
-    for (const rate of [0, -1, '0', '']) {
-      assert.equal(referenceRate([usdInvoice({ rate })], 21.34), null, `rate ${JSON.stringify(rate)}`);
-      assert.equal(referenceRate([PROBE_A, { ...PROBE_B, rate }], 15), null, `rate ${JSON.stringify(rate)}`);
-    }
-  });
-
-  it('is null when nothing is outstanding, or nothing is selected', () => {
-    assert.equal(referenceRate([usdInvoice({ pendingBalance: 0 })]), null);
-    assert.equal(referenceRate([]), null);
-    assert.equal(referenceRate(null), null);
-  });
-
-  describe('weighted by what an amount to pay actually settles', () => {
-    it('weights by the greedy allocation of the amount, not by outstanding', () => {
-      // 15 USD over A then B: A takes 10, B takes 5 → (10 × 0.6 + 5 × 0.8) / 15 = 0.6666…
-      const rate = referenceRate([PROBE_A, PROBE_B], 15);
-      assert.ok(Math.abs(rate - 2 / 3) < 1e-12, `expected 0.6667, got ${rate}`);
-      // The outstanding-weighted average (0.7) would overstate what 15 USD is worth.
-      assert.ok(Math.abs(referenceRate([PROBE_A, PROBE_B]) - 0.7) < 1e-12);
-    });
-
-    it('follows the request order', () => {
-      // B first: B takes 10, A takes 5 → (10 × 0.8 + 5 × 0.6) / 15 = 0.7333…
-      const rate = referenceRate([PROBE_B, PROBE_A], 15);
-      assert.ok(Math.abs(rate - 11 / 15) < 1e-12, `expected 0.7333, got ${rate}`);
-    });
-
-    it('is the first invoice rate when the amount does not reach the second', () => {
-      assert.equal(referenceRate([PROBE_A, PROBE_B], 5), 0.6);
-    });
-
-    it('coincides with the outstanding-weighted average when everything is paid', () => {
-      assert.ok(Math.abs(referenceRate([PROBE_A, PROBE_B], 20) - 0.7) < 1e-12);
-    });
-
-    it('falls back to outstanding weights for a zero, negative or missing amount', () => {
-      for (const actual of [0, -5, null, undefined]) {
-        assert.ok(Math.abs(referenceRate([PROBE_A, PROBE_B], actual) - 0.7) < 1e-12, `${actual}`);
-      }
-    });
-
-    it('is still null when a candidate lacks a rate, whatever the amount', () => {
-      assert.equal(referenceRate([PROBE_A, { ...PROBE_B, rate: undefined }], 5), null);
-    });
-  });
 });
 
 describe('allocateGreedy', () => {

@@ -11,7 +11,6 @@ import {
   onConvertedEdit,
   onRateEdit,
   outstandingSum,
-  referenceRate,
   remainderAmount,
   validateConversion,
 } from './reconciliationConversionMath.js';
@@ -110,12 +109,6 @@ export function useReconciliationConversion({
 
   const validation = validateConversion(state, { outstanding, lineAbs });
   const isReceipt = Number(lineAmount) >= 0;
-  // The invoice rate of what THIS amount settles (paid-weighted), so a partial payment over several
-  // invoices is compared against the invoices it actually pays.
-  const reference = referenceRate(invoices, state.actual);
-  // Figures derived from an invalid form are noise (a negative amount, a zero rate), so the
-  // exchange difference and the remainder are only offered while the form is valid.
-  const fx = reference == null || !validation.valid ? null : fxDifference(state, invoices);
 
   // The footer keeps the panel's own invoice-rate totals while selecting; it only announces what
   // reconciling at the bank rate WOULD book, from the defaults — never from the modal's edits.
@@ -141,9 +134,7 @@ export function useReconciliationConversion({
       // The typed text while the user owns the rate, so the field never re-renders what they typed.
       rate: state.rateText ?? state.rate,
       converted: state.converted,
-      reference,
-      fxDifference: fx,
-      fxOutcome: fxOutcome(fx, isReceipt),
+      // A remainder derived from an invalid form is noise (a negative amount, a zero rate).
       remainder: validation.valid ? remainderAmount(state, lineAbs) : 0,
       errors: {
         actual: validation.actualInvalid,

@@ -256,6 +256,9 @@ function PanelTable({ headCells, loading, items, renderRow, colSpan = 5 }) {
   );
 }
 
+/** "≈" plus a no-break space, so the sign never wraps away from the amount it qualifies. */
+const APPROX_PREFIX = '\u2248\u00A0';
+
 /** Date cell shared by both panels (per-panel width/background via cellClassName). */
 function DateCell({ date, bcpLocale, cellClassName }) {
   return (
@@ -272,11 +275,16 @@ function DateCell({ date, bcpLocale, cellClassName }) {
  * `MoneyCell`, the reconciled-line amount cell and the partial-line "conciliado" block, so a
  * foreign-currency document shows the same EUR-on-top / original-below pair everywhere (ETP-5450).
  * `primaryClassName` overrides the prominent line's typography (the block uses a 13px size).
+ * `approximate` (ETP-5657) prefixes the account-currency line with "≈": set only where that figure
+ * is a preview at the invoice's own rate (`amountBase` of a still-unreconciled candidate), never
+ * where it is the amount actually booked.
  */
 function DualAmount({
   value, currency, bold = false, secondaryValue, secondaryCurrency, baseOnTop = false,
-  primaryClassName, baseTestId = 'recon-cand-amount-base',
+  primaryClassName, baseTestId = 'recon-cand-amount-base', approximate = false,
 }) {
+  const ui = useUI();
+  const approxHint = ui('financeReconcileCandApproxAmount');
   const primaryCls = primaryClassName
     || cn('text-sm leading-5 text-[hsl(var(--foreground))]', bold ? 'font-semibold' : 'font-normal');
   const mutedCls = 'text-xs leading-4 text-[hsl(var(--muted-foreground))]';
@@ -295,7 +303,13 @@ function DualAmount({
   // MoneyAmount doesn't forward extra props (no data-testid), so the base testid goes on this
   // wrapping span (it always marks the account-currency amount, whichever position it's in).
   const baseLine = hasBase ? (
-    <span data-testid={baseTestId}>
+    <span data-testid={baseTestId} title={approximate ? approxHint : undefined}>
+      {approximate ? (
+        <>
+          <span className="sr-only">{approxHint}</span>
+          <span aria-hidden="true" className={baseOnTop ? primaryCls : mutedCls}>{APPROX_PREFIX}</span>
+        </>
+      ) : null}
       <MoneyAmount
         value={Number(secondaryValue) || 0}
         currency={secondaryCurrency}
@@ -729,6 +743,9 @@ function CandidateOperationsPanel({
     const candCurrency = cand.currency || currency;
     // Foreign candidate WITH a known account-currency equivalent → show EUR on top, foreign below.
     const hasBase = candForeign && cand.amountBase != null;
+    // That equivalent is only a preview at the invoice rate while the row is a candidate; on a
+    // reconciled line it is the amount actually booked, so it carries no "≈" (ETP-5657).
+    const estimate = hasBase && !reconciledMode;
     return (
       <TableRow
         key={cand.id}
@@ -786,6 +803,7 @@ function CandidateOperationsPanel({
           secondaryValue={candForeign ? cand.amountBase : undefined}
           secondaryCurrency={cand.baseCurrency || currency}
           baseOnTop={hasBase}
+          approximate={estimate}
           data-testid="MoneyCell__d0f4d5" />
         {reconciledMode ? (
           // Reconciled line: amount + a per-row individual un-link ("−"). cand.id is the transaction id.
@@ -824,6 +842,7 @@ function CandidateOperationsPanel({
             secondaryValue={candForeign ? cand.amountBase : undefined}
             secondaryCurrency={cand.baseCurrency || currency}
             baseOnTop={hasBase}
+            approximate={estimate}
             data-testid="MoneyCell__d0f4d5" />
         )}
       </TableRow>
