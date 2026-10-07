@@ -232,7 +232,7 @@ export function browserTools() {
 /**
  * Trace what the model asked for and what came back.
  *
- * MCP tools (neo_list, neo_get, ...) run HERE, inside the BFF — the browser
+ * MCP tools (etendo_list, etendo_get, ...) run HERE, inside the BFF — the browser
  * never sees them, so a failed data lookup leaves no trace in the React
  * console. Only the browser tools (navigate_to, open_form, ...) surface there.
  * Reading both halves is what tells a "the model never called the tool" bug
@@ -316,12 +316,12 @@ export async function handleChat(req, res) {
       // `bp-location/bpLocation`, then the `contacts/locationAddress` link).
       // Exploration is that expensive because tool output is never capped
       // before it goes back to the model — the `.slice()` calls below only
-      // trim the trace log, so `neo_discover` (~77 KB) and every `neo_schema`
+      // trim the trace log, so `etendo_discover` (~77 KB) and every `etendo_schema`
       // dump accumulate whole in the conversation.
       //
       // Raising this does NOT fix the hang that prompted the investigation:
       // that was a [400] from the model provider, and both runs died right
-      // after `neo_selectors` — at step 6 with the limit at 8, at ~8 with it at
+      // after `etendo_selectors` — at step 6 with the limit at 8, at ~8 with it at
       // 20. A larger budget only moves the failure later. Excess context is the
       // likeliest cause given the uncapped payloads above, but the provider
       // never said so, so treat it as unproven.

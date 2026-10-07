@@ -5,13 +5,15 @@ import {
   Download, CircleCheck, Search,
   Loader2, Globe, ChevronDown, Users, FileEdit,
   TriangleAlert, ReceiptText, Calculator, PenLine, ShieldAlert, Info, FileCheck,
-  X, Save,
+  X, Save, RefreshCw,
 } from 'lucide-react';
 import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount, compute349Operators, generate349File, validate349Vies, persistManualData } from '../../fiscalModelsUtils.js';
+import { getIncidentIndicator } from '../../incidentSeverity.js';
+import { FORMER_STATEMENT_LENGTH, isValidFormerStatement, sanitizeFormerStatementInput } from '../../formerStatement.js';
 import { invalidateFiscalComputeCache, getCachedFiscalCompute, setCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import '../../fiscal-models.css';
@@ -160,8 +162,10 @@ function rectificationKeys(r) {
 }
 
 // ── Sub-components ───────────────────────────────────────────────
-function KeyBadge({ k }) {
-  return <span className={`fm-key fm-key--${k}`}>{k}</span>;
+// ETP-5597 — colour comes from `.fm-key--{k}` (fiscal-models.css), grouped by operation type:
+// sales/issued (E, S) share one colour, purchases/received (A, I) share another.
+function KeyBadge({ k, 'data-testid': testId }) {
+  return <span className={`fm-key fm-key--${k}`} data-testid={testId}>{k}</span>;
 }
 
 // Follows the same inline-pill shape as ViesBadge above (see .fm-vies in
@@ -296,10 +300,6 @@ function KeyFilterDropdown({ value, onChange, t }) {
     ? allLabel
     : `${value} — ${t('fm.m349.key.' + value) ?? value}`;
 
-  const keyColors = { E: 'var(--status-info-bg)', S: 'var(--status-info-bg)', A: 'var(--status-warning-bg)', I: 'var(--status-info-bg)' };
-  const keyFgColors = { E: 'var(--status-info-fg)', S: 'var(--status-info-fg)', A: 'var(--status-warning-fg)', I: 'var(--status-info-fg)' };
-  const keyBorderColors = { E: 'var(--status-info-border)', S: 'var(--status-info-border)', A: 'var(--status-warning-border)', I: 'var(--status-info-border)' };
-
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
@@ -330,12 +330,9 @@ function KeyFilterDropdown({ value, onChange, t }) {
               className={`fm-status-select__item${value === k ? ' fm-status-select__item--active' : ''}`}
               onClick={() => { onChange(k); setOpen(false); }}
             >
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 24, height: 24, borderRadius: 8, fontSize: 12, fontWeight: 500,
-                background: keyColors[k], color: keyFgColors[k],
-                border: `1px solid ${keyBorderColors[k]}`,
-              }}>{k}</span>
+              {/* ETP-5597 — same KeyBadge as the totals card, so the key colours (grouped by
+                  operation type, see `.fm-key--*` in fiscal-models.css) have ONE source. */}
+              <KeyBadge k={k} data-testid="KeyBadge__keyFilter" />
               <span style={{ flex: 1 }}>{t(`fm.m349.key.${k}`)}</span>
               {value === k && <span>✓</span>}
             </button>
@@ -560,6 +557,7 @@ function InvoicesTabContent({ decl, liveInvoices, t, originFilter, onClearOrigin
         <SourcesTab
           decl={{ ...decl, sources }}
           t={t}
+          showTaxColumns={false}
           data-testid="SourcesTab__346dd5" />
       )}
     </>
@@ -702,32 +700,113 @@ function DetailTabContent({
   );
 }
 
-// ETP-5456 (349 substitutiva, layout follow-up) — declaration-level "Sustitutiva" flag,
-// rendered inline next to the "Todas las claves" key filter (Operadores tab toolbar) rather
-// than as its own full-width banner: a substitute filing is a decision about the DECLARATION,
-// not a one-off parameter typed at file-generation time, so it belongs on the form and is
-// persisted (`manualData.identification.sustitutiva`) the same way 303's `rectificativa` is —
-// see `identChecks` state in the main component below, which mirrors 303's naming/shape.
+// ETP-5456 / ETP-5597 — declaration-level "Tipo" (Normal | Sustitutiva). A substitute filing is a
+// decision about the DECLARATION, not a one-off parameter typed at file-generation time, so it
+// lives on the form and is persisted (`manualData.identification.sustitutiva`, flushed by
+// "Guardar") the same way 303's `rectificativa` is — see `identChecks` in the main component.
 //
-// The former-declaration identifier text field does NOT live here anymore — it moved back into
-// FileGenModal / PresentModal (FmOverlays.jsx), captured fresh each time a file is generated or
-// the declaration is presented, gated on THIS checkbox's persisted value. Only the yes/no
-// decision is a durable property of the declaration; the identifier itself is not persisted
-// (see the modals' own comments).
-function SubstitutiveSection({ identChecks, onChange, isSubmitted, t }) {
-  const sustitutiva = identChecks?.sustitutiva === true || identChecks?.sustitutiva === 'Y';
+// ETP-5597 — rendered as a two-option segmented control in the header action bar, right after
+// the "Estado" chip (it used to be a checkbox next to the "Todas las claves" key filter).
+// Read-only once the declaration is submitted.
+function isSustitutivaChecked(identChecks) {
+  return identChecks?.sustitutiva === true || identChecks?.sustitutiva === 'Y';
+}
+
+// ETP-5597 (W4) — `isBusy` also locks it while a manual-data save / generate / present is in
+// flight, so no Tipo edit can land mid-save.
+function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = false, t }) {
+  const sustitutiva = isSustitutivaChecked(identChecks);
+  const options = [
+    { value: false, labelKey: 'fm.m349.type.normal', fallback: 'Normal', testId: 'normal' },
+    { value: true,  labelKey: 'fm.m349.type.substitutive', fallback: 'Sustitutiva', testId: 'sustitutiva' },
+  ];
   return (
-    <label
-      className="fm-349-substitutive-inline"
-      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: isSubmitted ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
-    >
-      <CheckboxField
-        checked={sustitutiva}
-        disabled={isSubmitted}
-        onToggle={val => onChange('sustitutiva', val)}
-        data-testid="FmModel349Page__sustitutiva" />
-      {t('fm.filegen.substitutive')}
-    </label>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span className="fm-toolbar__sep" aria-hidden="true" />
+      <span style={{ fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>
+        {t('fm.m349.type.label') ?? 'Tipo'}
+      </span>
+      <div
+        className="fm-newdecl-segmented fm-349-type-segmented"
+        role="radiogroup"
+        aria-label={t('fm.m349.type.label') ?? 'Tipo'}
+      >
+        {options.map(o => {
+          const active = sustitutiva === o.value;
+          return (
+            <button
+              key={o.testId}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              disabled={isSubmitted || isBusy}
+              className={`fm-newdecl-segmented__btn${active ? ' fm-newdecl-segmented__btn--active' : ''}`}
+              onClick={() => { if (!active) onChange('sustitutiva', o.value); }}
+              data-testid={`FmModel349Page__type_${o.testId}`}
+            >
+              {t(o.labelKey) ?? o.fallback}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ETP-5597 — full-width warning banner shown between the action bar and the KPI cards while
+// Tipo = Sustitutiva. Hosts the former-declaration identifier ("Identificador declaración
+// anterior", AEAT: 13 digits), persisted with the flag as
+// `manualData.identification.formerStatement` and handed to FileGenModal, which still blocks
+// generation unless it is valid. Both gates — this page's "Registrar/Presentar" and
+// FileGenModal's "Generar fichero 349" — share ONE rule: exactly 13 digits after trim
+// (`isValidFormerStatement`, formerStatement.js). The input only accepts digits.
+function SubstitutiveBanner({ identChecks, onChange, isSubmitted, isBusy = false, t }) {
+  if (!isSustitutivaChecked(identChecks)) return null;
+  const label = t('fm.m349.substitutive_banner.former_statement') ?? 'Identificador declaración anterior';
+  return (
+    <div style={{ padding: '8px 20px', flexShrink: 0 }}>
+      <div
+        className="fm-349-substitutive-banner"
+        data-testid="FmModel349Page__substitutiveBanner"
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 320px', minWidth: 0 }}>
+          <RefreshCw
+            size={18}
+            strokeWidth={1.75}
+            style={{ color: 'var(--status-warning-fg)', flexShrink: 0 }}
+            data-testid="RefreshCw__substitutiveBanner" />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+              {t('fm.m349.substitutive_banner.title') ?? 'Declaración sustitutiva'}
+            </div>
+            <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
+              {t('fm.m349.substitutive_banner.sub') ?? 'Reemplaza por completo a la declaración presentada anteriormente para este periodo.'}
+            </div>
+          </div>
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap' }}>
+          <span>
+            {label}
+            <span aria-hidden="true" style={{ color: 'var(--status-destructive-fg)', marginLeft: 2 }}>*</span>
+          </span>
+          <input
+            value={identChecks?.formerStatement ?? ''}
+            onChange={e => onChange('formerStatement', sanitizeFormerStatementInput(e.target.value))}
+            disabled={isSubmitted || isBusy}
+            required
+            aria-label={label}
+            maxLength={FORMER_STATEMENT_LENGTH}
+            inputMode="numeric"
+            placeholder={t('fm.m349.substitutive_banner.former_statement_placeholder') ?? '13 dígitos'}
+            style={{
+              width: 180, height: 36, boxSizing: 'border-box', padding: '7px 12px', fontSize: 14,
+              border: '1px solid hsl(var(--border-control))', borderRadius: 8, outline: 'none',
+              color: 'hsl(var(--foreground))', background: 'hsl(var(--card))',
+            }}
+            data-testid="FmModel349Page__formerStatement" />
+        </label>
+      </div>
+    </div>
   );
 }
 
@@ -820,7 +899,18 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // race against, so this skips 303's `useRecordWriteQueue` machinery entirely.
   const [identChecks, setIdentChecks] = useState(decl.manualData?.identification ?? {});
   const hasPendingEditRef = useRef(false);
+  // ETP-5597 (W4) — bumped on every edit. A save only clears `hasPendingEditRef` when no edit
+  // happened after it started (same version on success), so an edit racing an in-flight save
+  // is never silently marked as persisted.
+  const editVersionRef = useRef(0);
+  // ETP-5597 (W4) — single-flight guards: the in-flight manual-data save (reused by any caller
+  // that asks for a save while one is running) and the in-flight present/generate actions (a
+  // double click starts only one).
+  const saveInFlightRef = useRef(null);
+  const presentInFlightRef = useRef(false);
+  const generateInFlightRef = useRef(false);
   const [isSavingManualData, setIsSavingManualData] = useState(false);
+  const [presenting, setPresenting] = useState(false);
 
   React.useEffect(() => {
     if (decl._precomputed?.operators) setLiveOperators(decl._precomputed.operators);
@@ -864,7 +954,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
 
   // ETP-5456 — derived from `identChecks`, not `decl.manualData` directly, so an unsaved
   // edit is reflected immediately (same precedent as 303's `identChecks.rectificativa`).
-  const sustitutiva = identChecks?.sustitutiva === true || identChecks?.sustitutiva === 'Y';
+  const sustitutiva = isSustitutivaChecked(identChecks);
+  // ETP-5597 — a substitute declaration cannot be registered/presented without the AEAT
+  // former-declaration identifier: exactly 13 digits, the same rule FileGenModal applies
+  // (`isValidFormerStatement`, formerStatement.js).
+  const formerStatementInvalid = sustitutiva && !isValidFormerStatement(identChecks?.formerStatement);
+  // ETP-5597 (W4) — while a manual-data save (Guardar or the flush before Generar/Presentar), a
+  // generation or a presentation is in flight, every control that edits or acts on the
+  // declaration is locked: no edit mid-save, no second save/present/generate.
+  const actionBusy = isSavingManualData || generating || presenting;
 
   const blocking     = decl.incidents?.blocking ?? 0;
   const warning      = decl.incidents?.warning  ?? 0;
@@ -899,23 +997,65 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // single explicit PUT per click is enough.
   function handleIdentChange(id, value) {
     hasPendingEditRef.current = true;
+    editVersionRef.current += 1;
     setIdentChecks(prev => ({ ...prev, [id]: value }));
   }
 
-  async function handleSave() {
-    if (!hasPendingEditRef.current || !apiBaseUrl) {
-      toast.success(t('recordSaved') ?? 'Registro guardado');
-      return;
-    }
+  // ETP-5597 — the single write path for `identChecks` (the whole manualData payload this page
+  // edits), shared by "Guardar", "Generar fichero 349" and "Registrar/Presentar". Returns `null`
+  // SYNCHRONOUSLY when there is nothing to persist (so callers keep their synchronous path), or
+  // a promise resolving `{ ok }`. Never toasts on its own.
+  function persistIdentChecks() {
+    if (!hasPendingEditRef.current || !apiBaseUrl) return null;
+    return persistIdentChecksNow();
+  }
+
+  function persistIdentChecksNow() {
+    // ETP-5597 (W4) — single flight: a second request while a save is running joins it instead
+    // of issuing a parallel PUT.
+    // A joining caller's edit made after the running save started is not in that save's payload:
+    // it stays pending (editVersionRef) and the next action flushes it — safe, the form is locked
+    // while the save is in flight, so only a racing event can produce such an edit.
+    if (saveInFlightRef.current) return saveInFlightRef.current;
+    const startVersion = editVersionRef.current;
+    const payload = { identification: identChecks };
     setIsSavingManualData(true);
-    const result = await persistManualData(decl.id, { identification: identChecks }, { token, apiBaseUrl });
-    setIsSavingManualData(false);
-    if (result.ok) {
-      hasPendingEditRef.current = false;
-      // ETP-5338 Bug A precedent (303) — push the just-saved manualData into FmListPage's own
-      // cached `decls` entry so the "Tipo" column and a re-opened declaration both see it
-      // without a full page reload.
-      onManualDataSaved?.(decl.id, { identification: identChecks });
+    const run = (async () => {
+      try {
+        const result = await persistManualData(decl.id, payload, { token, apiBaseUrl });
+        if (result.ok) {
+          // Only an edit-free save clears the pending flag — see editVersionRef.
+          if (editVersionRef.current === startVersion) hasPendingEditRef.current = false;
+          // ETP-5338 Bug A precedent (303) — push the just-saved manualData into FmListPage's own
+          // cached `decls` entry so the "Tipo" column and a re-opened declaration both see it
+          // without a full page reload. ETP-5597 (W4) — the payload actually SENT, never a
+          // later in-memory state.
+          onManualDataSaved?.(decl.id, payload);
+        }
+        return { ok: !!result.ok };
+      } finally {
+        saveInFlightRef.current = null;
+        setIsSavingManualData(false);
+      }
+    })();
+    saveInFlightRef.current = run;
+    return run;
+  }
+
+  // ETP-5597 — flushes unsaved edits before an action that depends on them (generate/present).
+  // Resolves `true` when the action may proceed; on failure shows Guardar's own error toast.
+  async function flushBeforeAction() {
+    const pending = persistIdentChecks();
+    if (!pending) return true;
+    const { ok } = await pending;
+    if (!ok) toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
+    return ok;
+  }
+
+  async function handleSave() {
+    const pending = persistIdentChecks();
+    const { ok } = pending ? await pending : { ok: true };
+    if (ok) {
       toast.success(t('recordSaved') ?? 'Registro guardado');
     } else {
       toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
@@ -927,7 +1067,31 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // from. Fire-and-forget — useAttachments.upload() already toasts its
   // own errors and never rethrows, so a failed upload must not block the
   // status change the user explicitly confirmed.
-  async function handlePresent({ status: newStatus, acuseFile }) {
+  async function handlePresent(args) {
+    // ETP-5597 (W4) — a double confirm starts only one flush + one status change.
+    if (presentInFlightRef.current) return;
+    presentInFlightRef.current = true;
+    setPresenting(true);
+    try {
+      await presentNow(args);
+    } finally {
+      presentInFlightRef.current = false;
+      setPresenting(false);
+    }
+  }
+
+  async function presentNow({ status: newStatus, acuseFile }) {
+    // ETP-5597 — belt-and-braces for the disabled "Registrar/Presentar" button: a substitutive
+    // declaration cannot be presented without its 13-digit former-declaration identifier.
+    if (formerStatementInvalid) {
+      toast.error(t('fm.m349.present_disabled.former_statement') ?? 'Introduce el identificador de la declaración anterior (13 dígitos) para presentar una declaración sustitutiva.');
+      return;
+    }
+    // ETP-5597 (bug) — flush unsaved Tipo/identifier BEFORE the status change, same as 303's
+    // handlePresent → persistEditableFields. The status PUT only carries `status`, and once the
+    // declaration is submitted it is read-only, so an unsaved "Sustitutiva" was silently lost:
+    // the declaration came back as Normal and the list's "Tipo" column read "Ordinaria".
+    if (hasPendingEditRef.current && !(await flushBeforeAction())) return;
     if (newStatus === 'submitted_ack' && acuseFile) {
       uploadReceipt(acuseFile);
     }
@@ -937,7 +1101,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
     // ETP-5438 — roll back a presentation the backend rejected (it could not compute the
     // submission snapshot); see FmModel303Page.jsx's handlePresent.
     const previous = { status, submissionMethod };
-    const result = await handleStatusChange(newStatus, submissionMethodForPath);
+    // ETP-5597 — a rejected onStatusChange (network error, thrown handler) is treated exactly
+    // like a backend `{ ok: false }`: roll back + present_error toast, never an unhandled rejection.
+    let result;
+    try {
+      result = await handleStatusChange(newStatus, submissionMethodForPath);
+    } catch (err) {
+      console.error('349 status change failed for', decl.id, err);
+      result = { ok: false };
+    }
     if (result?.ok === false) {
       setStatus(previous.status);
       setSubmissionMethod(previous.submissionMethod);
@@ -1090,10 +1262,21 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   }, [decl.id]);
 
   // ETP-5456 — `substitutive` is the persisted `identChecks` value (the checkbox lives on the
-  // form, next to the key filter — see SubstitutiveSection). `formerStatement` comes back from
-  // FileGenModal's own payload: the identifier is captured fresh at generation time, not
-  // persisted with the declaration (see FmOverlays.jsx's FileGenModal comment).
-  async function handleGenerate({
+  // form — see DeclarationTypeControl). ETP-5597 — `formerStatement` is typed in the
+  // substitutive banner (persisted as `identChecks.formerStatement`) and comes
+  // back through FileGenModal's payload, which only forwards it while `substitutive` is true.
+  async function handleGenerate(args) {
+    // ETP-5597 (W4) — a double confirm starts only one flush + one generation.
+    if (generateInFlightRef.current) return;
+    generateInFlightRef.current = true;
+    try {
+      await generateNow(args);
+    } finally {
+      generateInFlightRef.current = false;
+    }
+  }
+
+  async function generateNow({
     phone, contact, fileName, formerStatement, representativeTaxId, navarra, guipuzcoa,
   } = {}) {
     // ETP-5438 — the button that opens FileGenModal is itself hidden once submitted, so this
@@ -1104,6 +1287,9 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
       toast.error(t('fm.validation.already_submitted') ?? 'Esta declaración ya ha sido presentada.');
       return;
     }
+    // ETP-5597 (bug) — persist unsaved Tipo/identifier first (same flush as Registrar/Presentar),
+    // so the declaration record never disagrees with the file just generated from it.
+    if (hasPendingEditRef.current && !(await flushBeforeAction())) return;
     setGenerating(true);
     const result = await generate349File(decl, {
       token, apiBaseUrl, phone, contact, fileName,
@@ -1205,7 +1391,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
     { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
     { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: rectifications || null,  icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
     { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: invoicesTabBadge(snapshotServed, submittedSnapshot, liveInvoices), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
-    { id:'incidents', label: t('fm.m349.tab.incidents'), badge: blocking || null,        icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
+    // ETP-5597 — the badge counts every incident and takes its tone from the shared severity
+    // helper (danger if any blocking, warn if warnings only), same as the 303 incidents tab.
+    { id:'incidents', label: t('fm.m349.tab.incidents'), badge: (blocking + warning) || null,
+      badgeTone: getIncidentIndicator({ blocking, warning }, t)?.tone ?? null, icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
     { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: null,        icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
   ];
 
@@ -1254,6 +1443,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
           )}
         </span>
 
+        {/* ETP-5597 — Tipo: Normal | Sustitutiva, persisted via "Guardar". */}
+        <DeclarationTypeControl
+          identChecks={identChecks}
+          onChange={handleIdentChange}
+          isSubmitted={isSubmitted}
+          isBusy={actionBusy}
+          t={t}
+          data-testid="DeclarationTypeControl__346dd5" />
+
         <div style={{ flex: 1 }} />
 
         {/* ETP-5338 pt.5 — "Guardar", right-aligned leftmost of the primary-action group
@@ -1265,7 +1463,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
           <button
             className="fm-btn"
             onClick={handleSave}
-            disabled={isSavingManualData}
+            disabled={actionBusy}
             title={t('fm.action.save') ?? 'Guardar'}
             aria-label={t('fm.action.save') ?? 'Guardar'}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}
@@ -1307,7 +1505,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
           <button
             className="fm-btn"
             onClick={() => setShowFilegen(true)}
-            disabled={generating}
+            disabled={actionBusy}
+            data-testid="FmModel349Page__generate"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
           >
             <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
@@ -1320,12 +1519,25 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
             className="fm-toolbar__btn fm-toolbar__btn--primary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
             onClick={() => setShowPresent(true)}
+            disabled={formerStatementInvalid || actionBusy}
+            title={formerStatementInvalid
+              ? (t('fm.m349.present_disabled.former_statement') ?? 'Introduce el identificador de la declaración anterior (13 dígitos) para presentar una declaración sustitutiva.')
+              : undefined}
+            data-testid="FmModel349Page__present"
           >
             <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__346dd5" />
             {t('fm.action.present') ?? 'Registrar/Presentar'}
           </button>
         )}
       </div>
+      {/* ── Substitutive banner (ETP-5597) ───────────────────────── */}
+      <SubstitutiveBanner
+        identChecks={identChecks}
+        onChange={handleIdentChange}
+        isSubmitted={isSubmitted}
+        isBusy={actionBusy}
+        t={t}
+        data-testid="SubstitutiveBanner__346dd5" />
       {/* ── VIES banner ──────────────────────────────────────────── */}
       <ViesBanner
         onValidate={handleValidateVies}
@@ -1423,24 +1635,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                 onChange={setKeyFilter}
                 t={t}
                 data-testid="KeyFilterDropdown__346dd5" />
-              {/* ETP-5456 (layout follow-up) — "Sustitutiva" moved here, right next to the key
-                  filter it now shares a toolbar row with, per the design's placement. The
-                  separator matches the one the toolbar already uses elsewhere (.fm-toolbar__sep)
-                  so the checkbox reads as its own grouped control rather than crowding the
-                  dropdown. Same `!isSubmitted || sustitutiva` visibility this section always had
-                  (still shown, read-only via `isSubmitted`, once a substitute declaration has
-                  been presented). */}
-              {(!isSubmitted || sustitutiva) && (
-                <>
-                  <span className="fm-toolbar__sep" aria-hidden="true" />
-                  <SubstitutiveSection
-                    identChecks={identChecks}
-                    onChange={handleIdentChange}
-                    isSubmitted={isSubmitted}
-                    t={t}
-                    data-testid="SubstitutiveSection__346dd5" />
-                </>
-              )}
               <div style={{ flex: 1 }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: `1px solid ${searchQuery ? 'hsl(var(--focus-ring))' : 'hsl(var(--border-subtle))'}`, borderRadius: 8, fontSize: 14, color: 'hsl(var(--muted-foreground))', background: 'hsl(var(--card))', minWidth: 240 }}>
                 <Search
@@ -1602,6 +1796,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
           // not just whatever came down on the initial `decl` prop.
           decl={{ ...decl, contactFallback: liveContactFallback, phoneFallback: livePhoneFallback }}
           substitutive={sustitutiva}
+          formerStatement={identChecks?.formerStatement ?? ''}
           onConfirm={(payload) => handleGenerate(payload)}
           onClose={() => setShowFilegen(false)}
           data-testid="FileGenModal__346dd5" />

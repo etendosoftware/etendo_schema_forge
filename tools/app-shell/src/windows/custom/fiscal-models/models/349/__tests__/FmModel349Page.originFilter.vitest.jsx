@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 // ETP-5027 — the 349 operators table's "Origen" column and the filter its link
 // installs on the destination tab.
 //
@@ -42,6 +43,7 @@ vi.mock('../../../FmCommon.jsx', () => ({
       'button',
       {
         key: t.id, role: 'tab', 'data-tab-id': t.id,
+        'data-badge': String(t.badge ?? ''),
         'aria-selected': String(t.id === active),
         onClick: () => onSelect(t.id),
       },
@@ -54,9 +56,12 @@ vi.mock('../../../FmCommon.jsx', () => ({
 // list as `decl.sources`. Surfacing the refs it got is exactly the contract the
 // invoices-tab filter must satisfy.
 vi.mock('../../../FmTabContent.jsx', () => ({
-  SourcesTab: ({ decl }) => React.createElement(
+  SourcesTab: ({ decl, showTaxColumns }) => React.createElement(
     'div',
-    { 'data-testid': 'sources-tab', 'data-count': String((decl.sources ?? []).length) },
+    {
+      'data-testid': 'sources-tab', 'data-count': String((decl.sources ?? []).length),
+      'data-show-tax-columns': String(showTaxColumns),
+    },
     (decl.sources ?? []).map(s => React.createElement('span', { key: s.ref, 'data-testid': `source-${s.ref}` }, s.ref))
   ),
   IncidentsTab: ({ onGoToSources }) => React.createElement(
@@ -277,6 +282,13 @@ describe('FmModel349Page — Origen filter on the invoices tab (ETP-5027)', () =
     expect(screen.queryByTestId('source-F-9')).not.toBeInTheDocument();
   });
 
+  // ETP-5597 — 349 declares taxable bases only: Cuota/Total/Casillas are hidden.
+  it('renders the shared SourcesTab with showTaxColumns=false', () => {
+    renderWithBoth();
+    fireEvent.click(originCell(0));
+    expect(screen.getByTestId('sources-tab')).toHaveAttribute('data-show-tax-columns', 'false');
+  });
+
   it('the same-NIF row under another key filters to ITS own invoice', () => {
     renderWithBoth();
     fireEvent.click(originCell(1));
@@ -481,5 +493,36 @@ describe('FmModel349Page — origin filter is scoped to its own tab (ETP-5027)',
     fireEvent.click(tab('invoices'));
     expect(screen.queryByTestId('fm349-invoice-origin-filter-chip')).not.toBeInTheDocument();
     expect(screen.getByTestId('sources-tab')).toHaveAttribute('data-count', '4');
+  });
+});
+
+// ── (4) one invoice split across two keys (ETP-5597) ─────────────────────────
+
+describe('FmModel349Page — an invoice split across keys E and S (ETP-5597)', () => {
+  // The operators endpoint emits ONE live row per (invoice, key): a single sales invoice
+  // with goods AND services lines arrives twice, same id, once under 'E' and once under 'S'.
+  const SPLIT = [
+    { id: 'inv-1', ref: 'F-1', nifIva: NIF, key: 'E', type: 'Venta' },
+    { id: 'inv-1', ref: 'F-1', nifIva: NIF, key: 'S', type: 'Venta' },
+  ];
+
+  function renderSplit() {
+    return render(
+      <FmModel349Page
+        decl={makeDecl({ operators: [OP_E, OP_S], invoices: SPLIT, rectifications: [] })}
+        {...defaultProps}
+      />
+    );
+  }
+
+  it('both the E and the S operator rows show "1 factura venta" in Origen', () => {
+    renderSplit();
+    expect(originCell(0).textContent).toBe('1 factura venta');
+    expect(originCell(1).textContent).toBe('1 factura venta');
+  });
+
+  it('the "Facturas origen" tab badge counts both live rows (2)', () => {
+    renderSplit();
+    expect(tab('invoices')).toHaveAttribute('data-badge', '2');
   });
 });

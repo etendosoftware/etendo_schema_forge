@@ -20,6 +20,7 @@
 
 import {
   createFlagExposureHook,
+  sanitizeRumFeatureFlagKey,
   buildExposureProperties,
   resetExposureCache,
 } from '../flag-exposure.js';
@@ -59,6 +60,14 @@ describe('buildExposureProperties', () => {
 
   it('tolerates a missing hook context without throwing', () => {
     expect(() => buildExposureProperties(undefined, undefined)).not.toThrow();
+  });
+});
+
+describe('Datadog RUM feature flag key safety', () => {
+  it('normalizes kebab-case and unsupported characters without changing business payloads', () => {
+    expect(sanitizeRumFeatureFlagKey('webmcp-agent-chat')).toBe('webmcp_agent_chat');
+    expect(sanitizeRumFeatureFlagKey('flag name/value')).toBe('flag_name_value');
+    expect(sanitizeRumFeatureFlagKey('')).toBe('flag');
   });
 });
 
@@ -145,6 +154,30 @@ describe('createFlagExposureHook — deduplication', () => {
       'feature_flag_evaluated',
       expect.objectContaining({ enabled: false, provider: 'configcat' })
     );
+  });
+
+  it('sends real evaluations to RUM without creating another business event', () => {
+    const trackImpl = vi.fn();
+    const rumEvaluationImpl = vi.fn();
+    const hook = createFlagExposureHook({ trackImpl, rumEvaluationImpl });
+
+    hook.after(hookContext({ provider: 'configcat' }), details(true));
+    hook.after(hookContext({ provider: 'configcat' }), details(true));
+
+    expect(trackImpl).toHaveBeenCalledTimes(1);
+    expect(rumEvaluationImpl).toHaveBeenCalledTimes(1);
+    expect(rumEvaluationImpl).toHaveBeenCalledWith('sample_flag', true);
+  });
+
+  it('does not add startup no-op values to RUM context', () => {
+    const trackImpl = vi.fn();
+    const rumEvaluationImpl = vi.fn();
+    const hook = createFlagExposureHook({ trackImpl, rumEvaluationImpl });
+
+    hook.after(hookContext({ provider: 'No-op Provider' }), details(false));
+
+    expect(trackImpl).toHaveBeenCalledTimes(1);
+    expect(rumEvaluationImpl).not.toHaveBeenCalled();
   });
 });
 

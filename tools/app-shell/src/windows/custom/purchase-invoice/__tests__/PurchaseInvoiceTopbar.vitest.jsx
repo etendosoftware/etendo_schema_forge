@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceTopbar.jsx
 // Mocks must be hoisted before imports (Vitest hoisting)
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -110,6 +111,20 @@ describe('PurchaseInvoiceTopbar', () => {
     render(<PurchaseInvoiceTopbar {...defaultProps} />);
     expect(screen.queryByTestId('clone-btn')).toBeNull();
     expect(screen.queryByTestId('send-to-sif-btn')).toBeNull();
+  });
+
+  // "Gestionar recepción": the generic follow-up button, fed with this window's config
+  // (shared/invoiceFollowUp.js). Only the purchase key opens it, never in a read-only window.
+  it.each([
+    ['a receipt is pending', 'receipt', false, true],
+    ['a receipt is pending but the window is read-only', 'receipt', true, false],
+    ['only a sales shipment key is annotated', 'shipment', false, false],
+  ])('follow-up button when %s', (_, key, windowReadOnly, shown) => {
+    const data = { ...BASE_DATA, followUp: { available: [key], [key]: { needed: true, pendingLines: 2, action: 'createReceipt' } } };
+    render(<PurchaseInvoiceTopbar {...defaultProps} data={data} windowReadOnly={windowReadOnly} />);
+    const button = screen.queryByTestId('follow-up-document-button');
+    expect(Boolean(button)).toBe(shown);
+    if (shown) expect(button).toHaveTextContent('poManageReceipt');
   });
 
   it('does not render action buttons when recordId is absent', () => {

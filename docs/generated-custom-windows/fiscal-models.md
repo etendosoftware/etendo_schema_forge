@@ -19,7 +19,7 @@ debug contracts.
 
 - Fetch all declarations from `GET /fiscal303/declarations` and keep status changes in sync via `PUT /fiscal303/declarations?id=`.
 - Auto-compute fiscal boxes for **draft** declarations (303 and 349) in the background every 3 minutes, updating the "Resultado" column in the list without user interaction. **Non-draft** declarations (ready/submitted/submitted_ext/submitted_ack/skipped) get a **one-time** compute on mount instead (no polling) — `FiscalDeclCrudHandler#declToJson` never persists a computed result on the declaration record, so without this the column would be permanently stuck on "—" for every declaration that already left draft, the same class of bug the "Incidencias" column had before it fetched real data (ETP-4755). Both draft and non-draft computations call the same real endpoints (`/fiscal303/boxes`, `/fiscal349/operators`), which recompute from invoice data — except for a submitted declaration that carries a submission snapshot, which the list serves straight from `submittedSnapshot` with no compute call, and which those endpoints also return as-is instead of recomputing (ETP-5438, see "Freeze once presented" below).
-- Display an upcoming deadlines panel for unsubmitted declarations.
+- Count the declarations whose AEAT deadline falls within the next 7 days in the **"Por vencer"** KPI card (click-to-filter). There is **no** upcoming-deadlines panel/widget: `computeUpcomingDeadlines` still exists in `fiscalModelsUtils.js` but is only exercised by unit tests, never rendered (corrected in ETP-5597 — see "'Por vencer' KPI" below).
 - Filter declarations by model type (303, 349) and status.
 - Navigate into a per-model detail page when a declaration row is clicked, passing precomputed box data so the detail page renders immediately without a duplicate fetch.
 - In detail pages, guide the user through the submission lifecycle via a numbered stepper.
@@ -134,7 +134,9 @@ that already carries it is just as frozen as one presented through either curren
   - 303 keeps `boxes` + `summary`; `sources` (the per-invoice drilldown) becomes `sourceCount`.
   - 349 keeps `operators` (one row per intra-community partner), `summary`,
     `rectificativeSummary` (fixed E/S/A/I totals), `orgNif`/`orgName`; `invoices` and
-    `rectifications` become `invoiceCount` / `rectificationCount`. Before they are dropped, the
+    `rectifications` become `invoiceCount` / `rectificationCount` (`invoiceCount` counts ORIGIN
+    ROWS, not distinct invoices: a mixed goods + services invoice counts 2 — see "Mixed goods +
+    services invoices" in the 349 section). Before they are dropped, the
     operators' "Origen" counts are folded into each operator row as `originPurchases` /
     `originSales` (`Fiscal349SnapshotSupport#foldPerInvoiceAggregates`, same `nif|key` grouping as
     the frontend's `originByNif` / `originByRectification`) — one pair per partner, still bounded.
@@ -604,7 +606,7 @@ This also closes a narrower, related gap: `handlePresent` calling `persistEditab
 
 **Regression test note:** `FmModel303Page.explicitSaveSingleFlight.vitest.jsx` used to have a test named "drops a queued save when the declaration is submitted while a PUT is open", asserting the OPPOSITE of the fix above — that a save queued behind an in-flight Guardar was dropped once the declaration got filed. That was the same bug from a different angle and has been replaced with "flushes a queued save before filing the declaration, instead of dropping it", which asserts the corrected behavior: the queued edit is flushed (not dropped), and the status transition — and the `onStatusChange` callback — wait for that flush to actually settle. The file's top-of-file "four properties" comment and property (3) were updated to match: (3) now covers only the session-ending case (`token`/`apiBaseUrl` going falsy mid-flight), which is unaffected by this fix and still legitimately drops the queued edit (there is nothing left to flush it to).
 
-**349's final toolbar: Cancelar (left) + Guardar, a deliberate no-op (ETP-5338 pt.5).** `FmModel349Page.jsx` originally got a go-back icon button (`ArrowLeft`, `handleGoBack`, `data-testid="FmModel349Page__goBack"`) next to Cancelar for visual/UX consistency across Modelo detail pages (ETP-5338 pt.1) — functionally identical to "Cancelar", since both just called `onBack` directly. Once the requirement widened to "every fiscal-models declaration gets a Guardar button" (not just 303, which already had an autosave to piggyback on), 349 was re-investigated with that wider bar in mind: a fresh grep of every `useState`/write path in the file confirms it has zero locally-edited, persistable declaration data — `keyFilter`/`searchQuery`/`selected`/`activeTab`/`viesBannerDismissed` are ephemeral view state, `liveOperators`/`liveInvoices`/`liveRectifications`/`liveRectifSummary` are read-only server-computed snapshots, and VIES validation (`handleValidateVies`) already persists its result server-side the instant it runs — there is no staged, unsaved state anywhere on this page. Rather than skip Guardar here (which would break the "every model" requirement) or fake a network call that flushes nothing, 349's `handleSave` is a deliberate **no-op confirmation**: it shows `toast.success(...)` immediately, with no PUT and no loading state, in the right-aligned toolbar position (leftmost of the primary-action group, before "Calcular"). Once Guardar existed, the old go-back button became pure duplication of "Cancelar" — both did the same `onBack` call, sitting side by side — so it was removed entirely: 349's toolbar now has exactly Cancelar on the left and Guardar (plus Calcular/Registrar-Presentar) on the right, no go-back affordance. This is intentionally honest rather than a misleading "unsaved work exists" affordance — clicking Guardar always "succeeds" because there is genuinely nothing that could fail. If 349 ever grows real locally-edited declaration fields, `handleSave` is the handler to wire an actual flush into.
+**349's final toolbar: Cancelar (left) + Guardar, a deliberate no-op (ETP-5338 pt.5).** `FmModel349Page.jsx` originally got a go-back icon button (`ArrowLeft`, `handleGoBack`, `data-testid="FmModel349Page__goBack"`) next to Cancelar for visual/UX consistency across Modelo detail pages (ETP-5338 pt.1) — functionally identical to "Cancelar", since both just called `onBack` directly. Once the requirement widened to "every fiscal-models declaration gets a Guardar button" (not just 303, which already had an autosave to piggyback on), 349 was re-investigated with that wider bar in mind: a fresh grep of every `useState`/write path in the file confirms it has zero locally-edited, persistable declaration data — `keyFilter`/`searchQuery`/`selected`/`activeTab`/`viesBannerDismissed` are ephemeral view state, `liveOperators`/`liveInvoices`/`liveRectifications`/`liveRectifSummary` are read-only server-computed snapshots, and VIES validation (`handleValidateVies`) already persists its result server-side the instant it runs — there is no staged, unsaved state anywhere on this page. Rather than skip Guardar here (which would break the "every model" requirement) or fake a network call that flushes nothing, 349's `handleSave` is a deliberate **no-op confirmation**: it shows `toast.success(...)` immediately, with no PUT and no loading state, in the right-aligned toolbar position (leftmost of the primary-action group, before "Calcular"). Once Guardar existed, the old go-back button became pure duplication of "Cancelar" — both did the same `onBack` call, sitting side by side — so it was removed entirely: 349's toolbar now has exactly Cancelar on the left and Guardar (plus Calcular/Registrar-Presentar) on the right, no go-back affordance. This is intentionally honest rather than a misleading "unsaved work exists" affordance — clicking Guardar always "succeeds" because there is genuinely nothing that could fail. If 349 ever grows real locally-edited declaration fields, `handleSave` is the handler to wire an actual flush into. **Superseded:** ETP-5456 gave 349 a real persisted field (`sustitutiva`) and turned `handleSave` into a real `persistManualData` PUT; ETP-5597 added the persisted `formerStatement` and extracted the write path into `persistIdentChecks()`, which "Generar fichero 349" and "Registrar/Presentar" also call to flush unsaved edits first — see "349 'Tipo: Normal | Sustitutiva'" below.
 
 ### Sources tab — "Régimen" column removed (ETP-5187)
 
@@ -712,6 +714,29 @@ mixed reverse-charge-pair-plus-normal-line case both confirm nothing merges acro
 sets and nothing is halved; a negative rectificativa case confirms both rows keep their negative
 sign and land on the corrective box pair; the previously-documented "unpaired line silently halved"
 gap is now closed (full amount, single row). Full `Fiscal303*` suite re-run green.
+
+### Sources tab — relabelled columns, 349 hides the tax columns, row identity (ETP-5597)
+
+`SourcesTab` (`FmTabContent.jsx`) is shared by the 303 "Facturas" tab and the 349 "Facturas
+origen" tab.
+
+- **Relabelled headers** (locale values only, keys unchanged): `fm.sources.col.party` "Tercero" →
+  **"Contacto"** (`en_US`: "Party" → "Contact"), `fm.sources.col.ref` "Nº" → **"N° documento"**
+  (`en_US`: "Ref" → "Document No."), in `es_ES`/`es_AR`/`en_US`.
+- **New `showTaxColumns` prop** (default `true`). Modelo 349 declares taxable bases per
+  intra-community operator, so Cuota, Total and Casillas carry no meaning there:
+  `FmModel349Page`'s `InvoicesTabContent` passes `showTaxColumns={false}` and the table shows
+  6 columns (Fecha Factura, Fecha Contable, N° documento, Tipo, Contacto, Base); the empty-state
+  `colSpan` follows (9 / 6). 303 is unchanged.
+- **349 "Fecha Contable" is now populated.** The column already existed in the shared table but
+  the 349 rows never carried `accountingDate`, so it always read "—". The backend now sends it —
+  see "Facturas origen rows" in the 349 section. Submitted 349 declarations served from their
+  snapshot keep no invoice rows at all (the tab shows the "not kept" note), so there is nothing to
+  backfill there.
+- **Row identity.** 349 rows now carry `id` (the invoice id). The React key is `id` for a 303 row
+  (no `key` field) and `` `${id}|${key}` `` for a 349 row, because a mixed goods + services invoice
+  produces one row per AEAT349 key with the same `id`. `ref` (document number) is only the fallback
+  for a backend that has not been redeployed — AR/AP numbering can collide.
 
 ### Cache invalidation on Guardar/Calcular, Modelo 303 (ETP-5456 follow-up)
 
@@ -898,7 +923,7 @@ value. Flagged as a follow-up, not fixed here.
 
 The top of the Boxes tab shows the declaration type selector and, conditionally, the bank data section (`datos_bancarios`).
 
-**`tipo_declaracion` options:** `C` (Compensación), `D` (Devolución), `I` (Ingreso), `U` (Domiciliación), `N` (Resultado cero), `V` (Devolución cta. corriente), `X` (Devolución transferencia extranjero).
+**`tipo_declaracion` options:** `C` (Compensación), `D` (Devolución), `I` (Ingreso), `U` (Domiciliación), `N` (Resultado cero), `V` (Devolución cta. corriente), `X` (Devolución transferencia extranjero). Since ETP-5597, `C`/`D`/`V`/`X` are disabled while casilla 69 is positive — see "Tipo de declaración vs. casilla 69" below.
 
 **`datos_bancarios` visibility** (`sectionVisibleWhen`, ETP-4456, narrowed by the ETP-5393
 manual-QA fix): shown when `tipo_declaracion ∈ {U, D, X}` — the only types AEAT allows an IBAN
@@ -919,9 +944,14 @@ bank-data block sitting on screen — just without the asterisk — instead of d
 now tracks the exact same condition as requiredness (see `_BANK_FULL_BLOCK_REQUIRED_WHEN` below),
 so the section (and its fields) hide/show together with the required-mark instead of drifting.
 
-**Section title** varies by tipo:
-- `D`, `X` → "Devolución"
-- `U` → "Domiciliación"
+**No section title (ETP-5597).** The section used to carry a heading derived from the tipo
+(`titleKeyFrom`/`titleKeyMap`: `D`/`X` → "Devolución", `U` → "Domiciliación"). By product decision
+it is now rendered **without a heading** — the bank fields read as a continuation of the
+Identificación block. The section declares `untitled: true`, which `getLayout303`/`applyPatch` now
+accept alongside `titleKey`/`titleKeyMap` (their filter otherwise drops a title-less section). The
+`fm.section.devolucion`/`fm.section.domiciliacion` locale keys were removed. Requiredness and
+labels inside the section also changed in ETP-5597 — see "Tipo de declaración vs. casilla 69, bank
+block requiredness and boxes 70/109 (ETP-5597)" below.
 
 **Field-level visibility (`_BANK_DVX_VW`)** — SWIFT/BIC, Bank name, address, city, and country
 share the same `anyOf` condition as the section itself (`tipo ∈ {D, V, X}` **or**
@@ -1405,7 +1435,11 @@ blanking is **scoped to the Nota 3 case**; an ordinary refund with no box 111 ne
 On the frontend, requiredness is `_BANK_SWIFT_REQUIRED_WHEN` (condition B ∧ marca ∈ {2,3}) and
 `_BANK_FOREIGN_DETAILS_REQUIRED_WHEN` (condition B ∧ marca = 3);
 `_BANK_FULL_BLOCK_REQUIRED_WHEN` now means the baseline branch itself and is what `bank_sepa`
-carries.
+carries. **Superseded for requiredness by ETP-5597** (visibility below is unchanged): SWIFT-BIC is
+no longer required under marca 2, the marca-driven rule applies wherever the fields are on screen
+(not only under condition B), `bank_sepa` is required whenever visible, and
+`_BANK_FULL_BLOCK_REQUIRED_WHEN` was removed — see "Bank block requiredness by marca SEPA
+(ETP-5597)" below, which also records the resulting Classic gap.
 
 **Fields the marca does not call for are hidden — and their values are deliberately NOT cleared.**
 `_BANK_SWIFT_VW` / `_BANK_FOREIGN_DETAILS_VW` gate visibility the same way requiredness is gated.
@@ -1443,7 +1477,9 @@ const _NOT_NOTA3 = { anyOf: [
 The third clause is the exact complement of `_BANK_NOT_WAIVED` and enumerates the same two shapes
 `isCancelModifyDebitRequested` accepts. **No engine change was needed, and none was made.**
 
-Resulting matrix (`V` visible, `V*` visible and required, `—` hidden), verified end to end:
+Resulting matrix (`V` visible, `V*` visible and required, `—` hidden), verified end to end
+(**ETP-5431 state — the required marks were changed by ETP-5597**: visibility is still exactly
+this, but see "Bank block requiredness by marca SEPA (ETP-5597)" below for the current `*`s):
 
 | tipo | rectificativa | box 111 | flag | marca | IBAN | marca SEPA | SWIFT | Banco/Dir/Ciudad/País |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -1530,6 +1566,8 @@ the mark blank — a file stating the opposite of what it does).
   not waived).
 - No frontend validation was added for marca `0` outside the Nota 3 path — a plain devolución can
   still leave `bank_sepa` on its placeholder with no error, exactly as before this ticket.
+  **No longer true since ETP-5597:** `bank_sepa` is now required wherever it is visible, so a plain
+  `D`/`X` devolución left on the placeholder is blocked by the required-field gate.
 - Nothing validates that a non-zero box 111 implies a negative box 71 (or vice versa); the two
   boxes remain independently editable/computed, as they were before this ticket.
 - No `@etendosoftware` module version bump accompanied this change in either repo.
@@ -1747,6 +1785,137 @@ other boxes, just not accumulated and re-queried with `ONLY_MEMO_AND_CORRECTIVE`
 - `fm303Layouts.js`'s `mod_bases`/`mod_recargo`/`regularizacion` rows gained comments documenting
   they are intentionally NOT `editable` (backend-computed) — no rendering change was needed since
   they already lacked the `editable` flag.
+
+### Tipo de declaración vs. casilla 69, bank block requiredness and boxes 70/109 (ETP-5597)
+
+Four related changes to the Modelo 303 identification/result area. All are declared in
+`fm303Layouts.js` (layout metadata, no per-field JSX) and enforced through the same pre-flight
+gates as the existing required-field check.
+
+#### 1. Casilla 69 positive disables tipo `C`/`D`/`V`/`X`
+
+A positive casilla 69 ("Resultado de la autoliquidación", an amount to pay) is filed as Ingreso
+(`I`) or Domiciliación (`U`); only a negative result can be compensated or refunded. So while box
+69 is **strictly > 0**, the options `C` (Compensación), `D` (Devolución), `V` (Devolución cta.
+corriente) and `X` (Devolución transferencia extranjero) of `tipo_declaracion` cannot be chosen.
+
+- **Mechanism.** Each of those options carries `disabledWhen: { field: '_box69Positive', equals:
+  true }` and `disabledReasonKey: 'fm.ident.decl.disabled_positive_result'`.
+  `_box69Positive` is a synthetic key — box values live in `liveBoxes`, not in `identification` —
+  merged in by the new `withDerivedBoxFlags(identification, liveBoxes)` (`fiscalModelsUtils.js`),
+  a superset of `withBox111NonZeroFlag` (same technique as `_box111NonZero`). Every place the
+  identification object feeds the layout engine (`CasillasTab` rendering, `getMissingRequiredFields`,
+  the new invalid-option gate) now uses `withDerivedBoxFlags`. A missing box 69 (nothing computed
+  yet) reads as "not positive", so nothing is locked before the first calculation.
+- **Rendering** (`FmBoxes303.renderIdentSelectField`): a matching option is rendered `disabled`
+  with the reason as its `title`. Generic helpers in `fm303Layouts.js`: `isOptionDisabled(opt,
+  identification)` and `getInvalidSelectedOption(field, identification)`.
+- **An already-selected option is NOT cleared.** If the user picked e.g. "Compensación" and box 69
+  later turns positive (after an unrelated edit or a recalculation), the value stays selected —
+  silently wiping it would be surprising and would undo itself badly when box 69 turns negative
+  again. Instead the select gets a red border (`.fm-aeat-ident-inline-field__select--invalid`,
+  `aria-invalid`) and the reason is shown underneath (`role="alert"`,
+  `data-testid="fm-aeat-ident-tipo_declaracion-error"`): *"Los tipos de compensación y devolución no
+  están permitidos cuando la casilla 69 es positiva (resultado a ingresar). Selecciona otro tipo de
+  declaración."* (`fm.ident.decl.option_not_allowed` is the generic fallback text.)
+- **Gate.** `getInvalidSelectedOptions(year, period, identification)` (visible select fields whose
+  current value is a disabled option) is checked in `FmModel303Page` exactly like
+  `missingRequiredFields`: on the **"Generar fichero 303"** and **"Registrar/Presentar"** button
+  `onClick` (so the modal never opens) and again at the top of `handleGenerate`/`handlePresent`
+  (which also covers the `aeat_telematic` path). A blocked action shows the reason as a
+  `toast.error`.
+
+> **Open note — box 69 vs. box 71 (pending business confirmation).** The condition is casilla
+> **69** by product decision. AEAT's own validation is on the sign of casilla **71** ("Resultado de
+> la liquidación", `71 = 69 - 70 + 109 - 112`), which can differ from 69 in a rectificativa or
+> complementaria. Until the business confirms which box should drive this rule, a declaration
+> whose 69 and 71 have different signs can be allowed/blocked here differently from what AEAT
+> enforces. Changing it means swapping the synthetic flag read by `_RESULT_69_POSITIVE`.
+
+#### 2. Bank block requiredness by marca SEPA
+
+Requiredness inside `datos_bancarios` is now driven by the marca SEPA alone, **wherever the fields
+are on screen** (any `_BANK_DVX_VW` state: tipo `D`/`V`/`X`, or the Nota 3 branch — rectificativa
+∧ box 111 ≠ 0 ∧ not waived). It replaces the ETP-5431 escalation for **requiredness only**;
+visibility (`_BANK_SWIFT_VW`, `_BANK_FOREIGN_DETAILS_VW`, the matrix in "Bug E follow-up" above) is
+untouched.
+
+| marca SEPA | Required | Optional (if visible) |
+|---|---|---|
+| `1` Cuenta España | marca SEPA + IBAN | — (SWIFT/foreign fields hidden under Nota 3) |
+| `2` Unión Europea SEPA | marca SEPA + IBAN | SWIFT-BIC (still shown under Nota 3 — an EU account may carry a BIC — but no longer required) |
+| `3` Resto Países | marca SEPA + "Cuenta bancaria" + SWIFT-BIC + Banco + Dirección + Ciudad + Código País | — |
+| placeholder (empty) | marca SEPA itself is missing → blocked | — |
+
+- **Marca SEPA is required whenever visible** (`_BANK_SEPA_REQUIRED_WHEN = _BANK_DVX_VW`): the rule
+  above presupposes a marca, and the marca is what decides the rest. This is new for a plain
+  `D`/`X` devolución outside Nota 3 (it used to be allowed to stay on the placeholder). It is never
+  required for tipo `U` (hidden there), and a stale `bank_sepa` left over from another tipo makes
+  nothing mandatory for `U`.
+- **IBAN** keeps its own rule (`_BANK_IBAN_REQUIRED_WHEN`: tipo `U`/`D`/`X`, or Nota 3).
+- `_BANK_SWIFT_REQUIRED_WHEN = _BANK_FOREIGN_DETAILS_REQUIRED_WHEN = _BANK_REST_OF_WORLD` (`_BANK_DVX_VW`
+  ∧ marca 3). `_BANK_FULL_BLOCK_REQUIRED_WHEN` was removed.
+- **Label "IBAN" → "Cuenta bancaria" under marca 3.** Position 23 carries a plain account number
+  for a rest-of-world account, not an IBAN (see "Position 23 is not always an IBAN" above).
+  `bank_iban` declares `labelKeyWhen: [{ when: _BANK_REST_OF_WORLD, labelKey:
+  'fm.ident.bank.account' }]`, resolved by the new generic `resolveFieldLabelKey(field,
+  identification)` (first matching entry wins, else `labelKey`). It is used both by
+  `FmBoxes303` (every identification label) and by `FmModel303Page`'s missing-required-fields toast,
+  so the toast names the field exactly as it is labelled on screen ("Completa 'Cuenta bancaria' antes de generar el fichero.").
+  Same scope as `_BANK_REST_OF_WORLD`, so a stale marca 3 cannot relabel a Domiciliación's IBAN.
+- **No "Devolución"/"Domiciliación" heading** on the section any more (see "Identification
+  section" above).
+
+> **KNOWN GAP — Classic still requires the full bank block for a rectificativa with box 111 ≠ 0.**
+> Classic `org.openbravo.module.aeat303.es`, `AEAT303Report2024#checkBox111MandatoryParams` (called
+> from page 3 generation whenever the declaration is a rectificativa) throws
+> `@AEAT303_section_bank_empty@` ("Debe rellenar los datos de la sección Devolución.") when box 111 is
+> non-zero and any of **Banco, Dirección, Ciudad or Código País** is blank, and its
+> `checkIsDeclarationRMandatoryParams` does the same for a blank **SWIFT-BIC**, IBAN or marca SEPA —
+> regardless of the marca. So a rectificativa with box 111 ≠ 0, marca 1 or 2 and no foreign bank
+> data **passes the Go UI gate but is rejected by Classic** when the file is generated (and on the
+> AEAT telematic path, which generates the same file); the user sees Classic's message in the
+> generate error banner. This was **deliberately not changed** (decision 2026-10-05): the
+> functional rule above stands on the Go side and Classic is not patched under ETP-5597. Workaround
+> for the user: fill SWIFT-BIC and the Banco/Dirección/Ciudad/País fields (switching to marca 3
+> makes them visible) for such a rectificativa. Tracked in `docs/feedback.md`.
+
+#### 3. Boxes 70/109 editable only with "Autoliquidación rectificativa"
+
+Casillas 70 ("A deducir") and 109 ("Devoluciones acordadas por la AEAT") only apply to an
+autoliquidación rectificativa. Their `resultado_final` rows changed from `editable: true` to
+`editableWhen`:
+
+| Layouts | Gate |
+|---|---|
+| BASE (2025/2026) and `PATCHES['2024']` (2024 from October: T4, M10–M12) | `editableWhen: { field: 'rectificativa', equals: true }` |
+| 2021/2022 (`_PRE2023_BICOLUMN_OP`, box 70 only — no box 109 row) and 2023 + 2024 T1–M9 (`_2024_COMPLEMENTARIA_OPS`) | `editableWhen: { field: 'complementaria', equals: true }` — those layouts have a "complementaria" check instead of the rectificativa one, and Classic gates box 70 on `IsComplementary` |
+
+- `FmBoxes303.renderBoxCell` now uses `resolveEditable(row)` (the same `editableWhen` contract the
+  bicolumn infoboxes already used), so grid rows can be conditionally editable too.
+- **Unchecking clears them.** `handleIdentChange` → `boxesClearedByIdentChange`: unsetting
+  `rectificativa` (or `complementaria`) so that neither is active drops boxes 70 and 109
+  (`RECTIFICATION_ONLY_BOXES`) from `manualOverrides` **and** from the live box array, then
+  `recomputeDerivedBoxes` runs, so casilla 71 (and 111) are recomputed immediately. They are
+  dropped rather than hidden because, unlike the bank fields, Classic writes box 109
+  unconditionally (`AEAT303Report2023#generatePage3`) and both boxes move casilla 71 on screen. The
+  same helper keeps the pre-existing box 108 rule (`motivo_rectificacion` leaving `D`).
+- **Never sent without the check.** `applyBoxParams(params, manualOverrides, identChecks)` gained
+  an optional third argument; when given and neither check is active
+  (`isRectificationAdjustmentActive`), boxes 70/109 are skipped. Both callers —
+  `generate303File` and `AeatSubmitFlow`'s submit — pass `identChecks`, so a declaration persisted
+  before this rule (whose `manualOverrides` may still carry 70/109) cannot forward them either.
+
+> **Known gap (accepted).** A 303 declaration saved before ETP-5597 with manual overrides on box
+> 70/109 while rectificativa/complementaria is unchecked still shows those values on reload
+> (locked, since the box is no longer editable) and they still feed the on-screen casilla 71 — but
+> they are **not** sent in the generated file nor in the AEAT submission (`applyBoxParams` skips
+> them). Screen and file can therefore differ for such legacy declarations until the user ticks
+> and unticks the check, which clears them. Deliberately not changed (decision 2026-10-06).
+
+#### 4. Session cache
+
+No 303-specific cache change; see the 349 section for the `fiscal_ac_v5_` bump.
 
 ### Editable-box/field input validation vs. the official AEAT spec (ETP-5438)
 
@@ -2479,9 +2648,10 @@ accumulate them, and this applies to both severities together (a clean submissio
 `block` AND stale `warn` rows alike). A **successful** submission with no errors and no warnings
 (test or production) leaves the tab **empty**, not stale from a prior attempt.
 
-**Dismissible warning banner (ETP-5229 item #11).** The amber "Resuélvelas antes de generar el
-fichero" bar at the top of the tab (`fm.incidents.block_sub`, rendered whenever `blocking > 0 ||
-warning > 0`) has a close ("×") button that was never wired to anything — clicking it did
+**Dismissible warning banner (ETP-5229 item #11).** The bar at the top of the tab (rendered
+whenever `blocking > 0 || warning > 0`; since ETP-5597 its role and text follow the severity —
+destructive "Resuélvelas antes de generar el fichero" (`fm.incidents.block_sub`) with any blocking
+incident, amber `fm.incidents.warn_sub` with warnings only, see "Incidents severity" below) has a close ("×") button that was never wired to anything — clicking it did
 nothing, so the banner was effectively permanent. It is now backed by local component state
 (`dismissed`, plain `useState` in `IncidentsTab`) gating the banner's render, mirroring the only
 other dismissible-banner precedent in this codebase, `CertExpiryBanner.jsx`
@@ -2509,6 +2679,13 @@ Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalA
 | `A` | Purchase — Goods (Adquisiciones) | Intra-EU acquisitions |
 | `I` | Purchase — Services (Inv. Sujeto Pasivo) | Reverse-charge services |
 
+**Key colours are grouped by direction (ETP-5597).** `.fm-key--{E,S,A,I}` (`fiscal-models.css`):
+sales/issued keys **E** and **S** share the information role (`--status-info-*`); purchase/received
+keys **A** and **I** share the warning role (`--status-warning-*`) — the same Venta/Compra split
+`RECTIF_KEY_BY_TYPE` uses. `I` used to be painted like the sales keys. `KeyFilterDropdown` now
+renders the shared `KeyBadge` instead of its own inline colour maps, so the totals card, the
+operator rows and the key filter have one colour source.
+
 ### Tabs
 
 - **Operadores** — operator table with key filter chips and live name/NIF-IVA search. Null `name`/`nif` fields are guarded (`?? ''`) before case-folding to avoid runtime crashes. Each row's "Origen" summary (`FmModel349Page.originByNif`) is keyed by the composite `(nifIva, key)`, not `nifIva` alone — the same counterparty can legitimately appear as two separate operator rows under two different AEAT349 keys (e.g. one row under `E` — Entregas, another under `I` — Servicios recibidos), so each row's origin count now reflects only the invoices that belong to that row's own key (ETP-4755).
@@ -2522,8 +2699,9 @@ Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalA
   - The existing key filter and name/NIF search need no change — corrective rows flow through the same predicates and are picked up for free (covered by a test).
   - i18n: `fm.m349.rectificative` ("Rectificativa") and `fm.m349.rectif_subtotal.title` ("Subtotal rectificativas"), in both locales. (`fm.m349.rectif_subtotal.total` was removed together with the grand-total row.)
   - **Corrective rows are marked by the `RectificativeBadge` alone — there is no row-background tint.** The first pass also tinted the whole `<tr>` amber (`.fm-349-row--rectificative`); the functional owner reviewed it on screen and rejected it as too heavy across a full-width table, so both the class usage and its CSS rule were removed. Do not reintroduce a row tint. The rows still carry `data-rectificative="true"`, which is a test/selector hook, not styling.
-- **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by the composite `(nifIva, key)` of the row that was clicked, not by NIF-IVA alone (see the per-key origin scoping above). The active filter is rendered as a removable chip labelled `fm.m349.origin_filter.operator` ("Operador {nif}") with a `fm.m349.origin_filter.clear` clear action, plus a count badge. Each invoice row carries a per-invoice AEAT349 classification key (`E`/`S`/`A`/`I`), resolved server-side by `Fiscal349BoxesHandler#resolveInvoiceKeys` — this is what the Operadores tab's per-key origin scoping (above) relies on.
-- **Rectificaciones / Incidencias / Ficheros** — coming soon.
+- **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by the composite `(nifIva, key)` of the row that was clicked, not by NIF-IVA alone (see the per-key origin scoping above). The active filter is rendered as a removable chip labelled `fm.m349.origin_filter.operator` ("Operador {nif}") with a `fm.m349.origin_filter.clear` clear action, plus a count badge. Each invoice row carries an AEAT349 classification key (`E`/`S`/`A`/`I`), resolved server-side by `Fiscal349BoxesHandler#resolveInvoiceKeyBases` (formerly `resolveInvoiceKeys`) — this is what the Operadores tab's per-key origin scoping (above) relies on. Since ETP-5597 an invoice mixing goods and services produces **one row per key** — see "Mixed goods + services invoices and the 'Facturas origen' rows (ETP-5597)" below. The table hides the 303-only Cuota/Total/Casillas columns (`showTaxColumns={false}`, see "Sources tab — relabelled columns…" in the 303 section).
+- **Incidencias** — badge = blocking + warning, tone from the shared severity helper (ETP-5597, see "Incidents severity" under the list page).
+- **Rectificaciones / Ficheros** — coming soon.
 
 ### KPIs
 
@@ -2599,7 +2777,7 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
   the same `operators` array) move together. On failure it returns early — the displayed statuses
   are left exactly as they were, never blanked.
 - **Why the cache has to be invalidated**: `useFiscalAutoCompute` caches each declaration's
-  compute payload in `sessionStorage` (`fiscal_ac_v4_<declId>`) and, on every run of its mount
+  compute payload in `sessionStorage` (`fiscal_ac_v4_<declId>` at the time; `fiscal_ac_v5_` since ETP-5597) and, on every run of its mount
   effect, restores the cached payload whenever `checkModifiedFn` says nothing changed.
   `checkModified349` only asks whether the period's **invoices** changed, while a VIES
   revalidation updates **business partners** — so it answers `false`, the pre-validation payload
@@ -2654,7 +2832,7 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
 
 ### Action bar and kebab menu
 
-The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10). Both buttons — along with "Guardar" and "Calcular" — are wrapped `{!isSubmitted && ...}` (ETP-5438): "Generar fichero 349" used to be unconditionally visible regardless of submission status, but is now gated on submission status exactly like "Registrar/Presentar", so the whole primary-action group disappears once the declaration reaches a submitted-family status. See "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard.
+The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10). Since ETP-5597 the left side of the bar also carries the **"Tipo: Normal | Sustitutiva"** control right after the "Estado" chip, and "Registrar/Presentar" is disabled while a substitutive declaration lacks its 13-digit identifier — see "349 'Tipo: Normal | Sustitutiva'" below. Both buttons — along with "Guardar" and "Calcular" — are wrapped `{!isSubmitted && ...}` (ETP-5438): "Generar fichero 349" used to be unconditionally visible regardless of submission status, but is now gated on submission status exactly like "Registrar/Presentar", so the whole primary-action group disappears once the declaration reaches a submitted-family status. See "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard.
 
 ### PDF preview and file generation
 
@@ -2666,15 +2844,15 @@ The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"
   | 10 | `fileName` | Nombre del Fichero | TEXT | omitted from the body → backend computes `349_<period>_<year>` (`resolveFileName`) |
   | 10 | `contact` | Persona de contacto | TEXT | blocked client-side unless a server-resolvable fallback exists — see **349 sustitutivas (ETP-5456)** below |
   | 20 | `phone` | Teléfono de contacto | TEXT | blocked client-side unless a server-resolvable fallback exists — see **349 sustitutivas (ETP-5456)** below |
-  | 30 | `substitutive` | Sustitutiva | CHECK | **not asked in this modal since ETP-5456** — read from the declaration form's persisted checkbox, see below |
-  | 40 | `formerStatement` | Identificador declaración anterior | TEXT | rendered **only when `substitutive` is true**; blocked client-side when blank in that case — see below |
+  | 30 | `substitutive` | Sustitutiva | CHECK | **not asked in this modal since ETP-5456** — read from the declaration's persisted "Tipo" (header segmented control since ETP-5597), see below |
+  | 40 | `formerStatement` | Identificador declaración anterior | TEXT | **not asked in this modal since ETP-5597** — typed in the form's substitutive banner and persisted; the modal receives it as the `formerStatement` prop, while `substitutive` is true still blocks generation when it is blank (missing-field toast) or not exactly 13 digits (`fm.m349.former_statement_invalid` toast, same `isValidFormerStatement` rule as "Registrar/Presentar"), and forwards it only while `substitutive` is true — see below |
   | 80 | `representativeTaxId` | NIF del representante legal | TEXT | omitted from the body → backend leaves the key **out** of `inputParams` entirely (`applyOptionalTextParams`, mirrors classic's TEXT-parameter omission convention — no fallback value exists) |
   | 90 | `navarra` | — | CHECK | never omitted — see below |
   | 100 | `guipuzcoa` | — | CHECK | never omitted — see below |
 
   `fileName`/`formerStatement`/`representativeTaxId` are additionally `.trim() || undefined`'d client-side in `FileGenModal`'s confirm handler before being handed to `generate349File`, so whitespace-only input is treated the same as blank. `phone`/`contact` are **not** trimmed (sent as-is if truthy) — a whitespace-only value would still reach the backend, unlike the other three text fields.
 
-  The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. Since ETP-5456, `substitutive`'s value comes from the form's persisted checkbox (`FmModel349Page`'s `sustitutiva`), not from a field inside this modal — see below. The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
+  The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. Since ETP-5456, `substitutive`'s value comes from the form's persisted value (`FmModel349Page`'s `sustitutiva`; a checkbox until ETP-5597, now the header "Tipo" control), not from a field inside this modal — see below. The "Persona de contacto" label lost its "(para el fichero .349)" hint in ETP-5597 (`fm.filegen.contact_name_hint` removed). The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
   - **Software vendor NIF (ETP-5187 point 6):** Modelo 303's and Modelo 390's `OBTL_Tax_Report_Parameter` seed data (`org.openbravo.module.aeat303.es`'s `303_Report_Tax_Parameters.xml` and `org.openbravo.module.aeat390.es`'s `390_Report_Tax_Parameters.xml`, respectively) both hardcode an `EDDNIF`/"NIF Empresa Desarrollo" constant identifying the software vendor, seeded to Openbravo's `B31733934`. **Only Modelo 303 was fixed under ETP-5187** — every `taxReportGroup`'s `constantValue` in `303_Report_Tax_Parameters.xml` was updated via a proper dataset export to Etendo's `B75117705`. **Modelo 390 was deliberately left unfixed** — `390_Report_Tax_Parameters.xml` still carries the old `B31733934` on every `taxReportGroup` row — per an explicit user decision to defer it out of this ticket's scope, not an oversight; do not assume it was fixed alongside 303, and do not edit `aeat390.es`. The Modelo 349 tax report definition (`org.openbravo.module.aeat349.es/referencedata/standard/349_Tax_Parameters.xml`) carries **no such parameter** — verified: no `EDDNIF` searchKey, no hardcoded `constantValue` matching a NIF pattern. Nothing to fix here; both `use349Pdf.js` (PDF preview) and `Fiscal349BoxesHandler#handleGenerate` (real `.349` file, via `OBTL_TaxReport_I#generateElectronicFile`) resolve the declarant's own NIF dynamically and never touch a vendor-identity constant.
 
 ### 349 sustitutivas (ETP-5456)
@@ -2743,6 +2921,135 @@ sessionStorage cache-key bump) discovered while doing so.
    backend was still restarting when the first request under the new key went out; verify with a
    fresh tab (or an explicit `sessionStorage.clear()`) rather than trusting an F5 during rollout.
 
+**Points 1 and 2 above are superseded by ETP-5597** (next section): the checkbox became the header
+"Tipo" control, and the former-declaration identifier moved out of `FileGenModal` into the form and
+is now persisted.
+
+### 349 "Tipo: Normal | Sustitutiva" and the former-declaration identifier (ETP-5597)
+
+1. **"Tipo" segmented control in the header.** `DeclarationTypeControl` (`FmModel349Page.jsx`)
+   replaces the ETP-5456 `SubstitutiveSection` checkbox that sat next to the "Todas las claves" key
+   filter. It renders in the header action bar right after the "Estado" chip: label "Tipo"
+   (`fm.m349.type.label`) and a two-option `role="radiogroup"` — **Normal** | **Sustitutiva**
+   (`fm.m349.type.normal`/`.substitutive`, `data-testid="FmModel349Page__type_normal"` /
+   `__type_sustitutiva`), styled with the shared `.fm-newdecl-segmented` idiom
+   (`.fm-349-type-segmented`). It is always shown, disabled once the declaration is submitted
+   and while a save / generation / presentation is in flight (see item 6).
+   The value is still `manualData.identification.sustitutiva`, persisted by "Guardar" — nothing
+   changed in storage or in the list's "Tipo" column.
+
+2. **Substitutive banner with the "Identificador declaración anterior".** While Tipo =
+   Sustitutiva, `SubstitutiveBanner` renders a full-width warning-role banner
+   (`.fm-349-substitutive-banner`, `data-testid="FmModel349Page__substitutiveBanner"`) between the
+   action bar and the VIES banner/KPIs: title "Declaración sustitutiva", sub-text "Reemplaza por
+   completo a la declaración presentada anteriormente para este periodo." and a required input
+   **"Identificador declaración anterior"** (`maxLength` 13, `inputMode="numeric"`, placeholder
+   "13 dígitos", `data-testid="FmModel349Page__formerStatement"`). The input keeps digits only
+   (`sanitizeFormerStatementInput` strips every non-digit, so separators typed or pasted around
+   the identifier are dropped) and then truncates to 13 digits (`formerStatement.js`), so a pasted
+   14-digit value is silently kept as its first 13 digits. It is disabled while a save / generation / presentation is in
+   flight (item 6). The value is **persisted** with the flag as
+   `manualData.identification.formerStatement` (it was a one-off, unpersisted modal field in
+   ETP-5456).
+
+3. **One 13-digit rule for "Registrar/Presentar" and "Generar fichero 349".** The rule lives in
+   ONE helper, `isValidFormerStatement(value)` in `fiscal-models/formerStatement.js`: the value,
+   trimmed, must match `/^\d{13}$/` (exactly 13 digits). It sits in its own module, not in
+   `fiscalModelsUtils.js`, because many page tests `vi.mock` that file with an explicit factory and
+   would silently replace the real rule. `formerStatementInvalid = sustitutiva &&
+   !isValidFormerStatement(formerStatement)` disables the button (`data-testid="FmModel349Page__present"`, tooltip and new disabled style
+   `.fm-toolbar__btn--primary:disabled`) with `fm.m349.present_disabled.former_statement`
+   ("Introduce el identificador de la declaración anterior (13 dígitos) para presentar una
+   declaración sustitutiva."). `handlePresent` re-checks it and toasts the same text (belt and
+   braces). `FileGenModal` applies the SAME helper while `substitutive` is true: a blank
+   identifier is reported in the combined missing-field toast, a non-blank one that is not 13
+   digits gets `fm.m349.former_statement_invalid` ("El identificador de la declaración anterior
+   debe tener exactamente 13 dígitos.") — no file is generated in either case. A value persisted
+   before this rule existed (e.g. with a letter) fails both gates until it is corrected.
+
+4. **Unsaved edits are flushed before generating or presenting.** Guardar's write path was
+   extracted into `persistIdentChecks()` (returns `null` synchronously when nothing is pending,
+   else a promise of `{ ok }`). `handleGenerate` and `handlePresent` call `flushBeforeAction()`
+   first when there is a pending edit; if the save fails they show Guardar's own error toast
+   (`fm.action.save_error`) and **abort** — no file is generated and the status does not change.
+   Bug this fixes: the status PUT only carries `status`, and a submitted declaration is read-only,
+   so an unsaved "Sustitutiva" was silently lost on presentation — the declaration came back as
+   Normal and the list's "Tipo" column read "Ordinaria". Generating first also guarantees the
+   stored declaration never disagrees with the file just generated from it.
+
+5. **`FileGenModal` no longer asks for the identifier.** Its input (`FileGenModal__formerStatement`)
+   is gone; the modal receives `formerStatement` as a prop (`identChecks.formerStatement`),
+   validates it with the shared 13-digit rule (item 3) and forwards it in the confirm payload
+   **only while `substitutive` is true** (`(substitutive && formerStatement.trim()) || undefined`).
+   The "Persona de contacto" label no longer shows "(para el fichero .349)".
+
+6. **The form is locked while a write is in flight.** While a manual-data save (Guardar, or the
+   flush before Generar/Presentar), a file generation or a presentation is running
+   (`actionBusy = isSavingManualData || generating || presenting`), the Tipo control, the
+   identifier input, Guardar, "Generar fichero 349" (`data-testid="FmModel349Page__generate"`) and
+   "Registrar/Presentar" are all disabled — no edit can land mid-save and no second action can
+   start. Defensively, on top of that:
+   - `persistIdentChecksNow()` is **single-flight**: a save requested while one is running joins
+     the running one (`saveInFlightRef`) instead of issuing a parallel PUT.
+   - `handlePresent` / `handleGenerate` are single-flight too (`presentInFlightRef` /
+     `generateInFlightRef`): a double confirm triggers only one save + one status change (or one
+     generation).
+   - Every edit bumps `editVersionRef`. A successful save clears the pending-edit flag **only if
+     the version is the one captured when the save started**; an edit that raced the save stays
+     pending, so the next Guardar/Generar/Presentar persists it.
+   - The list cache (`onManualDataSaved`) receives the payload **actually sent**, never the
+     in-memory state at the time the response arrives.
+
+### Mixed goods + services invoices and the "Facturas origen" rows (ETP-5597)
+
+**Bug.** An intra-community invoice mixing goods and services lines (E + S on a sale, A + I on a
+purchase) is split by Classic's `getTaxBaseAmountPerBusinessPartner` into **two** operator rows,
+but `resolveInvoiceKeys` kept a single key per invoice (the one with the most tax lines). So the
+invoice backed only one of its two operator rows; the other showed "—" in Origen and its origin
+filter found nothing.
+
+**Backend (`com.etendoerp.go`, `Fiscal349BoxesHandler`).**
+
+- `resolveInvoiceKeyBases(invoices, taxRates, taxReportId, isPurchase)` (replaces
+  `resolveInvoiceKeys`) returns `invoiceId → (key → base)` with **every** key the invoice's tax
+  lines map to, using the same join and amount expression as `getTaxBaseAmountPerBusinessPartner`
+  (purchases halve the base of a line with a non-zero tax amount — the DAO's self-assessed
+  intra-community VAT rule). Keys come back in ascending order; amounts are in the invoice currency.
+- `collectInvoices` → `appendInvoiceRows` emits **one row per (invoice, key)**. A mixed invoice's
+  rows each carry only that key's per-key HQL base (halved for a purchase line with a non-zero tax
+  amount, in the invoice currency); a single-key invoice keeps exactly the row it always had (one
+  row, the invoice's `summedLineAmount`). The rows are origin evidence, not a reconciliation:
+  their bases are **not** guaranteed to add up to the operator's base (a single-key row is neither
+  halved nor currency-converted).
+- `buildInvoiceRow` now also sends `id` (invoice id) and `accountingDate` (`yyyy-MM-dd`, omitted
+  when null — same convention as the 303 sources rows).
+
+Row shape of `GET /fiscal349/operators` → `invoices[]`:
+
+```json
+{ "id": "A1B2…", "ref": "FV-1001", "date": "2026-07-14", "accountingDate": "2026-07-15",
+  "type": "Venta", "party": "ACME GmbH", "nifIva": "DE123456789", "base": "600.00", "key": "S" }
+```
+
+A mixed invoice yields two such objects with the same `id`/`ref` and different `key`/`base`;
+`(id, key)` is the unique pair.
+
+**Frontend.** `originByNif` (keyed `nifIva|key`) now finds the invoice under both operator rows, so
+Origen is populated for both.
+
+**Counts are ORIGIN ROWS, not invoices.** The "Facturas origen" tab badge (`invoicesTabBadge`) and
+the snapshot `invoiceCount` both count origin rows — one per (invoice, key) — so **a mixed goods +
+services invoice counts 2**, one per key. Neither is a count of distinct invoices. Snapshots taken
+from now on store `invoiceCount` as that number of rows (`Fiscal349SnapshotSupport`), so a future
+submitted declaration also counts a mixed invoice under both keys; already-submitted snapshots keep
+the count they were taken with.
+
+**Session cache bumped to `fiscal_ac_v5_`.** `useFiscalAutoCompute`'s `sessionCacheKey` moved from
+`v4` to `v5` because the backend payload shape changed (row per key, new `id`/`accountingDate`).
+`checkModified349` only detects invoice changes, so without the bump a v4 payload computed by the
+previous backend would be restored as-is and keep showing "—" in Origen for the services row. The
+ETP-5456 deployment trap above applies: verify in a fresh tab after deploying.
+
 ### Generate error banner (`genError`)
 
 `FmModel349Page` mirrors the pre-existing `genError` pattern from `FmModel303Page.jsx`: a local `genError` state, rendered as a destructive banner (`OctagonAlert` icon, `var(--status-destructive-bg)`) directly above the KPI-to-tabs boundary whenever `generate349File` resolves with `{ ok: false, ... }`.
@@ -2799,7 +3106,7 @@ same dead wiring.
 
 ### Model color tags — centralized as CSS custom properties (ETP-4755)
 
-The 303/349 color pairs (background/foreground/border) are defined once, in `fiscal-models.css`, as CSS custom properties (`--fm-model-303-{bg,fg,border}`, `--fm-model-349-{bg,fg,border}`) instead of being hardcoded per usage site. Every place a model tag renders consumes the same pair: list-row model badges (`.fm-model-badge--303/349`), the "Todos los modelos" filter dropdown options, the model catalog cards (`.fm-catalog-card__badge--303/349`), and the "Por vencer" upcoming-deadlines widget (`.fm-upcoming__badge--303/349`). Retinting a model now means editing one variable pair, not hunting down every class that duplicated the same hex values.
+The 303/349 color pairs (background/foreground/border) are defined once, in `fiscal-models.css`, as CSS custom properties (`--fm-model-303-{bg,fg,border}`, `--fm-model-349-{bg,fg,border}`) instead of being hardcoded per usage site. Every place a model tag renders consumes the same pair: list-row model badges (`.fm-model-badge--303/349`), the "Todos los modelos" filter dropdown options, and the model catalog cards (`.fm-catalog-card__badge--303/349`). (The `.fm-upcoming*` rules in `fiscal-models.css`, including `.fm-upcoming__badge--303/349`, belong to an upcoming-deadlines widget that is **not rendered anywhere** — no JSX references those classes; they are orphaned CSS, corrected here in ETP-5597.) Retinting a model now means editing one variable pair, not hunting down every class that duplicated the same hex values.
 
 ### Resultado sign-coloring — KPI and list column (`resolveResultColors`, ETP-5236)
 
@@ -2983,6 +3290,45 @@ one dominant tone (danger if any blocking, else warn) for visual styling — the
 never severity-filtered. No source change was made here. A user seeing an unexpectedly low/zero count
 on the list was hitting the "Incidencias" list-column bug above, not this card.
 
+### Incidents severity — one helper for every indicator (`incidentSeverity.js`, ETP-5597)
+
+Before ETP-5597 each incidents indicator chose its colour on its own, and they disagreed: the
+list's "Incidencias" KPI card was **always** red "Requiere revisión" (even with zero incidents or
+with warnings only), the 349 "Incidencias" tab badge counted blocking incidents only, and the
+`IncidentsTab` banner said "Resuélvelas antes de generar el fichero" in amber whatever the
+severity. Every indicator now derives its tone from one module,
+`tools/app-shell/src/windows/custom/fiscal-models/incidentSeverity.js` (kept out of
+`fiscalModelsUtils.js` on purpose, so the many page tests that `vi.mock` that module with an
+explicit factory need not stub these pure functions):
+
+- `getIncidentSeverity(incidents)` — accepts one `{ blocking, warning }` object or an array of them
+  (aggregate). Returns `'block'` if **any** blocking incident exists (blocking always wins),
+  `'warn'` if there are only warnings, `'none'` otherwise.
+- `getIncidentIndicator(incidents, t)` — the visual variant, theme tokens only:
+
+  | Severity | `tone` | Label | Colours |
+  |---|---|---|---|
+  | `block` | `danger` | `fm.kpi.incidents_sub` — "Requiere revisión" | `--status-destructive-bg` / `--destructive` |
+  | `warn` | `warn` | `fm.incidents.severity.warn` — "Advertencia" | `--status-warning-bg` / `--status-warning-fg` |
+  | `none` | — | returns `null`; each caller keeps its own no-incidents rendering | — |
+
+Where it is used:
+
+| Indicator | Behaviour |
+|---|---|
+| List "Incidencias" KPI card (`FmListPage` `KpiCardsRow`) | Worst severity across all listed declarations: red "Requiere revisión" only if some declaration has a blocking incident; amber "Advertencia" if only warnings; **muted "Sin incidencias"** (`fm.incidents.none`, `--muted` / `--muted-foreground`) when there are none. `hasIncidents` (the card's count and its filter) is now `getIncidentSeverity(decl.incidents) !== 'none'`. |
+| 303 "Incidencias" KPI card (`FmModel303Page`) | `buildIncidentVariants` delegates to the helper. **Label change:** a blocking incident now reads "Requiere revisión" (it used to read `fm.incidents.severity.block` "Bloqueante"), so the 303 KPI and the list KPI agree. With no incidents: no badge, disabled-text icon colour (unchanged). |
+| 303 "Incidencias" tab badge | Count = blocking + warning, tone from the helper (unchanged in practice). |
+| 349 "Incidencias" tab badge (`FmModel349Page`) | Count is now **blocking + warning** (it used to be blocking only, so a warning-only declaration showed no badge), and gets a `badgeTone` from the helper (`.fm-tabs__badge--danger` / `--warn`). |
+| `IncidentsTab` banner (`FmTabContent.jsx`) | Any blocking incident → destructive role, text `fm.incidents.block_sub` "Resuélvelas antes de generar el fichero". Warnings only → warning role, new text `fm.incidents.warn_sub` "Revisa las advertencias. No impiden generar el fichero." (warnings never prevent file generation). The dismiss behaviour (ETP-5229 #11) is unchanged. |
+
+**Data reality to keep in mind.** Only the **303 AEAT telematic submission** writes incidents today
+(`replaceIncidents`, see "'Incidencias' tab — persisted AEAT validation errors" above); 349 reads the
+same table but nothing writes 349 rows yet, so its badge is wired for when that exists. A legacy
+incident row with no/blank `severity` is defaulted to `'block'` both server-side
+(`FiscalDeclCrudHandler#resolveSeverity`) and in `fetchDeclarationIncidents`, so it counts as
+**blocking** in every indicator above.
+
 ### KPI cards as click-to-filter toggles (`kpiFilter`, ETP-4755)
 
 The list's 3 KPI cards — "Por vencer", "Pendientes", "Incidencias" — are now clickable filters, not
@@ -3024,6 +3370,26 @@ Deliberately **not** modeled: AEAT's weekend/public-holiday deadline shift (a re
 "Por vencer" is a planning-aid KPI, not a compliance calculator — see the code comment above
 `getDeadlineDate` for the full reasoning). Re-verify against the sede electrónica if these dates
 ever look wrong for a given campaign year — AEAT changes them periodically.
+
+**What the card actually counts (documented in ETP-5597, behaviour unchanged).** The "Por vencer"
+card (`KpiCardsRow` → `countUpcomingDeadlines(decls)`) and its click-to-filter clause both use
+`isUpcomingDeadline(decl)`:
+
+- **Window:** the deadline must fall within `[today, today + 7 days]`, **inclusive on both ends**
+  (`UPCOMING_DEADLINE_WINDOW_DAYS = 7`, compared at local-midnight granularity). A deadline 8 days
+  out is not counted yet.
+- **Excluded statuses:** `COMPLETED_STATUSES` — `submitted`, `submitted_ext`, `submitted_ack` and
+  `skipped`. Only `draft`/`ready` declarations can count.
+- **No overdue state:** a deadline that is already in the past is simply **not** counted (and does
+  not match the filter). There is no "Vencida"/overdue badge, colour or count anywhere in the list.
+- The badge text is the static `fm.kpi.upcoming_sub` ("Esta semana"); it does not change with the
+  count.
+
+There is no upcoming-deadlines **panel**: `computeUpcomingDeadlines` (top-N nearest deadlines,
+`limit = 5`, no "today" comparison) is still exported from `fiscalModelsUtils.js` but has no
+production caller — only `fiscalModelsUtils.branches.vitest.js` uses it — and the `.fm-upcoming*`
+CSS rules it would have fed are orphaned. Earlier revisions of this guide described such a panel;
+that was stale.
 
 ## Model catalog (`FmCatalogPage`)
 
@@ -3258,12 +3624,13 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `FmListPage.jsx` | Declaration table, toolbar, auto-compute wiring |
 | `FmCatalogPage.jsx` | Model catalog drawer — enable/disable tax forms, drives `activeModels` |
 | `useFiscalAutoCompute.js` | Background compute + polling hook |
-| `fiscalModelsUtils.js` | `computeBoxes303`, `checkModified303`, `generate303File`, `fetchDeclarationIncidents` (ETP-4456), formatters, deadline logic; `toBoxArray`/`applyOverrides`/`recomputeDerivedBoxes`/`getBoxValue` (ETP-5272 pt.6, shared between `FmModel303Page.jsx` and `FmListPage.jsx` — see "Manual box overrides" above) |
+| `incidentSeverity.js` | `getIncidentSeverity` / `getIncidentIndicator` — single source of the incidents tone/label for the list KPI, 303 KPI and tab badges (ETP-5597, see "Incidents severity") |
+| `fiscalModelsUtils.js` | `computeBoxes303`, `checkModified303`, `generate303File`, `fetchDeclarationIncidents` (ETP-4456), formatters, deadline logic; `withDerivedBoxFlags`, `RECTIFICATION_ONLY_BOXES`/`isRectificationAdjustmentActive` (ETP-5597); `toBoxArray`/`applyOverrides`/`recomputeDerivedBoxes`/`getBoxValue` (ETP-5272 pt.6, shared between `FmModel303Page.jsx` and `FmListPage.jsx` — see "Manual box overrides" above) |
 | `models/303/FmModel303Page.jsx` | Modelo 303 detail — boxes, sources, stepper, file gen |
 | `models/303/FmBoxes303.jsx` | Box grid renderer |
-| `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels) |
+| `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels); option `disabledWhen`, field `labelKeyWhen`, `getInvalidSelectedOptions`/`resolveFieldLabelKey` (ETP-5597) |
 | `models/303/AeatSubmitFlow.jsx` | AEAT electronic submission flow (ETP-4456) — confirm/submit/result, `POST /fiscal303/submit` |
-| `models/349/FmModel349Page.jsx` | Modelo 349 detail |
+| `models/349/FmModel349Page.jsx` | Modelo 349 detail — incl. `DeclarationTypeControl` / `SubstitutiveBanner` (ETP-5597) |
 | `FmCommon.jsx` | Shared components: `NumberedStepper`, `ResultPill`, `SummaryCard` |
 | `FmOverlays.jsx` | Modals and drawers: `PresentModal` (2 manual paths + opt-in `aeat_telematic` sentinel path), `FileGenModal`, `NewDeclModal`, `ConfigDrawer` |
 | `FmRowActions.jsx` | Row hover Edit/Delete icons for draft declarations (ETP-5187) — window-local, lighter counterpart to the generic `RowQuickActions` |
@@ -3285,10 +3652,59 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `POST` | `/fiscal303/submit?year=&period=&tipo=&id=` (body: testMode, idi, nrc, presenterNif, presenterName) | `AeatSubmitFlow` — AEAT electronic submission (ETP-4456). **POST-only**: a GET is answered 405 and never reaches a real AEAT filing (ETP-5027, QA F7) |
 | `GET` | `/fiscal303/incidents?id=` | `fetchDeclarationIncidents` — persisted AEAT validation errors for the "Incidencias" tab (ETP-4456) |
 | `GET` | `/session` | FmModel303Page — org NIF/nombre for file header |
-| `GET` | `/fiscal349/operators?year=&period=` | `compute349Operators` — returns operators (regular + corrective, see ETP-5027 above) + `summary` + `rectificativeSummary` + invoices + rectifications + orgNif/orgName |
+| `GET` | `/fiscal349/operators?year=&period=` | `compute349Operators` — returns operators (regular + corrective, see ETP-5027 above) + `summary` + `rectificativeSummary` + invoices (one row per (invoice, AEAT349 key), each with `id`/`accountingDate` — ETP-5597, see "Mixed goods + services invoices" above) + rectifications + orgNif/orgName |
 | `GET` | `/fiscal349/modified?year=&period=&since=` | `checkModified349` |
 | `POST` | `/fiscal349/generate` (body: year, period, phone, contact, fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa) | `generate349File` |
 
 All query parameters are built with `URLSearchParams` to ensure correct encoding.
 
 **Error response shape (`/fiscal349/generate` and siblings).** A non-2xx response from any `AbstractFiscalHandler`-based endpoint (including `/fiscal349/generate`) carries a JSON body of the shape `{"error":{"message": "<text>", "status": <int>}}` — the standard `NeoResponse.error()` envelope, same for every NEO Headless endpoint, not something specific to this feature. On the frontend, `generate349File` treats any `!res.ok` as failure: it reads the response text, feeds it through `parseServerMessage()` to extract and clean `error.message` (see "Generate error banner" above for the exact parsing steps), and returns `{ ok: false, error: 'http_<status>', serverMessage }` instead of throwing — `handleGenerate` in `FmModel349Page.jsx` is what turns that into the visible `genError` banner. A network-level failure (fetch throws) returns `{ ok: false, error: 'network' }` with no `serverMessage`, which also falls back to the generic banner text.
+
+## Access control (ETP-5546)
+
+"Modelos Fiscales" access is represented by the role's grant on the **Tax Report window**
+(`AD_Window_ID = 3E8FEA1EA7404D979306C9EE7FD2E7E8`) — a proxy window, not a window this UI
+actually renders, established by the ETP-5116 window-access-proxy pass. Only the Finanzas
+template role grants it by default; a role like Compras has no grant at all.
+
+**Before ETP-5546, that grant was decorative only — nothing enforced it.** The sidebar already
+hid the "Modelos Fiscales" menu entry for a role without the grant, but:
+
+- `/fiscal-models` rendered the full page on direct navigation regardless of role (the route's
+  `index.jsx` was a bare `export { default } from './FiscalModelsPage'`, no guard at all).
+- The backend never checked the grant either: `GET /fiscal303/declarations`, `GET
+  /fiscal303/boxes`, `POST /fiscal303/submit`, `GET /fiscal349/boxes`, `POST
+  /fiscal349/validate-vies` and every other `/fiscal303/*`/`/fiscal349/*` sub-route, plus `GET`/`PUT
+  /sws/neo/fiscal-models-catalog`, answered `200` to any authenticated role.
+
+**Fixed on both sides, reusing existing utilities — no new access-control mechanism:**
+
+- **Frontend** — `tools/app-shell/src/windows/custom/fiscal-models/index.jsx` now wraps
+  `FiscalModelsPage` behind `useWindowAccess(FISCAL_MODELS_WINDOW_ID)` /
+  `WindowAccessGuard` (`FISCAL_MODELS_WINDOW_ID` = the same Tax Report window id above), the
+  identical pattern already used by `sales-invoice/index.jsx` and `not-posted-documents`. A
+  `'none'` tier renders the access-denied screen instead of `FiscalModelsPage`; `'read-only'` and
+  `'full'` both render the page (this window is window-gated, not write-gated, on the frontend).
+- **Backend** (`com.etendoerp.go`) — two separate gates, both calling
+  `NeoAccessHelper.hasWindowAccess(NeoAttachmentAuthorizer.TAX_REPORT_WINDOW_ID, method)`:
+  - `AbstractFiscalHandler.handle(entityName, method, request, response)` — the single entry point
+    every `/fiscal303/*` and `/fiscal349/*` sub-route funnels through (declarations, incidents,
+    boxes, submit, modified, validate-vies) — checks access first, before any entity routing,
+    tiering read (`GET`) vs write (`POST`/`PUT`/etc.) exactly as the generic window-access rule
+    does elsewhere in NEO Headless.
+  - `NeoBuiltInEndpointHandler.handleFiscalModelsCatalogEndpoint` — a second, separate gate, since
+    `/sws/neo/fiscal-models-catalog` is not routed through `AbstractFiscalHandler`.
+
+**What a denied role sees:**
+
+| Surface | Denied result |
+|---|---|
+| Sidebar menu | Entry already hidden (unchanged by this fix) |
+| Direct navigation to `/fiscal-models` | `WindowAccessGuard` access-denied screen instead of the page |
+| Any `/fiscal303/*` or `/fiscal349/*` request | `403 Forbidden` (`"Access denied"`), before any computation or lookup runs |
+| `GET`/`PUT /sws/neo/fiscal-models-catalog` | `403 Forbidden` (`"Access denied"`) |
+
+Full backend reference, including the "no access control at all" root cause and the exact gate
+locations: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §7, "Fiscal models
+(`fiscal303`/`fiscal349`/`fiscal-models-catalog`) had NO access control at all until ETP-5546."
+See ETP-5116 for the window-access-proxy convention this reuses.
