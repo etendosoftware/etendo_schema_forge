@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/financial-accounts/AccountsTable/accountColumns.jsx
+// @covers tools/app-shell/src/components/financial-accounts/SyncStatusInline.jsx
 /**
  * accountColumns — the shared Cuentas cell bodies, and their reveal-on-row-hover contract.
  *
@@ -21,6 +22,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
 }));
 
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -182,6 +184,31 @@ describe('NameCell', () => {
 
 // ETP-5457 — NameCell forwards the window's "read-only" access tier to SyncStatusInline, which
 // then drops the inline "Conectar banco" CTA (a write). The rest of the cell is unaffected.
+describe('NameCell — last sync label', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date('2026-10-06T12:00:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('shows the sync label under a connected account name', () => {
+    render(<NameCell account={{ ...ACCOUNT, bankConnected: true, lastSyncDate: '2026-10-06T11:59:00Z' }} ui={ui} />);
+    expect(screen.getByTestId('last-sync-label')).toHaveTextContent('financeAccountsSyncedAgo');
+    expect(screen.getByTestId('last-sync-label').parentElement.className).toContain('--status-success-fg');
+  });
+
+  it('shows "never synced" for a connected account with no lastSyncDate', () => {
+    render(<NameCell account={{ ...ACCOUNT, bankConnected: true, lastSyncDate: null }} ui={ui} />);
+    expect(screen.getByTestId('last-sync-label')).toHaveTextContent('financeAccountsNeverSynced');
+    expect(screen.getByTestId('last-sync-label').parentElement.className).toContain('muted-foreground');
+  });
+
+  it('shows no sync label for a cash account', () => {
+    render(<NameCell account={{ ...ACCOUNT, type: 'C', bankConnected: false }} ui={ui} />);
+    expect(screen.queryByTestId('last-sync-label')).not.toBeInTheDocument();
+  });
+});
+
 describe('NameCell — read-only access tier (ETP-5457)', () => {
   const OFFLINE = { ...ACCOUNT, bankConnected: false };
 

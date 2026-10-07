@@ -1,4 +1,4 @@
-import { Info, Check } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import {
@@ -14,7 +14,7 @@ import { buildBalanceDisplay } from './balanceDisplay.js';
  * Cuentas sidebar — single column matching Figma frame `3012:25602`.
  *
  * Layout (top → bottom):
- *   1. Header — "Saldo" + info icon, sync pill underneath.
+ *   1. Header — "Saldo" + info icon.
  *   2. Big balance number (30 / 32 / medium, fixed) — the total converted to
  *      the organization currency (ETP-5580): `≈` when a conversion was applied,
  *      a warning for currencies with no exchange rate. Always the full amount
@@ -26,19 +26,6 @@ import { buildBalanceDisplay } from './balanceDisplay.js';
  *      reveals the full amount in a tooltip (TruncatedText).
  *   4. Pending reconcile card (bordered, rounded).
  */
-function SyncPill({ ui }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--status-success-bg)]">
-        <Check className="h-3 w-3 text-[var(--status-success-fg)]" data-testid="Check__5d6a4a" />
-      </span>
-      <span className="text-xs font-normal leading-4 text-[var(--status-success-fg)]">
-        {ui('financeAccountsSyncUpdatedAgo')}
-      </span>
-    </div>
-  );
-}
-
 function CurrencyBreakdown({ rows, primaryIso, ui }) {
   const visibleRows = rows.length > 0
     ? rows
@@ -161,14 +148,13 @@ export function AccountsSidebar({ summary, loading }) {
       data-testid="cuentas-sidebar"
       className="flex w-[292px] shrink-0 flex-col py-2"
     >
-      <header className="flex flex-col gap-0.5 px-3 pb-3 pt-2">
+      <header className="px-3 pb-3 pt-2">
         <div className="flex items-center gap-1">
           <h2 className="text-xl font-semibold leading-7 text-[hsl(var(--foreground))]">
             {ui('financeAccountsBalanceTitle')}
           </h2>
           <BalanceInfoButton ui={ui} data-testid="BalanceInfoButton__5d6a4a" />
         </div>
-        <SyncPill ui={ui} data-testid="SyncPill__5d6a4a" />
       </header>
       <div className="flex flex-col px-3">
         {/* The row carries the fixed 30px size (inherited by the amount) and bounds the

@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 
 vi.mock('@/i18n', () => ({
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
   // Interpolates `{param}` placeholders so parameterized labels (missing-rate line)
   // are assertable; keys without params behave exactly as before.
   useUI: () => (key, params) => {
@@ -12,7 +13,6 @@ vi.mock('@/i18n', () => ({
       financeAccountsBalanceTitle: 'Saldo',
       financeAccountsBalanceInfo: 'Info',
       financeAccountsBalanceMissingRate: 'No incluye: {currencies} (sin tasa de cambio)',
-      financeAccountsSyncUpdatedAgo: 'Actualizado',
       financeAccountsBalanceByCurrency: 'Por moneda',
       financeAccountsBalanceEmpty: 'Sin saldos',
       financeAccountsPendingTitle: 'Pendientes',
@@ -59,6 +59,14 @@ const baseSummary = {
   ],
   pending: { accountsWithPending: 3, suggestionsReady: 2, byRule: 1 },
 };
+
+describe('AccountsSidebar — no sync pill', () => {
+  it('does not render any sync/updated label in the header', () => {
+    render(<AccountsSidebar summary={baseSummary} loading={false} />);
+    expect(screen.queryByTestId('sidebar-last-sync')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Actualizado/)).not.toBeInTheDocument();
+  });
+});
 
 describe('AccountsSidebar', () => {
   it('renders the Saldo header and the formatted total balance', () => {

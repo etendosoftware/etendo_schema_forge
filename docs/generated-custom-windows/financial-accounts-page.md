@@ -75,6 +75,13 @@ account (`IsActive='N'`) and it disappears from the default list (still reachabl
 reconciliations cannot be archived — the backend rejects with HTTP 409 and the UI shows
 a clear message.
 
+## Last bank sync date (ETP-5582)
+
+Each entry of `accounts[]` in the page endpoint response carries `lastSyncDate`: the ISO instant
+of the last successful statement sync, or `null` when the account never completed one. The list
+rows render it through the shared sync label; for the semantics of the value, the UI and the
+i18n keys see `financial-account.md` -> "Last bank sync label (ETP-5582)".
+
 ## Interaction model
 
 - Route: `/finance/accounts` (registered in `App.jsx`).
