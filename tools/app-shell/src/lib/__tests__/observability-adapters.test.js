@@ -463,6 +463,9 @@ describe('private source-map release policy', () => {
       assert.match(workflow, new RegExp(`datadog_application_id=\\$\\{\\{ vars\\.VITE_DATADOG_APPLICATION_ID_${target} \\}\\}`));
       assert.match(workflow, new RegExp(`datadog_client_token=\\$\\{\\{ vars\\.VITE_DATADOG_CLIENT_TOKEN_${target} \\}\\}`));
       assert.match(workflow, new RegExp(`datadog_trace_api_bases=\\$\\{\\{ vars\\.VITE_DATADOG_TRACE_API_BASES_${target} \\}\\}`));
+      // The value is a JSON array: inside double quotes its own quotes close the shell string and
+      // the build gets `[https://…]`, which resolveTracingUrls rejects (no trace propagation).
+      assert.match(workflow, new RegExp(`echo 'datadog_trace_api_bases=\\$\\{\\{ vars\\.VITE_DATADOG_TRACE_API_BASES_${target} \\}\\}'`));
     }
     assert.match(workflow, /VITE_DATADOG_APPLICATION_ID: \$\{\{ steps\.target\.outputs\.datadog_application_id \}\}/);
     assert.match(workflow, /VITE_DATADOG_CLIENT_TOKEN: \$\{\{ steps\.target\.outputs\.datadog_client_token \}\}/);
