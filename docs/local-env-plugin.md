@@ -8,13 +8,16 @@ knows Etendo Classic only. Everything about Etendo GO lives here, in the plugin
 hooks, `LOCALENV_*` variables, failure policy): `etendo-localenv` →
 `docs/design.md` §6.7.
 
+Agents running a per-task environment: rules, ports, known failures and limits live in
+the project skill [`.claude/skills/local-env/SKILL.md`](../.claude/skills/local-env/SKILL.md).
+
 ## What it does
 
 | local-env hook | The plugin |
 |---|---|
 | `manifest` | prints `seed GOClient v1`, which becomes part of the DB fingerprint, so a DB with the GO sample client never shares a cached snapshot with one without it |
 | `db-seed` | prints the gradle invocations that load it, one per line: `import.sample.data -Pclient=GOClient`, then `prepareOnboardingSampledata --info`. local-env runs them right after `install`, against its own guarded DB, before the DB is snapshotted; every later DB comes from a snapshot that already carries the seed. A failed seed aborts `local-env up` |
-| `worktree-create` | reserves a free `SPA_PORT` (from 3101) and `BFF_PORT` (from 3401) for the new environment, skipping the ports other environments reserved and anything listening, and appends them to the environment's `build/local-env/env`. The main checkout keeps 3100 / 3400 |
+| `worktree-create` | reserves a free `SPA_PORT` (from 3101) and `BFF_PORT` (from 3401) for the new environment, skipping the ports other environments reserved and anything listening, and appends them to the environment's `build/local-env/env`, together with `ETGO_ALLOWED_ORIGINS` for that SPA port (see *Allowed origins* below). The main checkout keeps 3100 / 3400 |
 | `up` | in the background, in this environment's `schema_forge`: `make install` when `node_modules` is missing or `package-lock.json` changed since the last install, then `make dev-local-core ETENDO_URL=<this environment's Tomcat URL> SPA_PORT=… BFF_PORT=…`. Prints the SPA URL; log and pid in `build/local-env/plugins/etendo-go/` |
 | `status` | `SPA  http://localhost:<port> (running\|stopped)` |
 | `stop`, `off`, `worktree-rm` | stops this environment's SPA + BFF (one process group), nobody else's |
@@ -67,6 +70,23 @@ checkout. Two cases depend on this:
   `make install` in an adopted worktree: if its `node_modules` are missing or stale it
   warns and does not start the SPA. Note that `make dev-local-core` itself may still
   write there (the AI BFF's `npm install`, vite's cache).
+
+## Allowed origins
+
+The backend (`com.etendoerp.go` `CorsUtils`) accepts a browser origin only when it is
+`localhost:3000/3100/4173/5173`, the request's own origin, or listed in
+`ETGO_ALLOWED_ORIGINS` (comma-separated, added to those defaults; a
+`-Detgo.allowed.origins` system property replaces the variable). A SPA on any other
+port is refused with 403 "Origin not allowed" at login.
+
+So when an environment's `SPA_PORT` is not 3100 the plugin writes
+`export ETGO_ALLOWED_ORIGINS=http://localhost:<port>,http://127.0.0.1:<port>` into
+`<env>/build/local-env/env`: at `worktree-create`, and at `up` for an environment
+created before this existed. An existing value (the file's line, else one inherited
+from the shell) is kept and only the missing origins are appended. Tomcat inherits the
+variable: local-env sources that file, and `tomcat-fast` sources it again right before
+starting the JVM, so the Tomcat started by the same `up` already has it. Only a Tomcat
+that was running when the line was added lacks it; `up` then warns to restart it once.
 
 ## Ports outside local-env
 

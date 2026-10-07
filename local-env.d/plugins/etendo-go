@@ -45,6 +45,28 @@ free_port() {   # free_port START KEY TAKEN...
   echo "$p"
 }
 
+# com.etendoerp.go's CorsUtils trusts localhost:3000/3100/4173/5173 plus ETGO_ALLOWED_ORIGINS
+# (comma-separated, additive): a SPA on any other port gets "Origin not allowed" (403) on
+# login. The origins go into the environment's env file, which local-env sources and
+# exports before exec'ing tomcat-fast, so Tomcat's JVM inherits them. Merged with the value
+# already there (the file's line, else the inherited one): never clobbered.
+# add_origins PORT: exit 0 when it changed the env file, 1 when nothing was missing.
+add_origins() {
+  local port=$1 f="$LOCALENV_STATE/env" cur o add="" merged tmp
+  [[ "$port" == 3100 ]] && return 1
+  if grep -q '^export ETGO_ALLOWED_ORIGINS=' "$f" 2>/dev/null; then
+    cur="$(sed -n 's/^export ETGO_ALLOWED_ORIGINS=//p' "$f" | tail -1)"
+  else cur="${ETGO_ALLOWED_ORIGINS:-}"; fi
+  for o in "http://localhost:$port" "http://127.0.0.1:$port"; do
+    [[ ",$cur," == *",$o,"* ]] || add="${add:+$add,}$o"
+  done
+  [[ -n "$add" ]] || return 1
+  merged="${cur:+$cur,}$add"
+  tmp="$(mktemp)"
+  { grep -v '^export ETGO_ALLOWED_ORIGINS=' "$f" 2>/dev/null || true; echo "export ETGO_ALLOWED_ORIGINS=$merged"; } > "$tmp"
+  cat "$tmp" > "$f"; rm -f "$tmp"
+}
+
 needs_install() {   # node_modules missing, or the lockfile changed since the last install
   local ref="$STATE/install.stamp"
   [[ -d "$SF/node_modules" ]] || return 0
@@ -79,7 +101,8 @@ case "$hook" in
     spa="$(free_port 3101 SPA_PORT 3100 3400)"
     bff="$(free_port 3401 BFF_PORT 3100 3400 "$spa")"
     printf 'export SPA_PORT=%s\nexport BFF_PORT=%s\n' "$spa" "$bff" >> "$LOCALENV_STATE/env"
-    echo ">> Etendo GO SPA of this environment: :$spa (AI BFF :$bff)"
+    add_origins "$spa" || true
+    echo ">> Etendo GO SPA of this environment: :$spa (AI BFF :$bff), allowed as an origin by its Tomcat"
     ;;
   up)
     if [[ "${ETENDO_GO_SPA:-1}" == 0 ]]; then echo ">> ETENDO_GO_SPA=0: Etendo GO SPA not started"; exit 0; fi
@@ -87,6 +110,16 @@ case "$hook" in
     if [[ ! -d "$CORE/packages/app-shell-core/src" ]]; then
       echo "WARNING: $CORE not found: Etendo GO SPA not started (make dev-local-core needs it)" >&2
       exit 0
+    fi
+    # environments created before the origins were reserved. local-env sourced the env file
+    # before this hook, but tomcat-fast sources it again when it starts, so a Tomcat about
+    # to start (LOCALENV_TOMCAT=1) gets the line; one already running does not
+    if add_origins "$SPA_PORT"; then
+      if [[ "${LOCALENV_TOMCAT:-0}" == 1 ]]; then
+        echo ">> Added ETGO_ALLOWED_ORIGINS for :$SPA_PORT to $LOCALENV_STATE/env (the Tomcat starting now picks it up)"
+      else
+        echo "WARNING: added ETGO_ALLOWED_ORIGINS for :$SPA_PORT to $LOCALENV_STATE/env; a Tomcat of this environment that is already running does not have it: restart it once, or login from the SPA answers 'Origin not allowed'" >&2
+      fi
     fi
     if p="$(spa_pid)"; then echo ">> Etendo GO SPA already running: http://localhost:$SPA_PORT (pid $p, log $LOGF)"; exit 0; fi
     install=0; needs_install && install=1
