@@ -1490,8 +1490,9 @@
      content an option reveals is always reserved (see each block below). */
 
 /* Registrar/Presentar (PresentModal). Fixed width per variant: 760px with the
-   AEAT column (303), 500px single column (349). */
-.fm-present-modal { max-width: 500px; }
+   AEAT column (303), 500px single column (349). The two variables size the
+   "Subir justificante" row and its reserved slot (see below). */
+.fm-present-modal { max-width: 500px; --fm-acuse-upload-h: 32px; --fm-acuse-upload-gap: 12px; }
 .fm-present-modal--two-col { max-width: 760px; }
 .fm-present-modal .fm-config-modal__body { min-height: 0; }
 
@@ -1499,8 +1500,8 @@
    empty slot PresentModalColumn renders in its place while it is hidden. Both
    take their height from the same variable, so selecting the option swaps one
    for the other with no change in height. The button never wraps (a long file
-   name is ellipsized) so the row cannot outgrow the reserved slot. */
-.fm-present-modal { --fm-acuse-upload-h: 32px; --fm-acuse-upload-gap: 12px; }
+   name is ellipsized) so the row cannot outgrow the reserved slot. The two
+   variables are declared on `.fm-present-modal` above. */
 .fm-present-acuse-upload {
   margin-top: var(--fm-acuse-upload-gap); height: var(--fm-acuse-upload-h);
   display: flex; align-items: center; min-width: 0;
