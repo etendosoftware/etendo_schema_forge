@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Search, X, Loader2, Plus } from 'lucide-react';
+import { Search, X, Loader2, Plus, AlertCircle } from 'lucide-react';
+import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
@@ -164,9 +165,15 @@ export default function ProductDrawerShell({
   if (!open) return null;
 
   const {
-    query, setQuery, results, loading, loadingMore,
-    inputRef, listRef, doFetch, handleScroll,
+    query, setQuery, results, loading, loadingMore, error,
+    inputRef, listRef, rawOffsetRef, doFetch, handleScroll,
   } = fetchState;
+  // A NetworkError already carries a translated message (offline / timeout); anything else —
+  // a 504 from the gateway, a 500 — gets the generic search-failed text.
+  const errorMessage = error && (isNetworkError(error) ? error.message : ui('productSearchError'));
+  const retryFetch = () => (results.length > 0
+    ? doFetch(query, rawOffsetRef.current, true)
+    : doFetch(query, 0));
   const { toolbar, body, footerCount, hasResults, onNavKeyDown } = variant;
 
   const handleKeyDown = (e) => {
@@ -268,7 +275,26 @@ export default function ProductDrawerShell({
                   nothing used to render a completely blank body, which reads as broken —
                   doubly so now that a create row sits above it.
                 */}
-                {!loading && results.length === 0 && (
+                {!loading && error && results.length === 0 && (
+                  <div
+                    data-testid="product-search-error"
+                    role="alert"
+                    className="flex flex-col items-center justify-center gap-3 py-12 px-6 text-center"
+                  >
+                    <AlertCircle className="h-6 w-6 text-destructive" data-testid="AlertCircle__pds" />
+                    <p className="text-sm text-foreground">{errorMessage}</p>
+                    <button
+                      type="button"
+                      data-testid="product-search-retry"
+                      onClick={retryFetch}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      {ui('retry')}
+                    </button>
+                  </div>
+                )}
+
+                {!loading && !error && results.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <p className="text-sm">
                       {query.trim() ? ui('productSearchNoResults', { query }) : ui('noProductsFound')}
@@ -277,6 +303,25 @@ export default function ProductDrawerShell({
                 )}
 
                 {hasResults && body}
+
+                {/* A failed "load more" keeps the rows already shown and offers a retry below them. */}
+                {!loadingMore && error && results.length > 0 && (
+                  <div
+                    data-testid="product-search-load-more-error"
+                    role="alert"
+                    className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground"
+                  >
+                    <span>{errorMessage}</span>
+                    <button
+                      type="button"
+                      data-testid="product-search-load-more-retry"
+                      onClick={retryFetch}
+                      className="text-primary hover:underline"
+                    >
+                      {ui('retry')}
+                    </button>
+                  </div>
+                )}
 
                 {loadingMore && (
                   <div className="flex items-center justify-center py-3">
