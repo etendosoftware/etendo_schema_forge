@@ -972,7 +972,10 @@ is the same contract as the app's own optional selects (`SelectorInput`, `Entity
   `onValueChange` maps back to `''`.
 - **Required fields** (`isFieldRequired`) get no clear item.
 - **Options not allowed right now** (ETP-5597 `disabledWhen`, e.g. tipo C/D/V/X while casilla 69 is
-  positive) are rendered as `disabled` items with their `disabledReasonKey` as `title`. A value that
+  positive) are rendered as `disabled` items with their `disabledReasonKey` as `title`. The item
+  overrides the core `SelectItem`'s `data-[disabled]:pointer-events-none` with
+  `data-[disabled]:pointer-events-auto` so that title can show on hover; Radix still refuses to
+  select it. A value that
   is already selected stays selected; the trigger gets `--invalid` / `aria-invalid` and the reason
   shows under it (`fm-aeat-ident-<id>-error`).
 
@@ -3247,7 +3250,9 @@ is now persisted.
    `fiscalModelsUtils.js`, because many page tests `vi.mock` that file with an explicit factory and
    would silently replace the real rule. `formerStatementInvalid = sustitutiva &&
    !isValidFormerStatement(formerStatement)` disables the button (`data-testid="FmModel349Page__present"`, tooltip; the disabled look is the
-   app `Button`'s own, since ETP-5584 renders every action through `FmDetailButton`) with `fm.m349.present_disabled.former_statement`
+   app `Button`'s own, since ETP-5584 renders every action through `FmDetailButton`, which adds
+   `disabled:pointer-events-auto disabled:cursor-not-allowed` so a disabled action's tooltip is
+   still reachable — the core `Button` otherwise sets `disabled:pointer-events-none`) with `fm.m349.present_disabled.former_statement`
    ("Introduce el identificador de la declaración anterior (13 dígitos) para presentar una
    declaración sustitutiva."). `handlePresent` re-checks it and toasts the same text (belt and
    braces). `FileGenModal` applies the SAME helper while `substitutive` is true: a blank

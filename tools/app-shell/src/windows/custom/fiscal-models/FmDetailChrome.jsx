@@ -257,12 +257,19 @@ export function FmDetailActionBar({ left, right }) {
 const OUTLINE_BTN_CLS = 'h-10 px-3 gap-1.5 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground)/0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))]';
 const PRIMARY_BTN_CLS = 'h-10 px-3 gap-1.5 rounded-lg text-sm font-medium';
 
+// The core `Button` sets `disabled:pointer-events-none`, which also swallows the hover, so a
+// disabled action's `title` (e.g. 349's "Registrar presentación" while the former-declaration
+// identifier is missing, ETP-5597) would never show. A disabled native <button> still never fires
+// `onClick`, so re-enabling pointer events only brings the tooltip back; the cursor says "not
+// allowed". Later classes win through `cn`/tailwind-merge.
+const DISABLED_HOVER_CLS = 'disabled:pointer-events-auto disabled:cursor-not-allowed';
+
 export function FmDetailButton({ primary = false, className = '', children, ...props }) {
   return (
     <Button
       type="button"
       variant={primary ? 'default' : 'outline'}
-      className={`${primary ? PRIMARY_BTN_CLS : OUTLINE_BTN_CLS} ${className}`.trim()}
+      className={`${primary ? PRIMARY_BTN_CLS : OUTLINE_BTN_CLS} ${DISABLED_HOVER_CLS} ${className}`.trim()}
       data-testid="FmDetailButton"
       {...props}
     >

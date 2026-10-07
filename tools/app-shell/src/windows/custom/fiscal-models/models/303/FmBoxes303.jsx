@@ -245,6 +245,9 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                   key={opt.value}
                   value={opt.value}
                   disabled={optDisabled}
+                  // The core SelectItem sets `data-[disabled]:pointer-events-none`, which hides the
+                  // reason `title` below; Radix still refuses to select a disabled item.
+                  className="data-[disabled]:pointer-events-auto data-[disabled]:cursor-not-allowed"
                   title={optDisabled && opt.disabledReasonKey ? t(opt.disabledReasonKey) : undefined}
                   data-option-value={opt.value}
                   data-testid="SelectItem__49d327"

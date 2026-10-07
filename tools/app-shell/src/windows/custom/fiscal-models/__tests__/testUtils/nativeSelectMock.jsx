@@ -42,8 +42,8 @@ export function SelectContent({ children }) {
   return <>{children}</>;
 }
 
-export function SelectItem({ value, children, disabled, title }) {
-  return <option value={value} disabled={disabled} title={title}>{children}</option>;
+export function SelectItem({ value, children, disabled, title, className }) {
+  return <option value={value} disabled={disabled} title={title} className={className}>{children}</option>;
 }
 
 export function SelectGroup({ children }) {

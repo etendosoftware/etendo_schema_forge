@@ -2364,6 +2364,9 @@ describe('FmBoxes303 — tipo_declaracion disabled options (ETP-5597)', () => {
     for (const v of ['C', 'D', 'V', 'X']) {
       expect(optionByValue(select, v).disabled).toBe(true);
       expect(optionByValue(select, v).title).toBe('fm.ident.decl.disabled_positive_result');
+      // ETP-5584 — the core SelectItem's `data-[disabled]:pointer-events-none` would swallow the
+      // hover that shows that title; the item re-enables pointer events (jsdom cannot hover).
+      expect(optionByValue(select, v).className).toContain('data-[disabled]:pointer-events-auto');
     }
     for (const v of ['I', 'U', 'N']) expect(optionByValue(select, v).disabled).toBe(false);
     expect(container.querySelector('[data-testid="fm-aeat-ident-tipo_declaracion-error"]')).toBeNull();
