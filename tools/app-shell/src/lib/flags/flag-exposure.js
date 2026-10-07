@@ -1,4 +1,5 @@
 import { track, addFeatureFlagEvaluation } from '../observability.js';
+import { NO_EXPOSURE_FLAGS } from './flag-keys.js';
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/events.js';
 
 /**
@@ -84,6 +85,8 @@ export function createFlagExposureHook({
       try {
         const { flagKey, value } = { flagKey: hookContext?.flagKey, value: evaluationDetails?.value };
         if (!flagKey || typeof value !== 'boolean') return;
+        // The telemetry kill switches are read by the observability layer itself.
+        if (NO_EXPOSURE_FLAGS.has(flagKey)) return;
 
         const provider = hookContext?.providerMetadata?.name;
         const dedupeKey = `${flagKey}:${value}:${provider}`;

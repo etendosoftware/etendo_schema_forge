@@ -61,6 +61,13 @@ Do not target rules on secrets or rely on browser flags for entitlement. The
 browser client token and evaluated assignments are visible to the browser.
 Account and tenant attributes must match backend targeting conventions.
 
+## Telemetry kill switches
+
+`telemetry-kill-all` and `telemetry-kill-<datadog|aws-rum|mixpanel>` are operational
+switches read by the observability layer, not feature flags: `true` STOPS telemetry, the
+default is `false`, they are never exposed as flag exposures and they are not tracked in
+`flags-registry.json`. See [Kill Switch](ops/app-shell-observability.md#kill-switch).
+
 ## Exposure events and rollout
 
 The existing OpenFeature exposure hook emits the catalog-backed

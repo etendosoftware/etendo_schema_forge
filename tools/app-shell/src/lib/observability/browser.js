@@ -1,4 +1,5 @@
-import { initObservability, track } from '../observability.js';
+import { initObservability, track, disable, enable } from '../observability.js';
+import { bindTelemetryKillSwitch, killStateToDisabled, readKillState } from './killSwitch.js';
 import { OBSERVABILITY_EVENTS } from './events.js';
 import { createMixpanelProvider } from './providers/mixpanel.js';
 import { createRumProvider } from '../rum.js';
@@ -11,9 +12,13 @@ export function buildBrowserObservabilityConfig({
   storage = globalThis.localStorage,
 } = {}) {
   const hostname = location?.hostname;
+  // Build default + whatever the flags say right now. A provider killed here is never started.
+  const killState = readKillState({ env, logger });
 
   return {
     logger,
+    disabled: killStateToDisabled(killState),
+    killState,
     context: {
       app: 'app-shell',
       environment: hostname,
@@ -47,12 +52,33 @@ export function buildBrowserObservabilityConfig({
   };
 }
 
+/**
+ * How long startup waits for the flag provider before starting telemetry anyway. Long enough
+ * for the local provider (immediate) and a warm remote one; short enough that a slow control
+ * plane does not cost the app its first errors. A kill flag that answers later still applies,
+ * in place, through `bindTelemetryKillSwitch`.
+ */
+export const FLAGS_READY_WAIT_MS = 1500;
+
+function waitFor(promise, ms) {
+  if (!promise) return Promise.resolve();
+  return Promise.race([
+    Promise.resolve(promise).catch(() => undefined),
+    new Promise((resolve) => { setTimeout(resolve, ms); }),
+  ]);
+}
+
 export async function initBrowserObservability(
   options = {},
-  client = { initObservability, track }
+  client = { initObservability, track, disable, enable }
 ) {
-  const config = buildBrowserObservabilityConfig(options);
+  // Flags first, so a provider killed by flag is not even started. Never rejects, bounded.
+  await waitFor(options.flagsReady, options.flagsWaitMs ?? FLAGS_READY_WAIT_MS);
+  const { killState, ...config } = buildBrowserObservabilityConfig(options);
   await client.initObservability(config);
+  if (typeof client.disable === 'function' && typeof client.enable === 'function') {
+    bindTelemetryKillSwitch(client, { env: options.env, initial: killState, logger: options.logger });
+  }
   // The Mixpanel one-time stale-identity reset (see docs/surveys.md) is no longer
   // orchestrated here: it lives inside createMixpanelProvider's getClient() gate
   // (providers/mixpanel.js), so it is guaranteed to run before ANY provider

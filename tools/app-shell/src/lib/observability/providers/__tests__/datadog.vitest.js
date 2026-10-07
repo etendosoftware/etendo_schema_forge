@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/lib/observability/providers/datadog.js
 import { describe, expect, it, vi } from 'vitest';
-import { createDatadogProvider, redactErrorText } from '../datadog.js';
+import { createDatadogProvider } from '../datadog.js';
 
 const env = {
   VITE_DATADOG_ENABLED: 'true',
@@ -20,12 +20,18 @@ function fakeRum() {
 }
 
 describe('Datadog provider', () => {
-  it('redacts quoted and standalone bearer credentials', () => {
-    const result = redactErrorText('{"authorization":"Bearer secret-a"} Bearer secret-b');
-    expect(result).toContain('"authorization": "[redacted]"');
-    expect(result).toContain('Bearer [redacted]');
-    expect(result).not.toContain('secret-a');
-    expect(result).not.toContain('secret-b');
+  it('redacts quoted and standalone bearer credentials in automatic error text', async () => {
+    const { calls, rum } = fakeRum();
+    const provider = createDatadogProvider({ env, loader: vi.fn().mockResolvedValue({ datadogRum: rum }) });
+    await provider.init();
+    const { beforeSend } = calls.find(([method]) => method === 'init')[1];
+    const message = '{"authorization":"Bearer secret-a-0123456789abcdef"} Bearer secret-b-0123456789abcdef';
+    const event = { type: 'error', error: { message, stack: message } };
+    expect(beforeSend(event)).toBe(true);
+    for (const field of [event.error.message, event.error.stack]) {
+      expect(field).not.toContain('secret-a');
+      expect(field).not.toContain('secret-b');
+    }
   });
 
   it('starts a new RUM view after a tenant reset and assignment', async () => {
