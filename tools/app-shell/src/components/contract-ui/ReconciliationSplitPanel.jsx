@@ -283,46 +283,67 @@ function DualAmount({
   value, currency, bold = false, secondaryValue, secondaryCurrency, baseOnTop = false,
   primaryClassName, baseTestId = 'recon-cand-amount-base', approximate = false,
 }) {
-  const ui = useUI();
-  const approxHint = ui('financeReconcileCandApproxAmount');
   const primaryCls = primaryClassName
     || cn('text-sm leading-5 text-[hsl(var(--foreground))]', bold ? 'font-semibold' : 'font-normal');
-  const mutedCls = 'text-xs leading-4 text-[hsl(var(--muted-foreground))]';
   const hasBase = secondaryValue != null;
   // When `baseOnTop`, the account-currency (EUR) equivalent is shown ON TOP and prominent, with the
   // invoice's own (foreign) currency small underneath — the account currency is what reconciles the
   // line, so it leads. Otherwise the primary `value` leads and the base sits underneath (muted).
+  const baseLeads = baseOnTop && hasBase;
   const foreignLine = (
     <MoneyAmount
       value={Number(value) || 0}
       currency={currency}
       tone="neutral"
-      className={baseOnTop && hasBase ? mutedCls : primaryCls}
+      className={baseLeads ? MUTED_AMOUNT_CLS : primaryCls}
       data-testid="MoneyAmount__d0f4d5" />
   );
-  // MoneyAmount doesn't forward extra props (no data-testid), so the base testid goes on this
-  // wrapping span (it always marks the account-currency amount, whichever position it's in).
   const baseLine = hasBase ? (
-    <span data-testid={baseTestId} title={approximate ? approxHint : undefined}>
-      {approximate ? (
-        <>
-          <span className="sr-only">{approxHint}</span>
-          <span aria-hidden="true" className={baseOnTop ? primaryCls : mutedCls}>{APPROX_PREFIX}</span>
-        </>
-      ) : null}
-      <MoneyAmount
-        value={Number(secondaryValue) || 0}
-        currency={secondaryCurrency}
-        tone="neutral"
-        className={baseOnTop ? primaryCls : mutedCls}
-        data-testid="MoneyAmount-secondary__d0f4d5" />
-    </span>
+    <AccountCurrencyAmountLine
+      value={secondaryValue}
+      currency={secondaryCurrency}
+      className={baseOnTop ? primaryCls : MUTED_AMOUNT_CLS}
+      approximate={approximate}
+      testId={baseTestId}
+      data-testid="AccountCurrencyAmountLine__d0f4d5" />
   ) : null;
   return (
     <div className="flex flex-col items-end">
-      {baseOnTop && hasBase ? baseLine : foreignLine}
-      {baseOnTop && hasBase ? foreignLine : baseLine}
+      {baseLeads ? baseLine : foreignLine}
+      {baseLeads ? foreignLine : baseLine}
     </div>
+  );
+}
+
+/** Typography of the secondary (smaller, muted) line of a `DualAmount`. */
+const MUTED_AMOUNT_CLS = 'text-xs leading-4 text-[hsl(var(--muted-foreground))]';
+
+/**
+ * The account-currency line of a `DualAmount`, optionally marked as an estimate with "≈" plus a
+ * `title` / screen-reader hint (ETP-5657). Its own component so `DualAmount` stays under Sonar's
+ * cognitive-complexity ceiling (javascript:S3776).
+ *
+ * MoneyAmount doesn't forward extra props (no data-testid), so the testid goes on this wrapping span
+ * (it always marks the account-currency amount, whichever position it's in).
+ */
+function AccountCurrencyAmountLine({ value, currency, className, approximate, testId }) {
+  const ui = useUI();
+  const approxHint = ui('financeReconcileCandApproxAmount');
+  return (
+    <span data-testid={testId} title={approximate ? approxHint : undefined}>
+      {approximate ? (
+        <>
+          <span className="sr-only">{approxHint}</span>
+          <span aria-hidden="true" className={className}>{APPROX_PREFIX}</span>
+        </>
+      ) : null}
+      <MoneyAmount
+        value={Number(value) || 0}
+        currency={currency}
+        tone="neutral"
+        className={className}
+        data-testid="MoneyAmount-secondary__d0f4d5" />
+    </span>
   );
 }
 
