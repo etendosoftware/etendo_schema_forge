@@ -119,10 +119,10 @@ export function FmStatusChip({ status, submissionMethod, t, variant = 'list' }) 
       }}
     >
       {detail
-        ? <DetailStatusPill tone={tone} label={label} />
+        ? <DetailStatusPill tone={tone} label={label} data-testid="FmStatusChip__detailPill" />
         : (
           <span data-testid="FmStatusChip__badge" data-tone={tone} style={{ display: 'inline-flex' }}>
-            <StatusTag status={status} label={label} tone={tone} />
+            <StatusTag status={status} label={label} tone={tone} data-testid="FmStatusChip__listTag" />
           </span>
         )}
       {methodLabel && (

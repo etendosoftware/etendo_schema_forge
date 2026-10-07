@@ -223,6 +223,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
           value={identification?.[f.id] ?? ''}
           onValueChange={value => onIdentChange?.(f.id, value === EMPTY_OPTION ? '' : value)}
           disabled={readOnly}
+          data-testid="FmBoxes303__identSelectRoot"
         >
           <SelectTrigger
             className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}${invalidOption ? ' fm-aeat-ident-inline-field__select--invalid' : ''}`}
