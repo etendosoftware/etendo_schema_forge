@@ -151,10 +151,6 @@
             "true": { "en_US": "Posted", "es_ES": "Contabilizado" },
             "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
           },
-          "badgeVariants": {
-            "true": "green",
-            "false": "orange"
-          },
           "reason": "ETP-5436 — declared as a field (not left as an implicit AD button action) so the post/unpost menuActions and the statusPills entry below have a real value to read; mirrors goods-receipt/goods-shipment."
         },
         "project": {

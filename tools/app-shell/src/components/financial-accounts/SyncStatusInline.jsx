@@ -2,13 +2,15 @@ import { AlertTriangle } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { ACCOUNT_TYPE } from './tokens';
 import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
+import { LastSyncLabel } from './LastSyncLabel.jsx';
 
 /**
  * Inline secondary line under the account name.
  *
  * - Cash accounts (`type=C`) never show a sync line per Figma `3012:25602`.
  * - Accounts with an active bank connection (`bankConnected === true`) show
- *   "Sincronizado hace X" in green.
+ *   "Sincronizado hace X" in green (`account.lastSyncDate`, ETP-5582). A connected account that never
+ *   synced (no `lastSyncDate`) shows "Nunca sincronizada" with a gray (muted-foreground) dot and text.
  * - Pending accounts surface a warning treatment.
  * - Default state (no connection data, as in T1 before ETP-4097) renders the
  *   underlined "Conectar banco" CTA per Figma — inert in T1.
@@ -32,10 +34,16 @@ export function SyncStatusInline({ account, onConnect, windowReadOnly = false })
   }
 
   if (account.bankConnected === true) {
+    const synced = Boolean(account.lastSyncDate);
+    const tone = synced ? 'text-[var(--status-success-fg)]' : 'text-[hsl(var(--muted-foreground))]';
+    const dot = synced ? 'bg-[var(--status-success-fg)]' : 'bg-[hsl(var(--muted-foreground))]';
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-[var(--status-success-fg)]">
-        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-[var(--status-success-fg)]" aria-hidden="true" />
-        {ui('financeAccountsSyncedJustNow')}
+      <span className={`inline-flex items-center gap-1.5 text-xs ${tone}`}>
+        <span className={`inline-flex h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden="true" />
+        <LastSyncLabel
+          date={account.lastSyncDate}
+          prefixKey="financeAccountsSyncedAgo"
+          data-testid="last-sync-label" />
       </span>
     );
   }

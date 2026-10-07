@@ -28,6 +28,7 @@ A raw `fetch` also re-decided four other things, each an independent chance to g
 | `credentials: 'include'` | easy to omit | always set (overridable) |
 | `FormData` boundary | manual `delete headers['Content-Type']` | automatic |
 | 401 / expired session | nothing, or a bespoke handler per site | routed to the logout choke point |
+| 402 / environment blocked | read only by `windowaccessmap` | recorded in the environment-access gate from any response |
 
 ## How to make a request
 
@@ -256,6 +257,27 @@ loses its token, which covers the ambient (non-React) path too.
 
 That is why the local `@/auth/useApiFetch.js` **wraps** the core hook instead of re-exporting
 it: taking the core's own `useAuth().logout` would silently skip the clear.
+
+## 402 and the blocked-access screen (ETP-5642)
+
+When an environment's commercial access is cut (demo trial expired, subscription grace elapsed),
+the backend answers **402** `Environment access is not available: <DECISION>` to every request
+that touches it — NEO, Copilot, MCP and the account endpoints acting on the tenant. `apiFetch`
+treats that answer like the 401: as a statement about the whole session, not about the request.
+Its single response exit (`finish()` in the core's `auth/api.js`) reads a **clone** of every 402
+and, when the decision is `DEMO_TRIAL_EXPIRED` or `SUBSCRIPTION_REQUIRED`, records it in the
+environment-access gate (`@etendosoftware/app-shell-core/lib/environmentAccessGate.js`, re-exported
+as `@/lib/environmentAccessGate.js`). `AppLayout` reads the gate and replaces the UI with the
+blocked-access screen.
+
+- The caller still gets its response, unread and unchanged — handle the 402 as before, or not at all.
+- The transport only ever **sets** a block. A 200 from another endpoint proves nothing (the account
+  API stays reachable while ERP access is blocked); only a successful `/sws/neo/windowaccessmap`
+  clears it.
+- A 402 that arrives after the session changed identity (an environment switch) is not recorded.
+- Before this, the block was detected only from `windowaccessmap`. A tab already open when the
+  trial expired showed empty lists and an empty dashboard indefinitely — the silent refresh stops
+  at `/sws/neo/refreshtoken`'s 402 and never reaches `windowaccessmap`.
 
 ## Writes to child documents invalidate the parent order's cache (ETP-5525)
 
