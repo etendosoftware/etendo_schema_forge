@@ -119,8 +119,8 @@
         "label": "Exchange rates",
         "tabOrder": 50,
         "requireSavedRecord": true,
-        "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
-        "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
+        "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+        "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags. ETP-5657: @Processed@='Y' was deliberately dropped from this rule, reversing the ETP-4030 completion lock for the tab only — exchange rates stay editable on a completed-but-unposted invoice and lock once it is posted (editable again after unpost) or reversed. Core's C_CONVERSION_RATE_DOCUMENT_TRG still rejects writes on posted invoices server-side. The header currency/rate picker keeps its own @Processed@='Y' lock."
       }
     },
     "statusPills": [
@@ -1100,7 +1100,9 @@
           "gridReadOnly": true
         },
         "rate": {
-          "grid": true
+          "grid": true,
+          "type": "number",
+          "_note": "ETP-5657: explicit numeric type override. C_Conversion_Rate_Document.Rate uses AD reference 800019 'General Quantity', which the core extractor's reference map does not cover, so it is extracted as type 'string' (maxLength 10) and the inline editor treated the rate as plain text (raw '0.68027210884', no locale decimal comma). 'number' (not 'decimal') is used on purpose: generate-frontend maps it to a 'number' table column and, with explicitType, a 'number' form field; InlineLinesPanel only edits types in EDITABLE_TYPES (which has 'number' but not 'decimal') and routes NUMERIC_FIELD_TYPES through MaskedAmountInput without 2-decimal grouping. The string-only maxLength passthrough is dropped on the numeric path. Remove once ref 800019 is mapped in schema_forge_core."
         },
         "foreignAmount": {
           "grid": true,

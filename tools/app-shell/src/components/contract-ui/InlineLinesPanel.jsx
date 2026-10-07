@@ -792,6 +792,26 @@ function EditDateCell({ col, value, onCommit, isInvalid }) {
 /**
  * Edit-mode cell. Returns null for non-editable types so the caller falls back to read mode.
  */
+/**
+ * The keystroke limit of an edit-mode text cell: the column's AD length, but never below the
+ * length of the value the row already holds (ETP-5657).
+ *
+ * A limit below the stored value does not stop growth — it freezes the cell: the browser refuses
+ * every insertion while the value is at or over `maxLength`, so deleting one character still left
+ * the field uneditable. That is what a numeric column typed as text exposed — the Exchange rates
+ * tab's `rate` (AD length 10) holding `0.68027210884` (13 characters). The backend stays the real
+ * boundary for anything that does not fit.
+ *
+ * @param {number|string|undefined} maxLength the column's declared limit
+ * @param {*} value the value the cell starts from
+ * @returns {number|undefined}
+ */
+export function editTextMaxLength(maxLength, value) {
+  const limit = Number(maxLength);
+  if (!limit) return undefined;
+  return Math.max(limit, String(value ?? '').length);
+}
+
 function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid, ui, locale, t }) {
   const inputRef = useRef(null);
   useEffect(() => {
@@ -931,7 +951,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
       data-testid={`field-${col.key}`}
       type="text"
       defaultValue={value ?? ''}
-      maxLength={col.maxLength}
+      maxLength={editTextMaxLength(col.maxLength, value)}
       onBlur={(e) => onCommit(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {

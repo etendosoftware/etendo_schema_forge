@@ -167,6 +167,114 @@ describe('translateBackendError', () => {
     });
   });
 
+  // reconcileGroup with the bank-rate conversion fields (`actualPayment` / `conversionRate` /
+  // `convertedAmount`), refused by com.etendoerp.go ReconciliationConversionSupport. The English
+  // literals ARE the wire contract (no AD_MESSAGE), so they are pinned byte for byte here.
+  // Exchange Rates tab of an invoice (ConversionRateDocDeleteGuardObserver,
+  // com.smf.currency.conversionrate — AD_MESSAGE SMFCR_CannotDeleteRateCompleted, no es_ES TRL):
+  // a completed invoice's rate may be edited but not deleted.
+  describe('invoice exchange-rate delete refusal (ETP-5657)', () => {
+    const RAW = 'The exchange rate of a completed invoice cannot be deleted. Edit it instead.';
+    const KEY = 'backendError.conversionRateDeleteCompleted';
+    const REMOVED = 'Cannot modify document conversion rate when the invoice is not in draft status.';
+
+    it(`maps "${RAW.slice(0, 40)}..." to key ${KEY}`, () => {
+      const t = (k) => (k === KEY ? `translated:${KEY}` : k);
+      assert.equal(translateBackendError(RAW, t), `translated:${KEY}`);
+    });
+
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      it(`resolves to a non-empty ${locale} translation`, () => {
+        const json = JSON.parse(
+          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+        const translated = translateBackendError(RAW, (k) => json.genericLabels[k] ?? k);
+        assert.equal(translated, json.genericLabels[KEY], `${locale}.${KEY}`);
+        assert.ok(translated.trim());
+        if (locale !== 'en_US') assert.notEqual(translated, RAW, `${locale}.${KEY} is untranslated`);
+      });
+    }
+
+    it('no longer translates the retired "not in draft status" message: it passes through as is', () => {
+      const t = (k) => `translated:${k}`;
+      assert.equal(translateBackendError(REMOVED, t), REMOVED);
+    });
+
+    it('dropped the retired backendError.conversionRateNotDraft key from every locale', () => {
+      for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+        const json = JSON.parse(
+          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+        assert.equal(json.genericLabels['backendError.conversionRateNotDraft'], undefined, locale);
+      }
+    });
+  });
+
+  describe('bank-rate conversion refusals of reconcileGroup (ETP-5657)', () => {
+    const KNOWN = [
+      {
+        // Reachable from an MCP/REST caller only — the modal always sends actualPayment.
+        raw: 'actualPayment is required when conversionRate or convertedAmount is sent',
+        key: 'backendError.reconcileConversionActualRequired',
+      },
+      {
+        raw: 'Conversion fields require all selected invoices to share one currency different from the account currency',
+        key: 'backendError.reconcileConversionCurrencyMismatch',
+      },
+      {
+        raw: 'Conversion fields cannot be combined with existing transactions or a write-off',
+        key: 'backendError.reconcileConversionNotCombinable',
+      },
+      {
+        raw: 'The amount to pay must be greater than zero and not exceed the outstanding amount of the selected invoices',
+        key: 'backendError.reconcileConversionActualOutOfRange',
+      },
+      {
+        raw: 'The converted amount must be greater than zero and not exceed the statement line amount',
+        key: 'backendError.reconcileConversionConvertedOutOfRange',
+      },
+      {
+        raw: 'The converted amount is too small to allocate across the selected invoices',
+        key: 'backendError.reconcileConversionTooSmall',
+      },
+    ];
+
+    for (const { raw, key } of KNOWN) {
+      it(`maps "${raw.slice(0, 40)}..." to key ${key}`, () => {
+        const t = (k) => (k === key ? `translated:${key}` : k);
+        assert.equal(translateBackendError(raw, t), `translated:${key}`);
+      });
+    }
+
+    it('routes each refusal to its own key', () => {
+      const t = (k) => k;
+      const keys = KNOWN.map(({ raw }) => translateBackendError(raw, (k) => `translated:${k}`));
+      assert.equal(new Set(keys).size, KNOWN.length);
+      // With no translation the original English is kept (the t(key) === key guard).
+      for (const { raw } of KNOWN) assert.equal(translateBackendError(raw, t), raw);
+    });
+
+    it('does not match a refusal truncated or extended by a period', () => {
+      const t = (k) => `translated:${k}`;
+      for (const { raw } of KNOWN) {
+        assert.equal(translateBackendError(`${raw}.`, t), `${raw}.`);
+        assert.equal(translateBackendError(raw.slice(0, -1), t), raw.slice(0, -1));
+      }
+    });
+
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      it(`resolves every refusal to a non-empty ${locale} translation`, () => {
+        const json = JSON.parse(
+          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+        const t = (k) => json.genericLabels[k] ?? k;
+        for (const { raw, key } of KNOWN) {
+          const translated = translateBackendError(raw, t);
+          assert.equal(translated, json.genericLabels[key], `${locale}.${key}`);
+          assert.ok(translated.trim(), `${locale}.${key} is blank`);
+          if (locale !== 'en_US') assert.notEqual(translated, raw, `${locale}.${key} is untranslated`);
+        }
+      });
+    }
+  });
+
   describe('known access-control messages (ETP-5205)', () => {
     const KNOWN = [
       {
