@@ -1,8 +1,19 @@
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
 import { postedStatusTone } from '@/lib/postedStatus.js';
 import { postedCode, postingStatusLabel } from './postingStatusLabel.js';
+
+/**
+ * Dot colour per tone. CSS variables, not the `TONE_STYLES` hex: the theme redefines them
+ * under `.dark` (a light shade on a dark background), which a fixed hex would not follow.
+ * Same mapping `DocumentStatusPill` uses for its tone icons.
+ */
+const DOT_COLOR = {
+  success: 'var(--status-success-fg)',
+  warning: 'var(--status-warning-fg)',
+  destructive: 'hsl(var(--destructive))',
+  neutral: 'hsl(var(--muted-foreground))',
+};
 
 /**
  * Small dot + label indicating the accounting posting status of a movement. Reads the `posted`
@@ -27,7 +38,7 @@ export function PostingStatusDot({ posted, className }) {
     >
       <span
         className="h-1.5 w-1.5 rounded-full"
-        style={{ background: TONE_STYLES[tone].color }}
+        style={{ background: DOT_COLOR[tone] }}
       />
       {postingStatusLabel(code, ui)}
     </span>

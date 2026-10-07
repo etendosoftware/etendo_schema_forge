@@ -1,7 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/financial-account/PostingStatusDot.jsx
 // @covers tools/app-shell/src/windows/custom/financial-account/postingStatusLabel.js
 import { render, screen } from '@testing-library/react';
-import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -12,13 +11,17 @@ import { postingStatusLabel } from '../postingStatusLabel.js';
 
 const ui = (key) => key;
 
-// The dot colour comes from the shared posting-status registry (ETP-5647); jsdom normalises
-// the inline hex to rgb(), so compare against the same token rendered the same way.
+// The tone comes from the shared posting-status registry (ETP-5647); the dot paints it with
+// the theme's CSS variable so dark mode keeps a readable shade.
+const DOT_VAR = {
+  success: '--status-success-fg',
+  warning: '--status-warning-fg',
+  destructive: '--destructive',
+};
+
 function expectDotTone(container, tone) {
   expect(container.firstChild).toHaveAttribute('data-tone', tone);
-  const probe = document.createElement('span');
-  probe.style.background = TONE_STYLES[tone].color;
-  expect(container.querySelector('span > span').style.background).toBe(probe.style.background);
+  expect(container.querySelector('span > span').getAttribute('style')).toContain(DOT_VAR[tone]);
 }
 
 describe('PostingStatusDot', () => {
