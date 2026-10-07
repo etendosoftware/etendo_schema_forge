@@ -1,8 +1,8 @@
 {
-  "version": "0.41.0",
+  "version": "0.42.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "updatedAt": "2026-09-24T10:36:49.348Z",
-  "checksum": "fe0266c75162dd95",
+  "updatedAt": "2026-10-07T11:18:33.431Z",
+  "checksum": "bdc9c6708d28eacb",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -319,10 +319,6 @@
                 "en_US": "Not posted",
                 "es_ES": "Sin contabilizar"
               }
-            },
-            "badgeVariants": {
-              "true": "green",
-              "false": "orange"
             },
             "validation": {
               "required": true,

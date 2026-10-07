@@ -14,11 +14,17 @@
  * posting FAILED therefore read as one that was merely never attempted, hiding the
  * reason — the defect this registry exists to close (ETP-5075).
  *
- * Only the non-`Y`/`N` codes are resolved here. `Y`/`N` deliberately return `null` so
- * each caller keeps its existing path for them (the grid its `badgeLabels`, the detail
- * its `statusPills` `trueKey`/`falseKey`), which is what guarantees the windows already
- * shipped — `goods-receipt`, `purchase-invoice`, `sales-invoice` — do not change at all
- * in their normal operation.
+ * This module is also the ONLY place that colours a posting status (ETP-5647). Every code,
+ * `Y`/`N` included, maps to one status tone here, and every surface that shows the state —
+ * the list column, the detail pill, the Not Posted Documents page, the financial-account
+ * reconciliations and movements — reads that tone through {@link postedStatusTone}. Before
+ * that, five surfaces carried five colour tables in two palettes, and each window
+ * copy-pasted its own `badgeVariants: { false: 'orange' }`, so "Sin contabilizar" read as an
+ * error in the list and as a pending warning in the detail.
+ *
+ * Labels are a different matter: `resolvePostedStatus` still returns `null` for `Y`/`N` so
+ * each caller keeps its own wording for them (the grid its `badgeLabels`, the detail its
+ * `statusPills` `trueKey`/`falseKey`, the financial account its own keys).
  *
  * Keyed by AD column name, the same way `fkNavigation.js` keys its own registry, and it
  * fails closed: an unlisted column resolves to `null` and nothing changes.
@@ -38,37 +44,70 @@ const POSTED_STATUS_COLUMNS = new Set(['Posted', 'posted']);
  * `D` (document disabled) vs `d` (disabled for background). Never upper/lower-case a
  * code before looking it up here.
  *
- * Tones: a code that means "the posting failed and a human must act" is `destructive`;
- * a code that only means "posting is switched off / not attempted yet" is `neutral`.
+ * Tones (the status palette, `TONE_STYLES` in `status-tag-tokens.js`): `Y` is `success`;
+ * `N` — posting not attempted yet — is `warning` (yellow: pending, not an error); a code
+ * that means "the posting failed and a human must act" is `destructive`, `p` (period
+ * closed) included; a code that only means "posting is switched off / not prepared yet" is
+ * `neutral`.
  */
 const POSTED_STATUS = {
-  E:  { labelKey: 'postedStatusError',              tone: 'destructive', variant: 'red' },
-  C:  { labelKey: 'postedStatusErrorNoCost',        tone: 'destructive', variant: 'red' },
-  i:  { labelKey: 'postedStatusInvalidAccount',     tone: 'destructive', variant: 'red' },
-  b:  { labelKey: 'postedStatusNotBalanced',        tone: 'destructive', variant: 'red' },
-  c:  { labelKey: 'postedStatusNotConvertible',     tone: 'destructive', variant: 'red' },
-  NC: { labelKey: 'postedStatusCostNotCalculated',  tone: 'destructive', variant: 'red' },
-  AD: { labelKey: 'postedStatusNoAccountingDate',   tone: 'destructive', variant: 'red' },
-  DT: { labelKey: 'postedStatusNoDocumentType',     tone: 'destructive', variant: 'red' },
-  NO: { labelKey: 'postedStatusNoRelatedPo',        tone: 'destructive', variant: 'red' },
-  L:  { labelKey: 'postedStatusDocumentLocked',     tone: 'destructive', variant: 'red' },
-  p:  { labelKey: 'postedStatusPeriodClosed',       tone: 'destructive', variant: 'red' },
-  T:  { labelKey: 'postedStatusTableDisabled',      tone: 'neutral',     variant: 'neutral' },
-  D:  { labelKey: 'postedStatusDocumentDisabled',   tone: 'neutral',     variant: 'neutral' },
-  d:  { labelKey: 'postedStatusDisabledBackground', tone: 'neutral',     variant: 'neutral' },
-  y:  { labelKey: 'postedStatusPostPrepared',       tone: 'neutral',     variant: 'neutral' },
-  l:  { labelKey: 'postedStatusPendingRefresh',     tone: 'neutral',     variant: 'neutral' },
+  Y:  { labelKey: 'postedStatus',                   tone: 'success' },
+  N:  { labelKey: 'notPostedStatus',                tone: 'warning' },
+  E:  { labelKey: 'postedStatusError',              tone: 'destructive' },
+  C:  { labelKey: 'postedStatusErrorNoCost',        tone: 'destructive' },
+  i:  { labelKey: 'postedStatusInvalidAccount',     tone: 'destructive' },
+  b:  { labelKey: 'postedStatusNotBalanced',        tone: 'destructive' },
+  c:  { labelKey: 'postedStatusNotConvertible',     tone: 'destructive' },
+  NC: { labelKey: 'postedStatusCostNotCalculated',  tone: 'destructive' },
+  AD: { labelKey: 'postedStatusNoAccountingDate',   tone: 'destructive' },
+  DT: { labelKey: 'postedStatusNoDocumentType',     tone: 'destructive' },
+  NO: { labelKey: 'postedStatusNoRelatedPo',        tone: 'destructive' },
+  L:  { labelKey: 'postedStatusDocumentLocked',     tone: 'destructive' },
+  p:  { labelKey: 'postedStatusPeriodClosed',       tone: 'destructive' },
+  T:  { labelKey: 'postedStatusTableDisabled',      tone: 'neutral' },
+  D:  { labelKey: 'postedStatusDocumentDisabled',   tone: 'neutral' },
+  d:  { labelKey: 'postedStatusDisabledBackground', tone: 'neutral' },
+  y:  { labelKey: 'postedStatusPostPrepared',       tone: 'neutral' },
+  l:  { labelKey: 'postedStatusPendingRefresh',     tone: 'neutral' },
 };
 
-/** The values both renderers already handle themselves as plain true/false. */
-const BOOLEAN_VALUES = new Set([true, false, 'Y', 'N', 'true', 'false']);
+/** Boolean spellings of the `Y`/`N` pair, as the backend or a boolean-typed field sends them. */
+const BOOLEAN_CODE = new Map([[true, 'Y'], ['true', 'Y'], ['Y', 'Y'], [false, 'N'], ['false', 'N'], ['N', 'N']]);
+
+/**
+ * The posting code a raw value stands for: booleans fold to `Y`/`N`, anything else is the
+ * code itself (case kept). `null` for an empty value.
+ */
+function toPostedCode(value) {
+  if (value == null || value === '') return null;
+  return BOOLEAN_CODE.get(value) ?? String(value);
+}
+
+/**
+ * The status tone (`success` | `warning` | `destructive` | `neutral`) of a raw posting value —
+ * the single colour source for every surface that shows a posting status. An unknown code
+ * is `neutral`; an empty value is `null` (nothing to show).
+ */
+export function postedStatusTone(value) {
+  const code = toPostedCode(value);
+  if (code == null) return null;
+  return POSTED_STATUS[code]?.tone ?? 'neutral';
+}
+
+/**
+ * True when a raw value is one of the plain `Y`/`N` pair (or a boolean spelling of it),
+ * whose label each caller words itself.
+ */
+export function isPostedBooleanValue(value) {
+  return BOOLEAN_CODE.has(value);
+}
 
 /**
  * Resolves a posting-status code that the plain boolean path cannot express.
  *
  * @param column AD column name of the cell/field being rendered (`col.column`)
  * @param value  raw value straight from the backend
- * @returns `{ labelKey, rawLabel, tone, variant }` for a code that needs this registry,
+ * @returns `{ labelKey, rawLabel, tone }` for a code that needs this registry,
  *          or `null` when the column is not a posting-status column, the value is empty,
  *          or the value is plain `Y`/`N`/boolean (caller keeps its own rendering).
  *          `labelKey` is `null` for a code absent from the AD domain — `rawLabel` then
@@ -78,10 +117,10 @@ const BOOLEAN_VALUES = new Set([true, false, 'Y', 'N', 'true', 'false']);
 export function resolvePostedStatus(column, value) {
   if (!POSTED_STATUS_COLUMNS.has(column)) return null;
   if (value == null || value === '') return null;
-  if (BOOLEAN_VALUES.has(value)) return null;
+  if (isPostedBooleanValue(value)) return null;
   const code = String(value);
   const entry = POSTED_STATUS[code];
-  if (!entry) return { labelKey: null, rawLabel: code, tone: 'neutral', variant: 'neutral' };
+  if (!entry) return { labelKey: null, rawLabel: code, tone: 'neutral' };
   return { ...entry, rawLabel: code };
 }
 
@@ -136,5 +175,11 @@ export function resolveStatusPill(badge, value, ui) {
   // One-sided badges (only a trueKey declared) hide on the false value — the generator
   // emits the missing side as the literal string 'undefined', which must never show.
   if (!labelKey || labelKey === 'undefined') return null;
-  return { status: isTrue ? 'Y' : 'N', label: ui(labelKey), tone: isTrue ? 'success' : 'warning' };
+  const status = isTrue ? 'Y' : 'N';
+  // A posting-status pill takes its Y/N colour from the registry, like every other code;
+  // any other true/false pill keeps the generic success/warning pair.
+  const tone = isPostedStatusColumn(badge.column ?? badge.key)
+    ? postedStatusTone(status)
+    : (isTrue ? 'success' : 'warning');
+  return { status, label: ui(labelKey), tone };
 }

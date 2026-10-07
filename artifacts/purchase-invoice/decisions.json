@@ -442,10 +442,6 @@
               "es_ES": "Sin contabilizar"
             }
           },
-          "badgeVariants": {
-            "true": "green",
-            "false": "orange"
-          },
           "type": "boolean"
         },
         "trxOrganization": {

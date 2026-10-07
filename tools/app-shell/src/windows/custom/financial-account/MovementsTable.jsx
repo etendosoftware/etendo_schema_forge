@@ -20,6 +20,7 @@ import { MoneyAmount } from '@/components/ui/money-amount';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { MovementStatusBadge } from './MovementStatusBadge';
 import { PostingStatusDot } from './PostingStatusDot';
+import { postingStatusLabel } from './postingStatusLabel.js';
 import { MovementRowKebab } from './MovementRowKebab';
 import { getContractGridColumns, getContractPanelFields } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel, SortableHeaderSegments } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
@@ -204,8 +205,7 @@ const MOVEMENT_CELL_RENDERERS = {
       {
         key: 'posted',
         labelKey: 'financeAccountMovementsColPosted',
-        // The translated PostingStatusDot text, so the two states group the way they read.
-        // Only 'Y' is posted; every other code renders as "Sin contabilizar".
+        // The translated PostingStatusDot text, so the states group the way they read.
         sortValue: (m, ctx) => ctx.getPostedLabel(m),
       },
     ],
@@ -501,10 +501,8 @@ export function buildMovementSortCtx(ui, getTrxTypeLabel) {
       const config = m.processed === false ? DRAFT : MOVEMENT_STATUS_CONFIG[m.paymentStatus];
       return config ? ui(config.labelKey) : '';
     },
-    // Mirrors PostingStatusDot: only 'Y' is posted.
-    getPostedLabel: (m) => (m.posted === 'Y'
-      ? ui('financeAccountMovementsPosted')
-      : ui('financeAccountMovementsNotPosted')),
+    // The exact text PostingStatusDot shows, failure reasons included.
+    getPostedLabel: (m) => postingStatusLabel(m.posted, ui),
   };
 }
 

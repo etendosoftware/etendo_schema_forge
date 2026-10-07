@@ -1740,6 +1740,8 @@ Verified after the push: `reconciliations` → 15 fields `ISINCLUDED=Y`/`ISREADO
 
 **Accounting status comes from `Posted`, not from `EM_Etblkp_Accountingstatus`.** That second column is a mirror maintained by the trigger `etblkp_fin_recon_status_trg`, which **only fires on UPDATE, never on INSERT** — freshly inserted rows keep the `'l'` ("Pending Refresh") default and go stale. Confirmed in local data: documents 1000032 and 1000033 have `posted='Y'` with `em_etblkp_accountingstatus='l'`. The mirror is therefore `discarded` and the badge is derived from `posted`.
 
+**Accounting-status pill colour (ETP-5647):** the `posted` pill's tone comes from `postedStatusTone()` in `lib/postedStatus.js` (`Y` green, `N` yellow, every failure — `p`, `E`, `L`… — red, `D`/`l` grey); it used to be grey for `N` and yellow for every failure. Its label is `reconciliationPostedLabel()`: the window's own `financeAccountReconciliationsPosted_<code>` key when it is translated, else the shared posting-status label, so a code outside those seven (or a locale missing them) never prints a raw key.
+
 **Components** (`tools/app-shell/src/windows/custom/financial-account/ReconciliationList/`): `index.jsx` (tab shell) → `ReconciliationListTable.jsx` (accordion, CSS grid rather than `<table>` so the expanded row can span every column) → `ClearedItemsInline.jsx` (child grid, **fetches its own data only while its row is open**, so the query is lazy per row instead of N+1 up front). Same triplet shape as `ImportedStatementsTab` → `StatementsTable` → `StatementLinesInline`. Columns on both levels come from `getContractGridColumns()`, so reordering or dropping one is a `decisions.json` change, not a JSX change.
 
 Hooks: `tools/app-shell/src/hooks/useReconciliationList.js` — `useReconciliations(accountId)` and `useClearedItems(reconciliationId)`. Both pass `_endRow` explicitly (200 / 500): the generic CRUD defaults it to 100 and would silently truncate a long history.
@@ -2644,7 +2646,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
       MovementsTable.jsx           — header + rows / skeleton / empty-state; renderBody helper
         DimensionsPanel (inline)   — expandable grid of the 3 fixed dimensions (Proyecto / Centro de costes / Producto); editable ChipSelect when canEditDimensions (ETP-5101), else read-only
         MovementStatusBadge.jsx    — 2 status chips: Conciliado (green) / Sin conciliar (neutral)
-        PostingStatusDot.jsx       — derived posting status (RPPC → posted/green, else → orange)
+        PostingStatusDot.jsx       — posting status dot; colour from lib/postedStatus.js (Y green, N yellow, failures red + reason)
         MovementRowKebab.jsx       — on-hover kebab (Ver detalle · Unreconcile disabled · Post when !posted · Unpost when posted, ETP-4505)
     ReconciliationTab.jsx          — thin host for ReconciliationSplitPanel (T6); forwards windowReadOnly (ETP-5457)
     ImportedStatementsTab.jsx      — orchestrates list ↔ lines state machine
@@ -4599,7 +4601,7 @@ them now.)
 ## Known deviations from the Figma frame
 
 - **Row kebab visible on hover only** — appears via CSS `opacity-0 group-hover:opacity-100`. Figma shows it always-visible.
-- **Posting status sub-label** is derived provisionally from `paymentStatus` (RPPC → "Contabilizado" / green dot, else → "Sin contabilizar" / orange dot). Will be replaced by the real `ETBR_PostStatus` field once it exists.
+- **Posting status sub-label** reads the movement's `posted` code: "Contabilizado" / green dot for `Y`, "Sin contabilizar" / yellow dot for `N` or empty, and for any failure code (`p`, `E`, `i`…) a red dot naming the reason (e.g. "Periodo cerrado") — it used to say "Sin contabilizar" for those too (ETP-5647). Colour comes from `postedStatusTone()` in `lib/postedStatus.js`; the label from `postingStatusLabel.js`, which the list's sort also uses.
 - **Bank logo** is the generic `AccountLogoAvatar` (icon by account type). Real brand logos (Santander/BBVA/etc.) are a future enhancement.
 
 ## Accounting dimension visibility per section — ETP-4529
