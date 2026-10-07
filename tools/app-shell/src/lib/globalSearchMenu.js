@@ -14,6 +14,8 @@
  * so English route names such as "contacts" still find the window). A window's own
  * name outranks its section's: "configu" opens "Configuración Fiscal", not the first
  * window of "Configuración". No window is listed twice. Within a tier, menu order holds.
+ * When the same section ends one tier and starts the next, the two are merged so its
+ * heading is not repeated back to back; a section that recurs further down stays apart.
  */
 import { normalizeLabel } from './matchOptionLabel.js';
 
@@ -27,8 +29,9 @@ function matchesAny(values, needle) {
  * @param {string} query raw search text
  * @param {(label: string) => string} translate menu label translator
  * @returns the groups to list: unchanged for an empty query, otherwise the matches
- *   ranked by tier. A section may appear once per tier, so each listed group carries
- *   its `tier` (1 translated label, 2 section label, 3 source label or route name).
+ *   ranked by tier. A section may appear once per tier (adjacent appearances merged),
+ *   so each listed group carries the `tier` it starts in (1 translated label, 2 section
+ *   label, 3 source label or route name); `${tier}:${group}` is unique.
  */
 export function filterMenuGroups(groups, query, translate) {
   const needle = normalizeLabel(query);
@@ -45,7 +48,17 @@ export function filterMenuGroups(groups, query, translate) {
     if (sectionMatches && rest.length > 0) sections.push({ ...group, items: rest, tier: 2 });
     if (bySource.length > 0) others.push({ ...group, items: bySource, tier: 3 });
   }
-  return [...translated, ...sections, ...others];
+  return mergeAdjacentSections([...translated, ...sections, ...others]);
+}
+
+function mergeAdjacentSections(ranked) {
+  const merged = [];
+  for (const group of ranked) {
+    const last = merged.at(-1);
+    if (last?.group === group.group) merged[merged.length - 1] = { ...last, items: [...last.items, ...group.items] };
+    else merged.push(group);
+  }
+  return merged;
 }
 
 function foldChar(char) {

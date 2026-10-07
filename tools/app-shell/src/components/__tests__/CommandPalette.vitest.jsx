@@ -327,12 +327,13 @@ describe('CommandPalette', () => {
   });
 
   describe('filters the menu windows by the query', () => {
-    it('lists only the windows of a section whose name matches the query', async () => {
+    it('lists the windows whose name matches, then the rest of the matching section, under one heading', async () => {
       renderWithQuery('Configura');
       await waitFor(() => expect(renderedWindowNames())
         .toEqual(['fiscal-config', 'user', 'role', 'general-ledger-configuration']));
-      // Listed in tier 1 (Configuración Fiscal) and tier 2 (the rest of the section).
-      expect(screen.getAllByTestId('cmd-group-translated:Configuración')).toHaveLength(2);
+      // Tier 1 (Configuración Fiscal) and tier 2 (the rest of the section) are adjacent,
+      // so they render under one "Configuración" heading, not the same heading twice.
+      expect(screen.getAllByTestId('cmd-group-translated:Configuración')).toHaveLength(1);
       expect(screen.queryByTestId('cmd-group-translated:Sales')).not.toBeInTheDocument();
     });
 
@@ -383,7 +384,7 @@ describe('CommandPalette', () => {
     // QA ETP-5602: "Configura" matched the SOURCE label of "Esquema contable" (General Ledger
     // Configuration), whose section comes first in menu order, so Enter opened the wrong window.
     // Esquema contable stays in the last tier, behind the matching section's windows.
-    it('ranks a matching section above windows that match only by source label or route name', async () => {
+    it('ranks the matching section\'s windows above windows that match only by source label or route name', async () => {
       renderWithQuery('Configura');
       await waitFor(() => expect(renderedWindowNames())
         .toEqual(['fiscal-config', 'user', 'role', 'general-ledger-configuration']));
@@ -414,6 +415,7 @@ describe('CommandPalette', () => {
         renderWithQuery('-');
         await waitFor(() => expect(renderedWindowNames())
           .toEqual(['warehouse', 'sales-order', 'general-ledger-configuration', 'fiscal-config', 'goods-shipment']));
+        // Not adjacent (tier 1 and tier 3, with other sections between), so not merged.
         expect(screen.getAllByTestId('cmd-group-translated:Logistics')).toHaveLength(2);
         fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
         expect(mockNavigate).toHaveBeenCalledWith('/warehouse');
