@@ -1,12 +1,16 @@
 // @covers tools/app-shell/src/components/CommandPalette.jsx
 // @covers tools/app-shell/src/lib/globalSearchMenu.js
 // Mocks BEFORE any import
-const MENU_TRANSLATIONS = vi.hoisted(() => ({ 'General Ledger Configuration': 'Esquema contable' }));
+const MENU_TRANSLATIONS = vi.hoisted(() => ({
+  'General Ledger Configuration': 'Esquema contable',
+  'Fiscal Configuration': 'Configuración Fiscal',
+}));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   // A few labels translate to something unrelated to their source text, like the real
-  // es_ES menu ("General Ledger Configuration" → "Esquema contable").
+  // es_ES menu ("General Ledger Configuration" → "Esquema contable"), or that only match
+  // a query once translated ("Fiscal Configuration" → "Configuración Fiscal").
   useMenuLabel: () => (key) => MENU_TRANSLATIONS[key] ?? `translated:${key}`,
 }));
 
@@ -70,6 +74,8 @@ vi.mock('../../menu.json', () => ({
         items: [
           { name: 'user', label: 'Users', hidden: false },
           { name: 'role', label: 'Roles', hidden: false },
+          // Last of its section, like the real menu: only its own name can rank it first.
+          { name: 'fiscal-config', label: 'Fiscal Configuration', hidden: false },
         ],
       },
       {
@@ -323,14 +329,16 @@ describe('CommandPalette', () => {
   describe('filters the menu windows by the query', () => {
     it('lists only the windows of a section whose name matches the query', async () => {
       renderWithQuery('Configura');
-      await waitFor(() => expect(renderedWindowNames()).toEqual(['user', 'role', 'general-ledger-configuration']));
-      expect(screen.getByTestId('cmd-group-translated:Configuración')).toBeInTheDocument();
+      await waitFor(() => expect(renderedWindowNames())
+        .toEqual(['fiscal-config', 'user', 'role', 'general-ledger-configuration']));
+      // Listed in tier 1 (Configuración Fiscal) and tier 2 (the rest of the section).
+      expect(screen.getAllByTestId('cmd-group-translated:Configuración')).toHaveLength(2);
       expect(screen.queryByTestId('cmd-group-translated:Sales')).not.toBeInTheDocument();
     });
 
     it('matches section and window names ignoring accents and case', async () => {
       renderWithQuery('CONFIGURACION');
-      await waitFor(() => expect(renderedWindowNames()).toEqual(['user', 'role']));
+      await waitFor(() => expect(renderedWindowNames()).toEqual(['fiscal-config', 'user', 'role']));
 
       cleanup();
       renderWithQuery('albaran');
@@ -369,17 +377,19 @@ describe('CommandPalette', () => {
 
     it('keeps every visible window when the query is empty', () => {
       renderWithQuery('');
-      expect(renderedWindowNames()).toEqual(['sales-order', 'general-ledger-configuration', 'user', 'role', 'goods-shipment', 'warehouse']);
+      expect(renderedWindowNames()).toEqual(['sales-order', 'general-ledger-configuration', 'user', 'role', 'fiscal-config', 'goods-shipment', 'warehouse']);
     });
 
     // QA ETP-5602: "Configura" matched the SOURCE label of "Esquema contable" (General Ledger
     // Configuration), whose section comes first in menu order, so Enter opened the wrong window.
+    // Esquema contable stays in the last tier, behind the matching section's windows.
     it('ranks a matching section above windows that match only by source label or route name', async () => {
       renderWithQuery('Configura');
       await waitFor(() => expect(renderedWindowNames())
-        .toEqual(['user', 'role', 'general-ledger-configuration']));
+        .toEqual(['fiscal-config', 'user', 'role', 'general-ledger-configuration']));
       fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
-      expect(mockNavigate).toHaveBeenCalledWith('/user');
+      expect(mockNavigate).toHaveBeenCalledWith('/fiscal-config');
+      expect(mockNavigate).not.toHaveBeenCalledWith('/general-ledger-configuration');
     });
 
     it('ranks a translated-label match above a route-name-only match', async () => {
@@ -392,7 +402,7 @@ describe('CommandPalette', () => {
 
     // Review S1 (ETP-5602): the tiering must beat menu order, not just coincide with it.
     // "-" appears in route names only (sales-order, general-ledger-configuration,
-    // goods-shipment), plus one translated label added here ("Almacén - central"). The
+    // fiscal-config, goods-shipment), plus one translated label added here ("Almacén - central"). The
     // translated match lives in the LAST group, the route-name-only matches in earlier ones,
     // and Logistics splits across tiers 2 and 3, so it renders twice (one `${tier}:${group}` key each).
     it('ranks a translated-label match in a later group above route-name-only matches in earlier groups', async () => {
@@ -403,7 +413,7 @@ describe('CommandPalette', () => {
       try {
         renderWithQuery('-');
         await waitFor(() => expect(renderedWindowNames())
-          .toEqual(['warehouse', 'sales-order', 'general-ledger-configuration', 'goods-shipment']));
+          .toEqual(['warehouse', 'sales-order', 'general-ledger-configuration', 'fiscal-config', 'goods-shipment']));
         expect(screen.getAllByTestId('cmd-group-translated:Logistics')).toHaveLength(2);
         fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
         expect(mockNavigate).toHaveBeenCalledWith('/warehouse');
@@ -416,11 +426,22 @@ describe('CommandPalette', () => {
       }
     });
 
+    // QA ETP-5602 (second round): "configu" listed the Configuración section in menu order,
+    // so "Configuración Fiscal" — the one window whose own name matches — came last and Enter
+    // opened Organización. A window's own name now outranks its section's name.
+    it('ranks a window whose translated name matches above the rest of its matching section', async () => {
+      renderWithQuery('configu');
+      await waitFor(() => expect(renderedWindowNames())
+        .toEqual(['fiscal-config', 'user', 'role', 'general-ledger-configuration']));
+      fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
+      expect(mockNavigate).toHaveBeenCalledWith('/fiscal-config');
+    });
+
     it('opens the first matching window on Enter', async () => {
       renderWithQuery('Configura');
-      await waitFor(() => expect(renderedWindowNames()[0]).toBe('user'));
+      await waitFor(() => expect(renderedWindowNames()[0]).toBe('fiscal-config'));
       fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
-      expect(mockNavigate).toHaveBeenCalledWith('/user');
+      expect(mockNavigate).toHaveBeenCalledWith('/fiscal-config');
     });
   });
 
@@ -445,14 +466,14 @@ describe('CommandPalette', () => {
       renderWithQuery('Configura');
 
       const records = await waitForRecordResults();
-      const windows = screen.getByTestId('cmd-group-translated:Configuración');
+      const [windows] = screen.getAllByTestId('cmd-group-translated:Configuración');
       expect(windows.compareDocumentPosition(records) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
       const items = dropdownItems();
       const firstRecord = items.findIndex((item) => records.contains(item));
       expect(firstRecord).toBeGreaterThan(0);
       expect(items.slice(0, firstRecord).map((item) => item.dataset.testid.split(' ').at(-1)))
-        .toEqual(['user', 'role', 'general-ledger-configuration']);
+        .toEqual(['fiscal-config', 'user', 'role', 'general-ledger-configuration']);
     });
 
     it('opens the first matching window on Enter even when records also match', async () => {
@@ -463,7 +484,7 @@ describe('CommandPalette', () => {
       fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
 
       expect(mockNavigate).toHaveBeenCalledTimes(1);
-      expect(mockNavigate).toHaveBeenCalledWith('/user');
+      expect(mockNavigate).toHaveBeenCalledWith('/fiscal-config');
     });
 
     it('opens the first record result on Enter when no window matches', async () => {
