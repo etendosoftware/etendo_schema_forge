@@ -1,5 +1,4 @@
 // @covers tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js
-// @covers tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js
 //
 // The invoice windows' follow-up config is only i18n keys: a key missing from a catalog is
 // SILENT (the translator echoes it back and the modal shows `followUpCreateShipmentLabel`).
@@ -32,12 +31,6 @@ for (const [window, config] of Object.entries(CONFIGS)) {
     // real spec name (= artifact directory), never a display name or PascalCase.
     it('targets an existing spec (artifact directory)', () => {
       assert.ok(existsSync(new URL(`../../../../../../../artifacts/${config.spec}/decisions.json`, import.meta.url)));
-    });
-
-    // QA ETP-5576 (Obs 3): the purchase popup showed the supplier reference (`orderReference`)
-    // instead of the internal document number.
-    it('shows the internal document number in the summary, never the supplier reference', () => {
-      assert.equal(config.summary.documentNoField, 'documentNo');
     });
 
     for (const [locale, dictionary] of Object.entries(LOCALES)) {

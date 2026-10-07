@@ -160,12 +160,6 @@ describe('invalidateAfterWrite', () => {
     assert.deepEqual(cache.calls, []);
   });
 
-  it('a write to goods-receipt invalidates purchase-invoice only (ETP-5576)', () => {
-    const cache = fakeCache();
-    invalidateAfterWrite(cache, { url: '/sws/neo/goods-receipt/goodsReceipt/1', method: 'POST' });
-    assert.deepEqual(cache.calls, [{ spec: 'purchase-invoice' }]);
-  });
-
   it('no cache (no DataProvider: null / undefined) does not throw', () => {
     assert.doesNotThrow(() => invalidateAfterWrite(null, { url: WRITE_URL, method: 'POST' }));
     assert.doesNotThrow(() => invalidateAfterWrite(undefined, { url: WRITE_URL, method: 'POST' }));

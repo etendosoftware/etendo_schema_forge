@@ -2,6 +2,7 @@
 // @covers tools/app-shell/src/components/follow-up-documents/useFollowUpDocuments.js
 // @covers tools/app-shell/src/components/follow-up-documents/FollowUpDocumentModal.jsx
 // @covers tools/app-shell/src/components/contract-ui/ActionChoiceModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js
 //
 // The generic follow-up document flow end to end at component level: topbar button →
 // choice modal (ActionChoiceModal, real) → POST through apiFetch (mocked) → result modal
@@ -42,6 +43,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import FollowUpDocumentButton from '../FollowUpDocumentButton.jsx';
+import { buildSummary } from '../FollowUpDocumentModal.jsx';
+import { PURCHASE_INVOICE_FOLLOW_UP } from '@/windows/custom/shared/invoiceFollowUp.js';
 import { consumeFollowUpPrompt, requestFollowUpPrompt } from '../followUpDocuments.js';
 
 const SPEC = 'sales-invoice';
@@ -515,5 +518,15 @@ describe('FollowUpDocumentButton — input-required round-trip', () => {
     await act(async () => { pending.resolve(CREATED); });
     expect(mockApiFetch).toHaveBeenCalledTimes(2);
     expect(postBodies()).toEqual([{}, { warehouseId: 'wh-1' }]);
+  });
+});
+
+// QA ETP-5576 (Obs 3): the purchase popup showed the supplier reference (`orderReference`) in
+// the «Factura» column instead of the invoice's own number. Real window config, real builder.
+describe('FollowUpDocumentModal — summary document number', () => {
+  it('purchase invoice shows the internal documentNo, not the supplier orderReference', () => {
+    const record = { documentNo: 'FC1000000', orderReference: 'QA5576-C1' };
+    const { data } = buildSummary({ record, summary: PURCHASE_INVOICE_FOLLOW_UP.summary, single: null, ui: mockUi, locale: 'en_US' });
+    expect(data.document).toBe('FC1000000');
   });
 });
