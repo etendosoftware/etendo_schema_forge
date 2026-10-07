@@ -389,6 +389,14 @@ ETP-5487 moved these two cards' source from draft (`DocStatus=DR`) `M_InOut` rec
 delivery/reception status is still below 100% — `purchase-order`/`sales-order` filtered
 by `?filter=pendingReception`/`?filter=pendingDelivery` respectively.
 
+ETP-5632 — the counter and the drill-down read the same **stored computed columns** on `c_order`:
+`em_etgo_deliv_status_purchase` (purchase, `issotrx='N'`) and `em_etgo_delivery_status` (sales,
+`issotrx='Y'`), both `< 100` (NULL counts as 0, i.e. pending), with `docstatus='CO'` and the client
+filter. The list conditions use the grid columns `eTGODelivStatusPurchase` / `eTGODeliveryStatus`.
+Previously the counter re-ran the core virtual-column SQLLOGIC and the list used the core virtual
+fields `deliveryStatusPurchase`/`deliveryStatus` (`grid: false`), which the advanced filter silently
+dropped: the card showed the right count but the list showed every completed order.
+
 `paymentsDueToday` and `paymentsOverdue` are two states of the SAME card ("Pagos"): the
 backend combines invoices due today and past-due invoices into a single count, and picks
 `paymentsOverdue` over `paymentsDueToday` whenever at least one invoice is already overdue —
