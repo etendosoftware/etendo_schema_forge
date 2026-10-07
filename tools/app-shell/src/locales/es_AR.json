@@ -19998,6 +19998,7 @@
     "backendError.statementHasMatchedLines": "No es posible eliminar un extracto con líneas conciliadas. Deshacé la conciliación de esas líneas para poder eliminarlo.",
     "backendError.statementNotProcessed": "Solo los extractos procesados se pueden reactivar",
     "backendError.statementDraftNotReconcilable": "El extracto está en borrador. Procesalo antes de conciliar sus líneas.",
+    "backendError.conversionRateDeleteCompleted": "No se puede eliminar el tipo de cambio de una factura completada. Modificalo en su lugar.",
     "backendError.statementLineAlreadyReconciled": "Esta línea del extracto ya está conciliada.",
     "backendError.reconcileConversionCurrencyMismatch": "La conversión solo se puede indicar cuando todas las facturas seleccionadas comparten una misma moneda distinta de la de la cuenta.",
     "backendError.reconcileConversionNotCombinable": "La conversión no se puede combinar con movimientos existentes ni con un ajuste de la diferencia.",

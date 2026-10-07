@@ -168,6 +168,44 @@ describe('translateBackendError', () => {
   // reconcileGroup with the bank-rate conversion fields (`actualPayment` / `conversionRate` /
   // `convertedAmount`), refused by com.etendoerp.go ReconciliationConversionSupport. The English
   // literals ARE the wire contract (no AD_MESSAGE), so they are pinned byte for byte here.
+  // Exchange Rates tab of an invoice (ConversionRateDocDeleteGuardObserver,
+  // com.smf.currency.conversionrate — AD_MESSAGE SMFCR_CannotDeleteRateCompleted, no es_ES TRL):
+  // a completed invoice's rate may be edited but not deleted.
+  describe('invoice exchange-rate delete refusal (ETP-5657)', () => {
+    const RAW = 'The exchange rate of a completed invoice cannot be deleted. Edit it instead.';
+    const KEY = 'backendError.conversionRateDeleteCompleted';
+    const REMOVED = 'Cannot modify document conversion rate when the invoice is not in draft status.';
+
+    it(`maps "${RAW.slice(0, 40)}..." to key ${KEY}`, () => {
+      const t = (k) => (k === KEY ? `translated:${KEY}` : k);
+      assert.equal(translateBackendError(RAW, t), `translated:${KEY}`);
+    });
+
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      it(`resolves to a non-empty ${locale} translation`, () => {
+        const json = JSON.parse(
+          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+        const translated = translateBackendError(RAW, (k) => json.genericLabels[k] ?? k);
+        assert.equal(translated, json.genericLabels[KEY], `${locale}.${KEY}`);
+        assert.ok(translated.trim());
+        if (locale !== 'en_US') assert.notEqual(translated, RAW, `${locale}.${KEY} is untranslated`);
+      });
+    }
+
+    it('no longer translates the retired "not in draft status" message: it passes through as is', () => {
+      const t = (k) => `translated:${k}`;
+      assert.equal(translateBackendError(REMOVED, t), REMOVED);
+    });
+
+    it('dropped the retired backendError.conversionRateNotDraft key from every locale', () => {
+      for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+        const json = JSON.parse(
+          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+        assert.equal(json.genericLabels['backendError.conversionRateNotDraft'], undefined, locale);
+      }
+    });
+  });
+
   describe('bank-rate conversion refusals of reconcileGroup (ETP-5657)', () => {
     const KNOWN = [
       {

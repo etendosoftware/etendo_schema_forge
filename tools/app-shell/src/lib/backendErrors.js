@@ -280,11 +280,12 @@ const BACKEND_ERROR_MAP = {
   // popup's price-list picker was left empty (ETP-4942).
   'No Price List could be resolved for this invoice: select a tariff or configure a default Price List for the Business Partner':
     'backendError.shipmentPriceListRequired',
-  // Exchange Rates tab (ConversionRateDocLockObserver, com.smf.currency.conversionrate
-  // AD_MESSAGE `SMFCR_CannotModifyRateNonDraft`) — that module ships no es_ES
-  // AD_MESSAGE_TRL, so OBException falls back to the raw English MSGTEXT (ETP-4837).
-  'Cannot modify document conversion rate when the invoice is not in draft status.':
-    'backendError.conversionRateNotDraft',
+  // Exchange Rates tab (ConversionRateDocDeleteGuardObserver, com.smf.currency.conversionrate —
+  // ETP-5657): a completed invoice's rate may be edited but not deleted. AD_MESSAGE
+  // `SMFCR_CannotDeleteRateCompleted`; the module ships no es_ES AD_MESSAGE_TRL, so the English
+  // MSGTEXT reaches the toast and is translated here.
+  'The exchange rate of a completed invoice cannot be deleted. Edit it instead.':
+    'backendError.conversionRateDeleteCompleted',
   // Cash close (CashCloseSupport, com.etendoerp.go — ETP-4795) — hardcoded English literals with
   // no AD_Message involvement, so they reach the toast untranslated whatever the session locale.
   'The close date cannot be in the future.': 'backendError.cashCloseDateInFuture',
@@ -735,7 +736,7 @@ function matchCashCloseLineInClosedPeriod(msg) {
 // `PSD2_IBANAutoFillFailed` AD_MESSAGE ("IBAN could not be set automatically (%0). Please enter it
 // manually in the Financial Account."), shown when the connected bank account's own IBAN implies a
 // country that conflicts with the Financial Account's configured country (e.g. a Spain-registered
-// account linked to a German IBAN). Like `SMFCR_CannotModifyRateNonDraft` above, the owning module
+// account linked to a German IBAN). The owning module
 // (`com.etendoerp.psd2`) ships no real es_ES AD_MESSAGE_TRL for its ~108 messages — the es_ES row is
 // a verbatim copy of the English text — so Core resolves the same English string regardless of
 // session locale. `%0` is substituted server-side with the IBAN before this reaches the frontend, so
