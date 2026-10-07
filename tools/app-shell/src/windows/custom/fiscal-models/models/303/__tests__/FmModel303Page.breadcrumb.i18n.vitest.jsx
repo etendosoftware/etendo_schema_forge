@@ -12,8 +12,8 @@
 // the real locale dictionary instead of its identity mock.
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
-import { render } from '@testing-library/react';
-import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
+import { PageMetaProvider } from '@/components/layout/PageMetaContext';
+import { lastMeta, MetaProbe, renderWithMeta, describeTopBarKebab } from '../../../__tests__/testUtils/topBarMetaTestUtils.jsx';
 import { loadLocaleDictionary, makeRealUI } from '../../../../shared/__tests__/testUtils/realLocaleUI.js';
 
 const esES = loadLocaleDictionary('es_ES');
@@ -28,19 +28,9 @@ const navigateMock = vi.fn();
 
 vi.mock('@/i18n', () => ({ useUI: () => activeUi, useLocaleSwitch: () => ({ locale: activeLocale }) }));
 
-// ETP-5584 (review W1) — real assertions for the TopBar kebab's two items: favourites and help.
-const kebabMocks = vi.hoisted(() => ({
-  toggleFavorite: vi.fn(),
-  isFavorite: vi.fn(() => false),
-  setTab: vi.fn(),
-  open: vi.fn(),
-}));
-vi.mock('@/components/layout/FavoritesContext', () => ({
-  useFavorites: () => ({ toggleFavorite: kebabMocks.toggleFavorite, isFavorite: kebabMocks.isFavorite }),
-}));
-vi.mock('@/components/support/SupportChatContext.jsx', () => ({
-  useSupportChatSafe: () => ({ actions: { setTab: kebabMocks.setTab, open: kebabMocks.open } }),
-}));
+// ETP-5584 — the TopBar kebab's two contexts (favourites, support chat), shared stand-in.
+vi.mock('@/components/layout/FavoritesContext', () => import('../../../__tests__/testUtils/topBarMetaTestUtils.jsx'));
+vi.mock('@/components/support/SupportChatContext.jsx', () => import('../../../__tests__/testUtils/topBarMetaTestUtils.jsx'));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
@@ -101,18 +91,6 @@ const defaultProps = {
   onStatusChange: vi.fn(),
 };
 
-// ETP-5584 — the title/breadcrumb now live in the app TopBar, published through
-// useSetPageMeta; read them back through a PageMetaProvider probe (same pattern as
-// FmListPage.breadcrumb.i18n.vitest.jsx).
-let lastMeta = null;
-function MetaProbe() {
-  lastMeta = usePageMeta();
-  return null;
-}
-function renderWithMeta(ui) {
-  lastMeta = null;
-  return render(<PageMetaProvider>{ui}<MetaProbe /></PageMetaProvider>);
-}
 
 describe('FmModel303Page — breadcrumb against the real locale dictionary (ETP-4945)', () => {
   it('resolves the es_ES breadcrumb to "Finanzas / Modelos Fiscales / Modelo 303 - 2026/T2", not the stale "Tesorería"', () => {
@@ -201,34 +179,7 @@ describe('FmModel303Page — monthly period title (P9)', () => {
 });
 
 // ETP-5584 (review W1) — the TopBar kebab is wired to the real favourites and help mechanisms.
-describe('FmModel303Page — TopBar kebab: favourites and help (ETP-5584)', () => {
-  beforeEach(() => {
-    kebabMocks.toggleFavorite.mockClear();
-    kebabMocks.setTab.mockClear();
-    kebabMocks.open.mockClear();
-    kebabMocks.isFavorite.mockImplementation(() => false);
-  });
-
-  it('onAddToFavorites toggles the window favourite, labelled with the window name', () => {
-    activeUi = realUiEs;
-    renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    lastMeta.onAddToFavorites();
-    expect(kebabMocks.toggleFavorite).toHaveBeenCalledWith('fiscal-models', 'Modelos Fiscales');
-  });
-
-  it('onPageHelp opens the support chat on its "Ayuda" tab', () => {
-    activeUi = realUiEs;
-    renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    lastMeta.onPageHelp();
-    expect(kebabMocks.setTab).toHaveBeenCalledWith('ayuda');
-    expect(kebabMocks.open).toHaveBeenCalledTimes(1);
-  });
-
-  it('isFavorite follows the favourites context for the "fiscal-models" key', () => {
-    activeUi = realUiEs;
-    kebabMocks.isFavorite.mockImplementation((key) => key === 'fiscal-models');
-    renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    expect(lastMeta.isFavorite).toBe(true);
-    expect(kebabMocks.isFavorite).toHaveBeenCalledWith('fiscal-models');
-  });
+describeTopBarKebab('FmModel303Page', {
+  beforeEachRender: () => { activeUi = realUiEs; },
+  renderPage: () => renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />),
 });
