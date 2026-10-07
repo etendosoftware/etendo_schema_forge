@@ -1513,7 +1513,7 @@ numeric/date/enum contract field that omits `filterMode`. Full reference:
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move this invoice through its
-workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+workflow over MCP. `etendo_schema` returns it with `invokeVia: "etendo_action"`, `actionValues` (the
 active AD list of the `C_Invoice.DocAction` reference — note `CO` is labelled **Complete** here,
 not Book) and `actionParameter: "docAction"`; its `agentPrompt` — defined in `decisions.json` ->
 `entities.header.fields.documentAction.agentPrompt` — states which transitions are legal and
@@ -1521,7 +1521,7 @@ their preconditions.
 
 Completing a draft invoice over MCP:
 
-    neo_action { spec: "purchase-invoice", entity: "header", id: "<invoiceId>",
+    etendo_action { spec: "purchase-invoice", entity: "header", id: "<invoiceId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
 Flow encoded in the prompt: `DR -> CO` completes (computes taxes/totals, creates the payment
@@ -1574,7 +1574,7 @@ header is dirty — skipping it entirely on a clean header. A failed save blocks
 surfaces the error instead of proceeding with stale data.
 
 This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
-line created before completion — because `neo_action` executes the entity's `NeoHandler` hooks
+line created before completion — because `etendo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
 
@@ -2157,8 +2157,8 @@ invoice's id and payment/credit ids taken from that invoice's own listings.
 
 An agent pays a purchase invoice through the same invoice-header actions the *Pagos de la factura*
 popup and the *Nuevo pago* modal call — never by writing a payment by hand. They are published to
-MCP as declared actions next to the AD buttons (`neo_schema(spec:'purchase-invoice',
-entity:'header', view:'actions')`, also named in `neo_discover`), with `id` = the invoice id and
+MCP as declared actions next to the AD buttons (`etendo_schema(spec:'purchase-invoice',
+entity:'header', view:'actions')`, also named in `etendo_discover`), with `id` = the invoice id and
 the same contracts as `sales-invoice` (see that guide's "MCP payment actions" section):
 `invoiceAccounts`, `invoicePaymentMethods`, `invoiceCreditSources`, `invoicePayments`,
 `currencyOptions` (`GET`), `registerPayment` (`process` `draft`\|`confirm`), `confirmPayment` and

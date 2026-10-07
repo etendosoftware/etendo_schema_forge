@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/linesColumnWidth.js
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -63,10 +64,12 @@ const VIEWPORT = { width: 1280, height: 800 };
 //   - selector/search/foreignKey at idx 0            -> basis 192
 //   - string/text/enum/select (any idx)               -> basis 224
 //   - date (any idx)                                   -> basis 130
-// A selector/search column at idx > 0 (e.g. `tax`, `accountingCombination`
-// on simple-g-l-journal where `lineNo` occupies idx 0) is FIXED
-// (`0 0 192px`), not elastic, so it is deliberately excluded here — it was
-// never shrinkable and is not part of this regression.
+//   - any column with an explicit `minWidth`           -> basis = minWidth
+// A selector/search column at idx > 0 (e.g. `tax`) is FIXED (`0 0 192px`),
+// not elastic, so it is deliberately excluded here — it was never shrinkable
+// and is not part of this regression. On simple-g-l-journal, ETP-5611 dropped
+// `lineNo` from the grid, so `accountingCombination` now sits at idx 0 with
+// `columnWidth: 220` (`1 0 220px`) and IS checked.
 // ---------------------------------------------------------------------------
 
 const WINDOWS = [
@@ -261,7 +264,9 @@ const WINDOWS = [
     headerId: 'mock-narrow-glj-001',
     hasSidePanel: false,
     expectOverflow: false,
-    leadingColumns: [],
+    leadingColumns: [
+      { key: 'accountingCombination', minBasis: 220 },
+    ],
     header: {
       id: 'mock-narrow-glj-001',
       documentNo: 'GLJ-NARROW-001',

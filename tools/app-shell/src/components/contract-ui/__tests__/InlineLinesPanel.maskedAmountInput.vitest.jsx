@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 // ETP-5107 — integration coverage for the InlineLinesPanel `EditCell` numeric
 // wiring point (existing-line price editing). See
 // docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §6.3.2/§6.4.
@@ -187,5 +188,20 @@ describe('InlineLinesPanel EditCell — MaskedAmountInput numeric wiring (ETP-51
       '30',
       expect.objectContaining({}),
     );
+  });
+});
+
+describe('InlineLinesPanel EditCell — clearZeroOnFocus wiring (ETP-5611)', () => {
+  it('a zero amount cell is emptied on focus, and leaving it blank sends no PATCH', async () => {
+    const user = userEvent.setup();
+    const { onUpdateRow } = renderPanel({ data: [{ ...ROWS[0], unitPrice: 0 }] });
+    const row = await openEditOnRow('L1');
+
+    const priceInput = within(row).getByTestId('field-unitPrice');
+    await user.click(priceInput);
+    expect(priceInput).toHaveValue('');
+    await user.tab();
+
+    expect(onUpdateRow).not.toHaveBeenCalledWith(expect.anything(), 'unitPrice', expect.anything(), expect.anything());
   });
 });

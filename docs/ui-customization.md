@@ -261,6 +261,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
 | `headerTable` | replaces `{Entity}Table` import | List table in the master list view | Standard table props |
+| `newRecordComponent` | `onNew={() => setShowNewModal(true)}` on `ListView`, plus `{showNewModal && <X … />}` after it | Replaces the list toolbar's New button flow (a modal instead of the generic create form). Needs `hideCreate: false`; ListView still hides New for a read-only window | `token`, `apiBaseUrl`, `windowName`, `onClose` — nothing else, so any page state it needs (a selected row, loaded data) must come from a shared store or the URL |
 
 **Real examples:**
 - `topbarSecondary`: see §3b — 9 windows, all wrapping the shared `DocumentSecondaryActions`
@@ -268,7 +269,8 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 - `subHeader`: `product` (`ProductCostBanner`, ETP-5245 — the "this stocked product has no cost" warning, see `docs/generated-custom-windows/product.md`)
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
-- `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`)
+- `newRecordComponent`: `payment-in` (`NewPaymentModal`), `chart-of-accounts` (`NewSubAccountCreateModal`, ETP-5593 — reads the tree's selected row from `chartOfAccountsTreeStore.js`, see `docs/generated-custom-windows/chart-of-accounts.md`)
+- `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`); `chart-of-accounts` (`AccountTreeView`, a self-fetching tree whose controls are its `ToolbarQuickFilter` static slot, ETP-5593, see `docs/generated-custom-windows/chart-of-accounts.md`)
 
 **`subHeader` is the slot for a page-wide notice** (ETP-5245). Use it when the message belongs to the whole record rather than to one field: a blocking warning, a state explanation, a "this record is locked because…" strip. The generator emits it as `DetailView`'s `headerContent` prop, so it renders above the form, above the primary-tab content, and at full content width — the same place the built-in credit-limit / BP-on-hold banner (`BlockingBpBanner.jsx`) occupies. The component receives only `data` (the current record), so any other state it needs must be derived from the record or fetched by the component itself. Return `null` to render nothing — the slot has no visibility gate of its own. Pair it with the shared `InfoBanner` primitive (`@/components/InfoBanner`) rather than a bespoke box, and pick the tone deliberately: `info` (blue) for a notice, `warning` (amber) when the condition also blocks an action, `danger` for an error. If the notice must also **prevent saving**, keep the banner and the save gate reading one shared predicate (product puts it in `lib/productCostRequirement.js`, consumed by both `ProductCostBanner.jsx` and `useEntity.js`) so the two can never disagree.
 
@@ -387,8 +389,8 @@ Not a UI feature — guidance text returned to AI agents that consume the NEO He
 
 | Level | decisions key | Persisted to | Returned by |
 |-------|---------------|--------------|-------------|
-| Spec | `window.agentPrompt` | `ETGO_SF_SPEC.AGENT_PROMPT` | `neo_discover` (per spec) |
-| Field | `entities.{e}.fields.{f}.agentPrompt` | `ETGO_SF_FIELD.AGENT_PROMPT` | `neo_schema` (per field) |
+| Spec | `window.agentPrompt` | `ETGO_SF_SPEC.AGENT_PROMPT` | `etendo_discover` (per spec) |
+| Field | `entities.{e}.fields.{f}.agentPrompt` | `ETGO_SF_FIELD.AGENT_PROMPT` | `etendo_schema` (per field) |
 
 `push-to-neo` reads these straight from `decisions.json` (like `defaultExpr`) and writes the DB columns; the value is also mirrored into `contract.mcp.json → agentProfile.agentPrompt` for inspection. Omitted from the MCP response when empty. See `docs/decisions-reference.md`.
 
@@ -673,6 +675,20 @@ It is deliberately not bumped by `onDataMutated` reloads (save, delete, toggle),
 quiet, nor by the host's `refreshTrigger` **input** prop on `ListView` (a host bumps that to make
 `ListView` itself reload — same idea, opposite direction). A slot that spreads its remaining props
 onto a DOM element must destructure `userRefreshTrigger` out of the spread, like `selectedRows`.
+
+`ListView` also forwards **`windowReadOnly`** (ETP-5593). It is the same view-only flag that hides
+New in the toolbar and Print / bulk delete in the selection bar: the runtime read-only access tier,
+or `window.readOnly`. A
+custom table with its own inline edits must disable them when it is `true`. The chart-of-accounts
+status switch does this. `DataTable` ignores the flag.
+
+**The toolbar Share button copies the page URL (ETP-5593).** The link button in `ListView`'s idle
+bar (`list-share-link`, hidden by `hideLink`) had no handler on any list; it now calls
+`useCopyPageLink()` (`hooks/useCopyLinkAction.js`), which copies `window.location.href` with the
+`linkCopied` / `copyFailed` toasts. Not-posted documents' own toolbar uses the same hook, so pages that build
+their own toolbar should use it too. Anything a window keeps in the query string travels with the
+link. For example, chart-of-accounts keeps `q` and `accountType` there, so a shared link reproduces
+the filtered tree. Put filter state in the URL when you want Share to reproduce it.
 
 **Standardized delete-failure UX (applies to header, row, and bulk delete —
 no configuration needed):**
@@ -1560,6 +1576,21 @@ Clicking either the chevron or the hover action toggles the same expand state �
 
 **`AmortizationLinesTable.jsx` — hand-patched, not an `InlineLinesPanel` consumer (follow-up pass, same ticket).** This component is a wholly custom `<table>` (its own fetch/CRUD, multi-select, and inline add-row draft-line flow — none of which `InlineLinesPanel` has an equivalent for), so wrapping it in `InlineLinesPanel` was investigated and rejected as disproportionate rework relative to this ticket's actual gap (see `docs/feedback.md` for the full comparison). Instead, its own hover strip was hand-patched to match the *visible* mechanism above: the permanent "Accounting dimensions" grid column was removed, and a third hover-action button (`Layers` icon, static `editDimensionsTooltip` — the same i18n key, no separate one introduced) was added ahead of its existing Pencil/Trash, gated on `dimensionFields.length > 0` and `!isReadOnly`, toggling the same `expandedId` state its pre-existing chevron already drove. Two independent implementations of the same UX on purpose — not a shared code path — because this component was never built on top of `InlineLinesPanel` to begin with.
 
+**`RowExpandToggle` — the shared expand chevron (ETP-5593).** The circular outline chevron that
+opens a row's sub-row is now one component, `components/contract-ui/RowExpandToggle.jsx`, used by
+`InlineLinesPanel` (`dimensions-panel-toggle`), `AmortizationLinesTable`, financial-account's
+`MovementsTable` / `StatementsTable` / `ReconciliationListTable` and the chart-of-accounts tree.
+Before, each of them had its own copy of the same markup. Props:
+
+- `expanded`, `onToggle`;
+- `label` (aria-label; defaults to `expand` / `collapse`);
+- `orientation`: `vertical` is the default, a down chevron that turns 180°; `horizontal` is a right chevron that turns down, for tree folders;
+- `stopPropagation`, opt-in: set it when the row's own click opens the record;
+- `iconTestId`.
+
+Any other prop goes to the `<button>`. Use it for any new expandable row instead of copying the
+classes.
+
 ---
 
 ### 14c. `InlineLinesPanel` row hover-action extension slot (`rowActions` prop)
@@ -1753,6 +1784,15 @@ Customer/Vendor Accounting, etc.).
    (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
    every other entry, not just within its own group — see `docs/decisions-reference.md`'s
    `secondaryTabs` section for the full reference and the `customTabsAfterBottom` incompatibility.
+   **Gating a custom tab until the record is saved (ETP-5309).** A `placement: 'tab'` custom
+   component that cannot work on an unsaved record declares it through two statics:
+   `Component.requiresSavedRecord` (`true`, or a predicate over the tab's `props`) and
+   `Component.savedRecordHintKey` (i18n key). While `isNew`, DetailView renders that tab button
+   disabled with the hint as tooltip, in both tab strips (`getCustomTabSaveFirstHint` in
+   `detailViewHelpers.jsx`). Without `savedRecordHintKey` the tab is still disabled, only with no
+   tooltip — always declare both. The component should still guard its own panel, since
+   `location.state.openSecondaryTab` can open it. `AttachmentsTab` is the reference: it requires a
+   saved record unless its `config.saveBeforeAttach` is set.
 2. **Runtime prop, hand-written `windows/custom/{window}/index.jsx`** (documented below) — a
    `Panel`-backed tab with freeform fetch-and-render content that doesn't map to any generated
    entity at all, passed to the generated `<Page>` component from a hand-written wrapper. Requires
@@ -2703,6 +2743,21 @@ instances mount under the same Router).
 at the bottom of `UserHeaderTable.jsx` — moves the "Todos los roles" quick filter from its own
 wrapper div into the toolbar row. See `docs/generated-custom-windows/user.md` → "Users list role
 filter" for the full worked example.
+
+**Second example — several controls and shared state:**
+`artifacts/chart-of-accounts/custom/ChartOfAccountsToolbarSlot.jsx`, attached as
+`AccountTreeView.ToolbarQuickFilter` (ETP-5593). It puts three controls in the row (expand/collapse
+all, a search box, an account-type `DistinctValuesFilter`) and replaces the tree's own toolbar.
+Filter values live in the URL (`q`, `accountType`, `chartOfAccountsFilters.js`), so the toolbar
+Share button reproduces them. State that is not a filter (the expanded folders) is in a
+window-local `useSyncExternalStore` store (`chartOfAccountsTreeStore.js`) that the slot and the
+table both subscribe to, because they are siblings with no common parent of their own.
+
+**Writing URL params from a timer or debounce:** do not use react-router's functional
+`setSearchParams((prev) => …)` updater there. `prev` holds the params of the render that created the
+callback, not the live URL, so a delayed write rewrites the URL as it was then and drops any param
+set in between. Build the next params from a ref updated on every render instead (see
+`useChartOfAccountsFilters` in `chartOfAccountsFilters.js`).
 
 ### `col.toQueryParams(row)` — per-column raw query-param hook
 

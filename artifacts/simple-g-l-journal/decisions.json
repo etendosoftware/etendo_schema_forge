@@ -5,12 +5,24 @@
     "name": "Simple G/L Journal",
     "menuActions": [
       {
+        "key": "reactivate",
+        "label": "Reactivate",
+        "labelKey": "reactivate",
+        "documentAction": "RE",
+        "visibleWhenStatus": "CO",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "reactivated",
+        "_note": "ETP-5611 — Completed, not-posted journals can be reactivated back to Draft (GlJournalHeaderHandler routes RE through FIN_AddPaymentFromJournal). A posted journal must be unposted first."
+      },
+      {
         "key": "post",
         "label": "Post",
         "labelKey": "post",
         "action": "post",
         "visibleWhenFieldFalse": "posted",
-        "successKey": "documentPosted"
+        "successKey": "documentPosted",
+        "visibleWhenStatus": "CO",
+        "_note": "ETP-5611 — Post is only offered on a Completed journal (AND-combined with posted=false)."
       },
       {
         "key": "unpost",
@@ -22,6 +34,70 @@
         "destructive": true
       }
     ],
+    "hidePrint": true,
+    "hideDeleteWhenComplete": true,
+    "rowQuickActions": {
+      "actions": {
+        "delete": {
+          "visibleWhen": "@DocumentStatus@='DR'"
+        }
+      }
+    },
+    "summaryFields": [],
+    "customComponents": {
+      "bottomSection": "SimpleGLJournalBottomPanel"
+    },
+    "actions": {
+      "documentAction": {
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR"
+            ],
+            "appliesTo": {
+              "docAction": [
+                "CO"
+              ]
+            },
+            "description": "Complete (CO) requires a Draft journal whose debit and credit totals are equal and greater than zero"
+          },
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "CO"
+            ],
+            "appliesTo": {
+              "docAction": [
+                "RE"
+              ]
+            },
+            "description": "Reactivate (RE) requires a Completed journal"
+          },
+          {
+            "field": "posted",
+            "operator": "eq",
+            "values": [
+              "N"
+            ],
+            "appliesTo": {
+              "docAction": [
+                "RE"
+              ]
+            },
+            "description": "Reactivate (RE) is rejected once the journal is posted — unpost first"
+          }
+        ],
+        "edgeCases": [
+          "Complete with unbalanced or all-zero lines is rejected",
+          "Reactivate on a posted journal is rejected (GLJournalDocumentPosted)",
+          "Reactivate when Open Items lines have related payments succeeds with a warning; payments are not deleted"
+        ],
+        "_note": "ETP-5611 — curated MCP contract override; replaces the generic documentStatus in [DR, IP] precondition inferred for every documentAction."
+      }
+    },
     "breadcrumb": "Finance / Manual Journals",
     "balanceFooter": {
       "debitField": "foreignCurrencyDebit",
@@ -68,7 +144,8 @@
         "documentDate": {
           "visibility": "system",
           "grid": false,
-          "defaultExpr": "@#Date@"
+          "defaultExpr": "@#Date@",
+          "reason": "ETP-5611 — hidden and server-owned: GlJournalHeaderHandler mirrors accountingDate into it on every CRUD write (into the body on POST, onto the record on PATCH/PUT, because NEO's PATCH filter drops system fields from the body)."
         },
         "accountingDate": {
           "visibility": "editable",
@@ -92,19 +169,22 @@
           "searchable": true
         },
         "currency": {
-          "visibility": "editable",
-          "readOnlyLogicJs": "record['processed'] === true",
+          "visibility": "readOnly",
+          "section": "principal",
           "grid": true,
           "gridOrder": 4,
-          "searchable": true
+          "searchable": true,
+          "reason": "ETP-5611 — always the accounting schema currency (GlJournalHeaderHandler injects it on DEFAULTS and POST); manual journals are single-currency in Etendo GO."
         },
         "opening": {
           "visibility": "editable",
+          "section": "other",
           "readOnlyLogicJs": "record['processed'] === true",
           "reason": "Kept (cheap boolean) per spec — marks an opening-balance journal."
         },
         "multigeneralLedger": {
           "visibility": "editable",
+          "section": "other",
           "reason": "Kept (cheap boolean) per spec — multi-ledger flag."
         },
         "businessPartner": {
@@ -217,10 +297,8 @@
       "name": "gLJournalLine",
       "fields": {
         "lineNo": {
-          "visibility": "readOnly",
-          "grid": true,
-          "label": "LineNo",
-          "reason": "Line number — auto-sequenced, shown read-only as a grid column."
+          "visibility": "system",
+          "reason": "ETP-5611 — line number column removed from the grid; still assigned server-side by the AD default (MAX(Line)+10) and used as the list order."
         },
         "gLItems": {
           "visibility": "discarded",
@@ -231,8 +309,8 @@
           "grid": true,
           "lookup": true,
           "label": "Account",
-          "columnWidth": 280,
-          "reason": "Accounting combination (C_ValidCombination_ID) selector — the line's Account column. ETP-5210: explicit columnWidth (280px) so it renders wider than Description's 224px type default — neither field set a width before, and the foreignKey selector's 192px default rendered narrower than description's string default."
+          "columnWidth": 220,
+          "reason": "Accounting combination (C_ValidCombination_ID) selector — the line's Account column. ETP-5210: explicit columnWidth (280px) so it renders wider than Description's 224px type default — neither field set a width before, and the foreignKey selector's 192px default rendered narrower than description's string default. ETP-5611: narrowed to 220px so Debit/Credit plus the hover-actions slot fit without horizontal scroll."
         },
         "description": {
           "visibility": "discarded",
@@ -256,7 +334,8 @@
             "es_ES": "Crédito"
           },
           "clearsField": "foreignCurrencyDebit",
-          "reason": "Credit amount (AmtSourceCr) — drives the balanceFooter Σ credit. Entering a value clears debit (mutually exclusive)."
+          "reason": "Credit amount (AmtSourceCr) — drives the balanceFooter Σ credit. Entering a value clears debit (mutually exclusive). ETP-5611: noTrailing keeps Credit visible and clickable on hover — the row actions take their own slot instead of replacing the last amount column.",
+          "noTrailing": true
         },
         "businessPartner": {
           "visibility": "editable",
