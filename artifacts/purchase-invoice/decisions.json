@@ -145,7 +145,7 @@
         {
           "name": "pending",
           "label": "Unpaid",
-          "description": "Unpaid invoices with nothing paid yet (outstanding equals the total).",
+          "description": "Unpaid invoices with nothing paid yet (outstanding equals the total). Excludes partially paid invoices; use 'outstanding' for every invoice that still owes a balance.",
           "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)"
         },
         {
@@ -153,6 +153,12 @@
           "label": "Partially paid",
           "description": "Invoices with a partial payment: some amount paid but a balance remains.",
           "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)"
+        },
+        {
+          "name": "outstanding",
+          "label": "Pending payment",
+          "description": "Every invoice that still owes a balance: unpaid plus partially paid. Use this for 'what is still owed'; 'pending' alone excludes partially paid invoices.",
+          "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0"
         }
       ],
       "fields": {
