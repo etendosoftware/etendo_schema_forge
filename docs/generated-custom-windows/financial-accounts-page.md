@@ -32,7 +32,7 @@ Use this page as the entry point to the reconciliation module. It lists the fina
 > **Story:** ETP-4096. The toolbar's **+ Nueva cuenta** button and two row-kebab
 > actions (**Editar cuenta**, **Archivar cuenta**) are active. The wizard covers both the
 > *offline* flow (accounts created without a bank connection) and, through "Con conexión",
-> the connect-with-creation flow. Full detail: `financial-account.md` → "New Account Wizard".
+> the connect-with-creation flow. Full detail: `financial-account-management.md` → "New Account Wizard".
 
 ### New account wizard (`NewAccountWizard`)
 
@@ -65,7 +65,7 @@ untouched, so editing never wipes a stored BIC.
 > This description reflects T2 (ETP-4096) scope only. The modal has since gained a
 > live bank connection block (ETP-4097 / T3), a General/Contabilidad tab split with a
 > conditional Currency lock (ETP-4530), and a second entry point from the account
-> detail view — see `financial-account.md` → "Edit Account Modal" for the current
+> detail view — see `financial-account-management.md` → "Edit Account Modal" for the current
 > behavior.
 
 ### Archive account (`ArchiveAccountDialog`)
@@ -258,7 +258,7 @@ tier (ETP-5205 / ETP-5457)".
   `financial-account.md` → "Sidebar rendering").
 - E2E: `e2e/tests/flows/finance/financial-accounts-page.mocked.spec.js` covers the full
   total, the `≈` converted total and the missing-rate line.
-- See `financial-account.md` → "List summary" for the full list and the known gaps:
+- See `financial-account-management.md` → "List summary" for the full list and the known gaps:
   - an E2E check for the ⓘ tooltip (vitest already covers it);
   - the Spanish "B" suffix (dashboard only);
   - a clipped total being reachable only through the hover tooltip (not by touch or keyboard);
