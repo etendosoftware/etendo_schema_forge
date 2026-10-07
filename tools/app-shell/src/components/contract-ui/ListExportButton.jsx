@@ -124,7 +124,7 @@ export function ListExportButton({ importConfig, importFieldLabel, apiBaseUrl, b
       variant="outline"
       size="sm"
       disabled={exporting}
-      className="gap-1.5 text-[#828FA3] font-normal h-10 px-3 rounded-lg bg-card [&_svg]:size-5"
+      className="gap-1.5 text-[#828FA3] font-normal h-10 px-3 rounded-lg bg-card [&_svg]:size-5 hover:bg-[hsl(var(--muted))] hover:text-[#828FA3]"
       onClick={exportFormats.length > 1 ? undefined : () => handleExport(exportFormats[0] ?? 'csv')}
       aria-label={ui('export')}
       title={ui('export')}

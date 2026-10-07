@@ -255,7 +255,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       : parseFloat(data?.outstandingAmount ?? 0));
     if (installmentsLoading) {
       return (
-        <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground" style={{ padding: '4px 12px' }}>
+        <span className="inline-flex items-center gap-2 text-sm leading-6 text-muted-foreground h-10" style={{ padding: '0 12px' }}>
           {ui('loading')}
         </span>
       );
@@ -263,7 +263,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     if (outstandingAbs < 0.001) {
       return (
         <span
-          className="inline-flex items-center gap-1.5 text-[13px] font-medium h-9"
+          className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
           style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}
         >
           {ui('cpCreditFullyApplied')}
@@ -278,7 +278,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           type="button"
           data-testid="payment-status-badge"
           onClick={() => setShowPaymentsModal(true)}
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold hover:opacity-80 cursor-pointer h-9"
+          className="inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
           style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', border: '1px solid var(--status-info-border)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
@@ -305,7 +305,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   // While loading, show a subtle placeholder
   if (installmentsLoading) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground" style={{ padding: '4px 12px' }}>
+      <span className="inline-flex items-center gap-2 text-sm leading-6 text-muted-foreground h-10" style={{ padding: '0 12px' }}>
         {ui('loading')}
       </span>
     );
@@ -339,7 +339,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         type="button"
         data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
+        className="inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
         style={{
           padding: '0 12px',
           borderRadius: '8px',
@@ -361,7 +361,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         type="button"
         data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
+        className="inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
         style={{
           padding: '0 12px',
           borderRadius: '8px',

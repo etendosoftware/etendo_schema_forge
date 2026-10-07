@@ -79,7 +79,7 @@ function rowDocTypeLabel(row, ui, documentTypeLabels) {
 }
 
 // Same chrome as ListView's own link button, which these toolbar icons sit next to.
-const ICON_BUTTON_CLASS = 'h-10 w-10 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors';
+const ICON_BUTTON_CLASS = 'h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:text-foreground transition-colors';
 
 export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const ui = useUI();
@@ -418,7 +418,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     <div
       className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0"
       data-testid="npd-page">
-      <div className="flex flex-wrap items-center gap-2 px-2 py-3" data-testid="npd-toolbar">
+      <div className="flex flex-wrap items-center gap-2 p-2" data-testid="npd-toolbar">
         <DistinctValuesFilter
           value={filters.document}
           onChange={(code) => updateFilters({ document: code })}
@@ -459,7 +459,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
             data-testid="DateRangePopover__npd" />
         </span>
         {!filtersAreDefault && (
-          <Button type="button" onClick={resetFilters} data-testid="npd-reset-filters">
+          <Button type="button" variant="outline" onClick={resetFilters} className="h-10 px-3 rounded-lg bg-card text-sm leading-6 font-medium text-[#121217]" data-testid="npd-reset-filters">
             {ui('resetFilters')}
           </Button>
         )}
@@ -471,7 +471,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           aria-label={ui('copyLink')}
           className={ICON_BUTTON_CLASS}
           data-testid="npd-share">
-          <Link2 className="h-4 w-4" data-testid="Link2__npd" />
+          <Link2 className="h-5 w-5" data-testid="Link2__npd" />
         </button>
         <ListSortPopover
           columns={columns}

@@ -746,8 +746,12 @@ export function getSidebarSlideClassName(isClosingLine) {
   return isClosingLine ? 'sidebar-slide-out' : 'sidebar-slide-in';
 }
 
-export function getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom) {
-  return `flex items-center justify-between ${linesLayout === 'inlineEditable' ? 'p-2' : toolbarPaddingX + ' py-2'}${toolbarBorderBottom || linesLayout === 'inlineEditable' ? ' border-b border-[hsl(var(--border-subtle))]' : ''}`;
+// ETP-5601 — the record (form view) toolbar follows Figma on every window: 8px padding on all
+// sides around 40px controls (56px), with a 1px #E8EAEF bottom rule. The rule is an inset shadow,
+// not a border, so it is painted inside those 56px instead of adding a 57th pixel. It used to
+// vary per window (`toolbarPaddingX`, `toolbarBorderBottom`, `linesLayout`); it no longer does.
+export function getLinesToolbarClassName() {
+  return 'flex items-center justify-between p-2 shadow-[inset_0_-1px_0_var(--status-neutral-border)]';
 }
 
 export function getLineMenuActionsRef(getLineMenuActions, extraActionsRef) {
@@ -915,12 +919,16 @@ export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLin
   } : undefined;
 }
 
-export function getSqBtnSize(toolbarButtonSize) {
-  return toolbarButtonSize === 'default' ? 'h-10 w-10' : 'h-9 w-9';
+// ETP-5601 — every record-toolbar control is 40px (Figma), so the old per-window
+// `toolbarButtonSize` switch ('sm' = 36px, 'default' = 40px) is gone.
+export function getSqBtnSize() {
+  return 'h-10 w-10';
 }
 
-export function getSaveBtnCls(toolbarButtonSize) {
-  return toolbarButtonSize === 'default' ? 'h-10 gap-2' : 'gap-1.5';
+// Save, process and extra-action buttons: 40px, Figma's text-sm/leading-6 line, 20px icons
+// (`[&_svg]:size-5` beats the core Button's `[&_svg]:size-4`).
+export function getSaveBtnCls() {
+  return 'h-10 gap-2 leading-6 [&_svg]:size-5';
 }
 
 export function getDocumentReadOnly(lockWhenProcessed, _headerData) {

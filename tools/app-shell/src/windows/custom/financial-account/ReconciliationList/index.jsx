@@ -78,9 +78,9 @@ export function ReconciliationListTab({
           aria-label={ui('financeAccountDetailBack')}
           data-testid="reconciliation-list-back"
           onClick={() => navigate(-1)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-[#828FA3] transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__f4e9e1" />
+          <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__f4e9e1" />
         </button>
         <DateRangePopover
           value={dateRange}

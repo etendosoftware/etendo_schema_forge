@@ -23,9 +23,9 @@ function MovementsSplitButton({ ui, onNewMovement, onTransfer }) {
         type="button"
         data-testid="new-movement-button"
         onClick={onNewMovement}
-        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[hsl(var(--text-primary))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground"
+        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[#121217] px-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground"
       >
-        <Plus className="h-4 w-4" data-testid="Plus__f863ac" />
+        <Plus className="h-5 w-5" data-testid="Plus__f863ac" />
         {ui('financeAccountTxNewAction')}
       </button>
       <button
@@ -35,7 +35,7 @@ function MovementsSplitButton({ ui, onNewMovement, onTransfer }) {
         aria-expanded={open}
         data-testid="new-movement-split"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-10 w-9 items-center justify-center rounded-r-lg border-l border-primary-foreground/20 bg-[hsl(var(--text-primary))] text-primary-foreground transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-r-lg border-l border-primary-foreground/20 bg-[#121217] text-white transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground"
       >
         <ChevronDown
           className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -104,9 +104,9 @@ export function MovementsToolbar({
         aria-label={ui('financeAccountDetailBack')}
         data-testid="movements-toolbar-back"
         onClick={() => navigate(-1)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-[#828FA3] transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__f863ac" />
+        <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__f863ac" />
       </button>
       {/* Quick filters — type/status first, then date, mirroring the standard
           list toolbar (e.g. Sales Order). */}

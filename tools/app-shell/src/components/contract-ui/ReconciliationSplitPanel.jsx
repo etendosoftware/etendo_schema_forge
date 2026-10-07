@@ -98,7 +98,7 @@ function badgeKindFor(cand, readOnly) {
 function ToolbarShell({ children, search, onSearchChange, testIdPrefix }) {
   const ui = useUI();
   return (
-    <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+    <div className="flex flex-wrap items-center gap-2 p-2">
       {children}
       <div className="flex-1" />
       <input
@@ -107,7 +107,7 @@ function ToolbarShell({ children, search, onSearchChange, testIdPrefix }) {
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         data-testid={`${testIdPrefix}-search`}
-        className="h-9 w-40 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
+        className="h-10 w-40 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
       />
     </div>
   );
@@ -476,9 +476,9 @@ function StatementLinesPanel({
         aria-label={ui('financeAccountDetailBack')}
         data-testid="recon-toolbar-back"
         onClick={onBack}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-[#828FA3] transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__d0f4d5" />
+        <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__d0f4d5" />
       </button>
       <ReconciliationStatusFilter value={status} onChange={onStatusChange} counts={statusCounts} data-testid="ReconciliationStatusFilter__d0f4d5" />
       <DateRangePopover value={dateRange} onChange={onDateRangeChange} placeholder={ui('dateRangeAnyTime')} data-testid="DateRangePopover__d0f4d5" />

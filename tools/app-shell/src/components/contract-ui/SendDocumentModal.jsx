@@ -748,9 +748,9 @@ export function SendDocumentButton({ onClick }) {
         data-testid="action-send-email"
         onClick={onClick}
         aria-label={label}
-        className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors"
+        className="h-10 w-10 flex items-center justify-center rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors"
       >
-        <Mail className="h-[15px] w-[15px]" data-testid="Mail__afec0a" />
+        <Mail className="h-5 w-5" data-testid="Mail__afec0a" />
       </button>
       <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-[11px] text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity" style={{ zIndex: 50 }}>
         {label}

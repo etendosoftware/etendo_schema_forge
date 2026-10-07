@@ -443,7 +443,7 @@ export function ListView({
   listbarPaddingY = 'py-2',
   SortIconComponent = null,
   RefreshIconComponent = null,
-  iconButtonHover = 'hover:text-foreground',
+  iconButtonHover = 'hover:bg-[hsl(var(--muted))]',
   tablePaddingX = 'px-2',
   tablePaddingBottom = 'pb-6',
   labelOverrides,
@@ -1330,7 +1330,7 @@ export function ListView({
                 <div className="flex items-center gap-2">
                   {!(listViewOptions?.hideLink ?? hideLink) && (
                     <button
-                      className="h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:text-foreground transition-colors">
+                      className="h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors">
                       <Link2 className="h-5 w-5" data-testid="Link2__620cbc" />
                     </button>
                   )}
@@ -1362,7 +1362,7 @@ export function ListView({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5 text-[#828FA3] font-normal h-10 px-3 rounded-lg bg-card [&_svg]:size-5"
+                      className="gap-1.5 text-[#828FA3] font-normal h-10 px-3 rounded-lg bg-card [&_svg]:size-5 hover:bg-[hsl(var(--muted))] hover:text-[#828FA3]"
                       onClick={() => setShowImportDialog(true)}
                       aria-label={ui('import')}
                       title={ui('import')}
@@ -1383,7 +1383,7 @@ export function ListView({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-[#828FA3] font-normal h-10 w-10 p-0 rounded-lg bg-card [&_svg]:size-5"
+                      className="text-[#828FA3] font-normal h-10 w-10 p-0 rounded-lg bg-card [&_svg]:size-5 hover:bg-[hsl(var(--muted))] hover:text-[#828FA3]"
                       onClick={() => setShowReport(true)}
                       aria-label={ui('print')}
                       title={ui('print')}

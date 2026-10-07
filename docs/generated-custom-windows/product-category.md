@@ -32,10 +32,10 @@ The window uses these layout overrides (all set in `decisions.json → window`):
 | `detailEntity` | `"accounting"` | Accounting tab as the primary child entity |
 | `linesLayout` | `"inlineEditable"` | Inline pencil/trash editing on Accounting rows |
 | `noHeaderBorder` | `true` | Removes the border under the header form |
-| `toolbarBorderBottom` | `true` | Adds a border below the toolbar |
+| `toolbarBorderBottom` | `true` | No effect since ETP-5601 (the record toolbar is standardized) |
 | `formCardPadding` | `"p-2"` | Tighter padding on the form card |
 | `formScrollPaddingX` | `"px-2"` | Horizontal padding on the scroll column |
-| `toolbarPaddingX` | `"px-2"` | Horizontal padding on the toolbar |
+| `toolbarPaddingX` | `"px-2"` | No effect since ETP-5601 (the record toolbar is standardized) |
 | `tabsBarPaddingX` | `"px-2"` | Horizontal padding on the tabs bar |
 
 ## Header form layout

@@ -50,7 +50,7 @@ export function ListSortPopover({
   onClear,
   isDefaultSort = true,
   SortIconComponent,
-  iconButtonHover = 'hover:text-foreground',
+  iconButtonHover = 'hover:bg-[hsl(var(--muted))]',
   labelOverrides,
 }) {
   const ui = useUI();
