@@ -153,8 +153,10 @@ module *In Development*, and `./gradlew export.database` writes the four
 `decisions.json → window.vectorSearch.target` (SPA) must both equal the **spec name** (the
 `artifacts/<spec>/` directory name, kebab-case). A vector match carries no pointer to where its
 record lives, so the target key is the only clue a caller has; when it is the spec name, a match is
-read with `etendo_get(spec:<target>, id:<match.id>)` and the palette navigates to
-`/<spec>/<match.id>`. **Nothing validates the two against each other** (the pipeline-validator rule
+read with `etendo_get(spec:<target>, id:<match.id>)` (MCP, agents, any API caller) and nothing
+has to be guessed. The palette itself does not depend on this: it navigates by the `specName` it
+resolved from the contract that declared the target (`vectorSearchConfig.js:19-36`,
+`CommandPalette.jsx:312-318`). **Nothing validates the two against each other** (the pipeline-validator rule
 F11 is an open follow-up); a one-sided change makes the SPA send a key the server does not know,
 which the palette shows as *no results*, never as an error. See
 `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.9a and `docs/decisions-reference.md`
@@ -331,7 +333,11 @@ with the old text and keep it until each record is next inserted or has a watche
 the configuration-version bump only discards *queued* events, it does not rebuild anything.
 
 1. **Search Source** → select the source → **Request Reindex**. It records one request per source
-   (asking again restarts it) and tells you roughly how many records that will enqueue.
+   and tells you roughly how many records that will enqueue. If the source already has a request,
+   asking again **restarts** that walk from the beginning: the first click only answers how many
+   records are already enqueued and what the restart would cost, and the restart happens only when
+   you run it again with the parameter *"Enqueue the whole table again, discarding the previous
+   walk"* (`Confirm_Restart`) checked (`RequestVectorReindex.java:101, 118-126`).
 2. The scheduled **Process Vector Reindex** walks the table in chunks of 1 000 rows (at most 20
    chunks per run, pausing while the source has more than 10 000 pending events) and enqueues one
    outbox event per row (`ProcessVectorReindex.java`).
@@ -434,9 +440,14 @@ start with `/<spec>` (`vectorSearchConfig.js:51-66`):
 
 ```json
 "searchSuggestions": [
-  { "label": "overdueSalesInvoices", "path": "/sales-invoice?filter=overdue" }
+  { "label": "pendingDeliverySalesOrders", "path": "/sales-order?filter=pendingDelivery" }
 ]
 ```
+
+`resolveWindowSearchSuggestions` silently drops any entry whose `path` does not start with
+`/<spec>` of the window that declares it (`vectorSearchConfig.js:61`). The label key and the
+`filter` value above are illustrative: use a key you add to the locales and a query parameter the
+window actually understands.
 
 Regenerate:
 
@@ -462,8 +473,11 @@ python3 -c "import json;w=json.load(open('artifacts/sales-order/contract.json'))
   record ID). Choose content columns that make a readable label; keep FK IDs out.
 - **Result tag**: `frontendContract.window.name`, translated with the menu translations
   (`CommandPalette.jsx:383-384, 401`).
-- **Click**: navigates to `/<spec>/<match.id>` (`CommandPalette.jsx:312-318`), where `spec` is the
-  artifact directory — which is why the key must be the spec name.
+- **Click**: `handleVectorSelect` looks up the target in the contract-derived map and navigates to
+  `/<specName>/<match.id>` (`CommandPalette.jsx:312-318`), where `specName` is the artifact directory
+  of the contract that declared the target (`vectorSearchConfig.js:19-36`). Navigation therefore
+  works whatever the key is; the key-equals-spec rule exists for the callers that only have the
+  match (MCP, `etendo_get(spec:<target>, id)`), as explained in [Ownership](#ownership).
 - **Scope pill**: opening the palette from `/sales-order` scopes it to `sales-order`.
 
 ### Step 7 — Verify end to end
@@ -520,9 +534,15 @@ python3 -c "import json;w=json.load(open('artifacts/sales-order/contract.json'))
 2. Delete (or deactivate) the **Search Target** row.
 3. On the source, set **Enabled = N** (or inactive) and `./gradlew export.database`; then
    `./gradlew update.database`, which sweeps the triggers of every source that is no longer ready.
-   Prefer disabling over deleting the source row: `ETARC_VECTOR_OUTBOX` and
-   `ETARC_VECTOR_REINDEX_REQ` reference it without cascade, so a delete fails while any outbox or
-   reindex row points at it. To delete it, clear those rows first.
+   Prefer disabling over deleting the source row. Four foreign keys reference it **without
+   cascade**, so a delete fails while any of these rows points at it:
+   - `ETARC_VECTOR_OUTBOX` (`ETARC_VOUT_SOURCE`);
+   - `ETARC_VECTOR_REINDEX_REQ` (`ETARC_VREIDX_SOURCE`);
+   - `ETARC_VECTOR_SOURCE_COLUMN` (`ETARC_VSRCCOL_SOURCE`);
+   - `ETARC_VECTOR_SEARCH_TARGET` (`ETARC_VTARGET_SOURCE`).
+
+   To delete the source, first remove its targets and source columns, and clear its outbox and
+   reindex rows.
 4. **Clean up the vectors.** Nothing does this automatically: `VectorStore.deleteCollection()` exists
    but has no caller, and the trigger sweep leaves stored vectors in place. They are invisible once
    no active target points at the namespace, but they still occupy space and still contain tenant
