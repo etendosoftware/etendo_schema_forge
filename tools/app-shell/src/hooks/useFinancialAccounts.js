@@ -25,6 +25,11 @@ async function fetchAccountsPayload(apiFetch, signal) {
 
 const EMPTY_SUMMARY = {
   totalBalance: 0,
+  // ETP-5580: the total is converted to the organization currency; `null` lets the
+  // sidebar fall back to the first `byCurrency` row (or EUR) as with older backends.
+  totalBalanceCurrencyIso: null,
+  totalBalanceApproximate: false,
+  missingRateCurrencies: [],
   byCurrency: [],
   pending: { accountsWithPending: 0, suggestionsReady: 0, byRule: 0 },
 };

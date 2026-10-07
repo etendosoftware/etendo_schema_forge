@@ -89,7 +89,7 @@ import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
  *
  * @param {{ account: object, windowReadOnly?: boolean }} props
  */
-export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({ account, windowReadOnly = false }, ref) {
+export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({ account, windowReadOnly = false, onSynced }, ref) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   // The `name` sort accessor formats a periodFrom–periodTo range for statements with no name,
@@ -210,6 +210,8 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     try {
       const res = await sync(accountId);
       refreshStatements();
+      // ETP-5582: a finished sync moves the account's lastSyncDate (detail header label).
+      onSynced?.();
       // ETP-4891 follow-up: com.etendoerp.psd2 ships no real es_ES translation for these
       // AD_MESSAGEs (see backendErrors.js), so Core always resolves the English text — route it
       // through the same frontend translation map every other untranslated backend message uses.

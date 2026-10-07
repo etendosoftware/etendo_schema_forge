@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/postedStatus.js
 /**
  * ETP-5075 — shared `Posted` domain registry.
  *
@@ -10,7 +11,9 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolvePostedStatus, postedStatusLabel, resolveStatusPill } from '../postedStatus.js';
+import {
+  resolvePostedStatus, postedStatusLabel, resolveStatusPill, postedStatusTone, isPostedBooleanValue,
+} from '../postedStatus.js';
 
 describe('resolvePostedStatus', () => {
   it('returns null for a column that is not registered (fails closed)', () => {
@@ -43,7 +46,6 @@ describe('resolvePostedStatus', () => {
       labelKey: 'postedStatusInvalidAccount',
       rawLabel: 'i',
       tone: 'destructive',
-      variant: 'red',
     });
   });
 
@@ -51,24 +53,20 @@ describe('resolvePostedStatus', () => {
     const e = resolvePostedStatus('Posted', 'E');
     assert.equal(e.labelKey, 'postedStatusError');
     assert.equal(e.tone, 'destructive');
-    assert.equal(e.variant, 'red');
 
     const p = resolvePostedStatus('Posted', 'p');
     assert.equal(p.labelKey, 'postedStatusPeriodClosed');
     assert.equal(p.tone, 'destructive');
-    assert.equal(p.variant, 'red');
   });
 
   it("resolves 'T' (table disabled) and 'D' (document disabled) as neutral", () => {
     const t = resolvePostedStatus('Posted', 'T');
     assert.equal(t.labelKey, 'postedStatusTableDisabled');
     assert.equal(t.tone, 'neutral');
-    assert.equal(t.variant, 'neutral');
 
     const d = resolvePostedStatus('Posted', 'D');
     assert.equal(d.labelKey, 'postedStatusDocumentDisabled');
     assert.equal(d.tone, 'neutral');
-    assert.equal(d.variant, 'neutral');
   });
 
   describe('case sensitivity (load-bearing — never upper/lower-case a code)', () => {
@@ -113,7 +111,6 @@ describe('resolvePostedStatus', () => {
     const l = resolvePostedStatus('Posted', 'l');
     assert.equal(l.labelKey, 'postedStatusPendingRefresh');
     assert.equal(l.tone, 'neutral');
-    assert.equal(l.variant, 'neutral');
   });
 
   it('an unknown code out of the AD domain is shown, never silently collapsed to a dash', () => {
@@ -122,7 +119,6 @@ describe('resolvePostedStatus', () => {
       labelKey: null,
       rawLabel: 'ZZ',
       tone: 'neutral',
-      variant: 'neutral',
     });
   });
 
@@ -130,6 +126,59 @@ describe('resolvePostedStatus', () => {
     // Not a realistic backend payload, but proves the code path does not throw.
     const result = resolvePostedStatus('Posted', 123);
     assert.equal(result.rawLabel, '123');
+  });
+});
+
+describe('postedStatusTone — the single colour source (ETP-5647)', () => {
+  it("'N' (not posted) is warning — yellow pending, not an orange error", () => {
+    assert.equal(postedStatusTone('N'), 'warning');
+  });
+
+  it("'Y' (posted) is success", () => {
+    assert.equal(postedStatusTone('Y'), 'success');
+  });
+
+  it('folds every boolean spelling onto Y/N', () => {
+    assert.equal(postedStatusTone(true), 'success');
+    assert.equal(postedStatusTone('true'), 'success');
+    assert.equal(postedStatusTone(false), 'warning');
+    assert.equal(postedStatusTone('false'), 'warning');
+  });
+
+  it("'p' (period closed) is destructive, like every other failed posting", () => {
+    for (const code of ['p', 'E', 'C', 'i', 'b', 'c', 'NC', 'AD', 'DT', 'NO', 'L']) {
+      assert.equal(postedStatusTone(code), 'destructive', `code '${code}'`);
+    }
+  });
+
+  it('switched-off / not-prepared codes and unknown codes are neutral', () => {
+    for (const code of ['T', 'D', 'd', 'y', 'l', 'ZZ']) {
+      assert.equal(postedStatusTone(code), 'neutral', `code '${code}'`);
+    }
+  });
+
+  it('keeps case: lower-case y (post prepared) is not Y (posted)', () => {
+    assert.equal(postedStatusTone('y'), 'neutral');
+    assert.equal(postedStatusTone('Y'), 'success');
+  });
+
+  it('returns null for an empty value (nothing to colour)', () => {
+    assert.equal(postedStatusTone(null), null);
+    assert.equal(postedStatusTone(undefined), null);
+    assert.equal(postedStatusTone(''), null);
+  });
+
+  it('agrees with resolvePostedStatus on every non-boolean code', () => {
+    for (const code of ['E', 'C', 'i', 'b', 'c', 'NC', 'AD', 'DT', 'NO', 'L', 'p', 'T', 'D', 'd', 'y', 'l', 'ZZ']) {
+      assert.equal(postedStatusTone(code), resolvePostedStatus('Posted', code).tone, `code '${code}'`);
+    }
+  });
+});
+
+describe('isPostedBooleanValue', () => {
+  it('is true only for the Y/N pair and its boolean spellings', () => {
+    for (const v of [true, false, 'Y', 'N', 'true', 'false']) assert.equal(isPostedBooleanValue(v), true, String(v));
+    for (const v of ['y', 'n', 'E', '', null, undefined, 1]) assert.equal(isPostedBooleanValue(v), false, String(v));
   });
 });
 
@@ -184,6 +233,18 @@ describe('resolveStatusPill', () => {
   it("a one-sided badge with falseKey literal 'undefined' hides on a falsy value", () => {
     const badge = { key: 'isRectificative', trueKey: 'someKey', falseKey: 'undefined' };
     assert.equal(resolveStatusPill(badge, false, ui), null);
+  });
+
+  it("a posting-status pill takes its Y/N tone from the registry (keyed by badge.column too)", () => {
+    const badge = { key: 'anyApiKey', column: 'Posted', trueKey: 'x', falseKey: 'y' };
+    assert.equal(resolveStatusPill(badge, 'N', ui).tone, postedStatusTone('N'));
+    assert.equal(resolveStatusPill(badge, true, ui).tone, postedStatusTone('Y'));
+  });
+
+  it('a non-posted true/false pill keeps the generic success/warning pair', () => {
+    const badge = { key: 'isPaid', trueKey: 'paid', falseKey: 'unpaid' };
+    assert.equal(resolveStatusPill(badge, 'Y', ui).tone, 'success');
+    assert.equal(resolveStatusPill(badge, 'N', ui).tone, 'warning');
   });
 
   it('a non-posted-status column with an unrecognized value still falls to the true/false branch', () => {
