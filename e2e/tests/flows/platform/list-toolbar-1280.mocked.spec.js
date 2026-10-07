@@ -355,7 +355,7 @@ test.describe('List toolbar — crowded main row at 1280×720 (ETP-5509)', () =>
     // Widest left cluster: idle status label + long date label.
     const withDate = await measureToolbar(page);
     expectMainRowFits(withDate);
-    expectSeparator(withDate);
+    expectToolbarBox(withDate);
 
     // --- Status filter: pick the status with the longest label. Options carry
     // no test id either; the first button is the "all statuses" entry.
@@ -374,7 +374,7 @@ test.describe('List toolbar — crowded main row at 1280×720 (ETP-5509)', () =>
 
     const withBoth = await measureToolbar(page);
     expectMainRowFits(withBoth);
-    expectSeparator(withBoth);
+    expectToolbarBox(withBoth);
     // The tab group is still a row of its own below the (now filtered) main row.
     expect(withBoth.tabsRow).not.toBeNull();
     expect(withBoth.tabsRow.top).toBeGreaterThanOrEqual(withBoth.mainRow.bottom - EDGE_TOLERANCE_PX);
