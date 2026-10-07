@@ -10,9 +10,36 @@
  * entry here.
  */
 
+// ETP-5585 — issuer / receiver parties, used to validate the invoice is addressed to the active
+// organisation. Descriptions validated against real invoices; keep them verbatim.
+const ISSUER_DESCRIPTION = 'The party that issued the invoice (seller/supplier): usually the letterhead, logo or sender block. NOT the customer.';
+const RECEIVER_DESCRIPTION = "The party being invoiced: the buyer/customer who owes payment (labels such as Bill to, Sold to, Customer, Cliente, Client, Destinatario, Kunde, Rechnungsempfänger). It is NOT the issuer/seller (the party that emits the invoice, usually with the logo or letterhead) and NOT the Ship to / delivery address, unless Ship to is the only buyer shown. Labels may be absent: infer roles from document structure (issuer = letterhead / sender block; receiver = the other party block). Return null if the receiver is not identifiable.";
+const ISSUER_TAX_ID_DESCRIPTION = 'Tax identifier of the ISSUER only, exactly as printed (keep prefix, letters, digits; do not reformat). Null if not printed.';
+const RECEIVER_TAX_ID_DESCRIPTION = "Tax identifier of the RECEIVER only, exactly as printed (keep any country prefix, letters and digits; do not reformat, do not invent). It may appear far from the receiver's name, for example in a table row like 'Cliente | NIF'; use any label or row that is explicitly attached to the customer. NEVER copy the issuer's tax id here. If the only id printed for the receiver is a personal id (DNI, passport, SSN) set tax_id_type='personal_id'. If no receiver tax id is printed, return null; do not guess.";
+const TAX_ID_LABEL_DESCRIPTION = "The exact label text printed with the id (e.g. 'NIF', 'CIF', 'VAT ID', 'CUIT'). Null if none.";
+// Informational only: the comparison runs whatever the type is.
+const TAX_ID_TYPES = ['vat', 'national_tax_id', 'company_registration', 'personal_id', 'unknown'];
+
+function partyProperties(party) {
+  const isReceiver = party === 'receiver';
+  return [
+    { name: 'name', kind: 'text', description: `Name of the ${party}, as printed. Null if not printed.` },
+    { name: 'tax_id_raw', kind: 'text', description: isReceiver ? RECEIVER_TAX_ID_DESCRIPTION : ISSUER_TAX_ID_DESCRIPTION },
+    { name: 'tax_id_label', kind: 'text', description: TAX_ID_LABEL_DESCRIPTION },
+    {
+      name: 'tax_id_type',
+      kind: 'text',
+      enum: TAX_ID_TYPES,
+      description: `Kind of the ${party}'s tax identifier, as best as can be told from its format and label. Informational only. Null if there is no id.`,
+    },
+  ];
+}
+
 export const OCR_DOC_TYPES = [
   {
     id: 'purchase-invoice',
+    // ETP-5585 — name of the pre-flight check in useOcrFlow's VALIDATORS map.
+    validateExtraction: 'receiverTaxId',
     routePrefix: '/purchase-invoice/',
     toolName: 'SimpleOcrTool',
     eventName: 'copilot:ocr-prefill:purchase-invoice',
@@ -111,10 +138,24 @@ export const OCR_DOC_TYPES = [
     ],
     // Header-level fields no review-modal row surfaces, but which pre-fill the
     // create-contact popup via `createPrefilledFrom` above. Fed into the LLM
-    // output schema by buildOcrSchema. Every description names the *issuer* to
+    // output schema by buildOcrSchema. Every `vendor_*` description names the *issuer* to
     // keep the model from picking up the recipient's address block, which on a
-    // purchase invoice is our own organisation.
+    // purchase invoice is our own organisation. The one deliberate exception is the
+    // `receiver` object below (ETP-5585): it reads that recipient block on purpose, to
+    // compare its tax id with the active organisation's (see receiverTaxIdCheck.js).
     extraHeaderFields: [
+      {
+        name: 'issuer',
+        kind: 'object',
+        description: ISSUER_DESCRIPTION,
+        properties: partyProperties('issuer'),
+      },
+      {
+        name: 'receiver',
+        kind: 'object',
+        description: RECEIVER_DESCRIPTION,
+        properties: partyProperties('receiver'),
+      },
       {
         name: 'vendor_address',
         kind: 'text',
