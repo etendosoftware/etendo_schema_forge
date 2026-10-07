@@ -319,6 +319,20 @@ const BACKEND_ERROR_MAP = {
   // this one reaches the toast untranslated regardless of session locale.
   'This user is the tenant owner — only the owner can modify this account':
     'backendError.cannotModifyOwnerAccount',
+  // UserRoleAssignmentHandler#rejectEmailChange (com.etendoerp.go, ETP-5194) — hardcoded English
+  // literals. The first is the refusal outside the email-correction window (the form already
+  // locks the field there, so it is reached only from a stale form or an API call); the other two
+  // reject a correction that clears the address or does not look like one.
+  ...sameKeyEntries('backendError.userEmailLocked',
+    "Field 'email' can only be changed while the user's invitation has expired or could not be delivered"),
+  ...sameKeyEntries('backendError.userEmailRequired', "Field 'email' is required"),
+  ...sameKeyEntries('backendError.userEmailNotAGoUser',
+    "This user was never invited to Etendo (for example, a business partner contact person): edit its email through spec 'contacts', entity 'contact'"),
+  ...sameKeyEntries('backendError.userEmailInvalid', 'Invalid email format'),
+  // ContactHandler (com.etendoerp.go, ETP-5194) — an email change on a business partner's contact
+  // person that is actually an Etendo user (owner, or invited) must go through the Users window.
+  ...sameKeyEntries('backendError.contactEmailIsGoUser',
+    "This contact is an Etendo user: change its email through spec 'user', entity 'user'"),
   // NeoRequestRouter.java:132,191 (com.etendoerp.go) — hardcoded English literal sent on every
   // 403 for a spec/window/report the current role cannot access, regardless of session locale
   // (ETP-5205). Read-only-role users hit this whenever a control that should have been disabled
