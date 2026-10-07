@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmBoxes303.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // ETP-5393 manual-QA fix — reproduces the exact bug the user reported: the bank block
 // (datos_bancarios section, tab "identificacion") became visible once rectificativa was
 // checked AND box 111 (Rectificación - Importe, tab "resultado_final") carried a non-zero
@@ -197,13 +198,39 @@ describe('FmModel303Page + FmBoxes303 — marca SEPA reactivity (ETP-5431)', () 
       .forEach(key => expect(identInlineField(key)).toBeNull());
   });
 
-  it('the marca selector and bank_iban stay reachable at every marca', () => {
+  // ETP-5597 pt.3 — under marca 3 the same position-23 field is labelled "Cuenta bancaria".
+  it('the marca selector and bank_iban stay reachable at every marca (relabelled under marca 3)', () => {
     renderInNota3('3');
     for (const marca of ['1', '2', '3']) {
       setMarca(marca);
       expect(marcaSelect()).not.toBeNull();
-      expect(identInlineField('fm.ident.bank.iban')).not.toBeNull();
+      const expectedLabel = marca === '3' ? 'fm.ident.bank.account' : 'fm.ident.bank.iban';
+      const otherLabel = marca === '3' ? 'fm.ident.bank.iban' : 'fm.ident.bank.account';
+      expect(identInlineField(expectedLabel)).not.toBeNull();
+      expect(identInlineField(otherLabel)).toBeNull();
     }
+  });
+
+  it('the IBAN/Cuenta bancaria relabel keeps the typed account value', () => {
+    renderInNota3('1');
+    fireEvent.change(bankTextInput('fm.ident.bank.iban'), { target: { value: 'CH9300762011623852957' } });
+    setMarca('3');
+    expect(bankTextInput('fm.ident.bank.account').value).toBe('CH9300762011623852957');
+    setMarca('2');
+    expect(bankTextInput('fm.ident.bank.iban').value).toBe('CH9300762011623852957');
+  });
+
+  // ETP-5597 pt.2 — the required-mark ("*") follows the marca: SWIFT-BIC is shown but optional
+  // under marca 2, and mandatory under marca 3.
+  it('SWIFT-BIC carries the required-mark only under marca 3', () => {
+    const hasStar = (key) => identInlineField(key)
+      .querySelector('.fm-aeat-ident-inline-field__label').textContent.endsWith('*');
+    renderInNota3('2');
+    expect(hasStar('fm.ident.bank.swift_bic')).toBe(false);
+    expect(hasStar('fm.ident.bank.sepa')).toBe(true);
+    setMarca('3');
+    expect(hasStar('fm.ident.bank.swift_bic')).toBe(true);
+    expect(hasStar('fm.ident.bank.nombre')).toBe(true);
   });
 
   // THE decision this ticket made deliberately (and the reason no dependent-field-clearing

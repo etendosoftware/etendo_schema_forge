@@ -855,6 +855,20 @@
   box-shadow: 0 1px 3px hsl(var(--foreground) / .1), 0 1px 2px hsl(var(--foreground) / .06);
 }
 
+/* ETP-5597 — 349 header "Tipo: Normal | Sustitutiva": same segmented idiom, inline-sized. */
+.fm-349-type-segmented { width: auto; padding: 2px; gap: 2px; }
+.fm-349-type-segmented .fm-newdecl-segmented__btn { flex: 0 0 auto; padding: 4px 12px; font-size: 14px; }
+.fm-349-type-segmented .fm-newdecl-segmented__btn:disabled { cursor: default; }
+.fm-349-type-segmented .fm-newdecl-segmented__btn:disabled:not(.fm-newdecl-segmented__btn--active):hover { color: var(--fm-fg-3); }
+
+/* ETP-5597 — 349 substitutive-declaration banner (warning role). Wraps the identifier block
+   below the text on narrow widths. */
+.fm-349-substitutive-banner {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 12px 24px; padding: 12px 16px; border-radius: 8px;
+  background: var(--status-warning-bg); border: 1px solid var(--status-warning-border);
+}
+
 /* Período — month/quarter grid */
 .fm-newdecl-period-grid { display: grid; gap: 8px; }
 .fm-newdecl-period-grid--monthly   { grid-template-columns: repeat(6, 1fr); }
@@ -990,10 +1004,14 @@
 
 /* ─── 349 Operation key badges ─────────────────────────────────────── */
 .fm-key { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 8px; font: 500 12px/1 var(--fm-font-sans, system-ui); white-space: nowrap; flex-shrink: 0; border: 1px solid; }
-.fm-key--E { background: var(--status-info-bg); border-color: var(--status-info-border); color: var(--status-info-fg); }
+/* ETP-5597 — colours grouped by operation type (the same Venta/Compra split RECTIF_KEY_BY_TYPE
+   uses in FmModel349Page.jsx): sales/issued — E (entregas) and S (servicios prestados) — share
+   the information role; purchases/received — A (adquisiciones) and I (servicios recibidos) —
+   share the warning role. I used to be painted like the sales keys. */
+.fm-key--E,
 .fm-key--S { background: var(--status-info-bg); border-color: var(--status-info-border); color: var(--status-info-fg); }
-.fm-key--A { background: var(--status-warning-bg); border-color: var(--status-warning-border); color: var(--status-warning-fg); }
-.fm-key--I { background: var(--status-info-bg); border-color: var(--status-info-border); color: var(--status-info-fg); }
+.fm-key--A,
+.fm-key--I { background: var(--status-warning-bg); border-color: var(--status-warning-border); color: var(--status-warning-fg); }
 
 /* ─── 349 Key filter pills ─────────────────────────────────────────── */
 .fm-key-pills { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -1395,6 +1413,12 @@
 .fm-aeat-ident--aligned .fm-aeat-ident-inline-field__select { align-self: center; width: 100%; }
 /* Compact select (used inline inside identificacion, not in the aligned grid) */
 .fm-aeat-ident-inline-field__select--compact { min-width: 0; width: 280px; }
+/* ETP-5597 pt.1 — a select whose current option is no longer allowed (e.g. tipo Compensación with
+   casilla 69 positive): red border + a reason line under it. In the aligned grid variant the
+   wrapper is `display: contents`, so the error spans both grid columns instead of wrapping. */
+.fm-aeat-ident-inline-field--invalid { flex-wrap: wrap; }
+.fm-aeat-ident-inline-field__select--invalid { border-color: hsl(var(--destructive)); }
+.fm-aeat-ident-inline-field__error { flex-basis: 100%; grid-column: 1 / -1; margin-top: -4px; font: 400 12px/16px var(--fm-font-sans, system-ui); color: hsl(var(--destructive)); }
 .fm-aeat-ident-inline-field__input { background: hsl(var(--card)); border: 1px solid hsl(var(--border-control)); border-radius: 6px; padding: 5px 10px; font: 400 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); box-shadow: 0px 1px 2px hsl(var(--foreground) / 0.05); outline: none; }
 .fm-aeat-ident-inline-field__input:focus { border-color: hsl(var(--focus-ring)); box-shadow: 0 0 0 2px hsl(var(--focus-ring) / 0.15); }
 /* ETP-5584 — the trigger is the app's SelectTrigger (border, height, padding, focus ring come

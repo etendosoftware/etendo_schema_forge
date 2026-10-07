@@ -940,6 +940,24 @@ export function customTabKey(ct) {
   return `custom:${ct.key}`;
 }
 
+/**
+ * ETP-5309 — a 'tab'-placement custom component may declare that it cannot work until the
+ * record is persisted, through two statics on the component: `requiresSavedRecord` (true,
+ * or a predicate over the tab's `props`) and `savedRecordHintKey` (the i18n key of the
+ * hint). Returns the translated hint while `isNew` and the requirement holds — DetailView
+ * renders that tab button disabled with it as tooltip — else null. A component that sets
+ * `requiresSavedRecord` but no `savedRecordHintKey` gets `''`: the tab is still disabled,
+ * just without a tooltip. Structural only: the component describes itself, no tab key or
+ * window is named here.
+ */
+export function getCustomTabSaveFirstHint(ct, isNew, ui) {
+  const requires = ct?.Component?.requiresSavedRecord;
+  if (!isNew || !requires) return null;
+  if (typeof requires === 'function' && !requires(ct.props || {})) return null;
+  const hintKey = ct.Component.savedRecordHintKey;
+  return hintKey ? ui(hintKey) : '';
+}
+
 const SECONDARY_DEFAULT_WEIGHT = 99;
 const CUSTOM_DEFAULT_WEIGHT = 999;
 const LINES_DEFAULT_WEIGHT = -1;
@@ -1029,7 +1047,10 @@ export function buildInitialTabs(p) {
       if (p.customTabVisibility[ct.key] === false) return;
       const resolvedLabel = ct.labelKey ? p.ui(ct.labelKey) : ct.label;
       entries.push({
-        tab: { key: customTabKey(ct), label: resolvedLabel, count: p.customTabCounts[ct.key] ?? null },
+        tab: {
+          key: customTabKey(ct), label: resolvedLabel, count: p.customTabCounts[ct.key] ?? null,
+          saveFirstHint: getCustomTabSaveFirstHint(ct, p.isNew, p.ui),
+        },
         weight: ct.tabOrder ?? CUSTOM_DEFAULT_WEIGHT,
         insertionIndex: 10000 + i,
       });
@@ -1182,6 +1203,10 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
  * red like Figma shows (found while verifying ETP-4797).
  */
 export function getButtonClass(salesTheme, p, isPrimary) {
+  // `primary-danger` (ETP-5519): the filled-red Primary destructive button. Its colours come
+  // from the design-system `Button` `destructive` variant (see getProcessButtonVariant), so no
+  // colour override here — and it ignores `salesTheme`, which would repaint it amber.
+  if (p.style === 'primary-danger') return 'font-medium';
   if (p.style === 'ghost-danger') {
     return 'bg-card border-[hsl(var(--destructive))] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] hover:text-[hsl(var(--destructive))]';
   }
@@ -1492,8 +1517,30 @@ export function mergeLineEdits(lineEdits, selectedLine) {
   return lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine;
 }
 
+/**
+ * Process-button styles that mark a reversing/destructive action: `ghost-danger` (red outline)
+ * and `primary-danger` (filled red Primary destructive, ETP-5519). Both open the window's
+ * `processConfirmModal` and carry the Undo icon — the two styles differ only in emphasis.
+ */
+const DANGER_PROCESS_STYLES = new Set(['ghost-danger', 'primary-danger']);
+
+export function isDangerProcess(p) {
+  return DANGER_PROCESS_STYLES.has(p?.style);
+}
+
+/** Design-system `Button` variant for a header process button, keyed by `p.style`. */
+export function getProcessButtonVariant(p) {
+  if (p.style === 'primary-danger') return 'destructive';
+  return p.style === 'positive' ? 'default' : 'outline';
+}
+
+/** Undo icon colour: red on the outline `ghost-danger` button, inherited (white) on the filled one. */
+export function getDangerIconClass(p) {
+  return p.style === 'ghost-danger' ? 'mr-1 text-[hsl(var(--destructive))]' : 'mr-1';
+}
+
 export function dispatchProcessAction(p, { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess }) {
-  if ((p.style === 'ghost-danger' || p.confirmModal) && processConfirmModal) { setConfirmProcess(p); }
+  if ((isDangerProcess(p) || p.confirmModal) && processConfirmModal) { setConfirmProcess(p); }
   else if (p.params?.some(param => !param.hidden)) { setParamDialogProcess(p); }
   else { handleProcess?.(p); }
 }

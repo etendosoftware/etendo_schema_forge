@@ -39,7 +39,7 @@ vi.mock('../../../FmCommon.jsx', () => ({
     { role: 'tablist' },
     tabs.map(t => React.createElement(
       'button',
-      { key: t.id, role: 'tab', 'aria-selected': String(t.id === active), 'data-badge': t.badge ?? '', onClick: () => onSelect(t.id) },
+      { key: t.id, role: 'tab', 'aria-selected': String(t.id === active), 'data-badge': t.badge ?? '', 'data-badge-tone': t.badgeTone ?? '', onClick: () => onSelect(t.id) },
       t.label
     ))
   ),
@@ -48,9 +48,12 @@ vi.mock('../../../FmCommon.jsx', () => ({
   EmptyState: () => null,
   // Exposes label/value/badge via data-* attrs, keyed by label (an i18n key here, e.g.
   // 'fm.tab.incidents'), so a test can target the "Incidencias" KPI card specifically.
-  KpiWidget: ({ label, value, badge }) => React.createElement(
+  KpiWidget: ({ label, value, badge, badgeBg, badgeColor }) => React.createElement(
     'div',
-    { 'data-testid': `kpi-${label}`, 'data-value': value, 'data-badge': badge ?? '' },
+    {
+      'data-testid': `kpi-${label}`, 'data-value': value, 'data-badge': badge ?? '',
+      'data-badge-bg': badgeBg ?? '', 'data-badge-color': badgeColor ?? '',
+    },
     `${label}:${value}`,
   ),
 }));
@@ -240,3 +243,25 @@ describe('FmModel303Page — demo/mock mode does not overwrite seeded incidents 
     expect(incidentsMock.getAttribute('data-origins')).toBe('SEED');
   });
 });
+
+// ETP-5597 — the incidents KPI card and tab badge take their variant from the shared
+// `getIncidentIndicator`: blocking → destructive "Requiere revisión", warning-only → amber
+// "Advertencia", none → no badge.
+describe('FmModel303Page — incidents KPI/tab severity variant (ETP-5597)', () => {
+  it.each([
+    [{ blocking: 2, warning: 1 }, 'fm.kpi.incidents_sub', 'var(--status-destructive-bg)', 'hsl(var(--destructive))', 'danger'],
+    [{ blocking: 0, warning: 3 }, 'fm.incidents.severity.warn', 'var(--status-warning-bg)', 'var(--status-warning-fg)', 'warn'],
+    [{ blocking: 0, warning: 0 }, '', 'var(--status-warning-bg)', 'var(--status-warning-fg)', ''],
+  ])('incidents %j → KPI badge %j (%s / %s), tab tone %j', (counts, badge, bg, color, tone) => {
+    const decl = { ...BASE_DECL, incidents: { ...counts, items: [] } };
+    render(<FmModel303Page decl={decl} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    const kpi = screen.getByTestId('kpi-fm.tab.incidents');
+    expect(kpi.getAttribute('data-badge')).toBe(badge);
+    if (badge) {
+      expect(kpi.getAttribute('data-badge-bg')).toBe(bg);
+      expect(kpi.getAttribute('data-badge-color')).toBe(color);
+    }
+    expect(incidentsTabButton().getAttribute('data-badge-tone')).toBe(tone);
+  });
+});
+

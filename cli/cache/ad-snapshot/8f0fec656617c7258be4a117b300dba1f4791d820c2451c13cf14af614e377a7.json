@@ -18248,7 +18248,7 @@
       ]
     },
     "62e7d6689c11ba27fdc238450bbc940c71cc4a579d87d3669861331f4f00b615": {
-      "checksum": "8eac850593f222ad66a19aa837b22ee1e2d48abaedd1a7cbf4c78a551b873b28",
+      "checksum": "633bf9a7cd57a1ee8db4fcb9d712b16732e28a53260562f8c1125ad9d253b3fb",
       "params": [
         "B5673F73F613496C8BEA22FB55E4E1E4"
       ],
@@ -18350,12 +18350,6 @@
           "position": null
         },
         {
-          "ad_column_id": "7A8005A730744BCF8F971DF27700D4DF",
-          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
-          "columnname": "C_Year_Close_V_ID",
-          "position": null
-        },
-        {
           "ad_column_id": "1EDEE59E636940CD9E0C3C481FD61150",
           "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
           "columnname": "Created",
@@ -18371,6 +18365,12 @@
           "ad_column_id": "8CBA5F00D89D4464B4BE152DB36D6F01",
           "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
           "columnname": "Credit",
+          "position": null
+        },
+        {
+          "ad_column_id": "7A8005A730744BCF8F971DF27700D4DF",
+          "ad_table_id": "A45FDE07216C40FBA472E7B91F7273E4",
+          "columnname": "C_Year_Close_V_ID",
           "position": null
         },
         {
@@ -21822,7 +21822,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
-      "checksum": "13a0bd7468d92cb91b628baa09efae3d25682328f9fd62d18fdff34101553735",
+      "checksum": "e41c02e3e7e8c372925b45ad59d2c90c82ad5de69d0b779f374445a1dbb98b09",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -22498,6 +22498,24 @@
           "ad_table_id": "259",
           "columnname": "EM_ETGO_Currency_Rate",
           "position": "99"
+        },
+        {
+          "ad_column_id": "2911D24F4C8F4A60967A5544FD0357AB",
+          "ad_table_id": "259",
+          "columnname": "EM_ETGO_Invoice_Status",
+          "position": "100"
+        },
+        {
+          "ad_column_id": "72B58984BF2A4423ABC104E2BE24B696",
+          "ad_table_id": "259",
+          "columnname": "EM_ETGO_Delivery_Status",
+          "position": "101"
+        },
+        {
+          "ad_column_id": "EF5CF2AFF9E74860A127995C6DEA2EBD",
+          "ad_table_id": "259",
+          "columnname": "EM_ETGO_Deliv_Status_Purchase",
+          "position": "102"
         },
         {
           "ad_column_id": "9E82E728716246B393C40D2CDCA0133A",

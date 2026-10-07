@@ -38,7 +38,10 @@ vi.mock('../../../FmCommon.jsx', () => ({
     { role: 'tablist' },
     tabs.map(t => React.createElement(
       'button',
-      { key: t.id, role: 'tab', 'aria-selected': String(t.id === active), onClick: () => onSelect(t.id) },
+      {
+        key: t.id, role: 'tab', 'aria-selected': String(t.id === active), onClick: () => onSelect(t.id),
+        'data-tab-id': t.id, 'data-badge': t.badge == null ? '' : String(t.badge), 'data-badge-tone': t.badgeTone ?? '',
+      },
       t.label
     ))
   ),
@@ -291,6 +294,38 @@ describe('FmModel349Page — key filter', () => {
   });
 });
 
+// ETP-5597 — the key dropdown reuses KeyBadge, so its colours come from `.fm-key--{k}`.
+describe('FmModel349Page — key filter dropdown badges (ETP-5597)', () => {
+  it('renders every option with the shared KeyBadge (fm-key fm-key--{k}) — no inline colours', () => {
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    fireEvent.click(container.querySelector('.fm-toolbar__pill'));
+    const badges = Array.from(container.querySelectorAll('.fm-status-select__item .fm-key'));
+    expect(badges.map(b => b.textContent)).toEqual(['E', 'S', 'A', 'I']);
+    for (const b of badges) {
+      expect(b.classList.contains(`fm-key--${b.textContent}`)).toBe(true);
+      expect(b.getAttribute('style')).toBeNull();
+    }
+  });
+});
+
+// ── Incidents tab badge (ETP-5597) ────────────────────────────────────────────
+
+describe('FmModel349Page — incidents tab badge counts block+warn with tone (ETP-5597)', () => {
+  const incidentsTab = () => screen.getAllByRole('tab').find(b => b.getAttribute('data-tab-id') === 'incidents');
+
+  // ETP-5584 (P12) — every list tab shows its count, 0 included (no tone at 0).
+  it.each([
+    [{ blocking: 0, warning: 0 }, '0', ''],
+    [{ blocking: 0, warning: 2 }, '2', 'warn'],
+    [{ blocking: 1, warning: 0 }, '1', 'danger'],
+    [{ blocking: 1, warning: 2 }, '3', 'danger'],
+  ])('incidents %j → badge %j, tone %j', (incidents, badge, tone) => {
+    render(<FmModel349Page decl={makeDecl({ incidents })} {...defaultProps} />);
+    expect(incidentsTab().getAttribute('data-badge')).toBe(badge);
+    expect(incidentsTab().getAttribute('data-badge-tone')).toBe(tone);
+  });
+});
+
 // ── VIES banner ───────────────────────────────────────────────────────────────
 
 describe('FmModel349Page — VIES banner', () => {
@@ -519,10 +554,14 @@ describe('FmModel349Page — Guardar button (ETP-5338 pt.5)', () => {
     render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
     const left = screen.getByTestId('FmDetailActionBar__left');
     const right = screen.getByTestId('FmDetailActionBar__right');
-    const leftBtns = Array.from(left.querySelectorAll('button'));
+    // The only ACTION on the left is Cancelar; the other left-hand buttons are the two options
+    // of ETP-5597's "Tipo: Normal | Sustitutiva" control (role="radio"), a form control that
+    // sits right after the status chip.
+    const leftBtns = Array.from(left.querySelectorAll('button:not([role="radio"])'));
     expect(leftBtns).toHaveLength(1);
     expect(leftBtns[0].textContent).toContain('fm.action.cancel');
     expect(left.querySelector('.fm-status-chip')).toBeTruthy();
+    expect(left.querySelectorAll('[role="radio"]')).toHaveLength(2);
     const rightIds = Array.from(right.querySelectorAll('button')).map(b => b.getAttribute('data-testid'));
     expect(rightIds).toEqual([
       'FmModel349Page__compute', 'FmModel349Page__generate', 'FmModel349Page__save', 'FmModel349Page__present',

@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/AeatSubmitFlow.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/fiscalModelsUtils.js
 // Vitest tests for AeatSubmitFlow — the ETP-4456 Phase 2 AEAT 303 electronic
 // submission flow. Covers the pure helpers (response-status branching,
 // NRC/test-mode body shape, error-code-to-message mapping) plus the
@@ -322,7 +323,11 @@ describe('AeatSubmitFlow — forwards manualOverrides to AEAT (ETP-5431 Fix 3, p
 
   it('appends BOX_PARAM_MAP params (e.g. RectifyingAmount for box 111) when manualOverrides carries values', async () => {
     stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
-    renderFlow({ manualOverrides: { 111: 2.10, 70: 43.52 } });
+    // ETP-5597 pt.4 — box 70 is only forwarded inside a rectificativa, so the fixture checks it.
+    renderFlow({
+      identChecks: { tipo_declaracion: 'I', rectificativa: true, bank_iban: 'ES7620770024003102575766' },
+      manualOverrides: { 111: 2.10, 70: 43.52 },
+    });
 
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
 
@@ -331,6 +336,37 @@ describe('AeatSubmitFlow — forwards manualOverrides to AEAT (ETP-5431 Fix 3, p
     const params = new URLSearchParams(path.split('?')[1]);
     expect(params.get('RectifyingAmount')).toBe('2.1');
     expect(params.get('ComplementaryAmt')).toBe('43.52');
+  });
+
+  // ETP-5597 pt.4 — a declaration persisted before the 70/109 gating may still carry those
+  // overrides; the AEAT submission must drop them when neither rectificativa nor complementaria
+  // is checked, while every other manual box is still forwarded.
+  it('drops boxes 70/109 (ComplementaryAmt/ReturnsPendingSettlement) without rectificativa/complementaria', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({ manualOverrides: { 111: 2.10, 70: 43.52, 109: 9.5, 78: 12 } });
+
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    const params = new URLSearchParams(stableApiFetch.mock.calls[0][0].split('?')[1]);
+    expect(params.has('ComplementaryAmt')).toBe(false);
+    expect(params.has('ReturnsPendingSettlement')).toBe(false);
+    expect(params.get('RectifyingAmount')).toBe('2.1');
+    expect(params.get('PreviousPeriodAmtApplied')).toBe('12');
+  });
+
+  it('forwards box 109 when "complementaria" (pre-Oct-2024 layouts) is checked', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({
+      identChecks: { tipo_declaracion: 'I', complementaria: true, bank_iban: 'ES7620770024003102575766' },
+      manualOverrides: { 109: 9.5 },
+    });
+
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    const params = new URLSearchParams(stableApiFetch.mock.calls[0][0].split('?')[1]);
+    expect(params.get('ReturnsPendingSettlement')).toBe('9.5');
   });
 
   it('does NOT append any BOX_PARAM_MAP param when manualOverrides is null/absent (same guard as generate303File)', async () => {

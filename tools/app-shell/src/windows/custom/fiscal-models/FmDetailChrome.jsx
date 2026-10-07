@@ -1,5 +1,6 @@
 import React from 'react';
 import { useUI } from '@/i18n';
+import { getIncidentIndicator } from './incidentSeverity.js';
 import { Button } from '@/components/ui/button.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -160,15 +161,14 @@ export function tabCount(count) {
   return count == null ? null : count;
 }
 
-// Incidencias: blocking + warning (what the tab lists), toned by the worst severity — same
-// danger/warn tones 303 always used.
+// Incidencias: blocking + warning (what the tab lists), toned by the worst severity through
+// ETP-5597's shared `getIncidentIndicator` (incidentSeverity.js) — the same source the KPI card
+// and the list use, so the three can never disagree.
 export function incidentsTabBadge(blocking, warning) {
   const b = Number(blocking) || 0;
   const w = Number(warning) || 0;
-  let badgeTone = null;
-  if (b > 0) badgeTone = 'danger';
-  else if (w > 0) badgeTone = 'warn';
-  return { badge: b + w, badgeTone };
+  const indicator = getIncidentIndicator({ blocking: b, warning: w });
+  return { badge: b + w, badgeTone: indicator?.tone ?? null };
 }
 
 // ── Empty state (P11) ────────────────────────────────────────────────────────

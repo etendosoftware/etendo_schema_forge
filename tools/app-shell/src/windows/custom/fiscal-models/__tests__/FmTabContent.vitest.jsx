@@ -28,6 +28,8 @@ vi.mock('../fiscalModelsUtils.js', () => ({
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SourcesTab, IncidentsTab } from '../FmTabContent.jsx';
+import esES from '@/locales/es_ES.json';
+import enUS from '@/locales/en_US.json';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -156,6 +158,56 @@ describe('SourcesTab', () => {
     expect(emptyCell.getAttribute('colspan')).toBe('9');
   });
 
+  // ── showTaxColumns (ETP-5597) — 349 hides Cuota/Total/Casillas ───────────
+
+  describe('showTaxColumns', () => {
+    const decl = {
+      sources: [{ id: 'r1', ref: 'REC-1', date: '', type: 'Venta', party: 'ACME', base: 100, vat: 21, total: 121, boxes: '07' }],
+      incidents: { items: [] },
+    };
+
+    it('renders Cuota/Total/Casillas by default (303)', () => {
+      render(<SourcesTab decl={decl} t={t} />);
+      const headers = Array.from(document.querySelectorAll('thead th')).map(th => th.textContent);
+      expect(headers).toEqual(expect.arrayContaining(['fm.sources.col.vat', 'fm.sources.col.total', 'fm.sources.col.boxes']));
+      expect(document.querySelector('tbody tr').cells).toHaveLength(9);
+    });
+
+    it('omits Cuota/Total/Casillas headers and cells when false (349)', () => {
+      render(<SourcesTab decl={decl} t={t} showTaxColumns={false} />);
+      const headers = Array.from(document.querySelectorAll('thead th')).map(th => th.textContent);
+      expect(headers).toHaveLength(6);
+      for (const k of ['fm.sources.col.vat', 'fm.sources.col.total', 'fm.sources.col.boxes']) {
+        expect(headers).not.toContain(k);
+      }
+      expect(headers).toContain('fm.sources.col.party');
+      expect(headers).toContain('fm.sources.col.ref');
+      const cells = document.querySelector('tbody tr').cells;
+      expect(cells).toHaveLength(6);
+      expect(cells[5].textContent).toBe('100');
+      expect(document.body.textContent).not.toContain('121');
+    });
+
+    it('the empty-row colSpan follows the column count (6 when tax columns are hidden)', () => {
+      const withIncident = {
+        sources: [{ ref: 'R1', date: '', type: '', party: '', base: 0, total: 0, boxes: '07' }],
+        incidents: { items: [{ origin: 'Casilla 07', severity: 'warn', message: 'x' }] },
+      };
+      const { rerender } = render(<SourcesTab decl={withIncident} t={t} showTaxColumns={false} />);
+      fireEvent.click(screen.getByText('fm.sources.filter.incidents'));
+      rerender(<SourcesTab decl={{ ...withIncident, incidents: { items: [] } }} t={t} showTaxColumns={false} />);
+      expect(document.querySelector('tbody tr td').getAttribute('colspan')).toBe('6');
+    });
+  });
+
+  // ETP-5597 — column labels "Contacto" / "N° documento".
+  it('the party/ref column labels read "Contacto" and "N° documento" in Spanish', () => {
+    expect(esES.genericLabels['fm.sources.col.party']).toBe('Contacto');
+    expect(esES.genericLabels['fm.sources.col.ref']).toBe('N° documento');
+    expect(enUS.genericLabels['fm.sources.col.party']).toBe('Contact');
+    expect(enUS.genericLabels['fm.sources.col.ref']).toBe('Document No.');
+  });
+
   // ── row-per-side "type" label (ETP-5456) ─────────────────────────────────
 
   it('translates the "accrued" machine key via the i18n hook', () => {
@@ -213,14 +265,44 @@ describe('IncidentsTab', () => {
     expect(document.body.textContent).toContain('Missing data');
   });
 
-  it('renders warning banner', () => {
+  // ETP-5597 — the banner follows the real severity: warnings only → amber, non-blocking text.
+  it('renders the amber, non-blocking banner when there are only warnings', () => {
     const decl = {
       incidents: {
         items: [{ origin: 'Box', severity: 'warn', message: 'Check this' }],
       },
     };
     render(<IncidentsTab decl={decl} blocking={0} warning={1} t={t} />);
-    expect(document.body.textContent).toContain('fm.incidents.block_sub');
+    const text = screen.getByText('fm.incidents.warn_sub');
+    expect(text.style.color).toBe('var(--status-warning-fg)');
+    expect(screen.queryByText('fm.incidents.block_sub')).not.toBeInTheDocument();
+  });
+
+  it('renders the destructive "resolve before generating" banner when there is a blocking incident', () => {
+    const decl = { incidents: { items: [{ origin: 'Box', severity: 'block', message: 'Broken' }] } };
+    render(<IncidentsTab decl={decl} blocking={1} warning={0} t={t} />);
+    const text = screen.getByText('fm.incidents.block_sub');
+    expect(text.style.color).toBe('hsl(var(--destructive))');
+    expect(screen.queryByText('fm.incidents.warn_sub')).not.toBeInTheDocument();
+  });
+
+  it('blocking wins over warnings: blocking + warnings shows the destructive banner', () => {
+    const decl = {
+      incidents: {
+        items: [
+          { origin: 'Box', severity: 'block', message: 'Broken' },
+          { origin: 'Box2', severity: 'warn', message: 'Hmm' },
+        ],
+      },
+    };
+    render(<IncidentsTab decl={decl} blocking={1} warning={1} t={t} />);
+    expect(screen.getByText('fm.incidents.block_sub')).toBeInTheDocument();
+    expect(screen.queryByText('fm.incidents.warn_sub')).not.toBeInTheDocument();
+  });
+
+  it('the warn_sub key is translated in both locales', () => {
+    expect(esES.genericLabels['fm.incidents.warn_sub']).toBeTruthy();
+    expect(enUS.genericLabels['fm.incidents.warn_sub']).toBeTruthy();
   });
 
   it('shows go-to-sources link for casilla incidents', () => {
@@ -255,11 +337,11 @@ describe('IncidentsTab', () => {
   it('clicking the close button hides the banner', () => {
     const decl = { incidents: { items: [{ origin: 'Box', severity: 'warn', message: 'Check this' }] } };
     render(<IncidentsTab decl={decl} blocking={0} warning={1} t={t} />);
-    expect(screen.getByText('fm.incidents.block_sub')).toBeInTheDocument();
+    expect(screen.getByText('fm.incidents.warn_sub')).toBeInTheDocument();
 
     fireEvent.click(findCloseButton());
 
-    expect(screen.queryByText('fm.incidents.block_sub')).not.toBeInTheDocument();
+    expect(screen.queryByText('fm.incidents.warn_sub')).not.toBeInTheDocument();
   });
 
   it('keeps the banner hidden across a re-render with the same blocking/warning counts', () => {

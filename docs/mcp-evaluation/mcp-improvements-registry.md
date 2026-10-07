@@ -475,12 +475,12 @@ not a side effect of a run.
 
 | Surface | 2026-08-05 | 2026-08-06 | 2026-08-10 | 08-13 (B) | 08-13 (A) | Note |
 |---|---|---|---|---|---|---|
-| Read verbs (`neo_list`/`get`/`schema`/`defaults`/`selectors`/`discover`/`docs`) | ✅ | ✅ | ✅ | ✅ | ✅ | A1–A13; re-run as B1–B9, then as C1–C2, C13–C19. **08-13 (A):** `neo_discover` (56 specs), `neo_schema` on `product/stock`, `neo_list` with an unknown-field projection, `neo_get` on a missing id |
-| Write, Etendo (`neo_create`, `neo_batch`) | ✅ | ✅ | ✅ | ✅ | ⚠️ | W1–W8; `neo_create` re-run as B10–B14, then C3–C8. **`neo_batch` was re-probed on 2026-08-10** (C9–C10), closing the 08-06 caveat that IMP-4/IMP-15's batch clauses rested on 08-05 evidence — and the probe found IMP-23. **08-13 (A):** `neo_create` probed five times (found IMP-30); **`neo_batch` not re-probed**, so IMP-24's `neo_batch` clause is still unmeasured |
+| Read verbs (`etendo_list`/`get`/`schema`/`defaults`/`selectors`/`discover`/`docs`) | ✅ | ✅ | ✅ | ✅ | ✅ | A1–A13; re-run as B1–B9, then as C1–C2, C13–C19. **08-13 (A):** `etendo_discover` (56 specs), `etendo_schema` on `product/stock`, `etendo_list` with an unknown-field projection, `etendo_get` on a missing id |
+| Write, Etendo (`etendo_create`, `etendo_batch`) | ✅ | ✅ | ✅ | ✅ | ⚠️ | W1–W8; `etendo_create` re-run as B10–B14, then C3–C8. **`etendo_batch` was re-probed on 2026-08-10** (C9–C10), closing the 08-06 caveat that IMP-4/IMP-15's batch clauses rested on 08-05 evidence — and the probe found IMP-23. **08-13 (A):** `etendo_create` probed five times (found IMP-30); **`etendo_batch` not re-probed**, so IMP-24's `etendo_batch` clause is still unmeasured |
 | Write, Holded (`create_*` / `delete_*`) | ❌ | ✅ | ✅ | ✅ | ⚠️ | B17–B20, then C12. **Deletion could not be verified on 2026-08-10** — Holded exposes no read verb for contacts or sales orders (run report §2). **08-13 (A): not probed — no write authorization was given for the Holded tenant this run.** The catalog was re-enumerated read-only and the 08-10 note hardened into a finding: Holded exposes **no** contact read verb at all (no `list_contacts`, no `get_contact`), so the paired write task was not executable. Covered by prior evidence; see the 08-13 (A) run report |
-| `neo_update` | ❌ | ✅ | ✅ | ✅ | ✅ | B15–B16, then C11 — which is where IMP-24 was found. **08-13 (A):** probed three times — the ambiguous-date 422, an unknown-field body, and a 405 on a read-only entity |
-| `neo_action` | ❌ | ✅ | ✅ | ✅ | ⚠️ | B7, then C16 — read-only verification of the catalog (19 actions on 08-06, **22** on 08-10) + its `agentPrompt`/`actionValues` contract. Firing a completion/posting action remains forbidden (Step 0); the surface is scoreable without it. **08-13 (A): not re-probed** — nothing in the wave touched it |
-| `neo_widget` + the 8 report generators | ❌ | ✅ | ⚠️ | ✅ | ⚠️ | B1–B2, B3–B5. **Not re-probed on 2026-08-10** (job A, nothing in the wave touched them) — the surface still counts as covered by the 08-06 evidence, but IMP-19's clauses are 08-06-fresh, not 08-10-fresh. **Re-probed live on 2026-08-13 (B)** (`generate_tax_report`, run report §5.3) — the 08-10 ⚠️ is closed. **08-13 (A): not re-probed**; the (B) evidence is hours old, so this ⚠️ is the weakest of the three |
+| `etendo_update` | ❌ | ✅ | ✅ | ✅ | ✅ | B15–B16, then C11 — which is where IMP-24 was found. **08-13 (A):** probed three times — the ambiguous-date 422, an unknown-field body, and a 405 on a read-only entity |
+| `etendo_action` | ❌ | ✅ | ✅ | ✅ | ⚠️ | B7, then C16 — read-only verification of the catalog (19 actions on 08-06, **22** on 08-10) + its `agentPrompt`/`actionValues` contract. Firing a completion/posting action remains forbidden (Step 0); the surface is scoreable without it. **08-13 (A): not re-probed** — nothing in the wave touched it |
+| `etendo_widget` + the 8 report generators | ❌ | ✅ | ⚠️ | ✅ | ⚠️ | B1–B2, B3–B5. **Not re-probed on 2026-08-10** (job A, nothing in the wave touched them) — the surface still counts as covered by the 08-06 evidence, but IMP-19's clauses are 08-06-fresh, not 08-10-fresh. **Re-probed live on 2026-08-13 (B)** (`generate_tax_report`, run report §5.3) — the 08-10 ⚠️ is closed. **08-13 (A): not re-probed**; the (B) evidence is hours old, so this ⚠️ is the weakest of the three |
 
 A low discovery count is only evidence of maturity **at full coverage**. At 2 of 6 it meant four
 surfaces had not been looked at — which is precisely how IMP-15 survived two runs undetected. Now at
@@ -502,7 +502,7 @@ is unknown. Do not report a break-even figure until ACE-p is measured on both si
 
 M1 counts **calls**. It is blind to what each call costs: two servers can tie at 1.0× while one
 returns 400 bytes and the other 62 KB. That gap is not hypothetical — the 2026-08-10 run recorded a
-`neo_schema` full dump at **61,963 chars** and IMP-12's projection cutting one response by **−89.1 %**,
+`etendo_schema` full dump at **61,963 chars** and IMP-12's projection cutting one response by **−89.1 %**,
 both as asides, in a scorecard that has no place to put them. Context is the agent's scarcest
 resource: a response that does not fit is a failed call regardless of its status code.
 
@@ -511,7 +511,7 @@ ACE has **two components that are never summed**, because the two servers pay in
 | Component | What it measures | Unit | Who is structurally favoured |
 |---|---|---|---|
 | **ACE-p** — priming | Bytes of tool catalog (names + descriptions + input schemas) loaded into the agent's context **before it does anything**. Paid once per session, unavoidable, whether one task runs or fifty | bytes, absolute per server + ratio | **Etendo GO** — ~14 generic verbs + 8 generators against Holded's ~180 explicit tools (base §3) |
-| **ACE-v** — variable | Bytes exchanged (request + response, summed) to complete one frozen-suite task, from a cold start | bytes per task + median ratio vs Holded | **Holded, probably** — Etendo GO pays introspection at runtime (`neo_discover`, `neo_schema`, `neo_defaults`) where Holded pre-paid it in ACE-p |
+| **ACE-v** — variable | Bytes exchanged (request + response, summed) to complete one frozen-suite task, from a cold start | bytes per task + median ratio vs Holded | **Holded, probably** — Etendo GO pays introspection at runtime (`etendo_discover`, `etendo_schema`, `etendo_defaults`) where Holded pre-paid it in ACE-p |
 
 That asymmetry **is the finding**, and a single headline number would erase it. Holded front-loads a
 large fixed cost and then runs cheap; Etendo GO starts nearly free and pays per outcome. So the two
@@ -541,7 +541,7 @@ per-call verbosity is a non-issue. Nobody currently knows which.
 
 **Why it stays out of MARI** — and this is the load-bearing reason, not a formatting preference:
 **verbosity is not monotonic with quality.** IMP-5 asks for *richer* error envelopes; IMP-18 asks
-`neo_list` to *add* an `unknownFields` warning; IMP-12's whole value is a response that says more
+`etendo_list` to *add* an `unknownFields` warning; IMP-12's whole value is a response that says more
 with less. Fold bytes into the readiness index and shipping IMP-5 would lower the score — a metric
 that punishes the fix it is meant to motivate. ACE is a **cost** measurement read *next to* MARI, and
 a rising ACE is only a defect once MARI has stopped rising with it. Keep them adjacent and separate.

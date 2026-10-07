@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/incidentSeverity.js
 // Vitest component tests for FmListPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -106,10 +108,15 @@ vi.mock('../FmCommon.jsx', () => ({
   // Forwards onClick/active (ETP-4755, click-to-filter) so tests can exercise
   // FmListPage's own filtering wiring — the rendered textContent stays just
   // `value` (unchanged) so pre-existing index-based assertions keep working.
-  KpiWidget: ({ value, label, onClick, active }) =>
+  // ETP-5597 — also exposes badge/badgeBg/badgeColor as data-* so the incidents KPI's severity
+  // variant can be asserted; textContent is still just `value`.
+  KpiWidget: ({ value, label, onClick, active, badge, badgeBg, badgeColor }) =>
     React.createElement(
       'button',
-      { type: 'button', className: 'test-kpi', 'data-kpi-label': label, 'data-active': String(!!active), onClick },
+      {
+        type: 'button', className: 'test-kpi', 'data-kpi-label': label, 'data-active': String(!!active), onClick,
+        'data-badge': badge ?? '', 'data-badge-bg': badgeBg ?? '', 'data-badge-color': badgeColor ?? '',
+      },
       value,
     ),
 }));
@@ -1319,3 +1326,57 @@ describe('FmListPage — ETP-5030 selected-row shading', () => {
     expect(selectionClasses(rowByPeriod(container, 'T1'))).toEqual(['fm-table__row--current']);
   });
 });
+
+// ── Incidencias KPI badge follows the worst severity (ETP-5597) ───────────────
+describe('FmListPage — incidents KPI severity variant (ETP-5597)', () => {
+  function incidentsKpi(container) {
+    return container.querySelectorAll('.test-kpi')[2];
+  }
+
+  it('no incidents → muted "Sin incidencias" badge (never red)', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch();
+    const decl = makeDecl({ id: 'k-none', status: 'submitted' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    const kpi = incidentsKpi(container);
+    expect(kpi.textContent).toBe('0');
+    expect(kpi.getAttribute('data-badge')).toBe('fm.incidents.none');
+    expect(kpi.getAttribute('data-badge-bg')).toBe('hsl(var(--muted))');
+    expect(kpi.getAttribute('data-badge-color')).toBe('hsl(var(--muted-foreground))');
+  });
+
+  it('warnings only → amber "Advertencia" badge', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch({
+      incidentsByDeclId: { 'k-warn': [{ code: 'W', message: 'w', severity: 'warn' }] },
+    });
+    const decl = makeDecl({ id: 'k-warn', status: 'submitted' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    await waitFor(() => expect(incidentsKpi(container).textContent).toBe('1'));
+    const kpi = incidentsKpi(container);
+    expect(kpi.getAttribute('data-badge')).toBe('fm.incidents.severity.warn');
+    expect(kpi.getAttribute('data-badge-bg')).toBe('var(--status-warning-bg)');
+    expect(kpi.getAttribute('data-badge-color')).toBe('var(--status-warning-fg)');
+  });
+
+  it('any blocking incident (even alongside warnings elsewhere) → red "Requiere revisión" badge', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch({
+      incidentsByDeclId: {
+        'k-w': [{ code: 'W', message: 'w', severity: 'warn' }],
+        'k-b': [{ code: 'B', message: 'b', severity: 'block' }],
+      },
+    });
+    const decls = [
+      makeDecl({ id: 'k-w', status: 'submitted', period: 'T1' }),
+      makeDecl({ id: 'k-b', status: 'submitted', period: 'T2' }),
+    ];
+    const { container } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    await waitFor(() => expect(incidentsKpi(container).textContent).toBe('2'));
+    const kpi = incidentsKpi(container);
+    expect(kpi.getAttribute('data-badge')).toBe('fm.kpi.incidents_sub');
+    expect(kpi.getAttribute('data-badge-bg')).toBe('var(--status-destructive-bg)');
+    expect(kpi.getAttribute('data-badge-color')).toBe('hsl(var(--destructive))');
+  });
+});
+

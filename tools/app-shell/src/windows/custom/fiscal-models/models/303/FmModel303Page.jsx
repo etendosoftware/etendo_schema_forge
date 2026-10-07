@@ -14,16 +14,18 @@ import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303 } from '../../FmOverlays.jsx';
 import AeatSubmitFlow, { isMissingDefaultIaeActivity, checkMissingIaeGuard } from './AeatSubmitFlow.jsx';
-import { isLastPeriodOfYear, getMissingRequiredFields } from './fm303Layouts.js';
+import { isLastPeriodOfYear, getMissingRequiredFields, getInvalidSelectedOptions, resolveFieldLabelKey } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import {
   formatAmount, computeBoxes303, generate303File, fetchDeclarationIncidents,
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
-  resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
+  resolveResultColors, withDerivedBoxFlags, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
+  RECTIFICATION_ONLY_BOXES, isRectificationAdjustmentActive,
   clampNegativeOverrides, showIaeActivityReminder, showMissingRequiredFieldsReminder, buildValidatedBoxValue,
   RECEIPT_ATTACHMENT_CONFIG,
 } from '../../fiscalModelsUtils.js';
+import { getIncidentIndicator } from '../../incidentSeverity.js';
 import { getCachedFiscalCompute, setCachedFiscalCompute, invalidateFiscalComputeCache } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
@@ -61,6 +63,22 @@ function syncBox111Override(overrides, boxArr) {
   if (box111 != null) next[111] = box111;
   else delete next[111];
   return next;
+}
+
+// Boxes whose value must be dropped (from `manualOverrides` and from the live box array) as a
+// consequence of an identification edit:
+// - box 108 ("Otros ajustes") when the rectification reason moves away from "D" — pre-existing
+//   rule, only editable for that reason;
+// - ETP-5597 pt.4 — boxes 70/109 (`RECTIFICATION_ONLY_BOXES`) when the "Autoliquidación
+//   rectificativa" check (or, in the pre-October-2024 layouts, "complementaria") is unset: they
+//   are editable only while it is set, and a value left behind would still move casilla 71 on
+//   screen and, for box 109, still reach the file (see `RECTIFICATION_ONLY_BOXES`'s comment).
+function boxesClearedByIdentChange(id, value, nextIdentChecks) {
+  if (id === 'motivo_rectificacion' && value !== 'D') return [108];
+  if ((id === 'rectificativa' || id === 'complementaria') && !isRectificationAdjustmentActive(nextIdentChecks)) {
+    return RECTIFICATION_ONLY_BOXES;
+  }
+  return [];
 }
 
 function parseBoxInput(rawValue) {
@@ -235,7 +253,7 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
             year={decl.year}
             period={decl.period}
             sectionIds={section.sections}
-            identification={withBox111NonZeroFlag({ ...orgIdent, ...identChecks }, liveBoxes)}
+            identification={withDerivedBoxFlags({ ...orgIdent, ...identChecks }, liveBoxes)}
             onIdentChange={onIdentChange}
             onBoxChange={onBoxChange}
             readOnly={isSubmitted}
@@ -246,20 +264,18 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
   );
 }
 
+// ETP-5597 — delegates to the shared `getIncidentIndicator` so the KPI card, the tab badge and
+// the list page all agree: blocking → destructive + "Requiere revisión", warning-only → warning
+// + "Advertencia". No incidents keeps the previous neutral rendering (no badge, disabled icon).
 function buildIncidentVariants(blocking, warning, t) {
-  let tone = null;
-  if (blocking > 0) tone = 'danger';
-  else if (warning > 0) tone = 'warn';
-
-  let iconColor = 'hsl(var(--text-disabled))';
-  if (blocking > 0) iconColor = 'hsl(var(--destructive))';
-  else if (warning > 0) iconColor = 'var(--status-warning-fg)';
-
-  let badge = null;
-  if (blocking > 0) badge = t('fm.incidents.severity.block') ?? 'Bloqueante';
-  else if (warning > 0) badge = t('fm.incidents.severity.warn') ?? 'Advertencia';
-
-  return { tone, iconColor, badge };
+  const indicator = getIncidentIndicator({ blocking, warning }, t);
+  if (!indicator) {
+    return { tone: null, iconColor: 'hsl(var(--text-disabled))', badge: null };
+  }
+  return {
+    tone: indicator.tone, iconColor: indicator.iconColor, badge: indicator.label,
+    badgeBg: indicator.badgeBg, badgeColor: indicator.badgeColor,
+  };
 }
 
 // ETP-5456 (S3776 fix on FmModel303Page) — extracted out of the main component, pure refactor,
@@ -395,12 +411,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
 
     const fallback = decl._precomputed?.boxes ?? decl.boxes;
     const currentBoxes = liveBoxes ?? fallback;
-    if (id === 'motivo_rectificacion' && value !== 'D') {
-      setManualOverrides(prev => { const n = { ...prev }; delete n[108]; return n; });
+    const clearedBoxes = boxesClearedByIdentChange(id, value, nextIdentChecks);
+    if (clearedBoxes.length > 0) {
+      setManualOverrides(prev => {
+        const n = { ...prev };
+        for (const num of clearedBoxes) delete n[num];
+        return n;
+      });
     }
     if (currentBoxes == null) return;
-    const baseBoxes = (id === 'motivo_rectificacion' && value !== 'D')
-      ? toBoxArray(currentBoxes).filter(b => b.num !== 108)
+    const baseBoxes = clearedBoxes.length > 0
+      ? toBoxArray(currentBoxes).filter(b => !clearedBoxes.includes(b.num))
       : currentBoxes;
     const recomputed = recomputeDerivedBoxes(baseBoxes, nextIdentChecks);
     setManualOverrides(prev => syncBox111Override(prev, recomputed));
@@ -877,6 +898,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
       );
       return;
     }
+    if (invalidSelectedOptions.length > 0) {
+      invalidSelectedOptionsToast();
+      return;
+    }
     // ETP-5456 — an autocalculated box out of the AEAT record-length range must block file
     // generation outright: the file cannot be written with a rounded/truncated stand-in for the
     // real computed amount. See `outOfRangeBoxes`'s own doc comment above.
@@ -1115,6 +1140,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
       );
       return;
     }
+    if (invalidSelectedOptions.length > 0) {
+      invalidSelectedOptionsToast();
+      return;
+    }
     // ETP-5456 — an autocalculated box out of the AEAT record-length range must block "Registrar/
     // Presentar" outright, same reasoning as handleGenerate above: there is no correct way to
     // round/truncate the real computed amount into range, so the declaration cannot legally be
@@ -1234,14 +1263,28 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // "Generar fichero 303" and "Marcar como Presentado" — see handleGenerate/handlePresent below
   // and their button pre-checks — because the backend silently defaulted a missing/blank
   // declaration type to "N" instead of rejecting it (Fiscal303BoxesHandler.resolveDeclType).
-  const missingRequiredFields = getMissingRequiredFields(
-    decl?.year, decl?.period, withBox111NonZeroFlag(identChecks, liveBoxes),
-  );
+  const identWithBoxFlags = withDerivedBoxFlags(identChecks, liveBoxes);
+  const missingRequiredFields = getMissingRequiredFields(decl?.year, decl?.period, identWithBoxFlags);
   // Shared "'Label A', 'Label B'" rendering of missingRequiredFields, used by both the
   // click-time toast helper below and the proactive mount-effect toast further down — a
   // single non-nested template literal per field (javascript:S4624 flags nesting one
   // template literal's `${}` inside another's).
-  const missingFieldNames = missingRequiredFields.map(f => `'${t(f.labelKey)}'`).join(', ');
+  // ETP-5597 pt.3 — `resolveFieldLabelKey` so the toast names the field exactly as it is labelled
+  // on screen (e.g. "Cuenta bancaria" instead of "IBAN" under marca SEPA "Resto Países").
+  const missingFieldNames = missingRequiredFields
+    .map(f => `'${t(resolveFieldLabelKey(f, identWithBoxFlags))}'`).join(', ');
+
+  // ETP-5597 pt.1 — a select whose CURRENT value is an option that is no longer allowed (tipo
+  // Compensación/Devolución while casilla 69 is positive). Same gate shape as
+  // `missingRequiredFields`: blocks "Generar fichero 303" and "Registrar/Presentar" (button
+  // pre-checks + handleGenerate/handlePresent). The value is never cleared automatically — see
+  // `getInvalidSelectedOptions`' doc comment — and FmBoxes303 shows the reason under the select.
+  const invalidSelectedOptions = getInvalidSelectedOptions(decl?.year, decl?.period, identWithBoxFlags);
+
+  function invalidSelectedOptionsToast() {
+    const { option } = invalidSelectedOptions[0];
+    toast.error(t(option.disabledReasonKey ?? 'fm.ident.decl.option_not_allowed'));
+  }
 
   function missingRequiredFieldsToast(actionKey, fallback) {
     toast.error(t(actionKey, { fields: missingFieldNames }) ?? fallback.replace('{fields}', missingFieldNames));
@@ -1352,8 +1395,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   const resultColors = resolveResultColors(resultKind);
 
 
-  const { iconColor: incidentIconColor, badge: incidentBadge } =
-    buildIncidentVariants(blocking, warning, t);
+  const {
+    iconColor: incidentIconColor, badge: incidentBadge,
+    badgeBg: incidentBadgeBg, badgeColor: incidentBadgeColor,
+  } = buildIncidentVariants(blocking, warning, t);
 
   const tabs = [
     { id: 'boxes',     label: t('fm.tab.boxes') ?? 'Casillas',
@@ -1433,6 +1478,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                     );
                     return;
                   }
+                  // ETP-5597 pt.1 — same invalid-option gate handleGenerate enforces.
+                  if (invalidSelectedOptions.length > 0) {
+                    invalidSelectedOptionsToast();
+                    return;
+                  }
                   // ETP-5456 — same gate handleGenerate itself enforces; checked here too so the
                   // "Generar fichero 303" modal never even opens while a computed box is out of range.
                   if (outOfRangeBoxes.length > 0) {
@@ -1481,6 +1531,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                       'fm.validation.missing_required_present',
                       "Completá {fields} antes de marcar la declaración como presentada.",
                     );
+                    return;
+                  }
+                  // ETP-5597 pt.1 — same invalid-option gate handlePresent enforces.
+                  if (invalidSelectedOptions.length > 0) {
+                    invalidSelectedOptionsToast();
                     return;
                   }
                   // ETP-5456 — same gate handlePresent itself enforces; checked here too so the
@@ -1552,8 +1607,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
             label={t('fm.tab.incidents') ?? 'Incidencias'}
             value={String(incidentCount)}
             badge={incidentBadge}
-            badgeBg={blocking > 0 ? 'var(--status-destructive-bg)' : 'var(--status-warning-bg)'}
-            badgeColor={blocking > 0 ? 'hsl(var(--destructive))' : 'var(--status-warning-fg)'}
+            badgeBg={incidentBadgeBg}
+            badgeColor={incidentBadgeColor}
             data-testid="KpiWidget__4f6c0d" />
 
           {/* IVA Devengado */}

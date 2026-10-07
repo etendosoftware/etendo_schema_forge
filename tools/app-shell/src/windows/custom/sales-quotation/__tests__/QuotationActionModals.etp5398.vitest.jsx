@@ -1,3 +1,7 @@
+// @covers artifacts/sales-quotation/custom/QuotationConfirmModal.jsx
+// @covers artifacts/sales-quotation/custom/SendToEvaluationModal.jsx
+// @covers artifacts/sales-quotation/custom/RejectQuotationModal.jsx
+//
 // ETP-5398 — the three Sales Quotation action modals follow the Figma frame "PopUps":
 // a summary table (Presupuesto · Contacto · Líneas · Subtotal · Total), a dark pill primary
 // button and an outline Cancelar. Confirmar is mounted through the generic ActionChoiceModal;
@@ -127,6 +131,9 @@ describe('QuotationConfirmModal — mounted on ActionChoiceModal (ETP-5398)', ()
     await renderAndSettle(<QuotationConfirmModal {...modalProps()} />);
     expect(screen.getByTestId('confirm-option-order')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('confirm-option-order')).toHaveTextContent('soRecommended');
+    // ActionChoiceModal grew a per-option badgeTone; the quotation passes none, so its
+    // «Recomendado» must keep the green success tone, not the blue info one.
+    expect(screen.getByText('soRecommended')).toHaveAttribute('data-badge-tone', 'success');
     expect(screen.getByTestId('confirm-option-invoice')).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('sqCreateOrderDesc')).toBeInTheDocument();
     expect(screen.getByText('sqInvoiceDirectlyDesc')).toBeInTheDocument();

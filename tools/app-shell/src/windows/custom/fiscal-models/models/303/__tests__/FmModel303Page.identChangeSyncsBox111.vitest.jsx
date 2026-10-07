@@ -73,6 +73,13 @@ vi.mock('../FmBoxes303.jsx', () => ({
         'data-testid': 'rectificativa-cb',
         onChange: (e) => onIdentChange('rectificativa', e.target.checked),
       }),
+      // Pre-October-2024 layouts gate boxes 70/109 on "complementaria" instead (ETP-5597 pt.4).
+      React.createElement('input', {
+        type: 'checkbox',
+        checked: !!identification?.complementaria,
+        'data-testid': 'complementaria-cb',
+        onChange: (e) => onIdentChange('complementaria', e.target.checked),
+      }),
       ...[68, 70].map(num => React.createElement('input', {
         key: num,
         'data-testid': `commit-${num}`,
@@ -243,5 +250,94 @@ describe('FmModel303Page — handleIdentChange syncs box111 immediately (ETP-543
     // Only the ident-change itself (no further box edit) flips box111 on.
     toggleRectificativa();
     expect(boxValue(111)).toBe(15);
+  });
+});
+
+// ETP-5597 pt.4 — boxes 70 ("A deducir") and 109 ("Devoluciones acordadas por la AEAT") belong
+// only to a rectificativa: unticking it must drop them from the live boxes AND from the persisted
+// manualOverrides, and casilla 71 must be recomputed without them (71 = 69 - 70 + 109 - 112).
+describe('FmModel303Page — unticking "Rectificativa" clears boxes 70/109 (ETP-5597)', () => {
+  function makeDecl(rectificativa) {
+    return {
+      id: '303-2026-T2', model: '303', year: 2026, period: 'T2', type: 'ord',
+      status: 'draft', result: null, incidents: { blocking: 0, warning: 0 },
+      _precomputed: { boxes: [{ num: 68, value: 50 }, { num: 70, value: 20 }, { num: 109, value: 3 }], summary: {}, sources: [] },
+      boxes: null, sources: [], history: [],
+      manualData: {
+        identification: { tipo_declaracion: 'N', rectificativa },
+        manualOverrides: { 70: 20, 109: 3 },
+      },
+    };
+  }
+
+  it('drops 70/109 from the live boxes and recomputes box 71 the instant the check is cleared', () => {
+    render(<FmModel303Page decl={makeDecl(true)} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    expect(boxValue(70)).toBe(20);
+    expect(boxValue(109)).toBe(3);
+    expect(boxValue(71)).toBe(33); // 50 - 20 + 3
+
+    toggleRectificativa(); // true -> false
+
+    expect(boxValue(70)).toBeUndefined();
+    expect(boxValue(109)).toBeUndefined();
+    expect(boxValue(71)).toBe(50);
+  });
+
+  it('"Guardar" after unticking persists manualOverrides WITHOUT 70/109', async () => {
+    installImmediateServer();
+    render(<FmModel303Page decl={makeDecl(true)} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+
+    toggleRectificativa();
+    await act(async () => { clickSave(); await Promise.resolve(); await Promise.resolve(); });
+
+    expect(putCalls()).toHaveLength(1);
+    const overrides = overridesOf(putCalls()[0]);
+    expect(overrides).not.toHaveProperty('70');
+    expect(overrides).not.toHaveProperty('109');
+  });
+
+  it('ticking "Rectificativa" ON keeps 70/109 untouched', () => {
+    render(<FmModel303Page decl={makeDecl(false)} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    toggleRectificativa(); // false -> true
+    expect(boxValue(70)).toBe(20);
+    expect(boxValue(109)).toBe(3);
+  });
+});
+
+
+// ETP-5597 pt.4 — the pre-October-2024 layouts have no rectificativa check: box 70 there is the
+// complementaria's own "a deducir" amount, so unticking "complementaria" is what must drop it.
+describe('FmModel303Page — unticking "complementaria" on a 2023 declaration clears box 70 (ETP-5597)', () => {
+  const DECL_2023 = {
+    id: '303-2023-T2', model: '303', year: 2023, period: 'T2', type: 'ord',
+    status: 'draft', result: null, incidents: { blocking: 0, warning: 0 },
+    _precomputed: { boxes: [{ num: 68, value: 50 }, { num: 70, value: 20 }], summary: {}, sources: [] },
+    boxes: null, sources: [], history: [],
+    manualData: {
+      identification: { tipo_declaracion: 'N', complementaria: true },
+      manualOverrides: { 70: 20 },
+    },
+  };
+
+  it('drops box 70 from the live boxes and recomputes box 71 the instant the check is cleared', () => {
+    render(<FmModel303Page decl={DECL_2023} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    expect(boxValue(70)).toBe(20);
+    expect(boxValue(71)).toBe(30); // 50 - 20
+
+    fireEvent.click(screen.getByTestId('complementaria-cb')); // true -> false
+
+    expect(boxValue(70)).toBeUndefined();
+    expect(boxValue(71)).toBe(50);
+  });
+
+  it('"Guardar" after unticking persists manualOverrides WITHOUT box 70', async () => {
+    installImmediateServer();
+    render(<FmModel303Page decl={DECL_2023} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId('complementaria-cb'));
+    await act(async () => { clickSave(); await Promise.resolve(); await Promise.resolve(); });
+
+    expect(putCalls()).toHaveLength(1);
+    expect(overridesOf(putCalls()[0])).not.toHaveProperty('70');
   });
 });

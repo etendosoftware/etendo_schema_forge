@@ -12,7 +12,7 @@ const text = (t) => ({ type: 'text', text: t });
 
 describe('uiMessageText', () => {
   it('joins text parts and ignores tool parts', () => {
-    const message = { parts: [text('a'), { type: 'tool-neo_list', input: { secret: 1 }, output: 'big' }, text('b')] };
+    const message = { parts: [text('a'), { type: 'tool-etendo_list', input: { secret: 1 }, output: 'big' }, text('b')] };
     expect(uiMessageText(message)).toBe('ab');
   });
 });
@@ -34,7 +34,7 @@ describe('conversationTitle', () => {
 describe('unsavedMessages', () => {
   const messages = [
     { id: 'u1', role: 'user', parts: [text('hi')] },
-    { id: 'a1', role: 'assistant', parts: [{ type: 'tool-neo_list', state: 'output-available' }] },
+    { id: 'a1', role: 'assistant', parts: [{ type: 'tool-etendo_list', state: 'output-available' }] },
     { id: 'a2', role: 'assistant', parts: [text('answer')] },
     { id: 's1', role: 'system', parts: [text('ignored')] },
   ];

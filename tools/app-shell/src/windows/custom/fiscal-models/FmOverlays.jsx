@@ -9,6 +9,7 @@ import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatPeriod, showIaeActivityReminder, RECEIPT_ATTACHMENT_CONFIG } from './fiscalModelsUtils.js';
 import { buildAcceptAttribute, buildTypesLabel, isFileTypeAllowed } from '@/components/attachments/attachmentPolicy.js';
+import { isValidFormerStatement } from './formerStatement.js';
 import './fiscal-models.css';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -302,32 +303,37 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
 // never toggles these fields.
 //
 // ETP-5456 — Substitutive (30) moved OUT of this modal and into the declaration form itself
-// (`FmModel349Page.jsx`'s `SubstitutiveSection`, next to the "Todas las claves" key filter),
+// (`FmModel349Page.jsx`'s `DeclarationTypeControl`, ETP-5597: the header's "Tipo" control),
 // persisted as `manualData.identification.sustitutiva`, the same way Modelo 303's
 // "Autoliquidación rectificativa" lives in ITS form rather than in a generation-time popup —
 // that decision is a durable property of the declaration, so it must be reflected elsewhere too
 // (the declarations list's "Tipo" column, in particular).
 //
-// FormerStatement (40) — the AEAT "Identificador de la declaración anterior" — is back here as
-// an editable input, gated on the `substitutive` prop (the persisted form value, read-only from
-// this modal's point of view): a substitute filing NEEDS this identifier to file, but the
-// identifier itself is a one-off value typed at generation time, not a durable property of the
-// declaration — it is not persisted, so it's asked again on every regeneration, same as before
-// ETP-5456 moved the checkbox out. `substitutive` alone decides whether the field renders at
-// all; when it's false the modal doesn't ask for it.
-export function FileGenModal({ decl, substitutive, onConfirm, onClose }) {
+// FormerStatement (40) — the AEAT "Identificador de la declaración anterior". ETP-5597 moved its
+// input OUT of this modal too: it now renders in the form's substitutive banner
+// (FmModel349Page's SubstitutiveBanner, shown while Tipo = Sustitutiva) and is persisted as
+// `manualData.identification.formerStatement`. This modal only receives it through the
+// `formerStatement` prop, still validates it (a substitute filing NEEDS the identifier — the
+// "missing required field" toast below) and forwards it in the confirm payload. It is ignored
+// while `substitutive` is false.
+export function FileGenModal({ decl, substitutive, formerStatement: formerStatementProp, onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
   const [fileName,            setFileName]            = React.useState('');
   const [phone,                setPhone]               = React.useState(decl?.phone   ?? '');
   const [contact,              setContact]             = React.useState(decl?.contact ?? '');
-  const [formerStatement,      setFormerStatement]     = React.useState('');
+  // ETP-5597 — read-only here: the identifier is typed on the form, in the
+  // substitutive banner (FmModel349Page's SubstitutiveBanner), see this component's comment.
+  const formerStatement = String(formerStatementProp ?? '');
   const [representativeTaxId,  setRepresentativeTaxId] = React.useState('');
   const [navarra,              setNavarra]             = React.useState(false);
   const [guipuzcoa,            setGuipuzcoa]           = React.useState(false);
   // Only meaningful — and only checked — while `substitutive` is true; see this component's
-  // own comment above.
+  // own comment above. An empty identifier is reported as a missing field; a non-empty one
+  // must pass the SAME rule as FmModel349Page's "Registrar/Presentar" (exactly 13 digits,
+  // `isValidFormerStatement` in formerStatement.js).
   const missingFormerStatement = substitutive && !formerStatement.trim();
+  const invalidFormerStatement = substitutive && !missingFormerStatement && !isValidFormerStatement(formerStatement);
   // ETP-5456 — `contact`/`phone` have a server-side fallback when left blank
   // (`Fiscal349BoxesHandler#applyContactParams`: the logged-in AD_User's name / the org's
   // resolved phone from AD_OrgInformation). A blank field only blocks the modal when NEITHER
@@ -374,9 +380,6 @@ export function FileGenModal({ decl, substitutive, onConfirm, onClose }) {
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
               {t('fm.filegen.contact_name')}
-              {t('fm.filegen.contact_name_hint') && (
-                <span style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginLeft: 6 }}>{t('fm.filegen.contact_name_hint')}</span>
-              )}
             </div>
             <input style={inputSt} value={contact} onChange={e => setContact(e.target.value)} placeholder={t('fm.filegen.contact_name_placeholder')} />
           </div>
@@ -384,21 +387,6 @@ export function FileGenModal({ decl, substitutive, onConfirm, onClose }) {
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>{t('fm.filegen.contact_phone')}</div>
             <input style={inputSt} value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('fm.filegen.contact_phone_placeholder')} />
           </div>
-          {/* ETP-5456 — editable only while the declaration is marked "Sustitutiva" on the form
-              (checkbox lives there now, see this component's own comment above); a regular
-              filing never sees this field. */}
-          {substitutive && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
-                {t('fm.filegen.former_statement')}
-              </div>
-              <input
-                style={inputSt}
-                value={formerStatement}
-                onChange={e => setFormerStatement(e.target.value)}
-                data-testid="FileGenModal__formerStatement" />
-            </div>
-          )}
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
               {t('fm.filegen.representative_nif')}
@@ -454,10 +442,17 @@ export function FileGenModal({ decl, substitutive, onConfirm, onClose }) {
                 );
                 return;
               }
+              if (invalidFormerStatement) {
+                toast.error(
+                  t('fm.m349.former_statement_invalid')
+                  ?? 'El identificador de la declaración anterior debe tener exactamente 13 dígitos.',
+                );
+                return;
+              }
               onConfirm?.({
                 fileName: fileName.trim() || undefined,
                 phone, contact,
-                formerStatement: formerStatement.trim() || undefined,
+                formerStatement: (substitutive && formerStatement.trim()) || undefined,
                 representativeTaxId: representativeTaxId.trim() || undefined,
                 navarra, guipuzcoa,
               });
