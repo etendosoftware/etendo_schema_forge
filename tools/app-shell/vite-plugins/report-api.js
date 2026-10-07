@@ -31,13 +31,15 @@ const { resolveReportSession, reportAuthErrorBody } = await loadReportCli('repor
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
-const JSREPORT_URL = process.env.JSREPORT_URL || 'http://localhost:5488';
+const DEFAULT_JSREPORT_URL = 'http://localhost:5488';
 const DEFAULT_ETENDO_URL = 'http://localhost:8080/etendo';
-// ETP-5666 — set by the plugin factory from the `etendoUrl` option that
-// vite.config.js resolves via loadEnv (.env.local). The ETENDO_URL env var is
-// only a fallback: Vite never copies .env.local into process.env, so reading
-// it alone sent session checks to the default context (404 → 401 → logout).
+// ETP-5666 — set by the plugin factory from the `etendoUrl` / `jsreportUrl`
+// options that vite.config.js resolves via loadEnv (.env.local). The
+// ETENDO_URL / JSREPORT_URL env vars are only a fallback: Vite never copies
+// .env.local into process.env, so reading them alone sent session checks to
+// the default context (404 → 401 → logout).
 let etendoUrl = DEFAULT_ETENDO_URL;
+let jsreportUrl = DEFAULT_JSREPORT_URL;
 const REPORT_PARTIALS_DIR = resolve(ROOT, 'templates', 'reports');
 
 function expandReportPartials(templateContent) {
@@ -440,6 +442,10 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
 
 export default function reportApiPlugin(options = {}) {
   etendoUrl = options.etendoUrl || process.env.ETENDO_URL || DEFAULT_ETENDO_URL;
+  jsreportUrl = options.jsreportUrl || process.env.JSREPORT_URL || DEFAULT_JSREPORT_URL;
+  // The separators cache is keyed implicitly on etendoUrl — drop it so a
+  // re-invoked factory (new base URL) never serves the previous instance's.
+  currencySeparatorsPromise = null;
   return {
     name: 'report-api',
     configureServer(server) {
@@ -900,7 +906,7 @@ export default function reportApiPlugin(options = {}) {
 
             let jsRes;
             try {
-              jsRes = await fetch(`${JSREPORT_URL}/api/report`, {
+              jsRes = await fetch(`${jsreportUrl}/api/report`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),

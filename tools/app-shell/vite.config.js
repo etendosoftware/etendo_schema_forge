@@ -145,6 +145,11 @@ export default defineConfig(({ mode }) => {
   // Target Etendo instance for dev proxy. Override via ETENDO_URL in .env.local
   // if your instance uses a different context.name (e.g. ETENDO_URL=http://localhost:8080/mycontext)
   const ETENDO_URL = env.ETENDO_URL || process.env.ETENDO_URL || readEnvFile() || 'http://localhost:8080/etendo';
+  // jsreport base for the dev report API plugin. loadEnv(mode, cwd, '') already
+  // reads every key from .env, .env.local and .env.[mode](.local), so no
+  // readEnvFile() fallback is needed; a real exported JSREPORT_URL still wins
+  // over the default.
+  const JSREPORT_URL = env.JSREPORT_URL || process.env.JSREPORT_URL || 'http://localhost:5488';
   // Origin only (no path) — `vite preview` proxies the built bundle's *relative*
   // VITE_API_BASE (e.g. "/etendo") verbatim to Tomcat, so the target here must not
   // duplicate the context path already baked into the request.
@@ -225,7 +230,7 @@ export default defineConfig(({ mode }) => {
     react(),
     sliceLabelsPlugin(),
     schemaApiPlugin(),
-    reportApiPlugin({ etendoUrl: ETENDO_URL }),
+    reportApiPlugin({ etendoUrl: ETENDO_URL, jsreportUrl: JSREPORT_URL }),
     mcpWellKnownPlugin(),
     mcpRetryProxy(ETENDO_URL),
     appsSpikePlugin({

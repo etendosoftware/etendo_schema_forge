@@ -17,6 +17,7 @@
  * ETP-5666 — the Etendo base URL comes from the `etendoUrl` option that
  * vite.config.js passes (resolved from `.env.local` via loadEnv), not from
  * `process.env.ETENDO_URL`, which Vite never populates from `.env.local`.
+ * The jsreport base URL follows the same rule via the `jsreportUrl` option.
  *
  * @covers tools/app-shell/vite-plugins/report-api.js
  */
@@ -224,18 +225,22 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
     });
   });
 
-  describe('configured Etendo base URL (ETP-5666)', () => {
+  describe('configured Etendo and jsreport base URLs (ETP-5666)', () => {
     const CONFIGURED = 'http://configured-host:8080/etendogoclean';
-    let savedEnvUrl;
+    const CONFIGURED_JSREPORT = 'http://configured-jsreport:5499';
+    const ENV_KEYS = ['ETENDO_URL', 'JSREPORT_URL'];
+    let savedEnv;
 
     beforeEach(() => {
-      savedEnvUrl = process.env.ETENDO_URL;
-      delete process.env.ETENDO_URL;
+      savedEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
+      ENV_KEYS.forEach((k) => delete process.env[k]);
     });
 
     afterEach(() => {
-      if (savedEnvUrl === undefined) delete process.env.ETENDO_URL;
-      else process.env.ETENDO_URL = savedEnvUrl;
+      for (const k of ENV_KEYS) {
+        if (savedEnv[k] === undefined) delete process.env[k];
+        else process.env[k] = savedEnv[k];
+      }
     });
 
     function loadMiddlewareWith(options) {
@@ -270,6 +275,38 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       const sessionCall = fetchCalls.find((c) => c.url.includes('/sws/go/session'));
       assert.ok(sessionCall, 'expected a session resolution call');
       assert.equal(sessionCall.url, `${CONFIGURED}/sws/go/session`);
+    });
+
+    it('the render route posts to the jsreportUrl option and reads currency-format from etendoUrl', async () => {
+      const handler = loadMiddlewareWith({ etendoUrl: CONFIGURED, jsreportUrl: CONFIGURED_JSREPORT });
+      const res = makeRes();
+      await handler(
+        makeReq('POST', `/api/reports/${NEO_REPORT_ID}/render`, JSON.stringify({ format: 'pdf' }),
+          validSessionHeaders('POST')),
+        res,
+        () => { throw new Error('render route did not match'); },
+      );
+      assert.equal(res.statusCode, 200, `render failed: ${String(res.body).slice(0, 300)}`);
+      const jsreportCall = fetchCalls.find((c) => c.url.endsWith('/api/report'));
+      assert.ok(jsreportCall, 'expected a jsreport render call');
+      assert.equal(jsreportCall.url, `${CONFIGURED_JSREPORT}/api/report`);
+      const currencyCall = fetchCalls.find((c) => c.url.includes('/sws/neo/currency-format'));
+      assert.ok(currencyCall, 'expected a currency-format call (cache reset by the factory)');
+      assert.equal(currencyCall.url, `${CONFIGURED}/sws/neo/currency-format`);
+    });
+
+    it('still honours a real JSREPORT_URL environment variable when no option is given', async () => {
+      process.env.JSREPORT_URL = 'http://env-jsreport:5488';
+      const handler = loadMiddlewareWith();
+      const res = makeRes();
+      await handler(
+        makeReq('POST', `/api/reports/${NEO_REPORT_ID}/render`, JSON.stringify({ format: 'pdf' }),
+          validSessionHeaders('POST')),
+        res,
+        () => { throw new Error('render route did not match'); },
+      );
+      const jsreportCall = fetchCalls.find((c) => c.url.endsWith('/api/report'));
+      assert.equal(jsreportCall.url, 'http://env-jsreport:5488/api/report');
     });
 
     it('falls back to the default context when neither the option nor process.env is set', async () => {
@@ -313,6 +350,12 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       const reads = PLUGIN_SRC.match(/process\.env\.ETENDO_URL/g) || [];
       assert.equal(reads.length, 1, 'only the factory fallback may read process.env.ETENDO_URL');
       assert.doesNotMatch(PLUGIN_SRC, /const ETENDO_URL = process\.env/);
+    });
+
+    it('never reads process.env.JSREPORT_URL outside the plugin factory fallback (ETP-5666)', () => {
+      const reads = PLUGIN_SRC.match(/process\.env\.JSREPORT_URL/g) || [];
+      assert.equal(reads.length, 1, 'only the factory fallback may read process.env.JSREPORT_URL');
+      assert.doesNotMatch(PLUGIN_SRC, /const JSREPORT_URL = process\.env/);
     });
 
     it('the currency selector no longer branches on a possibly-null clientId (session guarantees it)', () => {
