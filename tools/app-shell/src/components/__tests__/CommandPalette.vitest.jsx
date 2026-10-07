@@ -127,7 +127,7 @@ vi.mock('@/components/global-search/GlobalSearchPrimitives.jsx', () => ({
   ),
 }));
 
-import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act, within } from '@testing-library/react';
 import { useEffect } from 'react';
 import { CommandPalette } from '../CommandPalette.jsx';
 import { splitSearchHighlight } from '@/lib/globalSearchMenu.js';
@@ -503,6 +503,37 @@ describe('CommandPalette', () => {
 
       expect(mockNavigate).toHaveBeenCalledTimes(1);
       expect(mockNavigate).toHaveBeenCalledWith('/sales-invoice/INV-1');
+    });
+  });
+
+  // ETP-5602: under "related" results the window tag sat inline after short labels, while
+  // in the other groups it looked right-aligned only because long labels filled the row. The
+  // similarity score ("74%") was shown on every row and means nothing to users.
+  describe('renders every record row through the same layout', () => {
+    // Scores split into the three groups (exact by text, semantic, related), not concentrated.
+    const match = (id, name, score) => ({ target: 'sales-invoice', id, score, fields: { name } });
+
+    it('right-aligns the window tag in every record group and shows no similarity percentage', async () => {
+      vectorSearchOverride.current = {
+        matches: [match('1', 'Avilés', 0.74), match('2', 'Foo', 0.8), match('3', 'Bar', 0.6), match('4', 'Baz', 0.58)],
+        isLoading: false,
+      };
+      renderWithQuery('avile');
+      // The tag (window label) resolves once the window contracts have loaded.
+      await screen.findByTestId('vector-search-scope');
+      await screen.findByTestId('cmd-group-exactSearchResults');
+      const rows = ['exactSearchResults', 'relevantSearchResults', 'relatedSearchResults']
+        .flatMap((group) => Array.from(screen.getByTestId(`cmd-group-${group}`)
+          .querySelectorAll('[data-global-search-item="true"]')));
+      expect(rows).toHaveLength(4);
+      for (const row of rows) {
+        const label = within(row).getByTestId('vector-search-result-label');
+        const tag = within(row).getByTestId('vector-search-result-tag');
+        expect(label).toHaveClass('min-w-0', 'flex-1');
+        expect(tag).toHaveClass('ml-auto', 'shrink-0', 'whitespace-nowrap');
+        expect(tag).toBe(row.lastElementChild);
+        expect(row).not.toHaveTextContent(/\d+\s*%/);
+      }
     });
   });
 
