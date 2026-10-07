@@ -154,9 +154,13 @@ Like the contextual-selector smoke above, they get a bearer JWT through
 
 `e2e/tests/flows/system/tenant-upgrade-provisioning-failure.integration.spec.js` runs in the
 ordinary integration project through `scripts/run-e2e-full.sh`, including the local
-`make test-e2e-headless` run and the pre-push E2E gate. The runner sets
-`E2E_PROVISIONING_FAILURE=1`. A CI job that invokes this runner includes the same spec;
-the current Jenkins pipeline does not invoke the runner.
+`make test-e2e-headless` run and the pre-push E2E gate, where the runner sets
+`E2E_PROVISIONING_FAILURE=1`. Under Jenkins (detected by a non-empty `JENKINS_URL`) the
+runner sets `E2E_PROVISIONING_FAILURE=0` and the spec self-skips: on first run the backend
+fixture (`POST /sws/go/dev/provisioning-failure-fixture`) provisions a whole dedicated pool
+tenant synchronously, which takes minutes and exceeds the 15 s `actionTimeout`. An explicit
+`E2E_PROVISIONING_FAILURE` value always wins — export `E2E_PROVISIONING_FAILURE=1` to force
+the spec on (including under Jenkins), or `0` to skip it locally.
 The spec creates a paid checkout through a local backend fixture, follows the real
 `/upgrade?checkout=success` browser path, checks that the UI sends onboarding with the
 same request ID, verifies the durable `provisioning_failed` state and visible recovery
