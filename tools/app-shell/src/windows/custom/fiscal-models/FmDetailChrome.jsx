@@ -18,11 +18,6 @@ import { Check } from 'lucide-react';
 // have to be added to every one of those mocks for the pages to render at all. Everything here
 // is presentational (translations come in as props), so tests render it for real.
 
-// Statuses whose label is not an i18n key (legacy, see "Status lifecycle" in the guide).
-const STATUS_PLAIN_LABEL = {
-  submitted_ext: 'Presentado en otra plataforma',
-};
-
 // statusLabelKey (ETP-4755): the status BADGE text must always read the plain
 // "Presentado"/"Submitted" for BOTH `submitted` and `submitted_ack` — `submitted_ack`
 // collapses onto `submitted`'s i18n key here. HOW it was submitted (manual ack, no
@@ -102,7 +97,9 @@ function DetailStatusPill({ tone, label }) {
  *   metrics) with the sub-label to its right, on one line.
  */
 export function FmStatusChip({ status, submissionMethod, t, variant = 'list' }) {
-  const label = STATUS_PLAIN_LABEL[status] ?? (t(`fm.status.${statusLabelKey(status)}`) ?? status);
+  // Every status, `submitted_ext` included, is translated through its `fm.status.*` key
+  // (`fm.status.submitted_ext`: "Presentado · otra plataforma" / "Submitted · other platform").
+  const label = t(`fm.status.${statusLabelKey(status)}`) ?? status;
   const tone = fiscalStatusTone(status);
   const methodLabel = submissionMethod && SUBMISSION_METHOD_STATUSES.has(status)
     ? t(`fm.present.method.${submissionMethod}`)

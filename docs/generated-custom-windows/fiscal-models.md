@@ -471,7 +471,11 @@ restated, as `DETAIL_PILL_STYLE`. Keep it in step with `DocumentStatusPill`'s `P
 `FmDetailChrome.jsx` (`statusLabelKey`, `FmStatusChip`), rendered by the list's "Estado" column
 and both detail action bars. The four former copies (`FmListPage.jsx`'s `StatusText`, the
 `FmModel303Page.jsx` / `FmModel349Page.jsx` "Estado: …" pills, and `FmCommon.jsx`'s unused
-`StatusPill`) are deleted. A future status value is one edit in `FmDetailChrome.jsx`.
+`StatusPill`) are deleted. A future status value is one edit in `FmDetailChrome.jsx`. Every status label, `submitted_ext` included, goes
+through its `fm.status.*` key: `fm.status.submitted_ext` reads "Presentado · otra plataforma" /
+"Submitted · other platform". Until ETP-5584 the chip hardcoded the Spanish "Presentado en otra
+plataforma" for that one status (a leftover from ETP-4170, not a deliberate exception), so it
+never translated.
 
 ## "Resultado" label — shared `deriveResultKind` (ETP-5187)
 

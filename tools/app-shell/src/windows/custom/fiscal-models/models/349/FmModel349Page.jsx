@@ -1233,8 +1233,9 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                 <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
                 {t('fm.action.gen349') ?? 'Generar fichero 349'}
               </FmDetailButton>
-              {/* ETP-5338 pt.5 — "Guardar" is a deliberate no-op confirmation (see `handleSave`):
-                  349 has no locally-edited declaration data to persist. */}
+              {/* "Guardar" (see `handleSave`, ETP-5456): PUTs the pending identification edits
+                  (e.g. the "Sustitutiva" data) as `manualData` and pushes them to the list; with
+                  nothing pending it just confirms, with no request. */}
               <FmDetailButton
                 onClick={handleSave}
                 disabled={isSavingManualData}

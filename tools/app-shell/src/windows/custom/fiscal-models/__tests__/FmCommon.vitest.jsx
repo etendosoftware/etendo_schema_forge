@@ -30,6 +30,7 @@ import {
 import {
   FmStatusChip, fiscalStatusTone, statusLabelKey, tabCount, incidentsTabBadge,
 } from '../FmDetailChrome.jsx';
+import { loadLocaleDictionary, makeRealUI } from '../../shared/__tests__/testUtils/realLocaleUI.js';
 
 // ── KpiWidget ─────────────────────────────────────────────────────────────────
 
@@ -449,6 +450,20 @@ describe('FmStatusChip', () => {
     const badge = screen.getByTestId('FmStatusChip__badge');
     expect(badge.querySelector('.status-tag')).toBeNull();
     expect(badge.nextElementSibling.textContent).toBe('fm.present.method.aeat_telematic');
+  });
+
+  // ETP-5584 — `submitted_ext` used to be a hardcoded Spanish string in the chip, so it never
+  // translated. It now goes through `fm.status.submitted_ext` like every other status.
+  it.each([
+    ['es_ES', 'Presentado · otra plataforma'],
+    ['en_US', 'Submitted · other platform'],
+  ])('translates submitted_ext through fm.status.submitted_ext (%s)', (locale, expected) => {
+    const realT = makeRealUI(loadLocaleDictionary(locale));
+    const { unmount } = render(<FmStatusChip status="submitted_ext" t={realT} />);
+    expect(screen.getByTestId('FmStatusChip__badge').textContent).toBe(expected);
+    unmount();
+    render(<FmStatusChip status="submitted_ext" t={realT} variant="detail" />);
+    expect(screen.getByTestId('FmStatusChip__badge').textContent).toBe(expected);
   });
 
   it('submitted_ack reads as the submitted label', () => {
