@@ -365,6 +365,10 @@ const BACKEND_ERROR_KEY_MAP = {
   // Consumption pre-check (ETP-5445). Mapped to
   // the same generic retry-later copy as the other two costing messages in BACKEND_ERROR_MAP.
   NotCalculatedCost: 'backendError.costNotCalculated',
+  // ETP-5529 — core `OtherPostingProcessActive` ("This record is being posted by another
+  // process"), the STATUS_DocumentLocked message DocumentPostingService names in `messageKeys`
+  // when another posting process holds the record (or AcctServer cannot take its lock).
+  OtherPostingProcessActive: 'backendError.recordBeingPosted',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own

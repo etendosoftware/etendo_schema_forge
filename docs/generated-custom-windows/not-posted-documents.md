@@ -479,6 +479,21 @@ This is exactly the text Relación albarán-factura shows (see `matched-purchase
 The bulk **Contabilizar** goes through `showBulkActionToast`: when exactly one row was sent and it
 failed, it shows that row's translated error (same identity); otherwise only the ok/failed counts.
 
+### Locked-record posting error (ETP-5529)
+
+A post that fails with `STATUS_DocumentLocked` (another posting process holds the record, or it
+is already posted, not processed, or stuck with `Processing='Y'`) returns
+`messageKeys: ["OtherPostingProcessActive"]`, forwarded the same way on **Post row** and on the
+bulk **Contabilizar** (only on the locked row). `BACKEND_ERROR_KEY_MAP` maps it to
+`backendError.recordBeingPosted`:
+
+> Este registro está siendo contabilizado por otro proceso. Si el problema persiste, actualice el
+> registro; puede que ya esté contabilizado.
+
+The mapping is shared, so every posting window shows the same copy. The backend side (why core's
+text came back in English) is in `com.etendoerp.go` `docs/neo-headless.md` (ETP-5529 paragraph).
+Only `en_US` and `es_ES` have the copy; an `es_AR` user gets core's English text.
+
 ---
 
 ## Manual verification

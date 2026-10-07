@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/lib/backendErrors.js
+// @covers tools/app-shell/src/locales/en_US.json
+// @covers tools/app-shell/src/locales/es_ES.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -2607,6 +2610,37 @@ describe('translateBackendError — NotCalculatedCost (ETP-5360)', () => {
 
   it('maps a bare @NotCalculatedCost@ token', () => {
     assert.equal(translateBackendError('@NotCalculatedCost@', t), 'COST_NOT_CALCULATED');
+  });
+});
+
+// ── ETP-5529: core `OtherPostingProcessActive` on a locked document ──
+//
+// DocumentPostingService names STATUS_DocumentLocked as `messageKeys: ['OtherPostingProcessActive']`
+// so the SPA renders it in its own locale, whatever language the backend resolved the prose in.
+// Reads the REAL en_US / es_ES files so a missing locale entry fails here, not on a user's screen.
+describe('translateBackendError — OtherPostingProcessActive (ETP-5529)', () => {
+  const RAW_EN = 'This record is being posted by another process';
+
+  it('renders the es_ES copy from the identity, not the English prose', () => {
+    assert.equal(
+      translateBackendError(RAW_EN, localeTranslator('es_ES'), { messageKeys: ['OtherPostingProcessActive'] }),
+      'Este registro está siendo contabilizado por otro proceso. Si el problema persiste, actualice el registro; puede que ya esté contabilizado.',
+    );
+  });
+
+  it('renders the en_US copy from the identity', () => {
+    assert.equal(
+      translateBackendError(RAW_EN, localeTranslator('en_US'), { messageKeys: ['OtherPostingProcessActive'] }),
+      'This record is being posted by another process. If the problem persists, refresh the record; it may already be posted.',
+    );
+  });
+
+  it('falls back to the backend prose when the locale has no entry (never the raw key)', () => {
+    const echo = (k) => k;
+    assert.equal(
+      translateBackendError(RAW_EN, echo, { messageKeys: ['OtherPostingProcessActive'] }),
+      RAW_EN,
+    );
   });
 });
 
