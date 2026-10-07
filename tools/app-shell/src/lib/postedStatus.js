@@ -178,8 +178,7 @@ export function resolveStatusPill(badge, value, ui) {
   const status = isTrue ? 'Y' : 'N';
   // A posting-status pill takes its Y/N colour from the registry, like every other code;
   // any other true/false pill keeps the generic success/warning pair.
-  const tone = isPostedStatusColumn(badge.column ?? badge.key)
-    ? postedStatusTone(status)
-    : (isTrue ? 'success' : 'warning');
+  let tone = isTrue ? 'success' : 'warning';
+  if (isPostedStatusColumn(badge.column ?? badge.key)) tone = postedStatusTone(status);
   return { status, label: ui(labelKey), tone };
 }
