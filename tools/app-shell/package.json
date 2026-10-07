@@ -19,6 +19,8 @@
   "dependencies": {
     "@ai-sdk/react": "^4.0.96",
     "@configcat/sdk": "^1.1.0",
+    "@datadog/browser-rum": "^7.15.0",
+    "@datadog/browser-rum-react": "^7.15.0",
     "@etendosoftware/app-shell-core": "0.3.70-preview.feature-ETP-5601.20261007145956.f3a170d",
     "@etendosoftware/etendo-go-core": "0.3.70-preview.feature-ETP-5601.20261007145956.f3a170d",
     "@iconicapp/iconic-react": "^1.1.4",
