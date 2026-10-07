@@ -529,7 +529,7 @@ describe('CommandPalette', () => {
       for (const row of rows) {
         const label = within(row).getByTestId('vector-search-result-label');
         const tag = within(row).getByTestId('vector-search-result-tag');
-        expect(label).toHaveClass('min-w-0', 'flex-1');
+        expect(label).toHaveClass('min-w-0', 'flex-1', 'break-words');
         expect(tag).toHaveClass('ml-auto', 'shrink-0', 'whitespace-nowrap');
         expect(tag).toBe(row.lastElementChild);
         expect(row).not.toHaveTextContent(/\d+\s*%/);

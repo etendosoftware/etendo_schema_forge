@@ -397,7 +397,7 @@ export function CommandPalette() {
           className="mr-2 h-4 w-4 shrink-0"
           strokeWidth={2}
           data-testid="Search__73263e" />
-        <span className="min-w-0 flex-1" data-testid="vector-search-result-label"><HighlightedQuery text={label} query={query} data-testid="HighlightedQuery__73263e" /></span>
+        <span className="min-w-0 flex-1 break-words" data-testid="vector-search-result-label"><HighlightedQuery text={label} query={query} data-testid="HighlightedQuery__73263e" /></span>
         {entityLabel && <span className="ml-auto shrink-0 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="vector-search-result-tag">{entityLabel}</span>}
       </CommandItem>
     );
