@@ -17,9 +17,9 @@
     "gateway:link-local-core": "make gateway-link-local-core"
   },
   "devDependencies": {
-    "@etendosoftware/app-shell-core": "0.3.69-preview.feature-ETP-5601.20261007125411.2545487",
-    "@etendosoftware/schema-forge-cli": "0.3.69-preview.feature-ETP-5601.20261007125411.2545487",
-    "@etendosoftware/schema-forge-core": "0.3.69-preview.feature-ETP-5601.20261007125411.2545487",
+    "@etendosoftware/app-shell-core": "0.3.70-preview.feature-ETP-5601.20261007145956.f3a170d",
+    "@etendosoftware/schema-forge-cli": "0.3.70-preview.feature-ETP-5601.20261007145956.f3a170d",
+    "@etendosoftware/schema-forge-core": "0.3.70-preview.feature-ETP-5601.20261007145956.f3a170d",
     "esbuild": "^0.28.0",
     "handlebars": "^4.7.9",
     "jscodeshift": "^17.3.0",
