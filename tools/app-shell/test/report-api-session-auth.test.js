@@ -23,7 +23,9 @@
  */
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
@@ -319,6 +321,125 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       );
       const sessionCall = fetchCalls.find((c) => c.url.includes('/sws/go/session'));
       assert.equal(sessionCall.url, 'http://localhost:8080/etendo/sws/go/session');
+    });
+
+    it('the etendoUrl option wins over a conflicting ETENDO_URL environment variable', async () => {
+      process.env.ETENDO_URL = 'http://env-host:8080/etendo-env';
+      const handler = loadMiddlewareWith({ etendoUrl: CONFIGURED });
+      const res = makeRes();
+      await handler(
+        makeReq('GET', `/api/reports/${NEO_REPORT_ID}/data`, null, validSessionHeaders('GET')),
+        res,
+        () => { throw new Error('data route did not match'); },
+      );
+      assert.equal(res.statusCode, 200, `data failed: ${String(res.body).slice(0, 300)}`);
+      const sessionCall = fetchCalls.find((c) => c.url.includes('/sws/go/session'));
+      assert.equal(sessionCall.url, `${CONFIGURED}/sws/go/session`);
+      assert.ok(neoCall().url.startsWith(`${CONFIGURED}/sws/neo/`), `NEO call went to ${neoCall().url}`);
+      assert.ok(
+        fetchCalls.every((c) => !c.url.startsWith('http://env-host:8080')),
+        `a call went to the env host: ${fetchCalls.map((c) => c.url).join(', ')}`,
+      );
+    });
+
+    it('the jsreportUrl option wins over a conflicting JSREPORT_URL environment variable', async () => {
+      process.env.JSREPORT_URL = 'http://env-jsreport:5488';
+      const handler = loadMiddlewareWith({ etendoUrl: CONFIGURED, jsreportUrl: CONFIGURED_JSREPORT });
+      const res = makeRes();
+      await handler(
+        makeReq('POST', `/api/reports/${NEO_REPORT_ID}/render`, JSON.stringify({ format: 'pdf' }),
+          validSessionHeaders('POST')),
+        res,
+        () => { throw new Error('render route did not match'); },
+      );
+      assert.equal(res.statusCode, 200, `render failed: ${String(res.body).slice(0, 300)}`);
+      const jsreportCalls = fetchCalls.filter((c) => c.url.endsWith('/api/report'));
+      assert.equal(jsreportCalls.length, 1);
+      assert.equal(jsreportCalls[0].url, `${CONFIGURED_JSREPORT}/api/report`);
+    });
+
+    // Company logo / document branding: the image is fetched from
+    // `${etendoBase}/sws/neo/image/<org_logo_id>` by the shared branding
+    // helper, so the observable is that URL. Every branding path opens a pg
+    // pool from gradle.properties first — stub both (temp properties file +
+    // a fake Pool that answers every query with one logo row).
+    describe('company logo / document branding', () => {
+      const LOGO_ID = 'LOGO-ID-1';
+      const ENV_HOST = 'http://env-host:8080/etendo-env';
+      let pgModule;
+      let originalPool;
+      let savedGradleProps;
+      let tmpDir;
+      let poolQueries;
+
+      beforeEach(async () => {
+        pgModule = await import('pg');
+        originalPool = pgModule.default.Pool;
+        poolQueries = [];
+        pgModule.default.Pool = class FakePool {
+          async query(sql) {
+            poolQueries.push(sql);
+            return { rows: [{ org_logo_id: LOGO_ID }] };
+          }
+
+          async end() {}
+        };
+        tmpDir = mkdtempSync(join(tmpdir(), 'report-api-branding-'));
+        const gradlePath = join(tmpDir, 'gradle.properties');
+        writeFileSync(gradlePath, 'bbdd.host=fake-db\nbbdd.port=5432\nbbdd.user=u\nbbdd.password=p\nbbdd.sid=fake\n');
+        savedGradleProps = process.env.ETENDO_GRADLE_PROPERTIES;
+        process.env.ETENDO_GRADLE_PROPERTIES = gradlePath;
+        // A conflicting env value proves the branding helper is handed the
+        // option, not process.env.
+        process.env.ETENDO_URL = ENV_HOST;
+      });
+
+      afterEach(() => {
+        pgModule.default.Pool = originalPool;
+        if (savedGradleProps === undefined) delete process.env.ETENDO_GRADLE_PROPERTIES;
+        else process.env.ETENDO_GRADLE_PROPERTIES = savedGradleProps;
+        rmSync(tmpDir, { recursive: true, force: true });
+      });
+
+      function imageCalls() {
+        return fetchCalls.filter((c) => c.url.includes('/sws/neo/image/'));
+      }
+
+      async function getData(reportId) {
+        const handler = loadMiddlewareWith({ etendoUrl: CONFIGURED });
+        const res = makeRes();
+        await handler(
+          makeReq('GET', `/api/reports/${reportId}/data`, null, validSessionHeaders('GET')),
+          res,
+          () => { throw new Error('data route did not match'); },
+        );
+        return res;
+      }
+
+      for (const [label, reportId] of [
+        ['a NEO-sourced listing report', NEO_REPORT_ID],
+        ['a SQL listing report', 'report-order-not-shipped'],
+        ['a document report', 'print-sales-order'],
+      ]) {
+        it(`${label} fetches the company logo from the etendoUrl option`, async () => {
+          const res = await getData(reportId);
+          assert.equal(res.statusCode, 200, `data failed: ${String(res.body).slice(0, 300)}`);
+          assert.ok(poolQueries.length > 0, 'expected the logo lookup to query the (fake) pool');
+          const calls = imageCalls();
+          assert.equal(calls.length, 1, `image calls: ${calls.map((c) => c.url).join(', ')}`);
+          assert.equal(calls[0].url, `${CONFIGURED}/sws/neo/image/${LOGO_ID}`);
+          assert.equal(calls[0].init.headers.Cookie, VALID_SESSION_COOKIE);
+        });
+      }
+
+      it('no branding request goes to process.env.ETENDO_URL or the default base', async () => {
+        await getData(NEO_REPORT_ID);
+        assert.ok(imageCalls().length > 0, 'expected an image call');
+        for (const c of imageCalls()) {
+          assert.ok(!c.url.startsWith(ENV_HOST), `image call went to env host: ${c.url}`);
+          assert.ok(!c.url.startsWith('http://localhost:8080/etendo/'), `image call went to default: ${c.url}`);
+        }
+      });
     });
   });
 
