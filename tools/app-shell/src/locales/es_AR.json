@@ -17663,6 +17663,7 @@
     "sendModalNoToRecipient": "Añade al menos un destinatario en Para",
     "invalidAmount": "Ingresá un importe válido",
     "productSearchNoResults": "Sin resultados para \"{query}\"",
+    "productSearchError": "No se pudo completar la búsqueda. Intentá de nuevo.",
     "productSearchCount": "{count} productos",
     "productSearchNavigate": "navegar",
     "productSearchSelect": "seleccionar",
