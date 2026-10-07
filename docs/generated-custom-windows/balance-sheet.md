@@ -12,7 +12,7 @@ Give finance users a point-in-time snapshot of assets, liabilities, and owner eq
 - Hide accounts whose net movement is below `0.01` (`HAVING ABS(...) > 0.01`).
 - Apply organization scoping through `ad_isorgincluded` so child organizations inherit the parent's accounts.
 
-- Honour each account's `ShowValueCond` like Classic (ETP-5662): a summary account marked "Positive ONLY" (`P`) shows its balance only when positive (`N`: only when negative), otherwise 0, and its descendants show 0. PGC mirror accounts (`551` under Activo / `(551)` under Pasivo) therefore show the balance on one side only and the report balances. Requires the tenant's `C_ElementValue_Operand` rows (data-fix R39). The fold lives in `report-grouping.js` (`buildAccountReportTree`) and is mirrored in Java (`AccountReportTree`); the SQL must select `ev.showvaluecond, ev.issummary`.
+- Honour each account's `ShowValueCond` like Classic (ETP-5662): a summary account marked "Positive ONLY" (`P`) shows its balance only when positive (`N`: only when negative), otherwise 0, and its descendants show 0. PGC mirror accounts (`551` under Activo / `(551)` under Pasivo) therefore show the balance on one side only and the report balances. Requires the tenant's `C_ElementValue_Operand` rows (data-fix R39). The fold lives in `report-grouping.js` (`buildAccountReportTree`) and is mirrored in Java (`AccountReportTree`); the SQL must select `ev.showvaluecond, ev.issummary`. When only one of the two groups (Activo / Patrimonio Neto y Pasivo) has visible rows, its group heading is still drawn (deliberate difference from Classic, display only).
 
 ## Interaction model
 - Route: `/report-viewer?report=balance-sheet`.
