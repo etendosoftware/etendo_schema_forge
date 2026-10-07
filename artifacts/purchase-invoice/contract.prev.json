@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "updatedAt": "2026-10-07T12:53:47.542Z",
-  "checksum": "cad8b974293b3342",
+  "updatedAt": "2026-10-07T13:43:14.325Z",
+  "checksum": "317381b386d3c0fc",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -4566,12 +4566,13 @@
             "apiKey": "rate",
             "column": "Rate",
             "label": "Rate",
-            "type": "string",
-            "tsType": "string",
+            "type": "number",
+            "tsType": "number",
             "visibility": "editable",
             "required": false,
             "grid": true,
             "form": true,
+            "explicitType": true,
             "validation": {
               "maxLength": 10
             },
@@ -8676,7 +8677,7 @@
             "name": "rate",
             "apiKey": "rate",
             "column": "Rate",
-            "type": "string",
+            "type": "number",
             "visibility": "editable",
             "required": false
           },
@@ -13321,7 +13322,7 @@
         "entity": "exchangeRates",
         "field": "rate",
         "runner": "node",
-        "description": "Field 'rate' should have type 'string' in exchangeRates"
+        "description": "Field 'rate' should have type 'number' in exchangeRates"
       },
       {
         "id": "t-field-type-exchangeRates-toCurrency",
