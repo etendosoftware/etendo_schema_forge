@@ -38,10 +38,7 @@ const PLUGIN_SRC = readFileSync(
   'utf8',
 );
 
-const VITE_CONFIG_SRC = readFileSync(
-  fileURLToPath(new URL('../vite.config.js', import.meta.url)),
-  'utf8',
-);
+const VITE_CONFIG_PATH = fileURLToPath(new URL('../vite.config.js', import.meta.url));
 const ENV_PRODUCTION_SRC = readFileSync(
   fileURLToPath(new URL('../.env.production', import.meta.url)),
   'utf8',
@@ -490,17 +487,6 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       assert.doesNotMatch(PLUGIN_SRC, /const JSREPORT_URL = process\.env/);
     });
 
-    it('vite.config.js points both /jsreport proxies at the resolved JSREPORT_URL (ETP-5666)', () => {
-      const proxies = [...VITE_CONFIG_SRC.matchAll(/'\/jsreport':\s*\{\s*target:\s*([^,]+),/g)]
-        .map((m) => m[1].trim());
-      assert.equal(proxies.length, 2, 'expected the dev and preview /jsreport proxy entries');
-      assert.deepEqual(proxies, ['JSREPORT_URL', 'JSREPORT_URL']);
-      const literals = VITE_CONFIG_SRC.match(/localhost:5488/g) || [];
-      assert.equal(literals.length, 1, 'the 5488 default may only appear in the JSREPORT_URL resolution');
-      assert.match(VITE_CONFIG_SRC,
-        /const JSREPORT_URL = env\.JSREPORT_URL \|\| process\.env\.JSREPORT_URL \|\| 'http:\/\/localhost:5488';/);
-    });
-
     it('.env.production does not declare JSREPORT_URL — nothing in the build reads it (ETP-5666)', () => {
       assert.doesNotMatch(ENV_PRODUCTION_SRC, /^\s*JSREPORT_URL\s*=/m);
     });
@@ -511,5 +497,55 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       assert.doesNotMatch(PLUGIN_SRC, /orderBy: clientId\s*\n\s*\?/,
         'currency orderBy must no longer conditionally branch on clientId');
     });
+  });
+});
+
+// ETP-5666 — behavioural guard for the /jsreport proxies: load the real config
+// through Vite's own loader (a raw import() fails, the config uses __dirname)
+// and read the resolved proxy entries. vite.config.js calls
+// loadEnv(mode, process.cwd(), ''), so each load runs with cwd set to an empty
+// temp dir: no developer .env/.env.local can leak in, and the result is the
+// same on CI and on any machine.
+describe('vite.config.js — /jsreport proxy', () => {
+  let savedJsreport;
+  let savedCwd;
+  let emptyEnvDir;
+
+  beforeEach(() => {
+    savedJsreport = process.env.JSREPORT_URL;
+    savedCwd = process.cwd();
+    emptyEnvDir = mkdtempSync(join(tmpdir(), 'vite-env-'));
+  });
+
+  afterEach(() => {
+    process.chdir(savedCwd);
+    rmSync(emptyEnvDir, { recursive: true, force: true });
+    if (savedJsreport === undefined) delete process.env.JSREPORT_URL;
+    else process.env.JSREPORT_URL = savedJsreport;
+  });
+
+  async function loadViteConfig() {
+    const { loadConfigFromFile } = await import('vite');
+    process.chdir(emptyEnvDir);
+    const loaded = await loadConfigFromFile({ mode: 'development', command: 'serve' }, VITE_CONFIG_PATH);
+    return loaded.config;
+  }
+
+  it('points the dev and preview proxies at a configured JSREPORT_URL, path included', async () => {
+    process.env.JSREPORT_URL = 'http://jr.example:9000/svc';
+    const config = await loadViteConfig();
+    const dev = config.server.proxy['/jsreport'];
+    const preview = config.preview.proxy['/jsreport'];
+    assert.equal(dev.target, 'http://jr.example:9000/svc');
+    assert.equal(preview.target, 'http://jr.example:9000/svc');
+    assert.equal(dev.rewrite('/jsreport/api/report'), '/api/report');
+    assert.equal(preview.rewrite('/jsreport/api/report'), '/api/report');
+  });
+
+  it('falls back to http://localhost:5488 when JSREPORT_URL is set nowhere', async () => {
+    delete process.env.JSREPORT_URL;
+    const config = await loadViteConfig();
+    assert.equal(config.server.proxy['/jsreport'].target, 'http://localhost:5488');
+    assert.equal(config.preview.proxy['/jsreport'].target, 'http://localhost:5488');
   });
 });
