@@ -9,7 +9,7 @@ import mcpRetryProxy from './vite-plugins/mcp-proxy.js';
 import appsSpikePlugin from './vite-plugins/apps-spike.js';
 import sliceLabelsPlugin from './vite-plugins/slice-labels.js';
 
-// Read ETENDO_URL from .env.local for proxy config only (not exposed to client)
+// Read ETENDO_URL from .env.local for the dev proxy and report API (not exposed to client)
 function readEnvFile() {
   try {
     const content = readFileSync(resolve(process.cwd(), '.env.local'), 'utf-8');
@@ -225,7 +225,7 @@ export default defineConfig(({ mode }) => {
     react(),
     sliceLabelsPlugin(),
     schemaApiPlugin(),
-    reportApiPlugin(),
+    reportApiPlugin({ etendoUrl: ETENDO_URL }),
     mcpWellKnownPlugin(),
     mcpRetryProxy(ETENDO_URL),
     appsSpikePlugin({

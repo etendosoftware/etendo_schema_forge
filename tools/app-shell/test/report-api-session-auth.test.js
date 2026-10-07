@@ -13,6 +13,12 @@
  * (same shape as report-api-neo-accept-language.test.js) exercising the
  * REAL routes with a stubbed `globalThis.fetch` that answers `/sws/go/
  * session` in addition to NEO/jsreport.
+ *
+ * ETP-5666 — the Etendo base URL comes from the `etendoUrl` option that
+ * vite.config.js passes (resolved from `.env.local` via loadEnv), not from
+ * `process.env.ETENDO_URL`, which Vite never populates from `.env.local`.
+ *
+ * @covers tools/app-shell/vite-plugins/report-api.js
  */
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { strict as assert } from 'node:assert';
@@ -218,6 +224,67 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
     });
   });
 
+  describe('configured Etendo base URL (ETP-5666)', () => {
+    const CONFIGURED = 'http://configured-host:8080/etendogoclean';
+    let savedEnvUrl;
+
+    beforeEach(() => {
+      savedEnvUrl = process.env.ETENDO_URL;
+      delete process.env.ETENDO_URL;
+    });
+
+    afterEach(() => {
+      if (savedEnvUrl === undefined) delete process.env.ETENDO_URL;
+      else process.env.ETENDO_URL = savedEnvUrl;
+    });
+
+    function loadMiddlewareWith(options) {
+      let handler;
+      reportApiPlugin(options).configureServer({ middlewares: { use: (fn) => { handler = fn; } } });
+      return handler;
+    }
+
+    it('resolves the session and calls NEO against the etendoUrl option, not process.env', async () => {
+      const handler = loadMiddlewareWith({ etendoUrl: CONFIGURED });
+      const res = makeRes();
+      await handler(
+        makeReq('GET', `/api/reports/${NEO_REPORT_ID}/data`, null, validSessionHeaders('GET')),
+        res,
+        () => { throw new Error('data route did not match'); },
+      );
+      assert.equal(res.statusCode, 200, `data failed: ${String(res.body).slice(0, 300)}`);
+      const sessionCall = fetchCalls.find((c) => c.url.includes('/sws/go/session'));
+      assert.ok(sessionCall, 'expected a session resolution call');
+      assert.equal(sessionCall.url, `${CONFIGURED}/sws/go/session`);
+      assert.ok(neoCall().url.startsWith(`${CONFIGURED}/sws/neo/`), `NEO call went to ${neoCall().url}`);
+    });
+
+    it('the selector route resolves the session against the etendoUrl option', async () => {
+      const handler = loadMiddlewareWith({ etendoUrl: CONFIGURED });
+      const res = makeRes();
+      await handler(
+        makeReq('GET', '/sws/report-selectors/acctschema?q=', null, validSessionHeaders('GET')),
+        res,
+        () => { throw new Error('selector route did not match'); },
+      );
+      const sessionCall = fetchCalls.find((c) => c.url.includes('/sws/go/session'));
+      assert.ok(sessionCall, 'expected a session resolution call');
+      assert.equal(sessionCall.url, `${CONFIGURED}/sws/go/session`);
+    });
+
+    it('falls back to the default context when neither the option nor process.env is set', async () => {
+      const handler = loadMiddlewareWith();
+      const res = makeRes();
+      await handler(
+        makeReq('GET', `/api/reports/${NEO_REPORT_ID}/data`, null, validSessionHeaders('GET')),
+        res,
+        () => { throw new Error('data route did not match'); },
+      );
+      const sessionCall = fetchCalls.find((c) => c.url.includes('/sws/go/session'));
+      assert.equal(sessionCall.url, 'http://localhost:8080/etendo/sws/go/session');
+    });
+  });
+
   describe('report-api.js source — wiring', () => {
     it('imports loadReportCli from the gated local-core loader', () => {
       assert.match(PLUGIN_SRC, /import \{ loadReportCli \} from '\.\/report-cli\.js';/);
@@ -240,6 +307,12 @@ describe('report-api.js — session-cookie authentication (ETP-5460)', () => {
       assert.match(PLUGIN_SRC, /const byClient = \(col\) => `AND \$\{col\} = '\$\{clientId\}'`;/);
       assert.doesNotMatch(PLUGIN_SRC, /byClient = \(col\) => clientId \? /,
         'the old conditional byClient (silently unscoped when clientId was null) must be gone');
+    });
+
+    it('never reads process.env.ETENDO_URL outside the plugin factory fallback (ETP-5666)', () => {
+      const reads = PLUGIN_SRC.match(/process\.env\.ETENDO_URL/g) || [];
+      assert.equal(reads.length, 1, 'only the factory fallback may read process.env.ETENDO_URL');
+      assert.doesNotMatch(PLUGIN_SRC, /const ETENDO_URL = process\.env/);
     });
 
     it('the currency selector no longer branches on a possibly-null clientId (session guarantees it)', () => {

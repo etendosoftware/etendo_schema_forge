@@ -267,7 +267,7 @@ Example (JVM flag in `TOMCAT_CATALINA_OPTS`):
 |---|---|---|
 | `VITE_API_BASE` | `.env.production` | Backend base path for all API and auth calls (e.g., `/etendo`). |
 | `VITE_MOCK` | `.env.production` | Set to `false` for production (disables mock data). |
-| `ETENDO_URL` | `.env.local` (dev only) | Full backend URL for the Vite dev proxy (e.g., `http://localhost:8080/etendo`). |
+| `ETENDO_URL` | `.env.local` (dev only) | Full backend URL for the Vite dev proxy and the dev report API (e.g., `http://localhost:8080/etendo`). |
 
 Example (`.env.production`):
 ```env
@@ -395,8 +395,9 @@ ETENDO_URL=http://localhost:8080/etendo
 ```
 
 `ETENDO_URL` is the Vite dev proxy target (`server.proxy` in `vite.config.js` forwards
-`/sws`, `/oauth2`, `/webhooks` to it) — it is read at server start, so restart `make dev`
-after changing it. **Do not also set `VITE_API_BASE` to that same absolute URL.**
+`/sws`, `/oauth2`, `/webhooks` to it), and the same resolved value is passed to the dev
+report API plugin (`vite-plugins/report-api.js`) for its session checks and NEO calls — it
+is read at server start, so restart `make dev` after changing it. **Do not also set `VITE_API_BASE` to that same absolute URL.**
 `VITE_API_BASE` is read by the browser (`detectBaseUrl()`, `menuTree.js`, `rolesApi.js`,
 etc.) to build every fetch URL; an absolute `http://localhost:8080/...` value there makes
 the *browser* call port 8080 directly, bypassing the proxy entirely and hitting a CORS

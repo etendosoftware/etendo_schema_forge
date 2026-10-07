@@ -32,7 +32,12 @@ const { resolveReportSession, reportAuthErrorBody } = await loadReportCli('repor
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
 const JSREPORT_URL = process.env.JSREPORT_URL || 'http://localhost:5488';
-const ETENDO_URL = process.env.ETENDO_URL || 'http://localhost:8080/etendo';
+const DEFAULT_ETENDO_URL = 'http://localhost:8080/etendo';
+// ETP-5666 — set by the plugin factory from the `etendoUrl` option that
+// vite.config.js resolves via loadEnv (.env.local). The ETENDO_URL env var is
+// only a fallback: Vite never copies .env.local into process.env, so reading
+// it alone sent session checks to the default context (404 → 401 → logout).
+let etendoUrl = DEFAULT_ETENDO_URL;
 const REPORT_PARTIALS_DIR = resolve(ROOT, 'templates', 'reports');
 
 function expandReportPartials(templateContent) {
@@ -48,8 +53,7 @@ function expandReportPartials(templateContent) {
 let currencySeparatorsPromise = null;
 async function getReportCurrencySeparators() {
   if (currencySeparatorsPromise) return currencySeparatorsPromise;
-  const etendoBase = process.env.ETENDO_URL || 'http://localhost:8080/etendo';
-  currencySeparatorsPromise = fetch(`${etendoBase}/sws/neo/currency-format`)
+  currencySeparatorsPromise = fetch(`${etendoUrl}/sws/neo/currency-format`)
     .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
     .then((data) => ({
       thousandsSeparator: typeof data?.thousandsSeparator === 'string' ? data.thousandsSeparator : '.',
@@ -167,7 +171,7 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
 
   // Real mode: NEO API (calls Etendo backend via NeoHandler)
   if (contract.neo?.endpoint) {
-    const neoUrl = `${ETENDO_URL}${contract.neo.endpoint}`;
+    const neoUrl = `${etendoUrl}${contract.neo.endpoint}`;
     const neoBody = { ...(contract.neo.body || {}), ...params };
 
     const neoRes = await fetch(neoUrl, {
@@ -242,7 +246,7 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
         });
         try {
           companyLogoDataUrl = await resolveCompanyLogoDataUrl(logoPool, {
-            clientId: session.clientId, orgId: params.orgId, authHeaders: session.forwardHeaders, etendoBase: ETENDO_URL,
+            clientId: session.clientId, orgId: params.orgId, authHeaders: session.forwardHeaders, etendoBase: etendoUrl,
           });
         } finally {
           await logoPool.end();
@@ -291,7 +295,7 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
       const headerResult = await pool.query(brandedHeaderSql);
       const header = await hydrateDocumentBranding(headerResult.rows[0] || {}, {
         authHeaders: session.forwardHeaders,
-        etendoBase: ETENDO_URL,
+        etendoBase: etendoUrl,
       });
 
       const linesResult = await pool.query(linesSql);
@@ -425,7 +429,7 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
     // `orgId` filter, e.g. Inventory Stock Report, Order Not Shipped).
     const companyLogoDataUrl = await resolveCompanyLogoDataUrl(pool, {
       clientId, orgId: params.orgId, authHeaders: session.forwardHeaders,
-      etendoBase: ETENDO_URL,
+      etendoBase: etendoUrl,
     });
 
     return { rows, contract, openingRows, operandRows, companyLogoDataUrl };
@@ -434,7 +438,8 @@ async function fetchReportData(reportId, { limit, session, params = {}, locale }
   }
 }
 
-export default function reportApiPlugin() {
+export default function reportApiPlugin(options = {}) {
+  etendoUrl = options.etendoUrl || process.env.ETENDO_URL || DEFAULT_ETENDO_URL;
   return {
     name: 'report-api',
     configureServer(server) {
@@ -467,7 +472,7 @@ export default function reportApiPlugin() {
           // (401/403/502), never a generic 500, and must never touch the DB.
           let session;
           try {
-            session = await resolveReportSession(req.headers, { method: req.method, etendoBase: ETENDO_URL });
+            session = await resolveReportSession(req.headers, { method: req.method, etendoBase: etendoUrl });
           } catch (e) {
             const { status, body } = reportAuthErrorBody(e);
             res.statusCode = status;
@@ -695,7 +700,7 @@ export default function reportApiPlugin() {
           // or call NEO at all.
           let session;
           try {
-            session = await resolveReportSession(req.headers, { method: req.method, etendoBase: ETENDO_URL });
+            session = await resolveReportSession(req.headers, { method: req.method, etendoBase: etendoUrl });
           } catch (e) {
             const { status, body } = reportAuthErrorBody(e);
             res.statusCode = status;
@@ -730,7 +735,7 @@ export default function reportApiPlugin() {
           // or call NEO at all.
           let session;
           try {
-            session = await resolveReportSession(req.headers, { method: req.method, etendoBase: ETENDO_URL });
+            session = await resolveReportSession(req.headers, { method: req.method, etendoBase: etendoUrl });
           } catch (e) {
             const { status, body: errorBody } = reportAuthErrorBody(e);
             res.statusCode = status;
