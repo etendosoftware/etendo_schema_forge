@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/financial-accounts/AccountsTable/accountColumns.jsx
 /**
  * accountColumns — the shared Cuentas cell bodies, and their reveal-on-row-hover contract.
  *
@@ -22,6 +23,7 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import {
   NameCell, TypeCell, CurrencyCell, BalanceCell, CountryCell,
 } from '../accountColumns.jsx';
@@ -334,23 +336,84 @@ describe('CurrencyCell', () => {
   });
 });
 
+// The Saldo cell shows the exact balance (never compacted), so a huge one cannot fit the
+// pinned column: it renders through TruncatedText, which ellipsises and reveals the exact
+// amount in a tooltip only when it is actually clipped.
 describe('BalanceCell', () => {
-  it('renders the currency-formatted balance', () => {
+  const HUGE = 87542314548725.5;
+
+  it('renders the exact formatCurrency text through TruncatedText with its row-scoped test id', () => {
     render(<BalanceCell account={ACCOUNT} />);
 
-    expect(screen.getByText(/1\.234,56/)).toBeInTheDocument();
+    const cell = screen.getByTestId('account-row-balance-acc-1');
+    expect(cell.textContent).toBe(formatCurrency('EUR', 1234.56));
+    expect(cell.textContent).toContain('1.234,56');
+    expect(cell).toHaveClass('truncate', 'text-right', 'tabular-nums');
   });
 
   it('renders a negative balance in the destructive treatment', () => {
-    const { container } = render(<BalanceCell account={{ ...ACCOUNT, currentBalance: -42.5 }} />);
+    render(<BalanceCell account={{ ...ACCOUNT, currentBalance: -42.5 }} />);
 
-    expect(container.firstChild.className).toMatch(/text-\[hsl\(var\(--destructive\)\)\]/);
+    const cell = screen.getByTestId('account-row-balance-acc-1');
+    expect(cell.className).toMatch(/text-\[hsl\(var\(--destructive\)\)\]/);
+    expect(cell.className).not.toMatch(/--foreground/);
   });
 
   it('renders a zero balance in the default treatment', () => {
-    const { container } = render(<BalanceCell account={{ ...ACCOUNT, currentBalance: 0 }} />);
+    render(<BalanceCell account={{ ...ACCOUNT, currentBalance: 0 }} />);
 
-    expect(container.firstChild.className).not.toMatch(/destructive/);
+    const cell = screen.getByTestId('account-row-balance-acc-1');
+    expect(cell.className).not.toMatch(/destructive/);
+    expect(cell.className).toMatch(/text-\[hsl\(var\(--foreground\)\)\]/);
+  });
+
+  it('renders a positive balance in the foreground treatment', () => {
+    render(<BalanceCell account={ACCOUNT} />);
+
+    const cell = screen.getByTestId('account-row-balance-acc-1');
+    expect(cell.className).toMatch(/text-\[hsl\(var\(--foreground\)\)\]/);
+    expect(cell.className).not.toMatch(/destructive/);
+  });
+
+  it('never compacts a huge balance: the cell carries the full exact amount', () => {
+    render(<BalanceCell account={{ ...ACCOUNT, currentBalance: HUGE }} />);
+
+    const cell = screen.getByTestId('account-row-balance-acc-1');
+    expect(cell.textContent).toBe(formatCurrency('EUR', HUGE));
+    expect(cell.textContent).toContain('87.542.314.548.725,50');
+  });
+
+  it('shows the exact balance in a tooltip only when it is clipped', () => {
+    const { unmount } = render(<BalanceCell account={{ ...ACCOUNT, currentBalance: HUGE }} />);
+    const clipped = screen.getByTestId('account-row-balance-acc-1');
+    setMetrics(clipped, 210, 110);
+
+    fireEvent.focus(clipped);
+
+    // textContent, not toHaveTextContent: the latter normalizes formatCurrency's NBSP.
+    expect(screen.getByTestId('account-row-balance-acc-1-tooltip').textContent)
+      .toContain(formatCurrency('EUR', HUGE));
+    unmount();
+
+    render(<BalanceCell account={ACCOUNT} />);
+    const fitting = screen.getByTestId('account-row-balance-acc-1');
+    setMetrics(fitting, 70, 110);
+
+    fireEvent.focus(fitting);
+
+    expect(screen.queryByTestId('account-row-balance-acc-1-tooltip')).not.toBeInTheDocument();
+  });
+
+  it('keeps the destructive treatment on a clipped negative balance and its tooltip text', () => {
+    render(<BalanceCell account={{ ...ACCOUNT, id: 'acc-9', currentBalance: -HUGE }} />);
+    const cell = screen.getByTestId('account-row-balance-acc-9');
+    setMetrics(cell, 220, 110);
+
+    fireEvent.focus(cell);
+
+    expect(cell.className).toMatch(/destructive/);
+    expect(screen.getByTestId('account-row-balance-acc-9-tooltip').textContent)
+      .toContain(formatCurrency('EUR', -HUGE));
   });
 });
 

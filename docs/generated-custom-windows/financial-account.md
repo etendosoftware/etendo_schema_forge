@@ -807,7 +807,8 @@ The account detail view (`index.jsx`) gained its own **Editar** button (`financi
 Pencil icon) in the tab-strip row, to the left of the Export/Automatch button — opening the same
 `EditAccountModal`. On save it reloads via `useFinancialAccount`'s `reload`. Archive from this
 entry point reuses `ArchiveAccountDialog` (same component as the Cuentas list) and, on success,
-navigates back to `/finance/accounts` (there is no reason to stay on the detail page of an
+navigates back to `/finance/accounts` — today only a redirect to `/financial-account`, the
+Cuentas list (there is no reason to stay on the detail page of an
 account that was just archived). **Delete** (ETP-4871, only offered when the account is
 `deletable`) mirrors the same shape through `DeleteAccountDialog` and also navigates back on
 success — unconditionally, unlike archive/unarchive, since a delete never leaves a record to
@@ -1143,6 +1144,185 @@ options available.
 - **Sub-endpoints are not account writes (ETP-5468).** Button actions (`POST /account/{id}/action/<button>`, MCP `etendo_action`), callouts and display-logic evaluation reach the hook with `httpMethod=POST` too. `handle()` and `afterHandle()` now act only when `NeoContext.getEndpointType()` is `CRUD` (or `null`, which internal callers such as batch/clone leave unset) — see `FinancialAccountHandler.isCrudRequest`. Before, every button call on `account` first ran the create validation, so an agent had to invent a unique `name` and a `currency` to get its button through, and the post-hook could provision a "new" account off an action response.
 - `matchingAlgorithm` is declared `visibility: "system"` in `decisions.json` so its `ETGO_SF_FIELD` row stays **included** — required for the injected value to survive `NeoFieldFilter`. `country` is `visibility: "editable"` (ETP-4896, see below) — it was `"system"` before. `deletable`/`deleteBlockedReason` are virtual, handler-injected fields, the same shape as `hasTransactions`/`pendingCount`.
 
+### List summary — `response.summary` and its currency (ETP-5580)
+
+The Cuentas sidebar ("Saldo total", the per-currency breakdown, "Cuentas con pendientes") reads
+`meta.summary` from **this W-spec list GET**, not from the `financial-accounts-page` R spec:
+`AccountsHeaderTable.jsx` renders `<AccountsSidebar summary={meta?.summary}>`, and
+`/finance/accounts` only redirects to `/financial-account`. The summary is attached as a sibling of
+`response.data` by `FinancialAccountHandler.injectDerivedFields`, which calls the shared
+`FinancialAccountsPageHandler.buildSummary(visible, resolveOrgCurrency())`. The R spec builds its
+own summary with the same method, so the two surfaces cannot drift apart.
+
+Before ETP-5580 `totalBalance` was the raw sum of every active account's `CurrentBalance`
+regardless of currency: EUR -357.99 + USD -20.00 was shown as "-377.99 €". Shape now (aggregated
+over the **active** rows of this response only, as before):
+
+```json
+"summary": {
+  "totalBalance": -375.13,
+  "totalBalanceCurrencyIso": "EUR",
+  "totalBalanceApproximate": true,
+  "missingRateCurrencies": [],
+  "byCurrency": [{"currencyIso": "EUR", "total": -357.99}, {"currencyIso": "USD", "total": -20.00}],
+  "pending": {"accountsWithPending": 1, "suggestionsReady": 0, "byRule": 0}
+}
+```
+
+- **Target currency** — the **login organization's** functional currency
+  (`NeoConversionHelper.resolveOrgCurrencyId()`, which tries the org, then its legal entity, then
+  the client), exposed as `totalBalanceCurrencyIso`.
+- **Conversion** — balances are grouped by currency first, and each foreign-currency subtotal is
+  converted **once** with **today's** general system rate (`C_Conversion_Rate`, via core
+  `FinancialUtils.getConversionRate(new Date(), from, orgCurrency, loginOrg, client)`). The
+  converted total is rounded to the org currency's standard precision (HALF_UP). The figure
+  therefore follows the day's rate, not the rates the movements were booked at.
+- **`totalBalanceApproximate`** — `true` when at least one currency with a **non-zero** subtotal
+  was converted with a rate. The sidebar marks the total with "≈" when it is set. It is `false`
+  when every counted balance was already in the org currency.
+- **Zero foreign subtotals are ignored** (ETP-5580 QA BUG-1). A foreign currency whose subtotal is
+  exactly 0 adds nothing at any rate, so it is skipped before the rate lookup. It never makes the
+  total "≈" and is never listed in `missingRateCurrencies`, because that warning would be noise.
+  It still appears in `byCurrency`. Real case: on an EUR org with a USD account at 0.00, the total
+  is exact.
+- **`missingRateCurrencies`** — ISO codes of the currencies left **out** of the total because no
+  usable rate exists. They are excluded, never summed unconverted. Two cases end up here even though
+  some rate is configured:
+  - **Direct direction only.** The lookup is account currency → org currency, the same as core. If
+    only the inverse rate is configured (e.g. EUR → USD for an EUR org), USD is reported as missing.
+  - **Login-org anchor.** Core walks from the login organization **up** to `0`, while the listed
+    accounts span the whole accessible org tree. A rate defined only on a sibling or child org is
+    not found, and that currency is reported as missing. This is fail-safe and accepted.
+- **`byCurrency`** — unchanged: the exact, **unconverted** per-currency subtotals, including any
+  currency listed in `missingRateCurrencies`.
+- **No org currency at all** (none on the org, the legal entity or the client): legacy raw sum,
+  `totalBalanceApproximate: false`, `missingRateCurrencies: []`, and `totalBalanceCurrencyIso` set
+  to the first `byCurrency` ISO, or JSON `null` when there are no active accounts.
+
+**Sidebar rendering** (`components/financial-accounts/AccountsSidebar/index.jsx`):
+
+- The total is formatted in `totalBalanceCurrencyIso`. A missing, `null` or empty value is treated
+  as unknown, and the sidebar falls back to the first `byCurrency` ISO, then to `EUR`. Each
+  breakdown row keeps its own currency.
+- When `totalBalanceApproximate` is strictly `true`, the total is prefixed with `≈ `.
+- When `missingRateCurrencies` is not empty, a warning line appears under the total
+  (`data-testid="balance-missing-rate"`, `financeAccountsBalanceMissingRate`), e.g.
+  "No incluye: GBP (sin tasa de cambio)". Several ISO codes are joined with ", ".
+- The ⓘ button next to "Saldo" (`data-testid="balance-info-button"`) opens a Radix tooltip
+  (`data-testid="balance-info-tooltip"`, `financeAccountsBalanceInfo`). It explains that the total
+  is in the organization currency, that accounts in other currencies, if any, are converted with
+  the system rate, which makes the total approximate (≈), and that the per-currency detail shows
+  the real balances.
+- The total is the **full amount**, formatted with the canonical `formatCurrency(iso, total)`
+  (`AccountsSidebar/balanceDisplay.js`, `buildBalanceDisplay`), e.g. "-357,99 €",
+  "≈ 2.242,12 €", "46.108.698,41 €", or "$14.028.905,17" for a USD organization. There is **no**
+  K/M/B compact notation in the sidebar (the dashboard's `FinancialSummaryCard` keeps it). The
+  symbol side comes from the currency-format config (`C_CURRENCY.ISSYMBOLRIGHTSIDE`, loaded from
+  `GET /sws/neo/currency-format`): EUR on the right, USD on the left, with the minus before the
+  symbol ("≈ -$100.000.000,00"). A test or page that never loads that config puts every symbol on
+  the right ("2.500,00 $"); that is not what users see.
+- The size is **fixed at 30px / 32px** (`BALANCE_TYPOGRAPHY`, the original `text-[30px] leading-8`)
+  and never steps down with the length of the amount, because a smaller font loses visibility.
+  The sidebar does not use `getDashboardValueTypography`.
+- **Overflow: ellipsis plus tooltip.** The amount renders through `TruncatedText`
+  (`components/ui/truncated-text.jsx`, the same component as the breakdown rows and the list
+  `BalanceCell`). The row (`data-testid="balance-total"`, `flex min-w-0`) carries the 30px size and
+  bounds the width; the amount (`data-testid="balance-card"`, `min-w-0 flex-1`) ellipsises when it
+  does not fit, and only then does hovering it (hover only, it is not focusable) open a tooltip
+  (`data-testid="balance-card-tooltip"`) with the exact value, `≈ ` included. An amount that fits
+  shows no tooltip.
+- **What fits.** The usable width is 268px (292px column minus `px-3`), i.e. 268 / 30 = 8.93em.
+  With Inter's approximate advances (tabular digit 0.63em; `.`, `,`, NBSP and space 0.28em; `-`
+  0.4em; `≈` 0.6em; `€` 0.62em; `$` 0.6em): "99.999.999,99 €" is 8.04em (241px, fits),
+  "-99.999.999,99 €" 8.44em (253px, fits), "≈ 99.999.999,99 €" 8.92em (268px, fits at the limit),
+  "≈ -99.999.999,99 €" 9.32em (280px, ellipsised), "≈ -100.000.000,00 €" 9.95em (299px,
+  ellipsised). So every amount under 100 million shows in full except an approximate **and**
+  negative one from about 10 million up; anything larger is ellipsised with the exact value in the
+  tooltip. The browser decides on the real glyphs, so an amount right at the limit may go either
+  way.
+- **Breakdown rows** ("Detalle de saldos por moneda", `balance-by-currency-<ISO>`) show the exact
+  `formatCurrency` balance. The ISO label is `shrink-0`; the amount is a `TruncatedText`
+  (`balance-by-currency-<ISO>-amount`, `min-w-0 flex-1 text-right`), so an amount that does not
+  fit next to the label ellipsises and shows the exact value in a tooltip. One that fits shows no
+  tooltip.
+- The exact per-currency balances are in the breakdown card below the total.
+- While loading, the amount shows "—" (same 30px size), with no warning line.
+- Backward compatibility: an older backend that omits the new fields gets the first `byCurrency`
+  ISO (or `EUR`), no `≈` and no warning. `useFinancialAccounts`'s empty summary carries the same
+  neutral defaults (`totalBalanceCurrencyIso: null`, `totalBalanceApproximate: false`,
+  `missingRateCurrencies: []`).
+
+Tests:
+
+- Backend: `FinancialAccountHandlerTest.testAfterHandleGetCrudAttachesSummarySiblingOverVisibleActiveRows`
+  (converted total) and `testAfterHandleGetCrudSummaryExcludesCurrencyWithoutRate` (W spec), plus
+  the `testBuildSummary*` conversion cases in `FinancialAccountsPageHandlerTest` (including the two
+  `testBuildSummaryZeroForeignSubtotal*` cases) and `testLookupRateDelegatesToFinancialUtils`.
+- Frontend:
+  - `AccountsSidebar/__tests__/index.vitest.jsx`: total currency and fallbacks, `≈`, the
+    missing-rate line, the full total in `TruncatedText`, the info tooltip.
+  - `AccountsSidebar/__tests__/balanceDisplay.vitest.js`: full `formatCurrency` text with the
+    `≈ ` prefix and the fixed 30px typography, under the default currency-format config.
+  - `AccountsSidebar/__tests__/balanceDisplay.symbolSide.vitest.js`: the same helper with a
+    realistic currency-format config loaded ("$2.500,00" for USD, EUR on the right). It is a
+    separate file so the loaded module-level config cannot leak into the default-config tests.
+  - `lib/__tests__/dashboardValueTypography.test.js`: the dashboard's 30/24/20px length steps
+    (10 / 12 characters).
+  - `components/dashboard/__tests__/financialSummaryCard-typography.test.js` (updated): it now
+    exercises the real `getDashboardValueTypography` (dashboard only) instead of an inline copy, and checks
+    that `FinancialSummaryCard` imports it.
+  - `hooks/__tests__/useFinancialAccounts.vitest.jsx`: the new fields pass through unchanged.
+- E2E: `e2e/tests/flows/finance/financial-accounts-page.mocked.spec.js` mocks the ETP-5580
+  `summary` contract.
+  - `sidebar aggregate values match the summary sibling of response.data` asserts the full
+    total (`273.853,46 €`) and that no missing-rate line appears.
+  - The "Financial Accounts list — Saldo converted total (ETP-5580)" describe covers the
+    converted total, with `≈` and an unconverted breakdown, and the `balance-missing-rate` line
+    for a currency without an exchange rate.
+
+Known gaps and follow-ups (accepted, out of scope for ETP-5580):
+
+- **E2E for the ⓘ tooltip:** the E2E covers the total, `≈` and the missing-rate line, but
+  not the `balance-info-tooltip`. Vitest already covers it (`AccountsSidebar/__tests__/index.vitest.jsx`,
+  "info tooltip"), so only the browser-level check is missing.
+- **Spanish "B" suffix (dashboard only):** `formatDashboardCompact` uses `K`/`M`/`B` with
+  `B` = 10^9. In Spanish a *billón* is 10^12, so "797,84B €" can be misread as a thousand times
+  larger. For example, "87.542,31B €" means 87,542 × 10^9, which is 87.5 trillion in English, or
+  87,5 *billones* in Spanish usage. A Spanish reader can take it for 87.542 *billones* (about
+  8.75 × 10^16). The Cuentas sidebar no longer compacts, so this now affects only the dashboard's
+  `FinancialSummaryCard`; the fix belongs in `formatDashboardCompact`.
+- **Clipped total only in a hover tooltip:** when the total ellipsises, its exact value is only in
+  the `TruncatedText` tooltip, which opens on **hover only**. The `TruncatedText` span has no
+  `tabIndex` and cannot take focus, so the exact value of a clipped total is not reachable by
+  touch or by keyboard. Those users see the ellipsised total. The breakdown below still shows the
+  exact per-currency balances, but not the converted total. The same applies to a clipped
+  breakdown row and to the list `BalanceCell`.
+- **Movement amounts clip without a tooltip:** in the account detail's movements table
+  (`MovementsTable.jsx`), the Importe and Saldo cells render `MoneyAmount` as a bare inline amount.
+  A huge value is clipped by the shared `TableCell` ellipsis, and nothing reveals the rest. The
+  Cuentas `BalanceCell` and the sidebar breakdown rows solved this with `TruncatedText`. The
+  clean fix here is a truncate option on `MoneyAmount` itself (`components/ui/money-amount.jsx`),
+  so every caller gets the ellipsis plus the exact-value tooltip, rather than wrapping each call
+  site by hand.
+- **Account-detail KPI strip can overflow:** `AccountSummaryStrip.jsx`'s `kpi-balance`,
+  `kpi-inflows` and `kpi-outflows` render a full `MoneyAmount` in `flex-1` sections, with no
+  truncation and no size step. With huge values the amounts can overflow their section.
+
+**Manual verification.** Open **Finanzas → Cuentas** (`/financial-account`; `/finance/accounts`
+redirects there) with active accounts in two currencies, e.g. EUR + USD under an EUR org:
+
+1. With a USD → EUR `C_Conversion_Rate` valid today on the login org or one of its ancestors, the
+   sidebar total is in EUR, shows "≈", and is the full amount at 30px, which equals
+   EUR + USD × rate. With a converted total too large for the column (e.g. "≈ -100.000.000,00 €")
+   it ellipsises; hover it and the tooltip shows the exact value. The breakdown still lists both currencies, exact and
+   unconverted.
+2. Delete or expire that rate and reload. The total now counts only the EUR accounts, without "≈",
+   and the line "No incluye: USD (sin tasa de cambio)" appears under it. The list GET response
+   (DevTools → Network) carries `"missingRateCurrencies": ["USD"]`.
+3. Archive the USD account. It drops out of the total, the breakdown and `missingRateCurrencies`.
+4. Leave the USD account at a 0.00 balance (with or without a rate). The total is exact: no "≈"
+   and USD is not in `missingRateCurrencies`, but it is still listed in the breakdown.
+
 ### Country field + IBAN↔country validation (ETP-4896)
 
 `C_Country_ID` used to be backend-only: `FinancialAccountHandler` derived it from the IBAN's ISO prefix and silently overwrote whatever was there, so a Cash/Card/IBAN-less-Bank account was always left with no country and no way to set one, and Salt Edge-connected accounts could never disagree with their own IBAN. Country is now a normal, always-editable field — required on create by `NewAccountWizard`/`AccountFormStep` (all three account types) and, since ETP-5473, by the backend for every caller. `EditAccountModal` does **not** require it: it can be cleared on edit except on a Bank account that keeps an IBAN (the backend applies the same rule) — pre-filled with the active organization's country (`defaults.country` above) but never locked, unlike Type/Currency which lock once the account has transactions or a bank link.
@@ -1361,6 +1541,8 @@ parameters are documented once, in the catalogue: `etendo_schema({spec:"bank-sta
 | File | Purpose |
 |------|---------|
 | `validateIban.js` (root `src/`) | `isValidIban(str)` — strips spaces, uppercases, rearranges, runs mod-97. Returns `true` for valid IBANs. Used by `AccountFormStep` to gate the submit button. |
+| `components/financial-accounts/AccountsSidebar/balanceDisplay.js` (ETP-5580) | `buildBalanceDisplay(currencyIso, total, { approximate })` returns `{ text, style }` for the sidebar's "Saldo" total: `text` is the full `formatCurrency` value, with `≈ ` when approximate (no compact notation); `style` is the fixed `BALANCE_TYPOGRAPHY` (`{ fontSize: '30px', lineHeight: '32px' }`). `text` is both what is displayed and what the `TruncatedText` overflow tooltip shows. The file's header comment carries the glyph-width math for what fits in 268px at 30px. See "List summary — `response.summary` and its currency" above. |
+| `lib/dashboardValueTypography.js` (ETP-5580) | `getDashboardValueTypography(value)` returns the inline `{ fontSize, lineHeight }` for a dashboard headline amount already in compact notation, measured on the string without a leading `-`: 12+ characters → 20px/24px, 10+ → 24px/28px, otherwise 30px/32px. Used by the dashboard's `FinancialSummaryCard` (which had the same rule inline as `getMetricValueTypography`). The Cuentas "Saldo" total does not use it: it is fixed at 30px and ellipsises instead. It is a separate module rather than part of `dashboardNumberFormat.js`, so tests that mock the formatter module still get the real rule. |
 | `countryIban.js` (root `src/lib/`, ETP-4896) | `validateIbanForCountry(iban, country)` — layers a country-aware prefix/length cross-check on top of `isValidIban`, degrading gracefully (mod-97 only) for the ~198 countries with no IBAN metadata. `ibanPrefixFor`/`expectedIbanLength` read a `countryIbanRules` catalog entry (`{id, iso, name, ibanPrefix, ibanLength}`). Used by both `AccountFormStep` and `EditAccountModal`. |
 
 ## i18n keys — account management
@@ -1380,6 +1562,7 @@ All keys added to both `en_US.json` and `es_ES.json`.
 | `financeAccountsNewFieldCountry` / `financeAccountsBankConnectionFieldCountry` (ETP-4896) | Country field label — New Account form and Edit modal respectively (kept separate from `financeAccountsNewBankCountry`, the unrelated BankPicker flag-dropdown `aria-label`) |
 | `financeAccountsNewIbanCountryMismatch` / `financeAccountsNewIbanLengthMismatch` (ETP-4896) | IBAN validation error messages for the two country-aware checks (prefix mismatch, wrong length), shared by both forms alongside the pre-existing `financeAccountsNewIbanInvalid` (mod-97 failure) |
 | `financeAccountsNewCountryRequiredForIban` (ETP-4896 follow-up) | EditAccountModal-only: shown when Country is explicitly cleared during the edit while a real IBAN remains, or (ETP-5473) when the IBAN of a Bank account with no country is edited while Country stays empty — mirrors the backend's "A bank account with an IBAN must have a country." 400 verbatim in translated form, and doubles as the backend-message fallback in `handleSave`'s catch block |
+| `financeAccountsBalanceInfo` / `financeAccountsBalanceMissingRate` (ETP-5580) | Sidebar "Saldo": the ⓘ tooltip copy (organization currency, conversion at the system rate, `≈`) and the "No incluye: {currencies} (sin tasa de cambio)" warning. Also present in `es_AR.json` |
 | `financeAccountsBankConnectionSpainOnly` (ETP-4896) | The reason the edit modal's connect button is disabled on a non-Spanish account. The only place the Spain-only rule is spelled out — the list row and row kebab hide their connect affordance instead |
 
 Key reference (English):
@@ -1422,6 +1605,13 @@ financeAccountsMenuArchive           "Archive account"
 
 ## Not implemented yet (follow-up tasks)
 
+- **Cuentas "Saldo" total and large amounts** (ETP-5580): five follow-ups are listed under "List
+  summary — `response.summary` and its currency" → "Known gaps and follow-ups":
+  - an E2E check for the ⓘ tooltip (vitest already covers it);
+  - the ambiguous Spanish "B" suffix of `formatDashboardCompact` (now dashboard only);
+  - a clipped total being reachable only through the hover tooltip (not by touch or keyboard);
+  - `MoneyAmount` clipping with no tooltip in the movements table (Importe/Saldo);
+  - the account-detail KPI strip overflowing with huge values.
 - **Bank connection / Connected mode** (T3): connection toggle is visible but both the "Connected" option and the Bank connection section in the edit modal are disabled.
 - **Real bank logos**: `bankCatalog.js` uses `<Landmark>` as a placeholder icon for all banks.
 - **Card accounts**: the CARD step shows a "Coming soon" placeholder — actual card creation requires a bank connection.
@@ -4377,6 +4567,14 @@ Narrower columns clip more text, so the cells that can overflow reveal the full 
 - `TypeCell`: the IBAN line (`account-row-iban-<id>`). Its `inline-flex` wrapper is
   `min-w-0 max-w-full` and the copy button is `shrink-0`, so only the IBAN text shrinks and the button
   keeps its size.
+- `BalanceCell` (ETP-5580): the **Saldo** column (`account-row-balance-<id>`). The balance is the exact
+  `formatCurrency` value, never compacted, so a huge one (e.g. `87.542.314.548.725,00 €`) does not fit
+  the 130px column. The clipping happens at the DataTable `<td>`: the shared `TableCell` is
+  `overflow-hidden text-ellipsis whitespace-nowrap`, so a bare inline span showed
+  "87.542.314.548.725,…" with no way to read the rest. The amount now renders through
+  `TruncatedText`, whose block span is bounded by that `<td>` under DataTable's `table-layout: fixed`
+  (same as `CountryCell`). It ellipsises and shows the exact value in a tooltip. It stays
+  `font-semibold tabular-nums`, right-aligned, and red when negative.
 
 A value that fits shows no tooltip.
 
