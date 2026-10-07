@@ -1,5 +1,14 @@
 import { normalizeRoute, sanitizeEventProperties } from '../payload.js';
 
+/**
+ * ETP-5351 — RUM global-context key that marks a support session ("Soporte Etendo" inside a
+ * customer's tenant). The core already keeps product events (`track`) away from Datadog there; the
+ * automatic click actions cannot be cut without turning `trackUserInteractions` off for everybody,
+ * so every event of the session carries this marker instead and dashboards filter on
+ * `@context.support_session`.
+ */
+export const SUPPORT_SESSION_CONTEXT_KEY = 'support_session';
+
 // Datadog automatically adds view and error contexts to this list. The RUM SDK
 // currently accepts only the four additional event types below.
 export const DATADOG_RUM_FEATURE_FLAG_EVENTS = ['vital', 'action', 'long_task', 'resource'];
@@ -122,7 +131,11 @@ function redactEventError(event) {
 }
 
 function sanitizeEventIdentity(event) {
+  // The business-property allowlist does not know the support marker; only its literal `true`
+  // survives, so it cannot become a channel for anything else.
+  const supportSession = event.context?.[SUPPORT_SESSION_CONTEXT_KEY] === true;
   event.context = sanitizeEventProperties(event.context ?? {});
+  if (supportSession) event.context[SUPPORT_SESSION_CONTEXT_KEY] = true;
   delete event.context.username;
   // User names/emails are never sent. Hosts can assign an opaque account identity.
   if (event.usr) event.usr = event.usr.id ? { id: event.usr.id } : {};
@@ -179,12 +192,26 @@ export function createDatadogProvider({
   let clientPromise;
   let currentRoute;
   let lastAccountId;
+  let supportSession = false;
   if (requested && !enabled) logger.warn('[observability] Datadog requires application ID, client token, site and environment');
+
+  // `setGlobalContext` replaces the whole global context (setContext, reset), so the support
+  // marker is folded into every replacement rather than set once and lost on the next one.
+  function withSupportMarker(globalContext) {
+    return supportSession ? { ...globalContext, [SUPPORT_SESSION_CONTEXT_KEY]: true } : globalContext;
+  }
+
+  function applySupportMarker(client) {
+    if (supportSession) client.setGlobalContextProperty(SUPPORT_SESSION_CONTEXT_KEY, true);
+    else client.removeGlobalContextProperty(SUPPORT_SESSION_CONTEXT_KEY);
+  }
 
   function getClient() {
     if (!enabled) return Promise.resolve(undefined);
     if (!clientPromise) clientPromise = loader().then(({ datadogRum, reactPlugin }) => {
       initializeDatadogRum({ env, logger, datadogRum, reactPlugin });
+      // Before the first view, so a support load is marked from its very first event.
+      if (supportSession) applySupportMarker(datadogRum);
       currentRoute = normalizeRoute(globalThis.location?.pathname || '/');
       datadogRum.startView({ name: currentRoute });
       return datadogRum;
@@ -228,14 +255,26 @@ export function createDatadogProvider({
       (await getClient())?.addError(error, sanitizeEventProperties(details));
     },
     async setContext(context) {
-      (await getClient())?.setGlobalContext(sanitizeEventProperties(context));
+      (await getClient())?.setGlobalContext(withSupportMarker(sanitizeEventProperties(context)));
+    },
+    /**
+     * ETP-5351 — called by the core when a support session starts or ends. Datadog keeps every
+     * monitoring signal (errors, views, resources, long tasks, replay, flag evaluations, identity
+     * for error attribution); this only adds or removes the support marker. Never loads the SDK on
+     * its own: before the SDK is loaded the flag is kept and applied when it loads.
+     */
+    async setAnalyticsSuppressed(suppressed) {
+      supportSession = Boolean(suppressed);
+      if (!clientPromise) return;
+      const client = await clientPromise;
+      if (client) applySupportMarker(client);
     },
     async reset() {
       const client = await getClient();
       client?.stopSession();
       client?.clearUser();
       client?.clearAccount();
-      client?.setGlobalContext({});
+      client?.setGlobalContext(withSupportMarker({}));
     },
     // Browser SDK delivery is lifecycle-managed; no public flush API exists.
     async flush() {},

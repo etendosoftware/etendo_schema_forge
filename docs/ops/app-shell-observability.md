@@ -15,25 +15,37 @@ and the committed `.env.observability.example` for all current environment varia
 
 An Etendo operator can enter a tenant as "Soporte Etendo" from Classic (see
 `lib/supportSession.js`). Nothing that session does may count as the customer's activity, so
-while it lasts the product-analytics providers are suppressed as a whole:
+while it lasts product events are suppressed, and monitoring keeps running:
 
-- A provider declares itself as product analytics with `analytics: true` (today only
-  Mixpanel). `createObservability().setAnalyticsSuppressed(true)` keeps every call away from
-  those providers — `init`, events, `page`, `identify`, `group`/`groupSet` (health score),
-  feature-flag exposure, `flush`, `reset` — and an init that runs while suppressed skips them;
-  they are initialized only if the suppression is lifted.
-- Datadog RUM and AWS RUM keep running: an error an operator hits is still an error. The
-  `analytics` entry in Datadog's `capabilities` list is not the suppression flag, so Datadog
-  stays fully active, including the custom action it records for each shared `track()`.
+- A pure product-analytics provider declares `analytics: true` (today only Mixpanel).
+  `createObservability().setAnalyticsSuppressed(true)` keeps every call away from it — `init`,
+  events, `page`, `identify`, `group`/`groupSet` (health score), feature-flag exposure, `flush`,
+  `reset` — and an init that runs while suppressed skips it; it is initialized only if the
+  suppression is lifted.
+- A monitoring provider that also records product events lists `analytics` in its
+  `capabilities` (Datadog). It stays on and loses only `track`: no shared business event
+  (`session_started`, `document_created`, `transaction_posted`, KPIs, `feature_flag_evaluated`,
+  ...) becomes a Datadog custom action. Errors, views, resources, long tasks, session replay,
+  feature-flag evaluations (error correlation) and `identify`/`group` (error attribution) keep
+  flowing. AWS RUM has no `track` and is not affected.
+- The core tells those providers about the suppression through their optional
+  `setAnalyticsSuppressed(suppressed)` hook, before their `init` and on every change. Datadog uses
+  it to set the RUM global-context property `support_session: true` for as long as the support
+  session lasts, and to remove it when it ends. The mark survives `setContext`/`reset` (which
+  replace the whole global context) and the `beforeSend` allowlist (only a literal `true`).
+  Automatic click actions cannot be cut without turning `trackUserInteractions` off for every
+  user, so they still arrive: Datadog dashboards and Product Analytics queries over customer
+  usage must exclude `@context.support_session:true`.
 - The switch is driven by the support-session store, wired once in `lib/observability.js`.
   `main.jsx` calls `bootSupportSession()` before `initBrowserObservability()`, so a support
-  load never initializes the Mixpanel SDK at all: the store starts in support mode on the
-  handoff route and whenever the `sf_support_session` marker (written by the handoff and by
-  every `/me` that reports a `supportSession`) is still live.
+  load never initializes the Mixpanel SDK and is marked in Datadog from its first view: the store
+  starts in support mode on the handoff route and whenever the `sf_support_session` marker
+  (written by the handoff and by every `/me` that reports a `supportSession`) is still live.
 - NPS/CSAT surveys are off in the same session (`useSurveyEngine`), see `docs/surveys.md`.
 
-Whatever replaces the Mixpanel provider (the telemetry gateway adapters) must keep the
-`analytics: true` flag, or Mixpanel goes back to receiving support sessions.
+Whatever replaces these providers (the telemetry gateway adapters) must keep the contract:
+`analytics: true` for a pure analytics destination, the `analytics` capability for a monitoring
+destination that also takes product events, and the support marker on the latter.
 
 ## Events
 

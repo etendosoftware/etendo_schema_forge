@@ -474,18 +474,82 @@ describe('setAnalyticsSuppressed', () => {
     expect(monitoring.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
   });
 
-  // Datadog lists `analytics` among its capabilities; that list is not the suppression flag, so
-  // its error and performance monitoring keeps running in a support session.
-  it('does not silence a provider that only lists the analytics capability', async () => {
+  // Datadog lists `analytics` among its capabilities: it records product events (custom actions)
+  // AND carries error and performance monitoring. Suppression cuts only the product events.
+  function makeDatadogLike() {
+    return makeProvider('datadog', {
+      capabilities: ['analytics', 'errors', 'performance', 'identity', 'featureFlagTracking'],
+      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
+      setAnalyticsSuppressed: vi.fn().mockResolvedValue(undefined),
+      reset: vi.fn().mockResolvedValue(undefined),
+    });
+  }
+
+  it('keeps track away from a monitoring provider that records product events, and delivers again once lifted', async () => {
     const obs = createObservability();
-    const datadog = makeProvider('datadog', { capabilities: ['analytics', 'errors'] });
+    const datadog = makeDatadogLike();
+    const monitoring = makeProvider('rum');
+    await obs.initObservability({ providers: [datadog, monitoring] });
+
+    await obs.setAnalyticsSuppressed(true);
+    await obs.track('document_created', { entity: 'sales_order' });
+    expect(datadog.track).not.toHaveBeenCalled();
+    expect(monitoring.track).toHaveBeenCalledTimes(1);
+
+    await obs.setAnalyticsSuppressed(false);
+    await obs.track('document_created', { entity: 'sales_order' });
+    expect(datadog.track).toHaveBeenCalledTimes(1);
+    expect(datadog.track.mock.calls[0][0]).toBe('document_created');
+  });
+
+  it('keeps errors, views, identity and flag evaluations flowing to that provider while suppressed', async () => {
+    const obs = createObservability();
+    const datadog = makeDatadogLike();
     await obs.setAnalyticsSuppressed(true);
     await obs.initObservability({ providers: [datadog] });
 
-    await obs.captureException(new Error('x'));
+    const error = new Error('boom');
+    await obs.captureException(error);
+    await obs.page('/sales-order');
+    await obs.identify('account-1');
+    await obs.group('account_id', 'tenant-1');
+    await obs.addFeatureFlagEvaluation('sample_flag', true);
+    await obs.setContext({ app: 'app-shell' });
+    await obs.reset();
 
     expect(datadog.init).toHaveBeenCalledTimes(1);
-    expect(datadog.captureException).toHaveBeenCalledTimes(1);
+    expect(datadog.captureException).toHaveBeenCalledWith(error, {}, expect.anything());
+    expect(datadog.page).toHaveBeenCalledTimes(1);
+    expect(datadog.identify).toHaveBeenCalledTimes(1);
+    expect(datadog.group).toHaveBeenCalledTimes(1);
+    expect(datadog.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
+    expect(datadog.setContext).toHaveBeenCalledTimes(1);
+    expect(datadog.reset).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells the monitoring providers about the suppression before their init and on each change', async () => {
+    const obs = createObservability();
+    const datadog = makeDatadogLike();
+    const mixpanel = makeProvider('mixpanel', { analytics: true, setAnalyticsSuppressed: vi.fn() });
+    await obs.setAnalyticsSuppressed(true);
+    await obs.initObservability({ providers: [datadog, mixpanel] });
+
+    expect(datadog.setAnalyticsSuppressed).toHaveBeenCalledWith(true);
+    expect(datadog.setAnalyticsSuppressed.mock.invocationCallOrder[0])
+      .toBeLessThan(datadog.init.mock.invocationCallOrder[0]);
+
+    await obs.setAnalyticsSuppressed(false);
+    expect(datadog.setAnalyticsSuppressed).toHaveBeenLastCalledWith(false);
+    expect(datadog.setAnalyticsSuppressed).toHaveBeenCalledTimes(2);
+    expect(mixpanel.setAnalyticsSuppressed).not.toHaveBeenCalled();
+  });
+
+  it('does not tell the providers anything when there is no suppression at init', async () => {
+    const obs = createObservability();
+    const datadog = makeDatadogLike();
+    await obs.initObservability({ providers: [datadog] });
+
+    expect(datadog.setAnalyticsSuppressed).not.toHaveBeenCalled();
   });
 
   it('does not initialize an analytics provider twice when it was already running', async () => {

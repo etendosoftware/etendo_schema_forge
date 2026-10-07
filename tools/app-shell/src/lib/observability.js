@@ -26,8 +26,9 @@ export const addFeatureFlagEvaluation = observability.addFeatureFlagEvaluation;
 export const setAnalyticsSuppressed = observability.setAnalyticsSuppressed;
 export const isAnalyticsSuppressed = observability.isAnalyticsSuppressed;
 
-// ETP-5351 — a support session sends nothing to the product-analytics providers (Mixpanel): no
-// init, no event, no NPS/CSAT answer, nothing towards the tenant's health score. Wired here, on the singleton every
+// ETP-5351 — a support session sends no product event anywhere: Mixpanel stays off entirely and
+// Datadog gets no custom action (monitoring stays on, marked `support_session`), so no NPS/CSAT
+// answer and nothing towards the tenant's health score. Wired here, on the singleton every
 // caller goes through, so it is decided once and before `main.jsx` initializes the providers
 // (`bootSupportSession` seeds the store first; see lib/supportSession.js).
 void setAnalyticsSuppressed(isSupportModeActive(getSupportSessionState()));

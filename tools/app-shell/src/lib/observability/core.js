@@ -4,13 +4,21 @@ function isProviderEnabled(provider) {
   return provider && provider.enabled !== false;
 }
 
-// ETP-5351 — a product-analytics provider (Mixpanel) declares `analytics: true`. Those, and only
-// those, go quiet while analytics are suppressed (a support session): no SDK init, no event, no
-// identity call, no reset. Error and performance monitoring (Datadog RUM, AWS RUM) keeps running,
-// because a bug an operator hits while helping a customer is still a bug. The `analytics` entry in
-// a provider's `capabilities` list (Datadog) is NOT this flag: only `analytics: true` silences.
+// ETP-5351 — while analytics are suppressed (a support session) nothing the session does may count
+// as the customer's activity. Two levels:
+// - A pure product-analytics provider (Mixpanel) declares `analytics: true` and goes quiet as a
+//   whole: no SDK init, no event, no identity call, no reset.
+// - A monitoring provider that also records product events (Datadog, `capabilities` includes
+//   'analytics') stays on — errors, views, resources, identity, flag evaluations — and only loses
+//   `track`, the one path that becomes a product event (a Datadog custom action). It is told about
+//   the suppression through its optional `setAnalyticsSuppressed` hook, to mark the session.
+// A bug an operator hits while helping a customer is still a bug.
 function isAnalyticsProvider(provider) {
   return provider?.analytics === true;
+}
+
+function recordsProductEvents(provider) {
+  return isAnalyticsProvider(provider) || provider?.capabilities?.includes('analytics') === true;
 }
 
 function getProviderName(provider) {
@@ -35,6 +43,18 @@ export function createObservability(options = {}) {
 
   function activeProviders() {
     return analyticsSuppressed ? providers.filter(provider => !isAnalyticsProvider(provider)) : providers;
+  }
+
+  function trackingProviders() {
+    return analyticsSuppressed ? providers.filter(provider => !recordsProductEvents(provider)) : providers;
+  }
+
+  function notifySuppression(suppressed) {
+    return Promise.all(
+      providers
+        .filter(provider => !isAnalyticsProvider(provider))
+        .map(provider => callProvider(provider, 'setAnalyticsSuppressed', [suppressed]))
+    );
   }
 
   async function callProvider(provider, methodName, args) {
@@ -65,6 +85,8 @@ export function createObservability(options = {}) {
       metadata = { ...(config.metadata ?? {}) };
       initialized = true;
       deferredAnalytics = analyticsSuppressed ? providers.filter(isAnalyticsProvider) : [];
+      // Before init, so a provider can mark the session from its very first event.
+      if (analyticsSuppressed) await notifySuppression(true);
 
       await Promise.all(
         activeProviders().map(provider => callProvider(provider, 'init', [{ context: getContext() }]))
@@ -73,19 +95,20 @@ export function createObservability(options = {}) {
 
     /**
      * ETP-5351 — the single switch for product analytics. Cutting here, and not at each event,
-     * is what makes "nothing reaches Mixpanel" hold for events nobody has written yet. Lifting it
-     * initializes the analytics providers an earlier init skipped.
+     * is what makes "no product event reaches Mixpanel or Datadog" hold for events nobody has
+     * written yet. Lifting it initializes the analytics providers an earlier init skipped.
      */
     async setAnalyticsSuppressed(suppressed) {
       const next = Boolean(suppressed);
       if (next === analyticsSuppressed) return;
       analyticsSuppressed = next;
-      if (next || !initialized || deferredAnalytics.length === 0) return;
-      const pending = deferredAnalytics;
-      deferredAnalytics = [];
-      await Promise.all(
-        pending.map(provider => callProvider(provider, 'init', [{ context: getContext() }]))
-      );
+      if (!initialized) return;
+      const pending = next ? [] : deferredAnalytics;
+      if (!next) deferredAnalytics = [];
+      await Promise.all([
+        notifySuppression(next),
+        ...pending.map(provider => callProvider(provider, 'init', [{ context: getContext() }])),
+      ]);
     },
 
     isAnalyticsSuppressed() {
@@ -97,7 +120,7 @@ export function createObservability(options = {}) {
       const payload = buildEventPayload({ properties, context, metadata });
 
       await Promise.all(
-        activeProviders().map(provider =>
+        trackingProviders().map(provider =>
           callProvider(provider, 'track', [eventName, payload, { context: getContext() }])
         )
       );
