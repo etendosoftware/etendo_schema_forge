@@ -145,6 +145,11 @@ export default defineConfig(({ mode }) => {
   // Target Etendo instance for dev proxy. Override via ETENDO_URL in .env.local
   // if your instance uses a different context.name (e.g. ETENDO_URL=http://localhost:8080/mycontext)
   const ETENDO_URL = env.ETENDO_URL || process.env.ETENDO_URL || readEnvFile() || 'http://localhost:8080/etendo';
+  // Dev server and AI BFF ports. `make dev` / `make dev-local-core` pass them; unset,
+  // they are the canonical 3100/3400. local-env's etendo-go plugin gives each
+  // environment its own pair so several SPAs run side by side (docs/local-env-plugin.md).
+  const SPA_PORT = Number(process.env.SPA_PORT) || 3100;
+  const BFF_PORT = Number(process.env.BFF_PORT) || 3400;
   // Origin only (no path) — `vite preview` proxies the built bundle's *relative*
   // VITE_API_BASE (e.g. "/etendo") verbatim to Tomcat, so the target here must not
   // duplicate the context path already baked into the request.
@@ -354,7 +359,7 @@ export default defineConfig(({ mode }) => {
     // resolve and then 403, so the dev profile fails at request time rather than
     // at config time. Only widened when LOCAL_CORE is set.
     ...(LOCAL_CORE ? { fs: { allow: [resolve(__dirname, '../..'), CORE_REPO] } } : {}),
-    port: 3100,
+    port: SPA_PORT,
     // Fail loudly instead of silently drifting to 3101/3102/... when 3100 is already
     // taken (e.g. a leftover `preview` or a stale dev server from another checkout) —
     // tests and the CORS/OAuth2 allowlist are hardcoded to :3100, so a silent port
@@ -378,7 +383,7 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
       },
       '/api/ai': {
-        target: 'http://localhost:3400',
+        target: `http://localhost:${BFF_PORT}`,
         changeOrigin: true,
       },
       '/jsreport': {
