@@ -274,14 +274,14 @@ was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../pla
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move this order through its
-workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+workflow over MCP. `etendo_schema` returns it with `invokeVia: "etendo_action"`, `actionValues` (the
 active AD list of the `C_Order.DocAction` reference) and `actionParameter: "docAction"`; its
 `agentPrompt` — defined in `decisions.json` -> `entities.header.fields.documentAction.agentPrompt`
 — states which transitions are legal and their preconditions.
 
 Booking a draft order over MCP:
 
-    neo_action { spec: "purchase-order", entity: "header", id: "<orderId>",
+    etendo_action { spec: "purchase-order", entity: "header", id: "<orderId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
 Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> RE` reactivates it back to
@@ -291,7 +291,7 @@ quantities. **This window now has a Reactivate menu action** (`window.menuAction
 `decisions.json`, added by ETP-5315), matching `sales-order`'s own conditional Reactivate.
 
 This runs `PurchaseOrderHeaderHandler` exactly as the UI does — including the pre-CO
-total-discount line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285).
+total-discount line — because `etendo_action` executes the entity's `NeoHandler` hooks (ETP-4285).
 If you change this window's workflow rules, update the `agentPrompt` in the same change: it is
 the only thing telling the agent what is legal.
 

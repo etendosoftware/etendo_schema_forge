@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/fiscalModelsUtils.js
 import { describe, it, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -9,6 +10,10 @@ import {
   generate349File,
   checkModified349,
   computeUpcomingDeadlines,
+  applyBoxParams,
+  withDerivedBoxFlags,
+  isRectificationAdjustmentActive,
+  RECTIFICATION_ONLY_BOXES,
 } from '../fiscalModelsUtils.js';
 
 // ── DOM stub ───────────────────────────────────────────────────────────────
@@ -1000,7 +1005,8 @@ describe('generate303File — BOX_PARAM_MAP additions (ETP-5391)', () => {
         {
           token: 'tok',
           apiBaseUrl: '/x',
-          identChecks: { tipo_declaracion: 'N' },
+          // ETP-5597 pt.4 — box 70 is only forwarded inside a rectificativa.
+          identChecks: { tipo_declaracion: 'N', rectificativa: Number(box) === 70 },
           manualOverrides: { [box]: 12.5 },
         }
       );
@@ -1086,3 +1092,91 @@ describe('generate303File — declaracion_terceros forwards 347TAX_FORM=Y litera
     assert.doesNotMatch(capturedUrl, /347TAX_FORM/);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ETP-5597 pt.4 — boxes 70/109 only reach the file inside a rectificativa/complementaria
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('applyBoxParams — rectification-only boxes 70/109 (ETP-5597)', () => {
+  const OVERRIDES = { 70: 20, 109: 3, 78: 5 };
+
+  it('RECTIFICATION_ONLY_BOXES is exactly [70, 109]', () => {
+    assert.deepEqual(RECTIFICATION_ONLY_BOXES, [70, 109]);
+  });
+
+  it('skips 70/109 when identChecks has neither rectificativa nor complementaria, keeps the rest', () => {
+    const params = new URLSearchParams();
+    applyBoxParams(params, OVERRIDES, { tipo_declaracion: 'I', rectificativa: false });
+    assert.equal(params.has('ComplementaryAmt'), false);
+    assert.equal(params.has('ReturnsPendingSettlement'), false);
+    assert.equal(params.get('PreviousPeriodAmtApplied'), '5');
+  });
+
+  it('forwards 70/109 with rectificativa checked', () => {
+    const params = new URLSearchParams();
+    applyBoxParams(params, OVERRIDES, { rectificativa: true });
+    assert.equal(params.get('ComplementaryAmt'), '20');
+    assert.equal(params.get('ReturnsPendingSettlement'), '3');
+  });
+
+  it('forwards 70/109 with complementaria checked (pre-Oct-2024 layouts)', () => {
+    const params = new URLSearchParams();
+    applyBoxParams(params, OVERRIDES, { complementaria: true });
+    assert.equal(params.get('ComplementaryAmt'), '20');
+    assert.equal(params.get('ReturnsPendingSettlement'), '3');
+  });
+
+  it('without identChecks (legacy 2-arg call) forwards 70/109 unchanged — backward compatible', () => {
+    const params = new URLSearchParams();
+    applyBoxParams(params, OVERRIDES);
+    assert.equal(params.get('ComplementaryAmt'), '20');
+    assert.equal(params.get('ReturnsPendingSettlement'), '3');
+  });
+
+  it('generate303File drops 70/109 for a non-rectificativa declaration', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T2' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N' }, manualOverrides: OVERRIDES },
+    );
+    assert.doesNotMatch(capturedUrl, /ComplementaryAmt=/);
+    assert.doesNotMatch(capturedUrl, /ReturnsPendingSettlement=/);
+    assert.match(capturedUrl, /PreviousPeriodAmtApplied=5/);
+  });
+});
+
+describe('isRectificationAdjustmentActive (ETP-5597)', () => {
+  it('is true only for a strict boolean true on rectificativa or complementaria', () => {
+    assert.equal(isRectificationAdjustmentActive({ rectificativa: true }), true);
+    assert.equal(isRectificationAdjustmentActive({ complementaria: true }), true);
+    assert.equal(isRectificationAdjustmentActive({ rectificativa: 'Y' }), false);
+    assert.equal(isRectificationAdjustmentActive({}), false);
+    assert.equal(isRectificationAdjustmentActive(null), false);
+    assert.equal(isRectificationAdjustmentActive(undefined), false);
+  });
+});
+
+describe('withDerivedBoxFlags (ETP-5597)', () => {
+  it('sets _box69Positive only for a strictly positive box 69', () => {
+    assert.equal(withDerivedBoxFlags({}, [{ num: 69, value: 0.01 }])._box69Positive, true);
+    assert.equal(withDerivedBoxFlags({}, [{ num: 69, value: 0 }])._box69Positive, false);
+    assert.equal(withDerivedBoxFlags({}, [{ num: 69, value: -10 }])._box69Positive, false);
+  });
+
+  it('treats a missing box 69 (nothing computed) as not positive', () => {
+    assert.equal(withDerivedBoxFlags({}, null)._box69Positive, false);
+    assert.equal(withDerivedBoxFlags({}, [])._box69Positive, false);
+  });
+
+  it('also carries _box111NonZero and keeps the original identification keys', () => {
+    const out = withDerivedBoxFlags({ tipo_declaracion: 'C' }, [{ num: 69, value: 5 }, { num: 111, value: 2 }]);
+    assert.equal(out.tipo_declaracion, 'C');
+    assert.equal(out._box111NonZero, true);
+    assert.equal(out._box69Positive, true);
+  });
+});
+

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
 import { describe, it, expect } from 'vitest';
 import { getLayout303, applyPatch, SUPPORTED_YEARS, SELECTABLE_YEARS } from '../fm303Layouts.js';
 import enUS from '@/locales/en_US.json';
@@ -40,6 +41,8 @@ const NOTA3_NEEDS_FOREIGN_DETAILS = { allOf: [RECTIFICATIVA_BRANCH, SEPA_MARK_NE
 /** Section gate, and bank_iban/bank_sepa visibility: tipo gate OR condition B. */
 const BANK_SECTION_VISIBLE_WHEN = { anyOf: [TIPO_IS_UDX, RECTIFICATIVA_BRANCH] };
 const BANK_DVX_VW = { anyOf: [TIPO_IS_DVX, RECTIFICATIVA_BRANCH] };
+/** ETP-5597 pt.2 — marca 3 (Resto Países) wherever the bank fields can be shown. */
+const BANK_REST_OF_WORLD = { allOf: [BANK_DVX_VW, SEPA_MARK_NEEDS_FOREIGN_DETAILS] };
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -623,24 +626,27 @@ describe('getLayout303 — datos_bancarios section visibility (EDID065 + rectifi
       });
   });
 
-  it('bank_sepa is the marca selector: required by condition B alone, never gated by its own value', () => {
+  // ETP-5597 pt.2 — required wherever it is shown (its requiredWhen IS its visibleWhen).
+  it('bank_sepa is the marca selector: required exactly when visible, never gated by its own value', () => {
     const sepa = sec.fields.find(f => f.id === 'bank_sepa');
-    expect(sepa.requiredWhen).toEqual(RECTIFICATIVA_BRANCH);
+    expect(sepa.requiredWhen).toEqual(BANK_DVX_VW);
     // It must stay reachable for the whole section, or the user could not change the marca
     // that gates the rest of the block.
     expect(sepa.visibleWhen).toEqual(BANK_DVX_VW);
   });
 
-  it('bank_swift_bic escalates from marca 2 — required and visible only from marca 2 upwards inside Nota 3', () => {
+  // ETP-5597 pt.2 — visibility still escalates from marca 2 inside Nota 3, but requiredness now
+  // follows the marca alone: only marca 3 (Resto Países) makes SWIFT-BIC mandatory.
+  it('bank_swift_bic is visible from marca 2 inside Nota 3 but required only at marca 3', () => {
     const swift = sec.fields.find(f => f.id === 'bank_swift_bic');
-    expect(swift.requiredWhen).toEqual(NOTA3_NEEDS_SWIFT);
+    expect(swift.requiredWhen).toEqual(BANK_REST_OF_WORLD);
     expect(swift.visibleWhen).toEqual({ anyOf: [TIPO_DVX_OUTSIDE_NOTA3, NOTA3_NEEDS_SWIFT] });
   });
 
   it('the four foreign-bank fields escalate from marca 3 only', () => {
     ['bank_nombre', 'bank_direccion', 'bank_ciudad', 'bank_pais'].forEach((id) => {
       const field = sec.fields.find(f => f.id === id);
-      expect(field.requiredWhen).toEqual(NOTA3_NEEDS_FOREIGN_DETAILS);
+      expect(field.requiredWhen).toEqual(BANK_REST_OF_WORLD);
       expect(field.visibleWhen).toEqual({
         anyOf: [TIPO_DVX_OUTSIDE_NOTA3, NOTA3_NEEDS_FOREIGN_DETAILS],
       });
@@ -672,20 +678,92 @@ describe('getLayout303 — datos_bancarios section visibility (EDID065 + rectifi
     expect(JSON.stringify(swift.visibleWhen)).not.toContain('notEquals');
   });
 
-  it('titleKeyMap only maps D, X (devolucion) and U (domiciliacion) — no G, I, V entries', () => {
-    expect(sec.titleKeyMap).toEqual({
-      D: 'fm.section.devolucion',
-      X: 'fm.section.devolucion',
-      U: 'fm.section.domiciliacion',
-    });
-    expect(sec.titleKeyMap).not.toHaveProperty('G');
-    expect(sec.titleKeyMap).not.toHaveProperty('I');
-    expect(sec.titleKeyMap).not.toHaveProperty('V');
+  // ETP-5597 — the "Devolución"/"Domiciliación" heading was removed by product decision.
+  it('carries no title at all (no titleKey, titleKeyFrom or titleKeyMap) — it is `untitled`', () => {
+    expect(sec.untitled).toBe(true);
+    expect(sec.titleKey).toBeUndefined();
+    expect(sec.titleKeyFrom).toBeUndefined();
+    expect(sec.titleKeyMap).toBeUndefined();
   });
 
-  it('is still returned by getLayout303 (titleKeyMap alone satisfies the titleKey||titleKeyMap filter)', () => {
-    expect(sec).toBeTruthy();
-    expect(sec.titleKeyFrom).toBe('tipo_declaracion');
+  it('is still returned by getLayout303 for every supported year (`untitled` satisfies the section filter)', () => {
+    for (const year of SUPPORTED_YEARS) {
+      const s = getLayout303(year, 'T1').sections.find(x => x.id === 'datos_bancarios');
+      expect(s, `year ${year}`).toBeTruthy();
+    }
+  });
+
+  // ETP-5597 pt.3 — under marca 3 position 23 is a plain account number, not an IBAN.
+  it('bank_iban is relabelled "Cuenta bancaria" under marca 3, with the same scope as the rest-of-world rule', () => {
+    const iban = sec.fields.find(f => f.id === 'bank_iban');
+    expect(iban.labelKey).toBe('fm.ident.bank.iban');
+    expect(iban.labelKeyWhen).toEqual([{ when: BANK_REST_OF_WORLD, labelKey: 'fm.ident.bank.account' }]);
+  });
+});
+
+// ── ETP-5597 pt.1 — tipo_declaracion options locked by a positive box 69 ─────
+
+describe('getLayout303 — tipo_declaracion negative-result options (ETP-5597)', () => {
+  const tipo = getLayout303(2026, 'T2').sections
+    .flatMap(s => s.fields ?? [])
+    .find(f => f.id === 'tipo_declaracion');
+  const byValue = Object.fromEntries(tipo.options.map(o => [o.value, o]));
+
+  it.each(['C', 'D', 'V', 'X'])('option %s is disabled while _box69Positive, with a translated reason', (value) => {
+    expect(byValue[value].disabledWhen).toEqual({ field: '_box69Positive', equals: true });
+    expect(byValue[value].disabledReasonKey).toBe('fm.ident.decl.disabled_positive_result');
+  });
+
+  it.each(['I', 'U', 'N'])('option %s is never disabled', (value) => {
+    expect(byValue[value].disabledWhen).toBeUndefined();
+  });
+
+  it('the disabled-reason and Cuenta bancaria keys exist in both locales', () => {
+    for (const key of ['fm.ident.decl.disabled_positive_result', 'fm.ident.bank.account']) {
+      expect(enUS.genericLabels[key], key).toBeTruthy();
+      expect(esES.genericLabels[key], key).toBeTruthy();
+    }
+  });
+});
+
+// ── ETP-5597 pt.4 — boxes 70/109 editable only in a rectificativa/complementaria ─
+
+function findRowByCell(node, cell) {
+  if (Array.isArray(node)) {
+    for (const n of node) { const hit = findRowByCell(n, cell); if (hit) return hit; }
+    return null;
+  }
+  if (node && typeof node === 'object') {
+    if (Array.isArray(node.cells) && node.cells.includes(cell) && node.id) return node;
+    for (const v of Object.values(node)) { const hit = findRowByCell(v, cell); if (hit) return hit; }
+  }
+  return null;
+}
+
+describe('getLayout303 — casillas 70/109 gating (ETP-5597)', () => {
+  it.each([70, 109])('2026: box %s is editable only with "rectificativa" and has no static editable flag', (box) => {
+    const row = findRowByCell(getLayout303(2026, 'T2').sections, box);
+    expect(row.editable).toBeUndefined();
+    expect(row.editableWhen).toEqual({ field: 'rectificativa', equals: true });
+  });
+
+  it.each([70, 109])('2024 T4: box %s is gated on "rectificativa"', (box) => {
+    const row = findRowByCell(getLayout303(2024, 'T4').sections, box);
+    expect(row.editableWhen).toEqual({ field: 'rectificativa', equals: true });
+  });
+
+  it.each([[2023, 'T2'], [2024, 'T1']])('%s %s (complementaria layouts): boxes 70 and 109 are gated on "complementaria"', (year, period) => {
+    for (const box of [70, 109]) {
+      const row = findRowByCell(getLayout303(year, period).sections, box);
+      expect(row.editable).toBeUndefined();
+      expect(row.editableWhen).toEqual({ field: 'complementaria', equals: true });
+    }
+  });
+
+  it.each([2021, 2022])('%s: box 70 is gated on "complementaria"', (year) => {
+    const row = findRowByCell(getLayout303(year, 'T2').sections, 70);
+    expect(row.editable).toBeUndefined();
+    expect(row.editableWhen).toEqual({ field: 'complementaria', equals: true });
   });
 });
 
