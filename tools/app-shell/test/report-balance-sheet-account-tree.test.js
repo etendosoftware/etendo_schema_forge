@@ -1,3 +1,5 @@
+// @covers artifacts/balance-sheet/report-contract.json
+// @covers artifacts/profit-loss/report-contract.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
