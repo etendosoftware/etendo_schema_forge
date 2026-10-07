@@ -22,7 +22,7 @@ debug contracts.
 - Display an upcoming deadlines panel for unsubmitted declarations.
 - Filter declarations by model type (303, 349) and status.
 - Navigate into a per-model detail page when a declaration row is clicked, passing precomputed box data so the detail page renders immediately without a duplicate fetch.
-- In detail pages, guide the user through the submission lifecycle via a numbered stepper.
+- In detail pages, guide the user through the submission lifecycle via the action bar (status chip + Registrar/Presentar).
 - Generate and download the submission file (`.txt`) for Modelo 303.
 - Show blocking and warning incident counts inline; a blocking count prevents file generation.
 
@@ -404,7 +404,7 @@ Modelo 349:
 them — the only component that could ever set them (`StatusPillMenu`/`StatusMenu` in
 `FmCommon.jsx`) was never wired into any real page and has been deleted.
 
-Status transitions are driven by the detail page action buttons. Clicking **"Registrar/Presentar"** (on 349 "Registrar presentación" since ETP-5584 P14; renamed from "Marcar como 'Presentado'" — ETP-5229 item #10, see the "Action bar" and "AEAT electronic submission" sections below) opens `PresentModal`, which offers **3 paths on Modelo 303** (`submitted_ack`, `submitted`, and the opt-in `aeat_telematic` sentinel card) and **2 on Modelo 349** (`submitted_ack`, `submitted` — 349 never passes `showAeatPath`). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
+Status transitions are driven by the detail page action buttons. Clicking **"Registrar/Presentar"** (on 349 "Registrar presentación" since ETP-5584 P14; renamed from "Marcar como 'Presentado'" — ETP-5229 item #10, see the "Action bar" and "AEAT electronic submission" sections below) opens `PresentModal`, which offers **3 paths on Modelo 303** (`submitted_ack`, `submitted`, and the opt-in `aeat_telematic` sentinel card) and **2 on Modelo 349** (`submitted_ack`, `submitted` — 349 never passes `showAeatPath`). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
 
 ### `submissionMethod` — telling apart the 3 paths that lead to "Presentado" (ETP-4755)
 
@@ -514,7 +514,9 @@ a zero amount) to "No result" — "Zero result" now correctly belongs to the new
 
 ### Stepper
 
-Three steps (0-based index):
+Not rendered: neither detail page mounts `Stepper`/`NumberedStepper` (`FmCommon.jsx` still exports
+both). The status is shown by the `FmStatusChip` in the action bar. The step mapping, kept for
+reference:
 
 | Step | Index | Status |
 |------|-------|--------|
@@ -526,11 +528,12 @@ Three steps (0-based index):
 
 | Tab | Content |
 |-----|---------|
-| Boxes | `FmBoxes303` — grid of fiscal box values |
-| Sources | Invoice rows that feed the boxes, filterable by incidents |
-| Files | Generated `.txt` file download |
-| Incidents | Blocking and warning validation messages |
-| Justificante (ETP-4456) | Generic `AttachmentsTab` bound to the `ETGO_Fiscal_Decl` record — see below |
+| Casillas (`boxes`) | `FmBoxes303` — grid of fiscal box values |
+| Facturas (`sources`) | Invoice rows that feed the boxes, filterable by incidents |
+| Incidencias (`incidents`) | Blocking and warning validation messages |
+| Justificante (`receipt`, ETP-4456) | Generic `AttachmentsTab` bound to the `ETGO_Fiscal_Decl` record — see below |
+
+There is no Files tab: the `.txt` file is produced by the "Generar fichero 303" action-bar button. Tab counters and empty states follow the shared rule in "Modelo 349 detail page › Tabs".
 
 A former 6th tab, **Historial** (`HistoryTab`), was removed together with this page's kebab menu (ETP-4755, see "List page toolbar" below) — the shared `HistoryTab` component was deleted from `FmTabContent.jsx` entirely, so it is gone for Modelo 349 too, not just 303.
 
@@ -547,9 +550,9 @@ variant for the primary. The status chip is the list's own chip (`FmStatusChip`)
 with no "Estado:" prefix. See "Detail page header, action bar and 1280×720 layout (ETP-5584)" below.
 The handlers, gates and data-safety behaviour described in the rest of this section are unchanged.
 
-Left to right (pre-ETP-5584 order): **Cancelar** (`onBack`) and a status pill (since ETP-5584 the `FmStatusChip`), then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+Left to right (pre-ETP-5584 order): **Cancelar** (`onBack`) and a status pill (since ETP-5584 the `FmStatusChip`), then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page has no in-page kebab: favourites and page help are in the app TopBar kebab (see "'More options' kebab — favorites and help").
 
-**Guardar's position (ETP-5338 pt.6).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
+**Guardar's position (ETP-5338 pt.6; superseded by the ETP-5584 order above, where Guardar sits right before the primary action).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
 
 **"Guardar" replaces the earlier go-back button (ETP-5338 pivot).** The button in this slot started life as a go-back affordance (`ArrowLeft` icon, `handleGoBack`) that flushed pending edits and then navigated back to the list, same as "Cancelar" but data-safe. Product later decided the correct affordance here is a genuine **Save** — matching the rest of Etendo Go's Save-button convention (icon swap to a spinning `Loader2` while saving, disabled while saving, `toast.success`/`toast.error` feedback; see `saveActions.jsx`'s shared Save/Confirm buttons) — that persists the current data and **stays on the same declaration view**, rather than one more way to navigate away. `handleSave` is hidden entirely once the declaration is submitted (`!isSubmitted`, same gate as "Calcular"/"Registrar-Presentar") since there is nothing left to save on a filed declaration.
 
@@ -632,7 +635,7 @@ This also closes a narrower, related gap: `handlePresent` calling `persistEditab
 
 **Regression test note:** `FmModel303Page.explicitSaveSingleFlight.vitest.jsx` used to have a test named "drops a queued save when the declaration is submitted while a PUT is open", asserting the OPPOSITE of the fix above — that a save queued behind an in-flight Guardar was dropped once the declaration got filed. That was the same bug from a different angle and has been replaced with "flushes a queued save before filing the declaration, instead of dropping it", which asserts the corrected behavior: the queued edit is flushed (not dropped), and the status transition — and the `onStatusChange` callback — wait for that flush to actually settle. The file's top-of-file "four properties" comment and property (3) were updated to match: (3) now covers only the session-ending case (`token`/`apiBaseUrl` going falsy mid-flight), which is unaffected by this fix and still legitimately drops the queued edit (there is nothing left to flush it to).
 
-**349's final toolbar: Cancelar (left) + Guardar, a deliberate no-op (ETP-5338 pt.5).** `FmModel349Page.jsx` originally got a go-back icon button (`ArrowLeft`, `handleGoBack`, `data-testid="FmModel349Page__goBack"`) next to Cancelar for visual/UX consistency across Modelo detail pages (ETP-5338 pt.1) — functionally identical to "Cancelar", since both just called `onBack` directly. Once the requirement widened to "every fiscal-models declaration gets a Guardar button" (not just 303, which already had an autosave to piggyback on), 349 was re-investigated with that wider bar in mind: a fresh grep of every `useState`/write path in the file confirms it has zero locally-edited, persistable declaration data — `keyFilter`/`searchQuery`/`selected`/`activeTab`/`viesBannerDismissed` are ephemeral view state, `liveOperators`/`liveInvoices`/`liveRectifications`/`liveRectifSummary` are read-only server-computed snapshots, and VIES validation (`handleValidateVies`) already persists its result server-side the instant it runs — there is no staged, unsaved state anywhere on this page. Rather than skip Guardar here (which would break the "every model" requirement) or fake a network call that flushes nothing, 349's `handleSave` is a deliberate **no-op confirmation**: it shows `toast.success(...)` immediately, with no PUT and no loading state, in the right-aligned toolbar position (leftmost of the primary-action group, before "Calcular"). Once Guardar existed, the old go-back button became pure duplication of "Cancelar" — both did the same `onBack` call, sitting side by side — so it was removed entirely: 349's toolbar now has exactly Cancelar on the left and Guardar (plus Calcular/Registrar-Presentar) on the right, no go-back affordance. This is intentionally honest rather than a misleading "unsaved work exists" affordance — clicking Guardar always "succeeds" because there is genuinely nothing that could fail. If 349 ever grows real locally-edited declaration fields, `handleSave` is the handler to wire an actual flush into.
+**349's toolbar: Cancelar (left) + Guardar (ETP-5338 pt.5). History only:** since ETP-5456, 349's `handleSave` does a real `persistManualData` PUT for the "Sustitutiva" flag (see "349 sustitutivas"), and since ETP-5584 the button order is the shared one in "Modelo 349 detail page › Action bar". `FmModel349Page.jsx` originally got a go-back icon button (`ArrowLeft`, `handleGoBack`, `data-testid="FmModel349Page__goBack"`) next to Cancelar for visual/UX consistency across Modelo detail pages (ETP-5338 pt.1) — functionally identical to "Cancelar", since both just called `onBack` directly. Once the requirement widened to "every fiscal-models declaration gets a Guardar button" (not just 303, which already had an autosave to piggyback on), 349 was re-investigated with that wider bar in mind: a fresh grep of every `useState`/write path in the file confirms it has zero locally-edited, persistable declaration data — `keyFilter`/`searchQuery`/`selected`/`activeTab`/`viesBannerDismissed` are ephemeral view state, `liveOperators`/`liveInvoices`/`liveRectifications`/`liveRectifSummary` are read-only server-computed snapshots, and VIES validation (`handleValidateVies`) already persists its result server-side the instant it runs — there is no staged, unsaved state anywhere on this page. Rather than skip Guardar here (which would break the "every model" requirement) or fake a network call that flushes nothing, 349's `handleSave` is a deliberate **no-op confirmation**: it shows `toast.success(...)` immediately, with no PUT and no loading state, in the right-aligned toolbar position (leftmost of the primary-action group, before "Calcular"). Once Guardar existed, the old go-back button became pure duplication of "Cancelar" — both did the same `onBack` call, sitting side by side — so it was removed entirely: 349's toolbar now has exactly Cancelar on the left and Guardar (plus Calcular/Registrar-Presentar) on the right, no go-back affordance. This is intentionally honest rather than a misleading "unsaved work exists" affordance — clicking Guardar always "succeeds" because there is genuinely nothing that could fail. If 349 ever grows real locally-edited declaration fields, `handleSave` is the handler to wire an actual flush into.
 
 ### Sources tab — "Régimen" column removed (ETP-5187)
 
@@ -2512,8 +2515,7 @@ item's split-and-revert) was deleted from both locale files rather than left dan
 
 ### "Justificante" tab — AEAT receipt storage (ETP-4456)
 
-A tab (`receipt`, labeled via `fm.tab.receipt`) is the last of the 5 tabs, positioned right after
-Files (the former Historial tab that used to sit here was removed, see "Tabs" above), and shows a
+A tab (`receipt`, labeled via `fm.tab.receipt`) is the last tab on both models and shows a
 generic `AttachmentsTab` (`@/components/attachments`) bound to `tableName="ETGO_Fiscal_Decl"` /
 `recordId={decl.id}`, restricted to PDF through `RECEIPT_ATTACHMENT_CONFIG` (`fiscalModelsUtils.js`, ETP-5584 — see "Justificante formats" under "Popups" below). It surfaces **both**
 kinds of AEAT justificante a declaration can end up with:
@@ -2554,30 +2556,20 @@ end-to-end: the dated section in
 `../plans/2026-07-15-ETP-4456-aeat-303-electronic-submission.md`.
 
 **Why `key={status}` on the tab's `AttachmentsTab`:** `status` is local state that changes on
-`handleStatusChange`/`handleTelematicSuccess` (i.e. exactly when a submission succeeds). Since the automatic AEAT attach is
-invisible server-side, remounting the tab (and its internal `useAttachments` fetch) on every status
-change is the only way for the tab to notice the new file without inventing a separate manual-refresh
-mechanism. **Known accepted edge case (Alex REVIEW, W3):** if `status` changes concurrently from
+`handleStatusChange`/`handleTelematicSuccess` (i.e. exactly when a submission succeeds), so the tab
+remounts and re-lists on every status change. Since ETP-5584 a server-side attach is also announced
+on the attachments bus (see "Refresh decoupled from `status`" below), so the remount is no longer
+the only refresh path. **Known accepted edge case (Alex REVIEW, W3):** if `status` changes concurrently from
 somewhere else while an upload through this tab is still in flight, the remount can drop the
 in-progress upload's own completion toast — the file still lands server-side (the upload request
 itself is unaffected by the remount), only the UI feedback for that one upload is lost. Narrow and
 accepted as-is; not fixed in this increment.
 
-**Known limitation, verified while implementing this (contradicts the original assumption):** the
-`useAttachments` hook accepts an `isActive` parameter but does **not** currently gate its eager
-`list()` fetch on it — `isActive` is destructured in the signature but never read in the effect that
-triggers the initial GET (`src/components/attachments/useAttachments.js`). This means the
-`isActive: false` instance `FmModel303Page` keeps mounted purely to grab `upload()` for the manual
-path still fires a (discarded) GET to `/sws/neo/attachments/ETGO_Fiscal_Decl/{recordId}` on every
-detail-page mount, in addition to the "Justificante" tab's own fetch when that tab is opened. This is
-extra, wasted network traffic, not a correctness bug (uploads still work), and is a pre-existing gap
-in the shared hook — not fixed here since `useAttachments` is consumed by several other windows
-(including `goods-receipt`) and changing its gating semantics needs its own audit across all
-consumers. Flagged as a follow-up for whoever owns
-`tools/app-shell/src/components/attachments/`. **Amplification noted by Sentinel QA (LOW,
-informational):** opening the "Justificante" tab fires its own GET on top of the always-mounted
-`isActive: false` instance's discarded one — i.e. two GETs per detail-page visit where one is
-expected, pure amplification of the same root cause above, not a separate bug.
+**Resolved limitation (history):** an eager-fetch gap was closed by ETP-4564 —
+`useAttachments` now honours `isActive: false` (no list fetch until the tab opens), and the page's
+instance only prefetches the lightweight count (`prefetchCount: true`, ETP-5584). Before that,
+the `isActive: false` instance kept only for `upload()` fired a discarded list GET on every
+detail-page mount, on top of the tab's own GET.
 
 **Refresh decoupled from `status` for test-mode successes.**
 - `AeatSubmitFlow` calls `onAttached` whenever the backend response carries `pdfBase64`, for both
@@ -2585,23 +2577,21 @@ expected, pure amplification of the same root cause above, not a separate bug.
 - 303's `handleAeatAttached` responds by announcing the attach on the attachments bus
   (`notifyAttachmentsChanged`). The counter and, if it is mounted, the tab refresh without any
   status change, so test mode still never alters `status`.
-- The tab also remounts on a status change (`key={status}`).
-- Until ETP-5584 this was a remount-key tick (`key={`${status}-${receiptRefreshTick}`}`). The tick
-  refreshed the tab, never its counter. See "Modelo 349 detail page › Tabs › Tab counters".
+- The tab also remounts on a status change (`key={status}`). The bus replaced a remount-key tick
+  (ETP-5584); see "Modelo 349 detail page › Tabs › Tab counters".
 
 **Other accepted, non-blocking findings from this increment's REVIEW/QA:**
-- **Client-side MIME gate is a UX hint only (Alex REVIEW, W1).** `config={{ allowedMimeTypes:
-  ['application/pdf'] }}` only steers the file picker and shows a client-side rejection message —
+- **Client-side MIME gate is a UX hint only (Alex REVIEW, W1).** `config={RECEIPT_ATTACHMENT_CONFIG}`
+  (PDF only) only steers the file picker and shows a client-side rejection message —
   there is no server-side MIME/magic-byte enforcement anywhere in the shared attachments stack. This
   is a pre-existing, cross-cutting gap (not introduced by this change) and is **not a security
   control** — do not rely on it to keep non-PDF files out of this store.
 - **No defensive test for `decl.id` falsy on mount (Sentinel QA, LOW).** Confirmed unreachable via
   every current call site into `FmModel303Page` (a declaration always has an id by the time this
   page renders), so left uncovered rather than adding a test for an unreachable branch.
-- **No badge/count on the "Justificante" tab (Alex REVIEW, cosmetic suggestion, not applied).**
-  Unlike Files (`decl.file ? 1 : null`) or Incidents, the tab has no attachment-count indicator.
-  Deferred — would need a lightweight count endpoint or a client-side list call just to render the
-  badge, judged not worth it for this increment.
+- **No badge/count on the "Justificante" tab — superseded.** Deferred in ETP-4456; ETP-5584 added
+  the counter (lightweight `/count` via `prefetchCount`, see "Modelo 349 detail page › Tabs › Tab
+  counters").
 
 ### Justificante delete blocked outside draft status (ETP-5432 pt.3)
 
@@ -2793,7 +2783,7 @@ rules apply to both 303 and 349.
   - i18n: `fm.m349.rectificative` ("Rectificativa") and `fm.m349.rectif_subtotal.title` ("Subtotal rectificativas"), in both locales. (`fm.m349.rectif_subtotal.total` was removed together with the grand-total row.)
   - **Corrective rows are marked by the `RectificativeBadge` alone — there is no row-background tint.** The first pass also tinted the whole `<tr>` amber (`.fm-349-row--rectificative`); the functional owner reviewed it on screen and rejected it as too heavy across a full-width table, so both the class usage and its CSS rule were removed. Do not reintroduce a row tint. The rows still carry `data-rectificative="true"`, which is a test/selector hook, not styling.
 - **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by the composite `(nifIva, key)` of the row that was clicked, not by NIF-IVA alone (see the per-key origin scoping above). The active filter is rendered as a removable chip labelled `fm.m349.origin_filter.operator` ("Operador {nif}") with a `fm.m349.origin_filter.clear` clear action, plus a count badge. Each invoice row carries a per-invoice AEAT349 classification key (`E`/`S`/`A`/`I`), resolved server-side by `Fiscal349BoxesHandler#resolveInvoiceKeys` — this is what the Operadores tab's per-key origin scoping (above) relies on.
-- **Rectificaciones / Incidencias / Ficheros** — coming soon.
+- **Rectificaciones** — the period's rectifications (`rectifications`). **Incidencias** — blocking and warning validation messages. **Justificante** — the same `AttachmentsTab` as 303 (see "'Justificante' tab" above). There is no Ficheros tab: "Generar fichero 349" is an action-bar button.
 
 ### KPIs
 
@@ -3589,12 +3579,13 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `FmCatalogPage.jsx` | Model catalog drawer — enable/disable tax forms, drives `activeModels` |
 | `useFiscalAutoCompute.js` | Background compute + polling hook |
 | `fiscalModelsUtils.js` | `computeBoxes303`, `checkModified303`, `generate303File`, `fetchDeclarationIncidents` (ETP-4456), formatters, deadline logic; `toBoxArray`/`applyOverrides`/`recomputeDerivedBoxes`/`getBoxValue` (ETP-5272 pt.6, shared between `FmModel303Page.jsx` and `FmListPage.jsx` — see "Manual box overrides" above) |
-| `models/303/FmModel303Page.jsx` | Modelo 303 detail — boxes, sources, stepper, file gen |
+| `models/303/FmModel303Page.jsx` | Modelo 303 detail — boxes, sources, file gen, AEAT submission |
 | `models/303/FmBoxes303.jsx` | Box grid renderer |
 | `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels) |
 | `models/303/AeatSubmitFlow.jsx` | AEAT electronic submission flow (ETP-4456) — confirm/submit/result, `POST /fiscal303/submit` |
 | `models/349/FmModel349Page.jsx` | Modelo 349 detail |
-| `FmCommon.jsx` | Shared components: `NumberedStepper`, `ResultPill`, `SummaryCard` |
+| `FmDetailChrome.jsx` | Detail-page chrome shared by 303/349 (ETP-5584): `useFmDetailPageMeta` + `buildDeclTitle` (TopBar title/breadcrumb/badge/kebab), `FmDetailHeader`/`FmDetailActionBar`/`FmDetailButton`, `FmStatusChip` + `statusLabelKey`, `tabCount`/`incidentsTabBadge`, `FmEmptyState` |
+| `FmCommon.jsx` | Shared components: `KpiWidget`, `Tabs`, `ResultPill`, `SummaryCard`, `EmptyState` (re-export of `FmEmptyState`) |
 | `FmOverlays.jsx` | Modals and drawers: `PresentModal` (2 manual paths + opt-in `aeat_telematic` sentinel path), `FileGenModal`, `NewDeclModal`, `ConfigDrawer` |
 | `FmRowActions.jsx` | Row hover Edit/Delete icons for draft declarations (ETP-5187) — window-local, lighter counterpart to the generic `RowQuickActions` |
 | `FmDebugPanel.jsx` | Developer panel (keystroke-activated) for testing with fixture data |
