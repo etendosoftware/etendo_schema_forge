@@ -201,6 +201,31 @@ export function resolveCustomAddModalSeed({ initialChildData, tabKey, rowId, row
 }
 
 /**
+ * `initialValues` for the `customAddModal` of secondary tab `st`: resolves the seed from the
+ * modal state and the tab's loaded rows (see `resolveCustomAddModalSeed`).
+ */
+export function buildCustomAddModalSeed({ initialChildData, st, customModalState, secondaryHooks, idx }) {
+  return resolveCustomAddModalSeed({
+    initialChildData,
+    tabKey: st.key,
+    rowId: customModalState.rowId,
+    rows: secondaryHooks[idx]?.children,
+  });
+}
+
+/**
+ * `onParentRefresh` for a `customAddModal`: the modal just wrote the parent record, so the
+ * cached list holds the old row (ETP-5378). No-op until the parent has an id.
+ */
+export function buildCustomAddModalOnParentRefresh({ hook, parentRecordId }) {
+  return () => {
+    if (!parentRecordId) return;
+    hook.invalidateEntityCache?.();
+    hook.fetchById(parentRecordId, { force: true });
+  };
+}
+
+/**
  * Router state for the one-shot cleanup that follows the FIRST save of a new record (ETP-5654).
  *
  * The save handlers navigate `/new` -> `/:id` with `state.justSaved`; DetailView consumes that

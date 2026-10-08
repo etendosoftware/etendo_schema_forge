@@ -145,6 +145,9 @@ function useDuplicateInvoice({ vendorId, documentNo, token, apiBaseUrl }) {
   return { invoices: key && state.key === key ? state.invoices : [], documentNo: wanted };
 }
 
+// Placeholder substituted for the invoice link inside the translated duplicate-invoice message.
+const DUPLICATE_LINK_TOKEN = '\u0001';
+
 function DuplicateInvoiceNotice({ invoices, documentNo }) {
   const ui = useUI();
   if (!invoices.length) return null;
@@ -153,8 +156,7 @@ function DuplicateInvoiceNotice({ invoices, documentNo }) {
   const label = first.documentNo || first.id;
   // The link text is the one dynamic part of the sentence; split the resolved message around a
   // placeholder token so the translation keeps full control of the word order.
-  const TOKEN = '\u0001';
-  const [before, after = ''] = ui('ocrReviewDuplicateInvoice', { documentNo, invoice: TOKEN }).split(TOKEN);
+  const [before, after = ''] = ui('ocrReviewDuplicateInvoice', { documentNo, invoice: DUPLICATE_LINK_TOKEN }).split(DUPLICATE_LINK_TOKEN);
   return (
     // InfoBanner always draws an accent border and cannot drop it through props, so this is a
     // plain div with InfoBanner's tone="warning" colour tokens minus the border and icon.

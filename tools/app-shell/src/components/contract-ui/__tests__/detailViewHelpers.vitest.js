@@ -54,6 +54,8 @@ import {
   buildHeaderFormData,
   buildCustomAddModalOnSaved,
   resolveCustomAddModalSeed,
+  buildCustomAddModalSeed,
+  buildCustomAddModalOnParentRefresh,
   buildPostCreateState,
   getButtonClass,
   getProcessButtonVariant,
@@ -1192,5 +1194,26 @@ describe('header process button styles (primary-danger / ghost-danger)', () => {
     expect(isDangerProcess({ style: 'primary-danger' })).toBe(true);
     expect(isDangerProcess({ style: 'destructive' })).toBe(false);
     expect(isDangerProcess(null)).toBe(false);
+  });
+});
+
+describe('buildCustomAddModalSeed / buildCustomAddModalOnParentRefresh (ETP-5654)', () => {
+  const seed = { address: 'Gran Via 45' };
+
+  it('seeds a new first row of the tab from the modal state and loaded rows', () => {
+    const args = { initialChildData: { locationAddress: seed }, st: { key: 'locationAddress' }, customModalState: { rowId: null }, secondaryHooks: [{ children: [] }], idx: 0 };
+    expect(buildCustomAddModalSeed(args)).toBe(seed);
+    expect(buildCustomAddModalSeed({ ...args, customModalState: { rowId: 'r1' } })).toBeNull();
+    expect(buildCustomAddModalSeed({ ...args, secondaryHooks: [{ children: [{ id: 'a' }] }] })).toBeNull();
+    expect(buildCustomAddModalSeed({ ...args, secondaryHooks: [] })).toBe(seed);
+  });
+
+  it('refreshes the parent forcing a refetch, and is a no-op without a parent id', () => {
+    const hook = { invalidateEntityCache: vi.fn(), fetchById: vi.fn() };
+    buildCustomAddModalOnParentRefresh({ hook, parentRecordId: null })();
+    expect(hook.fetchById).not.toHaveBeenCalled();
+    buildCustomAddModalOnParentRefresh({ hook, parentRecordId: 'p1' })();
+    expect(hook.invalidateEntityCache).toHaveBeenCalled();
+    expect(hook.fetchById).toHaveBeenCalledWith('p1', { force: true });
   });
 });

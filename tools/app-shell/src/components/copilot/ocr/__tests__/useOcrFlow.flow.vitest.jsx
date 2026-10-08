@@ -321,6 +321,7 @@ describe('useOcrFlow — full flow', () => {
       await fireOcr({ receiver: { tax_id_raw: 'A99999999' }, issuer: { tax_id_raw: 'C11111111' } });
 
       await waitFor(() => expect(readResult()?.committed).toBe(false));
+      expect(readResult().error).toContain('ocrReceiverTaxIdMismatch');
       expect(readResult().error).toContain('A99999999');
       // ETP-5654 — the organization's own tax id is no longer shown in the message.
       expect(readResult().error).not.toContain('B12345674');
