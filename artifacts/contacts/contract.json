@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-02T11:19:26.533Z",
-  "checksum": "b50ab64e2e2cbdcd",
+  "updatedAt": "2026-10-08T17:37:41.052Z",
+  "checksum": "f0c051e59f5c6853",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -156,7 +156,8 @@
         ],
         "limit": {
           "maxRows": 5000,
-          "concurrency": 4
+          "concurrency": 4,
+          "batchSize": 10
         },
         "dedupe": {
           "scope": "database",
@@ -5489,7 +5490,8 @@
         ],
         "limit": {
           "maxRows": 5000,
-          "concurrency": 4
+          "concurrency": 4,
+          "batchSize": 10
         },
         "dedupe": {
           "scope": "database",

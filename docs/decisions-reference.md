@@ -636,7 +636,7 @@ Read by the generic import dialog (`ImportDialog`) from the generated contract; 
 |-----|------|---------|-------------|
 | `maxRows` | number | `5000` | Rows beyond this are refused when the file is loaded. |
 | `concurrency` | number | `4` | Parallel `/batch` requests. |
-| `batchSize` | number | `1` | Rows per `POST /sws/neo/batch`. `1` is the original one-request-per-row behaviour. Capped at `50` by the engine. Opt in per window: only where the descriptor's operations are safe to share one transaction (Product uses `10`; Contacts stays at `1`). |
+| `batchSize` | number | `1` | Rows per `POST /sws/neo/batch`. `1` is the original one-request-per-row behaviour. Capped at `50` by the engine. Opt in per window: only where the descriptor's operations are safe to share one transaction. Product and Contacts use `10`; Contacts is a measured opt-in (see `contacts.md`) and can be set back to `1`. |
 
 With `batchSize > 1` the engine namespaces each row's op ids (`r<row>.<id>`, including `parentRef` and `$ref:` references) so they stay unique per request. A chunk is resent row by row only after a rollback the server vouches for (`committed:false`, `atomic:true`, empty `persisted`), so each row gets its own outcome; any other outcome — no response, a non-BatchService body, `atomic:false`, a missing or non-empty `persisted` — reports all its rows UNKNOWN and never resends (no idempotency key — resending could duplicate).
 
