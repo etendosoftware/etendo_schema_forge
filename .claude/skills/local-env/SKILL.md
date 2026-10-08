@@ -42,13 +42,45 @@ listed here. This skill carries what is specific to Etendo GO and to this machin
    the main checkout as it was at that moment, with its own `.git`. A later `git pull`
    in the main checkout never reaches the environment. Commit only in the repos you
    named (real worktrees); a commit in a copy lands in a throwaway `.git`.
-4. **Change repos with `sync`, not by recreating.** Edit `<env>/worktree.conf`, then
+4. **Module branches are checked before creating, because copies freeze them.** An
+   environment only builds when every module matches what `com.etendoerp.go` expects.
+   The GO module carries `ETGO_SF_FIELD` rows that point at columns from other modules.
+   If one of those modules is behind, `update.database` fails on a missing `AD_COLUMN`
+   or smartbuild fails on a missing getter. The rule:
+   - **Modules that follow the epic** (today `epic/ETP-3504`; as of 2026-10-08:
+     `com.etendoerp.psd2.bank.integration`, `com.etendoerp.db.extended`,
+     `com.etendoerp.go.localization.es.data`, `com.etendoerp.go.template`,
+     `com.etendoerp.sif.general`, `com.etendoerp.verifactu`, `com.smf.currency.*`,
+     `com.smf.ticketbai`, `org.openbravo.module.aeat*`, `bptaxidkey`, `intrastat`, `sii`,
+     `taxreportlauncher`) are on the epic branch, **pulled to its latest commit**, or on
+     a branch cut from it.
+   - **`com.etendoerp.go`** is on `develop` or on a `feature/ETP-XXXX` cut from
+     `origin/develop`.
+   - The rest (`copilot`, `docker`, `tomcat`, `devassistant`, `hqlquerytool`) stay on
+     whatever the user has; they do not shape the DB model GO depends on.
+
+   Before `local-env worktree`, run this from `etendo_develop/modules` and report any
+   module that is not on the expected branch or shows `behind>0`:
+
+   ```bash
+   for d in */; do d=${d%/}; [ -e "$d/.git" ] || continue; git -C "$d" fetch -q origin
+     u=$(git -C "$d" rev-parse --abbrev-ref @{u} 2>/dev/null)
+     printf '%-42s %-22s behind=%s\n' "$d" "$(git -C "$d" branch --show-current)" \
+       "$([ -n "$u" ] && git -C "$d" rev-list --count HEAD.."$u" || echo '?')"; done
+   ```
+
+   Pulling is the user's call (it changes their main checkout): ask, then create the
+   environment after they pull. When a module must be on a task branch, name it with
+   `--module <module>=<branch>` so it becomes a real worktree instead of a copy.
+   Recompute the epic list with the same loop (the modules whose branch is `epic/*`)
+   instead of trusting the dated list above.
+5. **Change repos with `sync`, not by recreating.** Edit `<env>/worktree.conf`, then
    `local-env sync --dry-run` and `local-env sync`. When the branch is already checked
    out elsewhere (a manual worktree, another session's), add `adopt` as the 4th field.
    local-env never modifies an adopted worktree, but `make dev-local-core` can: it runs
    `npm install` for the AI BFF, which may rewrite `tools/ai-bff/package-lock.json`
    there. Tell the owner of that worktree.
-5. **Create volume data in the environment's DB only.** It is `etendo_local`, user
+6. **Create volume data in the environment's DB only.** It is `etendo_local`, user
    `tad`/`tad`, on the environment's PG port (`source <env>/build/local-env/env`), via
    `/opt/homebrew/opt/libpq/bin/psql`.
 
@@ -91,7 +123,8 @@ cd /Users/futit/Workspace/etendo_develop && local-env worktree rm <name>   # bra
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `update.database` fails on an `AD_COLUMN` that an `ETGO_SF_FIELD` row references | A copied module is behind the GO branch (2026-10-07: go develop referenced a PSD2 column from `com.etendoerp.psd2.bank.integration` `origin/epic/ETP-3504`) | Pull the missing modules in the main checkout, then `worktree rm` and recreate. Or fast-forward that module's copy inside the environment |
+| `update.database` fails on an `AD_COLUMN` that an `ETGO_SF_FIELD` row references | A copied module is behind the GO branch (2026-10-07: go develop referenced a PSD2 column from `com.etendoerp.psd2.bank.integration` `origin/epic/ETP-3504`) | Run the module check from rule 4. Have the user pull the lagging modules in the main checkout, then `worktree rm` and recreate. Or fast-forward that module's copy inside the environment (`git -C <env>/modules/<m> fetch && merge --ff-only origin/<epic>`) |
+| smartbuild: `cannot find symbol` on a getter/setter of a column that exists in the env DB (2026-10-08: `getPSD2LastSyncDate()`), and `./gradlew generate.entities` "succeeds" without adding it | The environment carried the main checkout's `src-gen`, generated against a DB without that column. Entity generation is timestamp-based and judges the carried files up to date | From `<env>` only, after checking its config points at the env DB: `rm -rf src-gen build/classes && ./gradlew --no-daemon compile.complete -Dbuild.maxmemory=3072M` (~3 min), then `local-env up`. Deleting `src-gen` alone breaks smartbuild (`srcdir src-gen does not exist`). A local-env fix is pending |
 | No `SPA` line in `local-env status`; SPA never starts | The environment's `schema_forge` branch predates the plugin | Prefix every `up`, `status` and `stop` with `LOCALENV_PLUGINS=/Users/futit/Workspace/etendo_develop/schema_forge/local-env.d/plugins`. Leaving it off a later call drops the plugin's manifest line and status misreports |
 | SPA binds 3100/3400, clashing with the main checkout | That `schema_forge` branch has no `SPA_PORT` support | Free 3100/3400 first. `/api/ai` then hits the BFF on 3400 |
 | Login from the SPA: 403 "Origin not allowed" | The backend trusts only :3000/3100/4173/5173 plus `ETGO_ALLOWED_ORIGINS`, and this Tomcat started without the SPA's port in it | The plugin adds the line itself. If `up` warned that it added it while a Tomcat was already running, restart that Tomcat once (`pkill -f -- "-Dcatalina.base=<env>/"`, then `local-env up`). Check: `grep ETGO_ALLOWED_ORIGINS <env>/build/local-env/env` |
@@ -108,7 +141,8 @@ cd /Users/futit/Workspace/etendo_develop && local-env worktree rm <name>   # bra
 
 ## When another session asks for an environment
 
-Answer with the exact `local-env worktree` command for its branches, the ports it will
+First run the module check from rule 4 and list any lagging or off-branch module in the
+answer. Then give the exact `local-env worktree` command for its branches, the ports it will
 get, and the caveats that apply (frozen copies, carried `node_modules` that may lag the branch,
 `LOCALENV_PLUGINS` for old branches, no pgvector). Create it and run `up` only after
 the user approves.
