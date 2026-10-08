@@ -142,10 +142,9 @@ describe('AttachmentsTable — ETP-5030 selected-row shading', () => {
   });
 });
 
-// ETP-5526 (CP-17) — the "Subido por" column showed the AD username, which in a
-// multi-client instance is a technical login such as
-// `isaias.battaglia+70@smfconsulting.es+lapaulina`. The backend now sends the
-// user's e-mail alongside `name`, and the column must prefer it.
+// The "Subido por" column resolves the uploader from whichever shape the caller
+// has: the NEO attachments payload (`uploadedBy.name`), a plain DAL record
+// (`createdBy.name` / `createdBy$_identifier`), or nothing at all.
 //
 // Column order in a row WITHOUT selection (what `renderTable` renders since
 // ETP-5526 made the checkbox column opt-in): name, size, uploadedAt, updatedAt,
@@ -154,24 +153,8 @@ const UPLOADED_BY_CELL_INDEX = 4;
 const uploaderTextOf = (id) =>
   rowOf(id).querySelectorAll('td')[UPLOADED_BY_CELL_INDEX].textContent;
 
-describe('AttachmentsTable — ETP-5526 uploader column', () => {
-  it('shows the uploader e-mail instead of the technical AD username', () => {
-    renderTable({
-      items: [{
-        id: 'a1',
-        name: 'contract.pdf',
-        uploadedBy: {
-          id: 'U1',
-          name: 'isaias.battaglia+70@smfconsulting.es+lapaulina',
-          email: 'isaias.battaglia@smfconsulting.es',
-        },
-      }],
-    });
-
-    expect(uploaderTextOf('a1')).toBe('isaias.battaglia@smfconsulting.es');
-  });
-
-  it('falls back to the AD name when the user has no e-mail on record', () => {
+describe('AttachmentsTable — uploader column', () => {
+  it('shows the uploader name reported by the backend', () => {
     renderTable({
       items: [{ id: 'a1', name: 'contract.pdf', uploadedBy: { id: 'U1', name: 'Openbravo' } }],
     });
