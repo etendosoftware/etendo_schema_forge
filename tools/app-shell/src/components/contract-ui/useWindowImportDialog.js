@@ -3,6 +3,9 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLabel, useUI } from '@/i18n';
 import { simSearchEveryLanguage } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
+import { useNumberFlag } from '@/lib/flags/useFeatureFlag.js';
+import { IMPORT_BATCH_SIZE } from '@/lib/flags/flag-keys.js';
+import { resolveImportBatchSize } from '@/lib/importBatchSize.js';
 
 /**
  * Accent- and case-insensitive label comparison, matching how `mapColumns.normalizeHeader`
@@ -41,6 +44,9 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   // base for the existing-record lookup below, and must be the SPEC's URL.
   const { runBatch } = useBatch({ token });
   const entity = importConfig?.entity;
+  // ETP-5676: core only receives the resolved number; the global flag, if set, beats the window.
+  const batchSizeFlag = useNumberFlag(IMPORT_BATCH_SIZE);
+  const batchSize = resolveImportBatchSize(batchSizeFlag, importConfig?.limit?.batchSize);
 
   // ETP-4696/ETP-4997 — `headerScope` appends a localized qualifier naming the tab a column
   // belongs to. A Contacts row is split across THREE records — the business partner, its
@@ -225,7 +231,8 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     translate: ui,
     fieldLabelFn,
     existingKeyFetchFn,
-  }), [token, runBatch, labels, ui, fieldLabelFn, existingKeyFetchFn]);
+    batchSize,
+  }), [token, runBatch, labels, ui, fieldLabelFn, existingKeyFetchFn, batchSize]);
 }
 
 export default useWindowImportDialog;
