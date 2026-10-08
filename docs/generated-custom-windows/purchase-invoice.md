@@ -2425,3 +2425,25 @@ render the same definition. The preview no longer links to sales documents (`/sa
 - **Payments are not related documents**; the preview keeps its own PAYMENTS section.
 
 The `purchase-invoice:document-created` event is the `refreshEvent`. See `docs/ui-customization.md` §7.a.
+
+## Header layout at 1280x720 — ETP-5513
+
+- The OCR side panel is a fixed 320 px (`sidePanelStyle={{ width: 320 }}` in
+  `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`; it was 360 px).
+- The header form follows the shared responsive rules of `EntityForm` (see
+  `docs/ui-design-guidelines.md` → *Form View at 1280x720*): next to the side panel it uses
+  3 columns (about 208 px each with the rail expanded, 269 px collapsed) instead of 4, and only
+  its first 2 rows are shown — required fields first — behind a **Mostrar más datos** /
+  **Mostrar menos datos** toggle.
+
+**Verify:** at 1280x720, open a new purchase invoice with the rail expanded and collapsed:
+3 columns, labels on one line, 6 fields + *Mostrar más datos*; clicking it reveals the rest and
+changes to *Mostrar menos datos*.
+
+**Required fields in the collapsed block (ETP-5513 QA).** *Condiciones de pago*, *Moneda* and
+*Tarifa* are required but sit in the collapsed block. When the vendor does not default them,
+Guardar/Confirmar are disabled and their tooltip names those fields. Hovering, focusing or
+pressing the disabled button opens the block (and keeps it open until the user collapses it), so
+the missing fields are on screen. The block does not open on load, so a new invoice still shows
+2 rows. **Verify:** at 1280x720 on a new invoice leave those fields empty, hover *Guardar* and
+check the block opens with them visible and *Mostrar menos datos* shown.

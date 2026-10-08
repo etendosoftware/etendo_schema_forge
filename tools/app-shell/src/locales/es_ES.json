@@ -17875,6 +17875,8 @@
     "Search": "Buscar",
     "loadingPreview": "Cargando vista previa...",
     "moreDetails": "Más detalles",
+    "showMoreFormData": "Mostrar más datos",
+    "showLessFormData": "Mostrar menos datos",
     "others": "Otros",
     "relatedDocuments": "Documentos relacionados",
     "searchPlaceholder": "Buscar clientes, pedidos, facturas...",

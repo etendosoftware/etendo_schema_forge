@@ -574,7 +574,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         compactSidebarPadding
         whiteFormBackground
         autoSaveOnBlur
-        sidebarClassName="w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle"
+        sidebarClassName="w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle"
         tabsBarPaddingX="px-2"
         primaryTabsVariant="pill"
         toolbarPaddingX="px-2"

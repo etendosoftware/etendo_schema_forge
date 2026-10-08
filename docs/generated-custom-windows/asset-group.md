@@ -34,7 +34,7 @@ The depreciation policy fields are shown conditionally: they only appear when **
 | Field | Column | Type | Required | Notes |
 |-------|--------|------|----------|-------|
 | `name` | `Name` | text | Yes | Free-text category name shown in the list and as the record title |
-| `description` | `Description` | textarea | No | Optional description; spans 2 form columns, single-row height (`span: 2`, `rows: 1`) — shown in the list grid |
+| `description` | `Description` | textarea | No | Optional description; spans 2 form columns, compact height (`span: 2`, `rows: 1`, rendered at the 2-row minimum since ETP-5513) — shown in the list grid |
 | `depreciate` | `IsDepreciated` | checkbox | — | Toggles whether assets in this category depreciate. Positioned right after Description. Defaults OFF on create (`defaultExpr: "N"`). Drives all conditional fields below |
 
 ### Conditional depreciation-policy fields
@@ -93,7 +93,7 @@ The `depreciate` field (`IsDepreciated`) uses `defaultExpr: "N"`, so new categor
 
 The header form uses a 4-column grid. Field column span is controlled by the `span` property (default 1; valid values 1–4) and textarea height by the `rows` property.
 
-- **Top row:** Name (1 col) + Description (`span: 2`, 2 cols) + Depreciate (1 col) = 4 columns. Description is a single-row textarea (`rows: 1`) so it stays visually compact while still spanning two columns.
+- **Top row:** Name (1 col) + Description (`span: 2`, 2 cols) + Depreciate (1 col) = 4 columns. Description declares `rows: 1` to stay compact while spanning two columns; `EntityForm` renders it at its 2-row minimum (ETP-5513).
 - Because the top row consumes all 4 columns, the conditional depreciation-policy fields (Depreciation Type, Calculate Type, and the method-specific fields) wrap onto the following rows when Depreciate is on.
 
 ## Accounting subtab (`accounting` entity)

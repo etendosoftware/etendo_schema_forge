@@ -103,6 +103,16 @@ describe('WarehouseWindow', () => {
     });
   });
 
+  // ETP-5513 — the sidebar is a fixed 320 px column, not a share of the viewport
+  // (w-[30%]), so the form keeps its width at 1280x720.
+  it('renders the sidebar as a fixed 320 px, non-shrinking column', () => {
+    render(<WarehouseWindow token="tkn" apiBaseUrl="/api" />);
+
+    const classes = lastWarehousePageProps.sidebarClassName.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(['w-[320px]', 'shrink-0']));
+    expect(classes.some((c) => /^w-\[\d+%\]$/.test(c))).toBe(false);
+  });
+
   it('creates a default storage bin after creating a warehouse', async () => {
     render(<WarehouseWindow token="tkn" apiBaseUrl="/api" />);
 

@@ -3244,7 +3244,7 @@ export function DetailView({
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
                               layout="horizontal"
-                              section="principal"
+                              section="principal" initialRows={2}
                               readOnly={windowReadOnly} navigate={navigate}
                               displayLogic={displayLogic}
                               api={api}

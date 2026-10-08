@@ -130,7 +130,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
   - `inline: true` on the image field — keeps the image inside the four-column form grid
   - `autoSaveOnBlur: true` — all header fields (name, description, type, category, UOM, etc.) save automatically on blur, matching the behavior of Contacts, Assets, and Sales Order. The image field is explicitly excluded: image changes require the manual Save button.
   - `labelOverrides` — overrides `M_Product_Category_ID` to "Category"/"Categoría" and `ProductType` to "Type"/"Tipo" using the locale-nested format `{ "en_US": {...}, "es_ES": {...} }`
-  - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX` (no effect since ETP-5601 — the record toolbar is standardized), `tabsBarPaddingX`, `listbarPaddingX`, `tablePaddingX` — layout props for 30%-width sidebar with left border, 8px horizontal padding throughout
+  - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX` (no effect since ETP-5601 — the record toolbar is standardized), `tabsBarPaddingX`, `listbarPaddingX`, `tablePaddingX` — layout props for the fixed 320 px sidebar (`w-[320px]`, ETP-5513 — was `w-[30%]`) with left border, 8px horizontal padding throughout
   - `primaryTabsVariant: "pill"` — pill-style primary tab bar
   - `secondaryTabs.accounting` — exposes the GL-accounting tab (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) in the unified secondary tab strip (`tabOrder: 1`, so it renders first, ahead of the `customPanelTabs` entries), using the classic grid+form layout (not `inlineEditable`). `detailEntity` is explicitly `null` (not omitted — an omitted key falls back to auto-selecting the first non-primary entity, which would have picked `price` and produced an unintended extra detail section)
   - `vectorSearch.target: "product"` — opts Product into the global semantic search; windows without this declaration do not participate.
@@ -1467,3 +1467,25 @@ Manual verification: with the rail expanded, open `/product` at 1280×720 and at
 confirm one toolbar row — "Filtros", then the view toggle, then the main actions on the right,
 untruncated — and no empty second row; switching view still swaps grid and gallery.
 
+## Price tab and sidebar at 1280x720 — ETP-5513
+
+At the 1280x720 minimum viewport with the navigation rail expanded, the `Price` tab's fixed
+300 / 201 / 201 px columns (Name / Unit price / List price) overflowed the tab by ~100 px and cut
+the List price stepper. In `ProductPriceBar.jsx` every row of a section — the title header, the
+column labels, the add-tariff row and each saved row — is now laid out on ONE CSS grid template
+(`PRICE_ROW_GRID`): `minmax(120px,300px) minmax(192px,201px) minmax(192px,201px) 2rem`. The tracks
+depend only on the container width, never on content, so a column starts at the same x in every
+row; the 4th track is the row-action slot (delete / cancel-add), reserved even in rows without a
+button. Prices never drop below 192 px, so a value like `12.345,67` stays readable next to the
+currency prefix and the +/- buttons; the Name column gives way first. When the whole panel is
+narrower than 780 px (`PRICE_STACK_BELOW_PX`, measured with `useElementWidth`), the
+Venta/Compra switch moves from the left column to a row above the section, which is what makes
+the grid fit at 1280x720 with the rail expanded. The section title stays on one line
+(`whitespace-nowrap`) and may overflow into the empty Unit price cell of the header.
+
+The sidebar is a fixed 320 px (`window.sidebarClassName` → `w-[320px]`), with the rail expanded
+or collapsed, instead of `w-[30%]`.
+
+**Verify:** at 1280x720 with the rail expanded, open a product → `Price`, in both `Venta` and
+`Compra`: the switch sits above the section, Name, Unit price and List price are fully visible
+(prices not truncated), the columns line up under their labels, and the tab has no horizontal scroll.

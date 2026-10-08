@@ -227,6 +227,8 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
       refetchAfterSave: true,
     });
     expect(lastHeaderPageProps.draftMode).toMatchObject({ enabled: true, processValue: 'CO' });
+    // ETP-5513 — fixed 320 px side panel (was 360), so the header keeps 3 columns at 1280x720.
+    expect(lastHeaderPageProps.sidePanelStyle).toEqual({ width: 320 });
     expect(lastHeaderPageProps.summary.map((s) => s.key)).toEqual([
       'summedLineAmount', 'grandTotalAmount', 'totalPaid', 'outstandingAmount',
     ]);

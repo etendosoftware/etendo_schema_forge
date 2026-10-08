@@ -17643,6 +17643,8 @@
     "depreciation": "Depreciation",
     "loadingPreview": "Loading preview...",
     "moreDetails": "More details",
+    "showMoreFormData": "Show more details",
+    "showLessFormData": "Show less details",
     "others": "Others",
     "relatedDocuments": "Related Documents",
     "searchPlaceholder": "Search clients, orders, invoices...",
