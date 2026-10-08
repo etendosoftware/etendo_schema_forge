@@ -626,7 +626,7 @@ Each entry in `actions` accepts:
 | Mutually exclusive | ✅ | ❌ |
 | Combinable | ❌ | ✅ |
 
-The two can coexist in the same window. In the query, the subset is applied first and the quick filters refine it. On screen the order is the reverse (ETP-5509): the quick filters (toggle pills) sit on the first toolbar row, and the subsets (segmented control) sit on a second row below it — see [`list-filters.md` → "Toolbar layout (ETP-5509)"](list-filters.md#toolbar-layout-etp-5509).
+The two can coexist in the same window. In the query, the subset is applied first and the quick filters refine it. On screen both share the toolbar row, subsets first (ETP-5509); when the row does not fit, the subsets (segmented control) alone wrap to a second row below the quick filters — see [`list-filters.md` → "Toolbar layout (ETP-5509)"](list-filters.md#toolbar-layout-etp-5509).
 
 ### Custom Components (`window.customComponents`)
 

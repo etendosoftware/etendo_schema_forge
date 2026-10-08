@@ -6,32 +6,35 @@ import { login } from '../../helpers/auth.js';
  * ETP-5509 — List toolbar layout at the minimum supported resolution
  * (1280×720, navigation rail expanded).
  *
- * The idle list bar (`ListView.jsx`) is a column of up to two rows closed by a
- * separator line:
+ * The idle list bar (`ListView.jsx`) is ONE row with no bottom border, in
+ * the pre-ETP-5509 order: [subset tabs][quick filters, filters, "Filtros", view
+ * toggle] … [main actions]. The subset tabs (`list-toolbar-tabs`) open the row
+ * while everything fits and move — alone, the same element, by CSS — to a line
+ * of their own below when it does not. A measurement (`useListToolbarTabsFit`),
+ * not a breakpoint; the main row's `data-tabs-placement` says which:
  *
- *   list-toolbar            container, carries the bottom border
- *   ├─ list-toolbar-main-row  filters cluster (left) + main actions cluster (right)
- *   └─ list-toolbar-tabs-row  the tab group (subset tabs + list/gallery toggle),
- *                             rendered ONLY when the window has one
+ *   list-toolbar              container, no bottom border (ETP-5601)
+ *   └─ list-toolbar-main-row    flex-wrap row:
+ *      ├─ list-toolbar-tabs       the subset tabs (first, or last on their own line)
+ *      ├─ list-toolbar-filters    quick filters, filters, "Filtros", view toggle
+ *      └─ list-toolbar-actions    the main actions
  *
- * Before the change the tab group opened row 1, where at 1280px it competed for
- * width with the filters and the actions. jsdom has no layout, so the unit
- * suite (`ListView.toolbarLayout.vitest.jsx`) can only pin WHERE each control
- * lives in the DOM — this spec is the only automated guard for what the ticket
- * is actually about: that nothing overflows, overlaps or gets clipped at
- * 1280×720, and that the separator is really painted.
+ * jsdom has no layout, so the unit suite (`ListView.toolbarLayout.vitest.jsx`)
+ * feeds the fit check stubbed widths — this spec is the only automated guard
+ * against real geometry: nothing overflows, overlaps or gets clipped, the two
+ * clusters keep their minimum gap, the tabs are either on the first line or on
+ * a line of their own below it, and no bottom border is painted.
  *
  * Mock mode renders in `es_ES`, the wider of the two locales — kept on purpose.
  *
  * Per window (see `WINDOWS`), in this order:
- *   1. The tabs row exists exactly when the window has a tab group; when it
- *      does, it is a real second row (starts at or below the main row's bottom)
- *      and hosts the tabs / view toggle, which are absent from the main row.
+ *   1. The subset tabs exist exactly once when the window has them, and sit
+ *      either on the first line or on a line of their own below it.
  *   2. The main row does not overflow horizontally.
  *   3. Every visible main-row button sits inside the toolbar box and is not
  *      clipped; the create action is present exactly where the window has one.
- *   4. The main row's two clusters do not overlap.
- *   5. The toolbar paints NO bottom border and a single-row toolbar is 56px tall
+ *   4. The main row's two clusters keep at least the minimum gap.
+ *   5. The toolbar paints NO bottom border and a single-line toolbar is 56px tall
  *      with 40px main-row controls (Figma: 8px padding + 40px controls).
  *   6. The toolbar ends at or above the top of the list body.
  */
@@ -41,6 +44,10 @@ import { login } from '../../helpers/auth.js';
 const VIEWPORT_MIN = { width: 1280, height: 720 };
 const VIEWPORT_LARGE = { width: 1920, height: 1080 };
 
+// Minimum separation between the filters and the actions cluster: the main
+// row's `gap-2` plus the actions' `ml-2` (ETP-5509 review — "Filtros" used to
+// touch the actions).
+const MIN_CLUSTER_GAP_PX = 16;
 // Sub-pixel / border rounding allowance for every edge comparison below.
 const EDGE_TOLERANCE_PX = 1;
 // Lets web fonts and the first data paint settle before measuring (same value
@@ -62,29 +69,24 @@ const SETTLE_MS = 300;
  *                     cuenta — sit in the main row next to Share/Sort/Refresh/Print/New)
  *
  * `subsetTabs`  number of `filter-<key>` subset tabs the window declares.
- * `viewToggle`  which toolbar row hosts the list/gallery toggle, or null when
- *               the window has no gallery. The tabs row is expected exactly
- *               when `subsetTabs > 0 || viewToggle === 'tabs-row'`.
+ * `viewToggle`  whether the window has a list/gallery toggle. It is NOT part of
+ *               the tab group: it stays last in the filters cluster.
  * `hasCreate`   false for windows that pass `hideCreate`.
  * `hasPrint`    true when the window keeps the list Print button in row 1.
  */
 const WINDOWS = [
-  { slug: 'purchase-invoice', entity: 'header', subsetTabs: 3, viewToggle: null, hasCreate: true, hasPrint: false },
-  { slug: 'sales-invoice', entity: 'header', subsetTabs: 3, viewToggle: null, hasCreate: true, hasPrint: true },
-  { slug: 'contacts', entity: 'businessPartner', subsetTabs: 3, viewToggle: null, hasCreate: true, hasPrint: false },
-  // PENDING CONFIRMATION — the toggle sitting in row 2 is an interpretation of
-  // ETP-5509. If it goes back to the main row, change 'tabs-row' to 'main-row'
-  // here (Product then expects no tabs row at all) and drop the isolated
-  // "view toggle placement" describe at the bottom of this file.
-  { slug: 'product', entity: 'product', subsetTabs: 0, viewToggle: 'tabs-row', hasCreate: true, hasPrint: false },
-  { slug: 'warehouse', entity: 'warehouse', subsetTabs: 0, viewToggle: null, hasCreate: true, hasPrint: false },
-  { slug: 'payment-in', entity: 'finPayment', subsetTabs: 0, viewToggle: null, hasCreate: false, hasPrint: false },
-  { slug: 'payment-out', entity: 'header', subsetTabs: 0, viewToggle: null, hasCreate: false, hasPrint: false },
-  { slug: 'chart-of-accounts', entity: 'elementValue', subsetTabs: 0, viewToggle: null, hasCreate: true, hasPrint: true },
+  { slug: 'purchase-invoice', entity: 'header', subsetTabs: 3, viewToggle: false, hasCreate: true, hasPrint: false },
+  { slug: 'sales-invoice', entity: 'header', subsetTabs: 3, viewToggle: false, hasCreate: true, hasPrint: true },
+  { slug: 'contacts', entity: 'businessPartner', subsetTabs: 3, viewToggle: false, hasCreate: true, hasPrint: false },
+  { slug: 'product', entity: 'product', subsetTabs: 0, viewToggle: true, hasCreate: true, hasPrint: false },
+  { slug: 'warehouse', entity: 'warehouse', subsetTabs: 0, viewToggle: false, hasCreate: true, hasPrint: false },
+  { slug: 'payment-in', entity: 'finPayment', subsetTabs: 0, viewToggle: false, hasCreate: false, hasPrint: false },
+  { slug: 'payment-out', entity: 'header', subsetTabs: 0, viewToggle: false, hasCreate: false, hasPrint: false },
+  { slug: 'chart-of-accounts', entity: 'elementValue', subsetTabs: 0, viewToggle: false, hasCreate: true, hasPrint: true },
 ];
 
 const windowBySlug = (slug) => WINDOWS.find((w) => w.slug === slug);
-const expectsTabsRow = (win) => win.subsetTabs > 0 || win.viewToggle === 'tabs-row';
+const hasTabGroup = (win) => win.subsetTabs > 0;
 
 // One synthetic row set for every window: each list reads the keys it knows
 // and ignores the rest. `documentStatus` feeds the status filter where the
@@ -168,6 +170,31 @@ async function settle(page) {
   await page.waitForTimeout(SETTLE_MS);
 }
 
+/**
+ * Collects every "ResizeObserver loop" error the page raises: uncaught page
+ * errors, console errors, and the window `error` event — Chromium delivers the
+ * loop error as an ErrorEvent on window that never reaches `pageerror`, so the
+ * init script is what actually sees it. Install BEFORE navigating.
+ */
+async function guardResizeObserverLoop(page) {
+  const seen = [];
+  const isLoop = (text) => /ResizeObserver loop/i.test(text ?? '');
+  page.on('pageerror', (err) => { if (isLoop(err.message)) seen.push(`pageerror: ${err.message}`); });
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && isLoop(msg.text())) seen.push(`console: ${msg.text()}`);
+  });
+  await page.addInitScript(() => {
+    window.__resizeObserverLoopErrors = [];
+    window.addEventListener('error', (event) => {
+      if (/ResizeObserver loop/i.test(event.message ?? '')) window.__resizeObserverLoopErrors.push(event.message);
+    });
+  });
+  return async () => {
+    const inPage = await page.evaluate(() => window.__resizeObserverLoopErrors ?? []);
+    return [...seen, ...inPage.map((m) => `window error: ${m}`)];
+  };
+}
+
 /** Reads every geometry fact the assertions need in a single round-trip. */
 async function measureToolbar(page) {
   return page.getByTestId('list-toolbar').evaluate((toolbar) => {
@@ -181,15 +208,18 @@ async function measureToolbar(page) {
       return b.width > 0 && b.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
     };
     const mainRow = toolbar.querySelector('[data-testid="list-toolbar-main-row"]');
-    const tabsRow = toolbar.querySelector('[data-testid="list-toolbar-tabs-row"]');
+    const tabGroup = toolbar.querySelector('[data-testid="list-toolbar-tabs"]');
+    const filters = toolbar.querySelector('[data-testid="list-toolbar-filters"]');
+    const actions = toolbar.querySelector('[data-testid="list-toolbar-actions"]');
     const body = toolbar.closest('[data-testid="list-view"]')?.querySelector('table') ?? null;
     return {
       toolbar: rect(toolbar),
       borderBottomWidth: getComputedStyle(toolbar).borderBottomWidth,
       borderBottomStyle: getComputedStyle(toolbar).borderBottomStyle,
       mainRow: { ...rect(mainRow), scrollWidth: mainRow.scrollWidth, clientWidth: mainRow.clientWidth },
-      clusters: Array.from(mainRow.children).map(rect),
-      tabsRow: tabsRow ? rect(tabsRow) : null,
+      clusters: [filters, actions].map(rect),
+      tabGroup: tabGroup ? rect(tabGroup) : null,
+      tabsInline: mainRow.dataset.tabsPlacement === 'inline',
       buttons: Array.from(mainRow.querySelectorAll('button')).filter(isVisible).map((button) => ({
         name: button.dataset.testid || button.title || button.textContent.trim() || '(unnamed button)',
         ...rect(button),
@@ -199,6 +229,31 @@ async function measureToolbar(page) {
       body: body ? rect(body) : null,
     };
   });
+}
+
+/**
+ * Assertion 1 (geometry half) — the tab group is in the main row, or in a
+ * second row below it; the second row never exists without it.
+ */
+function expectTabGroupPlacement(m, win) {
+  if (!hasTabGroup(win)) {
+    expect(m.tabGroup, 'a window without subset tabs renders no tab group').toBeNull();
+    return;
+  }
+  expect(m.tabGroup, 'tab group not rendered').not.toBeNull();
+  const [filters, actions] = m.clusters;
+  const firstLineBottom = Math.max(filters.bottom, actions.bottom);
+  if (m.tabsInline) {
+    expect(m.tabGroup.top, 'inline tabs share the first line')
+      .toBeLessThan(Math.min(filters.bottom, actions.bottom));
+    expect(m.tabGroup.right, 'inline tabs open the row, left of the filters')
+      .toBeLessThanOrEqual(filters.left + EDGE_TOLERANCE_PX);
+    return;
+  }
+  expect(m.tabGroup.top, 'moved tabs must start below the first line')
+    .toBeGreaterThanOrEqual(firstLineBottom - EDGE_TOLERANCE_PX);
+  expect(m.tabGroup.bottom, 'moved tabs must stay inside the toolbar')
+    .toBeLessThanOrEqual(m.toolbar.bottom + EDGE_TOLERANCE_PX);
 }
 
 /** Assertions 2, 3 (geometry half) and 4 — the main row fits. */
@@ -218,17 +273,19 @@ function expectMainRowFits(m) {
       .toBeLessThanOrEqual(button.clientWidth);
   }
 
-  // 4. Filters cluster (left) and actions cluster (right) do not overlap.
-  expect(m.clusters, 'main row must be split into exactly two clusters').toHaveLength(2);
+  // 4. Filters cluster (left) and actions cluster (right) keep the minimum gap.
   const [filters, actions] = m.clusters;
-  expect(filters.right, 'filters cluster overlaps the actions cluster')
-    .toBeLessThanOrEqual(actions.left + EDGE_TOLERANCE_PX);
+  expect(actions.left - filters.right, 'filters cluster too close to (or over) the actions cluster')
+    .toBeGreaterThanOrEqual(MIN_CLUSTER_GAP_PX - EDGE_TOLERANCE_PX);
 }
 
-/** Assertion 5 — no bottom border; a single-row toolbar is 56px with 40px controls. */
+/**
+ * Assertion 5 — no bottom border; a single-line toolbar (no subset tabs, or tabs
+ * inline) is 56px with 40px controls.
+ */
 function expectToolbarBox(m) {
   expect(parseFloat(m.borderBottomWidth), 'toolbar must not paint a bottom border').toBe(0);
-  if (!m.tabsRow) {
+  if (!m.tabGroup || m.tabsInline) {
     expect(m.toolbar.height, 'single-row toolbar must be 56px tall').toBeCloseTo(56, 0);
     for (const button of m.buttons) {
       expect(button.height, `${button.name} must be 40px tall`).toBeLessThanOrEqual(40 + EDGE_TOLERANCE_PX);
@@ -250,36 +307,32 @@ test.describe('List toolbar — 1280×720 minimum resolution (ETP-5509)', () => 
 
       const toolbar = page.getByTestId('list-toolbar');
       const mainRow = toolbar.getByTestId('list-toolbar-main-row');
-      const tabsRow = toolbar.getByTestId('list-toolbar-tabs-row');
       const m = await measureToolbar(page);
 
       // ---------------------------------------------------------------
-      // 1. Second row: present exactly when the window has a tab group,
-      //    really below the main row, and hosting the tab group.
+      // 1. Tab group: exactly once, in the main row or in a second row
+      //    below it, never an empty second row.
       // ---------------------------------------------------------------
-      await expect(tabsRow).toHaveCount(expectsTabsRow(win) ? 1 : 0);
-      if (expectsTabsRow(win)) {
-        expect(m.tabsRow.top, 'tabs row must start below the main row')
-          .toBeGreaterThanOrEqual(m.mainRow.bottom - EDGE_TOLERANCE_PX);
-        expect(m.tabsRow.bottom, 'tabs row must stay inside the toolbar')
-          .toBeLessThanOrEqual(m.toolbar.bottom + EDGE_TOLERANCE_PX);
-      }
+      await expect(toolbar.getByTestId('list-toolbar-tabs')).toHaveCount(hasTabGroup(win) ? 1 : 0);
+      expectTabGroupPlacement(m, win);
 
-      // Subset tabs (`filter-<key>`). The main row owns `filter-status`,
+      // Subset tabs (`filter-<key>`). The main row also owns `filter-status`,
       // `filter-date` and `filter-advanced`, which share the prefix — so the
-      // tabs are identified by the ids found in the tabs row, and each of
-      // those ids must be absent from the main row.
-      const subsetTabs = tabsRow.locator('[data-testid^="filter-"]');
+      // tabs are identified inside the tab group, and each is rendered once.
+      const tabGroup = toolbar.getByTestId('list-toolbar-tabs');
+      const subsetTabs = tabGroup.locator('[data-testid^="filter-"]');
       await expect(subsetTabs).toHaveCount(win.subsetTabs);
       const subsetTabIds = await subsetTabs.evaluateAll((els) => els.map((el) => el.dataset.testid));
       for (const id of subsetTabIds) {
-        await expect(tabsRow.getByTestId(id)).toBeVisible();
-        await expect(mainRow.getByTestId(id)).toHaveCount(0);
+        await expect(tabGroup.getByTestId(id)).toBeVisible();
+        await expect(toolbar.getByTestId(id)).toHaveCount(1);
       }
 
-      // List/gallery toggle, in whichever row the matrix names.
-      await expect(tabsRow.getByTestId('view-toggle')).toHaveCount(win.viewToggle === 'tabs-row' ? 1 : 0);
-      await expect(mainRow.getByTestId('view-toggle')).toHaveCount(win.viewToggle === 'main-row' ? 1 : 0);
+      // The list/gallery toggle keeps its pre-ETP-5509 place: last in the
+      // filters cluster, never with the subset tabs.
+      const filtersCluster = toolbar.getByTestId('list-toolbar-filters');
+      await expect(filtersCluster.getByTestId('view-toggle')).toHaveCount(win.viewToggle ? 1 : 0);
+      await expect(toolbar.getByTestId('view-toggle')).toHaveCount(win.viewToggle ? 1 : 0);
 
       // ---------------------------------------------------------------
       // 2 + 3 + 4. The main row fits at this width.
@@ -317,7 +370,7 @@ test.describe('List toolbar — box at a large resolution (ETP-5509)', () => {
     expectToolbarBox(m);
     expectMainRowFits(m);
     expectToolbarAboveBody(m);
-    await expect(page.getByTestId('list-toolbar-tabs-row')).toHaveCount(0);
+    await expect(page.getByTestId('list-toolbar-tabs')).toHaveCount(0);
   });
 });
 
@@ -356,6 +409,7 @@ test.describe('List toolbar — crowded main row at 1280×720 (ETP-5509)', () =>
     const withDate = await measureToolbar(page);
     expectMainRowFits(withDate);
     expectToolbarBox(withDate);
+    expectTabGroupPlacement(withDate, windowBySlug('sales-invoice'));
 
     // --- Status filter: pick the status with the longest label. Options carry
     // no test id either; the first button is the "all statuses" entry.
@@ -375,33 +429,113 @@ test.describe('List toolbar — crowded main row at 1280×720 (ETP-5509)', () =>
     const withBoth = await measureToolbar(page);
     expectMainRowFits(withBoth);
     expectToolbarBox(withBoth);
-    // The tab group is still a row of its own below the (now filtered) main row.
-    expect(withBoth.tabsRow).not.toBeNull();
-    expect(withBoth.tabsRow.top).toBeGreaterThanOrEqual(withBoth.mainRow.bottom - EDGE_TOLERANCE_PX);
+    // Wider filters may push the tab group to the second row — either way it
+    // stays placed correctly and never leaves an empty row behind.
+    expectTabGroupPlacement(withBoth, windowBySlug('sales-invoice'));
     await expect(mainRow.getByTestId('action-new')).toBeVisible();
   });
 });
 
-// ─── ISOLATED ON PURPOSE ────────────────────────────────────────────────────
-// Placing the list/gallery view toggle in row 2 is an interpretation of
-// ETP-5509 still pending confirmation with the product owner. This describe is
-// self-contained: if the decision is reversed, delete it and flip Product's
-// `viewToggle` in WINDOWS — nothing else in the file depends on it.
-test.describe('List toolbar — view toggle placement on Product (pending confirmation)', () => {
-  test('product renders the view toggle in the second row at 1280×720', async ({ page }) => {
-    await openList(page, windowBySlug('product'));
+// ─── ETP-5509 review: one row when it fits, a second row only when not ─────
+test.describe('List toolbar — the subset tabs move only when they do not fit (ETP-5509)', () => {
+  // At 1920×1080 every window's toolbar is a single row: the review found
+  // Product and Contacts losing a grid row to a second toolbar row they did
+  // not need (Product has no subset tabs at all, see its own test below).
+  for (const win of WINDOWS.filter(hasTabGroup)) {
+    test(`${win.slug} keeps the tab group in the main row at 1920×1080`, async ({ page }) => {
+      await openList(page, win, VIEWPORT_LARGE);
 
+      const m = await measureToolbar(page);
+      expect(m.tabsInline, 'subset tabs must share the first line when they fit').toBe(true);
+      expectTabGroupPlacement(m, win);
+      expectMainRowFits(m);
+      expectToolbarBox(m);
+    });
+  }
+
+  // The decision follows the width live (ResizeObserver), in both directions,
+  // and moves the same element, so a focused tab keeps its focus.
+  test('purchase-invoice moves the subset tabs to their own line when narrowed and back when widened', async ({ page }) => {
+    // The fit is re-measured from a ResizeObserver; measuring inside its callback
+    // would trip the browser's "ResizeObserver loop" error (the hook defers to rAF).
+    const resizeObserverLoopErrors = await guardResizeObserverLoop(page);
+    await openList(page, windowBySlug('purchase-invoice'), VIEWPORT_LARGE);
     const mainRow = page.getByTestId('list-toolbar-main-row');
-    const tabsRow = page.getByTestId('list-toolbar-tabs-row');
-    const toggle = tabsRow.getByTestId('view-toggle');
+    const tab = page.getByTestId('list-toolbar-tabs').getByTestId('filter-invoicestab');
+    await expect(mainRow).toHaveAttribute('data-tabs-placement', 'inline');
+    await tab.focus();
 
-    await expect(toggle).toBeVisible();
-    await expect(mainRow.getByTestId('view-toggle')).toHaveCount(0);
-    await expect(page.getByTestId('view-toggle')).toHaveCount(1);
+    // Far below the minimum supported width, so the tabs cannot fit next to
+    // the filters and the actions whatever the labels measure.
+    await page.setViewportSize({ width: 960, height: 720 });
+    await expect(mainRow).toHaveAttribute('data-tabs-placement', 'wrapped');
+    await settle(page);
+    await expect(tab).toBeFocused();
+    const narrow = await measureToolbar(page);
+    expectTabGroupPlacement(narrow, windowBySlug('purchase-invoice'));
+    // Filters and actions never touch, even this narrow.
+    const [filters, actions] = narrow.clusters;
+    expect(actions.left - filters.right).toBeGreaterThanOrEqual(MIN_CLUSTER_GAP_PX - EDGE_TOLERANCE_PX);
 
-    const [toggleBox, mainRowBox] = await Promise.all([toggle.boundingBox(), mainRow.boundingBox()]);
-    expect(toggleBox).not.toBeNull();
-    expect(mainRowBox).not.toBeNull();
-    expect(toggleBox.y).toBeGreaterThanOrEqual(mainRowBox.y + mainRowBox.height - EDGE_TOLERANCE_PX);
+    // Tabs switch from their own line as well.
+    await tab.click();
+    await expect(tab).toHaveClass(/bg-card/);
+
+    await page.setViewportSize(VIEWPORT_LARGE);
+    await expect(mainRow).toHaveAttribute('data-tabs-placement', 'inline');
+    await expect(tab).toHaveClass(/bg-card/);
+
+    // Through the minimum supported width as well, in both directions.
+    await page.setViewportSize(VIEWPORT_MIN);
+    await settle(page);
+    await page.setViewportSize(VIEWPORT_LARGE);
+    await settle(page);
+    expect(await resizeObserverLoopErrors(), 'no ResizeObserver loop error while resizing').toEqual([]);
   });
+
+  // Review W1 — "debería estar como antes": Product's view toggle stays after
+  // "Filtros", as before ETP-5509, at the minimum and at a large resolution.
+  for (const viewport of [VIEWPORT_MIN, VIEWPORT_LARGE]) {
+    test(`product keeps the view toggle after Filtros at ${viewport.width}×${viewport.height}`, async ({ page }) => {
+      await openList(page, windowBySlug('product'), viewport);
+
+      const filters = page.getByTestId('list-toolbar-filters');
+      const toggle = filters.getByTestId('view-toggle');
+      const advanced = filters.getByTestId('filter-advanced');
+      await expect(toggle).toBeVisible();
+      await expect(advanced).toBeVisible();
+      const isLast = await toggle.evaluate((el) => el.parentElement.lastElementChild === el);
+      expect(isLast, 'view toggle must be the last control of the filters cluster').toBe(true);
+      const [toggleBox, advancedBox] = await Promise.all([toggle.boundingBox(), advanced.boundingBox()]);
+      expect(toggleBox.x).toBeGreaterThanOrEqual(advancedBox.x + advancedBox.width);
+      expect(Math.abs(toggleBox.y + toggleBox.height / 2 - (advancedBox.y + advancedBox.height / 2)))
+        .toBeLessThanOrEqual(EDGE_TOLERANCE_PX + 2);
+      await expect(page.getByTestId('list-toolbar-tabs')).toHaveCount(0);
+    });
+  }
+});
+
+// Observed live at 1280×720 with the rail expanded (es_ES): Contacts and
+// Purchase Invoice keep the subset tabs on the first line; Sales Invoice, the
+// busiest main row (status + date + Filtros; sort, refresh, print, Nueva
+// factura), sends them to a line of their own.
+test.describe('List toolbar — subset tab placement at 1280×720 (ETP-5509)', () => {
+  const EXPECTED_PLACEMENT = [
+    { slug: 'contacts', placement: 'inline' },
+    { slug: 'purchase-invoice', placement: 'inline' },
+    { slug: 'sales-invoice', placement: 'wrapped' },
+  ];
+
+  for (const { slug, placement } of EXPECTED_PLACEMENT) {
+    test(`${slug} places the subset tabs ${placement}`, async ({ page }) => {
+      const win = windowBySlug(slug);
+      await openList(page, win);
+
+      await expect(page.getByTestId('list-toolbar-main-row')).toHaveAttribute('data-tabs-placement', placement);
+      const m = await measureToolbar(page);
+      expect(m.tabsInline).toBe(placement === 'inline');
+      expectTabGroupPlacement(m, win);
+      expectMainRowFits(m);
+    });
+  }
 });

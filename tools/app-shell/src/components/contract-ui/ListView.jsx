@@ -24,6 +24,7 @@ import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
 import { useWindowImportDialog } from './useWindowImportDialog.js';
+import { useListToolbarTabsFit } from './useListToolbarTabsFit.js';
 import { buildAdvancedFilterCriteria, extractQueryParamConditions } from '@/lib/gridQuery';
 import {
   readListState,
@@ -152,6 +153,7 @@ function ListFilterBarSection(props) {
           onDeletePreset={props.windowName ? props.deletePreset : null}
           labelOverrides={props.labelOverrides}
           hideStatusFilter={props.hideStatusFilter}
+          flowInParent
           data-testid="ListFilterBar__620cbc" />
       )}
     </>
@@ -285,51 +287,67 @@ export function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, vie
 }
 
 /**
- * The list's tab group: the `subsetFilters` segmented control (Todos / Factura / …) and the
- * list/gallery `ViewToggle` — the two segmented switches that pick WHAT the list shows, as opposed
- * to the quick filters and actions around them. Returns the controls only, never a row wrapper, so
- * the caller decides where they sit: ETP-5509 gives them a toolbar row of their own (see
- * `hasListToolbarTabs` and the idle bar in ListView).
+ * The list's tab group: the `subsetFilters` segmented control (Todos / Factura / …), which picks
+ * WHAT universe the list shows, as opposed to the quick filters and actions around it. ETP-5509
+ * opens the toolbar's main row with it while everything fits and moves it alone to a second line
+ * when it does not (see `useListToolbarTabsFit` and the idle bar in ListView). The list/gallery
+ * `ViewToggle` is NOT part of it: it keeps its pre-ETP-5509 place after "Filtros".
  */
-function ListToolbarTabs({
-  subsetFilters, activeSubsetIndex, onSelectSubset, ui,
-  galleryRenderer, viewMode, onSelectList, onSelectGallery,
-}) {
+function ListToolbarTabs({ subsetFilters, activeSubsetIndex, onSelectSubset, ui }) {
   return (
-    <>
-      {subsetFilters?.length > 0 && (
-        <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
-          {subsetFilters.map((sf, i) => (
-            <button
-              key={sf.key || sf.label}
-              onClick={() => onSelectSubset(i)}
-              data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
-              className={[
-                'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
-                activeSubsetIndex === i
-                  ? 'bg-card shadow-sm'
-                  : 'bg-[hsl(var(--muted))] hover:brightness-95',
-              ].join(' ')}
-            >
-              {ui(sf.label)}
-            </button>
-          ))}
-        </div>
-      )}
-      <ViewToggle
-        galleryRenderer={galleryRenderer}
-        onSelectList={onSelectList}
-        viewMode={viewMode}
-        onSelectGallery={onSelectGallery}
-        data-testid="ViewToggle__620cbc" />
-    </>
+    <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
+      {subsetFilters.map((sf, i) => (
+        <button
+          key={sf.key || sf.label}
+          onClick={() => onSelectSubset(i)}
+          data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
+          className={[
+            'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
+            activeSubsetIndex === i
+              ? 'bg-card shadow-sm'
+              : 'bg-[hsl(var(--muted))] hover:brightness-95',
+          ].join(' ')}
+        >
+          {ui(sf.label)}
+        </button>
+      ))}
+    </div>
   );
 }
 
-// Whether the window has a tab group at all. Gates the toolbar's second row so a window without
-// one (e.g. Warehouse) keeps a single-row toolbar instead of an empty padded band.
-function hasListToolbarTabs(subsetFilters, galleryRenderer) {
-  return subsetFilters?.length > 0 || Boolean(galleryRenderer);
+// Whether the window has a tab group at all. A window without one (e.g. Warehouse, or Product,
+// whose only switch is the view toggle) never measures and is always a single row.
+function hasListToolbarTabs(subsetFilters) {
+  return subsetFilters?.length > 0;
+}
+
+// Value of the main row's `data-tabs-placement`: absent without subset tabs, otherwise where
+// `useListToolbarTabsFit` placed them.
+function listToolbarTabsPlacement(hasTabs, tabsInline) {
+  if (!hasTabs) return undefined;
+  return tabsInline ? 'inline' : 'wrapped';
+}
+
+/**
+ * The main row's subset-tabs cell (ETP-5509): ONE element that `useListToolbarTabsFit`
+ * measures through `tabsRef` and moves by CSS alone — opening the row while inline, alone on
+ * a line below (`order-last basis-full`) while wrapped — so it is never remounted and a
+ * focused tab keeps its focus when it moves.
+ */
+function ListToolbarTabsCell({ tabsRef, tabsInline, subsetFilters, activeSubsetIndex, onSelectSubset, ui }) {
+  return (
+    <div
+      ref={tabsRef}
+      className={tabsInline ? 'flex shrink-0 items-center' : 'order-last flex basis-full items-center'}
+      data-testid="list-toolbar-tabs">
+      <ListToolbarTabs
+        subsetFilters={subsetFilters}
+        activeSubsetIndex={activeSubsetIndex}
+        onSelectSubset={onSelectSubset}
+        ui={ui}
+        data-testid="ListToolbarTabs__620cbc" />
+    </div>
+  );
 }
 
 function iconSizeClass(selectionBarSize) {
@@ -1156,6 +1174,11 @@ export function ListView({
   // list bar dropped entirely — the individual hide* flags leave an empty padded strip
   // behind, since sort/refresh have no flag of their own.
   const listBarHidden = listViewOptions?.hideListBar ?? hideListBar;
+  // ETP-5509 — the tab group shares the main row while it fits and wraps to a row of its own
+  // only when it does not; the decision is measured, never a breakpoint.
+  const hasTabs = hasListToolbarTabs(subsetFilters);
+  const toolbarFit = useListToolbarTabsFit(hasTabs && !listBarHidden);
+  const toolbarTabsPlacement = listToolbarTabsPlacement(hasTabs, toolbarFit.tabsInline);
 
   // The New action, shared by the toolbar button and the empty-list context below.
   const canCreate = canCreateRecords(hideCreate, windowReadOnly);
@@ -1360,23 +1383,48 @@ export function ListView({
               </div>
             </SelectionToolbar>
           )}
-          {/* ETP-5509 — the idle bar is a column of up to two rows:
-                row 1 — quick filters + "Filtros" on the left, main actions on the right;
-                row 2 — the tab group (`ListToolbarTabs`), only when the window has one.
-              The tabs used to open row 1, where at the minimum supported viewport (1280x720
-              with the navigation rail expanded) they competed for width with the filters and
-              the actions. They sit on their own row at EVERY width — a product decision, not a
-              breakpoint: to make it conditional later, render `<ListToolbarTabs>` at the start
-              of row 1's left cluster above the breakpoint and gate row 2 on the opposite
-              condition; nothing else in this block depends on where the tabs are.
+          {/* ETP-5509 — the idle bar is ONE row:
+                [subset tabs][quick filters, slot, filters, "Filtros", view toggle] … [actions]
+              — the pre-ETP-5509 order. The subset tabs (`ListToolbarTabs`) open the row while
+              everything fits; when it does not they alone move to a line of their own below
+              (`order-last basis-full`), and the quick filters, the view toggle and the main
+              actions stay on the first line. The decision is a measurement
+              (`useListToolbarTabsFit`: natural widths against the row's width, with
+              hysteresis), not a breakpoint, so there is never an empty second line, and a
+              window without subset tabs is always one row. The tabs are ONE element moved by
+              CSS, never remounted, so a focused tab keeps its focus when it moves.
+              Gap: the row's `gap-x-2` plus the actions' `ml-2` keep at least 16px between the
+              filters and the actions at every width. When space runs out the filters yield:
+              the tabs move first, then the filter controls wrap onto extra lines inside their
+              cluster (the actions never shrink). Only when the widest single filter control and
+              the actions cannot share a line (around 1000px of viewport with the rail
+              expanded, depending on the window) do the actions drop to a line below the
+              filters — they may leave the first line, but never touch or overlap them.
               ETP-5601 — per Figma the bar is 56px: 8px padding on every side around 40px
               controls, and no bottom border (the 1px line it used to draw made it 57px). */}
           {!listBarHidden && (
             <div
               className={`flex flex-col gap-2 ${listbarPaddingX} ${listbarPaddingY}`}
               data-testid="list-toolbar">
-              <div className="flex items-center justify-between" data-testid="list-toolbar-main-row">
-                <div className="flex items-center gap-2">
+              <div
+                ref={toolbarFit.rowRef}
+                className="flex flex-wrap items-center gap-2"
+                data-tabs-placement={toolbarTabsPlacement}
+                data-testid="list-toolbar-main-row">
+                {hasTabs && (
+                  <ListToolbarTabsCell
+                    tabsRef={toolbarFit.tabsRef}
+                    tabsInline={toolbarFit.tabsInline}
+                    subsetFilters={subsetFilters}
+                    activeSubsetIndex={activeSubsetIndex}
+                    onSelectSubset={selectSubset}
+                    ui={ui}
+                    data-testid="ListToolbarTabsCell__620cbc" />
+                )}
+                <div
+                  ref={toolbarFit.leftRef}
+                  className="flex flex-1 flex-wrap items-center gap-2"
+                  data-testid="list-toolbar-filters">
                   {quickFilters && (
                     <div role="group" aria-label="Filters" className="flex items-center gap-1">
                       {quickFilters.map((qf, i) => (
@@ -1432,8 +1480,17 @@ export function ListView({
                     deletePreset={deletePreset}
                     labelOverrides={labelOverrides}
                     data-testid="ListFilterBarSection__620cbc" />
+                  <ViewToggle
+                    galleryRenderer={galleryRenderer}
+                    onSelectList={() => handleViewMode('list')}
+                    viewMode={viewMode}
+                    onSelectGallery={() => handleViewMode('gallery')}
+                    data-testid="ViewToggle__620cbc" />
                 </div>
-                <div className="flex items-center gap-2">
+                <div
+                  ref={toolbarFit.actionsRef}
+                  className="ml-2 flex shrink-0 items-center gap-2"
+                  data-testid="list-toolbar-actions">
                   {!(listViewOptions?.hideLink ?? hideLink) && (
                     <button
                       type="button"
@@ -1546,20 +1603,6 @@ export function ListView({
                   )}
                 </div>
               </div>
-              {hasListToolbarTabs(subsetFilters, galleryRenderer) && (
-                <div className="flex items-center gap-2" data-testid="list-toolbar-tabs-row">
-                  <ListToolbarTabs
-                    subsetFilters={subsetFilters}
-                    activeSubsetIndex={activeSubsetIndex}
-                    onSelectSubset={selectSubset}
-                    ui={ui}
-                    galleryRenderer={galleryRenderer}
-                    viewMode={viewMode}
-                    onSelectList={() => handleViewMode('list')}
-                    onSelectGallery={() => handleViewMode('gallery')}
-                    data-testid="ListToolbarTabs__620cbc" />
-                </div>
-              )}
             </div>
           )}
 

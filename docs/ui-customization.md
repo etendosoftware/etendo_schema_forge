@@ -2712,9 +2712,14 @@ declared by hand rather than derived from grid fields.
 **What it does:** lets a custom `headerTable` component expose a second component as a static
 property — `MyHeaderTable.ToolbarQuickFilter = SomeComponent` — that `ListView.jsx` renders inline
 in its OWN toolbar row, immediately left of the "Filtros" (advanced filter) trigger, alongside
-"Ordenar por"/"Actualizar"/quick filters — that is row 1 of the toolbar; since ETP-5509 the
-subset-filter tab group sits on a second row below it (`docs/list-filters.md` → "Toolbar
-layout"). Same convention `DetailView.jsx` already
+"Ordenar por"/"Actualizar"/quick filters — that is the toolbar's main row; since ETP-5509 the
+subset-filter tabs share that row while it fits and move to a line of their own only when it
+does not, and the slot stays in the filters cluster either way (`docs/list-filters.md` →
+"Toolbar layout"). The fit check counts the slot at its natural (max-content) width, so a slot
+root that grows (`flex-1`, `w-full`) or wraps its own content (`flex flex-wrap`, as
+`ChartOfAccountsToolbarSlot.jsx` does) is measured correctly; a slot does not need to size itself
+for the measurement. What it must not do is take width it does not need on one line (e.g. a
+`min-w-[600px]`), since that width is what the tabs are measured against. Same convention `DetailView.jsx` already
 uses for `formFooter.inlineInHeaderCard` (§3) — a companion flag/property attached to a slot
 component so the generic shell can special-case how it renders.
 

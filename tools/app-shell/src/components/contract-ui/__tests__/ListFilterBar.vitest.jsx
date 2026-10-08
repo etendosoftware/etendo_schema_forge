@@ -1186,3 +1186,31 @@ describe('ListFilterBar advanced filter builder wiring', () => {
     expect(screen.getByTestId('filter-advanced')).toBeInTheDocument();
   });
 });
+describe('ListFilterBar root — flowInParent', () => {
+  const renderBar = (props) => render(
+    <ListFilterBar columns={COLUMNS} columnFilters={{}} onFilterChange={vi.fn()} {...props} />,
+  );
+
+  it('keeps its own flex row by default', () => {
+    const { container } = renderBar();
+    const root = container.firstChild;
+    expect(root).toHaveClass('flex', 'items-center', 'gap-2');
+    expect(root).not.toHaveClass('contents');
+  });
+
+  it('keeps its own flex row when flowInParent is false', () => {
+    const { container } = renderBar({ flowInParent: false });
+    expect(container.firstChild).toHaveClass('flex', 'items-center', 'gap-2');
+  });
+
+  it('renders a display: contents root when flowInParent is true, so its controls flow in the parent row', () => {
+    const { container } = renderBar({ flowInParent: true });
+    const root = container.firstChild;
+    expect(root).toHaveClass('contents');
+    expect(root).not.toHaveClass('flex');
+    expect(root).not.toHaveClass('gap-2');
+    // The controls are still rendered, as direct children of the contents root.
+    expect(root).toContainElement(screen.getByTestId('filter-advanced'));
+    expect(screen.getByText('allStatuses')).toBeInTheDocument();
+  });
+});
