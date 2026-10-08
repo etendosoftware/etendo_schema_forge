@@ -2,15 +2,24 @@ name: Tests
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
   push:
-    branches: [main]
+    branches: [main, develop]
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  # Only PR runs are cancelled; every push sha must keep its own artifact.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
+      # Test the PR head commit (the sha Jenkins analyzes), not the merge ref.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -22,31 +31,30 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: CLI tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results.xml 'cli/test/*.test.js'
+      # Same target Jenkins runs: JUnit XML in test-results/, merged LCOV in coverage/.
+      - name: Unit tests with coverage
+        run: make test-ci-coverage
 
-      - name: Repo script tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout 'scripts/__tests__/*.test.js'
-
-      - name: App-shell Node tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout $(find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js')
-
-      - name: App-shell extra tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout 'tools/app-shell/test/*.test.js'
-
-      - name: Artifact custom tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout 'artifacts/**/__tests__/*.test.js'
-
-      - name: Vitest (React components)
-        run: cd tools/app-shell && npx vitest run
+      - name: Build app-shell
+        run: npm run build --workspace=tools/app-shell
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
         if: always()
         with:
           name: Test Results
-          path: test-results.xml
+          path: test-results/*.xml
           reporter: java-junit
+          fail-on-empty: false
 
-      - name: Build app-shell
-        run: npm run build --workspace=tools/app-shell
+      # Consumed later by Jenkins instead of re-running the suites.
+      - name: Upload coverage and test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-coverage
+          path: |
+            coverage/merged-lcov.info
+            test-results/*.xml
+          retention-days: 7
+          if-no-files-found: warn
