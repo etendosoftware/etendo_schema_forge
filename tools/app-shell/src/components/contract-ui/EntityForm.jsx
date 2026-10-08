@@ -26,6 +26,11 @@ import { SelectorInput } from './SelectorInput.jsx';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
 import { InlineCreateSelector } from './InlineCreateSelector.jsx';
 import LocationModalField from './LocationModalField.jsx';
+import { FormShowMoreToggle } from './FormShowMoreToggle.jsx';
+import { effectiveSpan, useInitialRowsCollapse, useMeasuredFormColumns } from './formResponsiveLayout.js';
+
+// Minimum visible height of a textarea, in text rows (ETP-5513).
+const MIN_TEXTAREA_ROWS = 2;
 
 function buildSelectPlaceholder(ui, label) {
   return `${ui('selectLabelPrefix')} ${label}...`;
@@ -695,7 +700,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
  *    container (a bare fragment), so the caller can splice them into another
  *    EntityForm's grid via its `trailing` slot. Opt-in; default false.
  */
-export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate }) {
+export function EntityForm({ entity, windowName, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false, trailing, renderAsFragment = false, navigate, initialRows }) {
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -753,6 +758,19 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registerFields, formId, data, displayLogic, fields, excludeFields, section, layout]);
 
+  // ETP-5513 — horizontal (header) grids size their columns from their own width,
+  // not the viewport, and can be limited to their first `initialRows` rows behind a
+  // "Show more details" toggle. Both stay inert until the grid is measured (jsdom,
+  // first commit), so the static Tailwind classes below remain the fallback.
+  const responsiveGrid = layout === 'horizontal' && !cols && !renderAsFragment;
+  const [gridRef, measuredCols] = useMeasuredFormColumns(responsiveGrid);
+  const collapse = useInitialRowsCollapse({
+    fields: displayFields.filter(f => f.type !== 'image' || f.inline),
+    cols: measuredCols,
+    initialRows,
+    fieldErrors,
+  });
+
   if (displayFields.length === 0) return null;
 
   const gridClass = resolveGridClass(cols, layout);
@@ -762,11 +780,19 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   // past its fair share instead of letting `truncate` clip it (ETP-4600 Gap D).
   // Tailwind's own `grid-cols-N` utility (the `resolveGridClass` default path)
   // already bakes this in; this inline-style override path needs it explicitly.
-  const gridStyle = cols ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 16 } : undefined;
+  let gridStyle;
+  if (cols) gridStyle = { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: 16 };
+  else if (measuredCols) gridStyle = { gridTemplateColumns: `repeat(${measuredCols}, minmax(0, 1fr))` };
 
   // If there's an image field (not inline), pin it to the right — rest of fields render in a 3-col grid on the left
   const imageField = displayFields.find(f => f.type === 'image' && !f.inline);
   const fieldsToRender = imageField ? displayFields.filter(f => f.type !== 'image' || f.inline) : displayFields;
+  // Cells actually placed in the grid: all of them, or the first rows + toggle.
+  const gridCells = collapse.collapsible ? collapse.fields : fieldsToRender;
+  const showTrailing = !collapse.collapsible || collapse.expanded;
+  const showMoreToggle = collapse.collapsible
+    ? <FormShowMoreToggle expanded={collapse.expanded} onToggle={collapse.toggle} data-testid="FormShowMoreToggle__a8d626" />
+    : null;
 
   // Shared by both the editable DocumentType selector (renderSelectorField below) and the
   // read-only FK renderer (renderReadOnlyFk) — a saved record must show the SAME translated
@@ -1290,8 +1316,10 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   };
 
   // Multi-line text field. `rows` controls height; absent rows gets a min-height.
+  // ETP-5513 — never fewer than MIN_TEXTAREA_ROWS: a one-line textarea reads as a
+  // plain input and hides that the field takes multi-line text.
   const renderTextareaField = (f, label, isReadOnly, displayValue) => {
-    const rowCount = f.rows ?? 4;
+    const rowCount = Math.max(f.rows ?? 4, MIN_TEXTAREA_ROWS);
     const minHeightClass = f.rows ? '' : ' min-h-[96px]';
     const placeholder = !isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined;
     return (
@@ -1545,7 +1573,9 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   // branch in renderField — the wrapper <div key={f.key}> already exists for each.
   const renderFieldWithError = (f) => {
     const SPAN_CLASS = { 2: 'col-span-2', 3: 'col-span-3', 4: 'col-span-4' };
-    const spanClass = f.span ? (SPAN_CLASS[f.span] ?? '') : '';
+    // A span wider than the measured grid would create implicit columns — clamp it.
+    const span = f.span && measuredCols ? effectiveSpan(f, measuredCols) : f.span;
+    const spanClass = span ? (SPAN_CLASS[span] ?? '') : '';
 
     if (f.type === 'image') {
       const label = t(f.column) ?? f.label ?? f.key;
@@ -1629,9 +1659,10 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       || evalReadOnlyLogic(imageField, data);
     return (
       <div className="flex gap-6 items-stretch">
-        <div className={`flex-1 min-w-0 ${gridClass}`} style={gridStyle}>
-          {fieldsToRender.map(renderFieldWithError)}
-          {trailing}
+        <div ref={gridRef} className={`flex-1 min-w-0 ${gridClass}`} style={gridStyle}>
+          {gridCells.map(renderFieldWithError)}
+          {showTrailing && trailing}
+          {showMoreToggle}
         </div>
         <div className="shrink-0 w-64 flex flex-col">
           <ImageField
@@ -1650,12 +1681,13 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   }
 
   return (
-    <div className={gridClass} style={gridStyle}>
-      {displayFields.map(renderFieldWithError)}
+    <div ref={gridRef} className={gridClass} style={gridStyle}>
+      {(collapse.collapsible ? collapse.fields : displayFields).map(renderFieldWithError)}
       {/* Additional grid item(s) rendered INSIDE the same grid container so they
           flow into the next free cell(s) after the native fields (opt-in; undefined
           for every existing caller → strictly additive). */}
-      {trailing}
+      {showTrailing && trailing}
+      {showMoreToggle}
     </div>
   );
 }

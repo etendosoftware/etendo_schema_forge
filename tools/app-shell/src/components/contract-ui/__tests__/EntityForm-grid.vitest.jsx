@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/EntityForm.jsx
 import { render } from '@testing-library/react';
 
 // Mock i18n hooks (mirror EntityForm.vitest.jsx)
@@ -52,7 +53,10 @@ describe('EntityForm — horizontal grid layout (ETP-4000)', () => {
     { key: 'description', label: 'Description', type: 'text', column: 'Description' },
   ];
 
-  it('horizontal layout uses md:grid-cols-4 (Figma ETP-4000 spec)', () => {
+  // ETP-5513 — the real column count is measured from the grid's own width
+  // (formResponsiveLayout.js) and applied inline; md:grid-cols-4 is only the static
+  // fallback for the unmeasured first commit (and jsdom, which has no layout).
+  it('horizontal layout keeps md:grid-cols-4 as the unmeasured fallback (ETP-4000, ETP-5513)', () => {
     const { container } = render(
       <EntityForm fields={fields} data={{}} onChange={vi.fn()} layout="horizontal" />
     );

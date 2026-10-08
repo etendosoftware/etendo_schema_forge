@@ -2319,3 +2319,17 @@ goods-receipt and return-material-receipt (the other drop-zone windows) keep the
 with its download/delete buttons. `OcrSidePanel` / `OcrInlineUploader` are mounted only by
 purchase-invoice (the only OCR doc type). `PdfViewer`'s new props (`zoom`, `hideToolbar`,
 `toolbarExtra`, `onExpand`, `onNumPages`) are optional, so every other PDF preview is unchanged.
+
+## Header layout at 1280x720 — ETP-5513
+
+- The OCR side panel is a fixed 320 px (`sidePanelStyle={{ width: 320 }}` in
+  `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`; it was 360 px).
+- The header form follows the shared responsive rules of `EntityForm` (see
+  `docs/ui-design-guidelines.md` → *Form View at 1280x720*): next to the side panel it uses
+  3 columns (about 208 px each with the rail expanded, 269 px collapsed) instead of 4, and only
+  its first 2 rows are shown — required fields first — behind a **Mostrar más datos** /
+  **Mostrar menos datos** toggle.
+
+**Verify:** at 1280x720, open a new purchase invoice with the rail expanded and collapsed:
+3 columns, labels on one line, 6 fields + *Mostrar más datos*; clicking it reveals the rest and
+changes to *Mostrar menos datos*.

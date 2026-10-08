@@ -282,6 +282,34 @@ away from creating a junk one, and a permissions problem looks like an empty rec
   screen: the backend does not distinguish it, so that screen would be a guess presented as a fact.
   `recordNotFoundBody` states both possibilities in one sentence instead.
 
+## Form View at 1280x720 (ETP-5513)
+
+1280x720 is the minimum supported desktop viewport. The shared header form (`EntityForm`
+with `layout="horizontal"`) is built to work there next to a side panel:
+
+- **Columns follow the form's own width, not the viewport.** `formResponsiveLayout.js`
+  measures the grid with a `ResizeObserver` and sets `grid-template-columns` inline:
+  < 480 px → 2 columns, < 960 px → 3, otherwise 4. A header next to a 320 px side panel at
+  1280 px therefore gets 3 columns; a header without a side panel keeps 4. Do not reintroduce
+  `md:`/`lg:` column prefixes for this: they key off the viewport and ignore the rail and the
+  side panel. The static `grid-cols-2 md:grid-cols-4` classes remain only as the
+  pre-measurement (and jsdom) fallback. A field `span` wider than the measured grid is clamped
+  to it, so it never creates implicit columns.
+- **First 2 rows + "Mostrar más datos".** `DetailView` renders the principal header form with
+  `initialRows={2}`. When the fields overflow 2 rows, required fields (red asterisk) are moved
+  first and the rest are revealed by `FormShowMoreToggle` (`showMoreFormData` /
+  `showLessFormData`). Expanded and collapsed share the same order, so expanding only appends.
+  If a hidden field carries a validation error (e.g. an empty required field on save), the block
+  opens on its own. All fields stay registered for validation whether shown or not. The split is
+  inert until the grid is measured, so jsdom tests see every field.
+- **Side panels are a fixed 320 px**, never a percentage (`w-[320px]` in `sidebarClassName`, or
+  `sidePanelStyle={{ width: 320 }}`).
+- **Textareas are at least 2 rows tall.** `EntityForm` clamps `rows` to a minimum of 2, so a
+  `rows: 1` in `decisions.json` still renders 2 lines.
+- **Fixed-width columns inside tabs must be able to shrink** (`w-[Npx] min-w-0 shrink`, not
+  `shrink-0`) so the tab never scrolls horizontally with the rail expanded (see
+  `ProductPriceBar.jsx`).
+
 ## References
 
 - Component implementations: `tools/app-shell/src/components/contract-ui/`
