@@ -74,8 +74,9 @@ export function useRoleMenu() {
         setAllowedIds(collectAllowedIds(data?.tree));
       })
       .catch((error) => {
-        recordAccessLoadError(error); // ETP-5489
-        if (isCurrentSession(snapshot)) setAllowedIds(null);
+        if (!isCurrentSession(snapshot)) return;
+        recordAccessLoadError(error); // ETP-5489 — only for the session that asked
+        setAllowedIds(null);
       });
     return undefined;
   }, [isAuthenticated, isSessionReady, accessLoaded, authRevision, menuAccess, captureSession, isCurrentSession]);

@@ -540,12 +540,20 @@ function AppLayoutAccessGate({ menuGroups }) {
     fetchMyReportAccess()
       .then((res) => { if (!cancelled) setReportAccess(res?.reportAccess ?? {}); })
       .catch((error) => {
-        recordAccessLoadError(error);
-        if (!cancelled) setReportAccess({});
+        if (cancelled) return;
+        recordAccessLoadError(error); // ETP-5489 — only for the mount that asked
+        setReportAccess({});
       });
     return () => { cancelled = true; };
   }, [allowedIds]);
 
+  // ETP-5395 Point 1 Fix B — must run BEFORE filterMenuGroupsByAccess and the
+  // NoAccessScreen size-check below: id-less menu items (no
+  // windowId/processId/obuiappProcessId — e.g. "first-steps", "dashboard")
+  // are never filtered by filterMenuGroupsByAccess regardless of the Set
+  // passed in, so gating only from the size-check below would still let
+  // <Outlet> mount and those routes become reachable while the real Set is
+  // in flight. See AppLayoutLoading's JSDoc above for the full story.
   // ETP-5395 Point 1 Fix B — must run BEFORE filterMenuGroupsByAccess and the
   // NoAccessScreen size-check below: id-less menu items (no
   // windowId/processId/obuiappProcessId — e.g. "first-steps", "dashboard")

@@ -77,7 +77,7 @@ test.describe('NEO 401 with the session alive — AccessLoadErrorScreen', () => 
     expect(page.url()).not.toContain('/onboarding');
   });
 
-  test('(b) session 401 is a real expiry: one redirect to the login, no error screen', async ({ page }) => {
+  test('(b) session 401 is a real expiry: it ends on the login and never re-enters, no error screen', async ({ page }) => {
     await login(page);
     await answerListMenu401(page);
     await declareNoSession(page);
@@ -88,7 +88,12 @@ test.describe('NEO 401 with the session alive — AccessLoadErrorScreen', () => 
     await expect(page).toHaveURL(/\/onboarding/, { timeout: 10_000 });
     await page.waitForTimeout(2_000);
     expect(page.url()).toContain('/onboarding');
-    expect(seen.urls.filter((url) => url.includes('/onboarding'))).toHaveLength(1);
+    // The loop's signature is the login view being left again for /dashboard. Not a count of
+    // /onboarding navigations: an SPA step change (/onboarding -> /onboarding/<step>) fires
+    // `framenavigated` too and would make that flaky.
+    const firstLogin = seen.urls.findIndex((url) => url.includes('/onboarding'));
+    expect(firstLogin).toBeGreaterThanOrEqual(0);
+    expect(seen.urls.slice(firstLogin + 1).filter((url) => url.includes('/dashboard'))).toHaveLength(0);
     await expect(page.getByTestId('AccessLoadErrorScreen__488148')).toHaveCount(0);
     expect(seen.environmentPosts).toBe(0);
   });
