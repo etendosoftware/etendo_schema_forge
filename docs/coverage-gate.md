@@ -50,7 +50,12 @@ the push-only hints, but a gate that cannot be evaluated **fails** instead of
 skipping: unreadable current coverage, a missing `.scannerwork/report-task.txt`,
 or an analysis that Sonar reports `FAILED`/`CANCELED` or does not process within
 the wait timeout (600 s), or a `ceTaskUrl` whose origin differs from
-`SONAR_HOST_URL` (refused so the token is never sent to another host). Before reading any measure, the CI run waits for the
+`SONAR_HOST_URL` (refused so the token is never sent to another host). The GitHub
+compare step authenticates with the `SONAR_READ_TOKEN` secret (a user token of
+the read-only Sonar user `github-actions-ro`) because the analysis token in
+`SONAR_TOKEN` cannot read measures; if that secret is revoked the step logs a
+403 warning and fails closed, and if it is missing the step fails with
+`SONAR_HOST_URL and SONAR_TOKEN must be set`. Before reading any measure, the CI run waits for the
 scanner's Compute Engine task (`ceTaskUrl` in `report-task.txt`) to finish, so it
 never compares a stale measure. A missing base still passes with a warning.
 

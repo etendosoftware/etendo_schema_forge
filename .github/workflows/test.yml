@@ -95,7 +95,8 @@ jobs:
       - name: Compare coverage with the base branch
         if: github.event_name == 'pull_request' && needs.test.result == 'success'
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          # Read-only user token: the analysis token cannot read measures (403).
+          SONAR_TOKEN: ${{ secrets.SONAR_READ_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_BRANCH: ${{ github.base_ref }}
