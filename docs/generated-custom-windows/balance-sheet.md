@@ -11,6 +11,9 @@ Give finance users a point-in-time snapshot of assets, liabilities, and owner eq
 - Show one row per account (`code - name`) with the signed balance: debit-minus-credit for assets and owner equity; credit-minus-debit for liabilities.
 - Hide accounts whose net movement is below `0.01` (`HAVING ABS(...) > 0.01`).
 - Apply organization scoping through `ad_isorgincluded` so child organizations inherit the parent's accounts.
+- Honour each account's `ShowValueCond` like Classic (ETP-5662): a summary account marked `P` (positive only) or `N` (negative only) shows 0 otherwise, and so do its descendants, so PGC mirror accounts (`551` / `(551)`) show on one side only. Needs the `C_ElementValue_Operand` rows (data-fix R39); fold in `buildAccountReportTree` (`report-grouping.js`) and Java `AccountReportTree`; the SQL selects `ev.showvaluecond, ev.issummary`.
+- Keep the group heading (Activo / Patrimonio Neto y Pasivo) when only one group has visible rows: a deliberate, display-only difference from Classic.
+- Show the breakdown and subaccounts of a mirror account whose balance is shown (e.g. `551` with `5510` and `55100000`). Classic hides them when Compare To is off; totals are the same.
 
 ## Interaction model
 - Route: `/report-viewer?report=balance-sheet`.

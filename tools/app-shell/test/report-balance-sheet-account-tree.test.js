@@ -1,3 +1,5 @@
+// @covers artifacts/balance-sheet/report-contract.json
+// @covers artifacts/profit-loss/report-contract.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -747,5 +749,19 @@ describe('balance-sheet template-csv.hbs', () => {
   it('header row uses translated labels [es_ES]', () => {
     const csv = renderCsv({ compareTo: true, locale: 'es_ES' });
     assert.equal(csv.trim().split('\n')[0], 'Group,Level,Code,Elemento,Importe,Importe de Referencia');
+  });
+});
+
+// ── ETP-5662: ShowValueCond columns feed the tree fold ─────────────────────
+
+describe('balance-sheet / profit-loss contracts select the ShowValueCond columns (ETP-5662)', () => {
+  it('both node queries select ev.showvaluecond and ev.issummary', () => {
+    for (const sql of [SQL, PL_CONTRACT.sql.query]) {
+      assert.match(sql, /ev\.showvaluecond, ev\.issummary FROM tree t/);
+    }
+  });
+
+  it('balance-sheet GROUP BY carries both columns (aggregated query)', () => {
+    assert.match(SQL, /GROUP BY [^]*ev\.accountsign, ev\.showvaluecond, ev\.issummary ORDER BY/);
   });
 });
