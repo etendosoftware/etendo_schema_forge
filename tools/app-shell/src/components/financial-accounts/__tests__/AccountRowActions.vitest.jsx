@@ -142,3 +142,58 @@ describe('AccountRowActions', () => {
     expect(onBankConnectionAction).toHaveBeenCalledWith('connect', OFFLINE);
   });
 });
+
+// ETP-5457 — the window's "read-only" access tier. Edit and Sync are writes, so neither icon is
+// rendered; the kebab stays (it still carries "Abrir cuenta") and receives the flag so it can
+// drop its own write items. Every read-only case has a full-access twin.
+describe('AccountRowActions — read-only access tier (ETP-5457)', () => {
+  it('hides the edit and sync icons of a bank-connected account under the read-only tier (ETP-5457)', () => {
+    render(<AccountRowActions account={CONNECTED} windowReadOnly />);
+
+    expect(screen.queryByTestId('account-row-edit-acc-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('account-row-refresh-acc-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('account-row-menu-trigger-acc-1')).toBeInTheDocument();
+  });
+
+  it('renders the edit and sync icons of the same account under full access (ETP-5457 twin)', () => {
+    render(<AccountRowActions account={CONNECTED} windowReadOnly={false} />);
+
+    expect(screen.getByTestId('account-row-edit-acc-1')).toBeInTheDocument();
+    expect(screen.getByTestId('account-row-refresh-acc-1')).toBeInTheDocument();
+    expect(screen.getByTestId('account-row-menu-trigger-acc-1')).toBeInTheDocument();
+  });
+
+  it('hides the edit icon of an offline account under the read-only tier (ETP-5457)', () => {
+    render(<AccountRowActions account={OFFLINE} windowReadOnly />);
+
+    expect(screen.queryByTestId('account-row-edit-acc-2')).not.toBeInTheDocument();
+    expect(screen.getByTestId('account-row-menu-trigger-acc-2')).toBeInTheDocument();
+  });
+
+  it('forwards the read-only tier to the kebab, which keeps only "Abrir cuenta" (ETP-5457)', async () => {
+    const onOpen = vi.fn();
+    render(<AccountRowActions account={CONNECTED} onOpen={onOpen} windowReadOnly />);
+    openMenu('acc-1');
+
+    fireEvent.click(await screen.findByTestId('account-row-menu-open-acc-1'));
+
+    expect(onOpen).toHaveBeenCalledWith(CONNECTED);
+    openMenu('acc-1');
+    await screen.findByTestId('account-row-menu-open-acc-1');
+    expect(screen.queryByTestId('account-row-menu-edit-acc-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('account-row-menu-sync-acc-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('account-row-menu-transfer-acc-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('account-row-menu-delete-acc-1')).not.toBeInTheDocument();
+  });
+
+  it('forwards full access to the kebab, which keeps its write items (ETP-5457 twin)', async () => {
+    render(<AccountRowActions account={CONNECTED} windowReadOnly={false} />);
+    openMenu('acc-1');
+
+    expect(await screen.findByTestId('account-row-menu-open-acc-1')).toBeInTheDocument();
+    expect(screen.getByTestId('account-row-menu-edit-acc-1')).toBeInTheDocument();
+    expect(screen.getByTestId('account-row-menu-sync-acc-1')).toBeInTheDocument();
+    expect(screen.getByTestId('account-row-menu-transfer-acc-1')).toBeInTheDocument();
+    expect(screen.getByTestId('account-row-menu-delete-acc-1')).toBeInTheDocument();
+  });
+});

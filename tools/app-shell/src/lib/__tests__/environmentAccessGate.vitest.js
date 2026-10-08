@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/environmentAccessGate.js
 import {
   parseEnvironmentAccessDecision,
   isBlockingAccessDecision,
@@ -6,6 +7,7 @@ import {
   subscribeEnvironmentAccessDecision,
   resetEnvironmentAccessGateForTest,
 } from '../environmentAccessGate.js';
+import * as coreGate from '@etendosoftware/app-shell-core/lib/environmentAccessGate.js';
 
 /**
  * ETP-5443 follow-up — the plain module that detects a commercial access cut-off (demo trial
@@ -202,6 +204,28 @@ describe('environmentAccessGate', () => {
       setEnvironmentAccessDecision('SUBSCRIPTION_REQUIRED');
 
       expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  // ETP-5642 — the store lives in the core, where apiFetch records a 402 from any response. This
+  // file re-exports it. If the store were ever re-declared here, the transport would write one
+  // copy and AppLayout would read the other: the blocked-access screen would silently never
+  // appear for a tab already open when the trial expired.
+  describe('a single store shared with the core', () => {
+    it('sees a block the core transport recorded', () => {
+      coreGate.setEnvironmentAccessDecision('DEMO_TRIAL_EXPIRED');
+      expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
+    });
+
+    it('notifies a subscriber registered here when the core clears it', () => {
+      setEnvironmentAccessDecision('SUBSCRIPTION_REQUIRED');
+      const listener = vi.fn();
+      subscribeEnvironmentAccessDecision(listener);
+
+      coreGate.setEnvironmentAccessDecision(null);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(getEnvironmentAccessDecision()).toBeNull();
     });
   });
 });

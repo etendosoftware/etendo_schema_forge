@@ -11,7 +11,7 @@ Use this page as the entry point to the reconciliation module. It lists the fina
 
 - List `FIN_Financial_Account` records for the current client and accessible organizations — active accounts in the type views, plus archived (inactive) accounts behind a dedicated **Inactivas** filter.
 - Show the aggregated sidebar widgets:
-  - Total balance across visible accounts.
+  - Total balance across active accounts, converted to the organization currency (approximate when another currency with a non-zero balance is converted — see the `summary` notes below).
   - Balance broken down by ISO currency (EUR, USD, …).
   - Pending counters: accounts with unreconciled `FIN_Bank_Statement_Line`s plus placeholders for the matching engine (introduced in T5).
 - Filter the table by account type (Banco, Caja, Tarjeta), by **Inactivas** (all archived accounts regardless of type), and search by name / IBAN / currency.
@@ -32,7 +32,7 @@ Use this page as the entry point to the reconciliation module. It lists the fina
 > **Story:** ETP-4096. The toolbar's **+ Nueva cuenta** button and two row-kebab
 > actions (**Editar cuenta**, **Archivar cuenta**) are active. The wizard covers both the
 > *offline* flow (accounts created without a bank connection) and, through "Con conexión",
-> the connect-with-creation flow. Full detail: `financial-account.md` → "New Account Wizard".
+> the connect-with-creation flow. Full detail: `financial-account-management.md` → "New Account Wizard".
 
 ### New account wizard (`NewAccountWizard`)
 
@@ -65,7 +65,7 @@ untouched, so editing never wipes a stored BIC.
 > This description reflects T2 (ETP-4096) scope only. The modal has since gained a
 > live bank connection block (ETP-4097 / T3), a General/Contabilidad tab split with a
 > conditional Currency lock (ETP-4530), and a second entry point from the account
-> detail view — see `financial-account.md` → "Edit Account Modal" for the current
+> detail view — see `financial-account-management.md` → "Edit Account Modal" for the current
 > behavior.
 
 ### Archive account (`ArchiveAccountDialog`)
@@ -74,6 +74,13 @@ Row kebab → **Archivar cuenta** opens a confirmation dialog. Confirming soft-d
 account (`IsActive='N'`) and it disappears from the default list (still reachable via the **Inactivas** filter). Accounts with open
 reconciliations cannot be archived — the backend rejects with HTTP 409 and the UI shows
 a clear message.
+
+## Last bank sync date (ETP-5582)
+
+Each entry of `accounts[]` in the page endpoint response carries `lastSyncDate`: the ISO instant
+of the last successful statement sync, or `null` when the account never completed one. The list
+rows render it through the shared sync label; for the semantics of the value, the UI and the
+i18n keys see `financial-account.md` -> "Last bank sync label (ETP-5582)".
 
 ## Interaction model
 
@@ -105,6 +112,9 @@ Response shape (envelope `response.data`):
       "currencyId": "102",
       "currencyIso": "EUR",
       "iban": "ES12...",
+      "countryId": "106",
+      "countryIso": "ES",
+      "countryName": "España",
       "isDefault": true,
       "active": true,
       "pendingCount": 4
@@ -112,8 +122,13 @@ Response shape (envelope `response.data`):
   ],
   "summary": {
     "totalBalance": 54321.0,
+    "totalBalanceCurrencyIso": "EUR",
+    "totalBalanceApproximate": true,
+    "missingRateCurrencies": ["GBP"],
     "byCurrency": [
-      { "currencyIso": "EUR", "total": 32000.0 }
+      { "currencyIso": "EUR", "total": 32000.0 },
+      { "currencyIso": "USD", "total": 24000.0 },
+      { "currencyIso": "GBP", "total": 1500.0 }
     ],
     "pending": {
       "accountsWithPending": 3,
@@ -125,8 +140,15 @@ Response shape (envelope `response.data`):
 ```
 
 - `accounts` is filtered by `AD_Client_ID = current client` and the accessible organization tree from `OrganizationStructureProvider`. It returns **both active and archived** accounts; each row carries an `active` boolean (`IsActive`). The UI shows active accounts in the type views (Todas / Banco / Caja / Tarjeta) and archived ones only under the dedicated **Inactivas** filter.
+- `countryName` is localized to the request language (ETP-5579): `ACCOUNTS_SQL` LEFT JOINs `c_country_trl` on the GO language (`Accept-Language` → `OBContext` language, applied by `NeoAuthenticator`) and returns `COALESCE(ctryt.name, ctry.name)`, so the same account reads "España" in es_ES and "Spain" in en_US. A country with no translation row falls back to the base `c_country.name`; an account with no country emits `""` for all three `country*` keys (the UI shows "—"). Before ETP-5579 `countryName` was always the base English name. `loadAccounts()` is the single loader behind both this R spec and the W spec `financial-account` (`FinancialAccountHandler.enrichRecord`), so the País list column (`CountryCell`, advanced-filter `countryLabel`) and the Edit Account modal's Country label get the same localized value.
 - `pendingCount` counts active `FIN_Bank_Statement_Line` rows linked to the account (through `FIN_BankStatement`) whose `fin_finacc_transaction_id IS NULL`.
-- `summary.*` is computed over **active accounts only** — archived accounts never skew `totalBalance`, `byCurrency` or `accountsWithPending`. (`summary.totalBalance` is the raw sum of `CurrentBalance`; currency normalisation against the GL schema arrives with later stories.)
+- `summary.*` is computed over **active accounts only** — archived accounts never skew `totalBalance`, `byCurrency` or `accountsWithPending`.
+- `summary` is built by `FinancialAccountsPageHandler.buildSummary(accounts, resolveOrgCurrency())`, the same method the `financial-account` W spec uses for the live Cuentas sidebar, so the two cannot drift apart (ETP-5580). In short:
+  - `totalBalance` is expressed in the **login organization's currency** (`totalBalanceCurrencyIso`). Each foreign-currency subtotal is converted once at **today's system exchange rate**, and the organization-currency subtotal is added as is.
+  - `totalBalanceApproximate` is `true` only when a **non-zero** foreign subtotal was converted. A foreign subtotal of exactly 0 is skipped before the rate lookup.
+  - A non-zero currency with **no exchange rate** is **excluded** from `totalBalance` (never added unconverted) and listed in `missingRateCurrencies`.
+  - `byCurrency` always carries the **real, unconverted** balance per currency.
+- The full rules (rate lookup direction, org-tree anchor, rounding, the no-org-currency fallback) and how `AccountsSidebar` renders them (`≈`, the "No incluye: …" warning, the ⓘ tooltip, the full-amount total at a fixed 30px, ellipsised with an exact-value tooltip when it does not fit, and the exact per-currency values in the breakdown) are documented once, in `financial-account.md` → "List summary — `response.summary` and its currency (ETP-5580)".
 - `summary.pending.suggestionsReady` and `summary.pending.byRule` always return `0` in T1 because the `ETBR_Match_Suggestion` table lands with T5.
 
 ### Account mutations endpoint (ETP-4096)
@@ -168,7 +190,7 @@ tools/app-shell/src/
 ├── components/financial-accounts/
 │   ├── index.js, tokens.js
 │   ├── AccountsToolbar.jsx                    # + Nueva cuenta button
-│   ├── AccountsSidebar/index.jsx
+│   ├── AccountsSidebar/index.jsx, balanceDisplay.js  # Saldo panel; full total, ellipsis + tooltip
 │   ├── AccountsTable/accountColumns.jsx       # cell bodies only (NameCell/TypeCell/BalanceCell)
 │   ├── accountCellTypes.jsx                   # binds contract `cellType` → renderer
 │   ├── contractColumns.js                     # reads the grid columns from contract.json
@@ -196,7 +218,7 @@ The legacy `bank-reconciliation` placeholder entry in `menu.json` is now hidden 
 
 1. Start the dev server with `make dev` and visit `http://localhost:3100/finance/accounts` after logging in.
 2. The sidebar should match the Figma frame `3012:25602`:
-   - Total balance reflects the sum of every active account.
+   - Total balance reflects every active account converted to the organization currency (`≈` prefix when a non-zero foreign balance was converted; a "No incluye: …" warning when a currency has no exchange rate). It is shown in full at a fixed 30px (e.g. "12.600,00 €"); amounts under 100 million fit, except an approximate negative one from about 10 million up. A larger amount is ellipsised; hover it to see the exact value in a tooltip. Hover the ⓘ icon to see the explanation tooltip.
    - "Por moneda" lists each ISO code with its aggregated total.
    - "Pendientes de conciliar" shows the number of accounts with non-zero `pendingCount`.
 3. Toggle the type filter (Banco / Caja / Tarjeta / Todas) and confirm the table updates. Select **Inactivas** and confirm only archived accounts are listed (across all types) and the sidebar totals stay unchanged.
@@ -214,6 +236,15 @@ The legacy `bank-reconciliation` placeholder entry in `menu.json` is now hidden 
 10. Click a row and confirm the navigation to `/financial-account/{id}`.
 11. Click the pending pill of a row with `pendingCount > 0` and confirm the toast points to T6.
 
+## Read-only access tier (ETP-5457)
+
+A role whose tier on Financial Account is `read-only` gets this list browse-only: no
+"+ Nueva cuenta", no row edit / sync icons, a kebab reduced to "Abrir cuenta", no inline
+"Conectar banco", no selection checkboxes and no account dialogs. "Reglas de matcheo" is shown
+whenever the role can see the Match Rule window at all (`read-only` or `full`). UI only — the
+backend remains the boundary. Full per-control table: `financial-account.md` → "Read-only access
+tier (ETP-5205 / ETP-5457)".
+
 ## Tests
 
 - Backend: `FinancialAccountsPageHandlerTest` (list page) and `FinancialAccountHandlerTest`
@@ -221,7 +252,18 @@ The legacy `bank-reconciliation` placeholder entry in `menu.json` is now hidden 
 - Frontend: `*.vitest.jsx` files under `components/financial-accounts/__tests__/` and
   `windows/custom/financial-account/__tests__/` (wizard, form, connection toggle, edit
   modal, archive dialog), plus `hooks/__tests__/` (`useAccountMutations`) and
-  `lib/__tests__/` (`validateIban`).
+  `lib/__tests__/` (`validateIban`). The sidebar's ETP-5580 tests live in
+  `components/financial-accounts/AccountsSidebar/__tests__/` (`index.vitest.jsx`,
+  `balanceDisplay.vitest.js`, `balanceDisplay.symbolSide.vitest.js`; see
+  `financial-account.md` → "Sidebar rendering").
+- E2E: `e2e/tests/flows/finance/financial-accounts-page.mocked.spec.js` covers the full
+  total, the `≈` converted total and the missing-rate line.
+- See `financial-account-management.md` → "List summary" for the full list and the known gaps:
+  - an E2E check for the ⓘ tooltip (vitest already covers it);
+  - the Spanish "B" suffix (dashboard only);
+  - a clipped total being reachable only through the hover tooltip (not by touch or keyboard);
+  - `MoneyAmount` clipping with no tooltip in the movements table;
+  - the account-detail KPI strip overflowing with huge values.
 
 ## Deployment notes
 

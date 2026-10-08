@@ -59,6 +59,7 @@ vi.mock('@/lib/flags', () => ({
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
   ACCT_PROCESS_MONITOR: 'acct-process-monitor',
   PUBLIC_API_KEYS: 'public-api-keys',
+  UNIFIED_CALENDAR_POC: 'unified-calendar-poc',
 }));
 
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
@@ -129,11 +130,13 @@ vi.mock('@/components/ui/dropdown-menu.jsx', async () => {
     // Mirrors the asChild-cloning behavior of DropdownMenuTrigger above so items
     // like the "Report a bug" <a> (rendered via asChild) keep their own tag,
     // href, and data-testid instead of being wrapped in an extra <div>.
-    DropdownMenuItem: ({ children, asChild, ...props }) => {
+    DropdownMenuItem: ({ children, asChild, onSelect, ...props }) => {
       if (asChild && React.isValidElement(children)) {
         return React.cloneElement(children, props);
       }
-      return <div {...props}>{children}</div>;
+      // Radix fires `onSelect` when the item is clicked; React's own `onSelect` on a <div> never
+      // fires (it only exists for text inputs), so the mock maps it to the click.
+      return <div onClick={onSelect} {...props}>{children}</div>;
     },
     DropdownMenuLabel: ({ children }) => <div>{children}</div>,
     DropdownMenuSeparator: () => <hr />,
@@ -325,6 +328,71 @@ describe('SideMenu', () => {
     render(<SideMenu {...defaultProps} />);
 
     expect(within(screen.getByLabelText('switchCompany')).queryByText('environmentDemo')).not.toBeInTheDocument();
+  });
+
+  // ETP-5548: the switcher named the session's ORGANIZATION, so a productive environment whose
+  // organization still carried its demo's name read as the demo.
+  it('names the current company after its client, not its organization', () => {
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments: [{ clientId: 'prod-1', clientName: 'Acme Productive', plan: 'productive' }],
+      switchTo: vi.fn(),
+      switching: null,
+      currentClientId: 'prod-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    expect(screen.getByTestId('company-switcher-name')).toHaveTextContent('Acme Productive');
+  });
+
+  // ETP-5548: the current company used to be a disabled item, which the menu dims to half
+  // opacity — the row answering "where am I?" was the least visible one.
+  it('highlights the current company instead of disabling it', () => {
+    const switchTo = vi.fn();
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments: [
+        { clientId: 'prod-1', clientName: 'Acme Productive', plan: 'productive' },
+        { clientId: 'demo-1', clientName: 'Acme Demo With A Rather Long Company Name', plan: 'free' },
+      ],
+      switchTo,
+      switching: null,
+      currentClientId: 'prod-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    const current = screen.getByTestId('company-option-prod-1');
+    const other = screen.getByTestId('company-option-demo-1');
+    expect(current).toHaveAttribute('aria-current', 'true');
+    expect(current).not.toHaveAttribute('disabled');
+    expect(current).toHaveTextContent('currentCompany');
+    expect(other).not.toHaveAttribute('aria-current');
+    expect(other).not.toHaveTextContent('currentCompany');
+    // The whole name is rendered (wrapped, not cut), with its plan on the line below.
+    expect(other).toHaveTextContent('Acme Demo With A Rather Long Company Name');
+    expect(other).toHaveTextContent('environmentDemo');
+  });
+
+  it('selecting the current company does not switch, selecting another one does', () => {
+    const switchTo = vi.fn();
+    const environments = [
+      { clientId: 'prod-1', clientName: 'Acme Productive', plan: 'productive' },
+      { clientId: 'demo-1', clientName: 'Acme Demo', plan: 'free' },
+    ];
+    mockUseEnvironmentSwitch.mockReturnValue({
+      environments,
+      switchTo,
+      switching: null,
+      currentClientId: 'prod-1',
+    });
+
+    render(<SideMenu {...defaultProps} />);
+
+    // The menu mock maps an item's `onSelect` to its click, as Radix does.
+    fireEvent.click(screen.getByTestId('company-option-prod-1'));
+    expect(switchTo).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('company-option-demo-1'));
+    expect(switchTo).toHaveBeenCalledWith(environments[1]);
   });
 
   it('renders the user avatar button', () => {

@@ -440,11 +440,7 @@ All tools live in `cli/src/`. Available as `sf-*` commands after `npm install`:
 | `sf-extract-db` | Extract fields + rules from Etendo DB |
 | `sf-extract` | Field extraction with FK resolution |
 | `sf-extract-rules` | Rule + callout extraction |
-| `sf-classify` | Pre-classify rules (deterministic + AI) |
-| `sf-validate` | 4-level schema validation |
-| `sf-contract` | Generate frontend/backend contracts |
 | `sf-push-neo` | Configure NEO Headless via DB writes |
-| `sf-test` | Run contract tests |
 | `sf-lock` | Window lock management (via GitHub Issues) |
 | `sf-check-version` | Check contract version and classify changes |
 

@@ -122,7 +122,7 @@ describe('agent chat history', () => {
 
   it('saves only text: tool parts never reach the backend', async () => {
     setup();
-    const tool = { type: 'tool-neo_list', state: 'output-available', input: { secret: 1 }, output: { rows: [1] } };
+    const tool = { type: 'tool-etendo_list', state: 'output-available', input: { secret: 1 }, output: { rows: [1] } };
     await runTurn([user('u1', 'lista'), assistant('a1', 'hecho', [{ type: 'step-start' }, tool, { type: 'step-start' }])]);
     await flush();
     expect(JSON.stringify(api.appendAgentMessages.mock.calls)).not.toContain('secret');

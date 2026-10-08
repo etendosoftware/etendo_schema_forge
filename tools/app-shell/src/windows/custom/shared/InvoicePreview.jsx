@@ -103,7 +103,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, profile, territory, earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, emailsRefreshSignal }) {
+function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, profile, territory, earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, emailsRefreshSignal }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile, territory);
   // ETP-5229 (corrected): the status VALUE below still reads directly off the
@@ -123,18 +123,27 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
     invoice, specName, profile, territory,
     { sii: earliestSiiCutoverDate, tbai: earliestTbaiCutoverDate, verifactu: earliestVerifactuCutoverDate },
   );
+  // Legacy specs, used only when no `relatedDocs` definition is passed (purchase
+  // invoices). Sales invoices pass SALES_RELATED_DOCS['sales-invoice'] (ETP-5527).
   const invoiceRelatedSpecs = useMemo(() => {
     const orderId = invoice?.salesOrder;
-    if (!orderId) return [];
+    if (relatedDocs || !orderId) return [];
     return [
       { key: 'sales-order', type: 'sales-order', fetch: (_id, tok, base) => fetchById('sales-order', 'header', orderId, tok, base).then(r => r ? [r] : []) },
       { key: 'shipment',    type: 'shipment',     fetch: (_id, tok, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', orderId, tok, base) },
     ];
-  }, [invoice?.salesOrder]);
+  }, [invoice?.salesOrder, relatedDocs]);
 
 
   const latestDueDate = getLatestInstallmentDueDate(installments);
   const currencyCode = installments[0]?.['currency$_identifier'] || invoice?.['currency$_identifier'] || '';
+
+  // Same gating as OrderPreview: show the row whenever the backend sent a value.
+  // Sales invoices read "Delivered", purchase invoices "Received".
+  const isPurchaseInvoice = specName === 'purchase-invoice';
+  const deliveryPercent = invoice?.eTGODeliveryStatus != null && invoice.eTGODeliveryStatus !== ''
+    ? Number(invoice.eTGODeliveryStatus)
+    : undefined;
 
   return (
     <div className="pb-4">
@@ -146,6 +155,8 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         dueDate={latestDueDate ?? null}
         statusCode={invoice?.documentStatus}
         statusLabel={statusLabel}
+        deliveryPercent={Number.isFinite(deliveryPercent) ? deliveryPercent : undefined}
+        deliveryLabel={isPurchaseInvoice ? ui('previewCardReceivedPercent') : undefined}
         orgCurrencyCode={orgCurrencyCode}
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
@@ -210,19 +221,35 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
           refreshSignal={emailsRefreshSignal}
           data-testid="EmailsCard__cf88e6" />
       )}
-      <RelatedDocumentsCard
-        documentId={invoice?.id}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        specs={invoiceRelatedSpecs}
-        data-testid="RelatedDocumentsCard__cf88e6" />
+      {relatedDocs ? (
+        <RelatedDocumentsCard
+          documentId={invoice?.id}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          definition={relatedDocs}
+          // The detail record is reloaded when the invoice changes (payment, SIF send...).
+          docsRefreshSignal={invoice?.updated}
+          data-testid="RelatedDocumentsCard__cf88e6" />
+      ) : (
+        <RelatedDocumentsCard
+          documentId={invoice?.id}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          specs={invoiceRelatedSpecs}
+          data-testid="RelatedDocumentsCard__cf88e6" />
+      )}
     </div>
   );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName, specName = 'purchase-invoice', onClose, onEdit, onInvoiceUpdated = null, readOnly = false }) {
+/**
+ * `relatedDocs` (optional, ETP-5527): a related-documents definition — the sales
+ * callers pass SALES_RELATED_DOCS['sales-invoice'] so the preview lists exactly what the
+ * sales-invoice form lists. Without it the card keeps its legacy specs (purchase invoice).
+ */
+export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName, specName = 'purchase-invoice', onClose, onEdit, onInvoiceUpdated = null, relatedDocs = null, readOnly = false }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const modalRef = useRef(null);
@@ -315,6 +342,8 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     storeCondition: true,
     readOnly,
     autoFetch: false,
+    // ETP-5518 — Replace / Delete menu and lightbox on the supplier's document.
+    fileActions: true,
     token,
     apiBaseUrl,
     onFileChange: setCachedAttachment,
@@ -362,6 +391,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
       content: (
         <InvoiceGeneralTab
           invoice={p.displayInvoice}
+          relatedDocs={relatedDocs}
           partnerName={p.partnerName}
           badgeProps={p.badgeProps}
           statusLabel={p.statusLabel}

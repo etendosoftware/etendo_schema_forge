@@ -52,7 +52,7 @@ posted/not-posted. Every other code is the REASON a posting attempt failed:
 | Code | Meaning | Shown as |
 |---|---|---|
 | `Y` | Posted | green "Contabilizado" |
-| `N` | Not posted | orange "Sin contabilizar" |
+| `N` | Not posted | yellow "Sin contabilizar" (was orange until ETP-5647) |
 | `i` | Invalid account | red "Cuenta inválida" |
 | `E` / `C` | Posting error / error, no cost | red |
 | `p` | Period closed | red |
@@ -64,8 +64,9 @@ Those states are the majority of real data, not an edge case (in one dev tenant:
 `'Y'`/`'N'` allowlist and disagreed: the grid printed a bare `—` while the detail pill
 claimed "Sin contabilizar", so a record whose posting had FAILED read as one that was never
 attempted. `tools/app-shell/src/lib/postedStatus.js` is now the single registry both use —
-keyed by AD column name, failing closed, `Y`/`N` untouched so the other windows are
-unaffected.
+keyed by AD column name, failing closed, `Y`/`N` labels untouched so the other windows are
+unaffected. Since ETP-5647 it is also the only colour source for every code, `Y`/`N` included
+(`postedStatusTone`), so the grid and the detail pill can no longer differ in colour either.
 
 **Real case that surfaced this:** a match whose invoice price differs from the receipt cost
 (e.g. 15.00 invoiced vs 19.80 received) needs the *Invoice Price Variance* account, which
@@ -433,6 +434,10 @@ qualifies. Two label/enrichment gaps had to be closed (ETP-5075):
   `"unknown tableId for Matched Invoice"` before ever reaching the API. Fixed with one map
   entry: `DOCUMENT_TYPE_TO_TABLE_ID.put("Matched Invoice", "472")`.
 
-Three maps, three different keyspaces (`MI` code / raw row label / raw row label again),
-two of them in this repo and one in `com.etendoerp.go` — worth re-reading this section
-before assuming a fourth document type "just works" here without checking all three.
+**ETP-5591 collapsed the three maps.** Rows now carry `documentTypeCode` (`MI`), so the row
+name goes through the same `DOC_TYPE_LABEL_KEYS` as the filter option and
+`ROW_DOC_TYPE_LABEL_KEYS` is gone. The backend translates the label once
+(`DS_LABEL_TO_DOCUMENT_TYPE_CODE`: `"Matched Invoice"` → `MI`) and takes `tableId` from the
+code map the filter already uses, so `DOCUMENT_TYPE_TO_TABLE_ID` is gone too. A new document
+type now needs one label → code entry; see `not-posted-documents.md` ("One label → code map").
+The same page's "Abrir documento" opens these rows at `/matched-purchase-invoices/{id}`.

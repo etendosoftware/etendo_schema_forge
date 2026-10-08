@@ -17,7 +17,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
   const inputRef = useRef(null);
 
   const endpoint = useMemo(
-    () => deriveEntityEndpoint({ entitySpec: column?.entitySpec, apiBaseUrl }),
+    () => deriveEntityEndpoint({ entitySpec: column?.entitySpec, selector: column?.selector, apiBaseUrl }),
     [column, apiBaseUrl],
   );
 
@@ -32,7 +32,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
     endpoint,
     token,
     query,
-    filter: column?.filter,
+    params: column?.selectorParams,
     limit: SEARCH_LIMIT,
   });
 

@@ -10,7 +10,9 @@ import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { getStatusDotColor, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
-import { resolvePostedStatus, postedStatusLabel } from '@/lib/postedStatus.js';
+import {
+  resolvePostedStatus, postedStatusLabel, postedStatusTone, isPostedStatusColumn, isPostedBooleanValue,
+} from '@/lib/postedStatus.js';
 
 function getDateDotColor(dateValue) {
   if (!dateValue) return null;
@@ -94,6 +96,25 @@ function renderBooleanBadgeCell(locale, col, ui, val) {
   return renderBooleanBadge(col, val, trueLabel, falseLabel);
 }
 
+// A posting-status column holds 17 codes, not a boolean, and its colour always comes from
+// the shared registry in lib/postedStatus.js — a window's `badgeVariants` is ignored here, so
+// "Sin contabilizar" cannot drift from the detail pill again (ETP-5647). `Y`/`N` keep the
+// window's `badgeLabels` wording; every other code is the REASON a posting attempt failed and
+// used to fall through to a dash, reading as "no data" (ETP-5075).
+function renderPostedStatusCell(locale, col, ui, val) {
+  const posted = resolvePostedStatus(col.column, val);
+  if (posted) {
+    return <StatusTag status={posted.rawLabel} tone={posted.tone} label={postedStatusLabel(posted, ui)} data-testid="StatusTag__eb5261" />;
+  }
+  if (!col.badge || !isPostedBooleanValue(val)) return null;
+  const resolveBadgeLabel = createBadgeLabelResolver(locale);
+  const isTrue = isTruthyBoolean(val);
+  const label = isTrue
+    ? resolveBadgeLabel(col.badgeLabels?.true, ui('postedStatus'))
+    : resolveBadgeLabel(col.badgeLabels?.false, ui('notPostedStatus'));
+  return <StatusTag status={isTrue ? 'Y' : 'N'} tone={postedStatusTone(val)} label={label} data-testid="StatusTag__eb5261" />;
+}
+
 function getPillLabel(pill, row) {
   return pill?.when(row) ? pill.label : null;
 }
@@ -175,16 +196,12 @@ export function renderBooleanCell({
       </div>
     );
   }
+  if (isPostedStatusColumn(col.column)) {
+    return renderPostedStatusCell(locale, col, ui, val) ?? renderBooleanFallback(val, ui);
+  }
   if (col.badge) {
     const badge = renderBooleanBadgeCell(locale, col, ui, val);
     if (badge) return badge;
-  }
-  // A posting-status column holds 17 codes, not a boolean: everything other than
-  // 'Y'/'N' is the REASON a posting attempt failed, and used to fall through to the
-  // dash below — reading as "no data" instead of "posting failed" (ETP-5075).
-  const posted = resolvePostedStatus(col.column, val);
-  if (posted) {
-    return <Tag variant={posted.variant} label={postedStatusLabel(posted, ui)} data-testid="Tag__eb5261" />;
   }
   return renderBooleanFallback(val, ui);
 }

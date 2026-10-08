@@ -217,6 +217,16 @@ ever changes, this needs revisiting.
   transaction) and was removed from `PeriodsExpandablePanel.jsx` — frontend-only removal (Option
   B1): the `documents` entity, `PeriodControlDocOpenCloseHandler`, and AD Process 168 remain in
   place server-side, unused but harmless. No `decisions.json`/contract change, no regen needed.
+- **Through MCP (ETP-5587).** An agent opens or closes a period the way the dialog does:
+  `etendo_action(spec:'open-close-period-control', entity:'periodControl', id:'<periodId>',
+  action:'openClose', parameters:{openClose:'O'|'C'|'P'})`. `PeriodOpenCloseHandler` declares the
+  button as a contract with exactly the dialog's parameter and options, so `etendo_schema` advertises
+  `openClose` with O/C/P (not the reference list's `docAction` with C/N/O/P), and the MCP sends the
+  dialog's own body (`{fieldValues:{openClose}}`). The per-document-type `documents.openClose` the
+  UI dropped is hidden from agents by `MCP_CONFIG.actions`; `periodControl.processNow` stays
+  discarded — `openClose` already runs Process 167 for every document type, so there is no separate
+  *open/close all* in the UI to mirror. REST and the SPA are unchanged. Details:
+  `com.etendoerp.go/docs/neo-headless.md` §4.12.1.6.
 - **Cerrar Año** / **Deshacer Cierre de Año** are `fiscal-calendar`'s `window.menuActions` entries
   (`closeYear`/`undoCloseYear`), rendered from the kebab menu, each opening
   `CloseYearConfirmModal.jsx` (in `tools/app-shell/src/windows/custom/fiscal-calendar/`) via a thin

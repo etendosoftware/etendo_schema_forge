@@ -35,6 +35,10 @@ PROBE_FINISHED = "probe_finished"
 #: tailing UI spinning forever on a probe that is already dead.
 PROBE_ABORTED = "probe_aborted"
 EFFECT_CHECKED = "effect_checked"
+#: One deterministic call the runner made around the agent (D41). Never a
+#: `tool_call`: those are the agent's, and a fixture must not inflate its count.
+SETUP_STEP = "setup_step"
+TEARDOWN_STEP = "teardown_step"
 RUN_FINISHED = "run_finished"
 
 #: How much of a tool result (and of a serialised argument blob) a single event
@@ -48,7 +52,7 @@ EVENT_PREVIEW_CHARS = 400
 #: kind of value. A RESULT is large by default and its head is diagnostic — the
 #: Gemini `$ref` is recognisable in 60 characters. ARGUMENTS are tiny by default
 #: (a filter, an id), so this cap almost never fires; the one call that breaks
-#: that rule is `neo_feedback`, whose arguments are a whole verdict report (D27),
+#: that rule is `etendo_feedback`, whose arguments are a whole verdict report (D27),
 #: and for which a 400-character head is worthless: truncated JSON does not
 #: parse, so the live view cannot render it as the report it is. The cost is
 #: bounded and it is not per-call — only the handful of calls whose arguments

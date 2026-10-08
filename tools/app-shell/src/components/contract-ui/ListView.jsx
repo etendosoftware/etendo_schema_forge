@@ -11,6 +11,7 @@ import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { useCopyPageLink } from '@/hooks/useCopyLinkAction.js';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import ReportDrawer from './ReportDrawer.jsx';
 import { ListExportButton } from './ListExportButton.jsx';
@@ -277,6 +278,54 @@ export function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, vie
       </button>
     </div>
   );
+}
+
+/**
+ * The list's tab group: the `subsetFilters` segmented control (Todos / Factura / …) and the
+ * list/gallery `ViewToggle` — the two segmented switches that pick WHAT the list shows, as opposed
+ * to the quick filters and actions around them. Returns the controls only, never a row wrapper, so
+ * the caller decides where they sit: ETP-5509 gives them a toolbar row of their own (see
+ * `hasListToolbarTabs` and the idle bar in ListView).
+ */
+function ListToolbarTabs({
+  subsetFilters, activeSubsetIndex, onSelectSubset, ui,
+  galleryRenderer, viewMode, onSelectList, onSelectGallery,
+}) {
+  return (
+    <>
+      {subsetFilters?.length > 0 && (
+        <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
+          {subsetFilters.map((sf, i) => (
+            <button
+              key={sf.key || sf.label}
+              onClick={() => onSelectSubset(i)}
+              data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
+              className={[
+                'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
+                activeSubsetIndex === i
+                  ? 'bg-card shadow-sm'
+                  : 'bg-[hsl(var(--muted))] hover:brightness-95',
+              ].join(' ')}
+            >
+              {ui(sf.label)}
+            </button>
+          ))}
+        </div>
+      )}
+      <ViewToggle
+        galleryRenderer={galleryRenderer}
+        onSelectList={onSelectList}
+        viewMode={viewMode}
+        onSelectGallery={onSelectGallery}
+        data-testid="ViewToggle__620cbc" />
+    </>
+  );
+}
+
+// Whether the window has a tab group at all. Gates the toolbar's second row so a window without
+// one (e.g. Warehouse) keeps a single-row toolbar instead of an empty padded band.
+function hasListToolbarTabs(subsetFilters, galleryRenderer) {
+  return subsetFilters?.length > 0 || Boolean(galleryRenderer);
 }
 
 function iconSizeClass(selectionBarSize) {
@@ -861,6 +910,7 @@ export function ListView({
     onAddToFavorites: favKey ? () => toggleFavorite(favKey, entityLabel || entity) : undefined,
     isFavorite: favActive,
   }, [favActive, hook.items.length, hideRecordCount]);
+  const copyPageLink = useCopyPageLink();
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
   // ETP-5387 — bumped only by the toolbar Refresh button and forwarded to the headerTable as
@@ -1086,6 +1136,10 @@ export function ListView({
     hoverRowActions,
     clearSelectionTrigger: clearSelectionCounter,
     userRefreshTrigger: userRefreshCounter,
+    // ETP-5593 — the same view-only flag that gates the toolbar's New/Print/bulk delete,
+    // so a custom table with its own inline edits (the chart-of-accounts status switch)
+    // can disable them. DataTable ignores it.
+    windowReadOnly,
     deselectTrigger,
     deselectRowIds,
     rowQuickActions: effectiveRowQuickActions,
@@ -1206,192 +1260,204 @@ export function ListView({
               </div>
             </SelectionToolbar>
           )}
+          {/* ETP-5509 — the idle bar is a column of up to two rows, closed by the gray line that
+              delimits toolbar from body:
+                row 1 — quick filters + "Filtros" on the left, main actions on the right;
+                row 2 — the tab group (`ListToolbarTabs`), only when the window has one.
+              The tabs used to open row 1, where at the minimum supported viewport (1280x720
+              with the navigation rail expanded) they competed for width with the filters and
+              the actions. They sit on their own row at EVERY width — a product decision, not a
+              breakpoint: to make it conditional later, render `<ListToolbarTabs>` at the start
+              of row 1's left cluster above the breakpoint and gate row 2 on the opposite
+              condition; nothing else in this block depends on where the tabs are.
+              The separator lives here rather than in each headerTable so every window that
+              keeps the native bar gets it by construction (Payments In, whose table sits next
+              to a sidebar, had none). A window that replaces the bar (`hideListBar`) draws its
+              own toolbar and its own line (financial-account). */}
           {!listBarHidden && (
-            <div className={`flex items-center justify-between ${listbarPaddingX} ${listbarPaddingY}`}>
-              <div className="flex items-center gap-2">
-                {subsetFilters && (
-                  <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
-                    {subsetFilters.map((sf, i) => (
-                      <button
-                        key={i}
-                        onClick={() => selectSubset(i)}
-                        data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
-                        className={[
-                          'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
-                          activeSubsetIndex === i
-                            ? 'bg-card shadow-sm'
-                            : 'bg-[hsl(var(--muted))] hover:brightness-95',
-                        ].join(' ')}
-                      >
-                        {ui(sf.label)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {quickFilters && (
-                  <div role="group" aria-label="Filters" className="flex items-center gap-1">
-                    {quickFilters.map((qf, i) => (
-                      <button
-                        key={i}
-                        onClick={() => toggleQuickFilter(i)}
-                        data-testid={`quick-filter-${qf.key || qf.label?.toLowerCase()}`}
-                        className={[
-                          'h-9 px-3 text-xs rounded-lg border bg-card transition-colors',
-                          activeFilterIndices.has(i)
-                            ? 'border-primary text-primary bg-primary/5 font-medium'
-                            : 'border-border text-muted-foreground hover:text-foreground',
-                        ].join(' ')}
-                      >
-                        {ui(qf.label)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {/* ETP-5188 — a custom `Table` component may expose a companion
-                    toolbar-slot component via a static property (same convention
-                    `DetailView.jsx` uses for `formFooter.inlineInHeaderCard`), so it can
-                    render a quick-filter control right here — same toolbar row as
-                    "Filtros", left of it — with zero changes to the generated page,
-                    `decisions.json`, or the generator. See `UserHeaderTable.
-                    ToolbarQuickFilter` / `RoleQuickFilterToolbarSlot.jsx` for the
-                    reference implementation. */}
-                {Table?.ToolbarQuickFilter && (
-                  <Table.ToolbarQuickFilter
+            <div
+              className={`flex flex-col gap-2 border-b border-[hsl(var(--border-subtle))] ${listbarPaddingX} ${listbarPaddingY}`}
+              data-testid="list-toolbar">
+              <div className="flex items-center justify-between" data-testid="list-toolbar-main-row">
+                <div className="flex items-center gap-2">
+                  {quickFilters && (
+                    <div role="group" aria-label="Filters" className="flex items-center gap-1">
+                      {quickFilters.map((qf, i) => (
+                        <button
+                          key={i}
+                          onClick={() => toggleQuickFilter(i)}
+                          data-testid={`quick-filter-${qf.key || qf.label?.toLowerCase()}`}
+                          className={[
+                            'h-9 px-3 text-xs rounded-lg border bg-card transition-colors',
+                            activeFilterIndices.has(i)
+                              ? 'border-primary text-primary bg-primary/5 font-medium'
+                              : 'border-border text-muted-foreground hover:text-foreground',
+                          ].join(' ')}
+                        >
+                          {ui(qf.label)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* ETP-5188 — a custom `Table` component may expose a companion
+                      toolbar-slot component via a static property (same convention
+                      `DetailView.jsx` uses for `formFooter.inlineInHeaderCard`), so it can
+                      render a quick-filter control right here — same toolbar row as
+                      "Filtros", left of it — with zero changes to the generated page,
+                      `decisions.json`, or the generator. See `UserHeaderTable.
+                      ToolbarQuickFilter` / `RoleQuickFilterToolbarSlot.jsx` for the
+                      reference implementation. */}
+                  {Table?.ToolbarQuickFilter && (
+                    <Table.ToolbarQuickFilter
+                      entity={entity}
+                      windowName={windowName}
+                      token={token}
+                      apiBaseUrl={apiBaseUrl}
+                      data-testid="TableToolbarQuickFilter__620cbc" />
+                  )}
+                  <ListFilterBarSection
+                    hideFilters={listViewOptions?.hideFilters}
+                    hideListFilters={hideListFilters}
+                    hideStatusFilter={listViewOptions?.hideStatusFilter}
                     entity={entity}
+                    apiBaseUrl={apiBaseUrl}
+                    columns={filterColumns}
+                    columnFilters={columnFilters}
+                    onFilterChange={handleFilterChange}
+                    advancedFilter={advancedFilter}
+                    onAdvancedFilterChange={setAdvancedFilter}
+                    hook={hook}
+                    dateFilterKey={dateFilterKey}
                     windowName={windowName}
-                    token={token}
-                    apiBaseUrl={apiBaseUrl}
-                    data-testid="TableToolbarQuickFilter__620cbc" />
-                )}
-                <ListFilterBarSection
-                  hideFilters={listViewOptions?.hideFilters}
-                  hideListFilters={hideListFilters}
-                  hideStatusFilter={listViewOptions?.hideStatusFilter}
-                  entity={entity}
-                  apiBaseUrl={apiBaseUrl}
-                  columns={filterColumns}
-                  columnFilters={columnFilters}
-                  onFilterChange={handleFilterChange}
-                  advancedFilter={advancedFilter}
-                  onAdvancedFilterChange={setAdvancedFilter}
-                  hook={hook}
-                  dateFilterKey={dateFilterKey}
-                  windowName={windowName}
-                  filterPresets={filterPresets}
-                  applyPreset={applyPreset}
-                  saveCurrentAsPreset={saveCurrentAsPreset}
-                  deletePreset={deletePreset}
-                  labelOverrides={labelOverrides}
-                  data-testid="ListFilterBarSection__620cbc" />
-                <ViewToggle
-                  galleryRenderer={galleryRenderer}
-                  onSelectList={() => handleViewMode('list')}
-                  viewMode={viewMode}
-                  onSelectGallery={() => handleViewMode('gallery')}
-                  data-testid="ViewToggle__620cbc" />
-              </div>
-              <div className="flex items-center gap-2">
-                {!(listViewOptions?.hideLink ?? hideLink) && (
-                  <button
-                    className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
-                    <Link2 className="h-4 w-4" data-testid="Link2__620cbc" />
-                  </button>
-                )}
-                <ListSortPopover
-                  columns={tableColumns}
-                  sortColumn={hook.sortColumn}
-                  sortDirection={hook.sortDirection}
-                  onSelect={handleSortSelect}
-                  onClear={handleClearSort}
-                  isDefaultSort={isDefaultSort}
-                  SortIconComponent={SortIconComponent}
-                  iconButtonHover={iconButtonHover}
-                  labelOverrides={labelOverrides}
-                  data-testid="ListSortPopover__620cbc" />
-                <RefreshButton
-                  RefreshIconComponent={RefreshIconComponent}
-                  iconButtonHover={iconButtonHover}
-                  onRefresh={() => {
-                    hook.refresh();
-                    setUserRefreshCounter((n) => n + 1);
-                  }}
-                  label={ui('refresh')}
-                  data-testid="RefreshButton__620cbc" />
-                {/* ETP-4997 (SHELL-02) — the arrow tracks the direction the DATA travels, not
-                    the file: import pulls records into Etendo (Download), export pushes them
-                    out (Upload). The import button used to carry the outward arrow, which read
-                    as an export. */}
-                {importConfig?.enabled && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
-                    onClick={() => setShowImportDialog(true)}
-                    aria-label={ui('import')}
-                    title={ui('import')}
-                    data-testid="ListView__importButton"
-                  >
-                    <Download className="h-3.5 w-3.5" data-testid="Download__ListViewImport" />
-                  </Button>
-                )}
-                {importConfig?.enabled && (
-                  <ListExportButton
-                    importConfig={importConfig}
-                    importFieldLabel={importDialogProps.fieldLabelFn}
-                    apiBaseUrl={apiBaseUrl}
-                    buildListQuery={hook.buildListQuery}
-                    data-testid="ListExportButton__620cbc" />
-                )}
-                {selectedRows.length === 0 && !(listViewOptions?.hidePrint ?? hidePrint) && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
-                    onClick={() => setShowReport(true)}
-                    data-testid="Button__620cbc">
-                    <Printer className="h-3.5 w-3.5" data-testid="Printer__620cbc" />
-                    {ui('print')}
-                  </Button>
-                )}
-                {/* Split "New" button */}
-                {!hideCreate && !windowReadOnly && (
-                  <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
+                    filterPresets={filterPresets}
+                    applyPreset={applyPreset}
+                    saveCurrentAsPreset={saveCurrentAsPreset}
+                    deletePreset={deletePreset}
+                    labelOverrides={labelOverrides}
+                    data-testid="ListFilterBarSection__620cbc" />
+                </div>
+                <div className="flex items-center gap-2">
+                  {!(listViewOptions?.hideLink ?? hideLink) && (
+                    <button
+                      type="button"
+                      onClick={copyPageLink}
+                      title={ui('copyLink')}
+                      aria-label={ui('copyLink')}
+                      data-testid="list-share-link"
+                      className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
+                      <Link2 className="h-4 w-4" data-testid="Link2__620cbc" />
+                    </button>
+                  )}
+                  <ListSortPopover
+                    columns={tableColumns}
+                    sortColumn={hook.sortColumn}
+                    sortDirection={hook.sortDirection}
+                    onSelect={handleSortSelect}
+                    onClear={handleClearSort}
+                    isDefaultSort={isDefaultSort}
+                    SortIconComponent={SortIconComponent}
+                    iconButtonHover={iconButtonHover}
+                    labelOverrides={labelOverrides}
+                    data-testid="ListSortPopover__620cbc" />
+                  <RefreshButton
+                    RefreshIconComponent={RefreshIconComponent}
+                    iconButtonHover={iconButtonHover}
+                    onRefresh={() => {
+                      hook.refresh();
+                      setUserRefreshCounter((n) => n + 1);
+                    }}
+                    label={ui('refresh')}
+                    data-testid="RefreshButton__620cbc" />
+                  {/* ETP-4997 (SHELL-02) — the arrow tracks the direction the DATA travels, not
+                      the file: import pulls records into Etendo (Download), export pushes them
+                      out (Upload). The import button used to carry the outward arrow, which read
+                      as an export. */}
+                  {importConfig?.enabled && (
                     <Button
-                      className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
-                      data-testid="action-new"
-                      onClick={() => onNew ? onNew() : navigate(`/${windowName}/new`)}
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+                      onClick={() => setShowImportDialog(true)}
+                      aria-label={ui('import')}
+                      title={ui('import')}
+                      data-testid="ListView__importButton"
                     >
-                      <Plus className="h-4 w-4" data-testid="Plus__620cbc" />
-                      {newLabel ?? tMenu(entityLabel, { field: 'newLabel' }) ?? ui('newRecord')}
+                      <Download className="h-3.5 w-3.5" data-testid="Download__ListViewImport" />
                     </Button>
-                    {newActions.length > 0 && (
-                      <>
-                        <div className="w-px bg-primary-foreground/20" />
-                        <DropdownMenu data-testid="DropdownMenu__620cbc">
-                          <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
-                            <Button
-                              className="rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
-                              data-testid="action-new-more">
-                              <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__620cbc" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" data-testid="DropdownMenuContent__620cbc">
-                            {newActions.map((action) => (
-                              <DropdownMenuItem
-                                key={action.key}
-                                onClick={action.onClick}
-                                data-testid={`action-new-${action.key}`}
-                              >
-                                {action.label}
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </>
-                    )}
-                  </div>
-                )}
+                  )}
+                  {importConfig?.enabled && (
+                    <ListExportButton
+                      importConfig={importConfig}
+                      importFieldLabel={importDialogProps.fieldLabelFn}
+                      apiBaseUrl={apiBaseUrl}
+                      buildListQuery={hook.buildListQuery}
+                      data-testid="ListExportButton__620cbc" />
+                  )}
+                  {selectedRows.length === 0 && !(listViewOptions?.hidePrint ?? hidePrint) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+                      onClick={() => setShowReport(true)}
+                      data-testid="Button__620cbc">
+                      <Printer className="h-3.5 w-3.5" data-testid="Printer__620cbc" />
+                      {ui('print')}
+                    </Button>
+                  )}
+                  {/* Split "New" button */}
+                  {!hideCreate && !windowReadOnly && (
+                    <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
+                      <Button
+                        className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+                        data-testid="action-new"
+                        onClick={() => onNew ? onNew() : navigate(`/${windowName}/new`)}
+                      >
+                        <Plus className="h-4 w-4" data-testid="Plus__620cbc" />
+                        {newLabel ?? tMenu(entityLabel, { field: 'newLabel' }) ?? ui('newRecord')}
+                      </Button>
+                      {newActions.length > 0 && (
+                        <>
+                          <div className="w-px bg-primary-foreground/20" />
+                          <DropdownMenu data-testid="DropdownMenu__620cbc">
+                            <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
+                              <Button
+                                className="rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+                                data-testid="action-new-more">
+                                <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__620cbc" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" data-testid="DropdownMenuContent__620cbc">
+                              {newActions.map((action) => (
+                                <DropdownMenuItem
+                                  key={action.key}
+                                  onClick={action.onClick}
+                                  data-testid={`action-new-${action.key}`}
+                                >
+                                  {action.label}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
+              {hasListToolbarTabs(subsetFilters, galleryRenderer) && (
+                <div className="flex items-center gap-2" data-testid="list-toolbar-tabs-row">
+                  <ListToolbarTabs
+                    subsetFilters={subsetFilters}
+                    activeSubsetIndex={activeSubsetIndex}
+                    onSelectSubset={selectSubset}
+                    ui={ui}
+                    galleryRenderer={galleryRenderer}
+                    viewMode={viewMode}
+                    onSelectList={() => handleViewMode('list')}
+                    onSelectGallery={() => handleViewMode('gallery')}
+                    data-testid="ListToolbarTabs__620cbc" />
+                </div>
+              )}
             </div>
           )}
 

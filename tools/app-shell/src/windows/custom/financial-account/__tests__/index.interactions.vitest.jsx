@@ -51,9 +51,12 @@ vi.mock('@/hooks/useReconciliationList', () => ({
   useReconciliations: () => ({ reconciliations: [], loading: false, reload: vi.fn() }),
   useClearedItems: () => ({ items: [], loading: false }),
 }));
+// `type` is undefined (a bank account) unless a test sets it — ETP-5457 flips it to CASH to mount
+// the cash-close branch of the reconciliation tab.
+let currentAccountType;
 vi.mock('@/hooks/useFinancialAccount', () => ({
   useFinancialAccount: () => ({
-    account: { id: 'acc-1', name: 'BBVA', pendingCount: 2 },
+    account: { id: 'acc-1', name: 'BBVA', pendingCount: 2, type: currentAccountType },
     loading: false,
     error: null,
     reload: reloadAccountMock,
@@ -138,8 +141,8 @@ let movementsTabProps = null;
 let mockMovementsApi = { filtered: [{ id: 'm1' }] };
 
 vi.mock('../ReconciliationTab.jsx', () => ({
-  ReconciliationTab: ({ onReconcileSuccess }) => (
-    <div data-testid="tab-reconciliation">
+  ReconciliationTab: ({ onReconcileSuccess, windowReadOnly }) => (
+    <div data-testid="tab-reconciliation" data-window-read-only={String(windowReadOnly)}>
       <button type="button" data-testid="stub-reconcile-success" onClick={onReconcileSuccess} />
     </div>
   ),
@@ -147,13 +150,20 @@ vi.mock('../ReconciliationTab.jsx', () => ({
 
 let mockStatementsApi = { selected: [], filtered: [] };
 vi.mock('../ImportedStatementsTab.jsx', () => ({
-  ImportedStatementsTab: forwardRef(function ImportedStatementsTabStub(_props, ref) {
+  ImportedStatementsTab: forwardRef(function ImportedStatementsTabStub(props, ref) {
     useImperativeHandle(ref, () => ({
       getSelectedStatementIds: () => mockStatementsApi.selected,
       getFilteredStatements: () => mockStatementsApi.filtered,
     }));
-    return <div data-testid="tab-statements" />;
+    return <div data-testid="tab-statements" data-window-read-only={String(props.windowReadOnly)} />;
   }),
+}));
+
+// ETP-5457 — only mounted for a CASH account (see `currentAccountType`).
+vi.mock('../CashClose/index.jsx', () => ({
+  CashCloseTab: ({ windowReadOnly }) => (
+    <div data-testid="tab-cash-close" data-window-read-only={String(windowReadOnly)} />
+  ),
 }));
 
 vi.mock('../EditAccountModal.jsx', () => ({
@@ -202,12 +212,14 @@ vi.mock('@/components/contract-ui/AutoMatchSuggestionModal', () => ({
 }));
 
 import { FinancialAccountDetail } from '../index.jsx';
+import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 
 const WINDOW_ID = '94EAA455D2644E04AB25D93BE5157B6D';
 
 beforeEach(() => {
   currentSearchParams = new URLSearchParams();
   currentWindowAccessTier = 'full';
+  currentAccountType = undefined;
   currentMovements = [{ id: 'm1' }];
   mockMovementsApi = { filtered: [{ id: 'm1' }] };
   mockStatementsApi = { selected: [], filtered: [] };
@@ -279,6 +291,41 @@ describe('FinancialAccountDetail — access tier gate (ETP-4658)', () => {
     rerender(<FinancialAccountDetail recordId="acc-1" />);
 
     expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'false');
+  });
+});
+
+// ETP-5457 — the read-only tier now reaches the three tabs that ETP-5205 left writable. Each tab
+// closes its own write paths (see their suites); what the host owes them is the prop. A dropped
+// prop is silent — the tab simply stays writable — so each mount is asserted both ways.
+describe('FinancialAccountDetail — read-only tier reaches every tab (ETP-5457)', () => {
+  const TIERS = [['read-only', 'true'], ['full', 'false']];
+
+  it.each(TIERS)('hands windowReadOnly to ReconciliationTab for tier %s (ETP-5457)', (tier, expected) => {
+    currentWindowAccessTier = tier;
+    currentSearchParams = new URLSearchParams('tab=reconciliation');
+    render(<FinancialAccountDetail recordId="acc-1" />);
+
+    expect(screen.getByTestId('tab-reconciliation'))
+      .toHaveAttribute('data-window-read-only', expected);
+    expect(screen.queryByTestId('tab-cash-close')).not.toBeInTheDocument();
+  });
+
+  it.each(TIERS)('hands windowReadOnly to CashCloseTab for tier %s on a cash account (ETP-5457)', (tier, expected) => {
+    currentWindowAccessTier = tier;
+    currentAccountType = ACCOUNT_TYPE.CASH;
+    currentSearchParams = new URLSearchParams('tab=reconciliation');
+    render(<FinancialAccountDetail recordId="acc-1" />);
+
+    expect(screen.getByTestId('tab-cash-close')).toHaveAttribute('data-window-read-only', expected);
+    expect(screen.queryByTestId('tab-reconciliation')).not.toBeInTheDocument();
+  });
+
+  it.each(TIERS)('hands windowReadOnly to ImportedStatementsTab for tier %s (ETP-5457)', (tier, expected) => {
+    currentWindowAccessTier = tier;
+    currentSearchParams = new URLSearchParams('tab=statements');
+    render(<FinancialAccountDetail recordId="acc-1" />);
+
+    expect(screen.getByTestId('tab-statements')).toHaveAttribute('data-window-read-only', expected);
   });
 });
 

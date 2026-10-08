@@ -43,7 +43,7 @@ function chunkIban(iban) {
 // drag-and-drop library at all — so it advertised a row reordering that does not exist.
 // Removed with its slot; COLUMN_CHROME.name's left padding in AccountsHeaderTable
 // mirrors this cell's leading offset and was reduced to match.
-export function NameCell({ account, ui, onConnect }) {
+export function NameCell({ account, ui, onConnect, windowReadOnly = false }) {
   const isCashLike = account.type === ACCOUNT_TYPE.CASH;
   // In T1 the connection column is not yet populated, so anything not explicitly
   // bankConnected === true is treated as offline for bank/card rows.
@@ -75,6 +75,7 @@ export function NameCell({ account, ui, onConnect }) {
         <SyncStatusInline
           account={account}
           onConnect={onConnect ? () => onConnect(account) : undefined}
+          windowReadOnly={windowReadOnly}
           data-testid="SyncStatusInline__dc050f" />
       </div>
     </div>
@@ -151,11 +152,21 @@ export function CurrencyCell({ account }) {
   return <Tag variant="neutral" label={account.currencyIso} data-testid="Tag__dc050f" />;
 }
 
+/** "Saldo" column (ETP-5580) — the exact balance, never compacted, so a huge one does not fit
+ *  the pinned 130px column. The clipping itself happens at the DataTable `<td>` (the shared
+ *  TableCell is `overflow-hidden text-ellipsis whitespace-nowrap`): with a bare inline span the
+ *  cell painted "87.542.314.548.725,…" and nothing revealed the rest. Rendering through
+ *  TruncatedText moves the ellipsis onto its own block span, which is width-bounded by that
+ *  `<td>` under DataTable's `table-layout: fixed` (same as CountryCell), so it can measure that
+ *  it overflows and show the exact amount in a tooltip. `text-right` is explicit even though
+ *  the `<td>` is already right-aligned (`amount` is a numeric type), so the alignment does not
+ *  depend on the host. */
 export function BalanceCell({ account }) {
   const isNegative = Number(account.currentBalance) < 0;
   return (
-    <span className={cn('text-sm font-semibold leading-5 tabular-nums', isNegative ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--foreground))]')}>
-      {formatCurrency(account.currencyIso, account.currentBalance)}
-    </span>
+    <TruncatedText
+      text={formatCurrency(account.currencyIso, account.currentBalance)}
+      className={cn('text-right text-sm font-semibold leading-5 tabular-nums', isNegative ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--foreground))]')}
+      data-testid={`account-row-balance-${account.id}`} />
   );
 }

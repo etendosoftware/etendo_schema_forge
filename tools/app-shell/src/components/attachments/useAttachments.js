@@ -458,9 +458,10 @@ export function useAttachments({
   // follow-up — a new/unsaved header has no persisted id to attach to, so
   // AttachmentsTab force-saves the header first and passes the freshly
   // returned id here instead of waiting for a re-render).
+  // ETP-5309: "new" is not a persisted id — mirror hasRealRecord instead of POSTing it.
   const upload = useCallback(async (file, opts = {}) => {
     const targetRecordId = opts.recordId || recordId;
-    if (!file || !tableName || !targetRecordId) return;
+    if (!file || !tableName || !targetRecordId || targetRecordId === 'new') return;
     const tempId = `upload-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
     setUploadingFiles((prev) => {
       const next = new Map(prev);

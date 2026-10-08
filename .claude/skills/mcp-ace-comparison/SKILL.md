@@ -102,7 +102,7 @@ two servers says nothing about whether either is in trouble.
 | **Hard per-response ceiling in Claude Code** | — | **25k** (`MAX_MCP_OUTPUT_TOKENS`) |
 
 Practical consensus is that 5–7 connected servers is the ceiling before degradation. The 25k
-per-response limit is a hard failure, not a slowdown: on 2026-08-13 a 61,963-character `neo_schema`
+per-response limit is a hard failure, not a slowdown: on 2026-08-13 a 61,963-character `etendo_schema`
 dump (~16.7k tokens, two thirds of the limit) is what registered IMP-12 after the call failed
 against the client limit. When a response approaches that ceiling, say so — it is a defect, not a
 cost.

@@ -40,8 +40,8 @@ const TRANSACTIONS_API_PATH = '/sws/neo/financial-account-transactions';
 // Movements CSV columns (key:Label:type). The Classic-parity transforms (type
 // /status labels, deposit/withdrawal split, synthetic "Payment", processed flag)
 // are pre-derived server-side on the transaction rows, so the generic exporter
-// stays a dumb serializer. `foreignAmount`/`foreignCurrency` are not exposed yet
-// → those keys are absent on the row and render as empty cells (as in Classic).
+// stays a dumb serializer. `foreignAmount`/`foreignCurrency` are only on the rows of
+// foreign-currency transactions (ETP-5657); elsewhere the keys are absent and the cells empty.
 // ETP-5020: this whole column list is a hardcoded, unlocalized mirror of
 // Classic's own CSV export headers (by design — every label here, not just
 // "G/L Item", stays in Classic's English regardless of active UI locale).
@@ -451,7 +451,7 @@ export function FinancialAccountDetail({ recordId }) {
       titleExtra: account ? <SyncStatusInline account={account} data-testid="SyncStatusInline__f7dbb3" /> : null,
       breadcrumb: `${ui('financeMenuLabel')} / ${ui('financeAccountsPageTitle')} / ${accountName}`,
     },
-    [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending],
+    [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending, account?.lastSyncDate],
   );
 
   // ETP-4658 — this custom window never delegated to the generated AccountPage.jsx
@@ -461,9 +461,10 @@ export function FinancialAccountDetail({ recordId }) {
   // across renders regardless of the tier (mirrors custom/sales-invoice/index.jsx).
   // ETP-5205 v6 — the "read-only" tier is now also propagated (see windowReadOnly
   // below), threaded into DetailToolbarActions, MovementsTab, and their respective
-  // modal render conditions. Reconciliation/Imported Statements/Cash Close are NOT
-  // yet covered — same gap, not yet fixed there; do not assume this window is fully
-  // closed out by this change alone.
+  // modal render conditions. ETP-5457 closed the remaining tabs the same way:
+  // ReconciliationTab (split panel), CashCloseTab and ImportedStatementsTab all take
+  // `windowReadOnly` and hide/disable their write entry points. The Reconciliations
+  // list tab has none (navigation only). UI-only: the backend is still the boundary.
   const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
   const windowReadOnly = windowAccessTier === 'read-only';
   if (windowAccessTier === 'none') {
@@ -545,6 +546,7 @@ export function FinancialAccountDetail({ recordId }) {
               // badge count, and that list is fetched here (not inside the tab), so it has to be
               // reloaded too — otherwise the close only shows up after a manual page refresh.
               onCloseSuccess={() => { reloadAccountAndList(); reloadMovements(); reloadReconciliations(); }}
+              windowReadOnly={windowReadOnly}
               data-testid="CashCloseTab__f7dbb3" />
           ) : (
             <ReconciliationTab
@@ -552,12 +554,15 @@ export function FinancialAccountDetail({ recordId }) {
               account={account}
               paymentMethods={paymentMethods}
               onReconcileSuccess={() => { reloadAccountAndList(); reloadMovements(); reloadAutoMatch(); }}
+              windowReadOnly={windowReadOnly}
               data-testid="ReconciliationTab__f7dbb3" />
           ))}
           {activeTab === 'statements' && (
             <ImportedStatementsTab
               ref={statementsTabRef}
               account={account}
+              windowReadOnly={windowReadOnly}
+              onSynced={reloadAccountAndList}
               data-testid="ImportedStatementsTab__f7dbb3" />
           )}
           {activeTab === 'reconciliationList' && (

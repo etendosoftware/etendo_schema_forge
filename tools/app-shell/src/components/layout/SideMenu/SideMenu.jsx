@@ -48,6 +48,7 @@ import {
   MessageCircle,
   ExternalLink,
   Loader2,
+  Check,
 } from 'lucide-react';
 import {
   ClipboardText as ClipboardCheck,
@@ -73,12 +74,13 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS } from '@/lib/flags';
+import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS, UNIFIED_CALENDAR_POC } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import {
   environmentCommercialLabel,
   environmentPlanLabelKey,
   environmentRelationshipLabel,
+  isProductiveEnvironment,
 } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
 import { useFirstStepsProgressOptional } from '@/pages/first-steps/FirstStepsContext.jsx';
@@ -229,6 +231,66 @@ export function findActiveGroup(menuGroups, pathname, search) {
     g.group !== 'Favorites' &&
     g.items.some((item) => matchesItem(item, currentPath, currentFull))
   ) || null;
+}
+
+/**
+ * One company in the switcher. The name is shown in full, wrapping over as many lines as it needs
+ * (the row grows; the menu scrolls), and the plan / commercial / relationship labels go on their
+ * own line below it. The current company is
+ * NOT a disabled item: a disabled Radix item is dimmed to half opacity, which made the one row
+ * that answers "where am I?" the least visible. It is highlighted, marked with a check and
+ * `aria-current`, and selecting it simply closes the menu.
+ */
+function CompanyOption({ env, isCurrent, switching, onSwitch, logoSrc, ui }) {
+  const commercialLabel = environmentCommercialLabel(env, ui);
+  const relationshipLabel = environmentRelationshipLabel(env, ui);
+  const name = env.clientName || env.orgName || ui('yourCompany');
+  return (
+    <DropdownMenuItem
+      disabled={switching !== null}
+      onSelect={() => { if (!isCurrent) onSwitch(env); }}
+      aria-current={isCurrent ? 'true' : undefined}
+      className={cn(
+        'items-start gap-2 py-2',
+        isCurrent && 'bg-primary/10 focus:bg-primary/15'
+      )}
+      data-testid={`company-option-${env.clientId}`}
+    >
+      <img src={logoSrc} alt="" className="mt-0.5 h-6 w-6 shrink-0 rounded-full" />
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span
+          className={cn(
+            'whitespace-normal break-words [overflow-wrap:anywhere] text-sm leading-snug',
+            isCurrent ? 'font-semibold text-primary' : 'font-medium text-foreground'
+          )}
+          title={name}
+        >
+          {name}
+        </span>
+        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          <span className={cn(
+            'rounded-full px-1.5 py-0.5 text-[11px] font-medium',
+            isProductiveEnvironment(env)
+              ? 'bg-status-success text-status-success-foreground'
+              : 'bg-muted text-muted-foreground'
+          )}>
+            {ui(environmentPlanLabelKey(env))}
+          </span>
+          {commercialLabel && <span>{commercialLabel}</span>}
+          {relationshipLabel && <span>· {relationshipLabel}</span>}
+        </span>
+      </span>
+      {switching === env.clientId && (
+        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" data-testid="Loader2__247c75" />
+      )}
+      {isCurrent && switching !== env.clientId && (
+        <span className="mt-0.5 flex shrink-0 items-center gap-1 text-xs font-medium text-primary">
+          <Check className="h-4 w-4" aria-hidden="true" data-testid="Check__247c75" />
+          {ui('currentCompany')}
+        </span>
+      )}
+    </DropdownMenuItem>
+  );
 }
 
 const COLLAPSED_W = 56;
@@ -584,6 +646,7 @@ export default function SideMenu({
   // only: the route is registered unconditionally and SFAcctProcessMonitor enforces admin access.
   const showAcctProcessMonitor = useFeatureFlag(ACCT_PROCESS_MONITOR);
   const showPublicApiKeys = useFeatureFlag(PUBLIC_API_KEYS);
+  const showUnifiedCalendarPoc = useFeatureFlag(UNIFIED_CALENDAR_POC);
   // Unconditional since ETP-4966: owning more than one environment is a shipped
   // capability, so the switcher is always available. The hook already returns an
   // empty list for a session that cannot list environments, which is what keeps
@@ -611,7 +674,10 @@ export default function SideMenu({
     // with showProofOfConceptMenu's group-level gate above, or an item inside an unlocked
     // group would still be filtered out here as if the flag were unset.
     [PROOF_OF_CONCEPT_MENU]: showProofOfConceptMenu,
-  }), [showAcctProcessMonitor, showPublicApiKeys, showProofOfConceptMenu]);
+    // Unified Calendar PoC — item-level flag. It sits inside the Proof of Concept group, so it is
+    // visible only when BOTH proof-of-concept-menu (group gate above) and this flag are on.
+    [UNIFIED_CALENDAR_POC]: showUnifiedCalendarPoc,
+  }), [showAcctProcessMonitor, showPublicApiKeys, showProofOfConceptMenu, showUnifiedCalendarPoc]);
 
   // Applied to Favorites TOO. Favorites are rebuilt from the user's own saved list rather than
   // from menuGroups, so returning early for that group let a favourited flag-gated item stay
@@ -700,79 +766,56 @@ export default function SideMenu({
                     alt="Etendo"
                     className="h-8 w-8 shrink-0 rounded-full"
                   />
-                  <TruncatedText
-                    text={selectedOrg?.name || ui('yourCompany')}
-                    className="flex-1 text-left text-sm font-semibold text-foreground"
-                    data-testid="company-switcher-name" />
-                  {/* Guarded on having resolved the environment, not on a flag: a session that
-                      cannot list environments (no platform token) has no plan to report, and
-                      environmentPlanLabelKey would otherwise label it "Demo" from a missing value
-                      rather than from a known free plan. */}
-                  {currentEnvironment && (
-                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      {ui(environmentPlanLabelKey(currentEnvironment))}
-                    </span>
-                  )}
-                  {currentEnvironment && environmentCommercialLabel(currentEnvironment, ui) && (
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
-                      {environmentCommercialLabel(currentEnvironment, ui)}
-                    </span>
-                  )}
+                  {/* Two lines so the name gets the whole width: the plan and commercial badges
+                      used to sit beside it and left a few characters of a 240px sidebar. The
+                      company is the client the session is in; the organization name is only the
+                      fallback for a session that cannot list environments. */}
+                  <span className="flex min-w-0 flex-1 flex-col items-start text-left">
+                    <TruncatedText
+                      text={currentEnvironment?.clientName || selectedOrg?.name || ui('yourCompany')}
+                      className="w-full text-sm font-semibold leading-tight text-foreground"
+                      data-testid="company-switcher-name" />
+                    {/* Guarded on having resolved the environment, not on a flag: a session that
+                        cannot list environments (no platform token) has no plan to report, and
+                        environmentPlanLabelKey would otherwise label it "Demo" from a missing value
+                        rather than from a known free plan. */}
+                    {currentEnvironment && (
+                      <span className="flex min-w-0 max-w-full items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
+                        <span className="shrink-0 font-medium">
+                          {ui(environmentPlanLabelKey(currentEnvironment))}
+                        </span>
+                        {environmentCommercialLabel(currentEnvironment, ui) && (
+                          <span className="truncate">
+                            · {environmentCommercialLabel(currentEnvironment, ui)}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </span>
                   <ChevronDown
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     data-testid="ChevronDown__247c75" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56" data-testid="DropdownMenuContent__247c75">
+              <DropdownMenuContent
+                align="start"
+                className="w-80 max-w-[calc(100vw-2rem)]"
+                data-testid="DropdownMenuContent__247c75"
+              >
                 <DropdownMenuLabel data-testid="DropdownMenuLabel__247c75">{ui('switchCompany')}</DropdownMenuLabel>
                 <DropdownMenuSeparator data-testid="DropdownMenuSeparator__247c75" />
                 {environments.length > 0 ? (
-                  environments.map((env) => {
-                    const isCurrent = env.clientId === currentClientId;
-                    return (
-                      <DropdownMenuItem
-                        key={env.clientId}
-                        disabled={isCurrent || switching !== null}
-                        onSelect={() => { if (!isCurrent) switchTo(env); }}
-                        data-testid={`company-option-${env.clientId}`}
-                      >
-                        <img
-                          src={logoSrc}
-                          alt=""
-                          className="h-5 w-5 mr-2 rounded-full"
-                        />
-                        {/* pointer-events-auto: the current company's row is `disabled`, which sets
-                            pointer-events-none on the item and would swallow the hover. */}
-                        <TruncatedText
-                          text={env.clientName || env.orgName || ui('yourCompany')}
-                          className="flex-1 pointer-events-auto"
-                          data-testid="TruncatedText__247c75" />
-                        <span className={cn(
-                          'ml-2 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                          env.plan === 'productive'
-                            ? 'bg-status-success text-status-success-foreground'
-                            : 'bg-muted text-muted-foreground'
-                        )}>
-                          {ui(environmentPlanLabelKey(env))}
-                        </span>
-                        {environmentCommercialLabel(env, ui) && (
-                          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
-                            {environmentCommercialLabel(env, ui)}
-                          </span>
-                        )}
-                        {environmentRelationshipLabel(env, ui) && (
-                          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
-                            {environmentRelationshipLabel(env, ui)}
-                          </span>
-                        )}
-                        {switching === env.clientId && (
-                          <Loader2
-                            className="h-3.5 w-3.5 ml-2 shrink-0 animate-spin"
-                            data-testid="Loader2__247c75" />
-                        )}
-                      </DropdownMenuItem>
-                    );
-                  })
+                  environments.map((env) => (
+                    <CompanyOption
+                      key={env.clientId}
+                      env={env}
+                      isCurrent={env.clientId === currentClientId}
+                      switching={switching}
+                      onSwitch={switchTo}
+                      logoSrc={logoSrc}
+                      ui={ui}
+                      data-testid="CompanyOption__247c75" />
+                  ))
                 ) : (
                   // No platform token, or the list could not be read: showing the
                   // current company alone beats an empty menu.

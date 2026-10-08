@@ -1,7 +1,11 @@
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
 import { describe, it, expect, vi } from 'vitest';
 import {
+  EXCHANGE_RATES_TAB_KEY,
   HEADER_FIELDS_DERIVED_FROM_CHILD_ROWS,
   headerHasChildDerivedFields,
+  refreshHeaderCurrencyRate,
+  withExchangeRateHeaderSync,
   withHeaderRefreshOnChildWrite,
 } from '../detailViewHelpers.jsx';
 
@@ -167,5 +171,151 @@ describe('withHeaderRefreshOnChildWrite (ETP-5245)', () => {
       await expect(wrapped.handleAddChild({})).resolves.toBeUndefined();
       expect(() => wrapped.handleDeleteChild('x')).not.toThrow();
     });
+  });
+});
+
+/**
+ * ETP-4029 / ETP-5657 — a write to the invoice Exchange rates tab also moves the header's hidden
+ * `eTGOCurrencyRate` on the backend, so the header must be re-read after it. The PATCH path calls
+ * `refreshHeaderCurrencyRate` directly; ADD and DELETE go through `withExchangeRateHeaderSync`.
+ */
+describe('refreshHeaderCurrencyRate', () => {
+  function makeHook(id = 'inv-1') {
+    return {
+      selected: id ? { id } : null,
+      clearUserChangedKey: vi.fn(),
+      refreshHeaderTotals: vi.fn(),
+    };
+  }
+
+  it('clears the user-changed mark on eTGOCurrencyRate, THEN re-reads the header', () => {
+    const hook = makeHook();
+    refreshHeaderCurrencyRate(hook);
+    expect(hook.clearUserChangedKey).toHaveBeenCalledWith('eTGOCurrencyRate');
+    expect(hook.refreshHeaderTotals).toHaveBeenCalledWith('inv-1');
+    // Order matters: the merge refuses to overwrite a key still marked as changed by the user.
+    expect(hook.clearUserChangedKey.mock.invocationCallOrder[0])
+      .toBeLessThan(hook.refreshHeaderTotals.mock.invocationCallOrder[0]);
+  });
+
+  it('clears only that one key', () => {
+    const hook = makeHook();
+    refreshHeaderCurrencyRate(hook);
+    expect(hook.clearUserChangedKey).toHaveBeenCalledTimes(1);
+  });
+
+  it('is a no-op without a selected header record', () => {
+    for (const hook of [makeHook(null), { ...makeHook(), selected: {} }]) {
+      refreshHeaderCurrencyRate(hook);
+      expect(hook.clearUserChangedKey).not.toHaveBeenCalled();
+      expect(hook.refreshHeaderTotals).not.toHaveBeenCalled();
+    }
+  });
+
+  it('tolerates a missing hook', () => {
+    expect(() => refreshHeaderCurrencyRate(undefined)).not.toThrow();
+  });
+});
+
+describe('withExchangeRateHeaderSync', () => {
+  const TABS = [{ key: 'paymentPlan' }, { key: EXCHANGE_RATES_TAB_KEY }];
+
+  function makeHook() {
+    return {
+      selected: { id: 'inv-1' },
+      clearUserChangedKey: vi.fn(),
+      refreshHeaderTotals: vi.fn(),
+    };
+  }
+
+  function makeSecondaryHook(addResult = { id: 'rate-1' }) {
+    return {
+      children: [],
+      handleAddChild: vi.fn(async () => addResult),
+      handleDeleteChild: vi.fn(() => 'deleted'),
+      handleSelect: vi.fn(),
+    };
+  }
+
+  it('uses the "exchangeRates" tab key', () => {
+    expect(EXCHANGE_RATES_TAB_KEY).toBe('exchangeRates');
+  });
+
+  it('returns the same array (same identity) when the window has no Exchange rates tab', () => {
+    const hooks = [makeSecondaryHook(), makeSecondaryHook()];
+    expect(withExchangeRateHeaderSync(hooks, [{ key: 'paymentPlan' }, { key: 'tax' }], makeHook())).toBe(hooks);
+    expect(withExchangeRateHeaderSync(hooks, undefined, makeHook())).toBe(hooks);
+  });
+
+  it('returns the same array when the Exchange rates slot has no hook', () => {
+    const hooks = [makeSecondaryHook(), null];
+    expect(withExchangeRateHeaderSync(hooks, TABS, makeHook())).toBe(hooks);
+  });
+
+  it('wraps only the Exchange rates index and keeps the other members of its hook', () => {
+    const other = makeSecondaryHook();
+    const rates = makeSecondaryHook();
+    const wrapped = withExchangeRateHeaderSync([other, rates], TABS, makeHook());
+    expect(wrapped).not.toBe([other, rates]);
+    expect(wrapped[0]).toBe(other);
+    expect(wrapped[1]).not.toBe(rates);
+    expect(wrapped[1].children).toBe(rates.children);
+    expect(wrapped[1].handleSelect).toBe(rates.handleSelect);
+  });
+
+  it('a successful ADD clears the rate mark, then re-reads the header, and returns the created row', async () => {
+    const hook = makeHook();
+    const rates = makeSecondaryHook({ id: 'rate-9' });
+    const wrapped = withExchangeRateHeaderSync([null, rates], TABS, hook);
+
+    await expect(wrapped[1].handleAddChild('inv-1', { rate: 0.68 })).resolves.toEqual({ id: 'rate-9' });
+    expect(rates.handleAddChild).toHaveBeenCalledWith('inv-1', { rate: 0.68 });
+    expect(hook.clearUserChangedKey).toHaveBeenCalledWith('eTGOCurrencyRate');
+    expect(hook.refreshHeaderTotals).toHaveBeenCalledWith('inv-1');
+    expect(hook.clearUserChangedKey.mock.invocationCallOrder[0])
+      .toBeLessThan(hook.refreshHeaderTotals.mock.invocationCallOrder[0]);
+  });
+
+  for (const refused of [null, undefined, false]) {
+    it(`a refused ADD (resolving ${refused}) re-reads nothing`, async () => {
+      const hook = makeHook();
+      // Built inline: passing undefined to makeSecondaryHook would pick up its default row.
+      const rates = { ...makeSecondaryHook(), handleAddChild: vi.fn(async () => refused) };
+      const wrapped = withExchangeRateHeaderSync([null, rates], TABS, hook);
+      await expect(wrapped[1].handleAddChild('inv-1', {})).resolves.toBe(refused);
+      expect(hook.clearUserChangedKey).not.toHaveBeenCalled();
+      expect(hook.refreshHeaderTotals).not.toHaveBeenCalled();
+    });
+  }
+
+  it('a DELETE clears the rate mark and re-reads the header, returning the inner result', () => {
+    const hook = makeHook();
+    const rates = makeSecondaryHook();
+    const wrapped = withExchangeRateHeaderSync([null, rates], TABS, hook);
+
+    expect(wrapped[1].handleDeleteChild('rate-1')).toBe('deleted');
+    expect(rates.handleDeleteChild).toHaveBeenCalledWith('rate-1');
+    expect(hook.clearUserChangedKey).toHaveBeenCalledWith('eTGOCurrencyRate');
+    expect(hook.refreshHeaderTotals).toHaveBeenCalledWith('inv-1');
+  });
+
+  it('touches nothing on the other tabs', async () => {
+    const hook = makeHook();
+    const other = makeSecondaryHook();
+    const wrapped = withExchangeRateHeaderSync([other, makeSecondaryHook()], TABS, hook);
+    await wrapped[0].handleAddChild('inv-1', {});
+    wrapped[0].handleDeleteChild('x');
+    expect(hook.clearUserChangedKey).not.toHaveBeenCalled();
+    expect(hook.refreshHeaderTotals).not.toHaveBeenCalled();
+  });
+
+  it('composes with withHeaderRefreshOnChildWrite, as DetailView chains them', async () => {
+    const hook = makeHook();
+    const rates = makeSecondaryHook();
+    const chained = withExchangeRateHeaderSync(withHeaderRefreshOnChildWrite([null, rates], hook), TABS, hook);
+    await chained[1].handleAddChild('inv-1', {});
+    expect(rates.handleAddChild).toHaveBeenCalledTimes(1);
+    expect(hook.clearUserChangedKey).toHaveBeenCalledWith('eTGOCurrencyRate');
+    expect(hook.refreshHeaderTotals).toHaveBeenCalledWith('inv-1');
   });
 });

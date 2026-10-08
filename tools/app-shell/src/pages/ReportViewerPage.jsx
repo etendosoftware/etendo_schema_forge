@@ -6,6 +6,7 @@ import { DateField } from '@/components/ui/date-field';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { TruncatedText } from '@/components/ui/truncated-text';
+import GalleryGrid from '@/components/ui/gallery-grid';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import ProductSearchDrawer from '@/components/contract-ui/ProductSearchDrawer.jsx';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
@@ -1649,7 +1650,17 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   const categoryLabel = categoryFilter && CATEGORY_LABELS[categoryFilter]
     ? tMenu(CATEGORY_LABELS[categoryFilter].en)
     : null;
-  const breadcrumb = [categoryLabel, tMenu('Reports'), title].filter(Boolean).join(' / ');
+  // ETP-5504 (OBS-2): the "Reports" level links back to the catalog of the same category, like
+  // the window level of a record's breadcrumb. The category is a menu folder with no route of its
+  // own, so it stays plain text.
+  const catalogHref = categoryFilter
+    ? `/report-viewer?category=${encodeURIComponent(categoryFilter)}`
+    : '/report-viewer';
+  const breadcrumb = [
+    categoryLabel && { label: categoryLabel },
+    { label: tMenu('Reports'), href: catalogHref },
+    { label: title },
+  ].filter(Boolean);
   const favKey = categoryFilter
     ? `report-viewer?category=${categoryFilter}&report=${report.id}`
     : `report-viewer?report=${report.id}`;
@@ -1657,7 +1668,9 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
 
   const favLabel = report.title?.en_US || report.title?.en || report.id;
   const favLabels = report.title && typeof report.title === 'object' ? report.title : undefined;
-  useSetPageMeta({ title, breadcrumb, onBack, onAddToFavorites: () => toggleFavorite(favKey, favLabel, favLabels), isFavorite: favActive }, [favActive]);
+  // ETP-5519: no `onBack` here — the report view does not show the TopBar ← button. The
+  // in-page Cancel button (`action-cancel`) is the way back to the report catalog.
+  useSetPageMeta({ title, breadcrumb, onAddToFavorites: () => toggleFavorite(favKey, favLabel, favLabels), isFavorite: favActive }, [favActive]);
 
   // document.title (ETP-5013) — this page never set one, so the browser's
   // OWN native print (Cmd/Ctrl+P on the live preview — a different path
@@ -2038,7 +2051,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                 {CATEGORY_LABELS[cat]?.[localeLangKey] || cat}
               </h2>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            <GalleryGrid data-testid="gallery-grid">
               {catReports.map(r => (
                 <ReportCard
                   key={r.id}
@@ -2046,7 +2059,7 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
                   onRun={selectReport}
                   data-testid="ReportCard__3c998a" />
               ))}
-            </div>
+            </GalleryGrid>
           </div>
         ))}
       </div>

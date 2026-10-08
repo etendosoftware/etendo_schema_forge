@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/financial-accounts/AccountsTable/accountColumns.jsx
+// @covers tools/app-shell/src/components/financial-accounts/SyncStatusInline.jsx
 /**
  * accountColumns — the shared Cuentas cell bodies, and their reveal-on-row-hover contract.
  *
@@ -20,8 +22,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
 }));
 
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import {
   NameCell, TypeCell, CurrencyCell, BalanceCell, CountryCell,
 } from '../accountColumns.jsx';
@@ -178,6 +182,66 @@ describe('NameCell', () => {
   });
 });
 
+// ETP-5457 — NameCell forwards the window's "read-only" access tier to SyncStatusInline, which
+// then drops the inline "Conectar banco" CTA (a write). The rest of the cell is unaffected.
+describe('NameCell — last sync label', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date('2026-10-06T12:00:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('shows the sync label under a connected account name', () => {
+    render(<NameCell account={{ ...ACCOUNT, bankConnected: true, lastSyncDate: '2026-10-06T11:59:00Z' }} ui={ui} />);
+    expect(screen.getByTestId('last-sync-label')).toHaveTextContent('financeAccountsSyncedAgo');
+    expect(screen.getByTestId('last-sync-label').parentElement.className).toContain('--status-success-fg');
+  });
+
+  it('shows "never synced" for a connected account with no lastSyncDate', () => {
+    render(<NameCell account={{ ...ACCOUNT, bankConnected: true, lastSyncDate: null }} ui={ui} />);
+    expect(screen.getByTestId('last-sync-label')).toHaveTextContent('financeAccountsNeverSynced');
+    expect(screen.getByTestId('last-sync-label').parentElement.className).toContain('muted-foreground');
+  });
+
+  it('shows no sync label for a cash account', () => {
+    render(<NameCell account={{ ...ACCOUNT, type: 'C', bankConnected: false }} ui={ui} />);
+    expect(screen.queryByTestId('last-sync-label')).not.toBeInTheDocument();
+  });
+});
+
+describe('NameCell — read-only access tier (ETP-5457)', () => {
+  const OFFLINE = { ...ACCOUNT, bankConnected: false };
+
+  it('renders no connect affordance under the read-only tier (ETP-5457)', () => {
+    render(<NameCell account={OFFLINE} ui={ui} onConnect={vi.fn()} windowReadOnly />);
+
+    expect(screen.queryByTestId('account-sync-connect-acc-1')).not.toBeInTheDocument();
+  });
+
+  it('renders the connect affordance under full access (ETP-5457 twin)', () => {
+    const onConnect = vi.fn();
+    render(<NameCell account={OFFLINE} ui={ui} onConnect={onConnect} windowReadOnly={false} />);
+
+    fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'));
+
+    expect(onConnect).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-1' }));
+  });
+
+  it('keeps the name and the offline badge under the read-only tier (ETP-5457)', () => {
+    render(<NameCell account={OFFLINE} ui={ui} windowReadOnly />);
+
+    expect(screen.getByTestId('account-row-name-acc-1')).toHaveTextContent('BBVA Principal');
+    expect(screen.getByText('financeAccountsBadgeOffline')).toBeInTheDocument();
+  });
+
+  it('keeps the name and the offline badge under full access (ETP-5457 twin)', () => {
+    render(<NameCell account={OFFLINE} ui={ui} windowReadOnly={false} />);
+
+    expect(screen.getByTestId('account-row-name-acc-1')).toHaveTextContent('BBVA Principal');
+    expect(screen.getByText('financeAccountsBadgeOffline')).toBeInTheDocument();
+  });
+});
+
 describe('TypeCell', () => {
   it('renders the translated type label and the IBAN chunked in fours', () => {
     render(<TypeCell account={ACCOUNT} ui={ui} />);
@@ -299,23 +363,84 @@ describe('CurrencyCell', () => {
   });
 });
 
+// The Saldo cell shows the exact balance (never compacted), so a huge one cannot fit the
+// pinned column: it renders through TruncatedText, which ellipsises and reveals the exact
+// amount in a tooltip only when it is actually clipped.
 describe('BalanceCell', () => {
-  it('renders the currency-formatted balance', () => {
+  const HUGE = 87542314548725.5;
+
+  it('renders the exact formatCurrency text through TruncatedText with its row-scoped test id', () => {
     render(<BalanceCell account={ACCOUNT} />);
 
-    expect(screen.getByText(/1\.234,56/)).toBeInTheDocument();
+    const cell = screen.getByTestId('account-row-balance-acc-1');
+    expect(cell.textContent).toBe(formatCurrency('EUR', 1234.56));
+    expect(cell.textContent).toContain('1.234,56');
+    expect(cell).toHaveClass('truncate', 'text-right', 'tabular-nums');
   });
 
   it('renders a negative balance in the destructive treatment', () => {
-    const { container } = render(<BalanceCell account={{ ...ACCOUNT, currentBalance: -42.5 }} />);
+    render(<BalanceCell account={{ ...ACCOUNT, currentBalance: -42.5 }} />);
 
-    expect(container.firstChild.className).toMatch(/text-\[hsl\(var\(--destructive\)\)\]/);
+    const cell = screen.getByTestId('account-row-balance-acc-1');
+    expect(cell.className).toMatch(/text-\[hsl\(var\(--destructive\)\)\]/);
+    expect(cell.className).not.toMatch(/--foreground/);
   });
 
   it('renders a zero balance in the default treatment', () => {
-    const { container } = render(<BalanceCell account={{ ...ACCOUNT, currentBalance: 0 }} />);
+    render(<BalanceCell account={{ ...ACCOUNT, currentBalance: 0 }} />);
 
-    expect(container.firstChild.className).not.toMatch(/destructive/);
+    const cell = screen.getByTestId('account-row-balance-acc-1');
+    expect(cell.className).not.toMatch(/destructive/);
+    expect(cell.className).toMatch(/text-\[hsl\(var\(--foreground\)\)\]/);
+  });
+
+  it('renders a positive balance in the foreground treatment', () => {
+    render(<BalanceCell account={ACCOUNT} />);
+
+    const cell = screen.getByTestId('account-row-balance-acc-1');
+    expect(cell.className).toMatch(/text-\[hsl\(var\(--foreground\)\)\]/);
+    expect(cell.className).not.toMatch(/destructive/);
+  });
+
+  it('never compacts a huge balance: the cell carries the full exact amount', () => {
+    render(<BalanceCell account={{ ...ACCOUNT, currentBalance: HUGE }} />);
+
+    const cell = screen.getByTestId('account-row-balance-acc-1');
+    expect(cell.textContent).toBe(formatCurrency('EUR', HUGE));
+    expect(cell.textContent).toContain('87.542.314.548.725,50');
+  });
+
+  it('shows the exact balance in a tooltip only when it is clipped', () => {
+    const { unmount } = render(<BalanceCell account={{ ...ACCOUNT, currentBalance: HUGE }} />);
+    const clipped = screen.getByTestId('account-row-balance-acc-1');
+    setMetrics(clipped, 210, 110);
+
+    fireEvent.focus(clipped);
+
+    // textContent, not toHaveTextContent: the latter normalizes formatCurrency's NBSP.
+    expect(screen.getByTestId('account-row-balance-acc-1-tooltip').textContent)
+      .toContain(formatCurrency('EUR', HUGE));
+    unmount();
+
+    render(<BalanceCell account={ACCOUNT} />);
+    const fitting = screen.getByTestId('account-row-balance-acc-1');
+    setMetrics(fitting, 70, 110);
+
+    fireEvent.focus(fitting);
+
+    expect(screen.queryByTestId('account-row-balance-acc-1-tooltip')).not.toBeInTheDocument();
+  });
+
+  it('keeps the destructive treatment on a clipped negative balance and its tooltip text', () => {
+    render(<BalanceCell account={{ ...ACCOUNT, id: 'acc-9', currentBalance: -HUGE }} />);
+    const cell = screen.getByTestId('account-row-balance-acc-9');
+    setMetrics(cell, 220, 110);
+
+    fireEvent.focus(cell);
+
+    expect(cell.className).toMatch(/destructive/);
+    expect(screen.getByTestId('account-row-balance-acc-9-tooltip').textContent)
+      .toContain(formatCurrency('EUR', -HUGE));
   });
 });
 

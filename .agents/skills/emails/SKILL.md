@@ -243,7 +243,7 @@ stop it. If the guard fails, fix the copy; do not relax the test.
   customer's subject line.
 - The default copy is duplicated in the frontend on purpose — see the section above.
 - **They close differently from every other email.** Where the rest sign off with
-  `signature` ("Saludos, Equipo de Etendo Go"), a document email closes by telling the customer they
+  `signature` ("Saludos, Equipo de Etendo"), a document email closes by telling the customer they
   can just reply and reach the person who sent it (`document.replyNote`) — which is only true
   because the operator's address travels in Reply-To. The signature comes back when
   `EmailSenderIdentity` resolves no address: a reply would then land on the unattended `noreply@`

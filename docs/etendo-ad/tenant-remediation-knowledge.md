@@ -14,6 +14,12 @@
 
 ## Corrected misinterpretations
 
+- **2026-09-29 — Historical paid lifecycle self-associations are not foreign links.** Production Galder, Santiagou and Fitz Roy retain both associated-client preferences pointing to their own client. Preserve these values; exclude only an association to a different productive client when repairing directly linked paid checkout metadata. A blanket nonempty association guard incorrectly skipped their conflicting visible plan rows and fiscal test overrides.
+
+- **2026-09-29 — Plan and lifecycle preferences have different tenant scopes.** `TenantPlanService.resolvePlan` reads `ETGO_TenantPlan` by `VisibleAtClient`, normally a System-owned row; `TenantEnvironmentLifecycleService` reads lifecycle type/date by the row's own client. An own-client-only audit omitted GOClient's two visible plan rows (`productive`/`free`). Audit both scopes, normalize compatible duplicates with direct paid provisioning evidence, and exclude foreign-owned/cross-visible metadata. The 45 prior demo trial repairs were independently rechecked and had zero visible productive plans.
+
+- **2026-09-29 — Missing demo banner does not prove an unpaid provisioning failure.** `TenantEnvironmentLifecycleService.resolve` returns no lifecycle snapshot when an otherwise free legacy tenant has neither trial/legacy transition start nor global activation. Preserve real trial starts; initialize legacy transition only with an explicit approved UTC instant. `AD_Client.created` is unsafe as a trial start for pool clients because pool creation predates user assignment. The canonical R41 fix uses a per-connection PostgreSQL setting supplied through `PGOPTIONS`, rather than broadening the application's global rollout property.
+
 - **2026-06-11 — `AccountingPackageCloner` is NOT the chart-of-accounts generator.** Wrong assumption (from the design spec): "R1/R2 reuse the cloner via webhook as single source of truth." Verified by reading `com.etendoerp.go/.../onboarding/AccountingPackageCloner.java`: it clones **tax categories, taxes, tax zones, tax accounts, and accounting combinations** — NOT the ~1790 `c_elementvalue` chart rows that gap A1 needs. **Apply:** for the corrective A1 data-fix, clone the chart from the GOOrg source client in SQL; do not route A1 to this cloner. The cloner belongs to the *preventive* front (onboarding accounting step) only.
 - **2026-06-11 — The cloner is only partially idempotent.** `ensureOrganizationAcctSchema` checks existence and returns early, but `cloneTaxCategories` / `cloneBusinessPartnerTaxCategories` / `cloneTaxes` / `cloneTaxZones` / `cloneTaxAccounts` iterate the source and `DalUtil.copy`+save unconditionally → **running twice duplicates** all of them. It assumes a fresh, empty org. **Apply:** if ever reused for remediation, it must be refactored to check existence per entity first.
 - **2026-09-22 (ETP-5444) — `OnboardingState` does not exist in the live onboarding path.** It is only referenced in `docs/etendo-ad/onboarding-and-datafixes-map.md` §2, describing the inert `OnboardingStep` abstraction's accumulated context class. The LIVE service chain (`EtendoGoJwtServlet.ensureOnboardingDataset`) has no equivalent state object — each `Onboarding*Service` is stateless and takes `clientId`/`orgId`/`adminUserId`/`adminRoleId` as plain method arguments. **Apply:** when writing a new preventive step, look up the org/warehouse/etc. directly via OBDal (e.g. `WarehouseLookupHelper.findFirstActiveWarehouse`) rather than hunting for a shared state object that doesn't exist on the live path.
@@ -2401,6 +2407,8 @@ as the immutability trigger for a data-fix `.sql` file.
 
 ### Corrected misinterpretations
 
+- **2026-09-29 — Historical paid lifecycle self-associations are not foreign links.** Production Galder, Santiagou and Fitz Roy retain both associated-client preferences pointing to their own client. Preserve these values; exclude only an association to a different productive client when repairing directly linked paid checkout metadata. A blanket nonempty association guard incorrectly skipped their conflicting visible plan rows and fiscal test overrides.
+
 - **2026-09-01 — "Onboarding seeds sample contacts (Laura Morat / Juan Perez)" is FALSE.**
   `C_BPARTNER` is **not** in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so the onboarding
   dataset import creates **zero** sample business partners. Those rows exist only in a developer's
@@ -3400,3 +3408,25 @@ restart — but it argues for running this fix close to a restart.
   to the data-fix as the reliable seeding path (as R40 already does) and treat the sourcedata XML as
   effective on a fresh `install.source`/CI build, not as something verifiable by flag-flipping an
   already-provisioned local dev DB.
+
+- **2026-10-01 — Fiscal period control facts behind R44 (ETP-5575).**
+  (1) `'N'` in `C_PeriodControl.PeriodStatus` reliably means "never opened": `C_PERIOD_PROCESS`
+  (AD Process 167, the only open/close action) only ever writes `'O'`, `'C'` or `'P'`. A fix that
+  flips only `'N'` therefore never undoes a user decision.
+  (2) Two readers disagree on what "open" means. The posting gate (`AcctServer_data.xsql`
+  `periodOpen`) and completion (`C_CHK_OPEN_PERIOD`) need ANY `'O'` row for the doc base type; the
+  costing closed-check (`CostingUtils_data.xsql`) reads ANY non-`'O'` row of the period as closed and
+  ignores the doc base type. A period is open for both only when EVERY row is `'O'`.
+  (3) Every onboarded tenant carries TWO control rows per (period, doc base type, org): the dataset
+  copy (`C_PERIODCONTROL.xml`) and the copy `AD_ORG_READY` inserts with no existence check, created
+  after `wirePeriodControl`. So any opener must flip every `'N'` copy, not "one row per key"; this is
+  also why the Calendar window shows "Mixto" on months the chain opened (dedup is ETP-5577).
+  (4) `ETGO_EnvironmentType` is stored in two shapes: runtime (`AD_Client_ID=<tenant>`) and legacy
+  (`AD_Client_ID='0'` + `VisibleAt_Client_ID=<tenant>`, 2 demos on the local DB). An effective DEMO
+  also has no active `ETGO_TenantPlan='productive'` row.
+  (5) A pooled tenant (ETP-5389) has no `ETGO_EnvironmentType` until it is claimed
+  (`markDemoReady` runs at claim time), so a DEMO-gated data-fix cannot see unclaimed pool tenants;
+  only the post-commit claim step covers them.
+  **Apply:** R44 dry-run on the local DB (2026-10-01): 14 `WOULD_APPLY` / 105 `SKIPPED_NOT_NEEDED`;
+  applied to Calendar1 (`A5C303F8CF314BBF85CDC90757C8DBD7`) → `APPLIED (430 rows)`, Jan–Oct all `'O'`,
+  Nov/Dec `'N'` → re-run `SKIPPED_NOT_NEEDED — kept prior success state`.

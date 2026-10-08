@@ -100,6 +100,69 @@ export function withHeaderRefreshOnChildWrite(secondaryHooks, hook) {
   });
 }
 
+/** The invoice "Exchange rates" secondary tab, whose writes also move the header's rate. */
+export const EXCHANGE_RATES_TAB_KEY = 'exchangeRates';
+
+/**
+ * Re-read the header after a write to the Exchange rates tab (ETP-4029, ETP-5657).
+ *
+ * Adding or editing a row there also updates the invoice header's hidden `eTGOCurrencyRate` on
+ * the backend (`InvoiceExchangeRateHandler` reverse sync), so without this the header's
+ * currency-rate picker keeps the stale value until a manual reload. `refreshHeaderTotals` is the
+ * same non-disruptive refresh used after primary-line edits: it re-GETs the header and merges in
+ * only the fields the user hasn't touched, so in-progress unsaved header edits survive.
+ *
+ * `clearUserChangedKey('eTGOCurrencyRate')` runs first, and only for this one field: a rate the
+ * user already saved through the header's own CurrencyRatePicker in this visit permanently marks
+ * the key "user changed" for the session (see `useEntity.handleChange`), and the merge would then
+ * refuse to overwrite it with the newer value the tab just persisted. A narrow, deliberate
+ * exception for this cross-surface sync — see the rationale on `clearUserChangedKey`.
+ *
+ * @param {object} hook the window's main `useEntity` hook
+ */
+export function refreshHeaderCurrencyRate(hook) {
+  const id = hook?.selected?.id;
+  if (!id) return;
+  hook.clearUserChangedKey?.('eTGOCurrencyRate');
+  hook.refreshHeaderTotals?.(id);
+}
+
+/**
+ * Wrap the Exchange rates tab's secondary hook so a successful ADD or DELETE of a rate row also
+ * runs {@link refreshHeaderCurrencyRate} — the PATCH path calls it directly. Every add/delete
+ * flow of a secondary tab ends in these two handlers, and only after the server accepted the
+ * write (a refused DELETE — e.g. a completed invoice's rate — never reaches `handleDeleteChild`),
+ * so wrapping them covers the inline add row, the bulk delete and the single-row delete at once.
+ *
+ * Returns the array unchanged (same identity) when the window has no Exchange rates tab.
+ *
+ * @param {Array<object|null>} secondaryHooks per-tab hooks, same order as `secondaryTabs`
+ * @param {Array<{key: string}>} secondaryTabs
+ * @param {object} hook the window's main `useEntity` hook
+ * @returns {Array<object|null>}
+ */
+export function withExchangeRateHeaderSync(secondaryHooks, secondaryTabs, hook) {
+  const idx = (secondaryTabs || []).findIndex(st => st.key === EXCHANGE_RATES_TAB_KEY);
+  const sh = idx < 0 ? null : secondaryHooks[idx];
+  if (!sh) return secondaryHooks;
+  const wrapped = [...secondaryHooks];
+  wrapped[idx] = {
+    ...sh,
+    handleAddChild: async (...args) => {
+      const result = await sh.handleAddChild?.(...args);
+      // Only on success — a refused POST changed nothing on the server.
+      if (result) refreshHeaderCurrencyRate(hook);
+      return result;
+    },
+    handleDeleteChild: (...args) => {
+      const result = sh.handleDeleteChild?.(...args);
+      refreshHeaderCurrencyRate(hook);
+      return result;
+    },
+  };
+  return wrapped;
+}
+
 /**
  * `onSaved` for a secondary tab's `customAddModal` (e.g. Contacts' address form).
  *
@@ -940,6 +1003,24 @@ export function customTabKey(ct) {
   return `custom:${ct.key}`;
 }
 
+/**
+ * ETP-5309 — a 'tab'-placement custom component may declare that it cannot work until the
+ * record is persisted, through two statics on the component: `requiresSavedRecord` (true,
+ * or a predicate over the tab's `props`) and `savedRecordHintKey` (the i18n key of the
+ * hint). Returns the translated hint while `isNew` and the requirement holds — DetailView
+ * renders that tab button disabled with it as tooltip — else null. A component that sets
+ * `requiresSavedRecord` but no `savedRecordHintKey` gets `''`: the tab is still disabled,
+ * just without a tooltip. Structural only: the component describes itself, no tab key or
+ * window is named here.
+ */
+export function getCustomTabSaveFirstHint(ct, isNew, ui) {
+  const requires = ct?.Component?.requiresSavedRecord;
+  if (!isNew || !requires) return null;
+  if (typeof requires === 'function' && !requires(ct.props || {})) return null;
+  const hintKey = ct.Component.savedRecordHintKey;
+  return hintKey ? ui(hintKey) : '';
+}
+
 const SECONDARY_DEFAULT_WEIGHT = 99;
 const CUSTOM_DEFAULT_WEIGHT = 999;
 const LINES_DEFAULT_WEIGHT = -1;
@@ -1029,7 +1110,10 @@ export function buildInitialTabs(p) {
       if (p.customTabVisibility[ct.key] === false) return;
       const resolvedLabel = ct.labelKey ? p.ui(ct.labelKey) : ct.label;
       entries.push({
-        tab: { key: customTabKey(ct), label: resolvedLabel, count: p.customTabCounts[ct.key] ?? null },
+        tab: {
+          key: customTabKey(ct), label: resolvedLabel, count: p.customTabCounts[ct.key] ?? null,
+          saveFirstHint: getCustomTabSaveFirstHint(ct, p.isNew, p.ui),
+        },
         weight: ct.tabOrder ?? CUSTOM_DEFAULT_WEIGHT,
         insertionIndex: 10000 + i,
       });
@@ -1038,6 +1122,28 @@ export function buildInitialTabs(p) {
 
   entries.sort((a, b) => a.weight - b.weight || a.insertionIndex - b.insertionIndex);
   return entries.map(e => e.tab);
+}
+
+/**
+ * Reloads a record after something outside the default CRUD path mutated it (a side-effecting
+ * extra action, a custom process-confirm modal that calls its own backend action, ...).
+ *
+ * ETP-5290 — `{ force: true }` is REQUIRED: without it `fetchById` serves the pre-mutation
+ * record from the in-memory cache for up to `staleTime` (or indefinitely if nothing else reads
+ * the id), so the toast fires but the status chip / buttons never update until a full reload.
+ * `invalidateEntityCache()` drops the entity's cached lists and records (ETP-5278) and
+ * `refresh()` force-reloads the mounted LIST so the grid row matches — the same
+ * `invalidateEntityCache(); fetchById(...); refresh();` sequence as useEntity's
+ * `handleProcessSuccess`.
+ *
+ * ETP-5547 — the process-confirm modal's `onRefresh` (DetailView → renderProcessConfirmModal)
+ * called `fetchById` without `force`, so payment-in/out "Confirmar" after "Reactivar"
+ * (registerPayment → 201) never issued a GET and the window stayed on "Borrador".
+ */
+export function refreshRecordAfterMutation(hook, id) {
+  hook.invalidateEntityCache?.();
+  hook.fetchById?.(id, { force: true });
+  hook.refresh?.();
 }
 
 export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
@@ -1072,11 +1178,7 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
     // `invalidateEntityCache(); fetchById(...); refresh();` pattern in
     // useEntity.js) so the grid row reflects the change too, not just the open
     // detail form.
-    onRefresh: () => {
-      hook.invalidateEntityCache?.();
-      hook.fetchById?.(data?.id, { force: true });
-      hook.refresh?.();
-    },
+    onRefresh: () => refreshRecordAfterMutation(hook, data?.id),
   }) : extraActions).map((action, i) => (
       action.visible !== false && (
           <Button
@@ -1164,6 +1266,10 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
  * red like Figma shows (found while verifying ETP-4797).
  */
 export function getButtonClass(salesTheme, p, isPrimary) {
+  // `primary-danger` (ETP-5519): the filled-red Primary destructive button. Its colours come
+  // from the design-system `Button` `destructive` variant (see getProcessButtonVariant), so no
+  // colour override here — and it ignores `salesTheme`, which would repaint it amber.
+  if (p.style === 'primary-danger') return 'font-medium';
   if (p.style === 'ghost-danger') {
     return 'bg-card border-[hsl(var(--destructive))] text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] hover:text-[hsl(var(--destructive))]';
   }
@@ -1474,8 +1580,30 @@ export function mergeLineEdits(lineEdits, selectedLine) {
   return lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine;
 }
 
+/**
+ * Process-button styles that mark a reversing/destructive action: `ghost-danger` (red outline)
+ * and `primary-danger` (filled red Primary destructive, ETP-5519). Both open the window's
+ * `processConfirmModal` and carry the Undo icon — the two styles differ only in emphasis.
+ */
+const DANGER_PROCESS_STYLES = new Set(['ghost-danger', 'primary-danger']);
+
+export function isDangerProcess(p) {
+  return DANGER_PROCESS_STYLES.has(p?.style);
+}
+
+/** Design-system `Button` variant for a header process button, keyed by `p.style`. */
+export function getProcessButtonVariant(p) {
+  if (p.style === 'primary-danger') return 'destructive';
+  return p.style === 'positive' ? 'default' : 'outline';
+}
+
+/** Undo icon colour: red on the outline `ghost-danger` button, inherited (white) on the filled one. */
+export function getDangerIconClass(p) {
+  return p.style === 'ghost-danger' ? 'mr-1 text-[hsl(var(--destructive))]' : 'mr-1';
+}
+
 export function dispatchProcessAction(p, { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess }) {
-  if ((p.style === 'ghost-danger' || p.confirmModal) && processConfirmModal) { setConfirmProcess(p); }
+  if ((isDangerProcess(p) || p.confirmModal) && processConfirmModal) { setConfirmProcess(p); }
   else if (p.params?.some(param => !param.hidden)) { setParamDialogProcess(p); }
   else { handleProcess?.(p); }
 }
