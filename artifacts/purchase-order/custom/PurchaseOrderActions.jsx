@@ -618,7 +618,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
                 {bpName}
               </div>
             )}
-            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
+            <div data-testid="purchase-order-confirm-grand-total" style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
               {formatCurrency(currency, grandTotal)}
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)', marginBottom: 10 }}>

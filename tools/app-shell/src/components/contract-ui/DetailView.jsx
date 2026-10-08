@@ -78,7 +78,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 // wherever it happens.
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, buildCustomAddModalOnSaved, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, buildCustomAddModalOnSaved, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, refreshHeaderCurrencyRate, withExchangeRateHeaderSync, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -228,28 +228,9 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
       // NEO wraps the saved record in {response:{data:[...]}}.
       const serverRow = updated?.response?.data?.[0] ?? null;
       if (serverRow) secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, serverRow);
-      // ETP-4029: editing rate/foreignAmount here also updates the invoice
-      // header's hidden eTGOCurrencyRate on the backend (reverse sync — see
-      // InvoiceExchangeRateHandler). Without this, the header's currency-rate
-      // picker keeps showing the stale value until a manual reload.
-      // refreshHeaderTotals is the same lightweight, non-disruptive header
-      // refresh already used after primary-line edits — it re-GETs the header
-      // and merges in only the fields the user hasn't touched, so any of the
-      // user's own in-progress unsaved header edits survive untouched.
-      //
-      // clearUserChangedKey('eTGOCurrencyRate') runs first, and ONLY for this
-      // one field: if the user had earlier edited the rate via the header's
-      // own CurrencyRatePicker in this same visit (already saved), that edit
-      // permanently marks eTGOCurrencyRate as "user changed" for the rest of
-      // the session (see useEntity.handleChange) — refreshHeaderTotals would
-      // then refuse to overwrite it, leaving the header stuck on the old
-      // value even though the tab's edit just persisted a newer one. This is
-      // a narrow, deliberate exception for this specific cross-surface sync;
-      // see the full rationale on clearUserChangedKey's definition.
-      if (st.key === 'exchangeRates' && hook?.selected?.id) {
-        hook.clearUserChangedKey('eTGOCurrencyRate');
-        hook.refreshHeaderTotals(hook.selected.id);
-      }
+      // ETP-4029: a rate edit here also moves the header's eTGOCurrencyRate on the backend;
+      // re-read it (rationale on refreshHeaderCurrencyRate). Add/delete: withExchangeRateHeaderSync.
+      if (st.key === EXCHANGE_RATES_TAB_KEY) refreshHeaderCurrencyRate(hook);
     } else {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
       const msg = await extractErrorMessage(res);
@@ -355,14 +336,14 @@ export function buildSecondaryLineHandlers(deps) {
       // Accounts/Movements/Statements bulk delete already use (see batchDelete.js).
       // Replaces the old two-independent-if (`recordsDeleted` + `recordsCouldNotBeDeleted`)
       // stacked-toast pattern this function predates.
-      const { succeeded, failed } = await runBatchDelete(rows, (row) => {
+      const { succeeded, failed, errors } = await runBatchDelete(rows, (row) => {
         const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
             || `${apiBaseUrl}/${st.key}/${row.id}`;
         return apiFetch(childUrl, {
           method: 'DELETE',
           token, baseUrl: '',
-        }).then(res => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        }).then(async res => { // reason + 4xx status travel for the toast (as useBulkRowDelete)
+          if (!res.ok) throw Object.assign(new Error(await extractErrorMessage(res)), { status: res.status });
           return row;
         });
       });
@@ -377,7 +358,7 @@ export function buildSecondaryLineHandlers(deps) {
       secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
       setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
 
-      toastBatchDeleteOutcome(ui, { succeeded, failed, total: rows.length });
+      toastBatchDeleteOutcome(ui, { succeeded, failed, errors, total: rows.length });
     } catch (err) {
       toast.error(err.message || ui('networkError'));
     } finally {
@@ -1261,7 +1242,7 @@ export function DetailView({
   const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHooks = withHeaderRefreshOnChildWrite([secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4], hook);
+  const secondaryHooks = withExchangeRateHeaderSync(withHeaderRefreshOnChildWrite([secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4], hook), secondaryTabs, hook);
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
   // "From" currency for secondary-tab inline add-rows. The parent document's
   // currency is a read-only column on those tabs (e.g. exchange rates), so the
@@ -2196,7 +2177,7 @@ export function DetailView({
   // — so this tab needs the same refetch whenever that total changes.
   useEffect(() => {
     if (!hook.selected?.id) return;
-    const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === 'exchangeRates');
+    const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === EXCHANGE_RATES_TAB_KEY);
     if (exchangeRatesIdx < 0) return;
     secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps

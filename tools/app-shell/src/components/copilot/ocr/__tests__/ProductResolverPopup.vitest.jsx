@@ -1,8 +1,9 @@
+// @covers tools/app-shell/src/components/copilot/ocr/ProductResolverPopup.jsx
 /**
  * Integration render test for ProductResolverPopup.
  * Renders the real component with mocked dependencies.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -399,6 +400,78 @@ describe('ProductResolverPopup', () => {
       taxCategory: 'tax-1',
     });
     expect(JSON.parse(postCall[1].body)).not.toHaveProperty('id');
+  });
+
+  // ETP-5585 — UoM / tax category are prefilled from /product/defaults, like the product window.
+  it('prefills UoM and tax category from product defaults and posts their ids', async () => {
+    const user = userEvent.setup();
+    const unmatched = [{ idx: 0, description: 'Widget A' }];
+    globalThis.fetch.mockImplementation((url, options = {}) => {
+      const href = String(url);
+      if (href.endsWith('/product/defaults')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ defaults: {
+            id: 'default-id', uOM: 'uom-def', 'uOM$_identifier': 'Unidad',
+            taxCategory: 'tax-def', 'taxCategory$_identifier': 'IVA Normal',
+          } }),
+        });
+      }
+      if (href.endsWith('/product') && options.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify({ response: { data: [{ id: 'prod-new', name: 'Widget A' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    });
+
+    render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
+    await user.click(screen.getByText('ocrProductSkip'));
+    await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
+    await user.click(screen.getByText('createProduct'));
+
+    expect(await screen.findByText('Unidad')).toBeInTheDocument();
+    expect(screen.getByText('IVA Normal')).toBeInTheDocument();
+
+    await user.click(screen.getByText('ocrProductCreate'));
+    await waitFor(() => expect(screen.queryByText('ocrProductCreateTitle')).not.toBeInTheDocument());
+    const postCall = globalThis.fetch.mock.calls.find(([url, options]) => String(url).endsWith('/product') && options?.method === 'POST');
+    expect(JSON.parse(postCall[1].body)).toMatchObject({ uOM: 'uom-def', taxCategory: 'tax-def' });
+  });
+
+  it('does not overwrite a UoM picked before the defaults response arrives', async () => {
+    const user = userEvent.setup();
+    const unmatched = [{ idx: 0, description: 'Widget A' }];
+    let resolveDefaults;
+    globalThis.fetch.mockImplementation((url) => {
+      const href = String(url);
+      if (href.endsWith('/product/defaults')) {
+        return new Promise((resolve) => { resolveDefaults = () => resolve({
+          ok: true,
+          json: async () => ({ defaults: { uOM: 'uom-def', 'uOM$_identifier': 'Unidad', taxCategory: 'tax-def', 'taxCategory$_identifier': 'IVA Normal' } }),
+        }); });
+      }
+      if (href.includes('/selectors/C_UOM_ID')) {
+        return Promise.resolve({ ok: true, json: async () => ({ items: [{ id: 'uom-1', name: 'Kilo' }] }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    });
+
+    render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
+    await user.click(screen.getByText('ocrProductSkip'));
+    await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
+    await user.click(screen.getByText('createProduct'));
+    await screen.findByText('ocrProductCreateTitle');
+
+    await user.click(screen.getAllByText('ocrProductCreateSelect')[0]);
+    await waitFor(() => expect(screen.getByText('Kilo')).toBeInTheDocument());
+    await user.click(screen.getByText('Kilo'));
+
+    await act(async () => { resolveDefaults(); });
+    await waitFor(() => expect(screen.getByText('IVA Normal')).toBeInTheDocument());
+    expect(screen.getByText('Kilo')).toBeInTheDocument();
+    expect(screen.queryByText('Unidad')).toBeNull();
   });
 
   // ETP-5289 Bug 6 — as an `absolute` child the list was clipped by the popup's scrolling body.

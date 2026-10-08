@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/financial-accounts/accountCellTypes.jsx
 /**
  * accountCellTypes — the Cuentas list's cellType → renderer registry.
  *
@@ -22,6 +23,7 @@ vi.mock('@/i18n', () => ({
     if (key === 'financeAccountsReconcilePending') return `Conciliar (${params.count})`;
     return key;
   },
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
 }));
 
 import * as registry from '../accountCellTypes.jsx';

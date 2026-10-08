@@ -25,7 +25,7 @@ Use this window to register stock consumed inside the organization rather than s
 ### List view
 
 - **Columns, in order:** Movement Date, Name, Status, Posted ("Fecha del movimiento", "Nombre", "Estado", "Contabilizado"). Status comes before Posted, consistent with the other document windows — driven by `gridOrder` 3 on `status` and 4 on `posted` in `decisions.json` (grid only; the form is unaffected).
-- **Posted badge:** `posted` is a read-only boolean badge — green **Posted / Contabilizado** or orange **Not posted / Sin contabilizar**. It is not a form field (`form: false`).
+- **Posted badge:** `posted` is a read-only boolean badge — green **Posted / Contabilizado** or yellow **Not posted / Sin contabilizar** (a failed posting shows red with its reason). Colours come from `lib/postedStatus.js`, not from the window (ETP-5647). It is not a form field (`form: false`).
 - **Toolbar trimmed:** the per-row link icon (`hideLink`), the Print button (`hidePrint`), and the **All statuses** filter dropdown (`hideStatusFilter`) are all hidden. Only the date filter and **Filters** remain on the left; sort and refresh remain on the right.
 - **Toolbar icons:** sort and refresh use the default `ListView` icons, same as `/sales-order` (ETP-5601; `customListIcons` is no longer set).
 - **Tighter padding:** the list toolbar and table use `px-2` (8 px) horizontal padding. `px-2` is now the global `ListView` default, so the window relies on the default rather than per-window overrides.
@@ -92,7 +92,7 @@ Use this window to register stock consumed inside the organization rather than s
 
 ### List view
 1. Open `/internal-consumption` and confirm the toolbar shows the date filter and **Filters**, but no **All statuses** dropdown, no Print button, and no per-row link icon.
-2. Confirm the columns read Movement Date, Name, Status, Posted in that order, and that Posted shows a green **Contabilizado** or orange **Sin contabilizar** badge.
+2. Confirm the columns read Movement Date, Name, Status, Posted in that order, and that Posted shows a green **Contabilizado** or yellow **Sin contabilizar** badge.
 3. Confirm the sort and refresh icons are the default `ListView` icons (same as `/sales-order`), the toolbar/table padding is tight (8 px), and there is no red dot next to the Movement Date values.
 
 ### Detail view — draft and Confirm

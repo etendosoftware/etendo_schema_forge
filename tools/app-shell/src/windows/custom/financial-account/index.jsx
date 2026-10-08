@@ -40,8 +40,8 @@ const TRANSACTIONS_API_PATH = '/sws/neo/financial-account-transactions';
 // Movements CSV columns (key:Label:type). The Classic-parity transforms (type
 // /status labels, deposit/withdrawal split, synthetic "Payment", processed flag)
 // are pre-derived server-side on the transaction rows, so the generic exporter
-// stays a dumb serializer. `foreignAmount`/`foreignCurrency` are not exposed yet
-// → those keys are absent on the row and render as empty cells (as in Classic).
+// stays a dumb serializer. `foreignAmount`/`foreignCurrency` are only on the rows of
+// foreign-currency transactions (ETP-5657); elsewhere the keys are absent and the cells empty.
 // ETP-5020: this whole column list is a hardcoded, unlocalized mirror of
 // Classic's own CSV export headers (by design — every label here, not just
 // "G/L Item", stays in Classic's English regardless of active UI locale).
@@ -456,7 +456,7 @@ export function FinancialAccountDetail({ recordId }) {
       titleExtra: account ? <SyncStatusInline account={account} data-testid="SyncStatusInline__f7dbb3" /> : null,
       breadcrumb: `${ui('financeMenuLabel')} / ${ui('financeAccountsPageTitle')} / ${accountName}`,
     },
-    [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending],
+    [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending, account?.lastSyncDate],
   );
 
   // ETP-4658 — this custom window never delegated to the generated AccountPage.jsx
@@ -567,6 +567,7 @@ export function FinancialAccountDetail({ recordId }) {
               ref={statementsTabRef}
               account={account}
               windowReadOnly={windowReadOnly}
+              onSynced={reloadAccountAndList}
               data-testid="ImportedStatementsTab__f7dbb3" />
           )}
           {activeTab === 'reconciliationList' && (

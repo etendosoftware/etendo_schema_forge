@@ -13,6 +13,8 @@ import {
 import {
   DifferenceBanner, DifferenceModal, GlItemSetupDialog, differenceState,
 } from './ReconciliationDifference.jsx';
+import { ReconciliationConversionSection } from './ReconciliationConversionSection.jsx';
+import { useReconciliationConversion } from './useReconciliationConversion.js';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import {
   STATUS_CODES, countForStatus, matchesStatus,
@@ -254,6 +256,9 @@ function PanelTable({ headCells, loading, items, renderRow, colSpan = 5 }) {
   );
 }
 
+/** "≈" plus a no-break space, so the sign never wraps away from the amount it qualifies. */
+const APPROX_PREFIX = '\u2248\u00A0';
+
 /** Date cell shared by both panels (per-panel width/background via cellClassName). */
 function DateCell({ date, bcpLocale, cellClassName }) {
   return (
@@ -270,43 +275,75 @@ function DateCell({ date, bcpLocale, cellClassName }) {
  * `MoneyCell`, the reconciled-line amount cell and the partial-line "conciliado" block, so a
  * foreign-currency document shows the same EUR-on-top / original-below pair everywhere (ETP-5450).
  * `primaryClassName` overrides the prominent line's typography (the block uses a 13px size).
+ * `approximate` (ETP-5657) prefixes the account-currency line with "≈": set only where that figure
+ * is a preview at the invoice's own rate (`amountBase` of a still-unreconciled candidate), never
+ * where it is the amount actually booked.
  */
 function DualAmount({
   value, currency, bold = false, secondaryValue, secondaryCurrency, baseOnTop = false,
-  primaryClassName, baseTestId = 'recon-cand-amount-base',
+  primaryClassName, baseTestId = 'recon-cand-amount-base', approximate = false,
 }) {
   const primaryCls = primaryClassName
     || cn('text-sm leading-5 text-[hsl(var(--foreground))]', bold ? 'font-semibold' : 'font-normal');
-  const mutedCls = 'text-xs leading-4 text-[hsl(var(--muted-foreground))]';
   const hasBase = secondaryValue != null;
   // When `baseOnTop`, the account-currency (EUR) equivalent is shown ON TOP and prominent, with the
   // invoice's own (foreign) currency small underneath — the account currency is what reconciles the
   // line, so it leads. Otherwise the primary `value` leads and the base sits underneath (muted).
+  const baseLeads = baseOnTop && hasBase;
   const foreignLine = (
     <MoneyAmount
       value={Number(value) || 0}
       currency={currency}
       tone="neutral"
-      className={baseOnTop && hasBase ? mutedCls : primaryCls}
+      className={baseLeads ? MUTED_AMOUNT_CLS : primaryCls}
       data-testid="MoneyAmount__d0f4d5" />
   );
-  // MoneyAmount doesn't forward extra props (no data-testid), so the base testid goes on this
-  // wrapping span (it always marks the account-currency amount, whichever position it's in).
   const baseLine = hasBase ? (
-    <span data-testid={baseTestId}>
-      <MoneyAmount
-        value={Number(secondaryValue) || 0}
-        currency={secondaryCurrency}
-        tone="neutral"
-        className={baseOnTop ? primaryCls : mutedCls}
-        data-testid="MoneyAmount-secondary__d0f4d5" />
-    </span>
+    <AccountCurrencyAmountLine
+      value={secondaryValue}
+      currency={secondaryCurrency}
+      className={baseOnTop ? primaryCls : MUTED_AMOUNT_CLS}
+      approximate={approximate}
+      testId={baseTestId}
+      data-testid="AccountCurrencyAmountLine__d0f4d5" />
   ) : null;
   return (
     <div className="flex flex-col items-end">
-      {baseOnTop && hasBase ? baseLine : foreignLine}
-      {baseOnTop && hasBase ? foreignLine : baseLine}
+      {baseLeads ? baseLine : foreignLine}
+      {baseLeads ? foreignLine : baseLine}
     </div>
+  );
+}
+
+/** Typography of the secondary (smaller, muted) line of a `DualAmount`. */
+const MUTED_AMOUNT_CLS = 'text-xs leading-4 text-[hsl(var(--muted-foreground))]';
+
+/**
+ * The account-currency line of a `DualAmount`, optionally marked as an estimate with "≈" plus a
+ * `title` / screen-reader hint (ETP-5657). Its own component so `DualAmount` stays under Sonar's
+ * cognitive-complexity ceiling (javascript:S3776).
+ *
+ * MoneyAmount doesn't forward extra props (no data-testid), so the testid goes on this wrapping span
+ * (it always marks the account-currency amount, whichever position it's in).
+ */
+function AccountCurrencyAmountLine({ value, currency, className, approximate, testId }) {
+  const ui = useUI();
+  const approxHint = ui('financeReconcileCandApproxAmount');
+  return (
+    <span data-testid={testId} title={approximate ? approxHint : undefined}>
+      {approximate ? (
+        <>
+          <span className="sr-only">{approxHint}</span>
+          <span aria-hidden="true" className={className}>{APPROX_PREFIX}</span>
+        </>
+      ) : null}
+      <MoneyAmount
+        value={Number(value) || 0}
+        currency={currency}
+        tone="neutral"
+        className={className}
+        data-testid="MoneyAmount-secondary__d0f4d5" />
+    </span>
   );
 }
 
@@ -727,6 +764,9 @@ function CandidateOperationsPanel({
     const candCurrency = cand.currency || currency;
     // Foreign candidate WITH a known account-currency equivalent → show EUR on top, foreign below.
     const hasBase = candForeign && cand.amountBase != null;
+    // That equivalent is only a preview at the invoice rate while the row is a candidate; on a
+    // reconciled line it is the amount actually booked, so it carries no "≈" (ETP-5657).
+    const estimate = hasBase && !reconciledMode;
     return (
       <TableRow
         key={cand.id}
@@ -784,6 +824,7 @@ function CandidateOperationsPanel({
           secondaryValue={candForeign ? cand.amountBase : undefined}
           secondaryCurrency={cand.baseCurrency || currency}
           baseOnTop={hasBase}
+          approximate={estimate}
           data-testid="MoneyCell__d0f4d5" />
         {reconciledMode ? (
           // Reconciled line: amount + a per-row individual un-link ("−"). cand.id is the transaction id.
@@ -822,6 +863,7 @@ function CandidateOperationsPanel({
             secondaryValue={candForeign ? cand.amountBase : undefined}
             secondaryCurrency={cand.baseCurrency || currency}
             baseOnTop={hasBase}
+            approximate={estimate}
             data-testid="MoneyCell__d0f4d5" />
         )}
       </TableRow>
@@ -932,6 +974,11 @@ function CandidateOperationsPanel({
 function ReconciliationActionBar({
   currency, selectedSum, remaining, canReconcile, isReconciledLine, reconcileCount, removeCount = 0,
   busy, onCancel, onReconcile, differenceNotice = null,
+  // ETP-5657 — "Al conciliar a la cotización del banco: diferencia de cambio +0,04 €" under the
+  // (invoice-rate) totals when the selection qualifies for a bank-rate conversion. Its own prop, not
+  // `differenceNotice`: that one also recolors the remaining amount, and an exchange difference
+  // says nothing about whether the line balances.
+  fxNotice = null,
   // ETP-5457 — the window's "read-only" access tier. The primary button is DISABLED rather than
   // hidden (hiding it would leave Cancel alone and shift the bar's layout); Cancel stays usable,
   // since clearing the selection is pure UI state.
@@ -967,6 +1014,14 @@ function ReconciliationActionBar({
               data-testid="recon-action-difference-notice"
             >
               {differenceNotice}
+            </p>
+          )}
+          {fxNotice && (
+            <p
+              className="px-3 text-xs leading-4 text-[hsl(var(--muted-foreground))]"
+              data-testid="recon-action-fx-notice"
+            >
+              {fxNotice}
             </p>
           )}
         </div>
@@ -1133,6 +1188,37 @@ function RemoveOperationConfirmDialog({
 }
 
 /**
+ * Title / body keys of the payment-method modal. Without methods the modal only opens for the
+ * currency conversion (ETP-5657), so "choose a method" would name a control that is not there.
+ *
+ * @param {boolean} hasMethods whether the method picker is shown
+ * @returns {{ title: string, body: string }}
+ */
+function methodModalCopy(hasMethods) {
+  return hasMethods
+    ? { title: 'financeReconcileMethodModalTitle', body: 'financeReconcileMethodModalBody' }
+    : { title: 'financeReconcileConversionModalTitle', body: 'financeReconcileConversionModalBody' };
+}
+
+/**
+ * Whether the modal's confirm is disabled: a request in flight, a picker shown with nothing picked,
+ * a conversion whose figures the backend would refuse — or, without a picker, no active conversion
+ * at all: that modal only exists to confirm the conversion, so with none there is nothing to
+ * confirm. Module-level for the same Sonar S3776 reason as {@link guardWrite}.
+ *
+ * @param {{ busy: boolean, hasMethods: boolean, methodId: string,
+ *   conversion: {active: boolean, valid: boolean}|null }} args
+ * @returns {boolean}
+ */
+function isMethodConfirmDisabled({ busy, hasMethods, methodId, conversion }) {
+  if (busy) return true;
+  const conversionActive = !!conversion?.active;
+  if (!hasMethods && !conversionActive) return true;
+  if (hasMethods && !methodId) return true;
+  return conversionActive && !conversion.valid;
+}
+
+/**
  * Invoice candidates are no longer filtered by payment method — every unpaid invoice is a valid
  * candidate — so the method is chosen here, once, right before creating the payment(s), via the
  * same chip selector used for other lookups in this window (e.g. "Concepto contable" in the New
@@ -1141,11 +1227,17 @@ function RemoveOperationConfirmDialog({
  * own payment/method untouched, see {@link ReconciliationFlowSupport} on the backend). Methods are
  * pre-filtered to the line's direction (payin for receipts, payout for payments) from the
  * account's configured methods.
+ *
+ * ETP-5657: when every selected invoice shares one foreign currency the modal also carries the
+ * bank-rate conversion ({@link ReconciliationConversionSection}), and it opens even if the account
+ * has no method for the direction — the picker is then hidden and the backend auto-resolves one.
  */
 function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm, onClose,
-  writeoff, onWriteoffChange, writeoffInfo, currency, isReceipt }) {
+  writeoff, onWriteoffChange, writeoffInfo, currency, isReceipt, conversion = null }) {
   const ui = useUI();
   const selectedMethod = methods.find((m) => m.id === methodId) || null;
+  const hasMethods = methods.length > 0;
+  const copy = methodModalCopy(hasMethods);
   // ChipSelect expects a useLookup(query) hook (server-backed elsewhere); the method list is
   // already loaded and short, so this just filters it locally — no round-trip needed.
   const useMethodLookup = useCallback((query) => {
@@ -1161,21 +1253,26 @@ function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm
       <DialogContent className="max-w-md bg-card" data-testid="recon-payment-method-dialog">
         <DialogHeader data-testid="DialogHeader__recon-payment-method">
           <DialogTitle data-testid="DialogTitle__recon-payment-method">
-            {ui('financeReconcileMethodModalTitle')}
+            {ui(copy.title)}
           </DialogTitle>
           <DialogDescription data-testid="DialogDescription__recon-payment-method">
-            {ui('financeReconcileMethodModalBody')}
+            {ui(copy.body)}
           </DialogDescription>
         </DialogHeader>
-        <div className="py-2">
-          <ChipSelect
-            value={selectedMethod}
-            onChange={(item) => onSelect(item?.id ?? '')}
-            useLookup={useMethodLookup}
-            placeholder={ui('cpPaymentMethod')}
-            testId="recon-payment-method"
-            data-testid="ChipSelect__recon-payment-method" />
-        </div>
+        {hasMethods && (
+          <div className="py-2">
+            <ChipSelect
+              value={selectedMethod}
+              onChange={(item) => onSelect(item?.id ?? '')}
+              useLookup={useMethodLookup}
+              placeholder={ui('cpPaymentMethod')}
+              testId="recon-payment-method"
+              data-testid="ChipSelect__recon-payment-method" />
+          </div>
+        )}
+        <ReconciliationConversionSection
+          conversion={conversion}
+          data-testid="ReconciliationConversionSection__recon-payment-method" />
         {/* ETP-4797. Absent unless the selection actually leaves a gap — a balanced match keeps the
             modal exactly as it was. Restricted to a single invoice on purpose: the backend
             allocates the line greedily across invoices, so with several selected only the boundary
@@ -1218,7 +1315,7 @@ function PaymentMethodModal({ open, methods, methodId, onSelect, busy, onConfirm
           </Button>
           <Button
             onClick={onConfirm}
-            disabled={busy || !methodId}
+            disabled={isMethodConfirmDisabled({ busy, hasMethods, methodId, conversion })}
             // Matches the primary-action hover elsewhere in the app (e.g. "Confirmar" in the New
             // Movement modal) — the shared Button's default variant hovers to primary/90, not the
             // Figma yellow.
@@ -1562,6 +1659,14 @@ export function ReconciliationSplitPanel({
     : lineFull;
   const remaining = Number((lineAmount - selectedSum).toFixed(2));
   const isReconciledLine = selectedLine?.status === 'reconciled';
+  // ETP-5657 — when every selected invoice shares one foreign currency, the payment is converted at
+  // the rate the bank implied (Classic parity) instead of the invoice's. All of it lives in the
+  // hook; the panel only feeds it and reads the footer notice, the payload fields and the gates.
+  // `windowReadOnly` because that tier force-closes the modal below: the hook drops its edits then.
+  const conversion = useReconciliationConversion({
+    invoiceMode, isReconciledLine, candidates, selectedOpIds, accountCurrency: currency,
+    lineAmount, windowReadOnly,
+  });
 
   // Invoices and transactions both may match PART of the line — the backend splits it and
   // leaves a remainder pending — but they differ on the UPPER bound:
@@ -1602,7 +1707,9 @@ export function ReconciliationSplitPanel({
     const state = writeoffState({
       difference: invoiceAmount - fundedAmount,
       limit: writeoffLimit,
-      eligible: invoiceMode && !!soleInvoice,
+      // No write-off on top of a bank-rate conversion (ETP-5657): the amount to pay already
+      // decides how much of the invoice is settled.
+      eligible: invoiceMode && !!soleInvoice && !conversion.eligible,
     });
     return {
       ...state,
@@ -1615,7 +1722,7 @@ export function ReconciliationSplitPanel({
         ? [soleInvoice.documentNo, soleInvoice.partnerName].filter(Boolean).join(' · ')
         : '',
     };
-  }, [invoiceMode, soleInvoice, lineAmount, selectedSum, writeoffLimit]);
+  }, [invoiceMode, soleInvoice, lineAmount, selectedSum, writeoffLimit, conversion.eligible]);
 
   /**
    * Whether the current shortfall is one the backend will post to an accounting concept instead of
@@ -1678,6 +1785,9 @@ export function ReconciliationSplitPanel({
         if (writeoff && writeoffInfo.visible && !writeoffInfo.blocked) {
           payload.writeoffDifference = true;
         }
+        // ETP-5657 — `actualPayment` / `conversionRate` / `convertedAmount`; null (a no-op here)
+        // unless the selection is converted at the bank's rate.
+        Object.assign(payload, conversion.payloadFields);
       } else {
         // An already-existing transaction keeps its own payment and method untouched.
         payload.operationIds = Array.from(selectedOpIds);
@@ -1691,6 +1801,7 @@ export function ReconciliationSplitPanel({
       setSelectedOpIds(new Set());
       setMethodModalOpen(false);
       setWriteoff(false);
+      conversion.reset();
       setGlItemPrompt(null);
       reloadLines();
       onReconcileSuccess?.();
@@ -1701,6 +1812,7 @@ export function ReconciliationSplitPanel({
       // than the read-only confirmation, which would offer a field the user cannot fill.
       if (err?.code === 'GL_ITEM_REQUIRED') {
         setMethodModalOpen(false);
+        conversion.reset();
         setGlItemPrompt(null);
         setGlItemSetupOpen(true);
         return;
@@ -1711,6 +1823,10 @@ export function ReconciliationSplitPanel({
       if (retargetId && retargetId !== candidateLineId) {
         setSelectedLineSel({ id: retargetId, matchGroupId: selectedLine?.matchGroupId ?? null });
         setSelectedOpIds(new Set());
+        // The selection the modal was confirming is gone; leaving it open would let one click
+        // submit the retargeted line unreviewed (ETP-5657 review).
+        setMethodModalOpen(false);
+        conversion.reset();
         reloadLines();
       }
       toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
@@ -1724,10 +1840,13 @@ export function ReconciliationSplitPanel({
     // A pure existing-transaction match needs no method (each transaction already has one); only
     // creating new invoice payments requires picking one, and only when the account actually has
     // methods configured for this direction — otherwise fall back to the backend's auto-resolve.
-    if (invoiceMode && directionMethods.length > 0) {
+    // A bank-rate conversion (ETP-5657) opens the modal even without methods: its figures are
+    // confirmed there, and the picker is simply hidden.
+    if (invoiceMode && (directionMethods.length > 0 || conversion.active)) {
       const preselected = directionMethods.find((m) => m.isDefault) || directionMethods[0];
       setSelectedMethodId(preselected?.id || '');
       setWriteoff(false);
+      conversion.reset();
       setMethodModalOpen(true);
       return;
     }
@@ -1780,6 +1899,12 @@ export function ReconciliationSplitPanel({
 
   const confirmMethodAndReconcile = () => {
     submitReconcile(selectedMethodId);
+  };
+
+  // A cancelled modal keeps no conversion edits: the next open starts from the defaults again.
+  const closeMethodModal = () => {
+    setMethodModalOpen(false);
+    conversion.reset();
   };
 
   /**
@@ -1938,6 +2063,9 @@ export function ReconciliationSplitPanel({
               currency={currency}
               selectedSum={selectedSum}
               remaining={remaining}
+              // Under a bank-rate conversion, the exchange difference reconciling would book with
+              // the default figures; the totals above stay at the invoice rate.
+              fxNotice={conversion.footer.fxNotice}
               canReconcile={canReconcile}
               isReconciledLine={isReconciledLine}
               reconcileCount={selectedOpIds.size}
@@ -1990,12 +2118,13 @@ export function ReconciliationSplitPanel({
         onSelect={setSelectedMethodId}
         busy={reconciling}
         onConfirm={confirmMethodAndReconcile}
-        onClose={() => setMethodModalOpen(false)}
+        onClose={closeMethodModal}
         writeoff={writeoff}
         onWriteoffChange={setWriteoff}
         writeoffInfo={writeoffInfo}
         currency={currency}
         isReceipt={lineAmount >= 0}
+        conversion={conversion}
         data-testid="PaymentMethodModal__d0f4d5" />
       <DifferenceModal
         open={diffModalOpen && !windowReadOnly}

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/ImportedStatementsTab.jsx
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -263,6 +264,23 @@ describe('ImportedStatementsTab', () => {
     await user.click(screen.getByTestId('toolbar-sync'));
     await waitFor(() => expect(bankSync).toHaveBeenCalledWith('acc-1'));
     await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
+  });
+
+  it('calls onSynced after a successful sync, and not when the tab is not synced', async () => {
+    const user = userEvent.setup();
+    const onSynced = vi.fn();
+    render(<ImportedStatementsTab account={{ id: 'acc-1', currencyIso: 'USD', bankConnected: true }} onSynced={onSynced} />);
+    expect(onSynced).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId('toolbar-sync'));
+    await waitFor(() => expect(onSynced).toHaveBeenCalledTimes(1));
+  });
+
+  it('syncs without error when no onSynced callback is given', async () => {
+    const user = userEvent.setup();
+    render(<ImportedStatementsTab account={{ id: 'acc-1', currencyIso: 'USD', bankConnected: true }} />);
+    await user.click(screen.getByTestId('toolbar-sync'));
+    await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
+    expect(toastError).not.toHaveBeenCalled();
   });
 
   // ETP-4891 follow-up: com.etendoerp.psd2's AD_MESSAGE for this toast has no real es_ES

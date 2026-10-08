@@ -100,6 +100,69 @@ export function withHeaderRefreshOnChildWrite(secondaryHooks, hook) {
   });
 }
 
+/** The invoice "Exchange rates" secondary tab, whose writes also move the header's rate. */
+export const EXCHANGE_RATES_TAB_KEY = 'exchangeRates';
+
+/**
+ * Re-read the header after a write to the Exchange rates tab (ETP-4029, ETP-5657).
+ *
+ * Adding or editing a row there also updates the invoice header's hidden `eTGOCurrencyRate` on
+ * the backend (`InvoiceExchangeRateHandler` reverse sync), so without this the header's
+ * currency-rate picker keeps the stale value until a manual reload. `refreshHeaderTotals` is the
+ * same non-disruptive refresh used after primary-line edits: it re-GETs the header and merges in
+ * only the fields the user hasn't touched, so in-progress unsaved header edits survive.
+ *
+ * `clearUserChangedKey('eTGOCurrencyRate')` runs first, and only for this one field: a rate the
+ * user already saved through the header's own CurrencyRatePicker in this visit permanently marks
+ * the key "user changed" for the session (see `useEntity.handleChange`), and the merge would then
+ * refuse to overwrite it with the newer value the tab just persisted. A narrow, deliberate
+ * exception for this cross-surface sync — see the rationale on `clearUserChangedKey`.
+ *
+ * @param {object} hook the window's main `useEntity` hook
+ */
+export function refreshHeaderCurrencyRate(hook) {
+  const id = hook?.selected?.id;
+  if (!id) return;
+  hook.clearUserChangedKey?.('eTGOCurrencyRate');
+  hook.refreshHeaderTotals?.(id);
+}
+
+/**
+ * Wrap the Exchange rates tab's secondary hook so a successful ADD or DELETE of a rate row also
+ * runs {@link refreshHeaderCurrencyRate} — the PATCH path calls it directly. Every add/delete
+ * flow of a secondary tab ends in these two handlers, and only after the server accepted the
+ * write (a refused DELETE — e.g. a completed invoice's rate — never reaches `handleDeleteChild`),
+ * so wrapping them covers the inline add row, the bulk delete and the single-row delete at once.
+ *
+ * Returns the array unchanged (same identity) when the window has no Exchange rates tab.
+ *
+ * @param {Array<object|null>} secondaryHooks per-tab hooks, same order as `secondaryTabs`
+ * @param {Array<{key: string}>} secondaryTabs
+ * @param {object} hook the window's main `useEntity` hook
+ * @returns {Array<object|null>}
+ */
+export function withExchangeRateHeaderSync(secondaryHooks, secondaryTabs, hook) {
+  const idx = (secondaryTabs || []).findIndex(st => st.key === EXCHANGE_RATES_TAB_KEY);
+  const sh = idx < 0 ? null : secondaryHooks[idx];
+  if (!sh) return secondaryHooks;
+  const wrapped = [...secondaryHooks];
+  wrapped[idx] = {
+    ...sh,
+    handleAddChild: async (...args) => {
+      const result = await sh.handleAddChild?.(...args);
+      // Only on success — a refused POST changed nothing on the server.
+      if (result) refreshHeaderCurrencyRate(hook);
+      return result;
+    },
+    handleDeleteChild: (...args) => {
+      const result = sh.handleDeleteChild?.(...args);
+      refreshHeaderCurrencyRate(hook);
+      return result;
+    },
+  };
+  return wrapped;
+}
+
 /**
  * `onSaved` for a secondary tab's `customAddModal` (e.g. Contacts' address form).
  *
