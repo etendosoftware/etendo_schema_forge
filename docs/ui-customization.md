@@ -419,7 +419,6 @@ Adds a transversal **Attachments** tab to the detail view for uploading, listing
 - No pagination — the list does a single lazy fetch when the tab becomes active.
 - The tab label shows the real number of attachments as soon as the record opens (ETP-5526): while the tab is inactive only the count is fetched (`.../count` endpoint below), the full list stays lazy. Once the list is read the label follows its length. If the count cannot be fetched (older backend without the endpoint, network error) the label shows no number — never `0` — until the tab is opened; no error is shown for it.
 - Hard upload limit of **10 MB** enforced by the NEO servlet (`MultipartConfig`). `maxSizeMB > 10` will fail at upload time.
-- The **Subido por** column shows `uploadedBy.name`, the raw AD username. In a multi-client instance that is a technical login such as `user+70@domain+client`, so the column is not pretty — making AD logins readable is a platform-wide concern and is deliberately not solved here.
 
 **Endpoints exposed by NEO Headless:**
 

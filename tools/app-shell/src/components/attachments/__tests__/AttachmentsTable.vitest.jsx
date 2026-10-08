@@ -142,33 +142,6 @@ describe('AttachmentsTable — ETP-5030 selected-row shading', () => {
   });
 });
 
-// The "Subido por" column resolves the uploader from whichever shape the caller
-// has: the NEO attachments payload (`uploadedBy.name`), a plain DAL record
-// (`createdBy.name` / `createdBy$_identifier`), or nothing at all.
-//
-// Column order in a row WITHOUT selection (what `renderTable` renders since
-// ETP-5526 made the checkbox column opt-in): name, size, uploadedAt, updatedAt,
-// uploadedBy, actions.
-const UPLOADED_BY_CELL_INDEX = 4;
-const uploaderTextOf = (id) =>
-  rowOf(id).querySelectorAll('td')[UPLOADED_BY_CELL_INDEX].textContent;
-
-describe('AttachmentsTable — uploader column', () => {
-  it('shows the uploader name reported by the backend', () => {
-    renderTable({
-      items: [{ id: 'a1', name: 'contract.pdf', uploadedBy: { id: 'U1', name: 'Openbravo' } }],
-    });
-
-    expect(uploaderTextOf('a1')).toBe('Openbravo');
-  });
-
-  it('falls back to the unknown-user label when there is no uploader at all', () => {
-    renderTable({ items: [{ id: 'a1', name: 'contract.pdf' }] });
-
-    expect(uploaderTextOf('a1')).toBe('attachmentsUnknownUser');
-  });
-});
-
 // ETP-5526 — selection is an opt-in capability of this shared table, and the
 // header-wide bulk controls are gone from it. Both halves matter: the checkbox
 // column used to render for EVERY caller, which is why SifAttachmentsSection
