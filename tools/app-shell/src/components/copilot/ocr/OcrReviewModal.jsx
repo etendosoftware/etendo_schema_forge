@@ -281,7 +281,12 @@ export default function OcrReviewModal({
                       data-testid="VendorAddressNotice__80a87a" />
                   )
                   : (field.key === 'documentNo'
-                    ? <DuplicateInvoiceNotice invoices={duplicate.invoices} documentNo={duplicate.documentNo} />
+                    ? (
+                      <DuplicateInvoiceNotice
+                        invoices={duplicate.invoices}
+                        documentNo={duplicate.documentNo}
+                        data-testid="DuplicateInvoiceNotice__80a87a" />
+                    )
                     : null)}
                 data-testid={"FieldRow__" + field.id}>
                 <KindRenderer
