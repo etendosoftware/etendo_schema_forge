@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/OrderPreview.jsx
 // Mocks must come before imports (Vitest hoisting)
 
 vi.mock('@/i18n', () => ({
@@ -102,12 +103,10 @@ vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
   default: ({ definition }) => <div data-testid="rel-docs-card" data-definition-spec={definition?.spec} />,
 }));
 
-// ETP-5527 — the previews only read the shared definition from the barrel.
+// ETP-5527 / ETP-5539 — the previews only read the shared definition from the barrel.
 vi.mock('@/components/related-documents', () => ({
-  SALES_RELATED_DOCS: {
-    'sales-order': { spec: 'sales-order' },
-    'sales-quotation': { spec: 'sales-quotation' },
-  },
+  getSalesRelatedDocs: (spec) => (['sales-order', 'sales-quotation'].includes(spec) ? { spec } : null),
+  getPurchaseRelatedDocs: (spec) => (spec === 'purchase-order' ? { spec } : null),
 }));
 
 vi.mock('@/lib/statusBadge.js', () => ({
@@ -226,11 +225,11 @@ describe('OrderPreview', () => {
     expect(screen.getByTestId('download-btn')).not.toBeDisabled();
   });
 
-  // ETP-5527 — sales orders render the shared sales-order definition (same as the form);
-  // purchase orders keep rendering no related-documents card at all.
+  // ETP-5527 / ETP-5539 — both order windows render the shared definition of their own spec
+  // (same as the form's RelatedDocuments section).
   it.each([
     ['sales-order', 'sales-order'],
-    ['purchase-order', undefined],
+    ['purchase-order', 'purchase-order'],
   ])('related-documents card for %s', (specName, expectedDefinitionSpec) => {
     renderOrderPreview({ specName });
     const card = screen.queryByTestId('rel-docs-card');

@@ -410,27 +410,28 @@ Adds a "Related Documents" tab/section to the detail view. Requires a hand-writt
 
 **Real examples:** `goods-shipment`, `payment-in`, `sales-invoice`.
 
-#### 7.a Sales documents: one definition for the form and the list preview (ETP-5527)
+#### 7.a Sales and purchase documents: one definition for the form and the list preview (ETP-5527, ETP-5539)
 
-For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`, `goods-shipment`, `return-material-receipt`) the form's "Related documents" section and the list preview's `RelatedDocumentsCard` render **the same definition**, so they always list the same documents with the same chips, statuses and navigation. Do not add a related-document source to only one of the two views — add it to the definition.
+For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`, `goods-shipment`, `return-material-receipt`) and the four purchase documents (`purchase-order`, `purchase-invoice`, `goods-receipt`, `return-to-vendor-shipment`, ETP-5539, defined in `purchaseRelatedDocs.js` as `PURCHASE_RELATED_DOCS` / `getPurchaseRelatedDocs(spec)`, same shape) the form's "Related documents" section and the list preview's `RelatedDocumentsCard` render **the same definition**, so they always list the same documents with the same chips, statuses and navigation. Do not add a related-document source to only one of the two views — add it to the definition.
 
 | Piece | Location (`tools/app-shell/src/components/related-documents/`) | Role |
 |---|---|---|
 | `SALES_RELATED_DOCS`, `getSalesRelatedDocs(spec)` | `salesRelatedDocs.js` | One entry per sales spec: `spec`, `entity` (header entity), optional `refreshEvent`, optional `depsKey(record)`, and `sources[]`. Each source has a `key`, a `type` (a `DOCUMENT_CHIP_TYPES` key, or `(doc) => key`) and either `select(record)` (synchronous, read from the record) or `fetch({ id, record, token, apiBaseUrl })` (async). `getSalesRelatedDocs` returns `null` for any non-sales spec. |
 | `useRelatedDocuments({ definition, id, record, token, apiBaseUrl, refreshSignal })` | `useRelatedDocuments.js` | Resolves a definition into `{ items: [{ type, doc }], loading, refresh }`, deduplicating by chip type + id. `record === undefined` → the hook loads the **detail** record itself (preview mode); `record === null` → waits for it (form still loading). Listens to `refreshEvent`; refetches async sources when `depsKey` or `refreshSignal` changes. |
-| `RelatedDocumentsSection` | `RelatedDocumentsSection.jsx` | Form renderer (`RelatedDocumentsShell` + `DocChip`). Each window's `artifacts/<spec>/custom/RelatedDocuments.jsx` is now a thin wrapper passing `SALES_RELATED_DOCS['<spec>']`. The refresh button is shown only when the definition has at least one `fetch` source. |
-| `fetchListInvoices` | `helpers.js` | Invoices through the `listInvoices` header action (also finds invoices linked only through their lines). |
+| `RelatedDocumentsSection` | `RelatedDocumentsSection.jsx` | Form renderer (`RelatedDocumentsShell` + `DocChip`). Each window's `RelatedDocuments.jsx` is now a thin wrapper passing `SALES_RELATED_DOCS['<spec>']` / `PURCHASE_RELATED_DOCS['<spec>']`. The refresh button is shown only when the definition has at least one `fetch` source. |
+| `fetchListInvoices` | `helpers.js` | Invoices through the `listInvoices` header action (also finds invoices linked only through their lines); available on sales and purchase orders. |
+| `fetchOriginInvoicesOf(spec)` | `helpers.js` | Source `fetch` for the invoices linked through "Import from Source Invoice" (`originInvoices`), shared by sales-invoice and purchase-invoice. |
 
-Payments (cobros) are deliberately **not** related documents: no sales order or invoice lists its payments as chips (functional decision, ETP-5527). Do not add a payments source to a definition.
+Payments (cobros) are deliberately **not** related documents: no sales or purchase order/invoice lists its payments as chips (functional decision, ETP-5527 / ETP-5539). Do not add a payments source to a definition.
 
 The definition always reads the **detail** record: `linkedShipments`, `sourceInvoice`, `originInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
 
 `RelatedDocumentsCard` (`tools/app-shell/src/windows/custom/shared/preview-cards/`) gained two optional props:
 
-- `definition` — a `SALES_RELATED_DOCS` entry. When set it **replaces** `specs`/`fetchExtra`, and the refresh button follows the same rule as the form section.
-- `record` — with `definition` only: the detail record when the caller already has it. Omit it and the card loads the detail record itself. (`return-material-receipt` passes the row, because its handler injects `sourceShipments`/`returnInvoices` on the list GET too.)
+- `definition` — a `SALES_RELATED_DOCS` / `PURCHASE_RELATED_DOCS` entry. When set it **replaces** `specs`/`fetchExtra`, and the refresh button follows the same rule as the form section.
+- `record` — with `definition` only: the detail record when the caller already has it. Omit it and the card loads the detail record itself. (`return-material-receipt` passes the row, because its handler injects `sourceShipments`/`returnInvoices` on the list GET too; `return-to-vendor-shipment` and `goods-receipt` omit it so the detail is loaded.)
 
-Without `definition` the card keeps the legacy `specs`/`fetchExtra` behavior; purchase documents still use it (their migration is ETP-5539). `InvoicePreview` likewise accepts an optional `relatedDocs` definition — the sales-invoice list and the fiscal monitor pass it for sales invoices; without it (purchase invoices) the legacy order/shipment specs are used.
+Without `definition` the card keeps the legacy `specs`/`fetchExtra` behavior, kept for back-compat (`ReturnDocStatsPanel` still accepts `specs`; the migrated sales and purchase windows pass `definition`). `InvoicePreview` takes the `relatedDocs` definition (sales-invoice list, fiscal monitor, purchase-invoice list); without it the card is not rendered. `ReturnDocStatsPanel` takes `relatedDefinition` plus `relatedLoadsDetail` (skip the row, load the detail).
 
 Each preview row (`DocRow`) is a single line: the document title and amount are never truncated; when space runs out the status tag shrinks with an ellipsis and shows the full status on hover.
 
@@ -2532,7 +2533,7 @@ document instead of being sent to the list (the fresh record is primed into the 
 
 **After creation** the button calls the slot's `onRefresh` (record re-read: the annotation empties
 and the button disappears) and the `<spec>:document-created` event refreshes related documents
-(`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`, purchase-invoice `RelatedDocuments.jsx`).
+(`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`, `PURCHASE_RELATED_DOCS['purchase-invoice'].refreshEvent`).
 
 **Keyboard.** `ActionChoiceModal` (shared, also used by sales-quotation) traps Tab (focus parks on
 the dialog while every control is disabled), Esc cancels (never while a request is in flight, and

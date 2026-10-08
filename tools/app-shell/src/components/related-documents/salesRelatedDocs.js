@@ -26,7 +26,7 @@
  * injected by the backend handlers on the detail GET only. `apiBaseUrl` is the
  * spec-scoped base (`.../sws/neo/<spec>`); cross-spec calls go through neoBase().
  *
- * Purchase documents are deliberately NOT here (separate ticket ETP-5539).
+ * Purchase documents live in purchaseRelatedDocs.js (ETP-5539), same shape.
  * Payments (cobros) are deliberately NOT related documents either: a sales order or
  * invoice never lists its payments as chips (functional decision, ETP-5527).
  */
@@ -35,6 +35,7 @@ import {
   fetchByCriteria,
   fetchById,
   fetchListInvoices,
+  fetchOriginInvoicesOf,
 } from './helpers.js';
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
@@ -79,22 +80,6 @@ async function fetchRectifiedInvoices({ id, record, token, apiBaseUrl }) {
   if (!orderId || getArSubtype(record) !== 'RECTIFICATIVA') return [];
   const invoices = await fetchByCriteria('sales-invoice', 'header', 'salesOrder', orderId, token, apiBaseUrl);
   return invoices.filter(inv => inv.id !== id);
-}
-
-/**
- * Invoices manually linked through "Import from Source Invoice" (ETP-4737/ETP-4919):
- * `originInvoices` is an array of {id, documentNo}; the legacy singular `originInvoice`
- * (bare id) is kept as a fallback for an older response shape.
- */
-async function fetchOriginInvoices({ record, token, apiBaseUrl }) {
-  const ids = Array.isArray(record?.originInvoices)
-    ? record.originInvoices.map(o => o?.id).filter(Boolean)
-    : [record?.originInvoice].filter(Boolean);
-  if (ids.length === 0) return [];
-  const invoices = await Promise.all(
-    ids.map(invId => fetchById('sales-invoice', 'header', invId, token, apiBaseUrl))
-  );
-  return invoices.filter(Boolean);
 }
 
 function idsOf(list) {
@@ -180,7 +165,7 @@ export const SALES_RELATED_DOCS = {
         type: 'sales-invoice',
         select: record => (record?.sourceInvoice ? [record.sourceInvoice] : []),
       },
-      { key: 'originInvoices', type: 'sales-invoice', fetch: fetchOriginInvoices },
+      { key: 'originInvoices', type: 'sales-invoice', fetch: fetchOriginInvoicesOf('sales-invoice') },
     ],
   },
 

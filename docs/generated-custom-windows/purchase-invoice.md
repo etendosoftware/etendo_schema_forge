@@ -2319,3 +2319,18 @@ goods-receipt and return-material-receipt (the other drop-zone windows) keep the
 with its download/delete buttons. `OcrSidePanel` / `OcrInlineUploader` are mounted only by
 purchase-invoice (the only OCR doc type). `PdfViewer`'s new props (`zoom`, `hideToolbar`,
 `toolbarExtra`, `onExpand`, `onNumPages`) are optional, so every other PDF preview is unchanged.
+
+## Related documents — form and list preview share one definition — ETP-5539
+
+The form's Related Documents tab (`tools/app-shell/src/windows/custom/purchase-invoice/RelatedDocuments.jsx`,
+now a thin wrapper over `RelatedDocumentsSection`) and the list preview (`InvoicePreview`, which
+receives `relatedDocs={PURCHASE_RELATED_DOCS['purchase-invoice']}` from `purchase-invoice/index.jsx`)
+render the same definition. The preview no longer links to sales documents (`/sales-order`,
+`/goods-shipment`). Sources:
+
+- **Origin purchase order** — read from the header's `salesOrder` FK.
+- **Receipts** — the detail record's `linkedReceipts`; a receipt with `isReturn === true` is shown as a return-to-vendor chip. This already covers the return shipments of a rectificative invoice, so the former per-line fetch chain (`fetchLinkedReturnDeliveries`) and the receipt criteria fallback are gone.
+- **Origin invoices** — `originInvoices` (legacy `originInvoice` as fallback), the invoices imported through "Import from Source Invoice".
+- **Payments are not related documents**; the preview keeps its own PAYMENTS section.
+
+The `purchase-invoice:document-created` event is the `refreshEvent`. See `docs/ui-customization.md` §7.a.

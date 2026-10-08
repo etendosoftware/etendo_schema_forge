@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/preview-cards/ReturnDocStatsPanel.jsx
 // Mocks before imports
 const capturedRelatedProps = vi.hoisted(() => ({ current: null }));
 vi.mock('../RelatedDocumentsCard.jsx', () => ({
@@ -91,6 +92,32 @@ describe('ReturnDocStatsPanel', () => {
     expect(props.definition).toBe(relatedDefinition);
     expect(props.record).toBe(relatedDefinition ? baseDoc : undefined);
     expect(props.specs).toBe(baseProps.specs);
+  });
+
+  // ETP-5539 — return-to-vendor-shipment passes relatedLoadsDetail: its list row lacks the
+  // detail-only sourceReceipts/returnInvoices, so no `record` is forwarded and the card
+  // loads the detail record itself. The default (false) keeps return-material-receipt as is.
+  describe('relatedLoadsDetail prop', () => {
+    const definition = { spec: 'return-to-vendor-shipment', sources: [] };
+
+    it('forwards the row as record by default (return-material-receipt)', () => {
+      render(<ReturnDocStatsPanel {...baseProps} relatedDefinition={definition} />);
+      expect(capturedRelatedProps.current.definition).toBe(definition);
+      expect(capturedRelatedProps.current.record).toBe(baseDoc);
+    });
+
+    it('withholds the row (card loads the detail) when relatedLoadsDetail is true', () => {
+      render(<ReturnDocStatsPanel {...baseProps} relatedDefinition={definition} relatedLoadsDetail />);
+      expect(capturedRelatedProps.current.definition).toBe(definition);
+      expect(capturedRelatedProps.current.record).toBeUndefined();
+    });
+
+    it('still forwards legacy specs and no record when there is no definition, even with relatedLoadsDetail', () => {
+      render(<ReturnDocStatsPanel {...baseProps} relatedLoadsDetail />);
+      expect(capturedRelatedProps.current.definition).toBeUndefined();
+      expect(capturedRelatedProps.current.record).toBeUndefined();
+      expect(capturedRelatedProps.current.specs).toBe(baseProps.specs);
+    });
   });
 
   // ── Billing status (invoiceStatus → invoicePercent) ──────────────────────────
