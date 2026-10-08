@@ -41,7 +41,7 @@ Search filters on `searchKey` and `name`.
 The detail page uses a split layout:
 
 - **Left side**: header form + tabs below it.
-- **Right sidebar** (30% width, `w-[30%]`): contains only `WarehouseSummary`. The sidebar is constrained to the area above the tabs (`sidebarAboveTabsOnly`), so tabs span the full width below the form.
+- **Right sidebar** (fixed 320 px, `w-[320px]` — ETP-5513; it was `w-[30%]`, which grew with the viewport and squeezed the form at 1280x720): contains only `WarehouseSummary`. The sidebar is constrained to the area above the tabs (`sidebarAboveTabsOnly`), so tabs span the full width below the form.
 
 Visual separators: `toolbarBorderBottom` draws a line between the toolbar and the form area; `tabsSeparator` draws a line between the form/sidebar and the tabs strip. The form area uses `p-2` (`formCardPadding`), scroll areas use `px-2` (`formScrollPaddingX`), and the tab content area uses `p-2 overflow-y-auto max-h-[calc(100vh-380px)]`.
 
@@ -56,7 +56,7 @@ Visual separators: `toolbarBorderBottom` draws a line between the toolbar and th
 | Search Key | 1 | 1 | Searchable, shown in grid |
 | Name | 2 | 1 | Searchable, shown in grid |
 | Location / Address | 3 | 2 | Shown in grid |
-| Description | 4 | 4 (full row) | `rows: 1` (single-line height) |
+| Description | 4 | 4 (full row) | `rows: 1` in decisions, rendered at 2 rows: `EntityForm` never renders a textarea below 2 rows (ETP-5513) |
 
 Discarded fields (not shown anywhere): `warehouseRule`, `storageBinSeparator`, `shipmentVehicle`, `shipperCode`, `fromDocumentNo`, `toDocumentNo`, `mReturnlocatorID`, `allocated`. The `discardPatterns: ["EM_*"]` rule additionally suppresses all Etendo module extension fields from the header form.
 

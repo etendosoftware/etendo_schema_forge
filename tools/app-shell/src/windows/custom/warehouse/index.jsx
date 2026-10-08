@@ -75,7 +75,7 @@ export default function WarehouseWindow(props) {
       onAfterCreate={handleAfterCreate}
       sidebarContent={sidebarContent}
       secondaryTabs={secondaryTabs}
-      sidebarClassName="w-[30%] shrink-0 border-l border-[hsl(var(--border-subtle))] overflow-y-auto p-2"
+      sidebarClassName="w-[320px] shrink-0 border-l border-[hsl(var(--border-subtle))] overflow-y-auto p-2"
       sidebarAboveTabsOnly
       formScrollPaddingX=""
       contentOverflow="hidden"

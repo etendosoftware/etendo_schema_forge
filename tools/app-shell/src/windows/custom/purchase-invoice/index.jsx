@@ -229,7 +229,7 @@ export default function PurchaseInvoiceWindow(props) {
           topbarRight={PurchaseInvoiceTopbar}
           topbarSecondary={PurchaseInvoiceSecondaryActions}
           sidePanel={windowAccessTier === 'read-only' ? ReadOnlyOcrSidePanel : OcrSidePanel}
-          sidePanelStyle={{ width: 360 }}
+          sidePanelStyle={{ width: 320 }}
           notesField="description"
           breadcrumb={breadcrumb}
           onAfterSave={true}
