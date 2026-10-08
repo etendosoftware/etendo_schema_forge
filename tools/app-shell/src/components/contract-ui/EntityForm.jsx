@@ -769,6 +769,9 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     cols: measuredCols,
     initialRows,
     fieldErrors,
+    // Same read-only test the cells use: a read-only field hides its asterisk, so it
+    // is not moved ahead of the others.
+    isReadOnly: f => formReadOnly || f.readOnly || displayLogic?.readOnly?.[f.key] === true || evalReadOnlyLogic(f, data),
   });
 
   if (displayFields.length === 0) return null;
@@ -789,7 +792,6 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   const fieldsToRender = imageField ? displayFields.filter(f => f.type !== 'image' || f.inline) : displayFields;
   // Cells actually placed in the grid: all of them, or the first rows + toggle.
   const gridCells = collapse.collapsible ? collapse.fields : fieldsToRender;
-  const showTrailing = !collapse.collapsible || collapse.expanded;
   const showMoreToggle = collapse.collapsible
     ? <FormShowMoreToggle expanded={collapse.expanded} onToggle={collapse.toggle} data-testid="FormShowMoreToggle__a8d626" />
     : null;
@@ -1661,7 +1663,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       <div className="flex gap-6 items-stretch">
         <div ref={gridRef} className={`flex-1 min-w-0 ${gridClass}`} style={gridStyle}>
           {gridCells.map(renderFieldWithError)}
-          {showTrailing && trailing}
+          {trailing}
           {showMoreToggle}
         </div>
         <div className="shrink-0 w-64 flex flex-col">
@@ -1686,7 +1688,10 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       {/* Additional grid item(s) rendered INSIDE the same grid container so they
           flow into the next free cell(s) after the native fields (opt-in; undefined
           for every existing caller → strictly additive). */}
-      {showTrailing && trailing}
+      {/* Always rendered, collapsed or not: `trailing` is not one of this form's field
+          rows (e.g. tax's TaxSifField, a nested EntityForm) and unmounting it would drop
+          its fields from client validation (ETP-5513). */}
+      {trailing}
       {showMoreToggle}
     </div>
   );

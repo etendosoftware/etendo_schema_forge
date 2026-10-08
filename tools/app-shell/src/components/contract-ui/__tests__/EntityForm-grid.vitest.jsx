@@ -375,12 +375,31 @@ describe('EntityForm — measured horizontal grid + initialRows (ETP-5513)', () 
       expect(renderedKeys(grid)).toHaveLength(6);
     });
 
-    it('hides the trailing slot while collapsed and shows it when expanded', () => {
+    // `trailing` is not one of this form's field rows (tax's TaxSifField is a nested
+    // EntityForm): unmounting it while collapsed would drop its fields from validation.
+    it('keeps the trailing slot mounted collapsed and expanded, before the toggle', () => {
       width = 700;
-      renderForm({ fields: nineFields(), initialRows: 2, trailing: <div data-testid="trailing-cell" /> });
-      expect(screen.queryByTestId('trailing-cell')).toBeNull();
+      const { container } = renderForm({ fields: nineFields(), initialRows: 2, trailing: <div data-testid="trailing-cell" /> });
+      const grid = getGridWrapper(container);
+      const trailingCell = screen.getByTestId('trailing-cell');
+      expect(screen.getByTestId('form-show-more-toggle')).toHaveAttribute('aria-expanded', 'false');
+      expect(trailingCell.nextElementSibling).toBe(grid.lastElementChild);
       fireEvent.click(screen.getByTestId('form-show-more-toggle'));
-      expect(screen.getByTestId('trailing-cell')).toBeInTheDocument();
+      expect(screen.getByTestId('trailing-cell')).toBe(trailingCell);
+    });
+
+    it('keeps a nested form passed through trailing registered while collapsed', () => {
+      width = 700;
+      const registerFields = vi.fn();
+      const nested = (
+        <EntityForm data={{}} onChange={vi.fn()} layout="horizontal" registerFields={registerFields}
+          fields={[{ key: 'nestedReq', label: 'Nested', type: 'text', column: 'Nested', required: true }]} />
+      );
+      renderForm({ fields: nineFields(), initialRows: 2, trailing: nested });
+      expect(screen.getByTestId('form-show-more-toggle')).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByTestId('field-nestedReq')).toBeInTheDocument();
+      const lastCall = registerFields.mock.calls.at(-1);
+      expect(lastCall[0]?.map(f => f.key)).toEqual(['nestedReq']);
     });
 
     it('keeps every field (hidden ones included) registered for validation', () => {
@@ -390,6 +409,32 @@ describe('EntityForm — measured horizontal grid + initialRows (ETP-5513)', () 
       expect(screen.queryByTestId('field-k7')).toBeNull();
       const lastCall = registerFields.mock.calls.filter(([f]) => f).at(-1);
       expect(lastCall[0].map(f => f.key)).toEqual(['k0', 'k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8']);
+    });
+
+    describe('read-only forms keep the declared order', () => {
+      // k7 and k8 are required: on an editable form they move first.
+      const fields = () => mk(9).map(f => (['k7', 'k8'].includes(f.key) ? { ...f, required: true } : f));
+
+      it('moves required fields first on an editable form', () => {
+        width = 700;
+        const { container } = renderForm({ fields: fields(), initialRows: 2 });
+        expect(renderedKeys(getGridWrapper(container))).toEqual(['k7', 'k8', 'k0', 'k1', 'k2', 'k3']);
+      });
+
+      it('does not reorder when the whole form is read-only (asterisks hidden)', () => {
+        width = 700;
+        const { container } = renderForm({ fields: fields(), initialRows: 2, readOnly: true });
+        expect(renderedKeys(getGridWrapper(container))).toEqual(['k0', 'k1', 'k2', 'k3', 'k4', 'k5']);
+      });
+
+      it('does not move a required field that readOnlyLogic locks (completed document)', () => {
+        width = 700;
+        const locked = fields().map(f => (f.key === 'k8' ? { ...f, readOnlyLogic: (r) => r.processed === true } : f));
+        const { container } = render(
+          <EntityForm data={{ processed: true }} onChange={vi.fn()} layout="horizontal" fields={locked} initialRows={2} />
+        );
+        expect(renderedKeys(getGridWrapper(container))).toEqual(['k7', 'k0', 'k1', 'k2', 'k3', 'k4']);
+      });
     });
 
     describe('a hidden field with a validation error', () => {
@@ -419,11 +464,17 @@ describe('EntityForm — measured horizontal grid + initialRows (ETP-5513)', () 
         expect(toggle()).toHaveAttribute('aria-expanded', 'true');
       });
 
-      it('collapses again once the error is cleared (user never expanded)', () => {
+      // Fixing the field clears its error on change: collapsing then would make the
+      // field the user is typing in vanish. The block stays open until the user closes it.
+      it('stays expanded once the error is cleared, and the user can then collapse it', () => {
         width = 700;
         const { rerender } = renderForm({ fields: required(), initialRows: 2, fieldErrors: { k8: 'fieldRequired' } });
         expect(screen.getByTestId('field-k8')).toBeInTheDocument();
         rerender(<EntityForm data={{}} onChange={vi.fn()} layout="horizontal" fields={required()} initialRows={2} fieldErrors={{}} />);
+        expect(screen.getByTestId('field-k8')).toBeInTheDocument();
+        expect(screen.getByTestId('form-show-more-toggle')).toHaveAttribute('aria-expanded', 'true');
+
+        fireEvent.click(screen.getByTestId('form-show-more-toggle'));
         expect(screen.queryByTestId('field-k8')).toBeNull();
         expect(screen.getByTestId('form-show-more-toggle')).toHaveAttribute('aria-expanded', 'false');
       });

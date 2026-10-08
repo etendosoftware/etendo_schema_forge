@@ -299,9 +299,15 @@ with `layout="horizontal"`) is built to work there next to a side panel:
   `initialRows={2}`. When the fields overflow 2 rows, required fields (red asterisk) are moved
   first and the rest are revealed by `FormShowMoreToggle` (`showMoreFormData` /
   `showLessFormData`). Expanded and collapsed share the same order, so expanding only appends.
-  If a hidden field carries a validation error (e.g. an empty required field on save), the block
-  opens on its own. All fields stay registered for validation whether shown or not. The split is
-  inert until the grid is measured, so jsdom tests see every field.
+  A required field that is read-only (the whole form read-only, `readOnly`, or locked by
+  `readOnlyLogic` on a completed document) shows no asterisk, so it is not moved: a read-only
+  form keeps its declared order. If a hidden field carries a validation error (e.g. an empty
+  required field on save), the block opens on its own and stays open after the error clears
+  (fixing the field clears its error, and the field must not vanish under the cursor); only the
+  user collapses it again. All of the form's fields stay registered for validation whether
+  shown or not, and the `trailing` slot (e.g. tax's `TaxSifField`, a nested form) is always
+  rendered, collapsed or not, so its own fields stay registered too. The split is inert until
+  the grid is measured, so jsdom tests see every field.
 - **Side panels are a fixed 320 px**, never a percentage (`w-[320px]` in `sidebarClassName`, or
   `sidePanelStyle={{ width: 320 }}`).
 - **Textareas are at least 2 rows tall.** `EntityForm` clamps `rows` to a minimum of 2, so a

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useElementWidth } from '@/hooks/useElementWidth.js';
 
 /**
@@ -48,7 +48,10 @@ function isRequiredField(field) {
  * - Only kicks in when the fields overflow `initialRows` rows; otherwise the field
  *   order is returned untouched and nothing is hidden.
  * - On overflow, required fields (red asterisk) are moved first — stable, so the
- *   relative order inside each group is the declared one. The same order is used
+ *   relative order inside each group is the declared one. A field for which
+ *   `isReadOnly(field)` is true does not count as required: its asterisk is hidden
+ *   (e.g. a completed document), so moving it would reorder the form for no visible
+ *   reason — on a fully read-only form the declared order is kept. The same order is used
  *   collapsed and expanded, so expanding only appends fields, never moves the
  *   visible ones.
  * - Row filling follows CSS grid auto-placement for spans: a field that does not fit
@@ -56,7 +59,7 @@ function isRequiredField(field) {
  *
  * @returns {{ ordered: object[], visible: object[], hiddenCount: number }}
  */
-export function partitionInitialRows(fields, cols, initialRows) {
+export function partitionInitialRows(fields, cols, initialRows, isReadOnly = () => false) {
   const list = Array.isArray(fields) ? fields : [];
   if (!cols || !(initialRows > 0)) return { ordered: list, visible: list, hiddenCount: 0 };
 
@@ -77,7 +80,8 @@ export function partitionInitialRows(fields, cols, initialRows) {
 
   if (countVisible(list) === list.length) return { ordered: list, visible: list, hiddenCount: 0 };
 
-  const ordered = [...list.filter(isRequiredField), ...list.filter(f => !isRequiredField(f))];
+  const first = (f) => isRequiredField(f) && !isReadOnly(f);
+  const ordered = [...list.filter(first), ...list.filter(f => !first(f))];
   const visibleCount = countVisible(ordered);
   return {
     ordered,
@@ -100,21 +104,29 @@ export function useMeasuredFormColumns(enabled) {
 
 /**
  * "Show more details" state for a form limited to `initialRows` rows.
- * The collapsed block opens on its own while one of its hidden fields carries a
+ * The collapsed block opens on its own when one of its hidden fields carries a
  * validation error, so a save blocked by an empty hidden required field always
- * shows the user which field is missing.
+ * shows the user which field is missing — and it STAYS open after the error clears
+ * (fixing the field clears its error on change; collapsing then would hide the
+ * field the user is typing in). Only the user collapses it again.
  */
-export function useInitialRowsCollapse({ fields, cols, initialRows, fieldErrors }) {
+export function useInitialRowsCollapse({ fields, cols, initialRows, fieldErrors, isReadOnly }) {
   const [userExpanded, setUserExpanded] = useState(false);
   const partition = useMemo(
-    () => partitionInitialRows(fields, cols, initialRows),
-    [fields, cols, initialRows]
+    () => partitionInitialRows(fields, cols, initialRows, isReadOnly),
+    [fields, cols, initialRows, isReadOnly]
   );
   const hiddenHasError = useMemo(() => {
     if (!partition.hiddenCount || !fieldErrors) return false;
     return partition.ordered.slice(partition.visible.length).some(f => Boolean(fieldErrors[f.key]));
   }, [partition, fieldErrors]);
+  // Latch: an error in the hidden block opens it for good, not just while it lasts.
+  useEffect(() => {
+    if (hiddenHasError) setUserExpanded(true);
+  }, [hiddenHasError]);
   const collapsible = partition.hiddenCount > 0;
+  // `hiddenHasError` also counts here so the block is open on the very render that
+  // reports the error, before the latch effect commits.
   const expanded = !collapsible || userExpanded || hiddenHasError;
   const toggle = useCallback(() => setUserExpanded(v => !v), []);
   return {

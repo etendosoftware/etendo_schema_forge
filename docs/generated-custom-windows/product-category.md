@@ -112,7 +112,7 @@ Regenerated on 2026-06-09 as part of feature/ETP-4192.
 - `detailEntity` changed from `assignedProducts` to `accounting`; `assignedProducts` and `translation` entities excluded.
 - `linesLayout: "inlineEditable"` added — Accounting tab now uses `InlineLinesPanel` with pencil/trash row actions.
 - Layout properties added: `noHeaderBorder`, `toolbarBorderBottom`, `formCardPadding`, `formScrollPaddingX`, `toolbarPaddingX`, `tabsBarPaddingX`.
-- `description` field configured with `span: 2, rows: 1`; `image` field discarded.
+- `description` field configured with `span: 2, rows: 1` (rendered at the 2-row textarea minimum since ETP-5513); `image` field discarded.
 - `grow: true` added to `productExpense`, `productRevenue`, and `productCOGS` so all four accounting selector columns share the row width equally.
 - Pipeline additions used by this window: `span`, `rows`, `explicitType`, `formScrollPaddingX`, and `grow` support in `resolve-curated.js`, `generate-contract.js`, and `generate-frontend.js`.
 - Backend fix (NEO Headless): `SelectorValidationResolver` now drops OBUISEL AND-clauses containing unresolvable `@param@` tokens instead of substituting `NULL`, which caused ValidCombination selectors to always return 0 results.

@@ -54,6 +54,14 @@ describe('partitionInitialRows', () => {
     expect(res.ordered.map(x => x.key)).toEqual(['c', 'g', 'a', 'b', 'd', 'e', 'h']);
   });
 
+  it('does not move a required field that is read-only (asterisk hidden)', () => {
+    const fields = [f('a'), f('b'), f('c', { required: true }), f('d'), f('e'), f('g', { required: true }), f('h')];
+    const res = partitionInitialRows(fields, 3, 2, (x) => x.key === 'c');
+    expect(res.ordered.map(x => x.key)).toEqual(['g', 'a', 'b', 'c', 'd', 'e', 'h']);
+    const allRo = partitionInitialRows(fields, 3, 2, () => true);
+    expect(allRo.ordered.map(x => x.key)).toEqual(['a', 'b', 'c', 'd', 'e', 'g', 'h']);
+  });
+
   it('starts a new row when a spanned field does not fit the rest of the row', () => {
     const fields = [f('a'), f('b'), f('desc', { span: 4 }), f('c'), f('d')];
     // 3 cols: row 1 = a, b ; desc (clamped to 3) does not fit -> row 2 = desc ; c -> row 3 hidden
