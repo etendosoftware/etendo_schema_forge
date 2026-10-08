@@ -317,6 +317,35 @@ function hasListToolbarTabs(subsetFilters) {
   return subsetFilters?.length > 0;
 }
 
+// Value of the main row's `data-tabs-placement`: absent without subset tabs, otherwise where
+// `useListToolbarTabsFit` placed them.
+function listToolbarTabsPlacement(hasTabs, tabsInline) {
+  if (!hasTabs) return undefined;
+  return tabsInline ? 'inline' : 'wrapped';
+}
+
+/**
+ * The main row's subset-tabs cell (ETP-5509): ONE element that `useListToolbarTabsFit`
+ * measures through `tabsRef` and moves by CSS alone — opening the row while inline, alone on
+ * a line below (`order-last basis-full`) while wrapped — so it is never remounted and a
+ * focused tab keeps its focus when it moves.
+ */
+function ListToolbarTabsCell({ tabsRef, tabsInline, subsetFilters, activeSubsetIndex, onSelectSubset, ui }) {
+  return (
+    <div
+      ref={tabsRef}
+      className={tabsInline ? 'flex shrink-0 items-center' : 'order-last flex basis-full items-center'}
+      data-testid="list-toolbar-tabs">
+      <ListToolbarTabs
+        subsetFilters={subsetFilters}
+        activeSubsetIndex={activeSubsetIndex}
+        onSelectSubset={onSelectSubset}
+        ui={ui}
+        data-testid="ListToolbarTabs__620cbc" />
+    </div>
+  );
+}
+
 function iconSizeClass(selectionBarSize) {
   return selectionBarSize === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4';
 }
@@ -1074,8 +1103,7 @@ export function ListView({
   // only when it does not; the decision is measured, never a breakpoint.
   const hasTabs = hasListToolbarTabs(subsetFilters);
   const toolbarFit = useListToolbarTabsFit(hasTabs && !listBarHidden);
-  let toolbarTabsPlacement;
-  if (hasTabs) toolbarTabsPlacement = toolbarFit.tabsInline ? 'inline' : 'wrapped';
+  const toolbarTabsPlacement = listToolbarTabsPlacement(hasTabs, toolbarFit.tabsInline);
 
   // Everything the Table needs, in one object, because ListTableRegion renders it from
   // either of two wrappers and these used to be written out once per branch. `meta` is
@@ -1287,17 +1315,14 @@ export function ListView({
                 data-tabs-placement={toolbarTabsPlacement}
                 data-testid="list-toolbar-main-row">
                 {hasTabs && (
-                  <div
-                    ref={toolbarFit.tabsRef}
-                    className={toolbarFit.tabsInline ? 'flex shrink-0 items-center' : 'order-last flex basis-full items-center'}
-                    data-testid="list-toolbar-tabs">
-                    <ListToolbarTabs
-                      subsetFilters={subsetFilters}
-                      activeSubsetIndex={activeSubsetIndex}
-                      onSelectSubset={selectSubset}
-                      ui={ui}
-                      data-testid="ListToolbarTabs__620cbc" />
-                  </div>
+                  <ListToolbarTabsCell
+                    tabsRef={toolbarFit.tabsRef}
+                    tabsInline={toolbarFit.tabsInline}
+                    subsetFilters={subsetFilters}
+                    activeSubsetIndex={activeSubsetIndex}
+                    onSelectSubset={selectSubset}
+                    ui={ui}
+                    data-testid="ListToolbarTabsCell__620cbc" />
                 )}
                 <div
                   ref={toolbarFit.leftRef}
