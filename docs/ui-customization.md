@@ -2488,7 +2488,7 @@ with the chosen value — see **Input-required round-trip** below.
 |---|---|
 | `followUpDocuments.js` | Pure helpers: `readFollowUpEntries`, `buildFollowUpActionUrl`, error-code → i18n key map (`FOLLOW_UP_ERROR_KEYS`, fallback `followUpErrorGeneric`), the input-required helpers (`readFollowUpInputRequest`, `followUpInputLabels`, `mergeFollowUpInputValues`), the prompt hand-off (`requestFollowUpPrompt` / `consumeFollowUpPrompt`) and `createFollowUpAfterProcess(spec, options)` |
 | `useFollowUpDocuments` | State machine `closed → choice → (loading) → result`; POSTs through `useApiFetch`; keeps a backend-requested input (`session.inputRequest`, `session.inputs`, `setInputValue`); on success dispatches `<spec>:document-created` and calls `onCreated` |
-| `FollowUpDocumentModal` | Choice phase on `ActionChoiceModal` — layout decided only by how many configured follow-ups are available: ONE → single-option confirmation (summary, the window's question, ONE static option card — title + badge + description with the pending count, no radio — and a label-only primary button named after the action, focused so Enter creates); TWO+ → one Figma choice card per follow-up. No "not now" card: Cancel / X / Esc / backdrop reject. Result phase on `ConfirmResultModal` (link to the created document); errors inline |
+| `FollowUpDocumentModal` | Choice phase on `ActionChoiceModal` — layout decided only by how many configured follow-ups are available: ONE → single-option confirmation (summary, the window's question, ONE static option card — title + badge + description with the pending count, no radio — and a label-only primary button named after the action, focused so Enter creates); TWO+ → one Figma choice card per follow-up. No "not now" card: Cancel / X / Esc / backdrop reject. Result phase on `ConfirmResultModal` with `variant="popup"` (link to the created document, in the same Figma "PopUps" shell as the choice phase: close icon, left-aligned title, card-style link, outlined «Cerrar» + dark pill «Ver …»; the default variant other windows use is unchanged); errors inline |
 | `FollowUpDocumentButton` | `topbarRight` entry point: renders only while a configured follow-up is available (never for a read-only window); always mounts the modal, so the post-Confirm prompt also opens it |
 
 **Per-window config** — a map keyed by the backend follow-up key (see
@@ -2511,7 +2511,10 @@ options: {
     resultTitleKey,
   },
 },
-summary: { documentLabelKey /* required */, documentNoField, dateLabelKey, dateField, contactField, totalField, currencyField,
+summary: { documentLabelKey /* required */,
+           documentNoField /* default 'documentNo' — the INTERNAL number; never a partner reference
+                              such as purchase-invoice `orderReference` (the supplier's own number) */,
+           dateLabelKey, dateField, contactField, totalField, currencyField,
            linesLabelKey /* pending-lines column, single follow-up only; default 'lines' («Líneas») */ },
 ```
 
@@ -2533,6 +2536,11 @@ document instead of being sent to the list (the fresh record is primed into the 
 **After creation** the button calls the slot's `onRefresh` (record re-read: the annotation empties
 and the button disappears) and the `<spec>:document-created` event refreshes related documents
 (`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`, purchase-invoice `RelatedDocuments.jsx`).
+Later writes to the created document (completing the shipment / receipt after following the link)
+happen in another window; they mark the source invoice's cached record stale through the
+cross-spec map in `lib/crossSpecCacheInvalidation.js` (`goods-shipment → sales-invoice`,
+`goods-receipt → purchase-invoice`), so going back to the invoice refetches it. A new follow-up
+pair (e.g. order → shipment) must add its own row there — see `docs/request-policy.md`.
 
 **Keyboard.** `ActionChoiceModal` (shared, also used by sales-quotation) traps Tab (focus parks on
 the dialog while every control is disabled), Esc cancels (never while a request is in flight, and

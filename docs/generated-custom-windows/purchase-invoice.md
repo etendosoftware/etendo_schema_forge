@@ -192,7 +192,8 @@ generated document differ) — see `docs/ui-customization.md` §20.
   invoice; otherwise the previous behaviour stays (navigate to the list with the preview).
 - **Modal** (single follow-up → direct confirmation, no radio): title «¿Gestionar recepción?»
   (`titleKey: 'followUpManageReceiptTitle'`; the topbar button keeps «Gestionar recepción» through its own
-  `buttonLabelKey: 'poManageReceipt'`), summary (Factura / Fecha / Contacto / Líneas / Total — «Líneas» is the pending line
+  `buttonLabelKey: 'poManageReceipt'`), summary (Factura / Fecha / Contacto / Líneas / Total — «Factura» is the internal document number
+  `documentNo`, e.g. «FC1000000», never the supplier reference `orderReference`; «Líneas» is the pending line
   count), the question «¿Qué vas a hacer con esta factura?» (`questionKey:
   'followUpInvoiceQuestion'`), ONE static option card (icon, «Crear albarán de compra» + blue «Borrador» badge
   — `badgeTone: 'info'` —, «Se generará en borrador con las N líneas pendientes de recepción.»,
@@ -201,7 +202,7 @@ generated document differ) — see `docs/ui-customization.md` §20.
   backdrop reject: the invoice stays Completed and nothing is created — there is no «Ahora no»
   card. «Crear recepción» POSTs
   `purchase-invoice/header/{id}/action/createGoodsReceipt`, which creates a **Draft** goods receipt (Albarán de Compra) with only
-  the pending lines; the result view links to it (`/goods-receipt/{id}`). Backend error codes
+  the pending lines; the result view («Albarán creado», same PopUps style as the popup — `ConfirmResultModal` `variant="popup"`) links to it (`/goods-receipt/{id}`). Backend error codes
   (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
 - **Warehouse asked when the backend cannot decide it.** The goods receipt needs a target warehouse. When
   the backend cannot determine it on its own, `createGoodsReceipt` answers `409 FOLLOW_UP_WAREHOUSE_REQUIRED`
@@ -218,6 +219,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
   while something is pending (never for a read-only window). After a creation the record is
   re-read (the button disappears; a partial movement later offers only what is still missing)
   and `purchase-invoice:document-created` refreshes `RelatedDocuments.jsx` (event listener).
+  Completing (or editing / deleting) that goods receipt later marks the invoice's cached record stale
+  (`goods-receipt → purchase-invoice` in `lib/crossSpecCacheInvalidation.js`), so coming back to the
+  invoice shows the new receipt status and linked receipts without a manual reload.
 - Config: `PURCHASE_INVOICE_FOLLOW_UP` in `tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js`.
 
 ## Gap assessment

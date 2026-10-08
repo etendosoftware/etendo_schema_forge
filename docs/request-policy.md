@@ -303,9 +303,18 @@ marked the sales order stale.
 | A write to | Marks stale |
 |---|---|
 | `goods-shipment`, `sales-invoice` | `sales-order` |
+| `goods-shipment` | `sales-invoice` (ETP-5576) |
+| `goods-receipt` | `purchase-invoice` (ETP-5576) |
 
-The Purchase equivalent (`goods-receipt` / `purchase-invoice` → `purchase-order`) is intentionally
-not included yet: it is owned by the Purchase cell, and adding it is just those two map entries.
+The invoice rows (ETP-5576) exist because an invoice shows values derived from its shipments /
+receipts — the `followUp` annotation behind «Gestionar envío / recepción», the delivery status and
+the `linkedShipments` / `linkedReceipts` Related Documents chips. Without them, completing the
+shipment created from the invoice's follow-up popup and going back to the invoice showed the
+pre-completion status (e.g. «Entregado 50%», shipment «Borrador») until a manual reload.
+
+The order-side Purchase equivalent (`goods-receipt` / `purchase-invoice` → `purchase-order`) is
+intentionally not included yet: it is owned by the Purchase cell, and adding it is just those two
+map entries.
 
 Add a row there when a new spec starts displaying values derived from another spec's documents.
 Not covered: writes made through the plain-module `apiFetch` (`@etendosoftware/app-shell-core/auth/api`,

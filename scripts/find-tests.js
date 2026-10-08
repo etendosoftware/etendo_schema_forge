@@ -30,10 +30,22 @@ function toPosix(path) {
   return path.split('\\').join('/');
 }
 
+// `git ls-files` must read the repo that contains `root`, never the one a caller's hook exported:
+// run from a linked worktree, git's hooks set GIT_DIR (absolute) and every child inherits it, so
+// without this the Java repo (GO_ROOT) would be listed from the schema_forge worktree instead.
+function envWithoutGitContext() {
+  const env = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!key.startsWith('GIT_')) env[key] = value;
+  }
+  return env;
+}
+
 function gitLsFiles(root, patterns) {
   try {
     const out = execFileSync('git', ['ls-files', '--', ...patterns], {
       cwd: root,
+      env: envWithoutGitContext(),
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
     });

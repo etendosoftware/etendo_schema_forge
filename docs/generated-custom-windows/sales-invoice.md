@@ -237,7 +237,7 @@ generated document differ) — see `docs/ui-customization.md` §20.
   backdrop reject: the invoice stays Completed and nothing is created — there is no «Ahora no»
   card. «Crear albarán» POSTs
   `sales-invoice/header/{id}/action/createShipment`, which creates a **Draft** sales shipment (Albarán de Venta) with only
-  the pending lines; the result view links to it (`/goods-shipment/{id}`). Backend error codes
+  the pending lines; the result view («Albarán creado», same PopUps style as the popup — `ConfirmResultModal` `variant="popup"`) links to it (`/goods-shipment/{id}`). Backend error codes
   (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
 - **Warehouse asked when the backend cannot decide it.** The shipment needs a target warehouse. When
   the backend cannot determine it on its own, `createShipment` answers `409 FOLLOW_UP_WAREHOUSE_REQUIRED`
@@ -254,6 +254,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
   while something is pending (never for a read-only window). After a creation the record is
   re-read (the button disappears; a partial movement later offers only what is still missing)
   and `sales-invoice:document-created` refreshes the related documents (`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`).
+  Completing (or editing / deleting) that shipment later marks the invoice's cached record stale
+  (`goods-shipment → sales-invoice` in `lib/crossSpecCacheInvalidation.js`), so coming back to the
+  invoice shows the new delivery status and shipment status without a manual reload.
 - Config: `SALES_INVOICE_FOLLOW_UP` in `tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js`.
 
 The previous ad-hoc «¿Gestionar envío?» dialog in `artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`
