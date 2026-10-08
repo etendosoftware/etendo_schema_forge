@@ -179,6 +179,30 @@ function DuplicateInvoiceNotice({ invoices, documentNo }) {
   );
 }
 
+/**
+ * The notice shown under a review field, if any: the vendor's missing-address warning under the
+ * vendor row, the duplicate-invoice warning under the document number row.
+ */
+function renderFieldNotice(fieldKey, { vendorAddress, duplicate }) {
+  if (fieldKey === 'vendor') {
+    return (
+      <VendorAddressNotice
+        status={vendorAddress.status}
+        onRecheck={vendorAddress.recheck}
+        data-testid="VendorAddressNotice__80a87a" />
+    );
+  }
+  if (fieldKey === 'documentNo') {
+    return (
+      <DuplicateInvoiceNotice
+        invoices={duplicate.invoices}
+        documentNo={duplicate.documentNo}
+        data-testid="DuplicateInvoiceNotice__80a87a" />
+    );
+  }
+  return null;
+}
+
 function formatValue(value) {
   if (!value) return '';
   if (typeof value === 'object') return value.label || value.name || '';
@@ -273,21 +297,7 @@ export default function OcrReviewModal({
                 onToggle={(checked) => updateField(field.key, { enabled: checked, editing: checked ? state[field.key]?.editing : false })}
                 toggleDisabled={(field.key === 'vendor' && resolving) || !hasResolvedValue}
                 expanded={!entry.enabled || !hasResolvedValue || entry.editing}
-                notice={field.key === 'vendor'
-                  ? (
-                    <VendorAddressNotice
-                      status={vendorAddress.status}
-                      onRecheck={vendorAddress.recheck}
-                      data-testid="VendorAddressNotice__80a87a" />
-                  )
-                  : (field.key === 'documentNo'
-                    ? (
-                      <DuplicateInvoiceNotice
-                        invoices={duplicate.invoices}
-                        documentNo={duplicate.documentNo}
-                        data-testid="DuplicateInvoiceNotice__80a87a" />
-                    )
-                    : null)}
+                notice={renderFieldNotice(field.key, { vendorAddress, duplicate })}
                 data-testid={"FieldRow__" + field.id}>
                 <KindRenderer
                   mode="field"
