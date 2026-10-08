@@ -102,6 +102,7 @@ describe('ListView — import labels + translator forwarded to ImportDialog', ()
     // ETP-4997: the hint carries a {formats} placeholder that ImportDropzone fills from the
     // window's own `formats` declaration, so it can no longer name formats the input rejects.
     expect(labels.dropzone.dropHint).toBe('importDropHintFormats');
+    expect(labels.reading).toBe('importReadingFile');
     expect(labels.progress.title).toBe('importProgressTitle');
     expect(labels.progress.counter).toBe('importProgressCounter');
     expect(labels.mapping.notImported).toBe('importNotImported');

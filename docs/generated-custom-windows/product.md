@@ -1501,3 +1501,7 @@ that old send is still in flight, loading the file starts a new run and clears t
 (`resetImportRun`) under the old workers. A remaining old row may then try to create a product
 category that already exists and fail with a unique-key conflict: that row is reported FAILED, nothing
 is lost and nothing is duplicated. Wait for the running import to finish before loading another file.
+
+Generic import dialog: after a file is attached, the dropzone is replaced by a "Reading file…"
+spinner (`importReadingFile`) until the preview is ready, so nothing can be attached on top of the
+file being read; it is also removed when the file is refused and the error step appears.

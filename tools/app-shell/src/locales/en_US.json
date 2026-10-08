@@ -16579,6 +16579,7 @@
     "computedFreshnessAria": "Computed value — may be delayed",
     "importDialogTitle": "Import",
     "importRevalidating": "Revalidating rows…",
+    "importReadingFile": "Reading file…",
     "importDownloadTemplate": "Download CSV template",
     "importDropHere": "Drop your file here",
     "importDropHint": "or select a file. Supported formats: CSV or TXT",

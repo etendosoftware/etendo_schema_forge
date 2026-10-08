@@ -16780,6 +16780,7 @@
     "computedFreshnessAria": "Valor calculado — puede estar desactualizado",
     "importDialogTitle": "Importar",
     "importRevalidating": "Revalidando filas…",
+    "importReadingFile": "Leyendo archivo…",
     "importDownloadTemplate": "Descargar plantilla CSV",
     "importDropHere": "Suelta tu archivo aquí",
     "importDropHint": "o selecciona un archivo. Formatos admitidos: CSV o TXT",

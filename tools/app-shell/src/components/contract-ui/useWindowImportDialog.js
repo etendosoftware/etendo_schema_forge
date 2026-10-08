@@ -121,6 +121,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   // `close` reuse existing generic keys per the i18n guide's "reuse before adding" rule.
   const labels = useMemo(() => ({
     title: ui('importDialogTitle'),
+    reading: ui('importReadingFile'),
     revalidating: ui('importRevalidating'),
     // `downloadTemplate` stays for back-compatibility (ImportDialog falls back to it for CSV
     // when the per-format key is absent); the two per-format captions are what actually render
