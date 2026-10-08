@@ -40,5 +40,17 @@
   ],
   "outputs": ["pdf", "xlsx", "csv", "html"],
   "summary": { "totalRows": true },
+  "labels": {
+    "hdrGroup": { "en_US": "Group", "es_ES": "Grupo" },
+    "hdrDepth": { "en_US": "Depth", "es_ES": "Profundidad" },
+    "hdrType": { "en_US": "Type", "es_ES": "Tipo" },
+    "hdrCode": { "en_US": "Code", "es_ES": "Código" },
+    "hdrName": { "en_US": "Name", "es_ES": "Nombre" },
+    "E": { "en_US": "Heading", "es_ES": "Epígrafe" },
+    "C": { "en_US": "Account", "es_ES": "Cuenta" },
+    "D": { "en_US": "Breakdown", "es_ES": "Desglose" },
+    "S": { "en_US": "Subaccount", "es_ES": "Subcuenta" },
+    "T": { "en_US": "Total", "es_ES": "Total" }
+  },
   "mockDataFile": "mock-data.json"
 }
