@@ -1505,3 +1505,7 @@ is lost and nothing is duplicated. Wait for the running import to finish before 
 Generic import dialog: after a file is attached, the dropzone is replaced by a "Reading file…"
 spinner (`importReadingFile`) until the preview is ready, so nothing can be attached on top of the
 file being read; it is also removed when the file is refused and the error step appears.
+
+Every import run reports one `import_completed` telemetry event (counts, timings, batch size and
+concurrency used, mapped columns, foreign keys resolved/created; never row content). See
+`decisions-reference.md` → *Import Limits* → Telemetry.

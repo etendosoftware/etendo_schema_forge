@@ -52,6 +52,8 @@ vi.mock('@/hooks/useWindowFilterPresets', () => ({
 }));
 
 const captured = vi.hoisted(() => ({}));
+const trackMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/observability.js', () => ({ track: trackMock }));
 // ETP-5676: the global `import-batch-size` flag; every other flag stays off.
 const flagValue = vi.hoisted(() => ({ batchSize: 0 }));
 vi.mock('@/lib/flags/useFeatureFlag.js', () => ({
@@ -154,6 +156,31 @@ describe('ListView — import batch size handed to ImportDialog', () => {
     flagValue.batchSize = 4;
     expect(open({ batchSize: 10 }).batchSize).toBe(4);
     flagValue.batchSize = 0;
+  });
+});
+
+// ETP-5676 — core's run summary becomes one `import_completed` event, quantities only.
+describe('ListView — onImportFinished emits import_completed', () => {
+  it('sends the declared properties and nothing else', () => {
+    flagValue.batchSize = 0;
+    const { onImportFinished } = (() => {
+      render(<ListView {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('ListView__importButton'));
+      return captured.props;
+    })();
+    trackMock.mockClear();
+    onImportFinished({
+      outcome: 'cancelled', entity: 'contacts', rowsTotal: 5, rowsCreated: 0, rowsFailed: 0,
+      rowsDuplicate: 0, rowsUnknown: 0, durationMs: 120, readMs: 20, validateMs: 100, sendMs: 0,
+      batchSize: 1, concurrency: 4, columnsInFile: 3, columnsAutoMapped: 3, columnsManuallyMapped: 0,
+      fkAutoResolved: 0, fkCreated: 0,
+      rows: [{ name: 'Secret SL' }], email: 'x@y.com',
+    });
+    expect(trackMock).toHaveBeenCalledTimes(1);
+    const [name, properties] = trackMock.mock.calls[0];
+    expect(name).toBe('import_completed');
+    expect(properties).toMatchObject({ outcome: 'cancelled', entity: 'contacts', rowsTotal: 5 });
+    expect(JSON.stringify(properties)).not.toMatch(/Secret|x@y\.com/);
   });
 });
 
