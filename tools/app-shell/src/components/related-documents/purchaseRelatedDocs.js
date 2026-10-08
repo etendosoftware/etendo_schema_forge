@@ -8,8 +8,16 @@
  * return shipments of a rectificative (isReturn === true), so no extra fetch chain
  * is needed for them.
  */
-import { fetchById, fetchOriginInvoicesOf } from './helpers.js';
-import { idsOf, criteriaSource, listInvoicesSource, selectSource } from './relatedSources.js';
+import { fetchById } from './helpers.js';
+import {
+  criteriaSource,
+  listInvoicesSource,
+  selectSource,
+  originInvoicesSource,
+  originInvoicesDepsKey,
+  movementDefinition,
+  returnDefinition,
+} from './relatedSources.js';
 
 export const PURCHASE_RELATED_DOCS = {
   'purchase-order': {
@@ -26,11 +34,7 @@ export const PURCHASE_RELATED_DOCS = {
     spec: 'purchase-invoice',
     entity: 'header',
     refreshEvent: 'purchase-invoice:document-created',
-    depsKey: record => [
-      record?.salesOrder ?? '',
-      idsOf(record?.originInvoices),
-      record?.originInvoice ?? '',
-    ].join('|'),
+    depsKey: record => [record?.salesOrder ?? '', originInvoicesDepsKey(record)].join('|'),
     sources: [
       {
         key: 'order',
@@ -42,28 +46,26 @@ export const PURCHASE_RELATED_DOCS = {
         },
       },
       selectSource('receipts', doc => (doc.isReturn === true ? 'return-to-vendor' : 'goods-receipt'), 'linkedReceipts'),
-      { key: 'originInvoices', type: 'purchase-invoice', fetch: fetchOriginInvoicesOf('purchase-invoice') },
+      originInvoicesSource('purchase-invoice'),
     ],
   },
 
-  'goods-receipt': {
+  'goods-receipt': movementDefinition({
     spec: 'goods-receipt',
     entity: 'goodsReceipt',
-    sources: [
-      selectSource('orders', 'order', 'linkedOrders'),
-      selectSource('invoices', 'purchase-invoice', 'linkedInvoices'),
-      selectSource('returns', 'return-to-vendor', 'linkedReturns'),
-    ],
-  },
+    orderType: 'order',
+    invoiceType: 'purchase-invoice',
+    returnType: 'return-to-vendor',
+    returnsField: 'linkedReturns',
+  }),
 
-  'return-to-vendor-shipment': {
+  'return-to-vendor-shipment': returnDefinition({
     spec: 'return-to-vendor-shipment',
     entity: 'returnToVendorShipment',
-    sources: [
-      selectSource('sourceReceipts', 'goods-receipt', 'sourceReceipts'),
-      selectSource('returnInvoices', 'purchase-invoice', 'returnInvoices'),
-    ],
-  },
+    sourceField: 'sourceReceipts',
+    sourceType: 'goods-receipt',
+    invoiceType: 'purchase-invoice',
+  }),
 };
 
 /** The related-documents definition of a purchase spec, or null for any other spec. */

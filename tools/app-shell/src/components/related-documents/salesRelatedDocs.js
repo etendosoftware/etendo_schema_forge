@@ -31,8 +31,16 @@
  * invoice never lists its payments as chips (functional decision, ETP-5527).
  */
 import { getArSubtype } from '@generated/sales-invoice/custom/invoiceSubtype.js';
-import { fetchByCriteria, fetchById, fetchOriginInvoicesOf } from './helpers.js';
-import { idsOf, criteriaSource, listInvoicesSource, selectSource } from './relatedSources.js';
+import { fetchByCriteria, fetchById } from './helpers.js';
+import {
+  criteriaSource,
+  listInvoicesSource,
+  selectSource,
+  originInvoicesSource,
+  originInvoicesDepsKey,
+  movementDefinition,
+  returnDefinition,
+} from './relatedSources.js';
 
 /**
  * The source quotation of a sales order, read from the real quotation record so the
@@ -110,8 +118,7 @@ export const SALES_RELATED_DOCS = {
     depsKey: record => [
       record?.salesOrder ?? '',
       getArSubtype(record),
-      idsOf(record?.originInvoices),
-      record?.originInvoice ?? '',
+      originInvoicesDepsKey(record),
     ].join('|'),
     sources: [
       {
@@ -131,30 +138,28 @@ export const SALES_RELATED_DOCS = {
         type: 'sales-invoice',
         select: record => (record?.sourceInvoice ? [record.sourceInvoice] : []),
       },
-      { key: 'originInvoices', type: 'sales-invoice', fetch: fetchOriginInvoicesOf('sales-invoice') },
+      originInvoicesSource('sales-invoice'),
     ],
   },
 
-  'goods-shipment': {
+  // Injected by GoodsShipmentHeaderHandler on the detail GET.
+  'goods-shipment': movementDefinition({
     spec: 'goods-shipment',
     entity: 'goodsShipment',
-    // Injected by GoodsShipmentHeaderHandler on the detail GET.
-    sources: [
-      selectSource('orders', 'sales-order', 'linkedOrders'),
-      selectSource('invoices', 'sales-invoice', 'linkedInvoices'),
-      selectSource('returns', 'return-material-receipt', 'returnReceipts'),
-    ],
-  },
+    orderType: 'sales-order',
+    invoiceType: 'sales-invoice',
+    returnType: 'return-material-receipt',
+    returnsField: 'returnReceipts',
+  }),
 
-  'return-material-receipt': {
+  // Injected by ReturnMaterialReceiptHeaderHandler (list and detail GET).
+  'return-material-receipt': returnDefinition({
     spec: 'return-material-receipt',
     entity: 'returnMaterialReceipt',
-    // Injected by ReturnMaterialReceiptHeaderHandler (list and detail GET).
-    sources: [
-      selectSource('sourceShipments', 'shipment', 'sourceShipments'),
-      selectSource('returnInvoices', 'sales-invoice', 'returnInvoices'),
-    ],
-  },
+    sourceField: 'sourceShipments',
+    sourceType: 'shipment',
+    invoiceType: 'sales-invoice',
+  }),
 };
 
 /** The related-documents definition of a sales spec, or null for any other spec. */

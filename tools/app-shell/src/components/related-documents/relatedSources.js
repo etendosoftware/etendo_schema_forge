@@ -4,7 +4,7 @@
  * plain source object ({ key, type, select | fetch }) — see salesRelatedDocs.js for the
  * contract. Network access stays in ./helpers.js.
  */
-import { fetchByCriteria, fetchListInvoices } from './helpers.js';
+import { fetchByCriteria, fetchListInvoices, fetchOriginInvoicesOf } from './helpers.js';
 
 export const asArray = (value) => (Array.isArray(value) ? value : []);
 
@@ -35,4 +35,45 @@ export function listInvoicesSource(key, type, spec, entity) {
 /** Documents read synchronously from an array field of the detail record. */
 export function selectSource(key, type, field) {
   return { key, type, select: record => asArray(record?.[field]) };
+}
+
+/** Invoices linked through "Import from Source Invoice", read from `originInvoices`. */
+export function originInvoicesSource(spec) {
+  return { key: 'originInvoices', type: spec, fetch: fetchOriginInvoicesOf(spec) };
+}
+
+/** The part of an invoice definition's `depsKey` that tracks its origin invoices. */
+export function originInvoicesDepsKey(record) {
+  return `${idsOf(record?.originInvoices)}|${record?.originInvoice ?? ''}`;
+}
+
+/**
+ * Definition of a goods movement (goods shipment / goods receipt): its linked orders,
+ * invoices and returns, all injected by the backend on the detail GET.
+ */
+export function movementDefinition({ spec, entity, orderType, invoiceType, returnType, returnsField }) {
+  return {
+    spec,
+    entity,
+    sources: [
+      selectSource('orders', orderType, 'linkedOrders'),
+      selectSource('invoices', invoiceType, 'linkedInvoices'),
+      selectSource('returns', returnType, returnsField),
+    ],
+  };
+}
+
+/**
+ * Definition of a return movement (return material receipt / return to vendor
+ * shipment): the movements it returns and its credit invoices.
+ */
+export function returnDefinition({ spec, entity, sourceField, sourceType, invoiceType }) {
+  return {
+    spec,
+    entity,
+    sources: [
+      selectSource(sourceField, sourceType, sourceField),
+      selectSource('returnInvoices', invoiceType, 'returnInvoices'),
+    ],
+  };
 }
