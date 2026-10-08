@@ -74,13 +74,36 @@ listed here. This skill carries what is specific to Etendo GO and to this machin
    `--module <module>=<branch>` so it becomes a real worktree instead of a copy.
    Recompute the epic list with the same loop (the modules whose branch is `epic/*`)
    instead of trusting the dated list above.
-5. **Change repos with `sync`, not by recreating.** Edit `<env>/worktree.conf`, then
+5. **Know where each branch is checked out before creating.** A task branch can sit in
+   the main checkout's repo, in a manual or agent worktree (`schema_forge-ETP-XXXX`,
+   `.claude/worktrees/*`, `modules/*` worktrees), or nowhere. git allows a branch in one
+   place only, and the right flag depends on where it is. For every repo the task
+   touches (core = `etendo_develop`, `modules/<m>`, `schema_forge`, `schema_forge_core`),
+   run `git -C <repo> worktree list --porcelain` and find the path whose `branch` line is
+   `refs/heads/<branch>`. Then state it to the user as a table before creating:
+
+   | Repo | Branch | Where it is checked out now | What the environment does |
+   |---|---|---|---|
+   | `modules/com.etendoerp.go` | `feature/ETP-X` | nowhere | `--module …=feature/ETP-X` (new worktree) |
+   | `schema_forge` | `feature/ETP-X` | `etendo_develop/schema_forge-ETP-X` (manual worktree) | `--repo schema_forge=feature/ETP-X@adopt` |
+   | `schema_forge` | `feature/ETP-X` | the main checkout itself (`etendo_develop/schema_forge`) | copy (no flag) if it is clean enough to snapshot, or `@adopt` to share it live; ask |
+   | other modules | (whatever is checked out) | main checkout | copy, frozen at creation |
+
+   - **Nowhere:** `--module/--repo <name>=<branch>` creates a real worktree.
+   - **Another worktree:** `@adopt` links it. local-env never modifies it, but the SPA's
+     `make` may write into it, so tell its owner (often another Claude session).
+   - **The main checkout:** a copy takes its current state, uncommitted changes
+     included, frozen. `@adopt` shares the user's live checkout instead. Never pick one
+     silently.
+   - A copy is never the branch: commits made there are lost. If the user will commit
+     on that repo inside the environment, it must be a worktree or an adoption.
+6. **Change repos with `sync`, not by recreating.** Edit `<env>/worktree.conf`, then
    `local-env sync --dry-run` and `local-env sync`. When the branch is already checked
    out elsewhere (a manual worktree, another session's), add `adopt` as the 4th field.
    local-env never modifies an adopted worktree, but `make dev-local-core` can: it runs
    `npm install` for the AI BFF, which may rewrite `tools/ai-bff/package-lock.json`
    there. Tell the owner of that worktree.
-6. **Create volume data in the environment's DB only.** It is `etendo_local`, user
+7. **Create volume data in the environment's DB only.** It is `etendo_local`, user
    `tad`/`tad`, on the environment's PG port (`source <env>/build/local-env/env`), via
    `/opt/homebrew/opt/libpq/bin/psql`.
 
@@ -141,7 +164,7 @@ cd /Users/futit/Workspace/etendo_develop && local-env worktree rm <name>   # bra
 
 ## When another session asks for an environment
 
-First run the module check from rule 4 and list any lagging or off-branch module in the
+First run the module check from rule 4 and the checkout check from rule 5, and list any lagging, off-branch or busy repo in the
 answer. Then give the exact `local-env worktree` command for its branches, the ports it will
 get, and the caveats that apply (frozen copies, carried `node_modules` that may lag the branch,
 `LOCALENV_PLUGINS` for old branches, no pgvector). Create it and run `up` only after
