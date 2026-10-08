@@ -22,6 +22,11 @@ listed here. This skill carries what is specific to Etendo GO and to this machin
 - **Environments:** `/Users/futit/Workspace/.worktrees/<name>`, one per task.
 - **GO plugin:** `schema_forge/local-env.d/plugins/etendo-go`. What it does per hook:
   [docs/local-env-plugin.md](../../../docs/local-env-plugin.md).
+- **Progress mod:** if the user has not installed it, recommend it before a long `up`:
+  `/plugin install local-env-progress --marketplace etendosoftware/etendo-localenv`.
+  It shows every environment's phase, gradle task and elapsed time above the prompt,
+  including runs started in the background. Without it, the progress lives only in
+  `<env>/build/local-env/progress.json` and the logs.
 
 ## Rules
 

@@ -41,6 +41,17 @@ local-env status                               # ... SPA  http://localhost:3101 
 local-env worktree rm ETP-1234                 # stops that SPA too
 ```
 
+**Recommended in Claude Code: the progress mod.** etendo-localenv ships a Claude Code mod
+that shows each environment's `local-env` run (phase, step N of M, gradle task, elapsed,
+then the Tomcat/SPA URLs or the error) in a band above the prompt. Install it once with:
+
+```
+/plugin install local-env-progress --marketplace etendosoftware/etendo-localenv
+```
+
+It reads `build/local-env/progress.json`, which local-env writes during every run, so
+it also covers runs started in the background.
+
 Skip the SPA for one run with `local-env up --skip-plugin=etendo-go` (or
 `ETENDO_GO_SPA=0 local-env up`); the DB seed is unaffected. `LOCALENV_SKIP_PLUGINS=etendo-go`
 disables the plugin entirely, seed included, and therefore changes the DB fingerprint.
