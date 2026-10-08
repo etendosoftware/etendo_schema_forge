@@ -11,7 +11,7 @@
 // real locale dictionary instead of its identity mock.
 import { vi, describe, it, expect } from 'vitest';
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, fireEvent } from '@testing-library/react';
 import { loadLocaleDictionary, makeRealUI } from '../../../../shared/__tests__/testUtils/realLocaleUI.js';
 
 const esES = loadLocaleDictionary('es_ES');
@@ -152,5 +152,19 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
 
     expect(container.textContent).toContain('Form 349 - 2026 / October');
     expect(container.textContent).not.toContain('octubre');
+  });
+
+  // ETP-5597 — like the parent crumb of a generated window's detail, the "Modelos Fiscales" level
+  // goes back to the declarations list; "Finanzas" and the current page stay plain text.
+  it('the "Modelos Fiscales" crumb is a link back to the list (onBack); the others are not', () => {
+    activeUi = realUiEs;
+    const onBack = vi.fn();
+    const { getByTestId } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} onBack={onBack} />);
+    const crumb = getByTestId('fm-breadcrumb');
+    const links = crumb.querySelectorAll('button');
+    expect(links).toHaveLength(1);
+    expect(links[0].textContent).toBe('Modelos Fiscales');
+    fireEvent.click(links[0]);
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });

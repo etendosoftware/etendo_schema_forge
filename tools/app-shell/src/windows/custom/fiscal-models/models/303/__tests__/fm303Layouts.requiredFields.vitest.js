@@ -10,7 +10,7 @@
 
 import {
   getMissingRequiredFields, matchesVisibility, resolveFieldLabelKey, isOptionDisabled,
-  getInvalidSelectedOption, getInvalidSelectedOptions,
+  getInvalidSelectedOption, getInvalidSelectedOptions, getAutoValueChanges,
 } from '../fm303Layouts.js';
 
 // ── matchesVisibility ─────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ describe('getMissingRequiredFields', () => {
   // two fields that every marca needs are reported: position 23 and the marca itself.
   it('with no marca chosen, reports only bank_iban and bank_sepa for a rectificativa with non-zero box 111', () => {
     const missing = getMissingRequiredFields(2026, 'T2', {
-      tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true,
+      tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', _box111NonZero: true,
     });
     expect(missing.map(f => f.id).sort()).toEqual(['bank_iban', 'bank_sepa']);
   });
@@ -151,7 +151,7 @@ describe('getMissingRequiredFields', () => {
     ['3', ['bank_ciudad', 'bank_direccion', 'bank_iban', 'bank_nombre', 'bank_pais', 'bank_swift_bic']],
   ])('marca %s demands exactly the fields that marca calls for', (marca, expected) => {
     const missing = getMissingRequiredFields(2026, 'T2', {
-      tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true, bank_sepa: marca,
+      tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', _box111NonZero: true, bank_sepa: marca,
     });
     expect(missing.map(f => f.id).sort()).toEqual([...expected].sort());
   });
@@ -160,7 +160,7 @@ describe('getMissingRequiredFields', () => {
   // the existing direct debit — the section is not even visible.
   it('demands no bank field when the cancel/modify-direct-debit flag is marked', () => {
     const missing = getMissingRequiredFields(2026, 'T2', {
-      tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true,
+      tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', _box111NonZero: true,
       bank_sepa: '3', baja_domiciliacion: true,
     });
     const missingIds = missing.map(f => f.id);
@@ -169,7 +169,7 @@ describe('getMissingRequiredFields', () => {
 
   it('does NOT report any bank field when rectificativa is checked but box 111 is zero (ETP-5393 Bug E)', () => {
     const missing = getMissingRequiredFields(2026, 'T2', {
-      tipo_declaracion: 'I', rectificativa: true, _box111NonZero: false,
+      tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', _box111NonZero: false,
     });
     const missingIds = missing.map(f => f.id);
     ALL_BANK_FIELD_IDS.forEach(id => expect(missingIds).not.toContain(id));
@@ -189,7 +189,7 @@ describe('getMissingRequiredFields', () => {
     // ETP-5431 — marca 3 is supplied so the whole block is in play, which is what makes this a
     // "multiple missing fields" case at all. bank_sepa itself is filled (it holds the marca).
     const missing = getMissingRequiredFields(2026, 'T2', {
-      rectificativa: true, _box111NonZero: true, bank_sepa: '3',
+      rectificativa: true, motivo_rectificacion: 'R', _box111NonZero: true, bank_sepa: '3',
     });
     expect(missing.map(f => f.id).sort()).toEqual(
       [...ALL_BANK_FIELD_IDS.filter(id => id !== 'bank_sepa'), 'tipo_declaracion'].sort(),
@@ -294,44 +294,94 @@ describe('resolveFieldLabelKey', () => {
 });
 
 describe('isOptionDisabled / getInvalidSelectedOption', () => {
-  const opt = { value: 'C', disabledWhen: { field: '_box69Positive', equals: true } };
+  const opt = { value: 'C', disabledWhen: { field: '_tipoDeclRestriction', equals: 'positive_result' } };
   const select = { id: 'tipo', type: 'select', options: [opt, { value: 'I' }] };
 
   it('isOptionDisabled follows disabledWhen; options without it are never disabled', () => {
-    expect(isOptionDisabled(opt, { _box69Positive: true })).toBe(true);
-    expect(isOptionDisabled(opt, { _box69Positive: false })).toBe(false);
-    expect(isOptionDisabled({ value: 'I' }, { _box69Positive: true })).toBe(false);
+    expect(isOptionDisabled(opt, { _tipoDeclRestriction: 'positive_result' })).toBe(true);
+    expect(isOptionDisabled(opt, { _tipoDeclRestriction: null })).toBe(false);
+    expect(isOptionDisabled({ value: 'I' }, { _tipoDeclRestriction: 'positive_result' })).toBe(false);
     expect(isOptionDisabled(null, {})).toBe(false);
   });
 
   it('getInvalidSelectedOption returns the selected option only when it is disabled now', () => {
-    expect(getInvalidSelectedOption(select, { tipo: 'C', _box69Positive: true })).toBe(opt);
-    expect(getInvalidSelectedOption(select, { tipo: 'I', _box69Positive: true })).toBeNull();
-    expect(getInvalidSelectedOption(select, { tipo: 'C', _box69Positive: false })).toBeNull();
-    expect(getInvalidSelectedOption(select, { tipo: '', _box69Positive: true })).toBeNull();
+    expect(getInvalidSelectedOption(select, { tipo: 'C', _tipoDeclRestriction: 'positive_result' })).toBe(opt);
+    expect(getInvalidSelectedOption(select, { tipo: 'I', _tipoDeclRestriction: 'positive_result' })).toBeNull();
+    expect(getInvalidSelectedOption(select, { tipo: 'C', _tipoDeclRestriction: null })).toBeNull();
+    expect(getInvalidSelectedOption(select, { tipo: '', _tipoDeclRestriction: 'positive_result' })).toBeNull();
     expect(getInvalidSelectedOption({ id: 'x', type: 'text' }, { x: 'C' })).toBeNull();
   });
 });
 
 describe('getInvalidSelectedOptions (2026 layout)', () => {
-  it.each(['C', 'D', 'V', 'X'])('reports tipo_declaracion=%s while box 69 is positive', (tipo) => {
-    const invalid = getInvalidSelectedOptions(2026, 'T2', { tipo_declaracion: tipo, _box69Positive: true });
+  it.each(['C', 'D', 'V', 'X'])('reports tipo_declaracion=%s while box 71 is positive', (tipo) => {
+    const invalid = getInvalidSelectedOptions(2026, 'T2', { tipo_declaracion: tipo, _tipoDeclRestriction: 'positive_result' });
     expect(invalid).toHaveLength(1);
     expect(invalid[0].field.id).toBe('tipo_declaracion');
     expect(invalid[0].option.value).toBe(tipo);
     expect(invalid[0].option.disabledReasonKey).toBe('fm.ident.decl.disabled_positive_result');
   });
 
-  it.each(['I', 'U', 'N'])('reports nothing for tipo %s with box 69 positive', (tipo) => {
-    expect(getInvalidSelectedOptions(2026, 'T2', { tipo_declaracion: tipo, _box69Positive: true })).toEqual([]);
+  it.each(['I', 'U', 'N'])('reports nothing for tipo %s with box 71 positive', (tipo) => {
+    expect(getInvalidSelectedOptions(2026, 'T2', { tipo_declaracion: tipo, _tipoDeclRestriction: 'positive_result' })).toEqual([]);
   });
 
-  it('reports nothing for tipo C while box 69 is not positive', () => {
-    expect(getInvalidSelectedOptions(2026, 'T2', { tipo_declaracion: 'C', _box69Positive: false })).toEqual([]);
+  it('reports nothing for tipo C when no restriction applies', () => {
+    expect(getInvalidSelectedOptions(2026, 'T2', { tipo_declaracion: 'C', _tipoDeclRestriction: null })).toEqual([]);
   });
 
   it('applies to an older year layout too (2023)', () => {
-    expect(getInvalidSelectedOptions(2023, 'T2', { tipo_declaracion: 'D', _box69Positive: true })).toHaveLength(1);
+    expect(getInvalidSelectedOptions(2023, 'T2', { tipo_declaracion: 'D', _tipoDeclRestriction: 'positive_result' })).toHaveLength(1);
   });
 });
 
+
+// ETP-5597 (QA round 1) — "Motivo de rectificación" is mandatory while the rectificativa check
+// is set, and only then; the pre-October-2024 layouts have no such field at all.
+describe('getMissingRequiredFields — motivo_rectificacion (ETP-5597)', () => {
+  const ids = (year, period, ident) => getMissingRequiredFields(year, period, ident).map(f => f.id);
+
+  it('is reported while rectificativa is checked and the reason is blank', () => {
+    expect(ids(2026, 'T2', { tipo_declaracion: 'N', rectificativa: true })).toContain('motivo_rectificacion');
+  });
+
+  it('is not reported once a reason is chosen, nor while rectificativa is unchecked', () => {
+    expect(ids(2026, 'T2', { tipo_declaracion: 'N', rectificativa: true, motivo_rectificacion: 'D' }))
+      .not.toContain('motivo_rectificacion');
+    expect(ids(2026, 'T2', { tipo_declaracion: 'N', rectificativa: false })).not.toContain('motivo_rectificacion');
+  });
+
+  it('does not exist in a complementaria-era layout (2023), so it is never required there', () => {
+    expect(ids(2023, 'T2', { tipo_declaracion: 'N', complementaria: true, rectificativa: true }))
+      .not.toContain('motivo_rectificacion');
+  });
+});
+
+// ETP-5597 (QA round 3) — under the zero-only rule (69 > 0, 71 < 0) tipo is FIXED to N: the page
+// applies it (getAutoValueChanges) and it is never reported as an invalid selection.
+describe('tipo_declaracion auto value under the zero-only rule (ETP-5597)', () => {
+  const ZERO_ONLY = { _tipoDeclRestriction: 'zero_only' };
+
+  it('getAutoValueChanges asks for N while another tipo (or none) is set, and nothing once N', () => {
+    expect(getAutoValueChanges(2026, 'T3', { ...ZERO_ONLY, tipo_declaracion: 'I' }))
+      .toEqual([{ field: 'tipo_declaracion', value: 'N' }]);
+    expect(getAutoValueChanges(2026, 'T3', { ...ZERO_ONLY })).toEqual([{ field: 'tipo_declaracion', value: 'N' }]);
+    expect(getAutoValueChanges(2026, 'T3', { ...ZERO_ONLY, tipo_declaracion: 'N' })).toEqual([]);
+  });
+
+  it('asks for nothing under the 71 > 0 rule or with no restriction', () => {
+    expect(getAutoValueChanges(2026, 'T3', { _tipoDeclRestriction: 'positive_result', tipo_declaracion: 'C' })).toEqual([]);
+    expect(getAutoValueChanges(2026, 'T3', { _tipoDeclRestriction: null, tipo_declaracion: 'I' })).toEqual([]);
+  });
+
+  it('a stale tipo under the zero-only rule is not an invalid selection (no error, no block)', () => {
+    for (const tipo of ['I', 'U', 'C', 'D']) {
+      expect(getInvalidSelectedOptions(2026, 'T3', { ...ZERO_ONLY, tipo_declaracion: tipo })).toEqual([]);
+    }
+  });
+
+  it('applies to an older year layout too (2023)', () => {
+    expect(getAutoValueChanges(2023, 'T2', { ...ZERO_ONLY, tipo_declaracion: 'I' }))
+      .toEqual([{ field: 'tipo_declaracion', value: 'N' }]);
+  });
+});

@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmBreadcrumb.jsx
 // ETP-5338 Bug B fix — "Cancelar" must genuinely discard unsaved edits.
 //
 // Root cause of the original bug: `identChecks`/`manualOverrides` used to autosave via a
@@ -287,5 +289,58 @@ describe('FmModel303Page — Cancelar discards unsaved edits (ETP-5338 Bug B fix
 
     expect(putCalls()).toHaveLength(1);
     expect(server.openPutCount).toBe(0);
+  });
+
+  // ETP-5597 — the "Modelos Fiscales" breadcrumb level is wired to the same `handleCancel` as the
+  // Cancelar button, so leaving through it must discard pending edits exactly like Cancelar does.
+  describe('the "Modelos Fiscales" breadcrumb crumb', () => {
+    function clickSectionCrumb() {
+      fireEvent.click(screen.getByTestId('fm-breadcrumb-level-1'));
+    }
+
+    it('is the section level of the breadcrumb, rendered as a link', () => {
+      installImmediateServer();
+      render(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+      const crumb = screen.getByTestId('fm-breadcrumb-level-1');
+      expect(crumb.tagName).toBe('BUTTON');
+      expect(crumb.textContent).toBe('fm.breadcrumb.section');
+    });
+
+    it('discards an identification edit and a box edit with ZERO PUT requests, then goes back once', async () => {
+      installImmediateServer();
+      const onBack = vi.fn();
+      render(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={onBack} onStatusChange={vi.fn()} />);
+
+      editNif('DISCARDED-VIA-CRUMB');
+      editBox46('4321');
+      await act(async () => { clickSectionCrumb(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+
+      expect(putCalls()).toHaveLength(0);
+      expect(onBack).toHaveBeenCalledTimes(1);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('leaves the same observable trace as Cancelar for the same edits', async () => {
+      async function leaveAfterEdits(leave) {
+        installImmediateServer();
+        const onBack = vi.fn();
+        const { unmount } = render(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={onBack} onStatusChange={vi.fn()} />);
+        editNif('SAME-EDIT');
+        editBox46('77');
+        await act(async () => { leave(); });
+        await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+        const trace = { puts: putCalls().length, backs: onBack.mock.calls.length, backArgs: onBack.mock.calls[0] };
+        unmount();
+        return trace;
+      }
+
+      const viaCancelar = await leaveAfterEdits(clickCancelar);
+      const viaCrumb = await leaveAfterEdits(clickSectionCrumb);
+      expect(viaCrumb).toEqual(viaCancelar);
+      expect(viaCrumb.puts).toBe(0);
+      expect(viaCrumb.backs).toBe(1);
+    });
   });
 });

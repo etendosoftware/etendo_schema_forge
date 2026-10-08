@@ -290,6 +290,44 @@ describe('FileGenModal', () => {
   }
 
 
+  // ETP-5597 — the AEAT 349 type-1 slots are 40 characters (contact) and 9 digits (phone); the
+  // inputs stop the user there instead of the generator failing with "longitud esperada".
+  // ETP-5597 (QA BUG-1) — typing stops at the AEAT width (9-digit phone, 40-char contact); a value
+  // arriving at once (paste / autofill) is normalized exactly like the server
+  // (Fiscal349GenerateSupport.fitAeatPhone: digits only, LAST 9; fitAeatContact: trim, then cut).
+  // No raw `maxLength`: the browser would cut the pasted text before it can be normalized.
+  it.each([
+    ['+34 600 123 123', '600123123'],
+    ['0034600123123', '600123123'],
+    ['600 12-31.23', '600123123'],
+  ])('a phone %s arriving at once is normalized like the server to %s', (pasted, expected) => {
+    const { container } = render(<FileGenModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    const { phone } = getFields(container);
+    expect(phone.hasAttribute('maxlength')).toBe(false);
+    fireEvent.change(phone, { target: { value: pasted } });
+    expect(phone.value).toBe(expected);
+  });
+
+  it('typing a 10th phone digit is refused (no silent truncation while typing)', () => {
+    const { container } = render(<FileGenModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    const { phone } = getFields(container);
+    for (const v of ['6', '60', '600123', '60012312', '600123123']) fireEvent.change(phone, { target: { value: v } });
+    expect(phone.value).toBe('600123123');
+    fireEvent.change(phone, { target: { value: '6001231234' } });
+    expect(phone.value).toBe('600123123');
+  });
+
+  it('a pasted 50-char contact is trimmed and capped at 40; typing a 41st char is refused', () => {
+    const { container } = render(<FileGenModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    const { contact } = getFields(container);
+    expect(contact.hasAttribute('maxlength')).toBe(false);
+    const long = '  ' + 'A'.repeat(50);
+    fireEvent.change(contact, { target: { value: long } });
+    expect(contact.value).toBe('A'.repeat(40));
+    fireEvent.change(contact, { target: { value: 'A'.repeat(40) + 'B' } });
+    expect(contact.value).toBe('A'.repeat(40));
+  });
+
   it('renders title', () => {
     render(<FileGenModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
     expect(document.body.textContent).toContain('fm.filegen.title');

@@ -572,7 +572,9 @@ describe('FmModel349Page — Guardar button (ETP-5338 pt.5)', () => {
   it('renders no go-back button — Cancelar is the only left-side action', () => {
     render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
     expect(document.querySelector('[data-testid="FmModel349Page__goBack"]')).toBeNull();
-    const btns = Array.from(document.querySelectorAll('button'));
+    // The header breadcrumb's navigable level (ETP-5597) is navigation, not an action button.
+    const btns = Array.from(document.querySelectorAll('button'))
+      .filter(b => !b.closest('[data-testid="fm-breadcrumb"]'));
     const cancelIdx = btns.findIndex(b => b.textContent.includes('fm.action.cancel'));
     expect(cancelIdx).toBe(0);
   });

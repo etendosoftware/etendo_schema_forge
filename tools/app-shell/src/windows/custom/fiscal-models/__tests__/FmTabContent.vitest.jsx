@@ -159,6 +159,64 @@ describe('SourcesTab', () => {
 
   // ── showTaxColumns (ETP-5597) — 349 hides Cuota/Total/Casillas ───────────
 
+  // ETP-5597 — opt-in key column (349 "Facturas origen"); 303 never passes it.
+  describe('keyColumn', () => {
+    const decl = {
+      sources: [
+        { id: 'inv-1', ref: 'F-1', key: 'E', type: 'Venta', base: 300 },
+        { id: 'inv-1', ref: 'F-1', key: 'S', type: 'Venta', base: 50 },
+        { id: 'inv-2', ref: 'F-2', type: 'Venta', base: 10 },
+      ],
+      incidents: { items: [] },
+    };
+    const headers = () => Array.from(document.querySelectorAll('thead th')).map(th => th.textContent);
+
+    it('is absent by default (303 table unchanged)', () => {
+      render(<SourcesTab decl={decl} t={t} />);
+      expect(headers()).toEqual([
+        'fm.sources.col.date', 'fm.sources.col.accountingDate', 'fm.sources.col.ref', 'fm.sources.col.type',
+        'fm.sources.col.party', 'fm.sources.col.base', 'fm.sources.col.vat', 'fm.sources.col.total', 'fm.sources.col.boxes',
+      ]);
+    });
+
+    it('renders the caller-supplied header and cell right after Tipo, one per row', () => {
+      render(
+        <SourcesTab decl={decl} t={t} showTaxColumns={false}
+          keyColumn={{ label: 'Clave', render: r => r.key ?? '—' }} />,
+      );
+      expect(headers()[4]).toBe('Clave');
+      const keyCells = Array.from(document.querySelectorAll('tbody tr')).map(tr => tr.children[4].textContent);
+      expect(keyCells).toEqual(['E', 'S', '—']);
+    });
+
+    // ETP-5597 round 8 — 349 hides "Tipo" (its key already tells a purchase from a sale).
+    it('hiddenColumns=["type"] drops the Tipo header and cells; the key column takes its place', () => {
+      render(
+        <SourcesTab decl={decl} t={t} showTaxColumns={false} hiddenColumns={['type']}
+          keyColumn={{ label: 'Clave', render: r => r.key ?? '—' }} />,
+      );
+      expect(headers()).toEqual([
+        'fm.sources.col.date', 'fm.sources.col.accountingDate', 'fm.sources.col.ref', 'Clave',
+        'fm.sources.col.party', 'fm.sources.col.base',
+      ]);
+      expect(document.body.textContent).not.toContain('Venta');
+      const keyCells = Array.from(document.querySelectorAll('tbody tr')).map(tr => tr.children[3].textContent);
+      expect(keyCells).toEqual(['E', 'S', '—']);
+    });
+
+    it('the empty-filter row spans exactly the visible columns', () => {
+      const withIncident = {
+        sources: [{ id: 'x', ref: 'F-X', key: 'E', base: 1, boxes: '01' }],
+        incidents: { items: [] },
+      };
+      render(
+        <SourcesTab decl={withIncident} t={t} showTaxColumns={false} hiddenColumns={['type']}
+          keyColumn={{ label: 'Clave', render: r => r.key }} />,
+      );
+      expect(document.querySelectorAll('thead th')).toHaveLength(6);
+    });
+  });
+
   describe('showTaxColumns', () => {
     const decl = {
       sources: [{ id: 'r1', ref: 'REC-1', date: '', type: 'Venta', party: 'ACME', base: 100, vat: 21, total: 121, boxes: '07' }],

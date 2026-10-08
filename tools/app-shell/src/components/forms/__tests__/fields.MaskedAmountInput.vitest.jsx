@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/forms/fields.jsx
 // ETP-5107 — MaskedAmountInput (Holded-style live-masked numeric input).
 // See docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §6.2/§6.3 for the
 // full design. This suite exercises the component in isolation (not through one
@@ -412,5 +413,103 @@ describe('MaskedAmountInput — other passthrough props', () => {
   it('defaults to a stable data-testid derived from `name` when none is given explicitly', () => {
     render(<MaskedAmountInput value={5} name="listPrice" />);
     expect(screen.getByTestId('field-number-listPrice')).toBeInTheDocument();
+  });
+});
+
+// ETP-5597 (CP-18) — optional `isAllowed(clean)` veto, used by the Modelo 303 box editor to keep
+// its AEAT width ceilings as a hard stop. Absent, nothing changes for existing callers.
+describe('MaskedAmountInput — isAllowed veto', () => {
+  it('a refused keystroke leaves the display unchanged and does not fire onChange', () => {
+    const onChange = vi.fn();
+    render(
+      <MaskedAmountInput value="" grouping={false} isAllowed={(clean) => clean.length <= 4}
+        onChange={onChange} data-testid="mi" />,
+    );
+    const input = getInput('mi');
+    fireEvent.change(input, { target: { value: '12,5' } });
+    expect(onChange).toHaveBeenLastCalledWith('12.5', 12.5);
+    fireEvent.change(input, { target: { value: '12,55' } });
+    expect(input.value).toBe('12,5');
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('a refused full-value paste is swallowed', () => {
+    const onChange = vi.fn();
+    render(<MaskedAmountInput value="" isAllowed={() => false} onChange={onChange} data-testid="mi" />);
+    fireEvent.paste(getInput('mi'), { clipboardData: { getData: () => '1.234,56' } });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(getInput('mi').value).toBe('');
+  });
+
+  // Review W2 — the paste path hands isAllowed the same clean shape as typing (digits, '.'
+  // decimal), never String(n)'s exponent notation for a huge number.
+  it('a paste gives isAllowed the same clean shape as typing, even for a huge number', () => {
+    const seen = [];
+    const onChange = vi.fn();
+    render(<MaskedAmountInput value="" isAllowed={(clean) => { seen.push(clean); return true; }}
+      onChange={onChange} data-testid="mi" />);
+    fireEvent.paste(getInput('mi'), { clipboardData: { getData: () => '1.234,56' } });
+    expect(seen).toEqual(['1234.56']);
+    expect(onChange).toHaveBeenLastCalledWith('1234.56', 1234.56);
+
+    fireEvent.change(getInput('mi'), { target: { value: '' } });
+    seen.length = 0;
+    fireEvent.paste(getInput('mi'), { clipboardData: { getData: () => '1000000000000000000000' } });
+    expect(seen).toEqual(['1000000000000000000000']);
+    expect(seen[0]).not.toMatch(/e/i);
+  });
+
+  // Paste path → toPlainNumberString: `String(n)` switches to exponent notation from 1e21 up and
+  // below 1e-6; neither form may ever reach isAllowed, onChange or the screen.
+  it('a pasted value >= 1e21 reaches onChange and the display as plain digits', () => {
+    const onChange = vi.fn();
+    render(<MaskedAmountInput value="" grouping={false} onChange={onChange} data-testid="mi" />);
+    fireEvent.paste(getInput('mi'), { clipboardData: { getData: () => '25000000000000000000000' } });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const [clean, parsed] = onChange.mock.calls[0];
+    expect(parsed).toBe(2.5e22);
+    // Plain digits, same magnitude (23 digits) and the same double as `parsed`. The trailing digits
+    // are the exact binary value of the double (BigInt of 2.5e22), not the pasted decimal text:
+    // beyond 2^53 a Number cannot carry those digits, and the width check only needs the length.
+    expect(clean).toMatch(/^\d{23}$/);
+    expect(Number(clean)).toBe(parsed);
+    expect(getInput('mi').value).toBe(clean);
+    expect(getInput('mi').value).not.toMatch(/e/i);
+  });
+
+  it('a pasted negative value <= -1e21 keeps its sign and stays plain digits', () => {
+    const onChange = vi.fn();
+    render(<MaskedAmountInput value="" grouping={false} onChange={onChange} data-testid="mi" />);
+    fireEvent.paste(getInput('mi'), { clipboardData: { getData: () => '-1000000000000000000000' } });
+    expect(onChange).toHaveBeenLastCalledWith('-1000000000000000000000', -1e21);
+  });
+
+  it('a pasted tiny fraction (exponent form in String(n)) reaches isAllowed and onChange as plain decimals', () => {
+    const seen = [];
+    const onChange = vi.fn();
+    render(<MaskedAmountInput value="" isAllowed={(clean) => { seen.push(clean); return true; }}
+      onChange={onChange} data-testid="mi" />);
+    fireEvent.paste(getInput('mi'), { clipboardData: { getData: () => '0,0000001' } });
+    expect(String(1e-7)).toMatch(/e/i); // the shape the component must avoid
+    expect(seen).toEqual(['0.0000001']);
+    expect(onChange).toHaveBeenLastCalledWith('0.0000001', 1e-7);
+    expect(getInput('mi').value).toBe('0,0000001');
+  });
+
+  it('a pasted huge number is refused by a 15-integer-digit ceiling (the 303 box width) and nothing changes', () => {
+    const fifteenIntegerDigits = (clean) => clean.replace('-', '').split('.')[0].length <= 15;
+    const seen = [];
+    const onChange = vi.fn();
+    render(<MaskedAmountInput value="" isAllowed={(clean) => { seen.push(clean); return fifteenIntegerDigits(clean); }}
+      onChange={onChange} data-testid="mi" />);
+    fireEvent.paste(getInput('mi'), { clipboardData: { getData: () => '1000000000000000000000' } });
+    // The veto measured the real 22 digits, not the 5 characters of "1e+21".
+    expect(seen).toEqual(['1000000000000000000000']);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(getInput('mi').value).toBe('');
+
+    // The ceiling still lets a 15-digit paste through.
+    fireEvent.paste(getInput('mi'), { clipboardData: { getData: () => '123456789012345' } });
+    expect(onChange).toHaveBeenLastCalledWith('123456789012345', 123456789012345);
   });
 });

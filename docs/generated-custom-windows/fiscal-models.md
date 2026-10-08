@@ -507,6 +507,20 @@ Three steps (0-based index):
 | Ready | 1 | `ready` |
 | Submitted | 2 | `submitted*` |
 
+### Header breadcrumb (ETP-5597)
+
+The 303 and 349 detail pages draw their own header below the TopBar (they do not publish page
+meta), so their breadcrumb line — *Finanzas / Modelos Fiscales / Modelo 303 - 2026/T4* — is rendered
+by `FmBreadcrumb` (`FmBreadcrumb.jsx`). It takes the same item model as the TopBar breadcrumb
+(`normalizeBreadcrumb` in `components/layout/TopBar/breadcrumb.js`: a string or
+`{ label, href?, onClick? }` per level), so it behaves like the parent crumb of a generated
+window's detail (e.g. *Facturas de compra* back to its list): the **Modelos Fiscales** level is a
+link (`.fm-breadcrumb__link`, underline on hover) that returns to the declarations list. Its
+`onClick` is the page's own back path — 303's `handleCancel` (discards unsaved edits exactly like
+**Cancelar**), 349's `onBack` — because these detail pages are a view state of `FiscalModelsPage`,
+not a route. *Finanzas* and the current page stay plain text; the visible text is unchanged. The
+list page keeps its plain *Finanzas / Modelos Fiscales* line (it is already the list).
+
 ### Tabs
 
 | Tab | Content |
@@ -923,7 +937,7 @@ value. Flagged as a follow-up, not fixed here.
 
 The top of the Boxes tab shows the declaration type selector and, conditionally, the bank data section (`datos_bancarios`).
 
-**`tipo_declaracion` options:** `C` (Compensación), `D` (Devolución), `I` (Ingreso), `U` (Domiciliación), `N` (Resultado cero), `V` (Devolución cta. corriente), `X` (Devolución transferencia extranjero). Since ETP-5597, `C`/`D`/`V`/`X` are disabled while casilla 69 is positive — see "Tipo de declaración vs. casilla 69" below.
+**`tipo_declaracion` options:** `C` (Compensación), `D` (Devolución), `I` (Ingreso), `U` (Domiciliación), `N` (Resultado cero), `V` (Devolución cta. corriente), `X` (Devolución transferencia extranjero). Since ETP-5597, the result boxes restrict which types can be chosen: `C`/`D`/`V`/`X` are disabled while casilla 71 is positive, and only `N` is allowed while casilla 69 is positive and casilla 71 negative — see "Tipo de declaración vs. casillas 69/71" below.
 
 **`datos_bancarios` visibility** (`sectionVisibleWhen`, ETP-4456, narrowed by the ETP-5393
 manual-QA fix): shown when `tipo_declaracion ∈ {U, D, X}` — the only types AEAT allows an IBAN
@@ -950,7 +964,7 @@ it is now rendered **without a heading** — the bank fields read as a continuat
 Identificación block. The section declares `untitled: true`, which `getLayout303`/`applyPatch` now
 accept alongside `titleKey`/`titleKeyMap` (their filter otherwise drops a title-less section). The
 `fm.section.devolucion`/`fm.section.domiciliacion` locale keys were removed. Requiredness and
-labels inside the section also changed in ETP-5597 — see "Tipo de declaración vs. casilla 69, bank
+labels inside the section also changed in ETP-5597 — see "Tipo de declaración vs. casillas 69/71, bank
 block requiredness and boxes 70/109 (ETP-5597)" below.
 
 **Field-level visibility (`_BANK_DVX_VW`)** — SWIFT/BIC, Bank name, address, city, and country
@@ -1200,9 +1214,9 @@ check). Go's previsualización had no equivalent check anywhere in the chain. Fi
 - **Frontend** (`FmModel303Page.jsx`'s `handleBoxChange`): a negative commit on box 111 or 77 is
   clamped to `0` and surfaces `ui('fm.box.error.negative_not_allowed', { box })` as a toast error
   — the same "make the invalid state structurally impossible" approach already used for the
-  box78/box110 clamp (ETP-5338 pt.2, see above). `FmBoxes303.jsx` also sets `min="0"` on these two
-  boxes' `<input type="number">` as a UX hint (not the actual enforcement — a browser `min` does
-  not block typing or blur).
+  box78/box110 clamp (ETP-5338 pt.2, see above). (`FmBoxes303.jsx` used to also set `min="0"` on
+  these boxes' `<input type="number">` as a UX hint; the editor is a text input since ETP-5597
+  CP-18 — see "Cell editor and decimal separators" — so the clamp is the only mechanism.)
 - **Backend** (`FiscalDeclCrudHandler.handleDeclPut`): a new `rejectNegativeManualBoxes` guard
   inspects `manualData.manualOverrides` for boxes `"111"`/`"77"` and rejects the whole PUT with
   400 if either is negative, leaving the declaration record completely untouched — unlike a
@@ -1716,8 +1730,10 @@ param straight off that map, bypassing `liveBoxes`/`recomputeDerivedBoxes` entir
 **Rule B — boxes 109 (`devoluciones_at`) and 70 (`a_deducir`) can never be negative.** Same
 existing mechanism boxes 111/77 already used (`NEGATIVE_NOT_ALLOWED_BOXES` in
 `fiscalModelsUtils.js`, now `{111, 77, 109, 70}`) — clamp to 0 + `fm.box.error.negative_not_allowed`
-toast in `FmModel303Page.jsx`'s `handleBoxChange`, `min="0"` on the input in `FmBoxes303.jsx`. No
-new mechanism was needed; adding the two box numbers to the Set was sufficient.
+toast in `FmModel303Page.jsx`'s `handleBoxChange` (the `min="0"` hint `FmBoxes303.jsx` used to put on
+the input is gone since ETP-5597 CP-18 — the editor is a text `MaskedAmountInput`, see "Cell editor
+and decimal separators"). No new mechanism was needed; adding the two box numbers to the Set was
+sufficient.
 
 **Tests invalidated by Rule A — rewritten in `d73efa31f`:** every test that used to drive Nota 3
 scenarios by directly typing into casilla 111's now-removed pencil editor was broken by this
@@ -1786,51 +1802,83 @@ other boxes, just not accumulated and re-queried with `ONLY_MEMO_AND_CORRECTIVE`
   they are intentionally NOT `editable` (backend-computed) — no rendering change was needed since
   they already lacked the `editable` flag.
 
-### Tipo de declaración vs. casilla 69, bank block requiredness and boxes 70/109 (ETP-5597)
+### Tipo de declaración vs. casillas 69/71, bank block requiredness and boxes 70/109 (ETP-5597)
 
 Four related changes to the Modelo 303 identification/result area. All are declared in
 `fm303Layouts.js` (layout metadata, no per-field JSX) and enforced through the same pre-flight
 gates as the existing required-field check.
 
-#### 1. Casilla 69 positive disables tipo `C`/`D`/`V`/`X`
+#### 1. The result boxes restrict `tipo_declaracion` (casilla 71 > 0; casilla 69 > 0 with 71 < 0)
 
-A positive casilla 69 ("Resultado de la autoliquidación", an amount to pay) is filed as Ingreso
-(`I`) or Domiciliación (`U`); only a negative result can be compensated or refunded. So while box
-69 is **strictly > 0**, the options `C` (Compensación), `D` (Devolución), `V` (Devolución cta.
-corriente) and `X` (Devolución transferencia extranjero) of `tipo_declaracion` cannot be chosen.
+Two rules, both resolved in **one place** — `resolveTipoDeclaracionRestriction(box69, box71)` in
+`fiscalModelsUtils.js` — into the synthetic `_tipoDeclRestriction` key:
 
-- **Mechanism.** Each of those options carries `disabledWhen: { field: '_box69Positive', equals:
-  true }` and `disabledReasonKey: 'fm.ident.decl.disabled_positive_result'`.
-  `_box69Positive` is a synthetic key — box values live in `liveBoxes`, not in `identification` —
-  merged in by the new `withDerivedBoxFlags(identification, liveBoxes)` (`fiscalModelsUtils.js`),
-  a superset of `withBox111NonZeroFlag` (same technique as `_box111NonZero`). Every place the
-  identification object feeds the layout engine (`CasillasTab` rendering, `getMissingRequiredFields`,
-  the new invalid-option gate) now uses `withDerivedBoxFlags`. A missing box 69 (nothing computed
-  yet) reads as "not positive", so nothing is locked before the first calculation.
+| Condition | `_tipoDeclRestriction` | Disabled options | Allowed | Reason key |
+|---|---|---|---|---|
+| casilla 71 **> 0** (amount to pay) | `'positive_result'` | `C`, `D`, `V`, `X` | `I`, `U`, `N` | `fm.ident.decl.disabled_positive_result` |
+| casilla 69 **> 0** AND casilla 71 **< 0** | `'zero_only'` | `C`, `D`, `I`, `U`, `V`, `X` | `N` only — **auto-selected silently** (see below) | `fm.ident.decl.disabled_zero_only` (tooltip of the disabled options only) |
+| anything else (incl. 69/71 not computed yet) | `null` | — | all | — |
+
+The two rules are **mutually exclusive by the sign of casilla 71**, so at most one applies and the
+reason shown is unambiguous. AEAT semantics: a positive result (71) is filed as Ingreso (`I`) or
+Domiciliación (`U`); only a negative result can be compensated or refunded; and a self-assessment
+whose own result (69) is positive but whose final result (71, `= 69 - 70 + 109 - 112`) is negative
+is filed as Resultado cero. QA round 1 moved the first rule from casilla 69 (the original product
+decision) to casilla 71 and added the second rule (business recommendation on ETP-5597).
+
+- **Mechanism.** `_tipoDeclRestriction` is merged into `identification` by
+  `withDerivedBoxFlags(identification, liveBoxes)` (`fiscalModelsUtils.js`, a superset of
+  `withBox111NonZeroFlag`; box values live in `liveBoxes`, not in `identification`). Every place
+  the identification object feeds the layout engine (`CasillasTab` rendering,
+  `getMissingRequiredFields`, the invalid-option gate) uses `withDerivedBoxFlags`. In
+  `fm303Layouts.js`, `C`/`D`/`V`/`X` declare `disabledWhen: { anyOf: [positive_result, zero_only] }`
+  plus `disabledReasonKey` (positive-result text) and `disabledReasonKeyWhen` (zero-only text while
+  that rule applies); `I`/`U` declare `disabledWhen` = zero-only; `N` is never disabled. A missing
+  box 69/71 yields no restriction, so nothing is locked before the first calculation.
+- **Zero-only rule: silent auto-select, no message (QA rounds 3-4).** With a single option left
+  there is nothing for the user to choose, so `TIPO_DECLARACION_FIELD` declares
+  `autoValueWhen: [{ when: zero_only, value: 'N' }]`.
+  - `resolveFieldAutoValue(field, identification)` (`fm303Layouts.js`) returns the matching entry;
+    `getInvalidSelectedOption` returns `null` while it matches, so a non-`N` tipo is **never** an
+    error nor a block for this rule — also on a read-only declaration.
+  - `FmModel303Page` applies `getAutoValueChanges(year, period, identification)` from an effect
+    keyed on the serialized change set: on a **draft** declaration only (the same
+    `status !== 'draft'` condition that makes the identification read-only) it calls
+    `handleIdentChange('tipo_declaracion', 'N')`, an ordinary edit, so **Guardar** and the auto-save
+    before Generar/Presentar persist it. Idempotent (no change once `N`), so it fires once per
+    change of the restriction (load, Calcular, box edit). Every other status — ready, submitted,
+    rejected, error, skipped — keeps its stored tipo untouched (no edit is recorded, so no auto-save
+    can persist one).
+  - If the condition later stops applying, `N` stays selected; the user can change it.
+  - **No message of any kind** next to or under the selector — no error, no hint, no toast. (A
+    neutral grey hint was tried in QA round 3 and removed in round 4 at the user's request.) The
+    other options stay disabled in the dropdown; their `title` tooltip is *"Casilla 69 positiva y
+    casilla 71 negativa: el tipo de declaración es Resultado cero."* / *"Box 69 is positive and box
+    71 is negative: the declaration type is Zero result."* (`fm.ident.decl.disabled_zero_only`).
+- **Reason resolution.** `resolveOptionDisabledReasonKey(opt, identification)` (`fm303Layouts.js`)
+  returns the first matching `disabledReasonKeyWhen` entry (`[{ when, labelKey }]`, same shape as
+  `labelKeyWhen`), else `disabledReasonKey`, else `fm.ident.decl.option_not_allowed`. It feeds the
+  option `title`, the inline error and the blocking toast, so all three name the rule in force.
 - **Rendering** (`FmBoxes303.renderIdentSelectField`): a matching option is rendered `disabled`
   with the reason as its `title`. Generic helpers in `fm303Layouts.js`: `isOptionDisabled(opt,
   identification)` and `getInvalidSelectedOption(field, identification)`.
-- **An already-selected option is NOT cleared.** If the user picked e.g. "Compensación" and box 69
-  later turns positive (after an unrelated edit or a recalculation), the value stays selected —
-  silently wiping it would be surprising and would undo itself badly when box 69 turns negative
-  again. Instead the select gets a red border (`.fm-aeat-ident-inline-field__select--invalid`,
-  `aria-invalid`) and the reason is shown underneath (`role="alert"`,
-  `data-testid="fm-aeat-ident-tipo_declaracion-error"`): *"Los tipos de compensación y devolución no
-  están permitidos cuando la casilla 69 es positiva (resultado a ingresar). Selecciona otro tipo de
-  declaración."* (`fm.ident.decl.option_not_allowed` is the generic fallback text.)
+- **An already-selected option is NOT cleared** (the transition case, 71 > 0 rule). If the user
+  picked e.g. "Compensación" and box 71 later turns positive (after an unrelated edit or a
+  recalculation), the value stays selected — silently
+  wiping it would be surprising and would undo itself badly when the boxes change back. Instead the
+  select gets a red border (`.fm-aeat-ident-inline-field__select--invalid`, `aria-invalid`) and the
+  reason is shown underneath (`role="alert"`, `data-testid="fm-aeat-ident-tipo_declaracion-error"`):
+  *"Los tipos de compensación y devolución no están permitidos cuando la casilla 71 es positiva
+  (resultado a ingresar). Selecciona otro tipo de declaración."* This "keep and block" behaviour
+  applies to the 71 > 0 rule only, where several valid types remain; the zero-only rule
+  auto-selects instead (above).
 - **Gate.** `getInvalidSelectedOptions(year, period, identification)` (visible select fields whose
   current value is a disabled option) is checked in `FmModel303Page` exactly like
   `missingRequiredFields`: on the **"Generar fichero 303"** and **"Registrar/Presentar"** button
   `onClick` (so the modal never opens) and again at the top of `handleGenerate`/`handlePresent`
   (which also covers the `aeat_telematic` path). A blocked action shows the reason as a
-  `toast.error`.
-
-> **Open note — box 69 vs. box 71 (pending business confirmation).** The condition is casilla
-> **69** by product decision. AEAT's own validation is on the sign of casilla **71** ("Resultado de
-> la liquidación", `71 = 69 - 70 + 109 - 112`), which can differ from 69 in a rectificativa or
-> complementaria. Until the business confirms which box should drive this rule, a declaration
-> whose 69 and 71 have different signs can be allowed/blocked here differently from what AEAT
-> enforces. Changing it means swapping the synthetic flag read by `_RESULT_69_POSITIVE`.
+  `toast.error`. The missing-required-fields check runs first, so a declaration missing a required
+  field reports that before the type restriction.
 
 #### 2. Bank block requiredness by marca SEPA
 
@@ -1916,6 +1964,22 @@ autoliquidación rectificativa. Their `resultado_final` rows changed from `edita
 #### 4. Session cache
 
 No 303-specific cache change; see the 349 section for the `fiscal_ac_v5_` bump.
+
+#### 5. "Motivo de rectificación" mandatory with "Autoliquidación rectificativa" (ETP-5597, QA round 1)
+
+`motivo_rectificacion` (select `R` Rectificaciones / `D` Discrepancia de criterio, in the
+`rectificativa` section) is declared `required: true` with its existing
+`visibleWhen: { field: 'rectificativa', equals: true }`. Because `getMissingRequiredFields` skips a
+required field whose `visibleWhen` does not match, the field is mandatory **exactly while the
+rectificativa check is set**: it gets the red asterisk (`isFieldRequired` in
+`FmBoxes303.renderIdentSelectField`), and a blank value blocks **"Generar fichero 303"** and
+**"Registrar/Presentar"**, appearing in the missing-fields toast next to the other required fields
+(`fm.ident.motivo_heading` label). Unchecked, it is hidden and never reported.
+
+Per-design difference: the pre-October-2024 layouts (2021–2023 and 2024 T1–M9) replace the whole
+section with `_COMPLEMENTARIA_RECTIF_OP` ("Complementaria" check + `nro_justificante`), which has
+**no rectification-reason field** — so, unlike boxes 70/109 (item 3), there is no
+"complementaria" equivalent to gate and nothing becomes required there.
 
 ### Editable-box/field input validation vs. the official AEAT spec (ETP-5438)
 
@@ -2006,7 +2070,8 @@ computed by a formula. The current, final design instead makes an out-of-range v
 **unreachable** for manual input, and **blocking-but-non-destructive** for computed values:
 
 **1. Manual input — keystroke/paste hard-stop, not a clamp.** `FmBoxes303.jsx`'s cell input
-(`renderCellInput`'s `onChange`) refuses the keystroke/paste outright, on BOTH axes independently:
+(`renderCellInput`, through `MaskedAmountInput`'s `isAllowed` veto since ETP-5597 CP-18) refuses
+the keystroke/paste outright, on BOTH axes independently:
 - **Integer part**: refused once it would reach `maxIntDigits` for that box/sign —
   `exceedsTypedIntegerDigits(boxNum, rawStr)` in `fiscalModelsUtils.js`. 15 digits for a `Num` box
   or a non-negative `N` box, 14 once the value is negative.
@@ -2215,8 +2280,10 @@ checkboxes" and "Box-to-AEAT-param wiring" above).
 `cellTypes`/`colTypes` in `fm303Layouts.js`) is now clamped to `[0, 100]` and rounded to 2 decimal
 places on blur or Enter — `FmBoxes303.jsx`'s `clampPercentValue`, applied in `renderCellInput`'s
 `commit` before calling `onBoxChange`. This is the same validation for the pre-existing box 65 field
-and the four new last-period territorial boxes; the HTML `max`/`min` attributes alone don't stop
-someone typing `150` and tabbing away, so the clamp also runs in JS right before the value commits.
+and the four new last-period territorial boxes. The clamp is the only range mechanism: the HTML
+`max`/`min` attributes it originally backed up were dropped in ETP-5597 CP-18 when the editor became
+a text `MaskedAmountInput` (percent cells render it with `grouping` off — see "Cell editor and
+decimal separators").
 
 **Routing note (reconciling with box 87 below, ETP-5391 + ETP-5338 pt.2):** casilla 107 and box 87
 are both a `cells: [N]` row that *also* declares a `derivedValue`, but they render through two
@@ -2699,7 +2766,7 @@ operator rows and the key filter have one colour source.
   - The existing key filter and name/NIF search need no change — corrective rows flow through the same predicates and are picked up for free (covered by a test).
   - i18n: `fm.m349.rectificative` ("Rectificativa") and `fm.m349.rectif_subtotal.title` ("Subtotal rectificativas"), in both locales. (`fm.m349.rectif_subtotal.total` was removed together with the grand-total row.)
   - **Corrective rows are marked by the `RectificativeBadge` alone — there is no row-background tint.** The first pass also tinted the whole `<tr>` amber (`.fm-349-row--rectificative`); the functional owner reviewed it on screen and rejected it as too heavy across a full-width table, so both the class usage and its CSS rule were removed. Do not reintroduce a row tint. The rows still carry `data-rectificative="true"`, which is a test/selector hook, not styling.
-- **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by the composite `(nifIva, key)` of the row that was clicked, not by NIF-IVA alone (see the per-key origin scoping above). The active filter is rendered as a removable chip labelled `fm.m349.origin_filter.operator` ("Operador {nif}") with a `fm.m349.origin_filter.clear` clear action, plus a count badge. Each invoice row carries an AEAT349 classification key (`E`/`S`/`A`/`I`), resolved server-side by `Fiscal349BoxesHandler#resolveInvoiceKeyBases` (formerly `resolveInvoiceKeys`) — this is what the Operadores tab's per-key origin scoping (above) relies on. Since ETP-5597 an invoice mixing goods and services produces **one row per key** — see "Mixed goods + services invoices and the 'Facturas origen' rows (ETP-5597)" below. The table hides the 303-only Cuota/Total/Casillas columns (`showTaxColumns={false}`, see "Sources tab — relabelled columns…" in the 303 section).
+- **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by the composite `(nifIva, key)` of the row that was clicked, not by NIF-IVA alone (see the per-key origin scoping above). The active filter is rendered as a removable chip labelled `fm.m349.origin_filter.operator` ("Operador {nif}") with a `fm.m349.origin_filter.clear` clear action, plus a count badge. Each invoice row carries an AEAT349 classification key (`E`/`S`/`A`/`I`), resolved server-side by `Fiscal349BoxesHandler#resolveInvoiceKeyBases` (formerly `resolveInvoiceKeys`) — this is what the Operadores tab's per-key origin scoping (above) relies on. Since ETP-5597 an invoice mixing goods and services produces **one row per key** — see "Mixed goods + services invoices and the 'Facturas origen' rows (ETP-5597)" below. The table hides the 303-only Cuota/Total/Casillas columns (`showTaxColumns={false}`, see "Sources tab — relabelled columns…" in the 303 section). **Clave column, no Tipo column (ETP-5597, QA observation + round 8).** A "Clave" column (`fm.m349.col.key`, the same label as the Operadores table) shows each row's `key` rendered **exactly like the Operadores Clave cell** — both use the shared `KeyCell` component in `FmModel349Page.jsx` (`KeyBadge` with the `.fm-key--{k}` colours + the `fm.m349.key.{k}` description) — so the two rows of a mixed goods + services invoice (E + S, A + I) can be told apart; a row with no key shows "—". The generic "Tipo" (Compra/Venta) column is **hidden** in this table, since the key already says it, and the Clave column takes its place. Both are opt-in `SourcesTab` props passed only by `InvoicesTabContent`: `keyColumn={{ label, render(row) }}` and `hiddenColumns={['type']}` (the empty-filter row's `colSpan` follows the visible columns). The 303 "Facturas" table passes neither and is unchanged (Tipo kept, no Clave). A presented declaration served from its submission snapshot keeps no per-invoice rows at all (`InvoiceDetailNotKept`), so the column only exists on live (draft/ready) declarations; the snapshot format was not changed.
 - **Incidencias** — badge = blocking + warning, tone from the shared severity helper (ETP-5597, see "Incidents severity" under the list page).
 - **Rectificaciones / Ficheros** — coming soon.
 
@@ -2850,9 +2917,9 @@ The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"
   | 90 | `navarra` | — | CHECK | never omitted — see below |
   | 100 | `guipuzcoa` | — | CHECK | never omitted — see below |
 
-  `fileName`/`formerStatement`/`representativeTaxId` are additionally `.trim() || undefined`'d client-side in `FileGenModal`'s confirm handler before being handed to `generate349File`, so whitespace-only input is treated the same as blank. `phone`/`contact` are **not** trimmed (sent as-is if truthy) — a whitespace-only value would still reach the backend, unlike the other three text fields.
+  `fileName`/`formerStatement`/`representativeTaxId` are additionally `.trim() || undefined`'d client-side in `FileGenModal`'s confirm handler before being handed to `generate349File`, so whitespace-only input is treated the same as blank. `phone`/`contact` are **not** `.trim()`'d in the confirm handler (sent as-is if truthy). The phone needs none — since ETP-5597 its input only ever holds digits (see the modal input rules below). A typed contact keeps its blanks, but the backend's `fitAeatContact` trims it, so a whitespace-only contact reaches generation as blank and falls back to the logged-in user's name — consistent with the modal's pre-check, which already treats `!contact.trim()` as blank.
 
-  The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. Since ETP-5456, `substitutive`'s value comes from the form's persisted value (`FmModel349Page`'s `sustitutiva`; a checkbox until ETP-5597, now the header "Tipo" control), not from a field inside this modal — see below. The "Persona de contacto" label lost its "(para el fichero .349)" hint in ETP-5597 (`fm.filegen.contact_name_hint` removed). The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
+  The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. Since ETP-5456, `substitutive`'s value comes from the form's persisted value (`FmModel349Page`'s `sustitutiva`; a checkbox until ETP-5597, now the header "Tipo" control), not from a field inside this modal — see below. The "Persona de contacto" label lost its "(para el fichero .349)" hint in ETP-5597 (`fm.filegen.contact_name_hint` removed). **40-character contact (ETP-5597, CP-19).** The AEAT type-1 record has a fixed 40-character "Persona de contacto" slot, and `AEAT3492010Report#generateLine1` formats it with `OBTL_Utility.format(contact, 40, ...)` *without* truncating first (unlike the type-2 BP name, which goes through `trunk(..., 40)`), so any longer value aborted the whole generation with *"Longitud de string inválida para el parámetro Persona de contacto … la longitud esperada 40"* and no file. The usual trigger was the blank-field fallback — the logged-in `AD_User`'s name, often the e-mail-based username on Etendo GO tenants. `Fiscal349GenerateSupport#applyContactParams` now passes both the typed value and the fallback through `fitAeatContact` (trim, then cut to `AEAT_CONTACT_WIDTH` = 40), and the modal stops at the same width (see the input rules just below). **Phone, same trap on the 9-digit slot.** `generateLine1` writes the phone with `OBTL_Utility.format(phone, 9, '0', ...)`, so anything longer than 9 characters failed with "longitud esperada 9". **Modal inputs (QA BUG-1).** Typing stops at the AEAT width — the phone input (`inputMode="numeric"`) accepts digits only and refuses a 10th digit; the contact refuses a 41st character. A value arriving at once (paste or browser autofill) is normalized exactly like the server: the phone keeps digits only and the **last** 9 (`+34 600 123 123` and `0034600123123` → `600123123`, as `fitAeatPhone`), the contact is trimmed and cut to 40 (as `fitAeatContact`) — `nextAeatPhone`/`nextAeatContact` in `FmOverlays.jsx`. There is deliberately no raw `maxLength` attribute: the browser would cut the pasted text before it could be normalized. The backend passes both the typed value and the blank-field fallback (`resolveOrgPhone`, free text such as `+34 600 123 123`) through `Fiscal349GenerateSupport.fitAeatPhone` (digits only; when more than 9 remain, the LAST 9 — drops an international prefix). `computeOperators` exposes `contactFallback`/`phoneFallback` already passed through `fitAeatContact`/`fitAeatPhone`, so a fallback that normalises to nothing counts as missing in the modal's pre-check. The declarant name (`DeponentIdent`, positions 18–57, read by the classic report straight from `AD_Org.SocialName`/`Name`) has the same untruncated 40-character format and is **not** covered by this fix — it lives in `org.openbravo.module.aeat349.es`. The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
   - **Software vendor NIF (ETP-5187 point 6):** Modelo 303's and Modelo 390's `OBTL_Tax_Report_Parameter` seed data (`org.openbravo.module.aeat303.es`'s `303_Report_Tax_Parameters.xml` and `org.openbravo.module.aeat390.es`'s `390_Report_Tax_Parameters.xml`, respectively) both hardcode an `EDDNIF`/"NIF Empresa Desarrollo" constant identifying the software vendor, seeded to Openbravo's `B31733934`. **Only Modelo 303 was fixed under ETP-5187** — every `taxReportGroup`'s `constantValue` in `303_Report_Tax_Parameters.xml` was updated via a proper dataset export to Etendo's `B75117705`. **Modelo 390 was deliberately left unfixed** — `390_Report_Tax_Parameters.xml` still carries the old `B31733934` on every `taxReportGroup` row — per an explicit user decision to defer it out of this ticket's scope, not an oversight; do not assume it was fixed alongside 303, and do not edit `aeat390.es`. The Modelo 349 tax report definition (`org.openbravo.module.aeat349.es/referencedata/standard/349_Tax_Parameters.xml`) carries **no such parameter** — verified: no `EDDNIF` searchKey, no hardcoded `constantValue` matching a NIF pattern. Nothing to fix here; both `use349Pdf.js` (PDF preview) and `Fiscal349BoxesHandler#handleGenerate` (real `.349` file, via `OBTL_TaxReport_I#generateElectronicFile`) resolve the declarant's own NIF dynamically and never touch a vendor-identity constant.
 
 ### 349 sustitutivas (ETP-5456)
@@ -3000,6 +3067,38 @@ is now persisted.
    - The list cache (`onManualDataSaved`) receives the payload **actually sent**, never the
      in-memory state at the time the response arrives.
 
+### Cell editor and decimal separators (ETP-5597, CP-18)
+
+**Bug.** Typing `12,5` into an editable 303 casilla committed `125,00 €`. The editor was a native
+`<input type="number">`, which the **browser** parses with its own UI locale — Chromium under an
+English UI treats `,` as a grouping separator and strips it — before any of our code ran (our
+`parseBoxInput` already accepted a comma).
+
+**Fix.** `renderCellInput` now renders the canonical **`MaskedAmountInput`**
+(`components/forms/fields.jsx`, ETP-5107), so the 303 boxes behave exactly like every other amount
+field in the app (EntityForm / DataTable / InlineLinesPanel for `TWO_DECIMAL_FIELD_TYPES`):
+- `type="text"` + `inputMode="decimal"`; letters are dropped as typed.
+- **Amount cells: `grouping` ON** (round 7, user decision). Instance separators from
+  `getCurrencyFormatConfig()` (`GET /sws/neo/currency-format`); with the es separators `,` is the
+  decimal and `.` the thousands separator, grouped live: `12,5` → 12,50; `12.5` → **125**;
+  `1.234,5` → 1.234,50. The editor opens on the formatted value (`42` shows `42,00`).
+- **Percent cells: `grouping` OFF**, like every percent/quantity field in the app (the
+  non-`TWO_DECIMAL_FIELD_TYPES` rule): `,` and `.` are both a decimal point (`21,5` / `21.5` → 21.5).
+  Their `[0, 100]` range and 2-decimal rounding stay in `clampPercentValue`.
+- Either way it reports the CLEAN value (`12.5`: digits, optional `-`, at most one `.`) through
+  `onChange`; that string is what `pendingValues` and `onBoxChange` carry, so
+  `buildValidatedBoxValue`'s exact digit split is unchanged, and `parseBoxInput` (FmModel303Page)
+  and `clampPercentValue` read it with the same canonical `parseLocaleNumber` the component uses —
+  what is shown and what is stored always agree.
+- The AEAT width hard-stops (`exceedsTypedIntegerDigits`/`exceedsTypedDecimalDigits`) run through
+  the optional `MaskedAmountInput` prop **`isAllowed(clean) => boolean`** on the clean value — a
+  refused keystroke or full-value paste leaves the field unchanged and `onChange` silent. Absent,
+  other callers are unaffected.
+- A full-value paste goes through `parseAmountInput` (MaskedAmountInput's own paste path), so
+  `1.234,56` and `1,234.56` both paste as 1234.56.
+
+Modelo 349 has no editable amount inputs (its only numeric input is the 13-digit identifier).
+
 ### Mixed goods + services invoices and the "Facturas origen" rows (ETP-5597)
 
 **Bug.** An intra-community invoice mixing goods and services lines (E + S on a sale, A + I on a
@@ -3023,6 +3122,13 @@ filter found nothing.
   halved nor currency-converted).
 - `buildInvoiceRow` now also sends `id` (invoice id) and `accountingDate` (`yyyy-MM-dd`, omitted
   when null — same convention as the 303 sources rows).
+- **The base keeps its sign (CP-20).** `buildInvoiceRow` used to `abs()` the base, so a rectifying
+  invoice (credit note) whose lines are negative showed a positive base. It is now only rounded
+  (`HALF_UP`, 2 decimals), for the single-key `summedLineAmount` and the mixed per-key (halved for
+  purchases) base alike — consistent with the operator rows and the AEAT file, which add those
+  lines up signed. The operator totals per key and the generated file are untouched (they never
+  read these rows). Declarations already submitted are served from their snapshot, so their
+  frozen rows keep the old positive base.
 
 Row shape of `GET /fiscal349/operators` → `invoices[]`:
 

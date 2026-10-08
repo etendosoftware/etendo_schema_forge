@@ -103,7 +103,7 @@ describe('FmModel303Page — duplicate-period banner', () => {
   it('clears the banner once rectificativa is checked, even though _hasDuplicatePeriod is still true', () => {
     const decl = makeDecl({
       _hasDuplicatePeriod: true,
-      identification: { tipo_declaracion: 'I', rectificativa: true, bank_iban: 'ES1234567890123456789012' },
+      identification: { tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', bank_iban: 'ES1234567890123456789012' },
     });
     render(<FmModel303Page decl={decl} {...defaultProps} />);
     expect(screen.queryByText('fm.duplicate_period.warning')).not.toBeInTheDocument();
@@ -141,7 +141,7 @@ describe('FmModel303Page — duplicate-period gate blocks "Marcar como Presentad
   it('allows presenting once rectificativa is checked', () => {
     const decl = makeDecl({
       _hasDuplicatePeriod: true,
-      identification: { tipo_declaracion: 'I', rectificativa: true, bank_iban: 'ES1234567890123456789012' },
+      identification: { tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', bank_iban: 'ES1234567890123456789012' },
     });
     render(<FmModel303Page decl={decl} {...defaultProps} />);
     fireEvent.click(submitBtn());

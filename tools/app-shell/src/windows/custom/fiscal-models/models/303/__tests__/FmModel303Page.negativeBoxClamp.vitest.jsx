@@ -265,7 +265,7 @@ describe('FmModel303Page — negative value rejected on boxes 111 and 77 (ETP-53
   // true` is seeded so the formula's other two conditions (box71 < 0, isRectificativa) are met,
   // isolating "box70 > 0" as the only thing the clamp can affect.
   it('a negative box70 commit is clamped BEFORE box111 is recomputed from it (ordering guarantee)', () => {
-    const decl = { ...BASE_DECL, identification: { tipo_declaracion: 'N', rectificativa: true } };
+    const decl = { ...BASE_DECL, identification: { tipo_declaracion: 'N', rectificativa: true, motivo_rectificacion: 'R' } };
     render(<FmModel303Page decl={decl} {...defaultProps} />);
 
     commit(27, '-500'); // box69 = -500 (< 0), box71 = -500 - box70 stays < 0 regardless of clamp.
@@ -308,7 +308,7 @@ describe('FmModel303Page — box70/109 clamp applies even when handleBoxChange n
       summary: { accrued: 0, deductible: 0, result: 0 },
       sources: [],
     });
-    const decl = { ...CALCULAR_DECL, identification: { tipo_declaracion: 'N', rectificativa: true } };
+    const decl = { ...CALCULAR_DECL, identification: { tipo_declaracion: 'N', rectificativa: true, motivo_rectificacion: 'R' } };
     render(<FmModel303Page decl={decl} token={TOKEN} apiBaseUrl={API_BASE_URL} {...defaultProps} />);
 
     await clickCalcular();
@@ -328,7 +328,7 @@ describe('FmModel303Page — box70/109 clamp applies even when handleBoxChange n
       ...BASE_DECL,
       _precomputed: { boxes: [{ num: 27, value: -500 }], summary: {}, sources: [] },
       manualData: {
-        identification: { tipo_declaracion: 'N', rectificativa: true },
+        identification: { tipo_declaracion: 'N', rectificativa: true, motivo_rectificacion: 'R' },
         manualOverrides: { 70: -300 },
       },
     };

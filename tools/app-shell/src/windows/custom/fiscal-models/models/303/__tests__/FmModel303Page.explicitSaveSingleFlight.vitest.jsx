@@ -445,13 +445,14 @@ describe('FmModel303Page — single-flight explicit-save write path (ETP-5255 / 
     const onManualDataSaved = vi.fn();
     // Checking 'rectificativa' makes the 'datos_bancarios' section visible (fm303Layouts.js),
     // whose 'bank_iban' is itself `required: true` — seeded here so the ETP-5187 pre-flight
-    // gate this test is not exercising doesn't block `submitDeclaration()` below.
+    // gate this test is not exercising doesn't block `submitDeclaration()` below. Same for
+    // 'motivo_rectificacion' (ETP-5597: required while the rectificativa check is set).
     renderPage({
       onStatusChange,
       onManualDataSaved,
       decl: {
         ...BASE_DECL,
-        manualData: { identification: { tipo_declaracion: 'N', bank_iban: 'ES0000000000000000000000' } },
+        manualData: { identification: { tipo_declaracion: 'N', bank_iban: 'ES0000000000000000000000', motivo_rectificacion: 'R' } },
       },
     });
 

@@ -271,6 +271,34 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
 // `formerStatement` prop, still validates it (a substitute filing NEEDS the identifier — the
 // "missing required field" toast below) and forwards it in the confirm payload. It is ignored
 // while `substitutive` is false.
+// ETP-5597 (QA BUG-1) — the AEAT 349 type-1 record holds the contact phone in a 9-digit numeric
+// slot and the contact person in a 40-character one. Typing stops at that width (no silent
+// truncation of what the user is typing). A value that arrives at once — a paste, or browser
+// autofill of a formatted number such as "+34 600 123 123" — is normalized exactly like the server
+// does at generation (Fiscal349GenerateSupport.fitAeatPhone: digits only, LAST 9 — drops an
+// international prefix; fitAeatContact: trim, then cut to 40), so what the modal shows is what the
+// file gets. There is deliberately no raw `maxLength`: the browser would cut the pasted text BEFORE
+// it could be normalized ("+34 600 1" → "346001").
+const AEAT_PHONE_WIDTH = 9;
+const AEAT_CONTACT_WIDTH = 40;
+
+function nextAeatPhone(prev, raw) {
+  const digits = String(raw ?? '').replace(/\D/g, '');
+  if (digits.length <= AEAT_PHONE_WIDTH) return digits;
+  const prevDigits = String(prev ?? '').replace(/\D/g, '');
+  // One more digit over the limit = typing: refuse it. Several at once = paste/autofill: normalize.
+  return digits.length - prevDigits.length > 1 ? digits.slice(-AEAT_PHONE_WIDTH) : prevDigits;
+}
+
+function nextAeatContact(prev, raw) {
+  const value = String(raw ?? '');
+  if (value.length <= AEAT_CONTACT_WIDTH) return value;
+  const previous = String(prev ?? '');
+  return value.length - previous.length > 1
+    ? value.trim().slice(0, AEAT_CONTACT_WIDTH).trim()
+    : previous;
+}
+
 export function FileGenModal({ decl, substitutive, formerStatement: formerStatementProp, onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
@@ -336,11 +364,13 @@ export function FileGenModal({ decl, substitutive, formerStatement: formerStatem
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
               {t('fm.filegen.contact_name')}
             </div>
-            <input style={inputSt} value={contact} onChange={e => setContact(e.target.value)} placeholder={t('fm.filegen.contact_name_placeholder')} />
+            <input style={inputSt} value={contact} data-testid="FileGenModal__contact" onChange={e => setContact(prev => nextAeatContact(prev, e.target.value))} placeholder={t('fm.filegen.contact_name_placeholder')} />
           </div>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>{t('fm.filegen.contact_phone')}</div>
-            <input style={inputSt} value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('fm.filegen.contact_phone_placeholder')} />
+            {/* ETP-5597 — the AEAT 349 type-1 record holds the phone in a 9-digit numeric slot and the
+                contact in a 40-character one; see nextAeatPhone / nextAeatContact. */}
+            <input style={inputSt} value={phone} inputMode="numeric" onChange={e => setPhone(prev => nextAeatPhone(prev, e.target.value))} placeholder={t('fm.filegen.contact_phone_placeholder')} data-testid="FileGenModal__phone" />
           </div>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>

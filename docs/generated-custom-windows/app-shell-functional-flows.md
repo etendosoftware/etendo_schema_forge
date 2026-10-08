@@ -293,7 +293,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Gated row (`gateQuestionKey`).** The row asks a yes/no question that REPLACES its description
   and its action until it is answered. The only one today is **Configuración fiscal** (a
   `productiveOnly` row, so a trial tenant never sees it): *"¿Debe informar las facturas a algún
-  Sistema de Facturación (SIF), como SII, Verifactu o TicketBai?"*
+  Sistema de Información Fiscal (SIF) como SII, TicketBai o Verifactu?"* (ETP-5597: systems listed
+  in the order SII, TicketBai, Verifactu; en_US "Fiscal Information System (SIF)")
   - **Sí** reveals the ordinary body — the description, the Configure button to `/fiscal-config`,
     the time estimate. It persists nothing: the user still has to do the step.
   - **No** marks the step completed, because for a tenant that reports to no SIF the answer IS

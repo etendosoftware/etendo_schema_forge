@@ -226,53 +226,55 @@ describe('FmModel303Page — required-field gate blocks "Marcar como Presentado"
   });
 });
 
-// ── ETP-5597 pt.1 — tipo Compensación/Devolución with a positive casilla 69 ───────────────
-// box 68 (reg_anual) = 1000 is the only input to box 69 in this fixture → box 69 = 1000 > 0.
-const POSITIVE_69 = { _precomputed: { boxes: [{ num: 68, value: 1000 }] } };
-const NEGATIVE_69 = { _precomputed: { boxes: [{ num: 68, value: -1000 }] } };
+// ── ETP-5597 pt.1 — tipo Compensación/Devolución with a positive casilla 71 ───────────────
+// box 68 (reg_anual) = 1000 is the only input to box 69 in this fixture → box 69 = 1000 and,
+// with 70/109/112 empty, box 71 (= 69 - 70 + 109 - 112) = 1000 > 0. Negative: both = -1000, so
+// neither the 71 > 0 rule nor the "69 > 0 and 71 < 0" rule applies.
+const POSITIVE_71 = { _precomputed: { boxes: [{ num: 68, value: 1000 }] } };
+const NEGATIVE_71 = { _precomputed: { boxes: [{ num: 68, value: -1000 }] } };
 
-describe('FmModel303Page — a negative-result tipo with box 69 positive blocks generate/present (ETP-5597)', () => {
-  it.each(['C', 'V'])('tipo %s + box 69 > 0: "Generar fichero 303" toasts the reason and never opens the modal', async (tipo) => {
+describe('FmModel303Page — a negative-result tipo with box 71 positive blocks generate/present (ETP-5597)', () => {
+  it.each(['C', 'V'])('tipo %s + box 71 > 0: "Generar fichero 303" toasts the reason and never opens the modal', async (tipo) => {
     const { toast } = await import('sonner');
-    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: tipo }, POSITIVE_69)} {...defaultProps} />);
+    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: tipo }, POSITIVE_71)} {...defaultProps} />);
     fireEvent.click(genBtn());
     expect(screen.queryByTestId('FileGenModal303-mock')).not.toBeInTheDocument();
     expect(toast.error).toHaveBeenCalledWith('fm.ident.decl.disabled_positive_result');
     expect(generate303File).not.toHaveBeenCalled();
   });
 
-  it('tipo C + box 69 > 0: "Registrar/Presentar" toasts the reason and never opens the modal', async () => {
+  it('tipo C + box 71 > 0: "Registrar/Presentar" toasts the reason and never opens the modal', async () => {
     const { toast } = await import('sonner');
-    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' }, POSITIVE_69)} {...defaultProps} />);
+    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' }, POSITIVE_71)} {...defaultProps} />);
     fireEvent.click(submitBtn());
     expect(screen.queryByTestId('PresentModal-mock')).not.toBeInTheDocument();
     expect(toast.error).toHaveBeenCalledWith('fm.ident.decl.disabled_positive_result');
   });
 
-  it('tipo I + box 69 > 0 is a valid combination — the generate modal opens', () => {
-    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'I' }, POSITIVE_69)} {...defaultProps} />);
+  it('tipo I + box 71 > 0 is a valid combination — the generate modal opens', () => {
+    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'I' }, POSITIVE_71)} {...defaultProps} />);
     fireEvent.click(genBtn());
     expect(screen.getByTestId('FileGenModal303-mock')).toBeInTheDocument();
   });
 
-  it('tipo C + box 69 < 0 is not blocked', async () => {
+  it('tipo C + box 69/71 < 0 is not blocked', async () => {
     const { toast } = await import('sonner');
-    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' }, NEGATIVE_69)} {...defaultProps} />);
+    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' }, NEGATIVE_71)} {...defaultProps} />);
     fireEvent.click(genBtn());
     expect(screen.getByTestId('FileGenModal303-mock')).toBeInTheDocument();
     expect(toast.error).not.toHaveBeenCalledWith('fm.ident.decl.disabled_positive_result');
   });
 
-  it('tipo C with no box 69 computed yet is not blocked', () => {
+  it('tipo C with no box 69/71 computed yet is not blocked', () => {
     render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' })} {...defaultProps} />);
     fireEvent.click(submitBtn());
     expect(screen.getByTestId('PresentModal-mock')).toBeInTheDocument();
   });
 });
 
-// ETP-5597 pt.1 — the transition case: tipo C chosen while box 69 is negative (valid), then
-// box 69 turns positive through a box edit + recompute. Uses the REAL FmBoxes303 grid.
-describe('FmModel303Page — box 69 turning positive under tipo C (ETP-5597)', () => {
+// ETP-5597 pt.1 — the transition case: tipo C chosen while box 71 is negative (valid), then
+// box 71 turns positive through a box edit + recompute (box 68 feeds 69, which feeds 71). Uses the REAL FmBoxes303 grid.
+describe('FmModel303Page — box 71 turning positive under tipo C (ETP-5597)', () => {
   function findCellByNum(container, num) {
     const padded = String(num).padStart(2, '0');
     return Array.from(container.querySelectorAll('.fm-aeat-cell')).find(
@@ -296,14 +298,14 @@ describe('FmModel303Page — box 69 turning positive under tipo C (ETP-5597)', (
     const { toast } = await import('sonner');
     boxesMode.real = true;
     const { container } = render(
-      <FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' }, NEGATIVE_69)} {...defaultProps} />,
+      <FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' }, NEGATIVE_71)} {...defaultProps} />,
     );
 
-    // Identificación page (default): box 69 negative, so tipo C is a valid choice — no error.
+    // Identificación page (default): box 71 negative, so tipo C is a valid choice — no error.
     expect(tipoSelect(container).value).toBe('C');
     expect(screen.queryByTestId('fm-aeat-ident-tipo_declaracion-error')).not.toBeInTheDocument();
 
-    // Resultado final page: box 68 edited to +1000 → recompute makes box 69 = 1000 > 0.
+    // Resultado final page: box 68 edited to +1000 → recompute makes box 69 = 71 = 1000 > 0.
     goToPage('fm.page.resultado_final');
     editBox(container, 68, '1000');
     expect(findCellByNum(container, 69).querySelector('.fm-aeat-cell__value').textContent).toContain('1000');
@@ -319,6 +321,50 @@ describe('FmModel303Page — box 69 turning positive under tipo C (ETP-5597)', (
     expect(screen.queryByTestId('FileGenModal303-mock')).not.toBeInTheDocument();
     expect(toast.error).toHaveBeenCalledWith('fm.ident.decl.disabled_positive_result');
     expect(generate303File).not.toHaveBeenCalled();
+  });
+});
+
+// ── ETP-5597 (QA round 3) — 69 > 0 and 71 < 0: tipo is auto-set to Resultado cero ─────────
+// box 68 = 1000 -> box 69 = 1000; box 70 = 1500 -> box 71 = 1000 - 1500 = -500.
+const ZERO_ONLY_BOXES = { _precomputed: { boxes: [{ num: 68, value: 1000 }, { num: 70, value: 1500 }] } };
+
+describe('FmModel303Page — the zero-only rule auto-selects Resultado cero (ETP-5597)', () => {
+  const tipoSelect = (container) => Array.from(container.querySelectorAll('select'))
+    .find(sel => Array.from(sel.options).some(o => o.value === 'C'));
+
+  it('a draft with tipo I is switched to N silently (no error, no message) and generate is not blocked', async () => {
+    const { toast } = await import('sonner');
+    boxesMode.real = true;
+    const { container } = render(
+      <FmModel303Page decl={makeDecl({ tipo_declaracion: 'I' }, ZERO_ONLY_BOXES)} {...defaultProps} />,
+    );
+    expect(tipoSelect(container).value).toBe('N');
+    expect(screen.queryByTestId('fm-aeat-ident-tipo_declaracion-error')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fm-aeat-ident-tipo_declaracion-hint')).not.toBeInTheDocument();
+    expect(toast.warning).not.toHaveBeenCalledWith('fm.ident.decl.disabled_zero_only');
+    fireEvent.click(genBtn());
+    expect(screen.getByTestId('FileGenModal303-mock')).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalledWith('fm.ident.decl.disabled_zero_only');
+  });
+
+  it('a submitted declaration keeps its stored tipo (never mutated) and shows no error', () => {
+    boxesMode.real = true;
+    const { container } = render(
+      <FmModel303Page decl={makeDecl({ tipo_declaracion: 'I' }, { ...ZERO_ONLY_BOXES, status: 'submitted' })} {...defaultProps} />,
+    );
+    expect(tipoSelect(container).value).toBe('I');
+    expect(screen.queryByTestId('fm-aeat-ident-tipo_declaracion-error')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fm-aeat-ident-tipo_declaracion-hint')).not.toBeInTheDocument();
+  });
+  // Review W1 — the identification is read-only for every status but draft, so a `ready`
+  // declaration must not get the invisible tipo edit either (an auto-save would persist it).
+  it('a ready (non-draft) declaration keeps its stored tipo (no auto edit) and shows no error', () => {
+    boxesMode.real = true;
+    const { container } = render(
+      <FmModel303Page decl={makeDecl({ tipo_declaracion: 'I' }, { ...ZERO_ONLY_BOXES, status: 'ready' })} {...defaultProps} />,
+    );
+    expect(tipoSelect(container).value).toBe('I');
+    expect(screen.queryByTestId('fm-aeat-ident-tipo_declaracion-error')).not.toBeInTheDocument();
   });
 });
 

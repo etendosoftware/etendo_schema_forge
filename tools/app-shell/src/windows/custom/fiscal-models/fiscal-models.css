@@ -1520,3 +1520,7 @@
 .fm-aeat-section--compact .fm-aeat-cell__value { line-height: 40px; }
 .fm-aeat-section--compact .fm-aeat-col-headers__cell { width: 180px; }
 .fm-aeat-section--compact .fm-aeat-group-bracket::before { right: 568px; } /* 3×180 − same gap offsets = 808−240 */
+
+/* ETP-5597 — navigable in-page breadcrumb level (FmBreadcrumb); same affordance as the TopBar's. */
+.fm-breadcrumb__link { background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.fm-breadcrumb__link:hover { color: hsl(var(--foreground)); text-decoration: underline; }

@@ -56,13 +56,20 @@ vi.mock('../../../FmCommon.jsx', () => ({
 // list as `decl.sources`. Surfacing the refs it got is exactly the contract the
 // invoices-tab filter must satisfy.
 vi.mock('../../../FmTabContent.jsx', () => ({
-  SourcesTab: ({ decl, showTaxColumns }) => React.createElement(
+  // ETP-5597 — also surfaces the opt-in `keyColumn` (label + the cell it renders per row).
+  SourcesTab: ({ decl, showTaxColumns, keyColumn, hiddenColumns }) => React.createElement(
     'div',
     {
       'data-testid': 'sources-tab', 'data-count': String((decl.sources ?? []).length),
       'data-show-tax-columns': String(showTaxColumns),
+      'data-key-column-label': keyColumn ? keyColumn.label : '',
+      'data-hidden-columns': (hiddenColumns ?? []).join(','),
     },
-    (decl.sources ?? []).map(s => React.createElement('span', { key: s.ref, 'data-testid': `source-${s.ref}` }, s.ref))
+    (decl.sources ?? []).map((s, i) => React.createElement(
+      'span', { key: `${s.ref}|${s.key ?? i}`, 'data-testid': `source-${s.ref}` },
+      s.ref,
+      keyColumn ? React.createElement('span', { 'data-testid': `source-key-${i}` }, keyColumn.render(s)) : null,
+    ))
   ),
   IncidentsTab: ({ onGoToSources }) => React.createElement(
     'button',
@@ -524,5 +531,35 @@ describe('FmModel349Page — an invoice split across keys E and S (ETP-5597)', (
   it('the "Facturas origen" tab badge counts both live rows (2)', () => {
     renderSplit();
     expect(tab('invoices')).toHaveAttribute('data-badge', '2');
+  });
+
+  // QA observation — the two rows of the mixed invoice must be told apart: the Clave column
+  // renders each row's key exactly like the Operadores Clave cell (badge + description); a row
+  // without a key shows the em-dash; the Tipo column is hidden (round 8).
+  it('the "Facturas origen" table gets a Clave column like Operadores and no Tipo column', () => {
+    render(
+      <FmModel349Page
+        decl={makeDecl({
+          operators: [OP_E, OP_S], rectifications: [],
+          invoices: [...SPLIT, { id: 'inv-2', ref: 'F-2', nifIva: NIF, type: 'Venta' }],
+        })}
+        {...defaultProps}
+      />
+    );
+    // The Operadores Clave cell (operators tab, shown first) — markup without test ids.
+    const markup = el => el.innerHTML.replace(/ data-testid="[^"]*"/g, '');
+    const operatorCell = markup(screen.getAllByTestId('KeyCell')[0]);
+    fireEvent.click(tab('invoices'));
+    expect(screen.getByTestId('sources-tab')).toHaveAttribute('data-key-column-label', 'fm.m349.col.key');
+    expect(screen.getByTestId('sources-tab')).toHaveAttribute('data-hidden-columns', 'type');
+    // Same markup as the Operadores Clave cell: KeyCell = badge + `fm.m349.key.<k>` description.
+    const row0 = screen.getByTestId('source-key-0');
+    expect(markup(row0.querySelector('[data-testid="KeyCell"]'))).toBe(operatorCell);
+    expect(row0.textContent).toBe('Efm.m349.key.E');
+    expect(row0.querySelector('.fm-key.fm-key--E')).toBeTruthy();
+    const row1 = screen.getByTestId('source-key-1');
+    expect(row1.textContent).toBe('Sfm.m349.key.S');
+    expect(row1.querySelector('.fm-key.fm-key--S')).toBeTruthy();
+    expect(screen.getByTestId('source-key-2').textContent).toBe('—');
   });
 });

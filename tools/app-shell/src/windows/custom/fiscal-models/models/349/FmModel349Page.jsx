@@ -8,6 +8,7 @@ import {
   X, Save, RefreshCw,
 } from 'lucide-react';
 import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
+import { FmBreadcrumb } from '../../FmBreadcrumb.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
@@ -166,6 +167,17 @@ function rectificationKeys(r) {
 // sales/issued (E, S) share one colour, purchases/received (A, I) share another.
 function KeyBadge({ k, 'data-testid': testId }) {
   return <span className={`fm-key fm-key--${k}`} data-testid={testId}>{k}</span>;
+}
+
+// The Clave cell of the Operadores table — the key badge plus its description. Shared with the
+// "Facturas origen" Clave column (ETP-5597) so both tables render the key identically.
+function KeyCell({ k, t, badgeTestId }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} data-testid="KeyCell">
+      <KeyBadge k={k} data-testid={badgeTestId} />
+      <span style={{ fontSize: 14, color: 'var(--fm-fg-1)' }}>{t(`fm.m349.key.${k}`)}</span>
+    </span>
+  );
 }
 
 // Follows the same inline-pill shape as ViesBadge above (see .fm-vies in
@@ -558,6 +570,15 @@ function InvoicesTabContent({ decl, liveInvoices, t, originFilter, onClearOrigin
           decl={{ ...decl, sources }}
           t={t}
           showTaxColumns={false}
+          // ETP-5597 — the AEAT349 key of each origin row, rendered exactly like the Operadores
+          // Clave cell (KeyCell), so the two rows of a mixed goods + services invoice (E + S, A + I)
+          // can be told apart. The key already says whether a row is a purchase or a sale, so the
+          // generic "Tipo" column is hidden here.
+          keyColumn={{
+            label: t('fm.m349.col.key') ?? 'Clave',
+            render: r => (r.key ? <KeyCell k={r.key} t={t} badgeTestId="KeyBadge__sourceRow" /> : '—'),
+          }}
+          hiddenColumns={['type']}
           data-testid="SourcesTab__346dd5" />
       )}
     </>
@@ -1416,9 +1437,16 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
             favLabel={t('fm.list.title') ?? 'Declaraciones'}
             data-testid="MoreOptionsMenu__346dd5" />
         </div>
-        <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 2 }}>
-          {ui('finance')} / {ui('fm.breadcrumb.section')} / {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
-        </div>
+        {/* ETP-5597 — the "Modelos Fiscales" level goes back to the declarations list, like the
+            parent crumb of a generated window's detail; same path as "Cancelar". */}
+        <FmBreadcrumb
+          style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 2 }}
+          items={[
+            ui('finance'),
+            { label: ui('fm.breadcrumb.section'), onClick: onBack },
+            `${t('fm.config.m349.title') ?? 'Modelo 349'} - ${periodLabel}`,
+          ]}
+        />
       </div>
       {/* ── Action bar ───────────────────────────────────────────── */}
       <div style={{
@@ -1720,10 +1748,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                             </span>
                           </td>
                           <td>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <KeyBadge k={op.key} data-testid="KeyBadge__346dd5" />
-                              <span style={{ fontSize: 14, color: 'var(--fm-fg-1)' }}>{t(`fm.m349.key.${op.key}`)}</span>
-                            </span>
+                            <KeyCell k={op.key} t={t} badgeTestId="KeyBadge__346dd5" />
                           </td>
                           <td
                             style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
