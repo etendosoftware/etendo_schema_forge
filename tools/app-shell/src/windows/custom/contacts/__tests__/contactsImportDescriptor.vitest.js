@@ -1,7 +1,11 @@
-import { describe, it, vi } from 'vitest';
+// @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
+// @covers tools/app-shell/src/windows/custom/contacts/contactsFkResolvers.js
+import { describe, it, vi, afterEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { buildOperations } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { runImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
+import { resetImportRun } from '@etendosoftware/app-shell-core/lib/import/importRunState.js';
+import '../contactsFkResolvers.js'; // registers the 'contacts-country' resolver the send path looks up
 import '../contactsImportDescriptor.js';
 
 const baseRow = {
@@ -567,5 +571,55 @@ describe('contacts import descriptor', () => {
         /Category service unavailable/,
       );
     });
+  });
+});
+
+// ETP-5676 — same redundant per-row resolution as the product unit of measure, for the country.
+describe('contacts import descriptor — FK reuse and run reset (ETP-5676)', () => {
+  const calls = (fetchMock, part) => fetchMock.mock.calls.filter(([url]) => String(url).includes(part));
+
+  function stubFetch() {
+    const fetchMock = vi.fn(async (url) => {
+      const u = String(url);
+      if (u.includes('/simsearch')) {
+        return { ok: true, json: async () => ({ item_0: { data: [{ id: 'C-AR', name: 'Argentina', similarity_percent: 100 }] } }) };
+      }
+      return { ok: true, json: async () => ({ response: { data: [{ id: 'BPG-CLIENTS', searchKey: 'CLIENTS', name: 'Clientes' }] } }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('asks the backend for no country the preview already resolved', async () => {
+    const fetchMock = stubFetch();
+    const fkResolutions = new Map([['country', new Map([['Argentina', { status: 'auto-resolved', id: 'C-PREVIEW', name: 'Argentina' }]])]]);
+    const results = await Promise.all(Array.from({ length: 5 }, () => buildOperations(
+      baseRow, { spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-prev', fkResolutions },
+    )));
+    assert.deepEqual(results.map((ops) => ops[1].body.country), Array(5).fill('C-PREVIEW'));
+    assert.equal(calls(fetchMock, '/simsearch').length, 0);
+  });
+
+  it('resolves an unpreviewed country once for all concurrent rows', async () => {
+    const fetchMock = stubFetch();
+    await Promise.all(Array.from({ length: 8 }, () => buildOperations(
+      baseRow, { spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-memo' },
+    )));
+    assert.ok(calls(fetchMock, '/simsearch').length <= 3);
+  });
+
+  it('reads the contact category catalogue once per run and again after a run reset', async () => {
+    const fetchMock = stubFetch();
+    const run = () => buildOperations(
+      { name: 'Acme', category: 'CLIENTS' }, { spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-cat' },
+    );
+    await run();
+    await run();
+    assert.equal(calls(fetchMock, '/business-partner-category/').length, 1);
+    resetImportRun();
+    await run();
+    assert.equal(calls(fetchMock, '/business-partner-category/').length, 2);
   });
 });

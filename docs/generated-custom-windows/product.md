@@ -1462,3 +1462,22 @@ Nothing changed in this window's own files or in `decisions.json` — the layout
 Manual verification: at 1280×720 with the rail expanded, open `/product` and confirm "Filtros"
 sits on the first row with the main actions on the right, untruncated; the list/gallery toggle
 sits on the second row; switching view still swaps grid and gallery.
+
+## ETP-5676 — The import stops re-resolving foreign keys per row
+
+The preview resolves each FK column once (one batched `simSearch` per column), but the send phase
+resolved the unit of measure AGAIN for every row — 2-3 GETs each, one per language — and ignored
+what the preview had found. Now:
+
+- `ImportDialog` passes its `fkResolutions` (popover picks included, stored by id) into the
+  descriptor config. `resolveUom` hands them to the registered `product-uom` resolver, whose
+  `registerFkResolver` wrapper answers a previewed value with no request.
+- A value the preview did not resolve is memoised per run: concurrent rows share one in-flight
+  promise, keyed by resolver + normalised value + token; a rejected promise is evicted so a retry
+  is a real retry.
+- The category creation cache key is normalised, so "Bebidas" and "BEBIDAS" create one category.
+- The descriptor's per-token caches (categories, product defaults, price list versions) register a
+  reset with `importRunState`, run when a new file is loaded, so a second file in the same tab no
+  longer reads the first file's snapshot.
+
+Behaviour is otherwise identical: same ops per row, same concurrency, same `/batch` contract.

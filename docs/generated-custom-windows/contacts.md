@@ -1412,3 +1412,9 @@ Financiero, at 1280×720: the five billing controls of each side have the same w
 Bloquear reads `[switch] Bloquear` level with the Condiciones de pago input; the two switches of
 "Valores por defecto SII" are on one row, each label beside its switch with "SII" / "TicketBAI"
 in muted text under it, and clicking a label toggles its switch.
+
+## ETP-5676 — Import: `country` and the category catalogue are resolved once per run
+
+Same change as `product.md` → *ETP-5676*. The `contacts-country` resolver now answers from the
+preview's `country` resolutions (no request per row) and memoises unpreviewed values per run; the
+business-partner category catalogue cache is reset when a new file is loaded.
