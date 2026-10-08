@@ -1,25 +1,35 @@
 /**
  * ListView — idle toolbar layout (ETP-5509).
  *
- * The idle list bar is a column of up to two rows closed by a separator line:
+ * The idle list bar is ONE row closed by a separator line, in the pre-ETP-5509
+ * order: [subset tabs][quick filters, slot, filters, view toggle] … [actions].
+ * The subset tabs open that row while everything fits and move — alone, as the
+ * same element, by CSS — to a line of their own below it when it does not:
  *
- *   list-toolbar            container, carries the bottom border
- *   ├─ list-toolbar-main-row  quick filters, Table.ToolbarQuickFilter, the filters
- *   │                         section and the main actions
- *   └─ list-toolbar-tabs-row  the tab group (subset filters + list/gallery toggle),
- *                             rendered ONLY when the window has one
+ *   list-toolbar                  container, carries the bottom border
+ *   └─ list-toolbar-main-row        flex-wrap row; `data-tabs-placement` =
+ *      │                            inline | wrapped (only with subset tabs)
+ *      ├─ list-toolbar-tabs         the subset tabs (order-last + full basis
+ *      │                            when wrapped)
+ *      ├─ list-toolbar-filters      quick filters, Table.ToolbarQuickFilter, the
+ *      │                            filters section, the view toggle
+ *      └─ list-toolbar-actions      the main actions
  *
- * These tests pin WHERE each control lives and WHEN the second row exists. They
- * assert structure through the stable test ids documented in
- * `docs/list-filters.md` ("Toolbar layout (ETP-5509)"), never through incidental
- * class strings — the one exception is the separator, where the border class IS
- * the behaviour.
+ * The fit decision is a measurement (`useListToolbarTabsFit`). jsdom has no layout,
+ * so these tests feed it widths through a `getBoundingClientRect` stub keyed by
+ * test id (`useLayout`): `NARROW` forces the wrap, `WIDE` keeps the tabs inline,
+ * and no layout at all (every width 0) keeps the default — inline, one row.
+ * Structure is asserted through the stable test ids documented in
+ * `docs/list-filters.md` ("Toolbar layout (ETP-5509)") and the placement marker;
+ * class strings only where the class IS the behaviour (the separator, the CSS
+ * move). The pure decision is covered in `useListToolbarTabsFit.vitest.js`.
  *
  * `hasListToolbarTabs` is module-private, so its truth table is covered through
- * rendering (see "second row gating").
+ * rendering (see "tab group gating").
  */
 // @covers tools/app-shell/src/components/contract-ui/ListView.jsx
-import { render, screen, within } from '@testing-library/react';
+// @covers tools/app-shell/src/components/contract-ui/useListToolbarTabsFit.js
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('react-router-dom', () => ({
@@ -71,8 +81,14 @@ vi.mock('../DocumentPrintDrawer.jsx', () => ({
   default: () => null,
   printDocuments: vi.fn(),
 }));
+// The props ListView hands the filter bar: `flowInParent` is how its controls become
+// items of the filters cluster, which is what the fit measures.
+let capturedFilterBarProps = null;
 vi.mock('../ListFilterBar.jsx', () => ({
-  ListFilterBar: () => <div data-testid="list-filter-bar" />,
+  ListFilterBar: (props) => {
+    capturedFilterBarProps = props;
+    return <div data-testid="list-filter-bar" />;
+  },
 }));
 
 import { noOpExtractQueryParamConditions } from './testUtils/gridQueryMock.js';
@@ -131,11 +147,35 @@ const galleryRenderer = () => <div data-testid="gallery-view" />;
 const renderListView = (props = {}) => render(<ListView {...defaultProps} {...props} />);
 
 const mainRow = () => screen.getByTestId('list-toolbar-main-row');
-const tabsRow = () => screen.getByTestId('list-toolbar-tabs-row');
-const queryTabsRow = () => screen.queryByTestId('list-toolbar-tabs-row');
+const tabGroup = () => screen.getByTestId('list-toolbar-tabs');
+const queryTabGroup = () => screen.queryByTestId('list-toolbar-tabs');
+const filtersCluster = () => screen.getByTestId('list-toolbar-filters');
+const actionsCluster = () => screen.getByTestId('list-toolbar-actions');
+const placement = () => mainRow().getAttribute('data-tabs-placement');
 // The subset segmented control and the quick-filter cluster are both
 // `role="group"`; counting them detects an empty group left behind.
 const groupsIn = (element) => within(element).queryAllByRole('group');
+
+// ─── Layout stub ────────────────────────────────────────────────────────────
+// Widths (px) by data-testid; anything not listed measures 0. The main row is
+// the available width; tabs + actions alone decide the fit in these fixtures.
+const NARROW = { 'list-toolbar-main-row': 600, 'list-toolbar-tabs': 300, 'list-toolbar-actions': 400 };
+const WIDE = { 'list-toolbar-main-row': 1600, 'list-toolbar-tabs': 300, 'list-toolbar-actions': 400 };
+
+let layoutWidths = {};
+const useLayout = (widths) => { layoutWidths = { ...widths }; };
+
+beforeEach(() => {
+  layoutWidths = {};
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function stubRect() {
+    const width = layoutWidths[this.dataset?.testid] ?? 0;
+    return { width, height: 0, top: 0, left: 0, right: width, bottom: 0, x: 0, y: 0, toJSON: () => ({}) };
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 beforeEach(() => {
   capturedEntityOptions = null;
@@ -148,46 +188,52 @@ beforeEach(() => {
 
 // ─── Item 1 ─────────────────────────────────────────────────────────────────
 
-describe('ListView toolbar layout — subset tabs live in the second row', () => {
-  it('renders every subset tab inside the tabs row', () => {
+describe('ListView toolbar layout — subset tabs move to a line of their own when they do not fit', () => {
+  beforeEach(() => useLayout(NARROW));
+
+  it('renders every subset tab inside the tab group', () => {
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
-    const row = tabsRow();
     for (const key of ['all', 'open', 'done']) {
-      expect(within(row).getByTestId(`filter-${key}`)).toBeInTheDocument();
+      expect(within(tabGroup()).getByTestId(`filter-${key}`)).toBeInTheDocument();
     }
   });
 
-  it('keeps the subset tabs out of the main row', () => {
+  it('keeps the subset tabs out of the filters and the actions clusters', () => {
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
     for (const key of ['all', 'open', 'done']) {
-      expect(within(mainRow()).queryByTestId(`filter-${key}`)).not.toBeInTheDocument();
+      expect(within(filtersCluster()).queryByTestId(`filter-${key}`)).not.toBeInTheDocument();
+      expect(within(actionsCluster()).queryByTestId(`filter-${key}`)).not.toBeInTheDocument();
     }
-    // Rendered exactly once: moved to row 2, not duplicated across rows.
+    // Rendered exactly once: moved, not duplicated.
     expect(screen.getAllByTestId('filter-all')).toHaveLength(1);
   });
 
-  it('places the tabs row after the main row, both inside the toolbar', () => {
+  it('moves the same tab group element last, on a full-width line', () => {
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
-    const toolbar = screen.getByTestId('list-toolbar');
-    expect(toolbar).toContainElement(mainRow());
-    expect(toolbar).toContainElement(tabsRow());
-    expect(mainRow().compareDocumentPosition(tabsRow()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // Siblings, not nested: the tabs row is a row of its own.
-    expect(mainRow()).not.toContainElement(tabsRow());
+    expect(placement()).toBe('wrapped');
+    expect(tabGroup()).toHaveClass('order-last', 'basis-full');
+    // Still inside the toolbar's single flex-wrap row: no second row element.
+    expect(mainRow()).toContainElement(tabGroup());
+    expect(screen.getByTestId('list-toolbar').children).toHaveLength(1);
   });
 });
 
 // ─── Items 2, 4 and the null/undefined edge cases of item 8 ─────────────────
 
-describe('ListView toolbar layout — second row gating', () => {
-  it('renders no tabs row without subsetFilters and without galleryRenderer', () => {
+describe('ListView toolbar layout — tab group gating', () => {
+  // Narrow on purpose: even when space is short, a window without subset tabs
+  // has nothing to move and never measures.
+  beforeEach(() => useLayout(NARROW));
+
+  it('renders no tab group without subsetFilters', () => {
     renderListView();
 
     expect(mainRow()).toBeInTheDocument();
-    expect(queryTabsRow()).not.toBeInTheDocument();
+    expect(queryTabGroup()).not.toBeInTheDocument();
+    expect(mainRow()).not.toHaveAttribute('data-tabs-placement');
   });
 
   it('keeps the toolbar to a single row when there is no tab group', () => {
@@ -197,11 +243,10 @@ describe('ListView toolbar layout — second row gating', () => {
     expect(screen.getByTestId('list-toolbar').firstElementChild).toBe(mainRow());
   });
 
-  it('renders no tabs row and no empty group for subsetFilters=[]', () => {
+  it('renders no tab group and no empty group for subsetFilters=[]', () => {
     renderListView({ subsetFilters: [] });
 
-    expect(mainRow()).toBeInTheDocument();
-    expect(queryTabsRow()).not.toBeInTheDocument();
+    expect(queryTabGroup()).not.toBeInTheDocument();
     expect(groupsIn(screen.getByTestId('list-toolbar'))).toHaveLength(0);
     // An empty list has no active subset, so it must not contribute a query either.
     expect(capturedEntityOptions.baseFilter).toBeNull();
@@ -213,89 +258,112 @@ describe('ListView toolbar layout — second row gating', () => {
   ])('treats subsetFilters=%s as no tab group', (_label, subsetFilters) => {
     renderListView({ subsetFilters });
 
-    expect(mainRow()).toBeInTheDocument();
-    expect(queryTabsRow()).not.toBeInTheDocument();
+    expect(queryTabGroup()).not.toBeInTheDocument();
     expect(groupsIn(screen.getByTestId('list-toolbar'))).toHaveLength(0);
   });
 
-  it('does not let quick filters alone open the tabs row', () => {
+  it('does not let quick filters alone create a tab group', () => {
     renderListView({ quickFilters: QUICK_FILTERS });
 
-    expect(queryTabsRow()).not.toBeInTheDocument();
-    expect(within(mainRow()).getByTestId('quick-filter-overdue')).toBeInTheDocument();
+    expect(queryTabGroup()).not.toBeInTheDocument();
+    expect(within(filtersCluster()).getByTestId('quick-filter-overdue')).toBeInTheDocument();
+  });
+
+  it('does not let a galleryRenderer alone create a tab group', () => {
+    renderListView({ galleryRenderer });
+
+    expect(queryTabGroup()).not.toBeInTheDocument();
+    expect(mainRow()).not.toHaveAttribute('data-tabs-placement');
   });
 });
 
-// ─── Item 3 — ISOLATED ON PURPOSE ───────────────────────────────────────────
-// Placing the list/gallery view toggle in row 2 is an interpretation of
-// ETP-5509 still to be confirmed with the product owner. This describe block is
-// the ONLY place that pins that placement for a gallery-only window: if the
-// decision is reversed (toggle back in the main row), invert or delete this
-// block and nothing else in the file needs to change.
+// ─── Item 3 ─────────────────────────────────────────────────────────────────
+// The list/gallery view toggle keeps its pre-ETP-5509 place: last in the filters
+// cluster, after "Filtros". It is not part of the tab group and never moves.
 
-describe('ListView toolbar layout — view toggle placement (pending confirmation)', () => {
-  it('renders the view toggle inside the tabs row when only galleryRenderer is set', () => {
+describe('ListView toolbar layout — view toggle placement', () => {
+  it('renders the view toggle last in the filters cluster, after the filters section', () => {
+    useLayout(WIDE);
+    renderListView({ subsetFilters: SUBSET_FILTERS, galleryRenderer });
+
+    const toggle = screen.getByTestId('view-toggle');
+    expect(filtersCluster().lastElementChild).toBe(toggle);
+    expect(screen.getByTestId('list-filter-bar').compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tabGroup()).not.toContainElement(toggle);
+  });
+
+  it('keeps the view toggle in the filters cluster when the subset tabs move away', () => {
+    useLayout(NARROW);
+    renderListView({ subsetFilters: SUBSET_FILTERS, galleryRenderer });
+
+    expect(placement()).toBe('wrapped');
+    expect(filtersCluster()).toContainElement(screen.getByTestId('view-toggle'));
+    expect(tabGroup()).not.toContainElement(screen.getByTestId('view-toggle'));
+  });
+
+  it('renders the view toggle in the filters cluster for a gallery-only window', () => {
     renderListView({ galleryRenderer });
 
-    expect(within(tabsRow()).getByTestId('view-toggle')).toBeInTheDocument();
-    expect(within(mainRow()).queryByTestId('view-toggle')).not.toBeInTheDocument();
+    expect(within(filtersCluster()).getByTestId('view-toggle')).toBeInTheDocument();
   });
 });
 
 // ─── Item 5 ─────────────────────────────────────────────────────────────────
 
-describe('ListView toolbar layout — main row contents', () => {
+describe('ListView toolbar layout — filters cluster contents', () => {
+  beforeEach(() => useLayout(NARROW));
+
   it('holds the quick filters', () => {
     renderListView({ quickFilters: QUICK_FILTERS, subsetFilters: SUBSET_FILTERS });
 
-    expect(within(mainRow()).getByTestId('quick-filter-overdue')).toBeInTheDocument();
-    expect(within(mainRow()).getByTestId('quick-filter-mine')).toBeInTheDocument();
-    expect(within(tabsRow()).queryByTestId('quick-filter-overdue')).not.toBeInTheDocument();
+    expect(within(filtersCluster()).getByTestId('quick-filter-overdue')).toBeInTheDocument();
+    expect(within(filtersCluster()).getByTestId('quick-filter-mine')).toBeInTheDocument();
+    expect(within(tabGroup()).queryByTestId('quick-filter-overdue')).not.toBeInTheDocument();
   });
 
   it('holds the Table.ToolbarQuickFilter slot', () => {
     renderListView({ Table: MockTableWithToolbarSlot, subsetFilters: SUBSET_FILTERS });
 
-    expect(within(mainRow()).getByTestId('toolbar-quick-filter-slot')).toBeInTheDocument();
-    expect(within(tabsRow()).queryByTestId('toolbar-quick-filter-slot')).not.toBeInTheDocument();
+    expect(within(filtersCluster()).getByTestId('toolbar-quick-filter-slot')).toBeInTheDocument();
+    expect(within(tabGroup()).queryByTestId('toolbar-quick-filter-slot')).not.toBeInTheDocument();
   });
 
   it('holds the filters section', () => {
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
-    expect(within(mainRow()).getByTestId('list-filter-bar')).toBeInTheDocument();
-    expect(within(tabsRow()).queryByTestId('list-filter-bar')).not.toBeInTheDocument();
+    expect(within(filtersCluster()).getByTestId('list-filter-bar')).toBeInTheDocument();
+    expect(within(tabGroup()).queryByTestId('list-filter-bar')).not.toBeInTheDocument();
   });
 
   // ETP-5593 — the Share button used to be decorative (no handler) on every list.
-  it('holds the Share button, which copies the current page URL', async () => {
+  it('holds the Share button in the actions cluster, which copies the current page URL', async () => {
     const writeText = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     renderListView();
 
-    const share = within(mainRow()).getByTestId('list-share-link');
+    const share = within(actionsCluster()).getByTestId('list-share-link');
     expect(share).toHaveAttribute('aria-label', 'copyLink');
     await userEvent.click(share);
 
     expect(writeText).toHaveBeenCalledWith(window.location.href);
   });
 
-  it('holds the create action', () => {
+  it('keeps the create action in the actions cluster', () => {
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
-    expect(within(mainRow()).getByTestId('action-new')).toBeInTheDocument();
-    expect(within(tabsRow()).queryByTestId('action-new')).not.toBeInTheDocument();
+    expect(within(actionsCluster()).getByTestId('action-new')).toBeInTheDocument();
+    expect(within(tabGroup()).queryByTestId('action-new')).not.toBeInTheDocument();
   });
 
-  it('keeps all of them in the main row of a single-row toolbar', () => {
-    renderListView({ Table: MockTableWithToolbarSlot, quickFilters: QUICK_FILTERS });
+  it('orders the filters cluster as before ETP-5509: quick filters, slot, filters section', () => {
+    renderListView({ Table: MockTableWithToolbarSlot, quickFilters: QUICK_FILTERS, galleryRenderer });
 
-    const row = mainRow();
-    expect(within(row).getByTestId('quick-filter-overdue')).toBeInTheDocument();
-    expect(within(row).getByTestId('toolbar-quick-filter-slot')).toBeInTheDocument();
-    expect(within(row).getByTestId('list-filter-bar')).toBeInTheDocument();
-    expect(within(row).getByTestId('action-new')).toBeInTheDocument();
-    expect(queryTabsRow()).not.toBeInTheDocument();
+    const order = ['quick-filter-overdue', 'toolbar-quick-filter-slot', 'list-filter-bar', 'view-toggle']
+      .map((id) => screen.getByTestId(id));
+    for (let i = 1; i < order.length; i += 1) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(filtersCluster()).toContainElement(order[i]);
+    }
   });
 });
 
@@ -308,14 +376,13 @@ describe('ListView toolbar layout — separator', () => {
     expect(screen.getByTestId('list-toolbar')).toHaveClass('border-b');
   });
 
-  it('draws the separator on the container, not on a row, for a two-row toolbar', () => {
+  it('draws the separator on the container, not on the row or the moved tabs', () => {
+    useLayout(NARROW);
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
     expect(screen.getByTestId('list-toolbar')).toHaveClass('border-b');
-    // One line closing the whole bar — a border on either row would draw a
-    // second line between the rows.
     expect(mainRow()).not.toHaveClass('border-b');
-    expect(tabsRow()).not.toHaveClass('border-b');
+    expect(tabGroup()).not.toHaveClass('border-b');
   });
 
   it('renders no toolbar at all when the list bar is hidden via the hideListBar prop', () => {
@@ -323,7 +390,7 @@ describe('ListView toolbar layout — separator', () => {
 
     expect(screen.queryByTestId('list-toolbar')).not.toBeInTheDocument();
     expect(screen.queryByTestId('list-toolbar-main-row')).not.toBeInTheDocument();
-    expect(queryTabsRow()).not.toBeInTheDocument();
+    expect(queryTabGroup()).not.toBeInTheDocument();
     expect(screen.queryByTestId('filter-all')).not.toBeInTheDocument();
     expect(screen.queryByTestId('view-toggle')).not.toBeInTheDocument();
     // Only the bar is dropped — the table still renders.
@@ -334,7 +401,7 @@ describe('ListView toolbar layout — separator', () => {
     renderListView({ listViewOptions: { hideListBar: true }, subsetFilters: SUBSET_FILTERS });
 
     expect(screen.queryByTestId('list-toolbar')).not.toBeInTheDocument();
-    expect(queryTabsRow()).not.toBeInTheDocument();
+    expect(queryTabGroup()).not.toBeInTheDocument();
   });
 
   it('lets listViewOptions.hideListBar=false win over the hideListBar prop', () => {
@@ -346,7 +413,9 @@ describe('ListView toolbar layout — separator', () => {
 
 // ─── Item 7 ─────────────────────────────────────────────────────────────────
 
-describe('ListView toolbar layout — tabs in the second row stay functional', () => {
+describe('ListView toolbar layout — moved tabs stay functional', () => {
+  beforeEach(() => useLayout(NARROW));
+
   // The highlight is exposed only as a class (no aria-pressed / aria-selected
   // on the tab buttons), so the active marker is asserted the same way the
   // existing interactions suite does.
@@ -355,9 +424,8 @@ describe('ListView toolbar layout — tabs in the second row stay functional', (
   it('starts with the first subset active and no subset query', () => {
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
-    const row = tabsRow();
-    expect(within(row).getByTestId('filter-all')).toHaveClass(ACTIVE_CLASS);
-    expect(within(row).getByTestId('filter-open')).not.toHaveClass(ACTIVE_CLASS);
+    expect(within(tabGroup()).getByTestId('filter-all')).toHaveClass(ACTIVE_CLASS);
+    expect(within(tabGroup()).getByTestId('filter-open')).not.toHaveClass(ACTIVE_CLASS);
     expect(capturedEntityOptions.baseFilter).toBeNull();
   });
 
@@ -365,39 +433,38 @@ describe('ListView toolbar layout — tabs in the second row stay functional', (
     const user = userEvent.setup();
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
-    await user.click(within(tabsRow()).getByTestId('filter-open'));
+    await user.click(within(tabGroup()).getByTestId('filter-open'));
 
-    const row = tabsRow();
-    expect(within(row).getByTestId('filter-open')).toHaveClass(ACTIVE_CLASS);
-    expect(within(row).getByTestId('filter-all')).not.toHaveClass(ACTIVE_CLASS);
-    expect(within(row).getByTestId('filter-done')).not.toHaveClass(ACTIVE_CLASS);
+    expect(within(tabGroup()).getByTestId('filter-open')).toHaveClass(ACTIVE_CLASS);
+    expect(within(tabGroup()).getByTestId('filter-all')).not.toHaveClass(ACTIVE_CLASS);
+    expect(within(tabGroup()).getByTestId('filter-done')).not.toHaveClass(ACTIVE_CLASS);
   });
 
   it('changes the filter passed to the data hook on each tab click', async () => {
     const user = userEvent.setup();
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
-    await user.click(within(tabsRow()).getByTestId('filter-open'));
+    await user.click(within(tabGroup()).getByTestId('filter-open'));
     expect(criteriaOf(capturedEntityOptions.baseFilter)).toEqual([
       { fieldName: 'status', operator: 'equals', value: 'DR' },
     ]);
 
-    await user.click(within(tabsRow()).getByTestId('filter-done'));
+    await user.click(within(tabGroup()).getByTestId('filter-done'));
     expect(criteriaOf(capturedEntityOptions.baseFilter)).toEqual([
       { fieldName: 'status', operator: 'equals', value: 'CO' },
     ]);
 
     // Back to the unfiltered subset: the query is dropped, not left stale.
-    await user.click(within(tabsRow()).getByTestId('filter-all'));
+    await user.click(within(tabGroup()).getByTestId('filter-all'));
     expect(capturedEntityOptions.baseFilter).toBeNull();
   });
 
-  it('composes a row-2 tab with a row-1 quick filter', async () => {
+  it('composes a moved tab with a quick filter', async () => {
     const user = userEvent.setup();
     renderListView({ subsetFilters: SUBSET_FILTERS, quickFilters: QUICK_FILTERS });
 
-    await user.click(within(tabsRow()).getByTestId('filter-open'));
-    await user.click(within(mainRow()).getByTestId('quick-filter-mine'));
+    await user.click(within(tabGroup()).getByTestId('filter-open'));
+    await user.click(within(filtersCluster()).getByTestId('quick-filter-mine'));
 
     expect(criteriaOf(capturedEntityOptions.baseFilter)).toEqual([
       { fieldName: 'status', operator: 'equals', value: 'DR' },
@@ -405,10 +472,10 @@ describe('ListView toolbar layout — tabs in the second row stay functional', (
     ]);
   });
 
-  it('honours initialSubsetIndex for the tab highlighted in the second row', () => {
+  it('honours initialSubsetIndex for the highlighted tab', () => {
     renderListView({ subsetFilters: SUBSET_FILTERS, initialSubsetIndex: 2 });
 
-    expect(within(tabsRow()).getByTestId('filter-done')).toHaveClass(ACTIVE_CLASS);
+    expect(within(tabGroup()).getByTestId('filter-done')).toHaveClass(ACTIVE_CLASS);
     expect(criteriaOf(capturedEntityOptions.baseFilter)).toEqual([
       { fieldName: 'status', operator: 'equals', value: 'CO' },
     ]);
@@ -418,23 +485,14 @@ describe('ListView toolbar layout — tabs in the second row stay functional', (
 // ─── Item 8 ─────────────────────────────────────────────────────────────────
 
 describe('ListView toolbar layout — edge cases', () => {
-  it('hosts subset tabs and the view toggle in one single tabs row', () => {
-    renderListView({ subsetFilters: SUBSET_FILTERS, galleryRenderer });
+  beforeEach(() => useLayout(NARROW));
 
-    expect(screen.getAllByTestId('list-toolbar-tabs-row')).toHaveLength(1);
-    expect(screen.getByTestId('list-toolbar').children).toHaveLength(2);
-    expect(within(tabsRow()).getByTestId('filter-all')).toBeInTheDocument();
-    expect(screen.getAllByTestId('view-toggle')).toHaveLength(1);
-    expect(tabsRow()).toContainElement(screen.getByTestId('view-toggle'));
-  });
-
-  it('renders a single-entry subsetFilters as one active tab in the tabs row', () => {
+  it('renders a single-entry subsetFilters as one active tab', () => {
     const only = [{ key: 'only', label: 'sfOnly', filter: encodeCriteria({ fieldName: 'kind', operator: 'equals', value: 'X' }) }];
     renderListView({ subsetFilters: only });
 
-    const row = tabsRow();
-    expect(within(row).getAllByRole('button')).toHaveLength(1);
-    expect(within(row).getByTestId('filter-only')).toHaveClass('bg-card');
+    expect(within(tabGroup()).getAllByRole('button')).toHaveLength(1);
+    expect(within(tabGroup()).getByTestId('filter-only')).toHaveClass('bg-card');
     // Always one subset active: the single entry's filter applies from the start.
     expect(criteriaOf(capturedEntityOptions.baseFilter)).toEqual([
       { fieldName: 'kind', operator: 'equals', value: 'X' },
@@ -444,19 +502,11 @@ describe('ListView toolbar layout — edge cases', () => {
   it('derives the tab test id from the lowercased label when an entry has no key', () => {
     renderListView({ subsetFilters: [{ label: 'Drafts', filter: null }, { key: 'open', label: 'sfOpen', filter: null }] });
 
-    expect(within(tabsRow()).getByTestId('filter-drafts')).toBeInTheDocument();
-    expect(within(mainRow()).queryByTestId('filter-drafts')).not.toBeInTheDocument();
+    expect(within(tabGroup()).getByTestId('filter-drafts')).toBeInTheDocument();
+    expect(within(filtersCluster()).queryByTestId('filter-drafts')).not.toBeInTheDocument();
   });
 
-  it('opens the tabs row for an empty subsetFilters when a galleryRenderer is present, without an empty group', () => {
-    renderListView({ subsetFilters: [], galleryRenderer });
-
-    const row = tabsRow();
-    expect(within(row).getByTestId('view-toggle')).toBeInTheDocument();
-    expect(groupsIn(row)).toHaveLength(0);
-  });
-
-  it('keeps the tab group in the second row after switching to gallery view', async () => {
+  it('keeps the tab group in place after switching to gallery view', async () => {
     const user = userEvent.setup();
     renderListView({ subsetFilters: SUBSET_FILTERS, galleryRenderer });
 
@@ -464,46 +514,46 @@ describe('ListView toolbar layout — edge cases', () => {
     await user.click(toggleButtons[toggleButtons.length - 1]);
 
     expect(screen.getByTestId('gallery-view')).toBeInTheDocument();
-    expect(within(tabsRow()).getByTestId('filter-all')).toBeInTheDocument();
-    expect(tabsRow()).toContainElement(screen.getByTestId('view-toggle'));
+    expect(within(tabGroup()).getByTestId('filter-all')).toBeInTheDocument();
+    expect(filtersCluster()).toContainElement(screen.getByTestId('view-toggle'));
   });
 
-  it('keeps the tabs row when the rest of the main row is stripped down', () => {
+  it('keeps the tab group when the rest of the main row is stripped down', () => {
     renderListView({
       subsetFilters: SUBSET_FILTERS,
       hideCreate: true,
       hideListFilters: true,
     });
 
-    expect(mainRow()).toBeInTheDocument();
     expect(within(mainRow()).queryByTestId('action-new')).not.toBeInTheDocument();
     expect(within(mainRow()).queryByTestId('list-filter-bar')).not.toBeInTheDocument();
-    expect(within(tabsRow()).getByTestId('filter-all')).toBeInTheDocument();
+    expect(within(tabGroup()).getByTestId('filter-all')).toBeInTheDocument();
   });
 });
 
 // ─── ETP-5509 acceptance: main actions stay in the first row ────────────────
 // Sort, refresh, import/export, print, link and the primary "New …" button
-// must NOT follow the tab group into row 2. Every test renders WITH
-// `subsetFilters` so both rows exist — otherwise "not in the tabs row" would be
-// vacuously true. `ListSortPopover` and `ListExportButton` are the real
+// must NOT follow the subset tabs when they move. Every test renders WITH
+// `subsetFilters` and the NARROW layout so the tabs are moved — otherwise "not in
+// the tab group" would be trivially true. `ListSortPopover` and `ListExportButton` are the real
 // components here (neither is mocked in this file).
 
 describe('ListView toolbar layout — main row holds every main action', () => {
+  beforeEach(() => useLayout(NARROW));
+
   const IMPORT_CONFIG = { enabled: true, spec: 'contacts', fields: [] };
 
-  // Asserts the control sits in row 1, not in row 2, and exists exactly once in
-  // the toolbar (moved, never duplicated across rows).
+  // Asserts the control sits in the actions cluster, never with the moved tabs.
   const expectOnlyInMainRow = (element) => {
-    expect(mainRow()).toContainElement(element);
-    expect(tabsRow()).not.toContainElement(element);
+    expect(actionsCluster()).toContainElement(element);
+    expect(tabGroup()).not.toContainElement(element);
   };
 
   it('holds the sort trigger', () => {
     renderListView({ subsetFilters: SUBSET_FILTERS });
 
     expectOnlyInMainRow(screen.getByTestId('list-sort-toggle'));
-    expect(within(tabsRow()).queryByTestId('list-sort-toggle')).not.toBeInTheDocument();
+    expect(within(tabGroup()).queryByTestId('list-sort-toggle')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('list-sort-toggle')).toHaveLength(1);
   });
 
@@ -513,7 +563,7 @@ describe('ListView toolbar layout — main row holds every main action', () => {
     // No dedicated test id: the button is identified by its `title`, which is
     // the `refresh` i18n key under the key-returning mock.
     expectOnlyInMainRow(screen.getByTitle('refresh'));
-    expect(within(tabsRow()).queryByTitle('refresh')).not.toBeInTheDocument();
+    expect(within(tabGroup()).queryByTitle('refresh')).not.toBeInTheDocument();
     expect(screen.getAllByTitle('refresh')).toHaveLength(1);
   });
 
@@ -522,7 +572,7 @@ describe('ListView toolbar layout — main row holds every main action', () => {
 
     for (const testId of ['ListView__importButton', 'ListView__exportButton']) {
       expectOnlyInMainRow(screen.getByTestId(testId));
-      expect(within(tabsRow()).queryByTestId(testId)).not.toBeInTheDocument();
+      expect(within(tabGroup()).queryByTestId(testId)).not.toBeInTheDocument();
       expect(screen.getAllByTestId(testId)).toHaveLength(1);
     }
   });
@@ -540,7 +590,7 @@ describe('ListView toolbar layout — main row holds every main action', () => {
 
     // No dedicated test id (generic `Button__620cbc`): located by role + name.
     expectOnlyInMainRow(within(mainRow()).getByRole('button', { name: 'print' }));
-    expect(within(tabsRow()).queryByRole('button', { name: 'print' })).not.toBeInTheDocument();
+    expect(within(tabGroup()).queryByRole('button', { name: 'print' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'print' })).toHaveLength(1);
   });
 
@@ -559,7 +609,7 @@ describe('ListView toolbar layout — main row holds every main action', () => {
     const linkButton = screen.getByTestId('Link2__620cbc').closest('button');
     expect(linkButton).not.toBeNull();
     expectOnlyInMainRow(linkButton);
-    expect(within(tabsRow()).queryByTestId('Link2__620cbc')).not.toBeInTheDocument();
+    expect(within(tabGroup()).queryByTestId('Link2__620cbc')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('Link2__620cbc')).toHaveLength(1);
   });
 
@@ -578,7 +628,7 @@ describe('ListView toolbar layout — main row holds every main action', () => {
 
     const more = screen.getByTestId('action-new-more');
     expectOnlyInMainRow(more);
-    expect(within(tabsRow()).queryByTestId('action-new-more')).not.toBeInTheDocument();
+    expect(within(tabGroup()).queryByTestId('action-new-more')).not.toBeInTheDocument();
     // Same split button as the primary action, not a control of its own.
     expect(more.parentElement).toBe(screen.getByTestId('action-new').parentElement);
   });
@@ -590,39 +640,164 @@ describe('ListView toolbar layout — main row holds every main action', () => {
     expect(within(mainRow()).getByTestId('action-new')).toBeInTheDocument();
   });
 
-  it('splits the main row into exactly two clusters: filters first, actions second', () => {
+  it('splits the main row into the tab group, the filters cluster and the actions cluster', () => {
     renderListView({
       subsetFilters: SUBSET_FILTERS,
       quickFilters: QUICK_FILTERS,
       import: IMPORT_CONFIG,
     });
 
-    const clusters = Array.from(mainRow().children);
-    expect(clusters).toHaveLength(2);
-    const [filtersCluster, actionsCluster] = clusters;
+    expect(Array.from(mainRow().children)).toEqual([tabGroup(), filtersCluster(), actionsCluster()]);
 
-    expect(within(filtersCluster).getByTestId('list-filter-bar')).toBeInTheDocument();
-    expect(within(filtersCluster).getByTestId('quick-filter-overdue')).toBeInTheDocument();
-    expect(within(filtersCluster).queryByTestId('action-new')).not.toBeInTheDocument();
+    expect(within(filtersCluster()).getByTestId('list-filter-bar')).toBeInTheDocument();
+    expect(within(filtersCluster()).getByTestId('quick-filter-overdue')).toBeInTheDocument();
+    expect(within(filtersCluster()).queryByTestId('action-new')).not.toBeInTheDocument();
 
-    expect(within(actionsCluster).getByTestId('action-new')).toBeInTheDocument();
-    expect(within(actionsCluster).queryByTestId('list-filter-bar')).not.toBeInTheDocument();
+    const actions = actionsCluster();
+    expect(within(actions).getByTestId('action-new')).toBeInTheDocument();
+    expect(within(actions).queryByTestId('list-filter-bar')).not.toBeInTheDocument();
     // Every main action shares the right-hand cluster with the create button.
-    expect(within(actionsCluster).getByTestId('list-sort-toggle')).toBeInTheDocument();
-    expect(within(actionsCluster).getByTitle('refresh')).toBeInTheDocument();
-    expect(within(actionsCluster).getByTestId('ListView__importButton')).toBeInTheDocument();
-    expect(within(actionsCluster).getByTestId('ListView__exportButton')).toBeInTheDocument();
-    expect(within(actionsCluster).getByRole('button', { name: 'print' })).toBeInTheDocument();
-    expect(within(actionsCluster).getByTestId('Link2__620cbc')).toBeInTheDocument();
+    expect(within(actions).getByTestId('list-sort-toggle')).toBeInTheDocument();
+    expect(within(actions).getByTitle('refresh')).toBeInTheDocument();
+    expect(within(actions).getByTestId('ListView__importButton')).toBeInTheDocument();
+    expect(within(actions).getByTestId('ListView__exportButton')).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: 'print' })).toBeInTheDocument();
+    expect(within(actions).getByTestId('Link2__620cbc')).toBeInTheDocument();
   });
 
-  it('keeps the two-cluster main row on a single-row toolbar', () => {
+  it('flows the filter bar controls into the filters cluster (flowInParent)', () => {
+    capturedFilterBarProps = null;
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+
+    expect(capturedFilterBarProps).toMatchObject({ flowInParent: true });
+  });
+
+  // The 16px minimum between filters and actions is the row's 8px gap plus the
+  // actions' 8px margin — the classes ARE the behaviour (jsdom has no layout).
+  it('keeps a minimum gap of a row gap plus a margin between the filters and the actions', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+
+    expect(mainRow()).toHaveClass('gap-2');
+    expect(actionsCluster()).toHaveClass('ml-2', 'shrink-0');
+  });
+
+  it('keeps two clusters on a toolbar without subset tabs', () => {
     renderListView();
 
-    expect(queryTabsRow()).not.toBeInTheDocument();
-    const clusters = Array.from(mainRow().children);
-    expect(clusters).toHaveLength(2);
-    expect(within(clusters[0]).getByTestId('list-filter-bar')).toBeInTheDocument();
-    expect(within(clusters[1]).getByTestId('action-new')).toBeInTheDocument();
+    expect(Array.from(mainRow().children)).toEqual([filtersCluster(), actionsCluster()]);
+    expect(within(filtersCluster()).getByTestId('list-filter-bar')).toBeInTheDocument();
+    expect(within(actionsCluster()).getByTestId('action-new')).toBeInTheDocument();
+  });
+});
+
+// ─── ETP-5509 review: one row when everything fits ──────────────────────────
+// UX contract: the toolbar is a single row (tabs + quick filters + actions);
+// the tabs move to a line of their own ONLY when they do not fit.
+
+describe('ListView toolbar layout — subset tabs share the row while they fit', () => {
+  it('opens the row with the tab group, before the filters, when it fits', () => {
+    useLayout(WIDE);
+    renderListView({ subsetFilters: SUBSET_FILTERS, quickFilters: QUICK_FILTERS });
+
+    expect(placement()).toBe('inline');
+    expect(mainRow().firstElementChild).toBe(tabGroup());
+    expect(tabGroup()).not.toHaveClass('order-last');
+    expect(screen.getByTestId('list-toolbar').children).toHaveLength(1);
+  });
+
+  it('counts the filters cluster controls in the fit', () => {
+    // tabs 300 + actions 400 fit a 1000 row; a 400px filter control does not.
+    const BASE_FIT = { 'list-toolbar-main-row': 1000, 'list-toolbar-tabs': 300, 'list-toolbar-actions': 400 };
+    useLayout(BASE_FIT);
+    const { unmount } = renderListView({ subsetFilters: SUBSET_FILTERS });
+    expect(placement()).toBe('inline');
+    unmount();
+
+    useLayout({ ...BASE_FIT, 'list-filter-bar': 400 });
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+    expect(placement()).toBe('wrapped');
+  });
+
+  it('defaults to inline when there is no layout to measure', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS, galleryRenderer });
+
+    expect(placement()).toBe('inline');
+    expect(tabGroup()).not.toHaveClass('order-last');
+  });
+
+  it('switches tabs while inline', async () => {
+    const user = userEvent.setup();
+    useLayout(WIDE);
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+
+    await user.click(within(tabGroup()).getByTestId('filter-open'));
+
+    expect(within(tabGroup()).getByTestId('filter-open')).toHaveClass('bg-card');
+    expect(criteriaOf(capturedEntityOptions.baseFilter)).toEqual([
+      { fieldName: 'status', operator: 'equals', value: 'DR' },
+    ]);
+  });
+});
+
+describe('ListView toolbar layout — the fit is re-measured on resize', () => {
+  let observers;
+
+  beforeEach(() => {
+    observers = [];
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback) { this.callback = callback; observers.push(this); }
+      observe() {}
+      disconnect() {}
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Fires every live observer and waits for the frame the hook defers to.
+  const resizeTo = async (widths) => {
+    useLayout(widths);
+    await act(async () => {
+      observers.forEach((o) => o.callback([]));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+  };
+
+  it('moves the tabs when the toolbar narrows and brings them back when it widens', async () => {
+    useLayout(WIDE);
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+    expect(placement()).toBe('inline');
+
+    await resizeTo(NARROW);
+    expect(placement()).toBe('wrapped');
+    expect(tabGroup()).toHaveClass('order-last');
+
+    await resizeTo(WIDE);
+    expect(placement()).toBe('inline');
+  });
+
+  it('moves the same element, so a focused tab keeps its focus', async () => {
+    useLayout(WIDE);
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+    const tab = screen.getByTestId('filter-open');
+    tab.focus();
+
+    await resizeTo(NARROW);
+
+    expect(screen.getByTestId('filter-open')).toBe(tab);
+    expect(tab).toHaveFocus();
+  });
+
+  it('does not bring wrapped tabs back while they fit only within the hysteresis margin', async () => {
+    // tabs 300 + actions 400 = 700 required: 704 is enough to stay inline but
+    // not enough to come back from the second line (needs 700 + 8).
+    const EDGE = { ...NARROW, 'list-toolbar-main-row': 704 };
+    useLayout(NARROW);
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+    expect(placement()).toBe('wrapped');
+
+    await resizeTo(EDGE);
+    expect(placement()).toBe('wrapped');
   });
 });

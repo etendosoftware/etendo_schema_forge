@@ -2,63 +2,97 @@
 
 Complete reference for the filter stack rendered above every list view (`ListView` component in `tools/app-shell/src/components/contract-ui/ListView.jsx`).
 
-The toolbar can show up to four filter surfaces, laid out in up to two rows (ETP-5509):
+The toolbar can show up to four filter surfaces. It is **one row**, in the same order as before
+ETP-5509; the subset tabs move to a line of their own only when the row does not fit:
 
 ```
-row 1  ┌──────┐  ┌──────┐ ┌──────┐  ┌──┐                 ┌──┐ ┌──┐ ┌──┐ ┌─────────┐
-       │Quick │  │Status│ │Date  │  │▽ │                 │⇅ │ │⟳ │ │… │ │ + New … │
-       │(pill)│  │      │ │range │  │  │                 └──┘ └──┘ └──┘ └─────────┘
-       └──────┘  └──────┘ └──────┘  └──┘                 main actions (sort, refresh,
-          ^          ^        ^       ^                  import/export, print, create)
-          2. Quick   3. Document-type filters   4. Advanced
-          filters    (auto-added by column type)   filter popover
+       ┌──────────────────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──┐ ┌───────┐          ┌──┐ ┌──┐ ┌──┐ ┌─────────┐
+       │ Subset | Subset  │ │Quick │ │Status│ │Date  │ │▽ │ │ ▤ | ▦ │  ≥ 16px  │⇅ │ │⟳ │ │… │ │ + New … │
+       │ (segmented)      │ │(pill)│ │      │ │range │ │  │ │       │          └──┘ └──┘ └──┘ └─────────┘
+       └──────────────────┘ └──────┘ └──────┘ └──────┘ └──┘ └───────┘          main actions (sort, refresh,
+          ^                    ^         ^        ^      ^      ^              import/export, print, create)
+          1. Subset filters    2. Quick  3. Document-type    4. Advanced  list / gallery
+          (the "tab group")    filters   filters (auto-added  filter       view toggle
+                                         by column type)      popover
+──────────────────────────────────────────────────────────────────────────────────────────────────  separator
 
-row 2  ┌──────────────────┐  ┌───────┐
-       │ Subset | Subset  │  │ ▤ | ▦ │      only when the window has a tab group
-       │ (segmented)      │  │       │
-       └──────────────────┘  └───────┘
-          ^                     ^
-          1. Subset filters     list / gallery view toggle
-───────────────────────────────────────────────────────────────────────  separator
+when the whole row does not fit, the subset tabs alone move below it:
+
+line 1  [Quick] [Status] [Date] [▽] [▤|▦]                          [⇅] [⟳] [Print] [+ New …]
+line 2  [ Subset | Subset | Subset ]
+──────────────────────────────────────────────────────────────────────────────────────────────────  separator
 ```
 
 All four combine with AND at query time. Empty / default selections contribute nothing — a totally unfiltered list shows when every surface is at its default state.
 
 ## Toolbar layout (ETP-5509)
 
-The idle list bar is a column of up to two rows, closed by a separator line.
+The idle list bar is a single flex-wrap row (`list-toolbar-main-row`), closed by a separator line.
+Its children, in this order:
 
-- **Row 1** — quick filters, a custom table's `ToolbarQuickFilter`, the status / date-range
-  filters and the "Filtros" button on the left; the main actions (link, sort, refresh,
-  import/export, print, "New …") on the right. The link button (`list-share-link`) copies the
-  current page URL, query string included (ETP-5593; it had no handler before).
-- **Row 2 — the tab group** — the subset-filter segmented control and the list/gallery view
-  toggle. It is rendered **only** when the window has one of them (`subsetFilters` with at least
-  one entry, or a `galleryRenderer`); a window with neither (e.g. Warehouse) keeps a single-row
-  toolbar and no empty band. *Provisional:* treating the view toggle as part of the tab group
-  (Product, whose second row holds only the toggle) is an interpretation of the ticket's "tab
-  group", pending product confirmation.
-- **Separator** — a `border-b` in `--border-subtle` on the toolbar container, spanning the full
-  width of the card. Every window that keeps the native bar gets it by construction. A window
-  that drops the bar with `hideListBar` draws its own toolbar and therefore its own line
-  (financial-account). *Provisional:* in a standard window this line is drawn in addition to the
-  existing line under the column headers; keeping both is pending product confirmation.
+- **The tab group (`list-toolbar-tabs`)** — the subset-filter segmented control. It opens the row
+  **while the whole row fits**; when it does not, the same element moves — alone, by CSS
+  (`order-last basis-full`), never remounted, so a focused tab keeps its focus — to a line of its
+  own below. Only windows with `subsetFilters` have one; a window without subset tabs (Warehouse,
+  Payments In, Product) is always a single row.
+- **Filters cluster (`list-toolbar-filters`)** — the quick filters, a custom table's
+  `ToolbarQuickFilter`, the status / date-range filters, the "Filtros" button and, last, the
+  list/gallery view toggle (Product). This is the pre-ETP-5509 order: the toggle is not part of
+  the tab group and never moves.
+- **Actions cluster (`list-toolbar-actions`)** — the main actions (link, sort, refresh,
+  import/export, print, "New …"). The link button (`list-share-link`) copies the current page
+  URL, query string included (ETP-5593; it had no handler before).
+- **Separator** — a `border-b` in `--border-subtle` on the toolbar container (`list-toolbar`),
+  spanning the full width of the card. Every window that keeps the native bar gets it by
+  construction. A window that drops the bar with `hideListBar` draws its own toolbar and therefore
+  its own line (financial-account). *Provisional:* in a standard window this line is drawn in
+  addition to the existing line under the column headers; keeping both is pending product
+  confirmation.
 
-Why two rows: the tab group used to open row 1. At the minimum supported viewport (1280×720 with
-the navigation rail expanded) it competed for width with the filters and the actions. The tabs
-sit on their own row at **every** width — that is a product decision, not a breakpoint. If UX
-later wants them inline above some width, the change is local to the idle bar in `ListView.jsx`:
-render `<ListToolbarTabs>` at the start of row 1's left cluster above the breakpoint and gate
-row 2 on the opposite condition. `ListToolbarTabs` returns the controls without a row wrapper
-precisely so that either placement can host it.
+**How the fit is decided** (`useListToolbarTabsFit.js`, next to `ListView.jsx`). It is a
+measurement, never a breakpoint: the subset tabs stay on the first line when
 
-Stable test ids: `list-toolbar` (container, carries the separator), `list-toolbar-main-row`
-(row 1), `list-toolbar-tabs-row` (row 2, absent when there is no tab group). The controls keep
+```
+tabs + gap + Σ(filter items) + their gaps + min cluster gap + actions  ≤  main row width
+```
+
+Every term is a **natural (max-content) width**: each element is briefly sized to `max-content`
+and read, then its inline style is restored before the browser paints. So a filter item that grows
+(`flex-1`, `w-full`) or wraps its own content (`flex-wrap`, e.g. the chart of accounts toolbar
+slot) is counted at what it needs on one line, not at its current box, and the result does not
+depend on where the tabs are or on whether the filters are wrapping — wrapped tabs always come
+back once there is room. Filter items are the flex items of the cluster: an element rendered with
+`display: contents` (`ListFilterBar` with `flowInParent`) is looked through to its children.
+A `ResizeObserver` on the row, the clusters, the tabs and every filter item re-runs the check —
+viewport resize, rail collapse/expand, a longer filter label once a status or date range is
+applied — and a `MutationObserver` catches controls that appear later (the status filter once its
+column metadata loads). Coming back to the first line requires 8px of slack
+(`LIST_TOOLBAR_TABS_HYSTERESIS_PX`), so a width change caused by the move itself cannot make the
+tabs oscillate. Before the first measurement, and wherever there is no layout (jsdom, a hidden
+tab), the tabs stay inline. Measured live at 1280×720 with the rail expanded (es_ES): Purchase
+Invoice and Contacts fit in one row; Sales Invoice — which also has Print — moves its tabs; all of
+them fit in one row at 1920×1080.
+
+**Gap and what yields.** The row's `gap-x-2` plus the actions cluster's `ml-2` keep a hard 16px
+minimum between the filters and the actions at every width. The actions cluster never shrinks.
+When space runs out the filters yield: first the subset tabs move to their own line, then the
+filter controls wrap onto extra lines inside the cluster (`ListFilterBar` renders with
+`flowInParent`, so its status / date / "Filtros" buttons are items of the wrapping cluster instead
+of a nowrap row of their own). Only when the widest single filter control and the actions cannot
+share a line — around 1000px of viewport with the rail expanded, depending on the window — does
+the actions cluster drop to a line below the filters. The actions may leave the first line then,
+but the two clusters never touch or overlap.
+
+Stable test ids: `list-toolbar` (container, carries the separator), `list-toolbar-main-row` (the
+flex-wrap row; carries `data-tabs-placement="inline" | "wrapped"` when the window has subset
+tabs), `list-toolbar-tabs`, `list-toolbar-filters`, `list-toolbar-actions` (its children). There
+is no separate second-row element: the moved tabs are still inside the main row. The controls keep
 theirs: `filter-<key>` (subset entries — the entry's `key`, else its `label` lowercased),
-`quick-filter-<key>`, `view-toggle`. Row 1 also holds `filter-status`, `filter-type`,
-`filter-date` and `filter-advanced`, which share the `filter-` prefix with the subset entries, so
-scope prefix queries to a row. The Playwright guard for the layout is described in
-`docs/e2e-testing-guide.md` → "Layout reference: list toolbar at 1280×720 (ETP-5509)".
+`quick-filter-<key>`, `view-toggle`. The filters cluster also holds `filter-status`,
+`filter-type`, `filter-date` and `filter-advanced`, which share the `filter-` prefix with the
+subset entries, so scope prefix queries to `list-toolbar-tabs` or `list-toolbar-filters`. The
+Playwright guard for the layout is described in `docs/e2e-testing-guide.md` → "Layout reference:
+list toolbar at 1280×720 (ETP-5509)".
 
 Out of scope of the shared layout: only what `ListView` itself renders is moved. A window that
 replaces the bar through `hideListBar` (financial-account's `AccountsToolbar`, which has no tab
@@ -72,8 +106,8 @@ Radio-style segmented control. **Always one active**, mutually exclusive, applie
 
 - Source: `decisions.json → window.subsetFilters` (propagated by `resolve-curated.js`, emitted by `generate-frontend.js`).
 - Visual: a single rounded group of connected buttons, separated by thin dividers.
-- Placement: the toolbar's second row, below the quick filters and actions — see
-  [Toolbar layout](#toolbar-layout-etp-5509).
+- Placement: the start of the toolbar row, before the quick filters; it moves to a line of its
+  own only when the toolbar does not fit — see [Toolbar layout](#toolbar-layout-etp-5509).
 - Behavior: clicking a different entry switches selection. Clicking the currently active entry does nothing.
 - When to use: "which universe am I looking at" — e.g. *All contacts* / *Customers* / *Vendors*, *Open* / *Closed* documents.
 - Full schema + examples: [`decisions-reference.md → Subset Filters`](decisions-reference.md).

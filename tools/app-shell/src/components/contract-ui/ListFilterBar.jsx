@@ -38,6 +38,10 @@ export function ListFilterBar({
   onDeletePreset = null,
   labelOverrides = null,
   hideStatusFilter = false,
+  // ETP-5509 — render the controls as items of the PARENT flex container (`display: contents`)
+  // instead of a nowrap row of their own, so a wrapping parent (the list toolbar's filters
+  // cluster) can move them onto a new line one by one when space runs out.
+  flowInParent = false,
 }) {
   const ui = useUI();
   const dictionary = useLocale();
@@ -316,7 +320,7 @@ export function ListFilterBar({
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className={flowInParent ? 'contents' : 'flex items-center gap-2'}>
       {statusCol && !hideStatusFilter && (
         <Popover
           open={statusMenuOpen}

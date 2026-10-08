@@ -1361,21 +1361,29 @@ type badge reads them), so no `sourceKeys` override is needed.
 NIF already exists as **Saltada**; the import only ever creates. Changing the role of an existing
 contact through a re-import is therefore not possible — use the Billing preferences of the
 contact instead.
-## List toolbar: tab group on its own row — ETP-5509
+## List toolbar: tab group wraps only when it does not fit — ETP-5509
 
-The list toolbar is laid out by the shared `ListView` in up to two rows: quick filters, "Filtros"
-and the main actions (sort, refresh, import, export, "New …") on the first, and the **Todos / Personas / Empresas** subset tabs on a second row
-below it, followed by a gray separator line between toolbar and body. Before ETP-5509 the tab
-group opened the first row and, at 1280×720 with the navigation rail expanded, competed for width
-with the filters and the actions. The tabs are on the second row at every width, and they behave
-as before: choosing another entry filters the grid and highlights the selection.
+The list toolbar is laid out by the shared `ListView` as **one row**: the **Todos / Personas / Empresas** subset
+tabs, quick filters and "Filtros" on the left and the main actions (sort, refresh, import, export, "New …") on the right, followed by a gray
+separator line between toolbar and body. The tabs move — alone, the same element, so a focused tab keeps focus — to a line of their own
+below only when
+the whole row does not fit at the current width (a measurement, not a breakpoint), so no grid row
+is lost when there is room. The filters and the actions always keep at least 16px between them.
+At 1280×720 with the rail expanded it fits in one row (measured in es_ES). The tabs behave the same in either row: choosing another entry filters the grid and
+highlights the selection.
 
-Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
-(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+ETP-5509 review: the first iteration put the tabs on the second row at every width, which cost a
+visible grid row even where everything fit; UX asked for a single row that wraps only when needed.
 
-Manual verification: at 1280×720 with the rail expanded, open `/contacts` and confirm "Filtros" sits on the
-first row with sort, refresh, import, export and "New contact" on the right, untruncated; the
-three tabs sit on the second row; switching tab still filters the grid.
+Nothing changed in this window's own files or in `decisions.json` — the layout, the fit check
+(`useListToolbarTabsFit`), the test ids (`list-toolbar-tabs`, `data-tabs-placement`) and the
+reasoning live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: with the rail expanded, open `/contacts` at 1920×1080 and confirm one toolbar
+row (tabs, filters, "Filtros", then the actions on the right, untruncated). Narrow the window
+until it no longer fits and confirm only the tabs drop to a second row, with no gap collapse
+between "Filtros" and the actions; widen it again and confirm they come back. Switching tab
+filters the grid from either row.
 
 ## Financiero: uniform widths and inline SII/TicketBAI switches — ETP-5519
 

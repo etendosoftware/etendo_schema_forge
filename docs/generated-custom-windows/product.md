@@ -1446,19 +1446,24 @@ The keyed coded/FK values are the point where parts 2 and 3 meet: an English tem
 `Unit`, `Item` and `Spain`, and part 2 is what makes those resolve for a Spanish user who receives
 that file.
 
-## List toolbar: view toggle on its own row — ETP-5509
+## List toolbar: one row, view toggle after "Filtros" — ETP-5509
 
-The list toolbar is laid out by the shared `ListView` in up to two rows, followed by a gray
-separator line between toolbar and body. This window declares no subset tabs; its tab group is the
-**list / gallery view toggle**, which used to sit on the first row right after "Filtros" and now
-sits alone on the second row. The first row keeps "Filtros" on the left and sort, refresh, import,
-export and "New …" on the right. The toggle is on the second row at every width and behaves as
-before. This placement is provisional: counting the view toggle as the ticket's "tab group" is an
-interpretation, pending product confirmation.
+The list toolbar is laid out by the shared `ListView` as **one row**, in the same order as before
+ETP-5509: "Filtros" and then the **list / gallery view toggle** on the left, and sort, refresh,
+import, export and "New …" on the right, followed by a gray separator line between toolbar and
+body. This window declares no subset tabs, so it has nothing that moves to a second line: the
+toolbar is a single row at 1280×720 and 1920×1080, and the filters and the actions always keep at
+least 16px between them (far below 1280px the filter controls wrap first, and only then do the
+actions drop below them).
 
-Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
-(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+ETP-5509 review: the first iterations put the toggle on a second row (always, then whenever it
+did not fit) and later at the start of the row; UX asked for the toolbar to look as before, so
+the toggle is no longer treated as part of the tab group and keeps its place after "Filtros".
 
-Manual verification: at 1280×720 with the rail expanded, open `/product` and confirm "Filtros"
-sits on the first row with the main actions on the right, untruncated; the list/gallery toggle
-sits on the second row; switching view still swaps grid and gallery.
+Nothing changed in this window's own files or in `decisions.json` — the layout and the reasoning
+live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: with the rail expanded, open `/product` at 1280×720 and at 1920×1080 and
+confirm one toolbar row — "Filtros", then the view toggle, then the main actions on the right,
+untruncated — and no empty second row; switching view still swaps grid and gallery.
+
