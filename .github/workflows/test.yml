@@ -58,3 +58,30 @@ jobs:
             test-results/*.xml
           retention-days: 7
           if-no-files-found: warn
+
+  # Sonar analysis fed with the coverage computed by the test job.
+  sonar:
+    name: Sonar Build
+    needs: test
+    # PRs always report the required check; pushes scan only with real coverage.
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || needs.test.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # Never feed Sonar a partial LCOV; extracts to coverage/ and test-results/.
+      - name: Download coverage
+        if: needs.test.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-coverage
+
+      - uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_SCANNER_OPTS: "-Xmx4096m"
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

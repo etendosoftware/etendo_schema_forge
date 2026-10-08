@@ -644,7 +644,7 @@ clasifica** piezas existentes, no crea infraestructura nueva:
 | `deploy-staging.yml` (SPA a S3+CloudFront; ya conoce production/staging/experimental) | Base del deploy automático a entornos |
 | `offline-regen-check.yml` | El check de drift — **🔴 #3 ya implementado** |
 | `pipeline-validate.yml` (en shadow) | El patrón shadow→enforce ya validado en casa |
-| `window-doc-freshness.yml`, `data-testid-check.yml`, `ratchet-guards.yml`, `sonar-scan.yml`, `test.yml` | Candidatos a 🟡 (advisory) — solo hay que clasificarlos |
+| `window-doc-freshness.yml`, `data-testid-check.yml`, `ratchet-guards.yml`, `test.yml` (incluye el job `Sonar Build`, antes `sonar-scan.yml`) | Candidatos a 🟡 (advisory) — solo hay que clasificarlos |
 
 ### Semana 0 — Arranque (sin código)
 
