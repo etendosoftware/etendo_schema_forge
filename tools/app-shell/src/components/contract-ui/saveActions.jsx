@@ -11,7 +11,8 @@
  * Behaviour-preserving move — the only functional change is the `saveGate` prop,
  * which every primary button now honours.
  */
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { notifySaveGateAttempt } from './saveGateAttempts.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Check, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
@@ -201,7 +202,13 @@ const SECONDARY_SAVE_CLS = 'bg-card border-[hsl(var(--border-control))] text-[hs
  */
 function GateTooltip({ title, children }) {
   if (!title) return children;
-  return <span title={title} className="inline-flex">{children}</span>;
+  // ETP-5513 — a blocked button is disabled, so the user can never click it; hovering,
+  // focusing or pressing it is the "show me what is missing" gesture. Report it so a
+  // required field hidden behind "Show more details" is revealed (saveGateAttempts.js).
+  // The wrapper (not the disabled button) listens: disabled controls swallow events.
+  const missing = React.isValidElement(children) ? children.props['data-missing-required'] : undefined;
+  const report = missing ? () => notifySaveGateAttempt(missing) : undefined;
+  return <span title={title} className="inline-flex" onPointerEnter={report} onPointerDown={report} onFocusCapture={report}>{children}</span>;
 }
 
 /**

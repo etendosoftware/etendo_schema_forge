@@ -2333,3 +2333,11 @@ purchase-invoice (the only OCR doc type). `PdfViewer`'s new props (`zoom`, `hide
 **Verify:** at 1280x720, open a new purchase invoice with the rail expanded and collapsed:
 3 columns, labels on one line, 6 fields + *Mostrar más datos*; clicking it reveals the rest and
 changes to *Mostrar menos datos*.
+
+**Required fields in the collapsed block (ETP-5513 QA).** *Condiciones de pago*, *Moneda* and
+*Tarifa* are required but sit in the collapsed block. When the vendor does not default them,
+Guardar/Confirmar are disabled and their tooltip names those fields. Hovering, focusing or
+pressing the disabled button opens the block (and keeps it open until the user collapses it), so
+the missing fields are on screen. The block does not open on load, so a new invoice still shows
+2 rows. **Verify:** at 1280x720 on a new invoice leave those fields empty, hover *Guardar* and
+check the block opens with them visible and *Mostrar menos datos* shown.

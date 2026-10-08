@@ -40,6 +40,7 @@ vi.mock('@/lib/selectorCatalog.js', () => ({
 }));
 
 import { EntityForm } from '../EntityForm.jsx';
+import { notifySaveGateAttempt } from '../saveGateAttempts.js';
 
 /**
  * Returns the top-level grid container that renders the fields.
@@ -409,6 +410,61 @@ describe('EntityForm — measured horizontal grid + initialRows (ETP-5513)', () 
       expect(screen.queryByTestId('field-k7')).toBeNull();
       const lastCall = registerFields.mock.calls.filter(([f]) => f).at(-1);
       expect(lastCall[0].map(f => f.key)).toEqual(['k0', 'k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8']);
+    });
+
+    // ETP-5513 QA BUG-1 — Save/Confirm are DISABLED while a required field is empty, so no
+    // error is ever set. Hover/focus/press on the blocked button (reported through
+    // saveGateAttempts) must reveal a required field that sits in the collapsed block.
+    describe('a blocked Save/Confirm that names a hidden required field', () => {
+      const required = () => mk(9, { required: true });
+
+      it('stays collapsed on load although hidden required fields are empty', () => {
+        width = 700;
+        renderForm({ fields: required(), initialRows: 2 });
+        expect(screen.queryByTestId('field-k8')).toBeNull();
+        expect(screen.getByTestId('form-show-more-toggle')).toHaveAttribute('aria-expanded', 'false');
+      });
+
+      it('reveals the hidden field and stays open when the attempt names it', () => {
+        width = 700;
+        renderForm({ fields: required(), initialRows: 2 });
+        act(() => notifySaveGateAttempt('k7,k8'));
+        expect(screen.getByTestId('field-k8')).toBeInTheDocument();
+        expect(screen.getByTestId('form-show-more-toggle')).toHaveAttribute('aria-expanded', 'true');
+        // Same stay-open semantics as an error: the user collapses it, nothing else does.
+        fireEvent.click(screen.getByTestId('form-show-more-toggle'));
+        expect(screen.queryByTestId('field-k8')).toBeNull();
+      });
+
+      it('ignores an attempt that only names visible fields', () => {
+        width = 700;
+        renderForm({ fields: required(), initialRows: 2 });
+        act(() => notifySaveGateAttempt('k0,k1'));
+        expect(screen.queryByTestId('field-k8')).toBeNull();
+        expect(screen.getByTestId('form-show-more-toggle')).toHaveAttribute('aria-expanded', 'false');
+      });
+
+      it('does nothing on a form with no collapsed block', () => {
+        width = 700;
+        renderForm({ fields: mk(4, { required: true }), initialRows: 2 });
+        act(() => notifySaveGateAttempt('k3'));
+        expect(screen.queryByTestId('form-show-more-toggle')).toBeNull();
+      });
+
+      it('marks the toggle aria-disabled (and inert) while an error holds the block open', () => {
+        width = 700;
+        renderForm({ fields: required(), initialRows: 2, fieldErrors: { k8: 'fieldRequired' } });
+        const toggle = screen.getByTestId('form-show-more-toggle');
+        expect(toggle).toHaveAttribute('aria-disabled', 'true');
+        fireEvent.click(toggle);
+        expect(screen.getByTestId('field-k8')).toBeInTheDocument();
+      });
+
+      it('keeps the toggle enabled when nothing locks the block', () => {
+        width = 700;
+        renderForm({ fields: required(), initialRows: 2 });
+        expect(screen.getByTestId('form-show-more-toggle')).not.toHaveAttribute('aria-disabled');
+      });
     });
 
     describe('read-only forms keep the declared order', () => {

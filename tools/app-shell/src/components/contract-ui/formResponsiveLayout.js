@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useElementWidth } from '@/hooks/useElementWidth.js';
+import { subscribeSaveGateAttempts } from './saveGateAttempts.js';
 
 /**
  * Responsive layout for the horizontal (header) EntityForm grid — ETP-5513.
@@ -109,6 +110,13 @@ export function useMeasuredFormColumns(enabled) {
  * shows the user which field is missing — and it STAYS open after the error clears
  * (fixing the field clears its error on change; collapsing then would hide the
  * field the user is typing in). Only the user collapses it again.
+ *
+ * Save/Confirm are DISABLED by the required-field gate while a required field is empty,
+ * so the user can never click them and no error is ever set. The block therefore also
+ * opens (and latches) when the user hovers, focuses or presses a blocked Save/Confirm
+ * whose missing fields include a hidden one (`saveGateAttempts.js`). It deliberately
+ * does NOT open on load or on an empty-required state alone: a fresh New form always has
+ * empty required fields, which would defeat the 2-row collapse.
  */
 export function useInitialRowsCollapse({ fields, cols, initialRows, fieldErrors, isReadOnly }) {
   const [userExpanded, setUserExpanded] = useState(false);
@@ -124,6 +132,16 @@ export function useInitialRowsCollapse({ fields, cols, initialRows, fieldErrors,
   useEffect(() => {
     if (hiddenHasError) setUserExpanded(true);
   }, [hiddenHasError]);
+  const hiddenKeys = useMemo(
+    () => new Set(partition.ordered.slice(partition.visible.length).map(f => f.key)),
+    [partition]
+  );
+  useEffect(() => {
+    if (hiddenKeys.size === 0) return undefined;
+    return subscribeSaveGateAttempts((keys) => {
+      if (keys.some(k => hiddenKeys.has(k))) setUserExpanded(true);
+    });
+  }, [hiddenKeys]);
   const collapsible = partition.hiddenCount > 0;
   // `hiddenHasError` also counts here so the block is open on the very render that
   // reports the error, before the latch effect commits.
@@ -132,6 +150,8 @@ export function useInitialRowsCollapse({ fields, cols, initialRows, fieldErrors,
   return {
     collapsible,
     expanded,
+    // An error holds the block open: the toggle cannot collapse it meanwhile.
+    locked: collapsible && hiddenHasError,
     // Expanded or not, `ordered` keeps the same order so the visible fields never move.
     fields: expanded ? partition.ordered : partition.visible,
     toggle,

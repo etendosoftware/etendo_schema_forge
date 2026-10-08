@@ -793,7 +793,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
   // Cells actually placed in the grid: all of them, or the first rows + toggle.
   const gridCells = collapse.collapsible ? collapse.fields : fieldsToRender;
   const showMoreToggle = collapse.collapsible
-    ? <FormShowMoreToggle expanded={collapse.expanded} onToggle={collapse.toggle} data-testid="FormShowMoreToggle__a8d626" />
+    ? <FormShowMoreToggle expanded={collapse.expanded} onToggle={collapse.toggle} locked={collapse.locked} data-testid="FormShowMoreToggle__a8d626" />
     : null;
 
   // Shared by both the editable DocumentType selector (renderSelectorField below) and the
