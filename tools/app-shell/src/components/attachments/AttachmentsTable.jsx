@@ -187,7 +187,11 @@ export default function AttachmentsTable({
         )}
 
         {hasItems && items.map((item) => {
-          const uploadedByName = item.uploadedBy?.name
+          // ETP-5526 (CP-17) — `name` is the AD username (it carries the
+          // `+client` login suffixes), so the e-mail is preferred when the
+          // backend provides it; `name` stays as the fallback.
+          const uploadedByName = item.uploadedBy?.email
+            ?? item.uploadedBy?.name
             ?? item.createdBy?.name
             ?? item['createdBy$_identifier']
             ?? null;

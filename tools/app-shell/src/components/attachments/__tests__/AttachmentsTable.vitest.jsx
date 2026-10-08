@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/attachments/AttachmentsTable.jsx
+//
 // ETP-5030 — selected-row shading for the attachments table.
 //
 // GROUP A (Tailwind utility on the row element). AttachmentsTable owns its
@@ -108,5 +110,48 @@ describe('AttachmentsTable — ETP-5030 selected-row shading', () => {
     fireEvent.click(headerCheckbox);
     expect(backgroundUtilities(rowOf('a1'))).toEqual([]);
     expect(backgroundUtilities(rowOf('a2'))).toEqual([]);
+  });
+});
+
+// ETP-5526 (CP-17) — the "Subido por" column showed the AD username, which in a
+// multi-client instance is a technical login such as
+// `isaias.battaglia+70@smfconsulting.es+lapaulina`. The backend now sends the
+// user's e-mail alongside `name`, and the column must prefer it.
+//
+// Column order in a row: checkbox, name, size, uploadedAt, updatedAt,
+// uploadedBy, actions.
+const UPLOADED_BY_CELL_INDEX = 5;
+const uploaderTextOf = (id) =>
+  rowOf(id).querySelectorAll('td')[UPLOADED_BY_CELL_INDEX].textContent;
+
+describe('AttachmentsTable — ETP-5526 uploader column', () => {
+  it('shows the uploader e-mail instead of the technical AD username', () => {
+    renderTable({
+      items: [{
+        id: 'a1',
+        name: 'contract.pdf',
+        uploadedBy: {
+          id: 'U1',
+          name: 'isaias.battaglia+70@smfconsulting.es+lapaulina',
+          email: 'isaias.battaglia@smfconsulting.es',
+        },
+      }],
+    });
+
+    expect(uploaderTextOf('a1')).toBe('isaias.battaglia@smfconsulting.es');
+  });
+
+  it('falls back to the AD name when the user has no e-mail on record', () => {
+    renderTable({
+      items: [{ id: 'a1', name: 'contract.pdf', uploadedBy: { id: 'U1', name: 'Openbravo' } }],
+    });
+
+    expect(uploaderTextOf('a1')).toBe('Openbravo');
+  });
+
+  it('falls back to the unknown-user label when there is no uploader at all', () => {
+    renderTable({ items: [{ id: 'a1', name: 'contract.pdf' }] });
+
+    expect(uploaderTextOf('a1')).toBe('attachmentsUnknownUser');
   });
 });
