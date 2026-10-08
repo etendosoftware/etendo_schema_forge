@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // Vitest tests for FmListPage.jsx's ETP-5187 row hover Edit/Delete wiring
 // (FmRowActions.jsx): only rendered for draft-status rows, Edit selects the
 // declaration the same way a row click would, and the delete confirmation
@@ -52,7 +53,6 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: ({ title, message }) =>
     React.createElement('div', { className: 'fm-empty-state' }, title || message || 'empty'),

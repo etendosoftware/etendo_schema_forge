@@ -8,6 +8,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
+// ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
+vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
 vi.mock('lucide-react', () => ({
   TrendingUp: () => null,
   TrendingDown: () => null,
@@ -1101,6 +1103,38 @@ describe('FmBoxes303 — rectificativa section', () => {
     const select = container.querySelector('select');
     fireEvent.change(select, { target: { value: 'R' } });
     expect(onIdentChange).toHaveBeenCalledWith('motivo_rectificacion', 'R');
+  });
+
+  // ETP-5584 (review W5) — the Radix Select stays controlled ('' when unset, never undefined) and
+  // an OPTIONAL field can be cleared again through its "Seleccionar…" item (the `__empty__`
+  // sentinel, mapped back to ''), like the native select allowed. A REQUIRED field offers no
+  // such item.
+  it('clears an optional select (motivo_rectificacion) back to \'\' through the placeholder item', () => {
+    const onIdentChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['rectificativa']}
+        identification={{ rectificativa: true, motivo_rectificacion: 'R' }}
+        onIdentChange={onIdentChange}
+      />
+    );
+    const select = container.querySelector('select');
+    expect(select.value).toBe('R');
+    const emptyItem = Array.from(select.querySelectorAll('option')).find(o => o.value === '__empty__');
+    expect(emptyItem.textContent).toBe('fm.ident.decl.placeholder');
+    fireEvent.change(select, { target: { value: '__empty__' } });
+    expect(onIdentChange).toHaveBeenCalledWith('motivo_rectificacion', '');
+  });
+
+  it('keeps an unset select controlled (value \'\') and offers no clear item on a required field', () => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{}} sectionIds={['identificacion']} identification={{}} />
+    );
+    const select = container.querySelector('[data-field-id="tipo_declaracion"]');
+    expect(select.value).toBe('');
+    expect(Array.from(select.querySelectorAll('option')).some(o => o.value === '__empty__')).toBe(false);
   });
 
   it('renders section title key', () => {
@@ -2330,6 +2364,9 @@ describe('FmBoxes303 — tipo_declaracion disabled options (ETP-5597)', () => {
     for (const v of ['C', 'D', 'V', 'X']) {
       expect(optionByValue(select, v).disabled).toBe(true);
       expect(optionByValue(select, v).title).toBe('fm.ident.decl.disabled_positive_result');
+      // ETP-5584 — the core SelectItem's `data-[disabled]:pointer-events-none` would swallow the
+      // hover that shows that title; the item re-enables pointer events (jsdom cannot hover).
+      expect(optionByValue(select, v).className).toContain('data-[disabled]:pointer-events-auto');
     }
     for (const v of ['I', 'U', 'N']) expect(optionByValue(select, v).disabled).toBe(false);
     expect(container.querySelector('[data-testid="fm-aeat-ident-tipo_declaracion-error"]')).toBeNull();
