@@ -4,6 +4,7 @@ import { useUI } from '@/i18n';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { Button } from '@/components/ui/button';
+import RequiredMark from '@/components/ui/required-mark.jsx';
 import { InfoBanner } from '@/components/InfoBanner';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { buildSearchUrl, readSearchRows } from './ocrQuery.js';
@@ -356,6 +357,7 @@ function SelectorDialog({
   ui,
   createLabel,
   onCreateNew,
+  placeholder,
 }) {
   const [query, setQuery] = useState(initialQuery || '');
   const [items, setItems] = useState([]);
@@ -443,7 +445,7 @@ function SelectorDialog({
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder={ui('ocrProductSearchPlaceholder')}
+              placeholder={placeholder || ui('ocrProductSearchPlaceholder')}
               className="w-full border border-border-control rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-focus-ring"
             />
           </div>
@@ -618,7 +620,7 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
         </div>
         <div className="px-6 py-4 space-y-3">
           <div>
-            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateName')}</label>
+            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateName')}<RequiredMark data-testid="RequiredMark__b3ae11" /></label>
             <input
               type="text"
               value={name}
@@ -627,7 +629,7 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateSearchKey')}</label>
+            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateSearchKey')}<RequiredMark data-testid="RequiredMark__b3ae11" /></label>
             <input
               type="text"
               value={searchKey}
@@ -636,7 +638,7 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateUom')}</label>
+            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateUom')}<RequiredMark data-testid="RequiredMark__b3ae11" /></label>
             <button
               type="button"
               onClick={() => setPicker('uom')}
@@ -652,7 +654,7 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
             </button>
           </div>
           <div>
-            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateTaxCategory')}</label>
+            <label className="block text-xs font-medium text-foreground mb-1">{ui('ocrProductCreateTaxCategory')}<RequiredMark data-testid="RequiredMark__b3ae11" /></label>
             <button
               type="button"
               onClick={() => setPicker('taxCategory')}
@@ -695,6 +697,7 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
       {picker === 'uom' && uomSelectorUrl && (
         <SelectorDialog
           title={ui('ocrProductCreateUom')}
+          placeholder={ui('ocrProductCreateUomSearchPlaceholder')}
           initialQuery=""
           selectorUrl={uomSelectorUrl}
           apiFetch={apiFetch}
@@ -708,6 +711,7 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
       {picker === 'taxCategory' && taxSelectorUrl && (
         <SelectorDialog
           title={ui('ocrProductCreateTaxCategory')}
+          placeholder={ui('ocrProductCreateTaxSearchPlaceholder')}
           initialQuery=""
           selectorUrl={taxSelectorUrl}
           apiFetch={apiFetch}

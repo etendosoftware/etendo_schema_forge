@@ -566,4 +566,35 @@ describe('ProductResolverPopup', () => {
     expect(continueBtn.className).toContain('bg-primary');
     expect(continueBtn.className).not.toContain('bg-status-info');
   });
+
+  describe('create-product form', () => {
+    async function openCreateForm(user) {
+      render(<ProductResolverPopup {...defaultProps} unmatched={[{ idx: 0, description: 'Widget A' }]} />);
+      await user.click(screen.getByText('ocrProductSkip'));
+      await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
+      await user.click(screen.getByText('createProduct'));
+      await screen.findByText('ocrProductCreateTitle');
+    }
+
+    it('marks name, search key, UoM and tax category labels as required', async () => {
+      const user = userEvent.setup();
+      await openCreateForm(user);
+      for (const key of ['ocrProductCreateName', 'ocrProductCreateSearchKey', 'ocrProductCreateUom', 'ocrProductCreateTaxCategory']) {
+        const label = screen.getByText(key, { selector: 'label' });
+        expect(label.querySelector('[aria-hidden], span')).not.toBeNull();
+        expect(label.textContent).toContain('*');
+      }
+    });
+
+    it.each([
+      [0, 'ocrProductCreateUomSearchPlaceholder'],
+      [1, 'ocrProductCreateTaxSearchPlaceholder'],
+    ])('picker %i shows its own search placeholder', async (index, placeholder) => {
+      const user = userEvent.setup();
+      await openCreateForm(user);
+      await user.click(screen.getAllByText('ocrProductCreateSelect')[index].closest('button'));
+      expect(await screen.findByPlaceholderText(placeholder)).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('ocrProductSearchPlaceholder')).not.toBeInTheDocument();
+    });
+  });
 });

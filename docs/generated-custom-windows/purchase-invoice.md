@@ -1744,11 +1744,12 @@ adapter and the manual Contacto selector (`useCreateContactModal`).
 The window-mode popup runs the Contacts window's **own** `useEntity`, whose `initialData` option
 (the `§19b` seeding mechanism) only reaches the **header** record (`businessPartner` fields).
 `address`/`postalCode`/`city`/`country` belong to the `locationAddress` **child tab**, created
-through a different code path (`LocationEditorModal.jsx`) that `initialData` does not touch.
-Seeding a child tab's first row is a different mechanism from `useEntity.handleNew` and was not
-built as part of ETP-5332 — so a match extracted by OCR is simply not pre-filled today, and the
-user types the address by hand as they would for a manually opened "+ Crear contacto". This is
-tracked as debt `ocr-contact-address-prefill` in `flags-registry.json`.
+through `LocationEditorModal.jsx`. Since ETP-5654 they are forwarded as `initialChildData`
+(`buildOcrContactAddressSeed`): as soon as the header is saved for the first time the "Dirección" modal opens
+automatically (and "Añadir dirección" still opens it while the tab has no rows), with address line 1, postal code and city filled and the country resolved from its printed
+name (falling back to España when the invoice has none or it cannot be matched). Region is never
+prefilled and nothing is saved until the user presses Guardar. A second address, or editing one,
+opens without the seed. The former debt `ocr-contact-address-prefill` is closed.
 
 The country-label-to-option-id resolution this section used to describe (`matchOptionByLabel`
 against the country selector, with an `EntityCreationModal` `patchValues` prop merging in the
@@ -1763,8 +1764,9 @@ Before ETP-5332, `CreateContactModal` created the BP up front (`BP → address �
 → billing PATCH`) and posted the address whenever `address || city || country` was set, so a
 pre-filled address block meant the new BP got a location immediately — which is what
 `resolvePartnerAddress` in `ingest/purchaseInvoiceDescriptor.js` looks up for the invoice
-header's `partnerAddress` (NOT NULL on `C_Invoice`). Since the address is no longer seeded (see
-above), a BP created from the OCR popup today has no location until someone adds one.
+header's `partnerAddress` (NOT NULL on `C_Invoice`). The popup no longer creates the address
+itself (ETP-5654 only prefills the "Añadir dirección" modal), so a BP created from the OCR popup
+has no location until someone adds one.
 
 **That is not a dead end, and the mandatory address the old modal enforced was redundant against
 the affordance that already existed.** `partnerAddress` is a `C_BPartner_Location_ID` column, and
@@ -1773,8 +1775,8 @@ renders a **"+ Añadir dirección"** row in the dropdown and opens `LocationEdit
 set to the partner just selected. So a contact that arrives on the invoice without a location gets
 one created inline, on the document, against the right parent. The Contacts window itself has
 always permitted a partner with no location; only the deleted popup forced one, and it forced it
-on one of the two paths. What remains is the typing, which is what
-`ocr-contact-address-prefill` covers.
+on one of the two paths. What remains is pressing "Añadir dirección" and reviewing the prefilled
+modal (ETP-5654).
 
 ### Automated evidence
 
