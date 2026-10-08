@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/product/ProductPriceBar.jsx
 import { render, screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -1237,5 +1238,64 @@ describe('ProductPriceBar', () => {
     const firstRow = screen.getByTestId('price-delete-price-s1');
     // Node.DOCUMENT_POSITION_FOLLOWING (4) => addRow comes before firstRow.
     expect(addRow.compareDocumentPosition(firstRow) & 4).toBeTruthy();
+  });
+
+  // -----------------------------------------------------------------------
+  // ETP-5513 — at 1280x720 (rail expanded + 320 px sidebar) the fixed-width columns
+  // overflowed the tab and cut the List price input. Every column is a width BASIS
+  // that may shrink (min-w-0 shrink, never shrink-0), and the header, the column
+  // labels, the add row and every data row use the SAME width per column, so they
+  // shrink in step and stay aligned.
+  // -----------------------------------------------------------------------
+  describe('shrinkable, aligned price columns (ETP-5513)', () => {
+    const tokens = (el) => el.className.split(/\s+/).filter(Boolean);
+    const widthOf = (el) => tokens(el).find(c => /^w-\[\d+px\]$/.test(c));
+    const firstThree = (row) => [...row.children].slice(0, 3);
+    // Nearest ancestor that is a sized column box (w-[Npx]); its parent is the row.
+    const rowOf = (el) => {
+      let node = el;
+      while (node && !(node.className && widthOf(node))) node = node.parentElement;
+      return node?.parentElement;
+    };
+    const expectShrinkable = (col) => {
+      expect(tokens(col)).toEqual(expect.arrayContaining(['min-w-0', 'shrink']));
+      expect(tokens(col)).not.toContain('shrink-0');
+    };
+
+    async function collectRows(user, section) {
+      if (section === 'purchase') await user.click(screen.getByTestId('price-tab-purchase'));
+      const header = await screen.findByTestId('price-section-header');
+      const labelRow = rowOf(screen.getByText('priceColName'));
+      const name = section === 'purchase' ? 'Purchase List v1' : 'Sales List v1';
+      const dataRow = rowOf(await screen.findByDisplayValue(name));
+      await user.click(addTariffButton());
+      const addRow = await screen.findByTestId('price-add-tariff-row');
+      return { header, labelRow, dataRow, addRow };
+    }
+
+    it.each(['sales', 'purchase'])('every %s column box may shrink and all rows share the column widths', async (section) => {
+      global.fetch = buildFetch({
+        'GET /price?parentId=': { response: { data: [salesRow(), purchaseRow()] } },
+      });
+      const user = userEvent.setup();
+      renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+      await screen.findByTestId('price-delete-price-s1');
+
+      const rows = await collectRows(user, section);
+      for (const row of Object.values(rows)) {
+        const cols = firstThree(row);
+        cols.forEach(expectShrinkable);
+        expect(cols.map(widthOf)).toEqual(['w-[300px]', 'w-[201px]', 'w-[201px]']);
+      }
+    });
+
+    it('the section title does not truncate when its column shrinks', async () => {
+      global.fetch = buildFetch({
+        'GET /price?parentId=': { response: { data: [salesRow()] } },
+      });
+      renderBar();
+      const header = await screen.findByTestId('price-section-header');
+      expect(tokens(within(header).getByRole('heading', { level: 3 }))).toContain('whitespace-nowrap');
+    });
   });
 });
