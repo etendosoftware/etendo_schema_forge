@@ -382,7 +382,8 @@
           "form": true,
           "label": "Credit Limit",
           "grid": false,
-          "section": "other"
+          "section": "other",
+          "defaultExpr": "0"
         },
         "creditUsed": {
           "visibility": "readOnly",

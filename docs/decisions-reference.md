@@ -949,6 +949,14 @@ Field keys use **camelCase from raw schema** (e.g., `"businessPartner"`, `"order
 | `system` | false | false | false |
 | `discarded` | false | false | false |
 
+### Form default (`defaultExpr`) — ETP-5676
+
+`defaultExpr` declares the value a new record's form starts with (served by `GET .../defaults`). Use it for an **editable** column whose AD default is empty but whose form should still start from a value — the literal `"0"` is the usual case. Example: `contacts` → `entities.businessPartner.fields.creditLimit` declares `"defaultExpr": "0"`, so the Credit Limit field opens at `0` instead of blank.
+
+- Stored in `ETGO_SF_FIELD.defaultvalue` by `push-to-neo` (`make regen PUSH_TO_NEO=1`), where it overrides the AD_Column default when non-empty.
+- Plain literals (e.g. `0`) pass through unchanged; `@token@` and `@SQL=` expressions are resolved as usual.
+- The value reaches `/defaults` as a **string** (`"0"`), not a JSON number. Numeric defaults from `defaultExpr` are not coerced on this path. Consumers that need a number must coerce it.
+
 ### Derivation (`derivation`) — ETP-5245
 
 Declares (or suppresses) **where a field's value comes from when the user does not supply it**.
