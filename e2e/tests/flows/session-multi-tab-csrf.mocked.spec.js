@@ -40,7 +40,9 @@ function rotate(server, { clientId = server.clientId } = {}) {
 
 function sessionPayload(server) {
   return {
-    account: { name: 'admin', email: 'admin@e2e.test' },
+    // ETP-5675 — the id is what lets a stale-proof revoke retry: it is only retried while the
+    // live session is still this account's.
+    account: { id: 'e2e-mock-account', name: 'admin', email: 'admin@e2e.test' },
     environment: { clientId: server.clientId, roleId: 'e2e-mock-role', orgId: MOCK_ORG_ID },
     roleList: [{
       id: 'e2e-mock-role',
@@ -163,7 +165,11 @@ test.describe('A session rotated in another tab (ETP-5550)', () => {
     await stale.getByTestId('user-menu-logout').click();
 
     await expect(stale.locator('#login-email')).toBeVisible({ timeout: 10_000 });
-    expect(server.revokes).toEqual([FIRST_PROOF, ROTATED_PROOF]);
+    // ETP-5675 — whether the stale proof is sent at all is a race: bringing the tab to the front
+    // re-reads the session (still this account's) and may refresh the proof before the click.
+    // Either way the revoke has to end with the live proof.
+    expect(server.revokes.at(-1)).toBe(ROTATED_PROOF);
+    expect(server.revokes.every((proof) => [FIRST_PROOF, ROTATED_PROOF].includes(proof))).toBe(true);
     expect(server.revoked).toBe(true);
     // The onboarding on /login read the session only after the revoke settled.
     expect(server.environmentEntries).toBe(entriesBeforeLogout);

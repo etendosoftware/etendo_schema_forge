@@ -7,7 +7,10 @@ import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
 import { useSessionStartTracking } from '@/lib/observability/useSessionStartTracking.js';
-import { useAuthOptional } from '@etendosoftware/app-shell-core/auth';
+import {
+  announceSessionAccount, deleteCookieSession, fetchCookieSession, useAuthOptional,
+} from '@etendosoftware/app-shell-core/auth';
+import { SessionConflictNotice } from '@/components/access/SessionConflictNotice.jsx';
 import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext';
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
@@ -314,6 +317,75 @@ function BlockedAccessScreen({ decision }) {
   );
 }
 
+// ETP-5675 — another tab signed this browser in as a different account. The session cookie belongs
+// to the browser profile, not to the tab, and production is one domain for every customer: this tab
+// was still showing the previous account while every read answered with the other account's tenant
+// data. The backend now refuses those requests (X-Go-Account); this screen replaces the page so
+// nothing stale stays on it, and asks the person which account they want.
+//
+// "Continue as" reloads: the restore adopts the live session and every cache of the previous
+// account (lists, menu, permissions) goes with the old document. "Sign out of all sessions" revokes
+// the browser's live session (the other account's) with its own proof and account — the only path
+// in this tab that revokes it, and only on an explicit click — then goes to the login.
+function SessionConflictScreen() {
+  const ui = useUI();
+  const auth = useAuthOptional();
+  const [live, setLive] = useState(undefined);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCookieSession().then((session) => { if (!cancelled) setLive(session); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const currentUser = auth?.account?.email || auth?.username || ui('sessionConflictThisAccount');
+  const otherUser = live?.account?.email || null;
+  const withUsers = (text) => text.replace('{currentUser}', currentUser).replace('{otherUser}', otherUser);
+
+  const continueAsOther = () => {
+    window.location.reload();
+  };
+
+  const signBackIn = async () => {
+    setBusy(true);
+    setFailed(false);
+    const session = live ?? (await fetchCookieSession());
+    if (session?.account?.id) {
+      const revoked = await deleteCookieSession(session.csrfToken ?? null, undefined,
+        { accountId: session.account.id });
+      if (!revoked) {
+        setBusy(false);
+        setFailed(true);
+        return;
+      }
+      announceSessionAccount(null);
+    }
+    window.location.assign('/login');
+  };
+
+  return (
+    <div className="flex min-h-screen items-center justify-center p-8" data-testid="SessionConflictScreen__488148">
+      <div className="w-full max-w-[34.75rem]">
+        <SessionConflictNotice
+          testId="app-session-conflict"
+          title={ui('sessionConflictTitle')}
+          description={withUsers(ui(otherUser ? 'sessionConflictDescription' : 'sessionConflictDescriptionUnknown'))}
+          primaryLabel={withUsers(ui(otherUser ? 'sessionConflictContinueAs' : 'sessionConflictContinueAsUnknown'))}
+          onPrimary={continueAsOther}
+          primaryTestId="session-conflict-continue"
+          secondaryLabel={ui('sessionConflictSwitchBack')}
+          onSecondary={signBackIn}
+          secondaryTestId="session-conflict-switch-back"
+          warning={failed ? ui('sessionConflictSwitchBackFailed') : ui('sessionConflictSwitchBackWarning')}
+          busy={busy || live === undefined}
+          data-testid="SessionConflictNotice__488148" />
+      </div>
+    </div>
+  );
+}
+
 // ETP-5395 Point 1 Fix B — while `allowedIds === undefined` (SFListMenu fetch
 // still in flight), `filterMenuGroupsByAccess`'s stand-in empty Set only hides
 // AD-backed menu items (see the comment above its call below) — an item with
@@ -434,6 +506,8 @@ function AppLayoutAccessGate({ menuGroups }) {
   // environment's commercial access cut off) is captured here, decoupled from AuthContext's
   // own windowAccess/capabilities/menuAccess shape.
   const environmentAccessDecision = useEnvironmentAccessGate();
+  // ETP-5675 — recorded by the core when another tab signed the browser in as another account.
+  const sessionConflict = useAuthOptional()?.sessionConflict;
   // AppLayout is rendered inside AppShellRuntime's AuthProvider (same place
   // SideMenu below already calls useAuth() today), unlike App.jsx itself — see
   // the note in App.jsx. That's why role-filtering is applied here rather than
@@ -502,6 +576,12 @@ function AppLayoutAccessGate({ menuGroups }) {
   // passed in, so gating only from the size-check below would still let
   // <Outlet> mount and those routes become reachable while the real Set is
   // in flight. See AppLayoutLoading's JSDoc above for the full story.
+  // ETP-5675 — before every other gate: the menu and access maps below may be the other
+  // account's, or never arrive because the backend refuses this tab's requests.
+  if (sessionConflict) {
+    return <SessionConflictScreen data-testid="SessionConflictScreen__488148" />;
+  }
+
   if (allowedIds === undefined) {
     return <AppLayoutLoading data-testid="AppLayoutLoading__488148" />;
   }

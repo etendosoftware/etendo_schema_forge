@@ -279,6 +279,36 @@ blocked-access screen.
   trial expired showed empty lists and an empty dashboard indefinitely — the silent refresh stops
   at `/sws/neo/refreshtoken`'s 402 and never reaches `windowaccessmap`.
 
+## 403 "Session belongs to another account" and the conflict screen (ETP-5675)
+
+The session cookie belongs to the browser profile, not to a tab, and production is one domain for
+every customer. When another tab signs in as a different account, a tab still showing the previous
+one used to read the new account's tenant data under the old name and avatar. So every request
+carries `X-Go-Account` — the `account.id` the tab restored from `GET /sws/go/session`, published by
+`AuthProvider` through `sessionCredentials.js` exactly like the CSRF proof (cookie scheme only) —
+and the backend refuses a mismatch with **403** `Session belongs to another account`.
+
+- `apiFetch`'s single exit reads a clone of every 403 and, for that message, records the conflict in
+  the core's `auth/sessionConflict.js`. `useAuth().sessionConflict` exposes it, and `AppLayout`
+  replaces the page — before every other gate — with `SessionConflictScreen`: *continue as the other
+  account* (a full reload, so nothing of the previous account stays cached) or *sign out of this
+  browser and sign in again* (revokes the browser's live session — the other account's — with its
+  own proof and account, only on an explicit click, then goes to the login).
+- Two cheaper signals raise the same screen before any request goes out: the tab that signs in or
+  out announces the account on a `BroadcastChannel` (`etendo-go-session`), and a tab returning to
+  the foreground compares its account with the live session (at most every 30 s). A session that
+  cannot be read (a deploy) is never a conflict. Another tab signing the browser **out** signs this
+  one out locally, without a revoke.
+- Same account, other company, is **not** a conflict: that is the ETP-5550 environment switch,
+  handled by the CSRF recovery. Only `account.id` is compared.
+- The caller still gets its 403. Never send `X-Go-Account` by hand: it comes from the header
+  builders, like every other credential header.
+
+The onboarding (`etendo-go-core`) does the same with its own binding (`bindOnboardingAccount`):
+a lost or foreign session replaces the step with "Tu sesión se cerró" instead of failing at
+provisioning with the backend's raw `Missing or invalid Authorization header`, and its "Cerrar
+sesión" now revokes the session server-side.
+
 ## Writes to child documents invalidate the parent order's cache (ETP-5525)
 
 The shared record cache (`@etendosoftware/app-shell-core/data`, 30 s `recordStaleTime`) is

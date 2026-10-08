@@ -100,6 +100,10 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
   registerAccount: vi.fn(),
   requestPasswordReset: vi.fn(),
   runOnboardingStream: vi.fn(),
+  // ETP-5675 — OnboardingFlow binds the page to its account and stops on a lost session; a
+  // factory mock without these makes every render throw on the first bind/unbind.
+  bindOnboardingAccount: vi.fn(),
+  isSessionLostError: (err) => err?.status === 401,
 }));
 
 // One provider is returned so the module-level SSO_PROVIDERS list (evaluated at
