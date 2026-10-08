@@ -313,6 +313,25 @@ Three things worth keeping in mind before touching another dropzone:
 Only this dropzone has been migrated. The other dashed dropzones (`ImageField`, `OcrSidePanel`,
 `CertSection`, `ImportStatementModal`, …) still carry their own colours.
 
+### The "browse" control is a deliberate divergence from the design
+
+The helper sentence is `attachmentsOr` + a button labelled `attachmentsBrowse` + `attachmentsAllowedFormats`.
+**The Figma component paints all three the same flat `color/gray/500` (#6C6C89), with no underline
+and no link treatment.** We do not follow it: the button carries `text-primary underline
+underline-offset-2` — the app's existing inline-text-link convention (`ApiKeysPage`,
+`OAuth2ClientDialog`, `DocumentTotalsPanel`, `ReversedInvoicesPanel`), reusing the `--primary`
+palette token rather than a literal.
+
+This is an intentional product override, not drift. QA found the control invisible in practice: it
+is the only clickable thing in the sentence and, at the design's value, it is indistinguishable
+from the static text on either side. **Do not "restore" the flat grey** — if the override is ever
+reversed, it is a product decision, not a design-fidelity fix.
+
+When the zone is disabled the button drops both the accent colour and the underline and inherits
+the sentence's gray/400, so a dead control never reads as an active link. It still gets no
+`disabled:opacity-50`: the whole sentence is already uniformly dimmed, and a 50% veil on one word
+would single the button out.
+
 ## References
 
 - Component implementations: `tools/app-shell/src/components/contract-ui/`

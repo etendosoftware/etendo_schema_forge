@@ -34,6 +34,27 @@ const STATE_DISABLED = 'border-[hsl(var(--field-disabled-border))] bg-[hsl(var(-
    react to hover — and color/gray/400 once the zone is disabled. */
 const HELPER_TEXT_DISABLED = 'text-[#828FA3]';
 
+/*
+ * DELIBERATE DIVERGENCE FROM THE FIGMA COMPONENT (ETP-5526) — do not "fix" this back.
+ *
+ * The design paints the whole helper sentence, the "browse" control included, one flat
+ * color/gray/500 (#6C6C89) with no underline and no link treatment at all. QA found that in
+ * practice nobody sees the control: it is the only clickable thing in the sentence and it looks
+ * exactly like the two static fragments around it. The product owner decided to override the
+ * design here and make it read as a link.
+ *
+ * `text-primary` + a permanent underline is the app's existing inline-text-link convention
+ * (ApiKeysPage, OAuth2ClientDialog, DocumentTotalsPanel, ReversedInvoicesPanel), so this reuses
+ * the palette token rather than introducing a literal.
+ *
+ * Disabled: neither the accent colour nor the underline. The control falls back to the sentence's
+ * gray/400 like the rest of the text, so a dead control never advertises itself as an active link
+ * — and, as before, no `disabled:opacity-50`, which would single the button out of a sentence
+ * that is already uniformly dimmed.
+ */
+const BROWSE_LINK = 'text-primary underline underline-offset-2';
+const BROWSE_LINK_DISABLED = 'no-underline';
+
 /**
  * Generic drag & drop area + "select a file" link to add files.
  *
@@ -159,9 +180,9 @@ export default function UploadDropzone({ onFiles, config = {}, disabled = false 
             type="button"
             onClick={handleBrowseClick}
             disabled={disabled}
-            /* No `disabled:opacity-50`: the design makes the whole helper sentence — this button
-               included — one flat gray/400, and a 50% veil would single the button out. */
-            className="underline-offset-2 hover:underline"
+            /* Link treatment, and its deliberate absence when disabled — see BROWSE_LINK above:
+               the Figma component shows flat grey here, this is an intentional product override. */
+            className={disabled ? BROWSE_LINK_DISABLED : BROWSE_LINK}
           >
             {ui('attachmentsBrowse')}
           </button>

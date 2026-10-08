@@ -110,5 +110,27 @@ describe('UploadDropzone', () => {
       // The helper text is what the blanket opacity made unreadable; it now carries gray/400.
       expect(zone().querySelector('p').className).toContain('text-[#828FA3]');
     });
+
+    /*
+     * Deliberate divergence from Figma (the design shows the whole helper sentence flat grey) —
+     * see the BROWSE_LINK comment in UploadDropzone.jsx and docs/ui-design-guidelines.md.
+     */
+    it('gives the browse control the link treatment while the zone is enabled', () => {
+      render(<UploadDropzone onFiles={vi.fn()} config={config} />);
+      const browse = screen.getByRole('button', { name: 'attachmentsBrowse' });
+
+      expect(browse).toHaveClass('text-primary');
+      expect(browse).toHaveClass('underline');
+    });
+
+    it('strips the link treatment from the browse control when the zone is disabled', () => {
+      render(<UploadDropzone onFiles={vi.fn()} config={config} disabled />);
+      const browse = screen.getByRole('button', { name: 'attachmentsBrowse' });
+
+      expect(browse).not.toHaveClass('text-primary');
+      expect(browse).not.toHaveClass('underline');
+      // The sentence is already uniformly dimmed; no 50% veil on this one word.
+      expect(browse.className).not.toContain('opacity-50');
+    });
   });
 });
