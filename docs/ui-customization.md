@@ -2455,6 +2455,13 @@ stops `shouldSkipPayloadField` from dropping a seeded legacy-looking numeric FK 
 Seed keys are verified `businessPartner` field names — `name`, `customer`, `vendor` — built by the
 exported `buildContactSeed(query, { documentType })`.
 
+The contact **category** (`businessPartnerCategory`) is seeded separately because its id is per client
+and needs an async lookup: `useContactCategorySeed` (backed by `resolveContactCategorySeed`) maps
+purchase to the `Proveedor` group and sale to `Cliente` by search key
+(`CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE`), and the popup is mounted only once it settles. A missing
+group or a failed lookup leaves the form's own default. A seeded key beats `/defaults` because
+`useEntity.handleNew` registers every seeded key as user-changed.
+
 **Known gap.** `initialData` seeds the **header record only**. The Copilot OCR flow also extracts
 `address` / `postalCode` / `city` / `country`, which belong to the `locationAddress` **child tab**, so
 those are no longer pre-filled and the user types them. Seeding a child tab's new row is a different

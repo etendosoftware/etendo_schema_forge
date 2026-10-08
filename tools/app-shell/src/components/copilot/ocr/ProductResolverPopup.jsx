@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { X, Loader2, Search, ChevronDown, Check, Plus } from 'lucide-react';
+import { X, Ban, AlertTriangle, Loader2, Search, ChevronDown, Check, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { Button } from '@/components/ui/button';
+import { InfoBanner } from '@/components/InfoBanner';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { buildSearchUrl, readSearchRows } from './ocrQuery.js';
 /* eslint-disable react/prop-types */
@@ -68,7 +69,16 @@ export default function ProductResolverPopup({
   const apiFetch = useApiFetch('');
 
   // selections: { [idx]: { id, label } | null }
-  const [selections, setSelections] = useState({});
+  // Rows carrying a suggestion start preselected; the user can still change, search, create or skip.
+  const [selections, setSelections] = useState(() => {
+    const seeded = {};
+    for (const row of unmatched) {
+      if (row.suggestion?.id) seeded[row.idx] = { id: row.suggestion.id, label: row.suggestion.name };
+    }
+    return seeded;
+  });
+  const hasPreselected = unmatched.some((row) => row.suggestion?.id);
+  const hasUnsuggested = unmatched.length === 0 || unmatched.some((row) => !row.suggestion?.id);
 
   const cancel = () => onCancel?.();
   const submit = () => {
@@ -91,9 +101,24 @@ export default function ProductResolverPopup({
           </button>
         </div>
 
-        <div className="px-6 py-3 text-xs text-muted-foreground border-b border-border-subtle">
-          {ui('ocrProductResolverHint')}
-        </div>
+        {hasPreselected && (
+          <div className="px-6 pt-4">
+            <InfoBanner
+              tone="warning"
+              icon={AlertTriangle}
+              dismissible={false}
+              data-testid="ocr-product-autoMatched-warning"
+            >
+              {ui('ocrProductAutoMatchedWarning')}
+            </InfoBanner>
+          </div>
+        )}
+
+        {hasUnsuggested && (
+          <div className="px-6 py-3 text-xs text-muted-foreground border-b border-border-subtle">
+            {ui('ocrProductResolverHint')}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
           {unmatched.map((row) => (
@@ -156,6 +181,22 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, api
           onCreateNew={productSpecUrl ? () => setCreating(true) : null}
           ui={ui}
           data-testid="InlineSelector__b3ae11" />
+        {/* Fixed-height slot: the button appearing/disappearing never shifts the row layout. */}
+        <div className="mt-1 flex h-8 justify-end">
+          {selection?.id && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onSelect(null)}
+              className="text-muted-foreground hover:text-foreground"
+              data-testid={`ocr-product-skip-${row.idx}`}
+            >
+              <Ban data-testid="Ban__b3ae11" />
+              {ui('ocrProductSkip')}
+            </Button>
+          )}
+        </div>
       </div>
       {creating && (
         <ProductCreateForm

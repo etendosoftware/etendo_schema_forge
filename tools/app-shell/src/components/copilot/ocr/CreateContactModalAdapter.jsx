@@ -3,6 +3,7 @@ import RecordCreateModal from '../../contract-ui/RecordCreateModal.jsx';
 import {
   LOOKUP_CREATE_TARGETS, buildContactSeed, resolveContactName,
 } from '../../contract-ui/lookupCreateTargets.js';
+import { useContactCategorySeed } from '../../contract-ui/useContactCategorySeed.js';
 import { deriveContactsApiBase } from './contactApi.js';
 
 /* eslint-disable react/prop-types */
@@ -28,11 +29,18 @@ export default function CreateContactModalAdapter({ item, apiBaseUrl, token, onC
 
   const prefilled = item?.payload?.prefilled || {};
   const initialQuery = prefilled.name || '';
+  const documentType = item?.payload?.documentType || null;
+  // Resolved before the popup mounts: the embedded window reads its seed once, on mount.
+  const { ready, categorySeed } = useContactCategorySeed({
+    contactsApiBaseUrl: bpApiBaseUrl, documentType, active: true,
+  });
   const initialData = useMemo(
-    () => buildOcrContactSeed(prefilled, item?.payload?.documentType || null),
+    () => ({ ...buildOcrContactSeed(prefilled, documentType), ...categorySeed }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(prefilled), item?.payload?.documentType],
+    [JSON.stringify(prefilled), documentType, categorySeed],
   );
+
+  if (!ready) return null;
 
   return (
     <RecordCreateModal
