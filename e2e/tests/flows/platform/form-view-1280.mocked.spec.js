@@ -5,6 +5,7 @@
 // @covers tools/app-shell/src/windows/custom/warehouse/index.jsx
 // @covers tools/app-shell/src/windows/custom/product/ProductPriceBar.jsx
 // @covers artifacts/product/decisions.json
+// @covers artifacts/assets/decisions.json
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -19,7 +20,7 @@ import { login } from '../../helpers/auth.js';
  *      (measured from its own width, next to the 320 px OCR side panel) lays
  *      out in 3 columns and shows only its first 2 rows; "Mostrar más datos"
  *      reveals the rest and "Mostrar menos datos" hides it again.
- *   2. Product and Warehouse: the detail sidebar is a fixed 320 px column.
+ *   2. Product, Assets and Warehouse: the detail sidebar is a fixed 320 px column.
  *   3. Product → Precio (Venta and Compra): the price columns stay inside the
  *      tab — nothing scrolls horizontally, nothing ends past the sidebar.
  *
@@ -219,6 +220,22 @@ test.describe('Form View 1280×720 — fixed 320 px sidebars (ETP-5513)', () => 
     await mockDetail(page, 'product', 'product', PRODUCT);
     await openAt(page, `/product/${PRODUCT.id}`);
     const anchor = page.getByRole('button', { name: 'Almacenes' });
+    await expect(anchor).toBeVisible({ timeout: 15_000 });
+    await settle(page);
+
+    await expectSidebar320(sidebarOf(anchor));
+    await expectNoHorizontalPageScroll(page);
+  });
+
+  test('Assets detail sidebar is 320 px', async ({ page }) => {
+    await login(page);
+    await mockDetail(page, 'assets', 'assets', {
+      id: 'AST-1280', name: 'Activo 1280', _identifier: 'Activo 1280',
+      depreciationAmt: 1200, depreciatedValue: 300, previouslyDepreciatedAmt: 0,
+      depreciatedPlan: 1200, etgoAmortizationStatus: 25,
+    });
+    await openAt(page, '/assets/AST-1280');
+    const anchor = page.getByText('Resumen de amortización');
     await expect(anchor).toBeVisible({ timeout: 15_000 });
     await settle(page);
 
