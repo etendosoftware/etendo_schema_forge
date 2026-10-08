@@ -518,18 +518,22 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
             every "List price" stepper underneath — a real shared edge, instead of floating
             at the START of that column, which aligns with nothing. (The per-row delete
             button sits further right, but it is a hover affordance, not a column.)
-            The title box is min-w so a longer translation grows it — the action just
-            shifts right instead of overlapping. */}
+            Every column box is a 300 / 201 px BASIS that may shrink (min-w-0 shrink, never
+            shrink-0): at 1280x720 with the navigation rail expanded and the 320 px sidebar
+            the fixed widths overflowed the tab by ~100 px and cut the List price input
+            (ETP-5513). All rows share the same classes, so they shrink in step and stay
+            aligned. The title does not truncate: it may overflow into the empty spacer over the
+            Unit price column (whitespace-nowrap), so a long translation stays readable. */}
         <div className="flex flex-row items-center gap-5 h-8" data-testid="price-section-header">
-          <div className="min-w-[300px] shrink-0 flex items-center gap-2">
-            <h3 className="text-lg font-semibold text-[hsl(var(--foreground))]">{sectionTitle}</h3>
+          <div className="w-[300px] min-w-0 shrink flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-[hsl(var(--foreground))] whitespace-nowrap">{sectionTitle}</h3>
             <span className="inline-flex items-center px-2 h-6 text-xs text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] border border-[hsl(var(--border-control))] rounded-lg">
               {sectionRows.length}
             </span>
           </div>
           {/* Spacer over the "Unit price" column */}
-          <div className="w-[201px] shrink-0" aria-hidden="true" />
-          <div className="w-[201px] shrink-0 flex justify-end">
+          <div className="w-[201px] min-w-0 shrink" aria-hidden="true" />
+          <div className="w-[201px] min-w-0 shrink flex justify-end">
             {!adding && (
               // Same control as "Add line" in the order/invoice lines panels (shared
               // AddLineButton). It hardcodes data-testid="action-add-line", which is not
@@ -553,9 +557,9 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
         {/* Column headers — rendered once, not repeated per row */}
         {(sectionRows.length > 0 || adding) && (
           <div className="flex flex-row gap-5">
-            <div className="w-[300px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColName')}</FieldLabel></div>
-            <div className="w-[201px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColUnitPrice')}</FieldLabel></div>
-            <div className="w-[201px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColListPrice')}</FieldLabel></div>
+            <div className="w-[300px] min-w-0 shrink"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColName')}</FieldLabel></div>
+            <div className="w-[201px] min-w-0 shrink"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColUnitPrice')}</FieldLabel></div>
+            <div className="w-[201px] min-w-0 shrink"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColListPrice')}</FieldLabel></div>
           </div>
         )}
 
@@ -571,7 +575,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
             {/* No `preferDown`: the panel is position:fixed, so when the row happens to sit
                 near the viewport bottom a forced-down panel is drawn off-screen and no
                 scrolling can reveal it. Auto-flip opens upward only when there is no room. */}
-            <div className="w-[300px] shrink-0 rounded-lg [&>div]:!bg-card [&>div:hover]:!bg-[hsl(var(--muted))]">
+            <div className="w-[300px] min-w-0 shrink rounded-lg [&>div]:!bg-card [&>div:hover]:!bg-[hsl(var(--muted))]">
               <CreatableSearchSelect
                 key={selectOptions.map(o => o.id).join(',')}
                 field={{ key: 'priceListVersion', id: 'priceListVersion', required: false }}
@@ -585,7 +589,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                 data-testid="CreatableSearchSelect__d76b90" />
             </div>
             {/* Unit price */}
-            <div className="w-[201px] shrink-0">
+            <div className="w-[201px] min-w-0 shrink">
               <PriceStepper
                 value={draftUnitPrice}
                 prefix={currencySymbol}
@@ -594,7 +598,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                 data-testid="PriceStepper__d76b90" />
             </div>
             {/* List price */}
-            <div className="w-[201px] shrink-0">
+            <div className="w-[201px] min-w-0 shrink">
               <PriceStepper
                 value={draftListPrice}
                 prefix={currencySymbol}
@@ -638,7 +642,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
             <div key={row.id} className="flex flex-col gap-1 group/row">
               <div className="flex flex-row items-end gap-5">
                 {/* Name */}
-                <div className="w-[300px] shrink-0">
+                <div className="w-[300px] min-w-0 shrink">
                   <input
                     type="text"
                     readOnly
@@ -647,7 +651,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                   />
                 </div>
                 {/* Unit price */}
-                <div className="w-[201px] shrink-0">
+                <div className="w-[201px] min-w-0 shrink">
                   <PriceStepper
                     value={row.standardPrice}
                     prefix={currencySymbol}
@@ -656,7 +660,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                     data-testid="PriceStepper__d76b90" />
                 </div>
                 {/* List price */}
-                <div className="w-[201px] shrink-0">
+                <div className="w-[201px] min-w-0 shrink">
                   <PriceStepper
                     value={row.listPrice}
                     prefix={currencySymbol}
