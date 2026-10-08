@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/attachments/UploadDropzone.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -79,5 +80,35 @@ describe('UploadDropzone', () => {
 
     expect(accept).toContain('application/pdf');
     expect(accept).toContain('.pdf');
+  });
+
+  /*
+   * ETP-5526 — the Figma "Drag" component. Two regressions the behaviour cases above cannot see:
+   * the zone shipped with no hover state at all, and its disabled state was a blanket
+   * `opacity-50` on the container, which is why the helper text turned unreadable on completed
+   * documents. Both are asserted through the state difference (enabled vs disabled), not through
+   * the literal class list.
+   */
+  describe('visual states', () => {
+    const zone = () => screen.getByTestId('attachments-dropzone');
+
+    it('arms the hover state only while the zone is enabled', () => {
+      const { rerender } = render(<UploadDropzone onFiles={vi.fn()} config={config} />);
+      expect(zone().className).toContain('hover:border-[#828FA3]');
+      expect(zone().className).toContain('hover:bg-[rgba(18,18,23,0.05)]');
+
+      rerender(<UploadDropzone onFiles={vi.fn()} config={config} disabled />);
+      expect(zone().className).not.toContain('hover:');
+    });
+
+    it('renders the disabled state as a fill and border change, not a blanket opacity', () => {
+      render(<UploadDropzone onFiles={vi.fn()} config={config} disabled />);
+
+      expect(zone().className).not.toContain('opacity-50');
+      expect(zone().className).toContain('bg-[hsl(var(--field-hover))]');
+      expect(zone().className).toContain('border-[hsl(var(--field-disabled-border))]');
+      // The helper text is what the blanket opacity made unreadable; it now carries gray/400.
+      expect(zone().querySelector('p').className).toContain('text-[#828FA3]');
+    });
   });
 });

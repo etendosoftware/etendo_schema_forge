@@ -282,6 +282,37 @@ away from creating a junk one, and a permissions problem looks like an empty rec
   screen: the backend does not distinguish it, so that screen would be a guess presented as a fact.
   `recordNotFoundBody` states both possibilities in one sentence instead.
 
+---
+
+## Attachments Upload Dropzone (ETP-5526)
+
+`components/attachments/UploadDropzone.jsx` is aligned to the Figma component **"Drag"**. Its
+three states and the value each one reads:
+
+| State | Border | Fill | Helper text |
+|---|---|---|---|
+| default | gray/200 `#D1D4DB` → `border-[hsl(var(--field-disabled-border))]` | none | gray/500 → `text-muted-foreground` |
+| hover | gray/400 `#828FA3` → `hover:border-[#828FA3]` | black/50 @ 5% → `hover:bg-[rgba(18,18,23,0.05)]` | unchanged — gray/500 |
+| disabled | `#D1D4DB` → `border-[hsl(var(--field-disabled-border))]` | `#F5F7F9` → `bg-[hsl(var(--field-hover))]` | gray/400 → `text-[#828FA3]` |
+
+Transition between default and hover: `transition-colors duration-200 ease-in`. Border: 1px
+dashed, radius 8px (`rounded-lg`). Container padding `py-5`, children `gap-2`.
+
+Three things worth keeping in mind before touching another dropzone:
+
+- **`border-border` is not gray/200.** The generic token resolves to `--border-subtle` `#E1E7EF`,
+  noticeably lighter than the design. `#D1D4DB` lives in the palette exactly once, as
+  `--field-disabled-border` (the design's `color/border/input/disabled`), and gray/200 is the same
+  colour — read that token. Do **not** redefine `--border` to reach it: it paints the whole app.
+- **`#F5F7F9` is `--field-hover`**, which `<Input>`, `<Select>` and `<DateField>` already reuse as
+  their disabled fill. Both tokens adapt in dark mode; `#828FA3` and the 5% black have no token and
+  stay literals, matching the core date/calendar chrome.
+- **A disabled state is a fill plus a border, not `opacity-50` on the container.** The blanket
+  opacity is what made the dropzone's helper text unreadable on completed documents.
+
+Only this dropzone has been migrated. The other dashed dropzones (`ImageField`, `OcrSidePanel`,
+`CertSection`, `ImportStatementModal`, …) still carry their own colours.
+
 ## References
 
 - Component implementations: `tools/app-shell/src/components/contract-ui/`
