@@ -1467,14 +1467,21 @@ sits on the second row; switching view still swaps grid and gallery.
 
 At the 1280x720 minimum viewport with the navigation rail expanded, the `Price` tab's fixed
 300 / 201 / 201 px columns (Name / Unit price / List price) overflowed the tab by ~100 px and cut
-the List price stepper. In `ProductPriceBar.jsx` those widths are now a *basis* that may shrink
-(`w-[...] min-w-0 shrink`, never `shrink-0`); the header, the column labels, the add-tariff row and
-every price row use the same classes, so they shrink in step and stay aligned. The section title
-no longer reserves a 300 px minimum: it stays on one line (`whitespace-nowrap`) and may overflow
-into the empty spacer above the Unit price column.
+the List price stepper. In `ProductPriceBar.jsx` every row of a section — the title header, the
+column labels, the add-tariff row and each saved row — is now laid out on ONE CSS grid template
+(`PRICE_ROW_GRID`): `minmax(120px,300px) minmax(192px,201px) minmax(192px,201px) 2rem`. The tracks
+depend only on the container width, never on content, so a column starts at the same x in every
+row; the 4th track is the row-action slot (delete / cancel-add), reserved even in rows without a
+button. Prices never drop below 192 px, so a value like `12.345,67` stays readable next to the
+currency prefix and the +/- buttons; the Name column gives way first. When the whole panel is
+narrower than 780 px (`PRICE_STACK_BELOW_PX`, measured with `useElementWidth`), the
+Venta/Compra switch moves from the left column to a row above the section, which is what makes
+the grid fit at 1280x720 with the rail expanded. The section title stays on one line
+(`whitespace-nowrap`) and may overflow into the empty Unit price cell of the header.
 
 The sidebar is a fixed 320 px (`window.sidebarClassName` → `w-[320px]`), with the rail expanded
 or collapsed, instead of `w-[30%]`.
 
 **Verify:** at 1280x720 with the rail expanded, open a product → `Price`, in both `Venta` and
-`Compra`: Name, Unit price and List price are fully visible and the tab has no horizontal scroll.
+`Compra`: the switch sits above the section, Name, Unit price and List price are fully visible
+(prices not truncated), the columns line up under their labels, and the tab has no horizontal scroll.

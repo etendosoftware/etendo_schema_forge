@@ -1218,7 +1218,7 @@ describe('ProductPriceBar', () => {
     // Same column grid as the rows: title box, then the unit-price slot, then the
     // list-price slot which holds the action, right-aligned so its right edge matches
     // the right edge of the list-price steppers below.
-    expect(wrapper.parentElement.className).toContain('w-[201px]');
+    expect(header.children[2]).toBe(wrapper.parentElement);
     expect(wrapper.parentElement.className).toContain('justify-end');
     expect(header.children).toHaveLength(3);
   });
@@ -1241,25 +1241,24 @@ describe('ProductPriceBar', () => {
   });
 
   // -----------------------------------------------------------------------
-  // ETP-5513 — at 1280x720 (rail expanded + 320 px sidebar) the fixed-width columns
-  // overflowed the tab and cut the List price input. Every column is a width BASIS
-  // that may shrink (min-w-0 shrink, never shrink-0), and the header, the column
-  // labels, the add row and every data row use the SAME width per column, so they
-  // shrink in step and stay aligned.
+  // ETP-5513 — at 1280x720 (rail expanded + 320 px sidebar) the fixed-width flex
+  // columns overflowed the tab; making them shrinkable flex boxes then misaligned them
+  // (rows with a delete button shrank their columns differently from rows without) and
+  // squeezed the steppers until prices were unreadable. Every row of a section — header,
+  // column labels, add row, data rows — is now laid out on ONE grid template with fixed
+  // track definitions (min/max lengths, content-independent) and a reserved 4th
+  // row-action track, so columns align by construction and prices keep a readable
+  // minimum width. jsdom has no layout: this pins the shared template; the geometry is
+  // measured by e2e/tests/flows/platform/form-view-1280.mocked.spec.js.
   // -----------------------------------------------------------------------
-  describe('shrinkable, aligned price columns (ETP-5513)', () => {
+  describe('one shared price-column grid (ETP-5513)', () => {
     const tokens = (el) => el.className.split(/\s+/).filter(Boolean);
-    const widthOf = (el) => tokens(el).find(c => /^w-\[\d+px\]$/.test(c));
-    const firstThree = (row) => [...row.children].slice(0, 3);
-    // Nearest ancestor that is a sized column box (w-[Npx]); its parent is the row.
+    const templateOf = (el) => tokens(el).find(c => c.startsWith('grid-cols-['));
+    // Nearest ancestor laid out on a grid template = the row.
     const rowOf = (el) => {
       let node = el;
-      while (node && !(node.className && widthOf(node))) node = node.parentElement;
-      return node?.parentElement;
-    };
-    const expectShrinkable = (col) => {
-      expect(tokens(col)).toEqual(expect.arrayContaining(['min-w-0', 'shrink']));
-      expect(tokens(col)).not.toContain('shrink-0');
+      while (node && !(node.className && templateOf(node))) node = node.parentElement;
+      return node;
     };
 
     async function collectRows(user, section) {
@@ -1273,7 +1272,7 @@ describe('ProductPriceBar', () => {
       return { header, labelRow, dataRow, addRow };
     }
 
-    it.each(['sales', 'purchase'])('every %s column box may shrink and all rows share the column widths', async (section) => {
+    it.each(['sales', 'purchase'])('every %s row uses the same grid template with a reserved action track', async (section) => {
       global.fetch = buildFetch({
         'GET /price?parentId=': { response: { data: [salesRow(), purchaseRow()] } },
       });
@@ -1282,11 +1281,22 @@ describe('ProductPriceBar', () => {
       await screen.findByTestId('price-delete-price-s1');
 
       const rows = await collectRows(user, section);
+      const templates = Object.values(rows).map(templateOf);
+      expect(new Set(templates).size).toBe(1);
+      const [template] = templates;
+      // name, unit price, list price (prices with a readable floor), then the action slot.
+      expect(template).toMatch(/^grid-cols-\[minmax\(\d+px,300px\)_minmax\((\d+)px,201px\)_minmax\(\1px,201px\)_2rem\]$/);
+      expect(Number(template.match(/minmax\((\d+)px,201px\)/)[1])).toBeGreaterThanOrEqual(190);
       for (const row of Object.values(rows)) {
-        const cols = firstThree(row);
-        cols.forEach(expectShrinkable);
-        expect(cols.map(widthOf)).toEqual(['w-[300px]', 'w-[201px]', 'w-[201px]']);
+        expect(tokens(row)).toContain('grid');
+        for (const col of [...row.children].slice(0, 3)) {
+          // No per-cell width: the track decides, identically in every row.
+          expect(tokens(col).some(c => /^w-\[/.test(c) || c === 'shrink-0')).toBe(false);
+        }
       }
+      // Rows with a row action put it in the 4th track.
+      expect(rows.dataRow.children).toHaveLength(4);
+      expect(rows.addRow.children).toHaveLength(4);
     });
 
     it('the section title does not truncate when its column shrinks', async () => {

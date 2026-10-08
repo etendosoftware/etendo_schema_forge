@@ -281,5 +281,47 @@ test.describe('Form View 1280×720 — Product price tab fits the form area (ETP
       expect(m.maxControlRight, 'a price control runs under the sidebar').toBeLessThanOrEqual(sidebar.left + EDGE_TOLERANCE_PX);
       await expectNoHorizontalPageScroll(page);
     });
+
+    // Reject cycle 1: the columns used to be flex boxes that shrank by different amounts
+    // in rows with and without the delete button (22-37 px drift), and the steppers
+    // shrank until "1.234,50" read "1.2…".
+    test(`price columns align across rows and prices are readable — ${section === 'sales' ? 'Venta' : 'Compra'}`, async ({ page }) => {
+      await login(page);
+      await mockDetail(page, 'product', 'product', PRODUCT);
+      await mockPrices(page);
+      await openAt(page, `/product/${PRODUCT.id}`);
+      await page.getByTestId('tab-custom:pricing').click();
+      if (section === 'purchase') await page.getByTestId('price-tab-purchase').click();
+      const row = PRICE_ROWS.find((r) => r['priceListVersion$salesPriceList'] === (section === 'sales'));
+      const del = page.getByTestId(`price-delete-${row.id}`);
+      await expect(del).toBeAttached({ timeout: 15_000 });
+      await settle(page);
+
+      const m = await del.evaluate((btn) => {
+        const dataRow = btn.parentElement.parentElement;
+        const header = document.querySelector('[data-testid="price-section-header"]');
+        const labelRow = header.nextElementSibling;
+        const lefts = (r) => Array.from(r.children).slice(0, 3).map((c) => Math.round(c.getBoundingClientRect().left));
+        const rightOf = (el) => Math.round(el.getBoundingClientRect().right);
+        const inputs = Array.from(dataRow.querySelectorAll('[data-testid="PriceStepperInput__d76b90"]'))
+          .map((i) => ({ value: i.value, scrollWidth: i.scrollWidth, clientWidth: i.clientWidth }));
+        return {
+          header: lefts(header),
+          labels: lefts(labelRow),
+          row: lefts(dataRow),
+          actionRight: rightOf(header.querySelector('[data-testid="price-add-tariff"]').parentElement),
+          listPriceRight: rightOf(dataRow.children[2]),
+          inputs,
+        };
+      });
+
+      expect(m.labels, 'column labels must start where the header columns start').toEqual(m.header);
+      expect(m.row, 'data-row columns must start under their labels').toEqual(m.labels);
+      expect(m.actionRight, 'the add action must end on the List price edge').toBe(m.listPriceRight);
+      expect(m.inputs).toHaveLength(2);
+      for (const i of m.inputs) {
+        expect(i.scrollWidth, `price "${i.value}" is clipped`).toBeLessThanOrEqual(i.clientWidth);
+      }
+    });
   }
 });

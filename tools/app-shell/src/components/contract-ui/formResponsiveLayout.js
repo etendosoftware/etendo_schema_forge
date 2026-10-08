@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useElementWidth } from '@/hooks/useElementWidth.js';
 
 /**
  * Responsive layout for the horizontal (header) EntityForm grid — ETP-5513.
@@ -93,25 +94,8 @@ export function partitionInitialRows(fields, cols, initialRows) {
  * plain and image-pinned layouts.
  */
 export function useMeasuredFormColumns(enabled) {
-  const [cols, setCols] = useState(null);
-  const observerRef = useRef(null);
-  const ref = useCallback((node) => {
-    observerRef.current?.disconnect();
-    observerRef.current = null;
-    if (!enabled || !node) return;
-    const apply = (width) => {
-      const next = resolveFormColumns(width);
-      setCols(prev => (prev === next ? prev : next));
-    };
-    apply(node.getBoundingClientRect?.().width ?? 0);
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) apply(entry.contentRect.width);
-    });
-    observer.observe(node);
-    observerRef.current = observer;
-  }, [enabled]);
-  return [ref, enabled ? cols : null];
+  const [ref, width] = useElementWidth(enabled);
+  return [ref, resolveFormColumns(width)];
 }
 
 /**

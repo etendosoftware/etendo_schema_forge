@@ -306,9 +306,14 @@ with `layout="horizontal"`) is built to work there next to a side panel:
   `sidePanelStyle={{ width: 320 }}`).
 - **Textareas are at least 2 rows tall.** `EntityForm` clamps `rows` to a minimum of 2, so a
   `rows: 1` in `decisions.json` still renders 2 lines.
-- **Fixed-width columns inside tabs must be able to shrink** (`w-[Npx] min-w-0 shrink`, not
-  `shrink-0`) so the tab never scrolls horizontally with the rail expanded (see
-  `ProductPriceBar.jsx`).
+- **Column-aligned rows inside tabs share one grid template**, not per-cell flex widths.
+  Flex boxes with the same basis shrink by different amounts when one row has an extra child (a
+  delete button), so columns drift. Use the same `grid-cols-[...]` template, made of
+  content-independent `minmax(<min>,<max>)` tracks, on the header, the labels and every row,
+  with the row-action slot reserved as its own track. Give value columns a readable minimum
+  and let the descriptive column give way. If the minimum still doesn't fit, rearrange the
+  layout from a measured width (`useElementWidth`), as `ProductPriceBar.jsx` does by moving its
+  Venta/Compra switch above the section.
 
 ## References
 
