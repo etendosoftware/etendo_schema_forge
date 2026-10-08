@@ -2455,10 +2455,41 @@ stops `shouldSkipPayloadField` from dropping a seeded legacy-looking numeric FK 
 Seed keys are verified `businessPartner` field names — `name`, `customer`, `vendor` — built by the
 exported `buildContactSeed(query, { documentType })`.
 
-**Known gap.** `initialData` seeds the **header record only**. The Copilot OCR flow also extracts
-`address` / `postalCode` / `city` / `country`, which belong to the `locationAddress` **child tab**, so
-those are no longer pre-filled and the user types them. Seeding a child tab's new row is a different
-mechanism from `useEntity.handleNew`. Debt: `ocr-contact-address-prefill`.
+The contact **category** (`businessPartnerCategory`) is seeded separately because its id is per client
+and needs an async lookup: `useContactCategorySeed` (backed by `resolveContactCategorySeed`) maps
+purchase to the `Proveedor` group and sale to `Cliente` by search key
+(`CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE`), and the popup is mounted only once it settles. A missing
+group or a failed lookup leaves the form's own default. A seeded key beats `/defaults` because
+`useEntity.handleNew` registers every seeded key as user-changed.
+
+**`initialChildData` — seeding a child tab's add modal (ETP-5654).** `initialData` seeds the
+**header record only**. A child tab that opens its own `customAddModal` (Contacts' `locationAddress`)
+is seeded through a sibling prop, `initialChildData`, keyed by the secondary tab's `key`:
+
+```js
+initialChildData = { locationAddress: { address, postalCode, city, countryName } }
+```
+
+It travels `CreateContactModalAdapter` → `RecordCreateModal` → `WindowApp` → the generated page's
+existing `{...props}` spread → `DetailView`, which hands `initialChildData[st.key]` to the modal as
+`initialValues`. The decision lives in `resolveCustomAddModalSeed` (`detailViewHelpers.jsx`): the seed
+is passed **only** when the modal opens in create mode (no `rowId`) **and** the tab has no rows yet
+(`secondaryHooks[idx].children`), so a second address or an edit never gets the one-off OCR data.
+`LocationEditorModal` applies the text keys without marking the form dirty, resolves `countryName`
+against the country selector (`matchOptionByLabel`) and falls back to Spain when it is empty or
+unresolved. Region is never seeded. Optional everywhere: with no `initialChildData` nothing changes.
+
+**Auto-open after the first save.** The modal does not wait for the user to find "Añadir dirección":
+the FIRST save of the new record opens it, prefilled, for review (nothing is saved until the user
+presses Guardar). Every save handler navigates `/new` → `/:id` with `state.justSaved`, and
+`DetailView`'s existing one-shot `justSaved` cleanup now builds the next router state through
+`buildPostCreateState` (`detailViewHelpers.jsx`): when `initialChildData` has a seed for a secondary
+tab with a `customAddModal`, it adds the same `openSecondaryTab` + `openAddSecondaryLine` state that
+`runSecondaryAddLineFlow` uses, and the existing open-modal effect switches to the tab and opens the
+modal in create mode. Once-only: `justSaved` exists only on the navigation that follows a create, and
+the open-modal effect clears the state, so a cancelled modal, later saves and re-renders never reopen
+it; the manual button keeps working and prefilling while the tab has no rows. Without
+`initialChildData`, the cleanup produces exactly the previous state.
 
 **Person vs company captions.** A company carries `name`; a PERSON is stored as
 `etgoFirstname`/`etgoLastname` and may have an empty `name`, so callers resolve the selector caption

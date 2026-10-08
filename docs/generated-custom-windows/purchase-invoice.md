@@ -1658,6 +1658,46 @@ final fix passes the literal `true` to `hidePrintWhen` instead, which
 `evaluateFieldCondition(true, data) → true` treats as an unconditional match, gating **only**
 the detail view; the list keeps its pre-ticket, untouched, always-visible print button. See
 `docs/decisions-reference.md` ("Print Visibility") for the generic `hidePrintWhen` mechanism.
+## OCR reader — empty extraction is rejected (ETP-5654)
+
+A blank or corrupt PDF used to open the "Datos detectados en la factura" modal completely empty:
+the OCR tool answers with valid JSON whose every field is null, which parsed as a success.
+`useOcrExtraction` now takes a `hasData` predicate; `OcrInlineUploader` passes
+`hasExtractedData(docType, payload)` (`ocr/hasExtractedData.js`). Data exists when any header
+field read from `docType.headerFields[].extractFrom` is non-blank, or `line_items` is non-empty.
+When there is none — or the response is unparseable — `extract` rejects, the review event is
+**not** dispatched (the modal does not open) and the uploader shows the translated
+`ocrNoDataExtracted` message. The check is driven by the docType config, so any future OCR
+document type gets it for free.
+
+Tests: `ocr/__tests__/hasExtractedData.test.js`, `useOcrExtraction.vitest.jsx`,
+`OcrInlineUploader.vitest.jsx`.
+
+## OCR reader — product matching never assigns a partial match silently
+
+Line products are looked up with `simSearch` (Product, `minSimPercent: 30`, `qtyResults: 3`).
+`classifyProductMatch` (`ocr/ingest/purchaseInvoiceDescriptor.js`) decides per line:
+
+- **Exactly one candidate whose name equals the line description** (trim, case-insensitive) →
+  assigned automatically.
+- **Any other candidate** (partial similarity, or two products with the same exact name) → the
+  line goes to the "Asociar productos" popup with the best candidate **preselected** in the
+  product selector. The user can change it, search, create a product, or skip the line with the
+  small "Skip line" button below the selector (`ocr-product-skip-{idx}`, shown only while a product
+  is selected);
+  Continue returns the preselected id unless changed. A **non-dismissible warning banner**
+  (`ocrProductAutoMatchedWarning`) is shown at the top of the popup whenever any row was
+  preselected, and the generic "couldn't auto-match" hint is shown only when at least one row has
+  no suggestion.
+- **No candidates** → popup without a suggestion, as before.
+
+Example: product "Mantenimiento Web" exists, the invoice line reads "Servicio de desarrollo y
+mantenimiento web" → the popup preselects it under the warning banner; nothing reaches the
+invoice without passing through that review step.
+
+Tests: `ocr/ingest/__tests__/purchaseInvoiceDescriptor.vitest.jsx`,
+`ocr/__tests__/ProductResolverPopup.vitest.jsx`.
+
 ## OCR reader — create-contact pre-fill — ETP-4855 (superseded by ETP-5332)
 
 When the OCR reader cannot match the invoice's supplier to an existing business partner, the
@@ -1687,16 +1727,33 @@ Four links, each of which has to carry the data:
 new header field to the popup is still one entry in `createPrefilledFrom` plus a line in
 `buildOcrContactSeed`; a genuinely new extraction field is one `extraHeaderFields` entry.
 
+### Contact category follows the document (ETP-5654)
+
+A contact created from a purchase invoice starts in the **Proveedor** category (a sale document
+starts in **Cliente**). Without this the form fell back to the group flagged `isdefault`, which is
+"Cliente". The mapping lives in `CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE` (`lookupCreateTargets.js`),
+keyed by `C_BP_Group.Value`, because onboarding gives every client `Cliente`, `Proveedor` and
+`Acreedor`; ids are never hardcoded since they differ per client.
+
+`useContactCategorySeed` resolves the id through the contacts spec's own
+`businessPartnerCategory` selector **before** the popup mounts (the embedded window reads its
+seed once, on mount) and adds `businessPartnerCategory` plus its `$_identifier` label to
+`initialData`. The selector only searches the group's Name, so the query is the key text and the
+row whose label equals it exactly is taken; a renamed or missing group, a failed request or the 4s
+timeout leave the field untouched and the default applies. Both entry points share it: this OCR
+adapter and the manual Contacto selector (`useCreateContactModal`).
+
 ### Why `address`, `postalCode`, `city` and `country` are no longer seeded
 
 The window-mode popup runs the Contacts window's **own** `useEntity`, whose `initialData` option
 (the `§19b` seeding mechanism) only reaches the **header** record (`businessPartner` fields).
 `address`/`postalCode`/`city`/`country` belong to the `locationAddress` **child tab**, created
-through a different code path (`LocationEditorModal.jsx`) that `initialData` does not touch.
-Seeding a child tab's first row is a different mechanism from `useEntity.handleNew` and was not
-built as part of ETP-5332 — so a match extracted by OCR is simply not pre-filled today, and the
-user types the address by hand as they would for a manually opened "+ Crear contacto". This is
-tracked as debt `ocr-contact-address-prefill` in `flags-registry.json`.
+through `LocationEditorModal.jsx`. Since ETP-5654 they are forwarded as `initialChildData`
+(`buildOcrContactAddressSeed`): as soon as the header is saved for the first time the "Dirección" modal opens
+automatically (and "Añadir dirección" still opens it while the tab has no rows), with address line 1, postal code and city filled and the country resolved from its printed
+name (falling back to España when the invoice has none or it cannot be matched). Region is never
+prefilled and nothing is saved until the user presses Guardar. A second address, or editing one,
+opens without the seed. The former debt `ocr-contact-address-prefill` is closed.
 
 The country-label-to-option-id resolution this section used to describe (`matchOptionByLabel`
 against the country selector, with an `EntityCreationModal` `patchValues` prop merging in the
@@ -1711,8 +1768,9 @@ Before ETP-5332, `CreateContactModal` created the BP up front (`BP → address �
 → billing PATCH`) and posted the address whenever `address || city || country` was set, so a
 pre-filled address block meant the new BP got a location immediately — which is what
 `resolvePartnerAddress` in `ingest/purchaseInvoiceDescriptor.js` looks up for the invoice
-header's `partnerAddress` (NOT NULL on `C_Invoice`). Since the address is no longer seeded (see
-above), a BP created from the OCR popup today has no location until someone adds one.
+header's `partnerAddress` (NOT NULL on `C_Invoice`). The popup no longer creates the address
+itself (ETP-5654 only prefills the "Añadir dirección" modal), so a BP created from the OCR popup
+has no location until someone adds one.
 
 **That is not a dead end, and the mandatory address the old modal enforced was redundant against
 the affordance that already existed.** `partnerAddress` is a `C_BPartner_Location_ID` column, and
@@ -1721,8 +1779,8 @@ renders a **"+ Añadir dirección"** row in the dropdown and opens `LocationEdit
 set to the partner just selected. So a contact that arrives on the invoice without a location gets
 one created inline, on the document, against the right parent. The Contacts window itself has
 always permitted a partner with no location; only the deleted popup forced one, and it forced it
-on one of the two paths. What remains is the typing, which is what
-`ocr-contact-address-prefill` covers.
+on one of the two paths. What remains is pressing "Añadir dirección" and reviewing the prefilled
+modal (ETP-5654).
 
 ### Automated evidence
 
@@ -2331,3 +2389,24 @@ goods-receipt and return-material-receipt (the other drop-zone windows) keep the
 with its download/delete buttons. `OcrSidePanel` / `OcrInlineUploader` are mounted only by
 purchase-invoice (the only OCR doc type). `PdfViewer`'s new props (`zoom`, `hideToolbar`,
 `toolbarExtra`, `onExpand`, `onNumPages`) are optional, so every other PDF preview is unchanged.
+
+## Duplicate invoice warning in the OCR review modal — ETP-5654
+
+Uploading the same invoice PDF twice used to create a second purchase invoice with the same
+vendor and the same supplier document number ("Nº documento", sent as `orderReference`) with no
+warning. The review modal ("Datos detectados en la factura") now looks for it.
+
+- **When.** Once the vendor row has a resolved vendor and the document-number row is enabled
+  with a non-blank value, `findDuplicatePurchaseInvoices` (in `purchaseInvoiceDescriptor.js`)
+  lists `GET <spec>/purchase-invoice/header?criteria=[...]` with `businessPartner equals <vendor>`,
+  `orderReference iEquals <trimmed number>` and `documentStatus notEqual VO`. The three filters
+  run server-side; the rows are re-checked client-side (trim, case-insensitive, not voided).
+  Changing the vendor or the number re-runs the lookup; a stale answer is discarded.
+- **What counts.** Same vendor and same number, case and surrounding spaces ignored. Draft and
+  completed invoices count; voided ones (`VO`) do not.
+- **What the user sees.** A warning banner (`InfoBanner`, warning tone) under the document-number
+  row: "Ya existe una factura de este proveedor con el Nº documento X (1000123)." The internal
+  document number is a link that opens the existing invoice in a new tab, so the OCR flow is not
+  lost. With several matches the first is shown.
+- **Warn only.** Continue stays enabled. A failed lookup (network, non-OK, unreadable answer)
+  shows nothing and does not block.

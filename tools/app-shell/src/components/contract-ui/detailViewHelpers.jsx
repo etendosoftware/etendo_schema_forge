@@ -187,6 +187,68 @@ export function buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCusto
   };
 }
 
+/**
+ * `initialValues` for a secondary tab's `customAddModal`, taken from the window's
+ * `initialChildData` prop (keyed by the tab key; ETP-5654, e.g. the address read from an
+ * OCR'd invoice). Only a brand-new first row is seeded: editing a row (`rowId`) or adding a
+ * further row to a tab that already has some must open with real / empty data, never with
+ * the one-off seed. Returns `null` when nothing applies.
+ */
+export function resolveCustomAddModalSeed({ initialChildData, tabKey, rowId, rows }) {
+  if (rowId) return null;
+  if (Array.isArray(rows) && rows.length > 0) return null;
+  return initialChildData?.[tabKey] ?? null;
+}
+
+/**
+ * `initialValues` for the `customAddModal` of secondary tab `st`: resolves the seed from the
+ * modal state and the tab's loaded rows (see `resolveCustomAddModalSeed`).
+ */
+export function buildCustomAddModalSeed({ initialChildData, st, customModalState, secondaryHooks, idx }) {
+  return resolveCustomAddModalSeed({
+    initialChildData,
+    tabKey: st.key,
+    rowId: customModalState.rowId,
+    rows: secondaryHooks[idx]?.children,
+  });
+}
+
+/**
+ * `onParentRefresh` for a `customAddModal`: the modal just wrote the parent record, so the
+ * cached list holds the old row (ETP-5378). No-op until the parent has an id.
+ */
+export function buildCustomAddModalOnParentRefresh({ hook, parentRecordId }) {
+  return () => {
+    if (!parentRecordId) return;
+    hook.invalidateEntityCache?.();
+    hook.fetchById(parentRecordId, { force: true });
+  };
+}
+
+/**
+ * Router state for the one-shot cleanup that follows the FIRST save of a new record (ETP-5654).
+ *
+ * The save handlers navigate `/new` -> `/:id` with `state.justSaved`; DetailView consumes that
+ * marker exactly once and rewrites the state. This helper builds the rewritten state: the marker
+ * is cleared and, when the window was given an `initialChildData` seed for a secondary tab that
+ * has a `customAddModal`, the SAME `openSecondaryTab` + `openAddSecondaryLine` state that
+ * `runSecondaryAddLineFlow` uses is added, so the existing open-modal effect switches to that
+ * tab and opens the modal in create mode (where `resolveCustomAddModalSeed` applies the seed).
+ *
+ * Once-only by construction: `justSaved` exists only on the navigation that follows a create,
+ * and the open-modal effect clears the state after acting. A cancelled modal, later saves and
+ * re-renders never see it again. A record that was just created has no child rows yet.
+ * A state that already asks for a tab (e.g. an explicit "add line" save) is left untouched.
+ * Without `initialChildData` the result is exactly `{ ...locationState, justSaved: undefined }`.
+ */
+export function buildPostCreateState({ locationState, initialChildData, secondaryTabs }) {
+  const cleared = { ...locationState, justSaved: undefined };
+  if (!initialChildData || !locationState?.justSaved?.id || locationState.openSecondaryTab) return cleared;
+  const target = (secondaryTabs ?? []).find(st => st?.customAddModal && initialChildData[st.key]);
+  if (!target) return cleared;
+  return { ...cleared, openSecondaryTab: target.key, openAddSecondaryLine: true };
+}
+
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
   // devtools console is open) and only place it beside the content once there
