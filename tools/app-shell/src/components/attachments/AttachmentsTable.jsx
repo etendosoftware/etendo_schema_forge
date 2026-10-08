@@ -154,11 +154,11 @@ export default function AttachmentsTable({
           <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUploadedAt')}</TableHead>
           <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUpdatedAt')}</TableHead>
           <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUploadedBy')}</TableHead>
-          {/* ETP-5526 — "Eliminar todo" is gone from here: the selection bar is the
-              one bulk-delete affordance now, and the Figma header has exactly the
-              five data columns above. "Descargar todo (ZIP)" survives only because
-              a caller without selection (SifAttachmentsSection) has no other way to
-              pull the whole bundle; the Adjuntos tab no longer passes it. */}
+          {/* ETP-5526 — the delete-all header control is gone from here: the selection
+              bar is the one bulk-delete affordance now, and the Figma header has exactly
+              the five data columns above. The download-all ZIP control survives only
+              because a caller without selection (SifAttachmentsSection) has no other way
+              to pull the whole bundle; the attachments tab no longer passes it. */}
           <TableHead className={headCell} data-testid="TableHead__e868a0">
             {onDownloadAll && (
               <div className="flex justify-end items-center gap-3">

@@ -335,7 +335,7 @@ export default function AttachmentsTab({
           }
         }}
         data-testid="ConfirmDeleteDialog__281340" />
-      {/* The bulk delete keeps the confirmation step the old "Eliminar todo" header
+      {/* The bulk delete keeps the confirmation step the old delete-all header
           control had — the bar deletes nothing directly. Only the wording moved:
           the message now names the selection and its size instead of claiming to
           remove every attachment of the record. */}
