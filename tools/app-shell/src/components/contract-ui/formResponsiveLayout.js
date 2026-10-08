@@ -20,13 +20,19 @@ import { subscribeSaveGateAttempts } from './saveGateAttempts.js';
  */
 export const FORM_COLUMN_BREAKPOINTS = Object.freeze({ three: 480, four: 960 });
 
+/** True only for a value that coerces to a number greater than 0 (NaN, null, undefined and <= 0 are false). */
+function isPositive(value) {
+  const n = Number(value);
+  return !Number.isNaN(n) && n > 0;
+}
+
 /**
  * Resolve the column count for a horizontal form of the given container width.
  * Returns `null` when the width is unknown (not mounted, jsdom), so the caller
  * keeps its static Tailwind fallback classes.
  */
 export function resolveFormColumns(width) {
-  if (!(width > 0)) return null;
+  if (!isPositive(width)) return null;
   if (width < FORM_COLUMN_BREAKPOINTS.three) return 2;
   if (width < FORM_COLUMN_BREAKPOINTS.four) return 3;
   return 4;
@@ -62,7 +68,7 @@ function isRequiredField(field) {
  */
 export function partitionInitialRows(fields, cols, initialRows, isReadOnly = () => false) {
   const list = Array.isArray(fields) ? fields : [];
-  if (!cols || !(initialRows > 0)) return { ordered: list, visible: list, hiddenCount: 0 };
+  if (!cols || !isPositive(initialRows)) return { ordered: list, visible: list, hiddenCount: 0 };
 
   const countVisible = (items) => {
     let row = 1;
