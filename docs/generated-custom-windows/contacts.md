@@ -121,7 +121,7 @@ The Contacts window should let users maintain a shared business-partner master r
 26. With rows selected, click the X button in the selection bar. Confirm the selection bar disappears AND all row checkboxes are visually unchecked.
 27. In the advanced filter panel, confirm "Tipo" appears as a filterable field with "Cliente" and "Proveedor" options. Apply `Tipo = Cliente` and confirm only customer contacts are shown. Apply `Tipo = Proveedor` and confirm only vendor contacts are shown.
 28. Confirm the Tipo column shows **Cliente** in purple (`#F4F1FD` bg / `#4316CA` text) and **Proveedor** in blue (`#F0FAFF` bg / `#0075AD` text).
-29. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+29. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 
 ## Automated evidence
 

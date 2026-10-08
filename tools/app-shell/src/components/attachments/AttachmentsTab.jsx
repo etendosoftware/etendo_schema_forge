@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Download, Trash2 } from 'lucide-react';
 import { useUI } from '@/i18n';
+import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
 import { useAttachments } from './useAttachments';
 import UploadDropzone from './UploadDropzone';
 import AttachmentsTable from './AttachmentsTable';
@@ -33,16 +35,23 @@ import { buildTypesLabel } from './attachmentPolicy';
  *                       the header. Only present (non-undefined) while isNew.
  *   onGoToSavedRecord - (savedRecord) => void. Navigates to the just-saved
  *                       record with this tab re-opened. Only present while isNew.
- *   readOnly          - When true, hides the single-row and "delete all" delete
- *                       actions (download/upload stay available). Default false
- *                       (every existing caller is unaffected). A window passes
- *                       this when the owning record has left an editable/draft
- *                       state — e.g. fiscal-models' "Justificante" tab, where an
- *                       already-submitted declaration's receipt must not be
- *                       deletable (ETP-5432 pt.3). This is a UI convenience only:
- *                       the backend `DELETE /sws/neo/attachments/:id` endpoint has
- *                       no per-record status check, so it does not stop a direct
- *                       API call — see NeoAttachmentsHelper#handleDelete.
+ *   readOnly          - When true, hides every delete action — the per-row one and
+ *                       the selection bar's. Download and upload stay available;
+ *                       that asymmetry is the prop's contract, not an oversight.
+ *                       Default false (every existing caller is unaffected). A
+ *                       window passes this when the owning record has left an
+ *                       editable/draft state — e.g. fiscal-models' "Justificante"
+ *                       tab, where an already-submitted declaration's receipt must
+ *                       not be deletable (ETP-5432 pt.3). This is a UI convenience
+ *                       only: the backend `DELETE /sws/neo/attachments/:id`
+ *                       endpoint DOES reject it for a non-draft fiscal declaration
+ *                       (409), but no generic per-record status check exists — see
+ *                       NeoAttachmentsHelper#handleDelete.
+ *   isDocumentReadOnly - Accepted and deliberately IGNORED since ETP-5526; see the
+ *                       note above `effectiveReadOnly` below. Kept in the signature
+ *                       because DetailView passes it to every tab-placement custom
+ *                       component, and because silently dropping it from the list
+ *                       would read as "this tab never received the document lock".
  *
  * ── Attaching before the header is saved (ETP-4315 QA follow-up) ───────────
  * A brand-new record has no persisted id, so `recordId` here is the literal
@@ -71,16 +80,32 @@ export default function AttachmentsTab({
   readOnly = false,
 }) {
   const ui = useUI();
-  // ETP-5432/ETP-5205 merge fix: `isDocumentReadOnly` (generic, wired by DetailView
-  // from the document's own lock/processed state) and `readOnly` (explicit, for
-  // bespoke callers outside DetailView — e.g. fiscal-models' "Justificante" tab,
-  // which is not rendered through DetailView) are two independent signals; either
-  // one should suppress delete. Losing either source silently re-enables delete on
-  // a record that must not allow it — this exact regression shipped once already:
-  // a develop merge kept `isDocumentReadOnly` and dropped `readOnly`, so both
-  // FmModel303Page's and FmModel349Page's `readOnly={status !== 'draft'}` silently
-  // stopped doing anything.
-  const effectiveReadOnly = !!isDocumentReadOnly || !!readOnly;
+  // ── Two signals, now DELIBERATELY asymmetric (ETP-5526). Read before "fixing". ──
+  //
+  // This used to be `!!isDocumentReadOnly || !!readOnly`, and the OR was load-bearing:
+  // a develop merge once kept `isDocumentReadOnly` and dropped `readOnly`, which
+  // silently re-enabled delete on records that must not allow it (FmModel303Page and
+  // FmModel349Page both pass `readOnly={status !== 'draft'}` and simply stopped doing
+  // anything). That regression is why the warning below is this long.
+  //
+  //   `readOnly` — the explicit prop, passed by bespoke callers that do NOT render
+  //   through DetailView: the fiscal-model "Justificante" tabs. It is UNCHANGED and
+  //   must stay so. It hides every delete affordance (per-row AND the selection bar's)
+  //   and deliberately does NOT touch upload or download — ETP-5432 blocks *removing*
+  //   a submitted declaration's receipt, nothing else. Dropping it, renaming it, or
+  //   widening it to cover upload all re-break ETP-5432.
+  //
+  //   `isDocumentReadOnly` — the generic lock DetailView wires from the document's own
+  //   processed/completed state. It no longer takes part here AT ALL: a processed
+  //   document now accepts attachment work (upload and delete), by product decision.
+  //   Attachments are evidence about a document, not part of it, and a closed invoice
+  //   is exactly when someone needs to file the signed copy. This is NOT a lost signal
+  //   — it is the ticket's intended behaviour change. Re-adding it to this expression,
+  //   or back to the dropzone's `disabled`, reverts a deliberate product decision.
+  //
+  // Consequence, known and accepted: there is currently no way to express a fully
+  // read-only attachments view through this component.
+  const effectiveReadOnly = !!readOnly;
   const saveBeforeAttach = !!config.saveBeforeAttach;
   const [isSavingBeforeAttach, setIsSavingBeforeAttach] = useState(false);
 
@@ -121,9 +146,9 @@ export default function AttachmentsTab({
     uploadingFiles,
     upload,
     download,
-    downloadAll,
+    downloadSelection,
     remove,
-    removeAll,
+    removeMany,
     formatBytes,
   } = useAttachments({
     tableName,
@@ -138,7 +163,35 @@ export default function AttachmentsTab({
 
   const [deletingAttachment, setDeletingAttachment] = useState(null);
   const [pendingUploadFile, setPendingUploadFile] = useState(null);
-  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [confirmDeleteSelection, setConfirmDeleteSelection] = useState(false);
+
+  // ── Multi-select (ETP-5526) ───────────────────────────────────────────────
+  // This tab owns the selection; AttachmentsTable only renders it (see its
+  // "Selection is an opt-in capability" note). Same split as
+  // MovementsTab → StatementsTable, including who renders the SelectionToolbar.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+  const toggleRow = useCallback((id) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (!next.delete(id)) next.add(id);
+    return next;
+  }), []);
+  const replaceSelection = useCallback((ids) => setSelectedIds(new Set(ids)), []);
+
+  // A selection must never outlive the record it was made on: DetailView keeps
+  // this tab mounted across record navigation, so without this the next record
+  // would open with the previous one's ids ticked — and the bar would offer to
+  // delete rows that are not on screen.
+  useEffect(() => { clearSelection(); }, [recordId, clearSelection]);
+
+  // Intersected with the live list rather than read straight off the Set: after a
+  // bulk delete the removed ids linger for one render, and the count (and the bar
+  // itself) must follow what the user can actually see.
+  const selectedItems = useMemo(
+    () => items.filter((it) => selectedIds.has(it.id)),
+    [items, selectedIds],
+  );
+  const selectionCount = selectedItems.length;
 
   const onCountChangeRef = useRef(onCountChange);
   useEffect(() => { onCountChangeRef.current = onCountChange; });
@@ -180,17 +233,18 @@ export default function AttachmentsTab({
     }
   };
 
-  const onDeleteAll = !effectiveReadOnly && items.length > 0 ? () => setConfirmDeleteAll(true) : undefined;
+  const downloadSelected = () => downloadSelection(selectedItems.map((it) => it.id));
 
   return (
     <div className="space-y-2" data-testid="attachments-tab-panel">
       <UploadDropzone
         onFiles={handleUpload}
         config={effectiveConfig}
-        // Upload stays gated by `isDocumentReadOnly` only — the bespoke `readOnly`
-        // prop is delete-only by contract (see JSDoc above: "download/upload stay
-        // available"), so it must not disable the dropzone.
-        disabled={!recordId || isSavingBeforeAttach || isDocumentReadOnly}
+        // Neither read-only signal gates upload any more: `readOnly` never did (it is
+        // delete-only by contract) and `isDocumentReadOnly` deliberately stopped doing
+        // so in ETP-5526 — attaching to a processed document is now allowed. What is
+        // left are the two mechanical reasons an upload cannot happen at all.
+        disabled={!recordId || isSavingBeforeAttach}
         data-testid="UploadDropzone__281340" />
       <AttachmentsTable
         items={items}
@@ -198,10 +252,50 @@ export default function AttachmentsTab({
         uploadingFiles={uploadingFiles}
         onDownload={download}
         onDelete={effectiveReadOnly ? undefined : setDeletingAttachment}
-        onDownloadAll={items.length > 0 ? downloadAll : undefined}
-        onDeleteAll={onDeleteAll}
+        selectedIds={selectedIds}
+        onToggleRow={toggleRow}
+        onToggleAll={replaceSelection}
         formatBytes={formatBytes}
         data-testid="AttachmentsTable__281340" />
+      {/* The system's own bulk-selection pill (SelectionToolbar) — the same shell
+          Contactos, Cuentas financieras, Amortización, Activos and every list view
+          use. Two segments, as that component expects: the counter, then the
+          actions. Delete obeys exactly the same gate as the per-row delete, so the
+          bar can never become a way around a rule the row respects. */}
+      <SelectionToolbar
+        visible={selectionCount > 0}
+        onClose={clearSelection}
+        closeTitle={ui('close')}
+        data-testid="attachments-selection-bar">
+        <span
+          role="status"
+          className="text-sm font-medium"
+          data-testid="attachments-selection-count">
+          {ui('selected', { count: selectionCount })}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            title={ui('attachmentsDownloadZip')}
+            aria-label={ui('attachmentsDownloadZip')}
+            onClick={downloadSelected}
+            className="inline-flex items-center justify-center rounded-md p-2 transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)]"
+            data-testid="attachments-download-selected">
+            <Download className="h-3.5 w-3.5" data-testid="Download__281340" />
+          </button>
+          {!effectiveReadOnly && (
+            <button
+              type="button"
+              title={ui('delete')}
+              aria-label={ui('delete')}
+              onClick={() => setConfirmDeleteSelection(true)}
+              className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10"
+              data-testid="attachments-delete-selected">
+              <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__281340" />
+            </button>
+          )}
+        </div>
+      </SelectionToolbar>
       <ConfirmDeleteDialog
         open={!!deletingAttachment}
         onClose={() => setDeletingAttachment(null)}
@@ -223,12 +317,19 @@ export default function AttachmentsTab({
           }
         }}
         data-testid="ConfirmDeleteDialog__281340" />
+      {/* The bulk delete keeps the confirmation step the old "Eliminar todo" header
+          control had — the bar deletes nothing directly. Only the wording moved:
+          the message now names the selection and its size instead of claiming to
+          remove every attachment of the record. */}
       <ConfirmDeleteDialog
-        open={confirmDeleteAll}
-        title={ui('attachmentsRemoveAllTitle')}
-        message={ui('attachmentsRemoveAllMessage')}
-        onClose={() => setConfirmDeleteAll(false)}
-        onConfirm={removeAll}
+        open={confirmDeleteSelection}
+        title={ui('attachmentsRemoveSelectedTitle')}
+        message={ui('attachmentsRemoveSelectedMessage', { count: selectionCount })}
+        onClose={() => setConfirmDeleteSelection(false)}
+        onConfirm={() => {
+          removeMany(selectedItems.map((it) => it.id));
+          clearSelection();
+        }}
         data-testid="ConfirmDeleteDialog__281340" />
     </div>
   );

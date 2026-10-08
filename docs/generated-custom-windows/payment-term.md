@@ -42,7 +42,7 @@ Maintain the rules that determine when a receivable or payable becomes due and w
 3. Confirm the detail form currently exposes only `Search Key`, `Name`, `Offset Month Due`, `Overdue Payment Days Rule`, and `Default`.
 4. Change the `Default` checkbox, save, reopen the record, and confirm the saved state is reflected back in the badge-style display.
 5. Attempt to find fixed-date, next-business-day, or child-line installment controls and confirm they are not currently exposed in the generated UI.
-6. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+6. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 
 ## Automated evidence
 
