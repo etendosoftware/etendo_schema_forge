@@ -1,5 +1,6 @@
 import { getDateBounds, toDateParam } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
+import { postedStatusTone } from '@/lib/postedStatus.js';
 
 /**
  * Filter state of the Not Posted Documents page (ETP-5591): its defaults, its URL form and
@@ -12,8 +13,8 @@ import { parseCalendarDate } from '@/lib/dateOnly';
  */
 
 /**
- * The statuses the page offers, in the order the design lists them (yellow → orange →
- * red). The design had four; ETP-5591 QA added "Coste no calculado" (`NC`), which the backend
+ * The statuses the page offers, in the order the design lists them (pending first, then the
+ * failures). The design had four; ETP-5591 QA added "Coste no calculado" (`NC`), which the backend
  * had never requested, so goods receipts stuck on an uncalculated cost never appeared.
  *
  * Each one is a URL `token` and the backend `keys` it stands for: "Error" covers both
@@ -22,18 +23,21 @@ import { parseCalendarDate } from '@/lib/dateOnly';
  * could not be split back into options.
  *
  * Labels are the page's own i18n keys, in the design's sentence case, not the AD's Title Case
- * translations ("Cuenta No Válida"). The badge tones are the design's.
+ * translations ("Cuenta No Válida"). The badge tone is NOT declared here: it comes from the
+ * shared posting-status registry (`postedStatusTone`), the one colour source every surface
+ * that shows a posting status reads — so "No contabilizado" is the same yellow, and "Periodo
+ * cerrado" the same red, here as in the lists and the detail view (ETP-5647).
  *
  * `error: true` marks the statuses the "Todos los errores" shortcut selects: every status that
  * means a posting attempt FAILED, i.e. all but "No contabilizado" (never attempted).
  */
 export const STATUS_DEFS = [
-  { token: 'N', keys: ['N'], labelKey: 'notPostedStatusUnposted', variant: 'yellow', error: false },
-  { token: 'p', keys: ['p'], labelKey: 'postedStatusPeriodClosed', variant: 'orange', error: true },
-  { token: 'i', keys: ['i'], labelKey: 'notPostedStatusInvalidAccount', variant: 'red', error: true },
-  { token: 'NC', keys: ['NC'], labelKey: 'postedStatusCostNotCalculated', variant: 'red', error: true },
-  { token: 'E', keys: ['E', 'C'], labelKey: 'notPostedStatusError', variant: 'red', error: true },
-];
+  { token: 'N', keys: ['N'], labelKey: 'notPostedStatusUnposted', error: false },
+  { token: 'p', keys: ['p'], labelKey: 'postedStatusPeriodClosed', error: true },
+  { token: 'i', keys: ['i'], labelKey: 'notPostedStatusInvalidAccount', error: true },
+  { token: 'NC', keys: ['NC'], labelKey: 'postedStatusCostNotCalculated', error: true },
+  { token: 'E', keys: ['E', 'C'], labelKey: 'notPostedStatusError', error: true },
+].map((def) => ({ ...def, tone: postedStatusTone(def.keys[0]) }));
 
 /** The status tokens "Todos los errores" stands for. */
 export const ERROR_TOKENS = STATUS_DEFS.filter((def) => def.error).map((def) => def.token);

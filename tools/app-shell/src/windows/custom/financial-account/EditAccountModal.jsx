@@ -28,6 +28,7 @@ import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchS
 import { useGLItemLookup } from '@/hooks/useMovementLookups.js';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEligibility.js';
+import { LastSyncLabel } from '@/components/financial-accounts/LastSyncLabel.jsx';
 import { normalizeIban } from '@/lib/validateIban.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
@@ -1843,9 +1844,19 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTo
   return (
     <div className="flex flex-col gap-3 rounded-lg bg-[hsl(var(--muted))] p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
-          {bankConnection.status?.providerName || ui('financeAccountsBankConnectionStatusConnected')}
-        </span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
+            {bankConnection.status?.providerName || ui('financeAccountsBankConnectionStatusConnected')}
+          </span>
+          {bankConnection.connected ? (
+            <LastSyncLabel
+              date={bankConnection.status?.lastSyncDate}
+              prefixKey="financeAccountsLastSyncAgo"
+              className="text-xs text-[hsl(var(--muted-foreground))]"
+              data-testid="bank-connection-last-sync"
+            />
+          ) : null}
+        </div>
         <button
           type="button"
           disabled={busy || !bankConnection.connected}

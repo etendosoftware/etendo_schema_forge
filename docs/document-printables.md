@@ -191,6 +191,17 @@ Two accepted consequences, both deliberate:
 - `updated` changes on *any* edit, so the cache is invalidated often. Regenerating more often is
   the desired trade-off: serving a stale document is worse than re-rendering.
 
+**A child write that changes a printed figure must move the parent's `updated`** — a write to a
+child table alone does not. The invoice's "Exchange rates" tab is the worked example (ETP-5657,
+verified against the code): the dual-currency total prints from the header's
+`eTGOCurrencyRate`, never from the `C_Conversion_Rate_Document` row. Adding or editing a rate row
+works only because `InvoiceExchangeRateHandler.syncHeaderCurrencyRate` sets that header field and
+saves the invoice through DAL, so `OBInterceptor.onFlushDirty → onUpdate` stamps
+`C_Invoice.updated`, and both cache halves (`useInvoicePreview` and `InvoicePreview`'s
+`attachmentConfig`) see the cached file as older. Before ETP-5657 the add path skipped that sync
+and the printed rate silently stayed on the old value. Deleting a non-draft invoice's rate is
+refused server-side, so it never has to invalidate anything.
+
 ### The second cause: the renderer changed (ETP-5125)
 
 A rendered PDF is a function of **four** inputs — the record's data, the template, the

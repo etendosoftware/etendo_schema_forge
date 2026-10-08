@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.cellRenderers.jsx
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 
@@ -292,8 +293,11 @@ describe('renderBooleanCell', () => {
 
   // ETP-5075 — the `Posted` AD column holds 17 codes, not a boolean. A code
   // outside `'Y'`/`'N'` used to fall through the badge branch above straight to
-  // the em-dash fallback, hiding the reason a posting attempt failed. It must
-  // now resolve through the shared `postedStatus.js` registry and render a Tag.
+  // the em-dash fallback, hiding the reason a posting attempt failed.
+  // ETP-5647 — its colour now comes ONLY from the shared `postedStatus.js`
+  // registry, rendered as a StatusTag in the status palette: the fixture keeps a
+  // stale `badgeVariants: { false: 'orange' }` on purpose to prove it is ignored,
+  // so "Not posted" is the yellow warning the detail pill shows, never orange.
   describe('with col.column: "Posted" (posting-status domain)', () => {
     const postedCol = {
       key: 'posted',
@@ -307,20 +311,26 @@ describe('renderBooleanCell', () => {
       badgeVariants: { true: 'green', false: 'orange' },
     };
 
-    it("renders a red Tag with the translated label for 'i' (invalid account), not the em-dash", () => {
+    it("renders a destructive StatusTag with the translated label for 'i' (invalid account), not the em-dash", () => {
       renderCell(renderBooleanCell({
         ...baseContext,
         col: postedCol,
         rawValue: 'i',
       }));
 
-      const tag = screen.getByTestId('tag');
-      expect(tag).toHaveAttribute('data-variant', 'red');
+      const tag = screen.getByTestId('status-tag');
+      expect(tag).toHaveAttribute('data-tone', 'destructive');
       expect(tag).toHaveTextContent('postedStatusInvalidAccount');
       expect(screen.queryByText('—')).not.toBeInTheDocument();
     });
 
-    it("still renders the ordinary green/orange Tag for 'Y' (no regression)", () => {
+    it("renders 'p' (period closed) destructive, like every other failed posting", () => {
+      renderCell(renderBooleanCell({ ...baseContext, col: postedCol, rawValue: 'p' }));
+
+      expect(screen.getByTestId('status-tag')).toHaveAttribute('data-tone', 'destructive');
+    });
+
+    it("renders 'Y' as a success StatusTag with the window's badgeLabels wording", () => {
       renderCell(renderBooleanCell({
         ...baseContext,
         locale: 'en_US',
@@ -328,12 +338,13 @@ describe('renderBooleanCell', () => {
         rawValue: 'Y',
       }));
 
-      const tag = screen.getByTestId('tag');
-      expect(tag).toHaveAttribute('data-variant', 'green');
+      const tag = screen.getByTestId('status-tag');
+      expect(tag).toHaveAttribute('data-tone', 'success');
       expect(tag).toHaveTextContent('Posted');
+      expect(screen.queryByTestId('tag')).not.toBeInTheDocument();
     });
 
-    it("still renders the ordinary green/orange Tag for 'N' (no regression)", () => {
+    it("renders 'N' as the yellow warning StatusTag, ignoring the column's orange badgeVariants", () => {
       renderCell(renderBooleanCell({
         ...baseContext,
         locale: 'en_US',
@@ -341,9 +352,26 @@ describe('renderBooleanCell', () => {
         rawValue: 'N',
       }));
 
-      const tag = screen.getByTestId('tag');
-      expect(tag).toHaveAttribute('data-variant', 'orange');
+      const tag = screen.getByTestId('status-tag');
+      expect(tag).toHaveAttribute('data-tone', 'warning');
       expect(tag).toHaveTextContent('Not posted');
+      expect(screen.queryByTestId('tag')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the generic posted / not-posted labels when the column has no badgeLabels', () => {
+      const { badgeLabels, ...noLabels } = postedCol;
+      renderCell(renderBooleanCell({ ...baseContext, col: noLabels, rawValue: false }));
+
+      const tag = screen.getByTestId('status-tag');
+      expect(tag).toHaveAttribute('data-tone', 'warning');
+      expect(tag).toHaveTextContent('notPostedStatus');
+    });
+
+    it('keeps the plain Yes/No text for a Posted column that is not a badge', () => {
+      renderCell(renderBooleanCell({ ...baseContext, col: { ...postedCol, badge: false }, rawValue: 'N' }));
+
+      expect(screen.queryByTestId('status-tag')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('tag')).not.toBeInTheDocument();
     });
   });
 });

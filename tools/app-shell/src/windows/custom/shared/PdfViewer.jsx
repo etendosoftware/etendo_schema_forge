@@ -11,14 +11,50 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3.0;
 const A4_ASPECT = 842 / 595; // portrait height/width ratio
 
-export default function PdfViewer({ url }) {
-  const ui = useUI();
-  const [numPages, setNumPages] = useState(0);
+/**
+ * Zoom state of a PdfViewer. The viewer owns one by default; a caller that draws its own
+ * controls (the file lightbox header, ETP-5518) creates it here and hands it over as `zoom`.
+ */
+export function usePdfZoom({ initialFitMode = 'width' } = {}) {
   const [scale, setScale] = useState(1.0);
+  const [fitMode, setFitMode] = useState(initialFitMode); // 'width' | 'page'
+
+  const zoomIn = useCallback(() => setScale((s) => Math.min(s + ZOOM_STEP, MAX_ZOOM)), []);
+  const zoomOut = useCallback(() => setScale((s) => Math.max(s - ZOOM_STEP, MIN_ZOOM)), []);
+  const toggleFitMode = useCallback(() => {
+    setFitMode((m) => (m === 'width' ? 'page' : 'width'));
+    setScale(1.0);
+  }, []);
+  const fitToPage = useCallback(() => {
+    setFitMode('page');
+    setScale(1.0);
+  }, []);
+
+  return {
+    scale, fitMode, zoomIn, zoomOut, toggleFitMode, fitToPage,
+    canZoomIn: scale < MAX_ZOOM,
+    canZoomOut: scale > MIN_ZOOM,
+  };
+}
+
+/**
+ * @param {string}    url            - PDF to render.
+ * @param {Object}    [zoom]         - external zoom state from `usePdfZoom`; omitted → internal.
+ * @param {boolean}   [hideToolbar]  - drop the floating zoom group (the caller draws its own).
+ * @param {ReactNode} [toolbarExtra] - extra control appended to the floating zoom group.
+ * @param {Function}  [onExpand]     - when set, clicking the rendered pages calls it.
+ * @param {Function}  [onNumPages]   - reports the page count once the document loads.
+ */
+export default function PdfViewer({
+  url, zoom, hideToolbar = false, toolbarExtra = null, onExpand, onNumPages,
+}) {
+  const ui = useUI();
+  const ownZoom = usePdfZoom();
+  const { scale, fitMode, zoomIn, zoomOut, toggleFitMode } = zoom ?? ownZoom;
+  const [numPages, setNumPages] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);
   const [containerHeight, setContainerHeight] = useState(0);
   const [pageAspect, setPageAspect] = useState(A4_ASPECT);
-  const [fitMode, setFitMode] = useState('width'); // 'width' | 'page'
   const [loadError, setLoadError] = useState(null);
   const containerRef = useRef(null);
   const scrollRef = useRef(null);
@@ -40,13 +76,6 @@ export default function PdfViewer({ url }) {
     return () => ro.disconnect();
   }, []);
 
-  const zoomIn = useCallback(() => setScale((s) => Math.min(s + ZOOM_STEP, MAX_ZOOM)), []);
-  const zoomOut = useCallback(() => setScale((s) => Math.max(s - ZOOM_STEP, MIN_ZOOM)), []);
-  const toggleFitMode = useCallback(() => {
-    setFitMode((m) => (m === 'width' ? 'page' : 'width'));
-    setScale(1.0);
-  }, []);
-
   const handlePageLoad = useCallback((page) => {
     const w = page?.originalWidth ?? page?.width;
     const h = page?.originalHeight ?? page?.height;
@@ -63,7 +92,7 @@ export default function PdfViewer({ url }) {
   return (
     <div ref={containerRef} className="relative w-full h-full flex flex-col">
       {/* Button Group — top-right floating */}
-      <div
+      {!hideToolbar && (<div
         className="absolute top-2 right-2 z-10 flex items-stretch bg-card rounded-lg overflow-hidden"
         style={{
           border: '1px solid hsl(var(--border-control))',
@@ -101,13 +130,19 @@ export default function PdfViewer({ url }) {
         >
           <ZoomOut size={20} style={{ color: 'hsl(var(--text-disabled))' }} data-testid="ZoomOut__fca188" />
         </button>
-      </div>
+        {toolbarExtra && (
+          <>
+            <div style={{ width: 1, backgroundColor: 'hsl(var(--border-subtle))' }} />
+            {toolbarExtra}
+          </>
+        )}
+      </div>)}
       {/* PDF scroll container */}
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto">
-        <div className="w-fit mx-auto py-2">
+        <div className="relative w-fit mx-auto py-2">
           <Document
             file={url}
-            onLoadSuccess={({ numPages }) => { setNumPages(numPages); setLoadError(null); }}
+            onLoadSuccess={({ numPages }) => { setNumPages(numPages); setLoadError(null); onNumPages?.(numPages); }}
             onLoadError={(err) => setLoadError(err?.message || 'Error')}
             loading={(
               <div className="flex items-center justify-center gap-2 text-muted-foreground p-12">
@@ -135,6 +170,18 @@ export default function PdfViewer({ url }) {
                 data-testid="Page__fca188" />
             ))}
           </Document>
+          {/* A transparent button over the pages rather than a click handler on them: it is
+              keyboard-reachable and scrolls with the document. */}
+          {onExpand && numPages > 0 && (
+            <button
+              type="button"
+              onClick={onExpand}
+              className="absolute inset-0 cursor-zoom-in"
+              aria-label={ui('fileViewerExpand')}
+              title={ui('fileViewerExpand')}
+              data-testid="file-viewer-expand"
+            />
+          )}
         </div>
       </div>
     </div>

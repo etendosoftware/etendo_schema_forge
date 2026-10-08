@@ -12,6 +12,7 @@ import {
   ReconciliationListTable,
   buildReconciliationSortAccessors,
   buildReconciliationSortColumns,
+  reconciliationPostedLabel,
 } from './ReconciliationListTable.jsx';
 import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
 import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
@@ -63,7 +64,7 @@ export function ReconciliationListTab({
   // whole history arrives in one request (`_endRow=200`) — see lib/clientSort.js.
   const sortAccessors = useMemo(() => buildReconciliationSortAccessors({
     ui,
-    postedLabel: (posted) => ui(`financeAccountReconciliationsPosted_${posted}`) || posted || '—',
+    postedLabel: (posted) => reconciliationPostedLabel(posted, ui),
   }), [ui]);
   const sortColumns = useMemo(() => buildReconciliationSortColumns(ui), [ui]);
   const {

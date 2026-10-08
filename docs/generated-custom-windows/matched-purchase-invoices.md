@@ -52,7 +52,7 @@ posted/not-posted. Every other code is the REASON a posting attempt failed:
 | Code | Meaning | Shown as |
 |---|---|---|
 | `Y` | Posted | green "Contabilizado" |
-| `N` | Not posted | orange "Sin contabilizar" |
+| `N` | Not posted | yellow "Sin contabilizar" (was orange until ETP-5647) |
 | `i` | Invalid account | red "Cuenta inválida" |
 | `E` / `C` | Posting error / error, no cost | red |
 | `p` | Period closed | red |
@@ -64,8 +64,9 @@ Those states are the majority of real data, not an edge case (in one dev tenant:
 `'Y'`/`'N'` allowlist and disagreed: the grid printed a bare `—` while the detail pill
 claimed "Sin contabilizar", so a record whose posting had FAILED read as one that was never
 attempted. `tools/app-shell/src/lib/postedStatus.js` is now the single registry both use —
-keyed by AD column name, failing closed, `Y`/`N` untouched so the other windows are
-unaffected.
+keyed by AD column name, failing closed, `Y`/`N` labels untouched so the other windows are
+unaffected. Since ETP-5647 it is also the only colour source for every code, `Y`/`N` included
+(`postedStatusTone`), so the grid and the detail pill can no longer differ in colour either.
 
 **Real case that surfaced this:** a match whose invoice price differs from the receipt cost
 (e.g. 15.00 invoiced vs 19.80 received) needs the *Invoice Price Variance* account, which

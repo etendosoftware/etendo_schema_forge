@@ -500,6 +500,14 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
           if (d.searchKey && !skTouched && !searchKey) {
             setSearchKey(String(d.searchKey));
           }
+          // Preselect the same UoM / tax category the product window defaults to
+          // (ProductDefaultsHandler). Functional setters: never clobber a user pick.
+          if (d.uOM) {
+            setUom((prev) => prev ?? { id: d.uOM, label: d['uOM$_identifier'] ?? '' });
+          }
+          if (d.taxCategory) {
+            setTaxCategory((prev) => prev ?? { id: d.taxCategory, label: d['taxCategory$_identifier'] ?? '' });
+          }
         }
       } catch {
         if (!cancelled) setDefaultsFailed(true);

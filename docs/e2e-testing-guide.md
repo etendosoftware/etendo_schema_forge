@@ -154,9 +154,13 @@ Like the contextual-selector smoke above, they get a bearer JWT through
 
 `e2e/tests/flows/system/tenant-upgrade-provisioning-failure.integration.spec.js` runs in the
 ordinary integration project through `scripts/run-e2e-full.sh`, including the local
-`make test-e2e-headless` run and the pre-push E2E gate. The runner sets
-`E2E_PROVISIONING_FAILURE=1`. A CI job that invokes this runner includes the same spec;
-the current Jenkins pipeline does not invoke the runner.
+`make test-e2e-headless` run and the pre-push E2E gate, where the runner sets
+`E2E_PROVISIONING_FAILURE=1`. Under Jenkins (detected by a non-empty `JENKINS_URL`) the
+runner sets `E2E_PROVISIONING_FAILURE=0` and the spec self-skips: on first run the backend
+fixture (`POST /sws/go/dev/provisioning-failure-fixture`) provisions a whole dedicated pool
+tenant synchronously, which takes minutes and exceeds the 15 s `actionTimeout`. An explicit
+`E2E_PROVISIONING_FAILURE` value always wins — export `E2E_PROVISIONING_FAILURE=1` to force
+the spec on (including under Jenkins), or `0` to skip it locally.
 The spec creates a paid checkout through a local backend fixture, follows the real
 `/upgrade?checkout=success` browser path, checks that the UI sends onboarding with the
 same request ID, verifies the durable `provisioning_failed` state and visible recovery
@@ -1063,6 +1067,19 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `row-quick-action-delete-confirm` | — | Destructive button inside the row delete confirm dialog |
 | `generic-preview-modal` | — | `GenericPreviewModal` card (the right-anchored panel) |
 | `preview-drop-zone` | — | Drop zone inside GenericPreviewModal managed left panel |
+| `preview-file-replace-input` | — | Hidden `<input type="file">` behind "Reemplazar archivo" in the list preview (`fileActions` mode) — use `setInputFiles()` |
+| `file-viewer-more` | — | "Más" (⋯) button on the uploaded-file mini toolbar (`UploadedFileViewer`) |
+| `file-viewer-menu` | — | Its dropdown menu |
+| `file-viewer-replace` | — | "Reemplazar archivo" menu item |
+| `file-viewer-delete` | — | "Eliminar archivo" menu item (opens `confirm-delete-dialog`) |
+| `file-viewer-expand` | — | Click target over the file preview that opens the lightbox |
+| `file-lightbox` | — | `FileLightbox` dialog container (`role="dialog"`) |
+| `file-lightbox-title` | — | File name in the lightbox header |
+| `file-lightbox-page-count` | — | Page count line (PDF only) |
+| `file-lightbox-zoom-in` / `-fit` / `-zoom-out` | — | Lightbox zoom controls |
+| `file-lightbox-replace` | — | Lightbox "Reemplazar archivo" button |
+| `file-lightbox-delete` | — | Lightbox "Eliminar archivo" button (opens `confirm-delete-dialog`) |
+| `file-lightbox-close` | — | Lightbox close (X) button |
 | `filter-{key}` | `filter-alltab`, `filter-invoicestab`, `filter-rectificativeinvoicestab` (invoices); `filter-all`, `filter-persons`, `filter-companies` (contacts) | ListView subset filter buttons (second toolbar row). `{key}` is the entry's `key`, or else its `label` as declared (the i18n key, not the translated text) lowercased — so there is no `filter-todos` |
 | `filter-status`, `filter-type`, `filter-date`, `filter-advanced` | — | ListFilterBar triggers in the first toolbar row (status, type — a column flagged `isTypeFilter` —, date range, "Filters"), each present only when the window has that filter. They share the `filter-` prefix with the subset buttons: scope a `[data-testid^="filter-"]` query to `list-toolbar-tabs-row` or `list-toolbar-main-row` |
 | `quick-filter-{name}` | `quick-filter-active` | ListView quick filter toggle buttons |
