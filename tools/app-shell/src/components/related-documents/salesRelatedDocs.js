@@ -31,14 +31,8 @@
  * invoice never lists its payments as chips (functional decision, ETP-5527).
  */
 import { getArSubtype } from '@generated/sales-invoice/custom/invoiceSubtype.js';
-import {
-  fetchByCriteria,
-  fetchById,
-  fetchListInvoices,
-  fetchOriginInvoicesOf,
-} from './helpers.js';
-
-const asArray = (value) => (Array.isArray(value) ? value : []);
+import { fetchByCriteria, fetchById, fetchOriginInvoicesOf } from './helpers.js';
+import { idsOf, criteriaSource, listInvoicesSource, selectSource } from './relatedSources.js';
 
 /**
  * The source quotation of a sales order, read from the real quotation record so the
@@ -82,10 +76,6 @@ async function fetchRectifiedInvoices({ id, record, token, apiBaseUrl }) {
   return invoices.filter(inv => inv.id !== id);
 }
 
-function idsOf(list) {
-  return asArray(list).map(item => (item && typeof item === 'object' ? item.id : item)).join(',');
-}
-
 export const SALES_RELATED_DOCS = {
   'sales-quotation': {
     spec: 'sales-quotation',
@@ -93,18 +83,8 @@ export const SALES_RELATED_DOCS = {
     // ETP-4779 — QuotationConfirmModal dispatches it after converting the quotation.
     refreshEvent: 'sales-quotation:document-created',
     sources: [
-      {
-        key: 'orders',
-        type: 'sales-order',
-        fetch: ({ id, token, apiBaseUrl }) =>
-          fetchByCriteria('sales-order', 'header', 'quotation', id, token, apiBaseUrl),
-      },
-      {
-        key: 'invoices',
-        type: 'sales-invoice',
-        fetch: ({ id, token, apiBaseUrl }) =>
-          fetchListInvoices('sales-quotation', 'quotation', id, token, apiBaseUrl),
-      },
+      criteriaSource('orders', 'sales-order', 'sales-order', 'header', 'quotation'),
+      listInvoicesSource('invoices', 'sales-invoice', 'sales-quotation', 'quotation'),
     ],
   },
 
@@ -116,18 +96,8 @@ export const SALES_RELATED_DOCS = {
     depsKey: record => String(record?.quotation ?? ''),
     sources: [
       { key: 'quotation', type: 'sales-quotation', fetch: fetchSourceQuotation },
-      {
-        key: 'shipments',
-        type: 'shipment',
-        fetch: ({ id, token, apiBaseUrl }) =>
-          fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', id, token, apiBaseUrl),
-      },
-      {
-        key: 'invoices',
-        type: 'sales-invoice',
-        fetch: ({ id, token, apiBaseUrl }) =>
-          fetchListInvoices('sales-order', 'header', id, token, apiBaseUrl),
-      },
+      criteriaSource('shipments', 'shipment', 'goods-shipment', 'goodsShipment', 'salesOrder'),
+      listInvoicesSource('invoices', 'sales-invoice', 'sales-order', 'header'),
     ],
   },
 
@@ -149,14 +119,10 @@ export const SALES_RELATED_DOCS = {
         type: doc => (doc._isQuotation ? 'sales-quotation' : 'sales-order'),
         fetch: fetchInvoiceOrigin,
       },
-      {
-        // Resolved server-side (SalesInvoiceHeaderHandler#enrichLinkedShipments) from each
-        // invoice line's own M_InOutLine_ID: normal deliveries AND customer returns, told
-        // apart by `isReturn` (ETP-4534). Never derived from `salesOrder`.
-        key: 'shipments',
-        type: doc => (doc.isReturn === true ? 'return-material-receipt' : 'shipment'),
-        select: record => asArray(record?.linkedShipments),
-      },
+      // Resolved server-side (SalesInvoiceHeaderHandler#enrichLinkedShipments) from each
+      // invoice line's own M_InOutLine_ID: normal deliveries AND customer returns, told
+      // apart by `isReturn` (ETP-4534). Never derived from `salesOrder`.
+      selectSource('shipments', doc => (doc.isReturn === true ? 'return-material-receipt' : 'shipment'), 'linkedShipments'),
       { key: 'rectified', type: 'sales-invoice', fetch: fetchRectifiedInvoices },
       {
         // Injected only when this invoice traces back through a return to the original
@@ -174,9 +140,9 @@ export const SALES_RELATED_DOCS = {
     entity: 'goodsShipment',
     // Injected by GoodsShipmentHeaderHandler on the detail GET.
     sources: [
-      { key: 'orders', type: 'sales-order', select: record => asArray(record?.linkedOrders) },
-      { key: 'invoices', type: 'sales-invoice', select: record => asArray(record?.linkedInvoices) },
-      { key: 'returns', type: 'return-material-receipt', select: record => asArray(record?.returnReceipts) },
+      selectSource('orders', 'sales-order', 'linkedOrders'),
+      selectSource('invoices', 'sales-invoice', 'linkedInvoices'),
+      selectSource('returns', 'return-material-receipt', 'returnReceipts'),
     ],
   },
 
@@ -185,8 +151,8 @@ export const SALES_RELATED_DOCS = {
     entity: 'returnMaterialReceipt',
     // Injected by ReturnMaterialReceiptHeaderHandler (list and detail GET).
     sources: [
-      { key: 'sourceShipments', type: 'shipment', select: record => asArray(record?.sourceShipments) },
-      { key: 'returnInvoices', type: 'sales-invoice', select: record => asArray(record?.returnInvoices) },
+      selectSource('sourceShipments', 'shipment', 'sourceShipments'),
+      selectSource('returnInvoices', 'sales-invoice', 'returnInvoices'),
     ],
   },
 };

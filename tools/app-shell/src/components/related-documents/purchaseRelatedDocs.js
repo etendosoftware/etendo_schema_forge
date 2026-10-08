@@ -8,18 +8,8 @@
  * return shipments of a rectificative (isReturn === true), so no extra fetch chain
  * is needed for them.
  */
-import {
-  fetchByCriteria,
-  fetchById,
-  fetchListInvoices,
-  fetchOriginInvoicesOf,
-} from './helpers.js';
-
-const asArray = (value) => (Array.isArray(value) ? value : []);
-
-function idsOf(list) {
-  return asArray(list).map(item => (item && typeof item === 'object' ? item.id : item)).join(',');
-}
+import { fetchById, fetchOriginInvoicesOf } from './helpers.js';
+import { idsOf, criteriaSource, listInvoicesSource, selectSource } from './relatedSources.js';
 
 export const PURCHASE_RELATED_DOCS = {
   'purchase-order': {
@@ -27,18 +17,8 @@ export const PURCHASE_RELATED_DOCS = {
     entity: 'header',
     refreshEvent: 'purchase-order:document-created',
     sources: [
-      {
-        key: 'receipts',
-        type: 'goods-receipt',
-        fetch: ({ id, token, apiBaseUrl }) =>
-          fetchByCriteria('goods-receipt', 'goodsReceipt', 'salesOrder', id, token, apiBaseUrl),
-      },
-      {
-        key: 'invoices',
-        type: 'purchase-invoice',
-        fetch: ({ id, token, apiBaseUrl }) =>
-          fetchListInvoices('purchase-order', 'header', id, token, apiBaseUrl),
-      },
+      criteriaSource('receipts', 'goods-receipt', 'goods-receipt', 'goodsReceipt', 'salesOrder'),
+      listInvoicesSource('invoices', 'purchase-invoice', 'purchase-order', 'header'),
     ],
   },
 
@@ -61,11 +41,7 @@ export const PURCHASE_RELATED_DOCS = {
           return order ? [order] : [];
         },
       },
-      {
-        key: 'receipts',
-        type: doc => (doc.isReturn === true ? 'return-to-vendor' : 'goods-receipt'),
-        select: record => asArray(record?.linkedReceipts),
-      },
+      selectSource('receipts', doc => (doc.isReturn === true ? 'return-to-vendor' : 'goods-receipt'), 'linkedReceipts'),
       { key: 'originInvoices', type: 'purchase-invoice', fetch: fetchOriginInvoicesOf('purchase-invoice') },
     ],
   },
@@ -74,9 +50,9 @@ export const PURCHASE_RELATED_DOCS = {
     spec: 'goods-receipt',
     entity: 'goodsReceipt',
     sources: [
-      { key: 'orders', type: 'order', select: record => asArray(record?.linkedOrders) },
-      { key: 'invoices', type: 'purchase-invoice', select: record => asArray(record?.linkedInvoices) },
-      { key: 'returns', type: 'return-to-vendor', select: record => asArray(record?.linkedReturns) },
+      selectSource('orders', 'order', 'linkedOrders'),
+      selectSource('invoices', 'purchase-invoice', 'linkedInvoices'),
+      selectSource('returns', 'return-to-vendor', 'linkedReturns'),
     ],
   },
 
@@ -84,8 +60,8 @@ export const PURCHASE_RELATED_DOCS = {
     spec: 'return-to-vendor-shipment',
     entity: 'returnToVendorShipment',
     sources: [
-      { key: 'sourceReceipts', type: 'goods-receipt', select: record => asArray(record?.sourceReceipts) },
-      { key: 'returnInvoices', type: 'purchase-invoice', select: record => asArray(record?.returnInvoices) },
+      selectSource('sourceReceipts', 'goods-receipt', 'sourceReceipts'),
+      selectSource('returnInvoices', 'purchase-invoice', 'returnInvoices'),
     ],
   },
 };
