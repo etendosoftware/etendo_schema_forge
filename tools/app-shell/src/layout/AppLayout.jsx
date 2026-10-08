@@ -8,7 +8,7 @@ import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
 import { useSessionStartTracking } from '@/lib/observability/useSessionStartTracking.js';
 import {
-  announceSessionAccount, deleteCookieSession, fetchCookieSession, useAuthOptional,
+  announceSessionAccount, deleteCookieSession, readCookieSession, useAuthOptional,
 } from '@etendosoftware/app-shell-core/auth';
 import { SessionConflictNotice } from '@/components/access/SessionConflictNotice.jsx';
 import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
@@ -326,7 +326,9 @@ function BlockedAccessScreen({ decision }) {
 // "Continue as" reloads: the restore adopts the live session and every cache of the previous
 // account (lists, menu, permissions) goes with the old document. "Sign out of all sessions" revokes
 // the browser's live session (the other account's) with its own proof and account — the only path
-// in this tab that revokes it, and only on an explicit click — then goes to the login.
+// in this tab that revokes it, and only on an explicit click — then goes to the login. The login is
+// reached only once the session is gone or confirmed absent: a session that could not be READ (a
+// deploy, a dropped network) may still be alive, and the onboarding on /login would restore it.
 function SessionConflictScreen() {
   const ui = useUI();
   const auth = useAuthOptional();
@@ -336,7 +338,11 @@ function SessionConflictScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchCookieSession().then((session) => { if (!cancelled) setLive(session); });
+    // Unreadable reads as unknown here (the copy without the other account's name); the sign-out
+    // reads it again before it decides anything.
+    readCookieSession()
+      .catch(() => null)
+      .then((session) => { if (!cancelled) setLive(session); });
     return () => { cancelled = true; };
   }, []);
 
@@ -351,7 +357,16 @@ function SessionConflictScreen() {
   const signBackIn = async () => {
     setBusy(true);
     setFailed(false);
-    const session = live ?? (await fetchCookieSession());
+    let session = live;
+    if (!session) {
+      try {
+        session = await readCookieSession();
+      } catch {
+        setBusy(false);
+        setFailed(true);
+        return;
+      }
+    }
     if (session?.account?.id) {
       const revoked = await deleteCookieSession(session.csrfToken ?? null, undefined,
         { accountId: session.account.id });

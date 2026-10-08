@@ -167,9 +167,8 @@ test.describe('A session rotated in another tab (ETP-5550)', () => {
     await expect(stale.locator('#login-email')).toBeVisible({ timeout: 10_000 });
     // ETP-5675 — whether the stale proof is sent at all is a race: bringing the tab to the front
     // re-reads the session (still this account's) and may refresh the proof before the click.
-    // Either way the revoke has to end with the live proof.
-    expect(server.revokes.at(-1)).toBe(ROTATED_PROOF);
-    expect(server.revokes.every((proof) => [FIRST_PROOF, ROTATED_PROOF].includes(proof))).toBe(true);
+    // So exactly one of two traces: the live proof alone, or one stale attempt and its single retry.
+    expect([[ROTATED_PROOF], [FIRST_PROOF, ROTATED_PROOF]]).toContainEqual(server.revokes);
     expect(server.revoked).toBe(true);
     // The onboarding on /login read the session only after the revoke settled.
     expect(server.environmentEntries).toBe(entriesBeforeLogout);

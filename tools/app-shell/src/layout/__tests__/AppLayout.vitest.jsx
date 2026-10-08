@@ -1268,4 +1268,37 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     expect(await screen.findByText(LABELS.sessionConflictSwitchBackFailed)).toBeInTheDocument();
     expect(locationStub.assign).not.toHaveBeenCalled();
   });
+
+  // An unreadable session may still be alive: going to /login would let the onboarding restore the
+  // very account the person asked to sign out.
+  it('stays on the screen when the live session cannot be read', async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      requests.push({ url: String(url), method: (init.method || 'GET').toUpperCase() });
+      return new Response('', { status: 503 });
+    });
+    const user = userEvent.setup();
+    render(<AppLayout {...defaultProps} />);
+    await vi.waitFor(() => { expect(screen.getByTestId('session-conflict-switch-back')).toBeEnabled(); });
+
+    await user.click(screen.getByTestId('session-conflict-switch-back'));
+
+    expect(await screen.findByText(LABELS.sessionConflictSwitchBackFailed)).toBeInTheDocument();
+    expect(locationStub.assign).not.toHaveBeenCalled();
+    expect(requests.some((r) => r.method === 'DELETE')).toBe(false);
+  });
+
+  it('goes to the login without a revoke when the browser has no session left', async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      requests.push({ url: String(url), method: (init.method || 'GET').toUpperCase() });
+      return new Response(JSON.stringify({ error: { message: 'No active session' } }), { status: 401 });
+    });
+    const user = userEvent.setup();
+    render(<AppLayout {...defaultProps} />);
+    await vi.waitFor(() => { expect(screen.getByTestId('session-conflict-switch-back')).toBeEnabled(); });
+
+    await user.click(screen.getByTestId('session-conflict-switch-back'));
+
+    await vi.waitFor(() => { expect(locationStub.assign).toHaveBeenCalledWith('/login'); });
+    expect(requests.some((r) => r.method === 'DELETE')).toBe(false);
+  });
 });

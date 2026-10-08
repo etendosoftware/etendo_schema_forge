@@ -293,7 +293,9 @@ and the backend refuses a mismatch with **403** `Session belongs to another acco
   replaces the page — before every other gate — with `SessionConflictScreen`: *continue as the other
   account* (a full reload, so nothing of the previous account stays cached) or *sign out of this
   browser and sign in again* (revokes the browser's live session — the other account's — with its
-  own proof and account, only on an explicit click, then goes to the login).
+  own proof and account, only on an explicit click, then goes to the login). The login is reached
+  only once that session is revoked or confirmed absent: one that cannot be read may still be
+  alive, and the onboarding on `/login` would restore it, so the screen stays and says so.
 - Two cheaper signals raise the same screen before any request goes out: the tab that signs in or
   out announces the account on a `BroadcastChannel` (`etendo-go-session`), and a tab returning to
   the foreground compares its account with the live session (at most every 30 s). A session that
