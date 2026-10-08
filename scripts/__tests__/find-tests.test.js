@@ -21,6 +21,12 @@ import {
   resolveSpecifier,
   resolveTarget,
 } from '../find-tests.js';
+import { gitEnv, scrubGitEnv } from './git-env.js';
+
+// Running from inside a git hook, an inherited GIT_DIR would point every git
+// call below — including the `git ls-files` that find-tests.js runs in-process
+// during resolveTarget() — at the real repository. See git-env.js.
+scrubGitEnv();
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'find-tests.js');
 
@@ -33,7 +39,7 @@ function writeTree(root, files) {
 }
 
 function gitInit(root) {
-  const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'ignore' });
+  const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'ignore', env: gitEnv() });
   git('init', '-q');
   git('add', '-A');
   git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'init', '--no-gpg-sign');
@@ -500,7 +506,8 @@ describe('main', () => {
         'src/lib/__tests__/foo.test.js': "// @covers src/lib/foo.js\nimport { foo } from '../foo.js';\n",
       });
       gitInit(sf);
-      env = { ...process.env, SF_ROOT: sf, GO_ROOT: join(tmp, 'go') };
+      // The script runs `git ls-files`, so the child needs the scrubbed env too.
+      env = gitEnv({ SF_ROOT: sf, GO_ROOT: join(tmp, 'go') });
     });
 
     after(() => rmSync(tmp, { recursive: true, force: true }));
