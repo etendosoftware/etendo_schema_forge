@@ -1494,3 +1494,10 @@ default for other windows stays 1). Each row's op ids are prefixed (`r<row>.prod
 are resent one by one, so a single bad row no longer hides which of its neighbours were fine. If a
 chunk gets no definite response (network error), its rows are shown as failed/unknown and are not
 resent automatically, because the batch may have committed. Progress is still counted in rows.
+
+Known limitation (import caches): "Close anyway" during a send does not stop it — `handleSend` keeps
+running while the dialog is unmounted. If the user reopens the import and picks a NEW file while
+that old send is still in flight, loading the file starts a new run and clears the per-run caches
+(`resetImportRun`) under the old workers. A remaining old row may then try to create a product
+category that already exists and fail with a unique-key conflict: that row is reported FAILED, nothing
+is lost and nothing is duplicated. Wait for the running import to finish before loading another file.
