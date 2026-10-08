@@ -77,9 +77,16 @@ listed here. This skill carries what is specific to Etendo GO and to this machin
 5. **Know where each branch is checked out before creating.** A task branch can sit in
    the main checkout's repo, in a manual or agent worktree (`schema_forge-ETP-XXXX`,
    `.claude/worktrees/*`, `modules/*` worktrees), or nowhere. git allows a branch in one
-   place only, and the right flag depends on where it is. For every repo the task
-   touches (core = `etendo_develop`, `modules/<m>`, `schema_forge`, `schema_forge_core`),
-   run `git -C <repo> worktree list --porcelain` and find the path whose `branch` line is
+   place only, and the right flag depends on where it is. **First step:** from
+   `etendo_develop`, run the intended command with `--dry-run`
+   (`local-env worktree <name> --module … --repo … --dry-run`, also with `--from`). It
+   changes nothing and prints one row per repo (core, every `modules/*` repo, every
+   top-level repo): the requested branch, where it is checked out now (nowhere / main
+   checkout / worktree `<path>` / adopted `<path>`), and what creation will do (new
+   worktree, adopt, `REFUSE: busy … add @adopt`, or a copy at its current branch with its
+   uncommitted files and how far behind upstream, as of the last fetch). Real creation
+   prints the same plan before acting. On an older local-env without `--dry-run`, check
+   by hand: `git -C <repo> worktree list --porcelain`, the path whose `branch` line is
    `refs/heads/<branch>`. Then state it to the user as a table before creating:
 
    | Repo | Branch | Where it is checked out now | What the environment does |
@@ -147,7 +154,7 @@ cd /Users/futit/Workspace/etendo_develop && local-env worktree rm <name>   # bra
 | Symptom | Cause | Fix |
 |---|---|---|
 | `update.database` fails on an `AD_COLUMN` that an `ETGO_SF_FIELD` row references | A copied module is behind the GO branch (2026-10-07: go develop referenced a PSD2 column from `com.etendoerp.psd2.bank.integration` `origin/epic/ETP-3504`) | Run the module check from rule 4. Have the user pull the lagging modules in the main checkout, then `worktree rm` and recreate. Or fast-forward that module's copy inside the environment (`git -C <env>/modules/<m> fetch && merge --ff-only origin/<epic>`) |
-| smartbuild: `cannot find symbol` on a getter/setter of a column that exists in the env DB (2026-10-08: `getPSD2LastSyncDate()`), and `./gradlew generate.entities` "succeeds" without adding it | The environment carried the main checkout's `src-gen`, generated against a DB without that column. Entity generation is timestamp-based and judges the carried files up to date | From `<env>` only, after checking its config points at the env DB: `rm -rf src-gen build/classes && ./gradlew --no-daemon compile.complete -Dbuild.maxmemory=3072M` (~3 min), then `local-env up`. Deleting `src-gen` alone breaks smartbuild (`srcdir src-gen does not exist`). A local-env fix is pending |
+| smartbuild: `cannot find symbol` on a getter/setter of a column that exists in the env DB (2026-10-08: `getPSD2LastSyncDate()`), and `./gradlew generate.entities` "succeeds" without adding it | The environment carried the main checkout's `src-gen`, generated against a DB without that column. Entity generation is timestamp-based and judges the carried files up to date | local-env now handles it: when `up` swaps the DB for a snapshot other than the one `src-gen` was made for (`build/local-env/outputs.db`), it prints "Generated entities (src-gen) … marked out of date" and the build regenerates them. Only an environment made with an older local-env that already has the stale `src-gen` and keeps its live DB (no snapshot swap, so nothing ages it) can still hit it; recover from `<env>` only, after checking its config points at the env DB: `rm -rf src-gen build/classes && ./gradlew --no-daemon compile.complete -Dbuild.maxmemory=3072M` (~3 min), then `local-env up`. Deleting `src-gen` alone breaks smartbuild (`srcdir src-gen does not exist`) |
 | No `SPA` line in `local-env status`; SPA never starts | The environment's `schema_forge` branch predates the plugin | Prefix every `up`, `status` and `stop` with `LOCALENV_PLUGINS=/Users/futit/Workspace/etendo_develop/schema_forge/local-env.d/plugins`. Leaving it off a later call drops the plugin's manifest line and status misreports |
 | SPA binds 3100/3400, clashing with the main checkout | That `schema_forge` branch has no `SPA_PORT` support | Free 3100/3400 first. `/api/ai` then hits the BFF on 3400 |
 | Login from the SPA: 403 "Origin not allowed" | The backend trusts only :3000/3100/4173/5173 plus `ETGO_ALLOWED_ORIGINS`, and this Tomcat started without the SPA's port in it | The plugin adds the line itself. If `up` warned that it added it while a Tomcat was already running, restart that Tomcat once (`pkill -f -- "-Dcatalina.base=<env>/"`, then `local-env up`). Check: `grep ETGO_ALLOWED_ORIGINS <env>/build/local-env/env` |

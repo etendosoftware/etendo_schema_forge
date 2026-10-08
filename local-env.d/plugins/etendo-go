@@ -36,6 +36,27 @@ BFF_PORT="${BFF_PORT:-3400}"
 port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
 spa_pid() { local p; p="$(cat "$PIDF" 2>/dev/null || true)"; [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null && echo "$p"; }
 
+# spa_listen_port PGID: the port the SPA really listens on, empty while nothing does yet.
+# The reserved SPA_PORT is only a request: a branch whose Makefile predates SPA_PORT
+# serves on its own default (ETP-5602 reserved 3101 and served 3100). The recorded pid
+# leads its own session (setsid), so its process group holds the BFF and vite: vite is
+# the SPA; failing that, any listener that is not the BFF's port.
+spa_listen_port() {
+  local pid="" port vite="" other="" line
+  while IFS= read -r line; do
+    case "$line" in
+      p*) pid="${line#p}" ;;
+      n*) port="${line##*:}"
+          if [[ -z "$vite" ]] && ps -o command= -p "$pid" 2>/dev/null | grep -q vite; then vite="$port"; fi
+          [[ -z "$other" && "$port" != "$BFF_PORT" ]] && other="$port" ;;
+    esac
+  done < <(lsof -nP -a -g "$1" -iTCP -sTCP:LISTEN -Fpn 2>/dev/null)
+  echo "${vite:-$other}"
+}
+
+# makefile_ignores_spa_port: this environment's schema_forge cannot be told the SPA port
+makefile_ignores_spa_port() { ! grep -q 'SPA_PORT' "$SF/Makefile" 2>/dev/null; }
+
 # first port >= START that nothing listens on and no other environment reserved;
 # the main checkout's pair is never handed out
 free_port() {   # free_port START KEY TAKEN...
@@ -124,7 +145,11 @@ case "$hook" in
         echo "WARNING: added ETGO_ALLOWED_ORIGINS for :$SPA_PORT to $LOCALENV_STATE/env; a Tomcat of this environment that is already running does not have it: restart it once, or login from the SPA answers 'Origin not allowed'" >&2
       fi
     fi
-    if p="$(spa_pid)"; then echo ">> Etendo GO SPA already running: http://localhost:$SPA_PORT (pid $p, log $LOGF)"; exit 0; fi
+    if p="$(spa_pid)"; then
+      port="$(spa_listen_port "$p")"
+      echo ">> Etendo GO SPA already running: http://localhost:${port:-$SPA_PORT}$([[ -n "$port" && "$port" != "$SPA_PORT" ]] && echo " (not the reserved :$SPA_PORT)") (pid $p, log $LOGF)"
+      exit 0
+    fi
     install=0 core_install=0
     needs_install "$SF" "$STATE/install.stamp" && install=1
     needs_install "$CORE" "$STATE/core-install.stamp" && core_install=1
@@ -154,11 +179,19 @@ case "$hook" in
         exec make dev-local-core ETENDO_URL="$ETENDO_URL" SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT"' \
       >> "$LOGF" 2>&1 < /dev/null &
     echo $! > "$PIDF"
+    if makefile_ignores_spa_port; then
+      echo "WARNING: this branch's schema_forge/Makefile does not take SPA_PORT: the SPA will listen on its own default, not the reserved :$SPA_PORT (local-env status shows the real port; its Tomcat only allows the reserved origin)" >&2
+    fi
     echo ">> Etendo GO SPA starting: http://localhost:$SPA_PORT -> $LOCALENV_URL$([[ $core_install == 1 ]] && echo ', after npm install in schema_forge_core')$([[ $install == 1 ]] && echo ', after make install') (log: $LOGF)"
     ;;
   status)
-    if spa_pid >/dev/null; then st=running; else st=stopped; fi
-    printf 'SPA\thttp://localhost:%s (%s)\n' "$SPA_PORT" "$st"
+    # the URL first: local-env takes the first one in the value as the SPA's (progress.json)
+    if ! p="$(spa_pid)"; then printf 'SPA\thttp://localhost:%s (stopped)\n' "$SPA_PORT"
+    elif port="$(spa_listen_port "$p")"; [[ -z "$port" ]]; then
+      printf 'SPA\thttp://localhost:%s (starting%s)\n' "$SPA_PORT" "$(makefile_ignores_spa_port && echo "; this branch's Makefile ignores SPA_PORT, the real port shows once it listens")"
+    elif [[ "$port" != "$SPA_PORT" ]]; then
+      printf 'SPA\thttp://localhost:%s (running; not the reserved :%s%s)\n' "$port" "$SPA_PORT" "$(makefile_ignores_spa_port && echo ": this branch's Makefile ignores SPA_PORT")"
+    else printf 'SPA\thttp://localhost:%s (running)\n' "$port"; fi
     ;;
   stop|off|worktree-rm)
     stop_spa
