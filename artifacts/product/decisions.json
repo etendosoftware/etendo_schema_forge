@@ -88,7 +88,7 @@
       "entity": "product",
       "descriptor": "product",
       "formats": ["csv", "txt", "xlsx"],
-      "limit": { "maxRows": 5000, "concurrency": 4 },
+      "limit": { "maxRows": 5000, "concurrency": 4, "batchSize": 10 },
       "dedupe": { "scope": "database", "key": ["searchKey"] },
       "fields": [
         { "target": "searchKey", "aliases": ["codigo", "código", "sku"], "label": "Search Key", "required": true, "example": "SKU-1001" },

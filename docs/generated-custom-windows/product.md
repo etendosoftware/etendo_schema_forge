@@ -1487,3 +1487,10 @@ window with an import): "1,234 / 2,000 processed" next to the percentage, groupe
 locale (`importProgressCounter`, en_US / es_ES / es_AR). It restarts from zero on every send,
 including the resend of fixed rows from the result step, and its updates are throttled (~150 ms)
 so a 2,000-row file does not re-render the dialog per row.
+
+Product's import now sends 10 rows per `/batch` request (`window.import.limit.batchSize: 10`; the
+default for other windows stays 1). Each row's op ids are prefixed (`r<row>.product`,
+`r<row>.salesPrice`, ...) and the whole chunk is one transaction. If a chunk is rejected, its rows
+are resent one by one, so a single bad row no longer hides which of its neighbours were fine. If a
+chunk gets no definite response (network error), its rows are shown as failed/unknown and are not
+resent automatically, because the batch may have committed. Progress is still counted in rows.

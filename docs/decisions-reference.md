@@ -628,6 +628,18 @@ Each entry in `actions` accepts:
 
 The two can coexist in the same window. In the query, the subset is applied first and the quick filters refine it. On screen the order is the reverse (ETP-5509): the quick filters (toggle pills) sit on the first toolbar row, and the subsets (segmented control) sit on a second row below it — see [`list-filters.md` → "Toolbar layout (ETP-5509)"](list-filters.md#toolbar-layout-etp-5509).
 
+### Import Limits (`window.import.limit`) — ETP-5676
+
+Read by the generic import dialog (`ImportDialog`) from the generated contract; the generator passes the object through unchanged.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `maxRows` | number | `5000` | Rows beyond this are refused when the file is loaded. |
+| `concurrency` | number | `4` | Parallel `/batch` requests. |
+| `batchSize` | number | `1` | Rows per `POST /sws/neo/batch`. `1` is the original one-request-per-row behaviour. Capped at `50` by the engine. Opt in per window: only where the descriptor's operations are safe to share one transaction (Product uses `10`; Contacts stays at `1`). |
+
+With `batchSize > 1` the engine namespaces each row's op ids (`r<row>.<id>`, including `parentRef` and `$ref:` references) so they stay unique per request. A rolled-back chunk is resent row by row so each row gets its own outcome; a chunk with no definite response is reported UNKNOWN for all its rows and never resent (no idempotency key — resending could duplicate).
+
 ### Custom Components (`window.customComponents`)
 
 Override generated components with custom implementations from `artifacts/{window}/custom/`. The generator emits the correct imports and DetailView props automatically.
