@@ -31,6 +31,7 @@ import {
   readAccessErrorMessage,
   setEnvironmentAccessDecision,
 } from '@/lib/environmentAccessGate.js';
+import { recordAccessLoadError } from '@/lib/accessLoadError.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { ListStateRouteGuard } from './lib/ListStateRouteGuard.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
@@ -141,7 +142,8 @@ async function fetchMenuAccess() {
       const ids = collectAllowedIds(tree?.tree);
       value = Object.fromEntries([...ids].map((id) => [id, true]));
       ttl = MENU_ACCESS_CACHE_TTL_MS;
-    } catch {
+    } catch (error) {
+      recordAccessLoadError(error); // ETP-5489
       // ETP-5375 — NOT `{}`: an unresolved fetch must stay distinguishable from a
       // resolved-but-empty allow set (see MENU_ACCESS_UNREACHABLE's own comment).
       value = { [MENU_ACCESS_UNREACHABLE]: true };

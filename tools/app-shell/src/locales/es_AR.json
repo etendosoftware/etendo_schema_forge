@@ -17695,6 +17695,8 @@
     "switchCompany": "Cambiar empresa",
     "noAccessNoRoleTitle": "Todavía no tenés un rol asignado",
     "noAccessNoRoleMessage": "Formás parte de {companyName}, pero todavía no te asignaron ningún rol, así que no hay nada que puedas abrir. Pedile a un administrador de {companyName} que te asigne uno.",
+    "accessLoadErrorTitle": "No pudimos cargar tu acceso",
+    "accessLoadErrorMessage": "Tu sesión sigue activa, pero el servidor rechazó el pedido que carga tu menú y tus permisos. Probá de nuevo; si persiste, cerrá sesión y volvé a entrar.",
     "noAccessRoleTitle": "Tu rol no tiene acceso",
     "noAccessRoleMessage": "Tu rol en {companyName} no da acceso a ninguna ventana. Pedile a un administrador que revise los permisos de tu rol.",
     "environmentDemo": "Demo",

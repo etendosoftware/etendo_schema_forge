@@ -16712,6 +16712,8 @@
     "importFieldProductType": "Product Type",
     "noAccessNoRoleTitle": "You do not have a role yet",
     "noAccessNoRoleMessage": "You are part of {companyName}, but nobody has assigned you a role yet, so there is nothing you can open. Ask an administrator of {companyName} to assign you one.",
+    "accessLoadErrorTitle": "We couldn't load your access",
+    "accessLoadErrorMessage": "Your session is still active, but the server refused the request that loads your menu and permissions. Try again; if it keeps happening, log out and sign in again.",
     "noAccessRoleTitle": "Your role has no access",
     "noAccessRoleMessage": "Your role in {companyName} does not grant access to any window. Ask an administrator to review your role's permissions.",
     "blockedAccessDemoExpiredTitle": "Your trial period has ended",
