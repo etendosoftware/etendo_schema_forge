@@ -453,3 +453,12 @@ Under the runtime Solo-Lectura tier, the list row "Enviar" is hidden generically
 Backend: the email send contract and every attachment write answer 403 for this tier
 (`com.etendoerp.go` — `DefaultDocumentSendEmailContract.authorize`, `NeoAttachmentAuthorizer`).
 Print and Download PDF are deliberately NOT restricted (they only expose readable data).
+
+## Related documents — form and list preview share one definition — ETP-5539
+
+The form's Related Documents tab (`artifacts/return-to-vendor-shipment/custom/RelatedDocuments.jsx`,
+now a thin wrapper over `RelatedDocumentsSection`) and the preview card
+(`ReturnToVendorShipmentPreview.jsx`) render `PURCHASE_RELATED_DOCS['return-to-vendor-shipment']`:
+source goods receipts (`sourceReceipts`) and return invoices (`returnInvoices`). The preview passes
+`relatedLoadsDetail` so the card loads the detail record instead of reading the list row. See
+`docs/ui-customization.md` §7.a.

@@ -11,7 +11,7 @@ import { downloadFromCachedAttachment } from './downloadFromCachedAttachment.js'
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
-import { SALES_RELATED_DOCS } from '@/components/related-documents';
+import { getSalesRelatedDocs, getPurchaseRelatedDocs } from '@/components/related-documents';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 
 // ── General tab content ───────────────────────────────────────────────────────
@@ -19,6 +19,7 @@ import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, onSend, emailsRefreshSignal }) {
   const ui = useUI();
   const isSalesOrder = specName === 'sales-order';
+  const relatedDefinition = getSalesRelatedDocs(specName) ?? getPurchaseRelatedDocs(specName);
 
   const statusCode = order.documentStatus;
   const statusLabel = resolveStatusLabel(statusCode, null, ui);
@@ -54,14 +55,14 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
         apiBaseUrl={apiBaseUrl}
         refreshSignal={emailsRefreshSignal}
         data-testid="EmailsCard__90f59a" />
-      {isSalesOrder && (
+      {relatedDefinition && (
         <RelatedDocumentsCard
           documentId={order.id}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          // ETP-5527 — same definition as the sales-order form's RelatedDocuments
-          // section (purchase orders render no related-documents card here).
-          definition={SALES_RELATED_DOCS['sales-order']}
+          // ETP-5527 / ETP-5539 — same definition as the form's RelatedDocuments
+          // section, for both sales-order and purchase-order.
+          definition={relatedDefinition}
           data-testid="RelatedDocumentsCard__90f59a" />
       )}
     </div>

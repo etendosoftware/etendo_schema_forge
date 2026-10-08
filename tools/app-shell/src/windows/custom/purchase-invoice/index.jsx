@@ -12,6 +12,7 @@ import { useRowDelete } from '@/hooks/useRowDelete';
 import PurchaseInvoiceHeaderTable from './PurchaseInvoiceHeaderTable.jsx';
 import HeaderPage from '@generated/purchase-invoice/generated/web/purchase-invoice/HeaderPage';
 import InvoicePreview from '../shared/InvoicePreview.jsx';
+import { PURCHASE_RELATED_DOCS } from '@/components/related-documents';
 import PurchaseInvoiceTopbar from './PurchaseInvoiceTopbar.jsx';
 import PurchaseInvoiceSecondaryActions from '@generated/purchase-invoice/custom/PurchaseInvoiceSecondaryActions';
 import OcrSidePanel, { ReadOnlyOcrSidePanel } from '../shared/OcrSidePanel.jsx';
@@ -315,6 +316,7 @@ export default function PurchaseInvoiceWindow(props) {
             apiBaseUrl={apiBaseUrl}
             windowName={windowName}
             specName="purchase-invoice"
+            relatedDocs={PURCHASE_RELATED_DOCS['purchase-invoice']}
             readOnly={readOnly}
             onClose={onClose}
             onEdit={onEdit}

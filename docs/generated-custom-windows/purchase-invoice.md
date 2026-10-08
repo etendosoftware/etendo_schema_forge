@@ -2410,3 +2410,18 @@ warning. The review modal ("Datos detectados en la factura") now looks for it.
   lost. With several matches the first is shown.
 - **Warn only.** Continue stays enabled. A failed lookup (network, non-OK, unreadable answer)
   shows nothing and does not block.
+
+## Related documents — form and list preview share one definition — ETP-5539
+
+The form's Related Documents tab (`tools/app-shell/src/windows/custom/purchase-invoice/RelatedDocuments.jsx`,
+now a thin wrapper over `RelatedDocumentsSection`) and the list preview (`InvoicePreview`, which
+receives `relatedDocs={PURCHASE_RELATED_DOCS['purchase-invoice']}` from `purchase-invoice/index.jsx`)
+render the same definition. The preview no longer links to sales documents (`/sales-order`,
+`/goods-shipment`). Sources:
+
+- **Origin purchase order** — read from the header's `salesOrder` FK.
+- **Receipts** — the detail record's `linkedReceipts`; a receipt with `isReturn === true` is shown as a return-to-vendor chip. This already covers the return shipments of a rectificative invoice, so the former per-line fetch chain (`fetchLinkedReturnDeliveries`) and the receipt criteria fallback are gone.
+- **Origin invoices** — `originInvoices` (legacy `originInvoice` as fallback), the invoices imported through "Import from Source Invoice".
+- **Payments are not related documents**; the preview keeps its own PAYMENTS section.
+
+The `purchase-invoice:document-created` event is the `refreshEvent`. See `docs/ui-customization.md` §7.a.
