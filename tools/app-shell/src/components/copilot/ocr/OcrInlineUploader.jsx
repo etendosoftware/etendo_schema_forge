@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
 
-const LazyPdfViewer = lazy(() => import('@/windows/custom/shared/PdfViewer.jsx'));
+const LazyUploadedFileViewer = lazy(() => import('@/windows/custom/shared/UploadedFileViewer.jsx'));
 import { useUI } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { getOcrDocType } from './ocrDocTypes';
@@ -181,7 +181,12 @@ export default function OcrInlineUploader({
                   </div>
                 )}
                 data-testid="Suspense__5fab8d">
-                <LazyPdfViewer url={previewUrl} data-testid="LazyPdfViewer__5fab8d" />
+                <LazyUploadedFileViewer
+                  file={{ objectUrl: previewUrl, fileName: file.name, mimeType: 'application/pdf' }}
+                  onReplace={openPicker}
+                  onDelete={clearFile}
+                  actionsDisabled={isBusy}
+                  data-testid="LazyUploadedFileViewer__5fab8d" />
               </Suspense>
             )}
           </div>
