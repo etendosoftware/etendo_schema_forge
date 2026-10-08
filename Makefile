@@ -746,22 +746,28 @@ sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow
 
 # --- Dev Server ---
 
+# Ports of the SPA dev server and the AI BFF. Override both to run several dev servers
+# side by side (local-env's etendo-go plugin does, per environment — see
+# docs/local-env-plugin.md); vite proxies /api/ai to BFF_PORT.
+SPA_PORT ?= 3100
+BFF_PORT ?= 3400
+
 .PHONY: dev
-dev: ensure-locale ## Start app-shell and AI BFF dev servers
+dev: ensure-locale ## Start app-shell and AI BFF dev servers (ports: SPA_PORT=3100, BFF_PORT=3400)
 	@$(MAKE) -s ai-bff-install
-	@cd tools/ai-bff && npm run start & bff_pid=$$!; \
+	@cd tools/ai-bff && BFF_PORT=$(BFF_PORT) npm run start & bff_pid=$$!; \
 	trap 'kill $$bff_pid 2>/dev/null || true' EXIT INT TERM; \
-	cd tools/app-shell && npm run dev
+	cd tools/app-shell && SPA_PORT=$(SPA_PORT) BFF_PORT=$(BFF_PORT) npm run dev
 
 .PHONY: ai-bff-install
 ai-bff-install:
 	@test -d tools/ai-bff/node_modules || npm install --prefix tools/ai-bff
 
 .PHONY: dev-local-core
-dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-shell-core from local ../schema_forge_core source (hot-reload; requires it cloned as sibling)
-	@test -d ../schema_forge_core/packages/app-shell-core/src || { echo "ERROR: ../schema_forge_core/packages/app-shell-core/src not found."; echo "Clone schema_forge_core as a sibling of this repo, or use 'make dev' to run against the published package."; exit 1; }
+dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-shell-core from local ../schema_forge_core source (hot-reload; requires it cloned as sibling; frees only SPA_PORT/BFF_PORT first)
+	@core="$${SCHEMA_FORGE_CORE:-../schema_forge_core}"; test -d "$$core/packages/app-shell-core/src" || { echo "ERROR: $$core/packages/app-shell-core/src not found."; echo "Clone schema_forge_core as a sibling of this repo (or point SCHEMA_FORGE_CORE at it), or use 'make dev' to run against the published package."; exit 1; }
 	@echo ">> LOCAL_CORE dev mode: app-shell-core resolves to ../schema_forge_core (published package bypassed)"
-	@for port in 3100 3400; do \
+	@for port in $(SPA_PORT) $(BFF_PORT); do \
 		pids=$$(lsof -tiTCP:$$port -sTCP:LISTEN 2>/dev/null || true); \
 		if [ -n "$$pids" ]; then \
 			echo ">> Stopping process(es) on port $$port: $$pids"; \
@@ -770,9 +776,9 @@ dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-
 		fi; \
 	done
 	@$(MAKE) -s ai-bff-install
-	@cd tools/ai-bff && npm run start & bff_pid=$$!; \
+	@cd tools/ai-bff && BFF_PORT=$(BFF_PORT) npm run start & bff_pid=$$!; \
 	trap 'kill $$bff_pid 2>/dev/null || true' EXIT INT TERM; \
-	cd tools/app-shell && LOCAL_CORE=1 npm run dev
+	cd tools/app-shell && LOCAL_CORE=1 SPA_PORT=$(SPA_PORT) BFF_PORT=$(BFF_PORT) npm run dev
 
 .PHONY: dev-mock
 dev-mock: ensure-locale ## Start app-shell dev server with mock data — required for E2E tests
