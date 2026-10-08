@@ -7,6 +7,7 @@ Give finance users a point-in-time snapshot of assets, liabilities, and owner eq
 - Browse the report from the Finance / Reports menu listed as **Balance de Situación** (es) / **Balance Sheet** (en).
 - Pick an Accounting Schema (General Ledger), an Organization, and a Year before running.
 - Render the report inline as HTML preview and download it as PDF, XLSX, or CSV.
+- XLSX and CSV are a flat grid with the columns **Grupo · Profundidad · Tipo · Código · Nombre · Importe** (+ **Importe de Referencia** when comparing), headers translated and identical in both formats (ETP-5663). **Profundidad** is the tree indent, which varies by branch; **Tipo** is the account type from `C_ElementValue.ElementLevel` (Epígrafe / Cuenta / Desglose / Subcuenta), or **Total** on a formula heading (`A.TOTAL`, `P.TOTAL`; P&L's `P.G.A`–`P.G.D`). A formula at a lower level is a mirror account such as `(5510)` = −1 × `5510`, so it keeps its own type (Desglose). Profit & Loss exports the same columns.
 - Group rows by accounting category: `1. Assets`, `2. Liabilities`, `3. Owner Equity` (with `Net Income` rolled into Owner Equity from income/expense accounts).
 - Show one row per account (`code - name`) with the signed balance: debit-minus-credit for assets and owner equity; credit-minus-debit for liabilities.
 - Hide accounts whose net movement is below `0.01` (`HAVING ABS(...) > 0.01`).
@@ -37,11 +38,13 @@ Give finance users a point-in-time snapshot of assets, liabilities, and owner eq
 4. Confirm three category headers appear in order: `1. Assets`, `2. Liabilities`, `3. Owner Equity`.
 5. Confirm `Net Income` appears as the last row under Owner Equity when income/expense activity exists in the selected year.
 6. Download the report as PDF, XLSX, and CSV; confirm all three formats render the same grouping and totals.
-7. Switch organization and confirm the balance set updates accordingly (child orgs inherit via `ad_isorgincluded`).
+7. In the XLSX and CSV, confirm the headers are translated and identical in both files, and the **Tipo** column reads Epígrafe / Cuenta / Desglose / Subcuenta per account and **Total** on `A.TOTAL` / `P.TOTAL` (Epígrafe until the core fold emits `isFormula`).
+8. Switch organization and confirm the balance set updates accordingly (child orgs inherit via `ad_isorgincluded`).
 
 ## Automated evidence
 - `artifacts/balance-sheet/report-contract.json` declares the report id, SQL, parameters, columns, groups, and outputs (PDF / XLSX / CSV / HTML). The localized title is `{ en_US: "Balance Sheet", es_ES: "Balance de Situación" }`.
 - `artifacts/balance-sheet/template.hbs` and `artifacts/balance-sheet/helpers.js` define the Handlebars rendering and currency/category helpers.
+- `artifacts/balance-sheet/template-excel.hbs` / `template-csv.hbs` (byte-identical to the profit-loss ones) render the export grid; their headers and Type names come from the contract's `labels` block (`hdr*`, `E`/`C`/`D`/`S`/`T`). Pinned for both reports in `tools/app-shell/test/report-balance-sheet-account-tree.test.js`; `report-template-helpers-contract.test.js` checks every `template*.hbs` against the helpers jsreport actually registers.
 - `artifacts/balance-sheet/mock-data.json` provides offline preview data for dev mode (`VITE_MOCK=true`).
 - `tools/app-shell/src/pages/ReportViewerPage.jsx` (`ReportList` + `ReportCard`) renders the localized title for both list and detail views via `report.title?.[locale]`.
 - `tools/app-shell/vite-plugins/report-api.js` `listReports()` reads `report-contract.json` at request time, so title changes appear after a browser refresh without rebuilding.
