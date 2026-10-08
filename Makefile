@@ -765,7 +765,7 @@ ai-bff-install:
 
 .PHONY: dev-local-core
 dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-shell-core from local ../schema_forge_core source (hot-reload; requires it cloned as sibling; frees only SPA_PORT/BFF_PORT first)
-	@test -d ../schema_forge_core/packages/app-shell-core/src || { echo "ERROR: ../schema_forge_core/packages/app-shell-core/src not found."; echo "Clone schema_forge_core as a sibling of this repo, or use 'make dev' to run against the published package."; exit 1; }
+	@core="$${SCHEMA_FORGE_CORE:-../schema_forge_core}"; test -d "$$core/packages/app-shell-core/src" || { echo "ERROR: $$core/packages/app-shell-core/src not found."; echo "Clone schema_forge_core as a sibling of this repo (or point SCHEMA_FORGE_CORE at it), or use 'make dev' to run against the published package."; exit 1; }
 	@echo ">> LOCAL_CORE dev mode: app-shell-core resolves to ../schema_forge_core (published package bypassed)"
 	@for port in $(SPA_PORT) $(BFF_PORT); do \
 		pids=$$(lsof -tiTCP:$$port -sTCP:LISTEN 2>/dev/null || true); \

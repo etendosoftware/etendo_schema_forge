@@ -160,6 +160,16 @@ case "$hook" in
         exit 0
       fi
     done
+    # a branch whose Makefile predates SPA_PORT/BFF_PORT runs on 3100/3400 whatever was
+    # reserved, and its dev-local-core first kills whatever listens there: possibly the
+    # main checkout's SPA and BFF. Start it only while both ports are free
+    if makefile_ignores_spa_port && [[ "$SPA_PORT" != 3100 || "$BFF_PORT" != 3400 ]]; then
+      if port_busy 3100 || port_busy 3400; then
+        echo "WARNING: this branch's schema_forge/Makefile does not take SPA_PORT/BFF_PORT, so its SPA would take :3100/:3400, which are in use (its dev-local-core would kill them): Etendo GO SPA not started" >&2
+        exit 0
+      fi
+      echo "WARNING: this branch's schema_forge/Makefile does not take SPA_PORT: the SPA will listen on :3100, not the reserved :$SPA_PORT (local-env status shows the real port; its Tomcat only allows the reserved origin)" >&2
+    fi
     # own session (= own process group): Ctrl-C on Tomcat or closing the terminal does
     # not kill it, and stop_spa can signal the whole make/npm/node tree at once
     : > "$LOGF"
@@ -174,14 +184,16 @@ case "$hook" in
         if [[ $CORE_INSTALL == 1 ]]; then (cd "$SCHEMA_FORGE_CORE" && npm install) && touch "$CORE_STAMP" || exit 1; fi
         cd "$SF"
         if [[ $INSTALL == 1 ]]; then make install && touch "$STAMP" || exit 1; fi
-        # command-line variables: they beat an ETENDO_URL / *_PORT in schema_forge/.env,
-        # which the Makefile includes and would otherwise prefer over the environment
-        exec make dev-local-core ETENDO_URL="$ETENDO_URL" SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT"' \
+        # command-line variables: they beat the same names in schema_forge/.env, which the
+        # Makefile includes (and exports) and would otherwise prefer over the environment.
+        # The AI BFF does not read ETENDO_URL: without ETENDO_MCP_URL it calls :8080, the
+        # main checkout, with this user credentials; the usage URL derives from it unless
+        # ETENDO_USAGE_URL is set, so both are pinned to this environment Tomcat
+        exec make dev-local-core ETENDO_URL="$ETENDO_URL" SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT" \
+          SCHEMA_FORGE_CORE="$SCHEMA_FORGE_CORE" \
+          ETENDO_MCP_URL="$ETENDO_URL/sws/mcp" ETENDO_USAGE_URL="$ETENDO_URL/sws/neo/usage"' \
       >> "$LOGF" 2>&1 < /dev/null &
     echo $! > "$PIDF"
-    if makefile_ignores_spa_port; then
-      echo "WARNING: this branch's schema_forge/Makefile does not take SPA_PORT: the SPA will listen on its own default, not the reserved :$SPA_PORT (local-env status shows the real port; its Tomcat only allows the reserved origin)" >&2
-    fi
     echo ">> Etendo GO SPA starting: http://localhost:$SPA_PORT -> $LOCALENV_URL$([[ $core_install == 1 ]] && echo ', after npm install in schema_forge_core')$([[ $install == 1 ]] && echo ', after make install') (log: $LOGF)"
     ;;
   status)
