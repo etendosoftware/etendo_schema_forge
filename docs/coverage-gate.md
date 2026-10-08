@@ -5,10 +5,13 @@
 Sonar's Quality Gate only evaluates **new code**, so a PR can pass it while still
 lowering the project's **overall** coverage — typically by adding new source files
 with too few tests. This gate closes that gap: `run-sonar.sh --compare-coverage`
-(invoked by the pre-push hook) blocks a push that would drop overall coverage.
+(invoked by the pre-push hook) blocks a push that would drop overall coverage, and
+the GitHub `Sonar Build` check fails a pull request that does.
 
 It mirrors Jenkins' "Compare Coverage Results" stage (`sonarUtils.compareCoverage`),
-so the local pre-push and CI apply the same rule.
+so the local pre-push and CI apply the same rule. The rule, its default thresholds
+and its messages live in **one** script, `scripts/compare-sonar-coverage.js`, called
+by both `run-sonar.sh` and `.github/workflows/test.yml`.
 
 ## The rule
 
@@ -19,7 +22,8 @@ coverage (`base`), both read live from Sonar's `coverage` metric:
 2. `current < base − COVERAGE_TOLERANCE` → **block** (dropped more than the tolerance).
 3. otherwise → **pass**.
 
-Both thresholds are environment variables with defaults:
+Both thresholds are environment variables; their defaults are defined only in
+`scripts/compare-sonar-coverage.js`:
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -40,17 +44,29 @@ fluctuation on an otherwise-identical commit no longer flips the gate.
 | current coverage not readable on Sonar | ⚠️ skip — not blocking |
 | base branch not yet analysed on Sonar | ⚠️ skip (matches CI treating a missing baseline as 0%) |
 
+The table describes the pre-push (`--context push`, the default). In the GitHub
+`Sonar Build` job (`--context ci`) the thresholds and messages are the same, minus
+the push-only hints, but a gate that cannot be evaluated **fails** instead of
+skipping: unreadable current coverage, a missing `.scannerwork/report-task.txt`,
+or an analysis that Sonar reports `FAILED`/`CANCELED` or does not process within
+the wait timeout (600 s), or a `ceTaskUrl` whose origin differs from
+`SONAR_HOST_URL` (refused so the token is never sent to another host). Before reading any measure, the CI run waits for the
+scanner's Compute Engine task (`ceTaskUrl` in `report-task.txt`) to finish, so it
+never compares a stale measure. A missing base still passes with a warning.
+
 Bypass a block with `git push --no-verify` (WIP only, and by a human in their own
 terminal — the committed `PreToolUse` hook `.claude/hooks/block-push-no-verify.sh`
 denies that flag when an agent tries it through Claude Code's Bash tool. The
 companion `.claude/hooks/block-coverage-threshold-overrides.sh` also denies
 agent-run assignments or exports of `COVERAGE_MINIMUM` and
-`COVERAGE_TOLERANCE`; adjust their reviewed defaults in `run-sonar.sh` instead.
+`COVERAGE_TOLERANCE`; adjust their reviewed defaults in
+`scripts/compare-sonar-coverage.js` instead.
 See **Agent Guardrails** in `CLAUDE.md`).
 
 ## Where it runs
 
 - **`etendo_schema_forge` / `run-sonar.sh`** and **`com.etendoerp.go` / `run-sonar.sh`** — each repo's pre-push hook calls it with `--compare-coverage`.
+- **GitHub `Sonar Build`** — the `sonar` job of `.github/workflows/test.yml` runs `scripts/compare-sonar-coverage.js --context ci` after the scan on every pull request (current = the PR analysis, `pullRequest=<number>`; base = the PR's target branch, `github.base_ref`). See below.
 - **Jenkins** — `sonarUtils.compareCoverage` (shared pipeline library) applies the same tolerance + minimum on the CI side, so local and CI agree.
 
 ## Where the coverage data is produced
@@ -82,8 +98,8 @@ measured, Jenkins can download `unit-coverage` instead of re-running the suites.
 Until then both run.
 
 The `Sonar Build` check (a required status check on `develop`) is the `sonar` job
-of `test.yml`: it runs after `test` (`needs: test`, skipped only when the run is
-cancelled) and downloads `unit-coverage` only when `test` succeeded, so Sonar is
+of `test.yml`: it runs after `test` (`needs: test`; on a PR it always runs unless
+the run is cancelled, on a push only when `test` succeeded) and downloads `unit-coverage` only when `test` succeeded, so Sonar is
 never fed a partial LCOV. PR analyses, and the branch analyses of pushes to
 `develop` / `main`, therefore carry real coverage on SonarQube. When `test` fails,
 a PR still gets the required check (the scan runs without coverage), but a push to
@@ -96,5 +112,25 @@ deliberate trade-off for real coverage. The job replaces the former
 workflow's branch-push analyses of `feature/**`, `epic/**`, `release/**` and
 `master` were dropped on purpose: those branches are no longer analyzed on push,
 nothing consumed those analyses and they never carried coverage.
-Sending coverage cannot block a PR: the quality gate's `new_coverage` condition
-is `< 0`.
+Sending coverage cannot fail the Sonar quality gate itself: its `new_coverage`
+condition is `< 0`.
+
+After the scan, on pull requests whose `test` job succeeded, the same job runs the
+coverage-decrease rule against the PR's target branch and fails with the current
+%, the base % and the threshold when coverage drops. This applies to **every** PR,
+`feature/*` included — which until now only had the bypassable pre-push check —
+and since `Sonar Build` is a required check on `develop`, a coverage drop now
+blocks the merge. Pushes to `develop` / `main` are not compared (there is no other
+branch to compare against), as in Jenkins: the `Compare Coverage Results` stage of
+`etendo-go/schemaforge/Jenkinsfile` (`com.etendoerp.jenkins.pipelines` repo) skips
+when `compareBranch == SCHEMA_FORGE_BRANCH`, i.e. on pushes to `develop` / `main`.
+
+The base is the **latest** analysis of the target branch, while the PR is measured
+at its head commit. On a long-lived branch, a `COVERAGE DECREASED` can therefore
+come from `develop` having moved on (new tests landed there) rather than from the
+PR itself: merge `develop` into the branch and push again before adding tests.
+
+When `test` fails, the comparison step is skipped and `Sonar Build` can still
+report success. That does not open a hole only if the `Tests` check itself is
+required: today it is not a required status check on `develop`, so a PR with
+failing tests is held back by Jenkins and review, not by this check.

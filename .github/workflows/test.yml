@@ -85,3 +85,21 @@ jobs:
           SONAR_SCANNER_OPTS: "-Xmx4096m"
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # Same rule as Jenkins' Compare Coverage Results; fails this check on a drop.
+      - uses: actions/setup-node@v4
+        if: github.event_name == 'pull_request' && needs.test.result == 'success'
+        with:
+          node-version: 22
+
+      - name: Compare coverage with the base branch
+        if: github.event_name == 'pull_request' && needs.test.result == 'success'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: >-
+          node scripts/compare-sonar-coverage.js --context ci
+          --pull-request "$PR_NUMBER" --base-branch "$BASE_BRANCH"
+          --report-task .scannerwork/report-task.txt
