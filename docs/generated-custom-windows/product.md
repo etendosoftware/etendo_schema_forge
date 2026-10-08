@@ -1481,3 +1481,9 @@ what the preview had found. Now:
   longer reads the first file's snapshot.
 
 Behaviour is otherwise identical: same ops per row, same concurrency, same `/batch` contract.
+
+The same ticket adds a processed-records counter to the import's sending step (generic, every
+window with an import): "1,234 / 2,000 processed" next to the percentage, grouped per the session
+locale (`importProgressCounter`, en_US / es_ES / es_AR). It restarts from zero on every send,
+including the resend of fixed rows from the result step, and its updates are throttled (~150 ms)
+so a 2,000-row file does not re-render the dialog per row.

@@ -138,6 +138,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     progress: {
       title: ui('importProgressTitle'),
       subtitle: ui('importProgressSubtitle'),
+      counter: ui('importProgressCounter'),
     },
     mapping: {
       notImported: ui('importNotImported'),

@@ -16585,6 +16585,7 @@
     "importButtonCount": "Import {n}",
     "importProgressTitle": "Importing…",
     "importProgressSubtitle": "Processing rows",
+    "importProgressCounter": "{processed} / {total} processed",
     "importNotImported": "Not imported",
     "importAlreadyAssigned": "already fills {field}",
     "importMappedSummary": "{mapped}/{total} fields mapped",

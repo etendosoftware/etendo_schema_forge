@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/useWindowImportDialog.js
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
@@ -102,6 +103,7 @@ describe('ListView — import labels + translator forwarded to ImportDialog', ()
     // window's own `formats` declaration, so it can no longer name formats the input rejects.
     expect(labels.dropzone.dropHint).toBe('importDropHintFormats');
     expect(labels.progress.title).toBe('importProgressTitle');
+    expect(labels.progress.counter).toBe('importProgressCounter');
     expect(labels.mapping.notImported).toBe('importNotImported');
     // Reused generic keys — not import-prefixed, per the "reuse before adding" rule.
     expect(labels.mapping.save).toBe('save');
