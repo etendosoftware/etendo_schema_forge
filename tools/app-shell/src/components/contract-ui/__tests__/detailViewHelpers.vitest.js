@@ -35,6 +35,8 @@ import {
   getSecondaryLinesTableRef,
   getSecondaryEditRowHandler,
   getLinesToolbarClassName,
+  getSqBtnSize,
+  getSaveBtnCls,
   getLineMenuActionsRef,
   getAddLineMenuActions,
   getSidebarSlideClassName,
@@ -412,11 +414,22 @@ describe('class-name and small value helpers', () => {
     expect(getAddLineWrapperClassName('table')).toBe('relative');
     expect(getInlineEditableShrinkClassName('inlineEditable')).toBe('shrink-0');
     expect(getInlineEditableShrinkClassName('table')).toBe('');
-    expect(getLinesToolbarClassName('inlineEditable', 'px-4', false)).toContain('p-2');
-    expect(getLinesToolbarClassName('inlineEditable', 'px-4', false)).toContain('border-b');
-    expect(getLinesToolbarClassName('table', 'px-4', false)).toContain('px-4 py-2');
-    expect(getLinesToolbarClassName('table', 'px-4', false)).not.toContain('border-b');
-    expect(getLinesToolbarClassName('table', 'px-4', true)).toContain('border-b');
+  });
+
+  it('uses one constant record-toolbar class: p-2 plus the inset bottom rule, no border-b', () => {
+    const cls = getLinesToolbarClassName();
+    expect(cls).toContain('p-2');
+    expect(cls).toContain('shadow-[inset_0_-1px_0_var(--status-neutral-border)]');
+    expect(cls).not.toContain('border-b');
+    expect(getLinesToolbarClassName('table', 'px-4', true)).toBe(cls);
+  });
+
+  it('always sizes square buttons h-10 w-10 and the save button h-10', () => {
+    expect(getSqBtnSize()).toBe('h-10 w-10');
+    expect(getSqBtnSize('default')).toBe('h-10 w-10');
+    expect(getSqBtnSize('sm')).toBe('h-10 w-10');
+    expect(getSaveBtnCls()).toContain('h-10');
+    expect(getSaveBtnCls('sm')).toContain('h-10');
   });
 
   it('stacks the side panel below the content until lg', () => {

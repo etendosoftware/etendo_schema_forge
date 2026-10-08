@@ -30,7 +30,7 @@ The list uses `WarehouseCustomTable` in place of the default generated table. Co
 | **Location** | Resolved from `locationAddress$_identifier`, falls back to raw `locationAddress`. Not sortable. |
 | **Products** | Dynamic count cell (`WarehouseProductCountCell`): fetches storageBins then binContents per warehouse row, aggregates via `aggregateProducts`, displays count of products with `qty != 0` (includes negative stock, excludes exact zero — see "Stock filtering semantics" below). Shows `—` while loading or on error. Not sortable. |
 
-Print and Link buttons are hidden (`hidePrint`, `hideLink`). Custom sort and refresh icons match the Products window style (`SortIcon`, `RefreshIcon` from `@/components/ui/custom-icons`). List toolbar and table use 8 px horizontal/vertical padding throughout (`listbarPaddingX="px-2"`, `tablePaddingX="px-2"`, etc.).
+Print and Link buttons are hidden (`hidePrint`, `hideLink`). The sort and refresh toolbar icons are the default `ListView` icons, same as `/sales-order` (ETP-5601). List toolbar and table use 8 px horizontal/vertical padding throughout (`listbarPaddingX="px-2"`, `tablePaddingX="px-2"`, etc.).
 
 Search filters on `searchKey` and `name`.
 
@@ -43,7 +43,7 @@ The detail page uses a split layout:
 - **Left side**: header form + tabs below it.
 - **Right sidebar** (30% width, `w-[30%]`): contains only `WarehouseSummary`. The sidebar is constrained to the area above the tabs (`sidebarAboveTabsOnly`), so tabs span the full width below the form.
 
-Visual separators: `toolbarBorderBottom` draws a line between the toolbar and the form area; `tabsSeparator` draws a line between the form/sidebar and the tabs strip. The form area uses `p-2` (`formCardPadding`), scroll areas use `px-2` (`formScrollPaddingX`), and the tab content area uses `p-2 overflow-y-auto max-h-[calc(100vh-380px)]`.
+Visual separators: the toolbar's bottom rule is part of the standard record toolbar since ETP-5601 (the `toolbarBorderBottom` key no longer has any effect); `tabsSeparator` draws a line between the form/sidebar and the tabs strip. The form area uses `p-2` (`formCardPadding`), scroll areas use `px-2` (`formScrollPaddingX`), and the tab content area uses `p-2 overflow-y-auto max-h-[calc(100vh-380px)]`.
 
 `noHeaderBorder` removes the default form card border.
 

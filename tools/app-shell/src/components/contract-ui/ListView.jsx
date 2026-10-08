@@ -239,10 +239,10 @@ function RefreshButton({ RefreshIconComponent, iconButtonHover, onRefresh, label
   return (
     <button
       onClick={onRefresh}
-      className={`h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground ${iconButtonHover} transition-colors`}
+      className={`h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] ${iconButtonHover} transition-colors`}
       title={label || 'Refresh'}
     >
-      <RefreshEl className="h-4 w-4" data-testid="RefreshEl__620cbc" />
+      <RefreshEl className="h-5 w-5" data-testid="RefreshEl__620cbc" />
     </button>
   );
 }
@@ -410,12 +410,12 @@ function emptyListEntryPoints({ canCreate, handleNew, importEnabled, openImportD
 // overflow-hidden would cut the offset keyboard focus ring.
 function newButtonGroupClass(isSplitNew) {
   const clip = isSplitNew ? '' : ' overflow-hidden';
-  return `inline-flex items-stretch rounded-lg shadow-sm ml-3${clip}`;
+  return `inline-flex items-stretch rounded-lg shadow-sm${clip}`;
 }
 
 function newButtonClass(isSplitNew) {
   const focusRing = isSplitNew ? ` ${SPLIT_NEW_FOCUS_RING}` : '';
-  return `rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors${focusRing}`;
+  return `group h-10 rounded-none rounded-l-lg gap-2 pl-2 pr-3 text-sm leading-6 font-medium bg-[#121217] text-white hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors [&_svg]:size-5${focusRing}`;
 }
 
 async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }) {
@@ -505,10 +505,10 @@ export function ListView({
   newLabel = null,
   newActions = [],
   listbarPaddingX = 'px-2',
-  listbarPaddingY = 'py-3',
+  listbarPaddingY = 'py-2',
   SortIconComponent = null,
   RefreshIconComponent = null,
-  iconButtonHover = 'hover:text-foreground',
+  iconButtonHover = 'hover:bg-[hsl(var(--muted))]',
   tablePaddingX = 'px-2',
   tablePaddingBottom = 'pb-6',
   labelOverrides,
@@ -1360,8 +1360,7 @@ export function ListView({
               </div>
             </SelectionToolbar>
           )}
-          {/* ETP-5509 — the idle bar is a column of up to two rows, closed by the gray line that
-              delimits toolbar from body:
+          {/* ETP-5509 — the idle bar is a column of up to two rows:
                 row 1 — quick filters + "Filtros" on the left, main actions on the right;
                 row 2 — the tab group (`ListToolbarTabs`), only when the window has one.
               The tabs used to open row 1, where at the minimum supported viewport (1280x720
@@ -1370,13 +1369,11 @@ export function ListView({
               breakpoint: to make it conditional later, render `<ListToolbarTabs>` at the start
               of row 1's left cluster above the breakpoint and gate row 2 on the opposite
               condition; nothing else in this block depends on where the tabs are.
-              The separator lives here rather than in each headerTable so every window that
-              keeps the native bar gets it by construction (Payments In, whose table sits next
-              to a sidebar, had none). A window that replaces the bar (`hideListBar`) draws its
-              own toolbar and its own line (financial-account). */}
+              ETP-5601 — per Figma the bar is 56px: 8px padding on every side around 40px
+              controls, and no bottom border (the 1px line it used to draw made it 57px). */}
           {!listBarHidden && (
             <div
-              className={`flex flex-col gap-2 border-b border-[hsl(var(--border-subtle))] ${listbarPaddingX} ${listbarPaddingY}`}
+              className={`flex flex-col gap-2 ${listbarPaddingX} ${listbarPaddingY}`}
               data-testid="list-toolbar">
               <div className="flex items-center justify-between" data-testid="list-toolbar-main-row">
                 <div className="flex items-center gap-2">
@@ -1388,10 +1385,10 @@ export function ListView({
                           onClick={() => toggleQuickFilter(i)}
                           data-testid={`quick-filter-${qf.key || qf.label?.toLowerCase()}`}
                           className={[
-                            'h-9 px-3 text-xs rounded-lg border bg-card transition-colors',
+                            'h-10 px-3 text-sm leading-6 font-medium text-[#121217] rounded-lg border bg-card transition-colors',
                             activeFilterIndices.has(i)
-                              ? 'border-primary text-primary bg-primary/5 font-medium'
-                              : 'border-border text-muted-foreground hover:text-foreground',
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border',
                           ].join(' ')}
                         >
                           {ui(qf.label)}
@@ -1444,8 +1441,8 @@ export function ListView({
                       title={ui('copyLink')}
                       aria-label={ui('copyLink')}
                       data-testid="list-share-link"
-                      className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
-                      <Link2 className="h-4 w-4" data-testid="Link2__620cbc" />
+                      className="h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors">
+                      <Link2 className="h-5 w-5" data-testid="Link2__620cbc" />
                     </button>
                   )}
                   <ListSortPopover
@@ -1476,13 +1473,13 @@ export function ListView({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+                      className="gap-1.5 text-[#828FA3] font-normal h-10 px-3 rounded-lg bg-card [&_svg]:size-5 hover:bg-[hsl(var(--muted))] hover:text-[#828FA3]"
                       onClick={() => openImportDialog()}
                       aria-label={ui('import')}
                       title={ui('import')}
                       data-testid="ListView__importButton"
                     >
-                      <Download className="h-3.5 w-3.5" data-testid="Download__ListViewImport" />
+                      <Download className="h-5 w-5" data-testid="Download__ListViewImport" />
                     </Button>
                   )}
                   {importConfig?.enabled && (
@@ -1497,11 +1494,12 @@ export function ListView({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+                      className="text-[#828FA3] font-normal h-10 w-10 p-0 rounded-lg bg-card [&_svg]:size-5 hover:bg-[hsl(var(--muted))] hover:text-[#828FA3]"
                       onClick={() => setShowReport(true)}
+                      aria-label={ui('print')}
+                      title={ui('print')}
                       data-testid="Button__620cbc">
-                      <Printer className="h-3.5 w-3.5" data-testid="Printer__620cbc" />
-                      {ui('print')}
+                      <Printer className="h-5 w-5" data-testid="Printer__620cbc" />
                     </Button>
                   )}
                   {/* Split "New" button */}
@@ -1512,7 +1510,9 @@ export function ListView({
                         data-testid="action-new"
                         onClick={handleNew}
                       >
-                        <Plus className="h-4 w-4" data-testid="Plus__620cbc" />
+                        <Plus
+                          className="h-5 w-5 text-white/90 group-hover:text-[hsl(var(--accent-highlight-foreground))]"
+                          data-testid="Plus__620cbc" />
                         {newLabel ?? tMenu(entityLabel, { field: 'newLabel' }) ?? ui('newRecord')}
                       </Button>
                       {isSplitNew && (
@@ -1521,7 +1521,7 @@ export function ListView({
                           <DropdownMenu data-testid="DropdownMenu__620cbc">
                             <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
                               <Button
-                                className={`rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors ${SPLIT_NEW_FOCUS_RING}`}
+                                className={`h-10 rounded-none rounded-r-lg px-2 bg-[#121217] text-white hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors ${SPLIT_NEW_FOCUS_RING}`}
                                 aria-label={ui('moreOptions')}
                                 title={ui('moreOptions')}
                                 data-testid="action-new-more">
@@ -1563,9 +1563,11 @@ export function ListView({
             </div>
           )}
 
-          {/* KPI / header content */}
+          {/* KPI / header content. empty:hidden collapses the padded wrapper when the slot
+              renders nothing — a function slot always yields a truthy element, so the guard
+              above cannot catch a component that returns null (contacts' record summary). */}
           {headerContent && (
-            <div className="px-6 pt-4">
+            <div className="px-6 pt-4 empty:hidden">
               {typeof headerContent === 'function'
                 ? headerContent({ api, token, apiBaseUrl, items: hook.items, loading: hook.loading, meta: hook.meta })
                 : headerContent}

@@ -149,11 +149,13 @@ The effect only re-runs when `isNewRecord` or `d.currency` changes, not when `on
 
 Changes landed in `feature/ETP-4103`. Covers visual polish, full-form restructure, sidebar updates, and list-view adjustments specific to the Assets window.
 
+> ETP-5601: the record (form view) toolbar is now standardized on every window (56px, 40px controls). The `toolbarBorderBottom`, `toolbarButtonSize` and `toolbarPaddingX` keys listed below no longer have any effect; see `docs/list-filters.md` (Visual parity).
+
 ### Visual polish
 
-- `toolbarBorderBottom: true` in `decisions.json` — adds a horizontal divider line below the toolbar buttons row.
+- `toolbarBorderBottom: true` in `decisions.json` — added a horizontal divider line below the toolbar buttons row. No effect since ETP-5601 (the record toolbar is standardized; the divider is part of the standard toolbar).
 - `sidebarClassName: "w-[30%] shrink-0 overflow-y-auto border-l border-[#E8EAEF] p-2"` in `decisions.json` — sidebar is now proportional (30% of detail width) with a left-border divider and 8 px internal padding. Previously fixed at `w-96`.
-- `toolbarButtonSize: "default"` in `decisions.json` — toolbar buttons (including the kebab menu) are now `h-10 w-10`, matching the Contacts window. Previously `sm` (`h-9`).
+- `toolbarButtonSize: "default"` in `decisions.json` — toolbar buttons (including the kebab menu) are now `h-10 w-10`, matching the Contacts window. Previously `sm` (`h-9`). No effect since ETP-5601 (all record-toolbar buttons are standardized at 40px).
 - `listbarPaddingX: "px-2"` and `tablePaddingX: "px-2"` in `decisions.json` — list-view toolbar and table horizontal padding reduced from 24 px to 8 px.
 - `tools/app-shell/src/windows/custom/assets/AssetsSidebar.jsx` — outer `rounded-2xl border bg-white shadow-sm` card wrapper removed; the sidebar `border-l` divider from `sidebarClassName` makes the wrapper border redundant.
 - `whiteFormBackground: true` in `decisions.json` — forces white background on form inputs and textareas, overriding the `bg-[#F5F7F9]` default on inputs and `bg-background` on textareas. Disabled textareas use `opacity-50` instead of `bg-muted/50` for visual consistency.

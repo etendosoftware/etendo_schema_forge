@@ -95,10 +95,12 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
         <Button
           onClick={handleSave}
           disabled={!selectedOrg?.id || !isDirty || saving || loading}
-          className={savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}
+          // ETP-5601 — same size as the record toolbar's Save (getSaveBtnCls): 40px, 8px radius,
+          // text-sm/leading-6, 20px icon with an 8px gap.
+          className={`h-10 gap-2 rounded-lg leading-6 [&_svg]:size-5 ${savedOk ? 'bg-status-success hover:bg-status-success border-status-success-border' : ''}`}
           data-testid="glc-save"
         >
-          <Check size={14} className="mr-1.5" data-testid="Check__79cd86" />
+          <Check data-testid="Check__79cd86" />
           {ui('saveChanges')}
         </Button>
       </div>

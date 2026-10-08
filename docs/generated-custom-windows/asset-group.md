@@ -135,7 +135,6 @@ All five flags are set in `decisions.json → window`:
 | `noHeaderBorder` | `true` | Removes the border/card around the header form fields |
 | `hidePrint` | `true` | Hides the Print button from the detail view toolbar |
 | `hideLink` | `true` | Hides the share/link icon from the list view toolbar |
-| `customListIcons` | `true` | Replaces generic toolbar icons with the custom Sort and Refresh icons (`SortIcon`, `RefreshIcon`) from `packages/app-shell-core/src/components/ui/custom-icons.jsx` — matches the style used by Contacts and Warehouse |
 
 ## i18n notes
 
@@ -295,7 +294,7 @@ Verified in `artifacts/asset-group/contract.json` and the regenerated
 
 1. Open the Finance menu and confirm **Asset Group** appears after Assets.
 2. Open `/asset-group` and confirm the list loads with Name and Description columns.
-3. Confirm the custom Sort and Refresh icons appear in the list toolbar and that the Print and Link icons do not appear.
+3. Confirm the default Sort and Refresh icons (same as `/sales-order`) appear in the list toolbar and that the Print and Link icons do not appear.
 4. Create a new category, confirm the **Depreciate** checkbox starts unchecked, and confirm the record saves with only Name supplied (no depreciation fields required while Depreciate is off).
 5. Open the created record and confirm the header form shows Name, Description (wider, single-row), and Depreciate on the top row, with no border/card around the fields.
 6. Check **Depreciate** and confirm **Depreciation Type** (Linear) and **Calculate Type** (Percentage / Time) appear, both required.
