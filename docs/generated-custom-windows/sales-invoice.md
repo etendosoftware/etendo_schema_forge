@@ -307,11 +307,16 @@ via `getSifButtonLabelKey(specName, pendingTargets)` (`shared/sifSending.js`, ne
 |---|---|---|
 | Detail preview (list side panel) | `InvoicePreview.jsx` (`useInvoicePreview`) | Unchanged except the caption. |
 | Form view topbar | `SendToSifButton.jsx` | Caption, plus a gate fix: ETP-5205 hid it with `isDocumentReadOnly`, which `DetailView` also sets for every processed document (`lockWhenProcessed`), i.e. for every completed invoice — so the button never showed where sending applies. It now hides only under the Solo Lectura tier (`windowReadOnly`). |
-| Form view kebab (⋮) | `SifSendMenuItem.jsx`, declared as `decisions.json → window.customComponents.moreMenuContent` | NEW. A `menuActions` entry cannot express it: its caption is a fixed `labelKey` and its visibility can only test the status or a record field, while this action depends on the org's fiscal configuration. The kebab unmounts its content when the menu closes, so the item hands the request (with the targets it computed through `useInvoiceSifSending`, the hook the topbar button also uses) to `SifSendModalHost`, which the window wrapper (`index.jsx`) mounts next to the form unconditionally (window event `sif:open-send-modal`). It must not depend on the topbar button: the first version did, and since that button was not rendered on completed invoices the entry did nothing. Pending header edits are not flushed before this send (the kebab has no save handle); the topbar button still does. |
+| Form view kebab (⋮) | `SifSendMenuItem.jsx`, declared as `decisions.json → window.customComponents.moreMenuContent` | NEW. A `menuActions` entry cannot express it: its caption is a fixed `labelKey` and its visibility can only test the status or a record field, while this action depends on the org's fiscal configuration. The kebab unmounts its content when the menu closes, so the item hands the request (with the targets it computed through `useInvoiceSifSending`, the hook the topbar button also uses) to `SifSendModalHost`, which the window wrapper (`index.jsx`) mounts next to the form unconditionally (window event `sif:open-send-modal`). |
 | Grid row hover kebab | `useSifRowSendAction.jsx`, appended through `buildInvoiceRowQuickActions(..., { extraMenuActions })` | NEW. Gated per row with the same rules. Uses the fiscal config of the top-nav selected org, the same one the list's fiscal status columns use (per-row org resolution is ETP-5248). Hidden under the Solo Lectura tier. A successful send refreshes the list when the modal closes. |
 
 VERI*FACTU has no manual send path (Classic sends it automatically on completion), so no entry point
 offers it.
+
+**Known limitation — the kebab send does not flush unsaved header edits.** The kebab entry has no
+save handle, so it sends the last-persisted invoice. The topbar button still saves pending header
+edits first (ETP-5272, below). On a completed invoice the header is normally locked, so this only
+matters for the few fields that stay editable after completion (e.g. `accountingDate`).
 
 **Captions on a sales invoice.**
 
@@ -599,7 +604,7 @@ backend change is deployed.
 12b. **ETP-5302 — bulk reactivate of a posted invoice.** Complete an invoice, post it ("Contabilizar"), then select it in the list and run `Procesar` → **Reactivar**. It must return to draft and the toast must report it as successful. Before this fix the row failed with `{"status":"error","message":"Factura contabilizada"}` while reactivating the very same invoice from its form kebab succeeded. Also confirm the page does **not** reload: scroll down a long list, apply a filter, run the bulk action, and verify the filter and scroll position are still there and only the rows refetch.
 13. Open a draft invoice and confirm the Send/"Enviar" action is **not** shown, neither in the topbar nor as a row quick action in the list. Confirm the invoice, then open the Send Email modal from the topbar and from the invoice preview and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language. Also confirm the `Asunto` and `Mensaje` fields are editable (not greyed-out/read-only), that they pre-fill with the auto-derived subject and an empty message, and that sending without touching either still succeeds normally.
 14. Open an existing draft invoice without touching any field and confirm the "Save Draft" button is **disabled**. Change any header field and confirm it becomes enabled. Save and confirm it disables again. Revert the changed field to its original value without saving and confirm the button disables once more. Add a line: once the add-row is submitted, the button should disable again if no header changes remain pending. Confirm the "Confirm" button stays enabled throughout all these states.
-15. Under an org configured for `sii+tbai`, open a completed sales invoice and confirm `Enviar a SIF` still appears after a partial send until both targets are sent. The confirmation copy must indicate both targets, and the result modal must attempt both `Em_aeatsii_send` and `Em_Tbai_Xmlgenerator` independently.
+15. Under an org configured for `sii+tbai`, open a completed sales invoice and confirm the send action still appears after a partial send until both targets are sent, captioned with the remaining target (`Envío SII` or `Envío TBAI`; `Envío SII+TBAI` while both are pending — see the ETP-5700 section). The confirmation copy must indicate both targets, and the result modal must attempt both `Em_aeatsii_send` and `Em_Tbai_Xmlgenerator` independently.
 16. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
 17. On a draft invoice tied to a customer that has at least one completed (not fully invoiced) sales order, open `Import from Sales Order` and confirm: only that customer's completed-and-not-fully-invoiced orders appear; expanding an order lists its lines with already-imported lines marked and disabled; submitting creates invoice lines that reference the source order (`salesOrderLine`). If every imported order carried the same non-zero `etgoTotalDiscount`, confirm the invoice header now shows that same total discount; if the imported orders carry different discounts (or none), the header discount is left untouched.
 18. In the list, select 0, then 1, then 2+ invoices and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/sales-invoice/<id>`. Open a saved invoice and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
@@ -2162,13 +2167,18 @@ concurrently would report whichever failed first while the others had already la
 
 Etendo GO's per-role window-access tier (`useWindowAccess('167')` → `'none' | 'read-only' |
 'full'`) must hide every mutating control in a window the Solo Lectura role can see. For this
-window: "Enviar a SII/TBAI" (`SendToSifButton`, rendered inside `InvoiceTopbarExtra`, gated on its
-own `isDocumentReadOnly` prop), the secondary-actions bar's Clone/Send (shared
+window: the fiscal send button (`SendToSifButton`, rendered inside `InvoiceTopbarExtra`), the secondary-actions bar's Clone/Send (shared
 `DocumentSecondaryActions` via `topbarSecondary`), the bulk-selection toolbar's document actions,
 and the notes field / total-discount input (shared `DetailView`/`LinesBottomSection` fix). Not
 live-testable in this session — this role has `full`, not `read-only`, access to Sales Invoice, and
 `lockWhenProcessed` is `null` in `decisions.json`, so no completed-invoice state can be reached
 either way; relies on unit-test coverage.
+
+**Corrected by ETP-5700.** This ticket gated `SendToSifButton` on `isDocumentReadOnly`, but
+`DetailView` also sets that prop for every processed document, i.e. for every completed invoice —
+the only state in which sending applies — so the button never showed. It now reads
+`windowReadOnly` (the Solo Lectura tier only). The ETP-5700 form kebab and grid row kebab entries
+are hidden under the same tier.
 
 ### QA reject pasada 1 — Send and attachment writes (ETP-5205, 2026-09-29)
 
@@ -2189,7 +2199,7 @@ does not trigger any of this):
   → "No tenés autorización para enviar este documento") and every attachment write
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
-- Preview also hides **Añadir cobro** and **Enviar a SIF** under the tier (both write).
+- Preview also hides **Añadir cobro** and the fiscal send button (`Envío SII/TBAI`, ETP-5700) under the tier (both write).
 
 ## Payment ids scoped to the invoice and the tenant — ETP-5558
 
