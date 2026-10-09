@@ -267,6 +267,72 @@ Confirm navigated to the list anyway, so the dialog was unreachable. The sibling
 limitation (it only reacts to a `DocAction` process run through `hook.handleProcess`, which this
 window does not expose), so its behaviour is unchanged.
 
+## Fiscal sending: same-day eligibility, system-specific caption and new entry points — ETP-5700
+
+**Symptom.** With a fiscal system active in Configuración fiscal, the sales invoice offered no way to
+send the invoice to SII / TicketBAI: no button in the detail preview, nothing in the form view kebab
+(only "Reactivar"), nothing on the grid row hover, and the fiscal status column showed "—". The SIF
+tab still showed the fiscal data, because it only depends on the fiscal profile, not on the date gate.
+
+**Root cause — the date gate, east of UTC.** `fechaAcogidaSII` (`aeatsii_config.insiisystemdate`)
+and `tbaisystemdate` are AD **Date** columns, which NEO serialises as a bare `yyyy-MM-dd`.
+`isSifEligibleByDate` (`tools/app-shell/src/windows/custom/shared/fiscalTargets.js`) parsed it with
+`new Date(raw)`, i.e. UTC midnight, which in Europe/Madrid is already 02:00 local (01:00 in winter,
+and the same in Atlantic/Canary). The invoice's own day is compared at local midnight, so an invoice
+dated on the day the fiscal configuration was created always compared as "before" the adoption: no
+send action and a dash instead of its fiscal status, from the moment the configuration existed. West
+of UTC (Argentina) the same parse lands on the previous evening, which is why it never reproduced
+there. `useFiscalConfig.js`'s `earliestCutoverDate()` made it worse by re-serialising the earliest
+value with `toISOString()`.
+
+**Fix.**
+- `parseAdoptionDate()` (new, `fiscalTargets.js`) reads a date-only adoption date as a LOCAL calendar
+  day (`parseCalendarDate`); a full timestamp (VERI*FACTU's `inVfactuSystem`, or any value with a
+  time-of-day) is still compared as the instant it names, exactly like Classic.
+- `earliestCutoverDate()` orders rows with the same parser and returns the winning row's value as-is
+  (a `yyyy-MM-dd` for SII/TBAI), never a UTC-re-serialised timestamp.
+- Every "today" the fiscal-config flows write into those date fields (onboarding wizard payloads,
+  `createComplementary`, the SII and TBAI configuration sections) is the local calendar day
+  (`todayCalendarISO`), not `toISOString().slice(0, 10)`, which in Spain right after midnight is
+  still yesterday.
+
+**System-specific caption.** Every send entry point now names the system the invoice is pending for,
+via `getSifButtonLabelKey(specName, pendingTargets)` (`shared/sifSending.js`, next to
+`getSifBodyKey`). The generic `sendToSif` ("Enviar a SIF") is no longer used by these entry points.
+
+**Entry points.** All of them gate on the same `getPendingSifTargets()` and open the same
+`SifSendingModal`:
+
+| Surface | Where | Notes |
+|---|---|---|
+| Detail preview (list side panel) | `InvoicePreview.jsx` (`useInvoicePreview`) | Unchanged except the caption. |
+| Form view topbar | `SendToSifButton.jsx` | Unchanged except the caption; it is also the modal host for the kebab entry. |
+| Form view kebab (⋮) | `SifSendMenuItem.jsx`, declared as `decisions.json → window.customComponents.moreMenuContent` | NEW. A `menuActions` entry cannot express it: its caption is a fixed `labelKey` and its visibility can only test the status or a record field, while this action depends on the org's fiscal configuration. The kebab unmounts its content when the menu closes, so the item asks the topbar `SendToSifButton` of the same record to open the modal (`requestSifSendModal`, window event `sif:open-send-modal`). Gating and caption come from `useInvoiceSifSending`, the hook both use, so they cannot disagree. |
+| Grid row hover kebab | `useSifRowSendAction.jsx`, appended through `buildInvoiceRowQuickActions(..., { extraMenuActions })` | NEW. Gated per row with the same rules. Uses the fiscal config of the top-nav selected org, the same one the list's fiscal status columns use (per-row org resolution is ETP-5248). Hidden under the Solo Lectura tier. A successful send refreshes the list when the modal closes. |
+
+VERI*FACTU has no manual send path (Classic sends it automatically on completion), so no entry point
+offers it.
+
+**Captions on a sales invoice.**
+
+| Pending for | es_ES | en_US | Key |
+|---|---|---|---|
+| SII only | Envío SII | Send to SII | `sendToSifLabelSii` |
+| TicketBAI only | Envío TBAI | Send to TBAI | `sendToSifLabelTbai` |
+| SII and TicketBAI | Envío SII+TBAI | Send to SII+TBAI | `sendToSifLabelBoth` |
+
+**Manual verification (Europe/Madrid browser timezone).**
+1. Configure SII for an org today (Configuración fiscal), create and confirm an invoice dated today:
+   the preview, the form topbar, the form kebab and the grid row kebab all offer "Envío SII", and the
+   SII status column shows "Pendiente", not "—".
+2. Same with TicketBAI only: "Envío TBAI" everywhere.
+3. With SII + TicketBAI: "Envío SII+TBAI"; after sending only one of them (partial failure) the
+   caption names the remaining one.
+4. From the form kebab entry, the confirmation modal opens and stays open while you click inside it.
+5. From the grid row kebab, a successful send refreshes the row's status when the modal closes.
+6. Under the Solo Lectura tier, none of the four entry points is offered.
+7. An invoice dated before the org's adoption date still offers nothing and shows "—".
+
 ## Known issues / Open bugs
 
 | ID | Severity | Window | Description | Status |

@@ -39,7 +39,8 @@
     "customComponents": {
       "topbarExtra": "PurchaseInvoiceReceiptBadge",
       "headerTable": "InvoiceHeaderTable",
-      "bottomSection": "PurchaseInvoiceBottomPanel"
+      "bottomSection": "PurchaseInvoiceBottomPanel",
+      "moreMenuContent": "SifSendMenuItem"
     },
     "processOverrides": {},
     "draftMode": {

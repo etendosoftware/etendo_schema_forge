@@ -20,7 +20,8 @@
       "topbarExtra": "InvoiceDeliveryBadge",
       "headerTable": "InvoiceHeaderTable",
       "bottomSection": "InvoiceBottomPanel",
-      "topbarRight": "InvoiceTopbarExtra"
+      "topbarRight": "InvoiceTopbarExtra",
+      "moreMenuContent": "SifSendMenuItem"
     },
     "linesLayout": "inlineEditable",
     "vectorSearch": {

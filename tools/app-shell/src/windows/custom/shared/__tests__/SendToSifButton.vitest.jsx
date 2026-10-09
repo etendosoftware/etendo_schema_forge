@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/SendToSifButton.jsx
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const useFiscalConfigMock = vi.fn();
@@ -60,18 +61,18 @@ describe('SendToSifButton', () => {
 
   it('does not render when isDocumentReadOnly is true, even with pending SII/TBAI targets (ETP-5205)', () => {
     renderButton({ isDocumentReadOnly: true });
-    expect(screen.queryByRole('button', { name: 'sendToSif' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^sendToSifLabel/ })).not.toBeInTheDocument();
   });
 
   it('regression: renders when isDocumentReadOnly is false/absent (existing behavior)', () => {
     renderButton();
-    expect(screen.getByRole('button', { name: 'sendToSif' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^sendToSifLabel/ })).toBeInTheDocument();
   });
 
   it('renders for completed invoices with pending fiscal targets', async () => {
     renderButton();
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'sendToSif' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^sendToSifLabel/ })).toBeInTheDocument();
     });
   });
 
@@ -79,7 +80,7 @@ describe('SendToSifButton', () => {
     renderButton({
       data: { aeatsiiIssent: true, tbaiIssent: true, invoiceDate: '2026-06-15' },
     });
-    expect(screen.queryByRole('button', { name: 'sendToSif' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^sendToSifLabel/ })).not.toBeInTheDocument();
   });
 
   // ETP-5122 — TicketBAI must not be offered on an invoice dated before the
@@ -88,7 +89,7 @@ describe('SendToSifButton', () => {
     renderButton({
       data: { aeatsiiIssent: true, tbaiIssent: false, invoiceDate: '2019-06-15' },
     });
-    expect(screen.queryByRole('button', { name: 'sendToSif' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^sendToSifLabel/ })).not.toBeInTheDocument();
   });
 
   it('shows only the SII confirmation copy when the invoice predates TBAI adoption', () => {
@@ -98,19 +99,19 @@ describe('SendToSifButton', () => {
         accountingDate: '2019-06-15',
       },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+    fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
     expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
   });
 
   it('shows the combined confirmation copy when both SII and TBAI are pending', () => {
     renderButton();
-    fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+    fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
     expect(screen.getByText('sendToSifBodyBoth')).toBeInTheDocument();
   });
 
   it('renders the modal with dialog semantics', () => {
     renderButton();
-    fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+    fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
     expect(screen.getByRole('dialog', { name: 'sendToSifTitle' })).toBeInTheDocument();
   });
 
@@ -119,7 +120,7 @@ describe('SendToSifButton', () => {
       data: { aeatsiiIssent: true, tbaiIssent: false, invoiceDate: '2026-06-15' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+    fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
     expect(screen.getByText('sendToSifBodyTbai')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
@@ -141,7 +142,7 @@ describe('SendToSifButton', () => {
       data: { aeatsiiIssent: true, tbaiIssent: false, invoiceDate: '2026-06-15' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+    fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
     fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
 
     await screen.findByText('sendToSifSuccessTbai');
@@ -173,7 +174,7 @@ describe('SendToSifButton', () => {
       });
 
     renderButton();
-    fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+    fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
     fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
 
     await screen.findByText('SII failed');
@@ -192,7 +193,7 @@ describe('SendToSifButton', () => {
         earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
       });
       renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
-      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
       expect(screen.getByText('sendToSifBodyBothPurchase')).toBeInTheDocument();
       expect(screen.queryByText('sendToSifBodyBoth')).not.toBeInTheDocument();
     });
@@ -204,7 +205,7 @@ describe('SendToSifButton', () => {
         earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
       });
       renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
-      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
       expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
       expect(screen.queryByText('sendToSifBodyTbai')).not.toBeInTheDocument();
       expect(screen.queryByText('sendToSifBodyBoth')).not.toBeInTheDocument();
@@ -217,7 +218,7 @@ describe('SendToSifButton', () => {
         earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
       });
       renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
-      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
       expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
     });
 
@@ -236,7 +237,7 @@ describe('SendToSifButton', () => {
           accountingDate: '2025-12-31',
         },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
       expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
       expect(screen.queryByText('sendToSifBodyBothPurchase')).not.toBeInTheDocument();
     });
@@ -270,7 +271,7 @@ describe('SendToSifButton', () => {
         },
       });
       expect(useFiscalConfigMock).toHaveBeenCalledWith('ORG_INVOICE', '/sws/neo/purchase-invoice');
-      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
       // ETP-5027: purchase-invoice always resolves to the Batuz-specific copy.
       expect(screen.getByText('sendToSifBodyBothPurchase')).toBeInTheDocument();
     });
@@ -300,7 +301,7 @@ describe('SendToSifButton', () => {
           accountingDate: '2026-06-15',
         },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
       fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
 
       await waitFor(() => {
@@ -321,7 +322,7 @@ describe('SendToSifButton', () => {
           accountingDate: '2026-06-15',
         },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
       fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
 
       await waitFor(() => {
@@ -334,7 +335,7 @@ describe('SendToSifButton', () => {
       const onSave = vi.fn(async () => null);
 
       renderButton({ onSave, isDirty: true });
-      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: /^sendToSifLabel/ }));
       fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
 
       await screen.findByText('sendToSifSaveError');
@@ -378,7 +379,7 @@ describe('SendToSifButton', () => {
       },
     });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'sendToSif' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^sendToSifLabel/ })).toBeInTheDocument();
     });
   });
 });

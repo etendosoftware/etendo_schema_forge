@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+// @covers tools/app-shell/src/windows/custom/fiscal-config/fiscalConfig.utils.js
+import { describe, it, expect, vi } from 'vitest';
 import {
   resolveSystem,
   detectProfile,
@@ -35,9 +36,17 @@ describe('todayIsoDate', () => {
     expect(todayIsoDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it('is consistent with new Date() toISOString slice', () => {
-    const expected = new Date().toISOString().slice(0, 10);
-    expect(todayIsoDate()).toBe(expected);
+  // ETP-5700 — the LOCAL calendar day, never the UTC one (`toISOString().slice(0, 10)`),
+  // which east of UTC is still yesterday right after local midnight.
+  it('is the LOCAL calendar day, not the UTC one', () => {
+    vi.useFakeTimers();
+    try {
+      // 00:30 local on 2026-10-09: the UTC day is still 2026-10-08 east of UTC.
+      vi.setSystemTime(new Date(2026, 9, 9, 0, 30));
+      expect(todayIsoDate()).toBe('2026-10-09');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
