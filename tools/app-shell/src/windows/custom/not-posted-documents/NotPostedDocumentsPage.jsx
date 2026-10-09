@@ -12,12 +12,13 @@ import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { RefreshButton } from '@/components/contract-ui/RefreshButton.jsx';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { Button } from '@/components/ui/button';
-import { Tag } from '@/components/ui/tag';
+import { StatusTag } from '@/components/ui/status-tag';
 import { useClientSort } from '@/hooks/useClientSort';
 import { showBulkActionToast } from '@/hooks/useBulkActionToast';
 
 // ETP-5022: this page carried its own buildHeaders copy; header policy now has one home.
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useCopyPageLink } from '@/hooks/useCopyLinkAction.js';
 import {
   translateBackendError,
   extractBackendMessageKeys,
@@ -220,7 +221,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       id: row.documentId,
       documentTypeLabel: rowDocTypeLabel(row, ui, documentTypeLabels),
       accountingStatusLabel: statusDef ? ui(statusDef.labelKey) : '',
-      statusVariant: statusDef?.variant ?? null,
+      statusTone: statusDef?.tone ?? null,
     };
   }), [rows, ui, documentTypeLabels]);
 
@@ -239,10 +240,10 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       key: 'accountingStatusLabel',
       label: ui('statusLabel'),
       type: 'string',
-      render: (row) => (row.statusVariant
+      render: (row) => (row.statusTone
         ? (
           <span data-testid={`npd-status-${row.documentId}`}>
-            <Tag variant={row.statusVariant} label={row.accountingStatusLabel} data-testid="Tag__npdrow" />
+            <StatusTag tone={row.statusTone} label={row.accountingStatusLabel} data-testid="StatusTag__npdrow" />
           </span>
         )
         : null),
@@ -350,14 +351,8 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   }
 
   // ── Share: the page URL already carries the filters ──────────────────────────
-  async function copyPageLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success(ui('linkCopied'));
-    } catch {
-      toast.error(ui('copyFailed'));
-    }
-  }
+  // Same hook as ListView's toolbar Share (ETP-5593).
+  const copyPageLink = useCopyPageLink();
 
   useSetPageMeta({
     title: ui('notPostedDocuments'),
@@ -438,10 +433,10 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           renderLabel={(token) => (token === ALL_ERRORS_TOKEN
             ? statusLabel(token) // plain text, same weight as the "Todos los estados" row
             : (
-              <Tag
-                variant={statusDefForToken(token).variant}
+              <StatusTag
+                tone={statusDefForToken(token).tone}
                 label={statusLabel(token)}
-                data-testid="Tag__npdstatus" />
+                data-testid="StatusTag__npdstatus" />
             ))}
           allLabel={ui('allStatuses')}
           multipleLabel={statusTriggerLabel}

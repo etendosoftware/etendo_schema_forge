@@ -169,13 +169,17 @@ plus the **"Todos los errores"** shortcut. The request sends search keys (`N`, `
 `getValues()` queries `AD_Ref_List` by primary key, not by search key. The handler translates via
 `ACCOUNTING_STATUS_KEY_TO_ID`.
 
-| UI label (es_ES / i18n key) | Tag tone | Search key(s) | `ad_ref_list_id` | Notes |
+The badges are `StatusTag`s whose tone is NOT declared by the page: `STATUS_DEFS` takes it from
+`postedStatusTone()` in `lib/postedStatus.js`, the one colour source for posting statuses, so a
+status reads the same colour here as in the lists and the detail view (ETP-5647).
+
+| UI label (es_ES / i18n key) | Tone | Search key(s) | `ad_ref_list_id` | Notes |
 |---|---|---|---|---|
-| No contabilizado (`notPostedStatusUnposted`) | yellow | `N` | `D16B6411F4CB4708AE05E7F6E109920E` | |
-| Periodo cerrado (`postedStatusPeriodClosed`) | orange | `p` | `D1EAA8BCC3E649C398D4E544282E5292` | |
-| Cuenta no válida (`notPostedStatusInvalidAccount`) | red | `i` | `A12420CC6D4144768EEC57143859EFD6` | |
-| Coste no calculado (`postedStatusCostNotCalculated`) | red | `NC` | `EF3E057A84CD4BE88A9EF57BE9598DA3` | Added by ETP-5591 (see below) |
-| Error (`notPostedStatusError`) | red | `E`, `C` | `420D49CD77304D32BE49582002C315BE`, `4AE29BF062D4484E976B1BEEF34A7913` | Unified: Error + Error-No-Cost |
+| No contabilizado (`notPostedStatusUnposted`) | warning (yellow) | `N` | `D16B6411F4CB4708AE05E7F6E109920E` | |
+| Periodo cerrado (`postedStatusPeriodClosed`) | destructive (red) | `p` | `D1EAA8BCC3E649C398D4E544282E5292` | Orange until ETP-5647, now red like everywhere else |
+| Cuenta no válida (`notPostedStatusInvalidAccount`) | destructive (red) | `i` | `A12420CC6D4144768EEC57143859EFD6` | |
+| Coste no calculado (`postedStatusCostNotCalculated`) | destructive (red) | `NC` | `EF3E057A84CD4BE88A9EF57BE9598DA3` | Added by ETP-5591 (see below) |
+| Error (`notPostedStatusError`) | destructive (red) | `E`, `C` | `420D49CD77304D32BE49582002C315BE`, `4AE29BF062D4484E976B1BEEF34A7913` | Unified: Error + Error-No-Cost |
 
 **`NC` — Coste no calculado (ETP-5591).** Until ETP-5591 the handler never requested `NC`
 (ETP-4355 left it out of the curated set), so every goods receipt / shipment whose posting stopped
@@ -364,7 +368,7 @@ Spec name: `not-posted-documents`. Entity: `header`. Java_Qualifier: `not-posted
 `servesActions()` returning `true`** (ETP-4254). The MCP catalog hides a type-`W` spec whose
 entities are all handler-backed *and* declare no `/action` route — that rule exists for the
 dashboard's widgets, and this spec has the same shape. Dropping the declaration removes the spec
-from `neo_discover`, from the CRUD tool enums and from `neo_action`, taking `post` / `bulk-post`
+from `etendo_discover`, from the CRUD tool enums and from `etendo_action`, taking `post` / `bulk-post`
 away from agents. The React page is unaffected either way (`NeoRequestRouter` never consults
 `hasSpecAccess`), so the regression is invisible in the UI. See
 [`../agentic-validation/agentic-write-exposure-criteria.md`](../agentic-validation/agentic-write-exposure-criteria.md) §6
@@ -423,7 +427,7 @@ paged NEO entity grid, and this handler serves a custom, unpaged contract):
 | Estado | core `DistinctValuesFilter` (`multiple`, `heading`, `searchable={false}`, `renderLabel` → `Tag`) | See "Accounting status filter" |
 | Fecha | `DateRangePopover` | Default **Últimos 12 meses** (`last12m`) |
 | Limpiar filtros | `Button` | Only when filters differ from the defaults; resets to them (date back to 12 months) |
-| Share (link icon) | — | Copies `window.location.href` (filters are in the URL); `linkCopied` / `copyFailed` toasts |
+| Share (link icon) | — | Copies `window.location.href` (filters are in the URL); `linkCopied` / `copyFailed` toasts. Uses the shared `useCopyPageLink()` hook (`hooks/useCopyLinkAction.js`), the same one behind `ListView`'s Share (ETP-5593) |
 | Ordenar | `ListSortPopover` + `useClientSort` | Client-side: the handler returns every row at once. Sorts the displayed (translated) values |
 | Actualizar | `RefreshButton` | Refetches with the same filters |
 | Table | `DataTable` | Columns: Tipo de documento (bold), Estado (`Tag`), Descripción, Fecha contable (`date`, `dot: false`), Organización |
@@ -479,13 +483,28 @@ This is exactly the text Relación albarán-factura shows (see `matched-purchase
 The bulk **Contabilizar** goes through `showBulkActionToast`: when exactly one row was sent and it
 failed, it shows that row's translated error (same identity); otherwise only the ok/failed counts.
 
+### Locked-record posting error (ETP-5529)
+
+A post that fails with `STATUS_DocumentLocked` (another posting process holds the record, or it
+is already posted, not processed, or stuck with `Processing='Y'`) returns
+`messageKeys: ["OtherPostingProcessActive"]`, forwarded the same way on **Post row** and on the
+bulk **Contabilizar** (only on the locked row). `BACKEND_ERROR_KEY_MAP` maps it to
+`backendError.recordBeingPosted`:
+
+> Este registro está siendo contabilizado por otro proceso. Si el problema persiste, actualice el
+> registro; puede que ya esté contabilizado.
+
+The mapping is shared, so every posting window shows the same copy. The backend side (why core's
+text came back in English) is in `com.etendoerp.go` `docs/neo-headless.md` (ETP-5529 paragraph).
+Only `en_US` and `es_ES` have the copy; an `es_AR` user gets core's English text.
+
 ---
 
 ## Manual verification
 
 1. Open `/not-posted-documents` — the toolbar shows "Todos los documentos", "Todos los estados", "Últimos 12 meses" and, on the right, link / sort / refresh. No "Buscar", no "N registros" row; the count is in the title badge.
 2. Tipo de documento lists the enabled types A→Z with a search box; on a tenant whose `c_acctschema_table` row for `800168` is active (GOClient, or any tenant after data-fix R40) that includes **Consumo interno** (ETP-5445). Never present: payments, bank statements, reconciliation, work effort, doubtful debt, cost adjustment, bill of materials production, landed cost, landed cost cost.
-3. Every row shows a translated type and a status badge (yellow / orange / red). Picking a type or statuses refetches immediately; two statuses read "2 Estados"; "Todos los errores" ticks Periodo cerrado / Cuenta no válida / Coste no calculado / Error at once. Goods receipts with "Coste no calculado" appear. "Limpiar filtros" appears and resets.
+3. Every row shows a translated type and a status badge (yellow for No contabilizado, red for every failure — Periodo cerrado included). Picking a type or statuses refetches immediately; two statuses read "2 Estados"; "Todos los errores" ticks Periodo cerrado / Cuenta no válida / Coste no calculado / Error at once. Goods receipts with "Coste no calculado" appear. "Limpiar filtros" appears and resets.
 4. Copy the link, open it in another tab → same filters.
 5. Hover a row → "Abrir documento" opens the source document (a transaction opens its financial account); Back returns with the filters intact. "Contabilizar" posts it (success toast, row disappears).
 6. Select rows → floating toolbar "{n} Seleccionados · Contabilizar · ✕"; Contabilizar → outcome toast, table refreshes.

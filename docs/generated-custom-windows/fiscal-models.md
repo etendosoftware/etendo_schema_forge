@@ -3765,3 +3765,52 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 All query parameters are built with `URLSearchParams` to ensure correct encoding.
 
 **Error response shape (`/fiscal349/generate` and siblings).** A non-2xx response from any `AbstractFiscalHandler`-based endpoint (including `/fiscal349/generate`) carries a JSON body of the shape `{"error":{"message": "<text>", "status": <int>}}` — the standard `NeoResponse.error()` envelope, same for every NEO Headless endpoint, not something specific to this feature. On the frontend, `generate349File` treats any `!res.ok` as failure: it reads the response text, feeds it through `parseServerMessage()` to extract and clean `error.message` (see "Generate error banner" above for the exact parsing steps), and returns `{ ok: false, error: 'http_<status>', serverMessage }` instead of throwing — `handleGenerate` in `FmModel349Page.jsx` is what turns that into the visible `genError` banner. A network-level failure (fetch throws) returns `{ ok: false, error: 'network' }` with no `serverMessage`, which also falls back to the generic banner text.
+
+## Access control (ETP-5546)
+
+"Modelos Fiscales" access is represented by the role's grant on the **Tax Report window**
+(`AD_Window_ID = 3E8FEA1EA7404D979306C9EE7FD2E7E8`) — a proxy window, not a window this UI
+actually renders, established by the ETP-5116 window-access-proxy pass. Only the Finanzas
+template role grants it by default; a role like Compras has no grant at all.
+
+**Before ETP-5546, that grant was decorative only — nothing enforced it.** The sidebar already
+hid the "Modelos Fiscales" menu entry for a role without the grant, but:
+
+- `/fiscal-models` rendered the full page on direct navigation regardless of role (the route's
+  `index.jsx` was a bare `export { default } from './FiscalModelsPage'`, no guard at all).
+- The backend never checked the grant either: `GET /fiscal303/declarations`, `GET
+  /fiscal303/boxes`, `POST /fiscal303/submit`, `GET /fiscal349/boxes`, `POST
+  /fiscal349/validate-vies` and every other `/fiscal303/*`/`/fiscal349/*` sub-route, plus `GET`/`PUT
+  /sws/neo/fiscal-models-catalog`, answered `200` to any authenticated role.
+
+**Fixed on both sides, reusing existing utilities — no new access-control mechanism:**
+
+- **Frontend** — `tools/app-shell/src/windows/custom/fiscal-models/index.jsx` now wraps
+  `FiscalModelsPage` behind `useWindowAccess(FISCAL_MODELS_WINDOW_ID)` /
+  `WindowAccessGuard` (`FISCAL_MODELS_WINDOW_ID` = the same Tax Report window id above), the
+  identical pattern already used by `sales-invoice/index.jsx` and `not-posted-documents`. A
+  `'none'` tier renders the access-denied screen instead of `FiscalModelsPage`; `'read-only'` and
+  `'full'` both render the page (this window is window-gated, not write-gated, on the frontend).
+- **Backend** (`com.etendoerp.go`) — two separate gates, both calling
+  `NeoAccessHelper.hasWindowAccess(NeoAttachmentAuthorizer.TAX_REPORT_WINDOW_ID, method)`:
+  - `AbstractFiscalHandler.handle(entityName, method, request, response)` — the single entry point
+    every `/fiscal303/*` and `/fiscal349/*` sub-route funnels through (declarations, incidents,
+    boxes, submit, modified, validate-vies) — checks access first, before any entity routing,
+    tiering read (`GET`) vs write (`POST`/`PUT`/etc.) exactly as the generic window-access rule
+    does elsewhere in NEO Headless.
+  - `NeoBuiltInEndpointHandler.handleFiscalModelsCatalogEndpoint` — a second, separate gate, since
+    `/sws/neo/fiscal-models-catalog` is not routed through `AbstractFiscalHandler`.
+
+**What a denied role sees:**
+
+| Surface | Denied result |
+|---|---|
+| Sidebar menu | Entry already hidden (unchanged by this fix) |
+| Direct navigation to `/fiscal-models` | `WindowAccessGuard` access-denied screen instead of the page |
+| Any `/fiscal303/*` or `/fiscal349/*` request | `403 Forbidden` (`"Access denied"`), before any computation or lookup runs |
+| `GET`/`PUT /sws/neo/fiscal-models-catalog` | `403 Forbidden` (`"Access denied"`) |
+
+Full backend reference, including the "no access control at all" root cause and the exact gate
+locations: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §7, "Fiscal models
+(`fiscal303`/`fiscal349`/`fiscal-models-catalog`) had NO access control at all until ETP-5546."
+See ETP-5116 for the window-access-proxy convention this reuses.

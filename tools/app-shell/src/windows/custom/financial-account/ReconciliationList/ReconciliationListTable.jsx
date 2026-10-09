@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { ChevronDown, Scale } from 'lucide-react';
+import { Scale } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,6 +9,8 @@ import { formatDate } from '@/lib/formatSigned';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 import { ClearedItemsInline } from './ClearedItemsInline.jsx';
+import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
+import { postedStatusTone, resolvePostedStatus, postedStatusLabel } from '@/lib/postedStatus.js';
 
 /**
  * Read-only list of the reconciliation documents of an account (ETP-4795) — Classic's
@@ -90,7 +92,7 @@ const CELL_RENDERERS = {
     render: (r, ctx) => (
       <span>
         <StatusTag
-          tone={postedTone(r.posted)}
+          tone={postedStatusTone(r.posted) ?? 'neutral'}
           label={ctx.postedLabel(r.posted)}
           data-testid="StatusTag__d80a75" />
       </span>
@@ -109,14 +111,20 @@ const SKELETON_CELL_KEYS = ['chev', ...COLUMNS.map((c) => `c_${c.name}`)];
 const SKELETON_ROWS = [1, 2, 3, 4];
 
 /**
- * `Posted` carries the accounting state. Only 'Y' is genuinely posted; 'N' is pending and every
- * other code is a blocked/error variant, so anything unknown reads as a warning rather than
- * silently looking fine.
+ * Label of a reconciliation's `Posted` code. The window's own wording wins
+ * (`financeAccountReconciliationsPosted_<code>`), but it only covers seven codes and is absent
+ * from some locales, and `ui()` echoes a missing key back verbatim — so any other code falls back
+ * to the shared posting-status label instead of printing the raw key. The tone is never decided
+ * here: it comes from `postedStatusTone`, the one colour source for posting statuses (ETP-5647).
  */
-function postedTone(posted) {
-  if (posted === 'Y') return 'success';
-  if (posted === 'N') return 'neutral';
-  return 'warning';
+export function reconciliationPostedLabel(posted, ui) {
+  if (posted == null || posted === '') return '—';
+  const key = `financeAccountReconciliationsPosted_${posted}`;
+  const own = ui(key);
+  if (own && own !== key) return own;
+  const shared = resolvePostedStatus('Posted', posted);
+  if (shared) return postedStatusLabel(shared, ui);
+  return ui(posted === 'Y' ? 'postedStatus' : 'notPostedStatus');
 }
 
 function amountAligned(name) {
@@ -162,7 +170,7 @@ export function ReconciliationListTable({
     bcpLocale,
     currency,
     // The label set of the accounting status, keyed by the raw `Posted` code.
-    postedLabel: (posted) => ui(`financeAccountReconciliationsPosted_${posted}`) || posted || '—',
+    postedLabel: (posted) => reconciliationPostedLabel(posted, ui),
   };
 
 
@@ -265,18 +273,15 @@ function ReconciliationRow({ row, currency, cellCtx, ui, open, onToggle }) {
         onClick={onToggle}
         data-testid={`reconciliation-row-${row.id}`}
       >
-        <button
-          type="button"
-          aria-label={open
+        <RowExpandToggle
+          expanded={open}
+          stopPropagation
+          label={open
             ? ui('financeAccountReconciliationsCollapseAria')
             : ui('financeAccountReconciliationsExpandAria')}
-          aria-expanded={open}
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-          style={{ transform: open ? 'rotate(180deg)' : undefined }}
-        >
-          <ChevronDown className="h-4 w-4" data-testid="ChevronDown__d80a75" />
-        </button>
+          onToggle={() => onToggle()}
+          iconTestId="ChevronDown__d80a75"
+          data-testid="RowExpandToggle__d80a75" />
         {COLUMNS.map((col) => {
           const renderer = CELL_RENDERERS[col.name];
           return (

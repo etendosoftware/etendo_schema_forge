@@ -212,6 +212,58 @@ Verifactu config table. The other seven printables are untouched.
 The VERI\*FACTU logo is **not** rendered: art. 20.1.b requires the *phrase* «Factura verificable
 en la sede electrónica de la AEAT» **or** the «VERI\*FACTU» mark, and the phrase alone complies.
 
+## Follow-up shipment after Confirm — ETP-5576
+
+Confirming an invoice that ends **Completed** with quantities still pending to ship no longer sends the
+user to the list: they stay on the invoice and see «¿Gestionar envío?». The popup and the topbar
+button «Gestionar envío» are the generic follow-up flow shared with purchase-invoice (only texts and the
+generated document differ) — see `docs/ui-customization.md` §20.
+
+- **What is pending is decided by the backend.** The header GET carries
+  `followUp.available` (`["shipment"]` or `[]`) plus `followUp.shipment.pendingLines`. Credit notes,
+  returns and fully delivered invoices come back with an empty list → no popup, no button.
+- **Confirm** (`getInvoiceDraftMode(ui, { afterProcess })` in `tools/app-shell/src/windows/custom/sales-invoice/index.jsx`):
+  `draftMode.afterProcess = createFollowUpAfterProcess('sales-invoice', …)` runs after the process
+  succeeded. With a pending `shipment` it returns `{ stay: true }` and the modal opens on the
+  invoice; otherwise the previous behaviour stays (navigate to the list with the preview).
+- **Modal** (single follow-up → direct confirmation, no radio): title «¿Gestionar envío?»
+  (`titleKey: 'followUpManageShipmentTitle'`; the topbar button keeps «Gestionar envío» through its own
+  `buttonLabelKey: 'soManageShipment'`), summary (Factura / Fecha / Contacto / Líneas / Total — «Líneas» is the pending line
+  count), the question «¿Qué vas a hacer con esta factura?» (`questionKey:
+  'followUpInvoiceQuestion'`), ONE static option card (icon, «Crear albarán de venta» + blue «Borrador» badge
+  — `badgeTone: 'info'` —, «Se generará en borrador con las N líneas pendientes de envío.»,
+  singular variant for one line; not selectable, no Tab stop), footer Cancelar + «Crear albarán»
+  (label only, focused, so Enter creates). Cancel, the close icon, Esc and the
+  backdrop reject: the invoice stays Completed and nothing is created — there is no «Ahora no»
+  card. «Crear albarán» POSTs
+  `sales-invoice/header/{id}/action/createShipment`, which creates a **Draft** sales shipment (Albarán de Venta) with only
+  the pending lines; the result view links to it (`/goods-shipment/{id}`). Backend error codes
+  (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
+- **Warehouse asked when the backend cannot decide it.** The shipment needs a target warehouse. When
+  the backend cannot determine it on its own, `createShipment` answers `409 FOLLOW_UP_WAREHOUSE_REQUIRED`
+  with an `input` block (`key: "warehouseId"` + the candidate warehouses). The modal then stays open,
+  without an error, and shows a required «Almacén» selector («Elige el almacén donde se creará el
+  documento.») under the option card; with a single candidate it is preselected but still shown.
+  «Crear albarán» stays disabled until a warehouse is chosen, and the retry POSTs
+  `{"warehouseId": "<id>"}`. A rejected id (`400 FOLLOW_UP_INVALID_INPUT`) shows «El valor
+  seleccionado ya no es válido…» and keeps the selector; a 409 with no candidates (no `input` block)
+  shows «No se pudo determinar el almacén del documento…». When the backend can decide the warehouse
+  itself, nothing is asked and the flow is the one above. The selector is generic (key and options
+  come from the backend) — see `docs/ui-customization.md` §20 «Input-required round-trip».
+- **Topbar button** `follow-up-document-button` in `SalesInvoiceTopbar.jsx`: shown on a completed invoice
+  while something is pending (never for a read-only window). After a creation the record is
+  re-read (the button disappears; a partial movement later offers only what is still missing)
+  and `sales-invoice:document-created` refreshes the related documents (`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`).
+- Config: `SALES_INVOICE_FOLLOW_UP` in `tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js`.
+
+The previous ad-hoc «¿Gestionar envío?» dialog in `artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`
+(armed by a `neo:processSuccess` listener + `sessionStorage['invoice:createShipment:{id}']`) was
+removed: that event is never emitted by the draftMode Confirm (`handleSaveAndProcess`), and the
+Confirm navigated to the list anyway, so the dialog was unreachable. The sibling
+`invoice:sendAfterConfirm:{id}` flag on the same listener is kept untouched — it has the same
+limitation (it only reacts to a `DocAction` process run through `hook.handleProcess`, which this
+window does not expose), so its behaviour is unchanged.
+
 ## Known issues / Open bugs
 
 | ID | Severity | Window | Description | Status |
@@ -555,7 +607,7 @@ Sales invoices carry the same currency/exchange-rate editing model already shipp
 
 ### Header currency field and `CurrencyRatePicker`
 
-- `header.currency` in `artifacts/sales-invoice/decisions.json` is `visibility: "editable"`, `form: true`, `section: "principal"`, `readOnlyLogic: "@Processed@='Y'"` — editable while the invoice is draft, locked once completed. Previously it was `readOnly`/hidden in the `summary` section.
+- `header.currency` in `artifacts/sales-invoice/decisions.json` is `visibility: "editable"`, `form: true`, `section: "principal"`, `readOnlyLogic: "@Processed@='Y'"` — editable while the invoice is draft, locked once completed. Previously it was `readOnly`/hidden in the `summary` section. This completion lock applies to the header currency/rate picker only: since ETP-5657 the **Exchange Rates** secondary tab (ETP-4030 section below) no longer follows it and stays editable on a completed-but-unposted invoice.
 - A new hidden field, `eTGOCurrencyRate` (`visibility: "editable"`, `form: false`, `grid: false`), stores the per-invoice exchange-rate override (`C_INVOICE.EM_ETGO_Currency_Rate`, `NUMERIC(20,12)`, nullable — same column shape as `C_ORDER.EM_ETGO_Currency_Rate` from ETP-4027). It is writable by NEO but not rendered as its own form field; `CurrencyRatePicker` reads/writes it as part of the currency selection.
 - `tools/app-shell/src/components/contract-ui/EntityForm.jsx` renders the `CurrencyRatePicker` component (searchable currency selector with an inline rate editor, shared with sales-order/purchase-order/sales-quotation) instead of the plain `SelectorInput` whenever the field's column is `C_Currency_ID`, the entity is `header`, and the current URL matches `/(sales-order|purchase-order|sales-quotation|sales-invoice|purchase-invoice)(\/|$)/`. Selecting a currency calls the `currencyOptions` header action to list currencies reachable from the org currency (with their rates) and PATCHes `currency`, `currency$_identifier`, and `eTGOCurrencyRate` together.
 - `lines.cCurrencyId` remains `visibility: "system"` on sales-invoice — unlike orders, invoice lines (`C_InvoiceLine`) have no `C_Currency_ID` column at all, so there is no line-level currency to sync; the field in the contract is a derived/context value, not a real column.
@@ -613,9 +665,16 @@ When a sales invoice is issued in a currency other than the organization's base 
 - Declared in `artifacts/sales-invoice/decisions.json → window.secondaryTabs.exchangeRates` (`label: "Exchange rates"`, `tabOrder: 50`) and resolved as the `exchangeRates` child entity (`javaQualifier: "invoiceExchangeRateHandler"`), mapping to the document conversion-rate records (`C_Conversion_Rate_Doc`) tied to the invoice header. ETP-4836: the label was previously `"Exchange Rates"` (capital R) — a casing typo that didn't match the locale dictionaries' `tabs["Exchange rates"]` entry (lowercase r, the tab's real AD_Tab name), so it always rendered untranslated regardless of locale. Every other window's `secondaryTabs.<key>.label` (`contacts`, `warehouse`, etc.) follows the same convention — an explicit label string that must match a dictionary key exactly — so the fix here is the same one-line casing correction, no generator change needed.
 - `foreignAmount`'s label is overridden per-window via `window.labelOverrides.{es_ES,en_US}.Foreign_Amount` (ETP-4836: the shared `Foreign_Amount` AD_Element label is also used by Payment Out's Exchange Rates tab, so the fix is scoped here rather than edited in the global dictionary) and the field is declared `noTrailing: true` (ETP-4836: it's the only `amount`-type column in this grid, so the generic "last amount column hides under row-hover action icons" heuristic in `InlineLinesPanel.jsx` was swallowing its editable input entirely — `noTrailing` opts it out).
 - **Visible columns:** Currency (derived from the document, `form: false`), To Currency, Rate, and Foreign Amount. The inline add-row exposes `addLineFields: ["toCurrency", "rate", "foreignAmount"]`.
+- **`rate` is declared `"type": "number"` in decisions.json — ETP-5657:** `C_Conversion_Rate_Document.Rate` uses AD reference `800019` ("General Quantity"), which the core extractor's reference map does not cover yet, so it is extracted as `type: "string"` with `validation.maxLength: 10`. Before this override the inline editor treated the rate as free text (raw `0.68027210884`, no locale decimal comma). With the explicit type the generated grid column and form field are `type: 'number'`, so `InlineLinesPanel` edits it through `MaskedAmountInput` (no 2-decimal grouping, precision kept) and renders it with `formatPlainDecimal`. `number` is used rather than `decimal` because `decimal` is not in `InlineLinesPanel`'s `EDITABLE_TYPES` and would make the cell non-editable inline. The DB-derived `validation.maxLength: 10` still sits in the contract but is harmless: the generator emits `maxLength` only for string/text fields. Remove the override once ref `800019` is mapped in `schema_forge_core`.
 - **`requireSavedRecord: true`** — usable only after the invoice header is saved.
-- **Tab-level `readOnlyLogic: "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"` — ETP-4837:** this is the ONLY place that actually locks the tab at runtime. It is compiled by `resolveSecondaryTabDefs()`/`convertLogicToJs()` against the **header entity's own column map** and evaluated by `evalTabReadOnly(tab, props.hook.selected)` in `DetailView.jsx` — i.e. against the **invoice header record**, not the exchange-rate row. This is what suppresses the row's edit/delete affordances entirely (`InlineLinesPanel`/`DataTable` receive `isDocumentReadOnly={tabReadOnly}`) once the invoice is Completed (`Processed='Y'`) or Posted (`Posted='Y'`), matching the backend guard in `ConversionRateDocLockObserver` (module `com.smf.currency.conversionrate`), which already rejects the save with `SMFCR_CannotModifyRateNonDraft` for any non-Draft document status.
-  - **Gotcha (root cause of a shipped regression):** a *field-level* `readOnlyLogic` set on `entities.exchangeRates.fields.rate` in decisions.json is a no-op for this purpose — per-field `readOnlyLogic` on a secondary-tab field is evaluated against the **line's own record** (the `C_Conversion_Rate_Document` row), which carries no `Processed`/`Posted`/`HASREVERSEDINVOICE*` columns of its own, so the condition always resolves to `false` and the field stays editable. The first ETP-4837 pass added the condition there by mistake; it looked correct (the pipeline validator and contract inspection passed) but never took effect against the live app because it was reachable only via the unused `ExchangeRatesForm.jsx` sidebar (`inlineEditable` layout never renders it). The fix moved the `Processed` condition into the **tab-level** `readOnlyLogic` above instead. Do not reintroduce a field-level override on `rate`/`foreignAmount` for header-derived flags — extend the tab-level expression.
+- **Tab-level `readOnlyLogic: "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"` — ETP-4837, relaxed by ETP-5657:** this is the ONLY place that actually locks the tab at runtime. It is compiled by `resolveSecondaryTabDefs()`/`convertLogicToJs()` against the **header entity's own column map** and evaluated by `evalTabReadOnly(tab, props.hook.selected)` in `DetailView.jsx` — i.e. against the **invoice header record**, not the exchange-rate row. This is what suppresses the row's edit/delete affordances entirely (`InlineLinesPanel`/`DataTable` receive `isDocumentReadOnly={tabReadOnly}`) once the invoice is Posted (`Posted='Y'`) or has been reversed (`HASREVERSEDINVOICESO`/`HASREVERSEDINVOICEPO`). Unposting the invoice makes the tab editable again.
+  - **ETP-5657 — completed-but-unposted invoices are editable:** the original ETP-4837 rule also locked on `@Processed@='Y'`, mirroring the ETP-4030 completion lock enforced server-side by `ConversionRateDocLockObserver` (module `com.smf.currency.conversionrate`, `SMFCR_CannotModifyRateNonDraft` for any non-Draft status). ETP-5657 drops `@Processed@='Y'` from the tab rule so the document rate can still be corrected after completion and before posting, and that observer was **removed** from `com.smf.currency.conversionrate` (its `backendError.conversionRateNotDraft` mapping went with it). Final behavior on a completed-but-unposted invoice:
+    - **Edit** a rate row: allowed. `InvoiceExchangeRateHandler.handleUpdate` mirrors the new rate onto the header's `eTGOCurrencyRate` (`syncHeaderCurrencyRate`).
+    - **Add** a rate row: allowed, and it now syncs the header rate the same way. Either write saves the invoice through DAL, which moves `C_Invoice.updated` — so the cached PDF is detected as stale and re-rendered with the new rate (`docs/document-printables.md` § cache). In the UI the header is re-read after add, edit and delete alike (`withExchangeRateHeaderSync` / `refreshHeaderCurrencyRate` in `detailViewHelpers.jsx`), so the header's rate picker never shows a stale value.
+    - **Delete** a rate row: refused for any non-draft invoice by the slim `ConversionRateDocDeleteGuardObserver` (smf module, AD_MESSAGE `SMFCR_CannotDeleteRateCompleted`): "The exchange rate of a completed invoice cannot be deleted. Edit it instead." — mapped to `backendError.conversionRateDeleteCompleted` and shown in the delete toast (the secondary-tab bulk delete now carries the backend reason and its status, so a one-row refusal names it). The delete affordance itself stays visible: secondary tabs have no delete-only condition, so the backend message is the guard.
+    - **Posted or reversed:** read-only, unchanged — the tab rule above (`@Posted@='Y'`, `HASREVERSEDINVOICE*`) and Core's `C_CONVERSION_RATE_DOCUMENT_TRG`, which rejects writes on posted invoices.
+    The header currency/rate picker (`header.currency`, ETP-4029 section above) keeps its own `@Processed@='Y'` lock — only the tab changed.
+  - **Gotcha (root cause of a shipped regression):** a *field-level* `readOnlyLogic` set on `entities.exchangeRates.fields.rate` in decisions.json is a no-op for this purpose — per-field `readOnlyLogic` on a secondary-tab field is evaluated against the **line's own record** (the `C_Conversion_Rate_Document` row), which carries no `Processed`/`Posted`/`HASREVERSEDINVOICE*` columns of its own, so the condition always resolves to `false` and the field stays editable. The first ETP-4837 pass added the condition there by mistake; it looked correct (the pipeline validator and contract inspection passed) but never took effect against the live app because it was reachable only via the unused `ExchangeRatesForm.jsx` sidebar (`inlineEditable` layout never renders it). The fix moved the header-flag conditions into the **tab-level** `readOnlyLogic` above instead. Do not reintroduce a field-level override on `rate`/`foreignAmount` for header-derived flags — extend the tab-level expression.
 
 ### Server-side rate ⇄ foreign-amount recompute
 
@@ -638,7 +697,8 @@ The `invoiceExchangeRateHandler` (`modules/com.etendoerp.go/src/com/etendoerp/go
 2. Add a row: set To Currency and type a Rate. Save and confirm Foreign Amount = grand total × rate, shown live.
 3. Edit Foreign Amount. Save and confirm Rate = foreign amount ÷ grand total, live.
 4. Complete with no rate present and no general rate: confirm the block `SMFCR_NoRateOnComplete <FROM> → <TO>`.
-5. Add the rate and confirm completion succeeds; on a completed invoice confirm the tab is read-only.
+5. Add the rate and confirm completion succeeds; on the completed (not yet posted) invoice confirm the tab is still editable and a rate change saves (ETP-5657).
+6. Post the invoice and confirm the tab is read-only (no edit/delete affordances); unpost it and confirm the tab is editable again. On a reversed invoice the tab stays read-only.
 
 ### Automated evidence
 
@@ -1611,7 +1671,7 @@ Verifactu have no equivalent stored column and keep their own unconditional clie
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move this invoice through its
-workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+workflow over MCP. `etendo_schema` returns it with `invokeVia: "etendo_action"`, `actionValues` (the
 active AD list of the `C_Invoice.DocAction` reference — note `CO` is labelled **Complete** here,
 not Book) and `actionParameter: "docAction"`; its `agentPrompt` — defined in `decisions.json` ->
 `entities.header.fields.documentAction.agentPrompt` — states which transitions are legal and
@@ -1619,7 +1679,7 @@ their preconditions.
 
 Completing a draft invoice over MCP:
 
-    neo_action { spec: "sales-invoice", entity: "header", id: "<invoiceId>",
+    etendo_action { spec: "sales-invoice", entity: "header", id: "<invoiceId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
 Flow encoded in the prompt: `DR -> CO` completes (assigns the final document number, computes
@@ -1703,7 +1763,7 @@ Both `sifSending.js` and `SiiSendHandler.java` are shared between sales-invoice 
 purchase-invoice — see `purchase-invoice.md` for this window's mirror of the same fix.
 
 This runs `SalesInvoiceHeaderHandler` exactly as the UI does — including the `ProcessInvoiceHook`
-routing on completion — because `neo_action` executes the entity's `NeoHandler` hooks
+routing on completion — because `etendo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
 
@@ -1816,7 +1876,7 @@ Three constraints worth knowing:
   zero limit means *no limit* — a deliberate divergence from Classic, documented in
   `financial-account.md`.
 - **Enforced server-side too (ETP-5558).** Until ETP-5558 the limit lived only in the SPA, so an MCP
-  `neo_action registerPayment` or a direct REST call with `writeoffDifference:true` could write off
+  `etendo_action registerPayment` or a direct REST call with `writeoffDifference:true` could write off
   any amount. `PaymentWriteoffLimitGuard` (called from `doRegisterPaymentAdvanced` before the draft,
   the consumed credit or a PIS transfer exists) now refuses it with a 400 and the
   `ETGO_WriteoffLimitExceeded` AD_Message (English only — the module ships no message
@@ -2088,8 +2148,8 @@ invoice's id and payment/credit ids taken from that invoice's own listings.
 
 An agent collects an invoice through the same invoice-header actions the *Cobros de la factura*
 popup and the *Nuevo cobro* modal call — never by writing a collection by hand. They are published
-to MCP as declared actions next to the AD buttons (`neo_schema(spec:'sales-invoice',
-entity:'header', view:'actions')`, also named in `neo_discover`), with `id` = the invoice id:
+to MCP as declared actions next to the AD buttons (`etendo_schema(spec:'sales-invoice',
+entity:'header', view:'actions')`, also named in `etendo_discover`), with `id` = the invoice id:
 
 | Action | What it does |
 |---|---|

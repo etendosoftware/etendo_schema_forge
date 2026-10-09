@@ -28,6 +28,9 @@
       ],
       "summary": {
         "totalBalance": 12596.17,
+        "totalBalanceCurrencyIso": "EUR",
+        "totalBalanceApproximate": false,
+        "missingRateCurrencies": [],
         "byCurrency": [
           { "currencyIso": "EUR", "total": 12596.17 }
         ],

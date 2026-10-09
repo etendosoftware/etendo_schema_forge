@@ -218,9 +218,9 @@ ever changes, this needs revisiting.
   B1): the `documents` entity, `PeriodControlDocOpenCloseHandler`, and AD Process 168 remain in
   place server-side, unused but harmless. No `decisions.json`/contract change, no regen needed.
 - **Through MCP (ETP-5587).** An agent opens or closes a period the way the dialog does:
-  `neo_action(spec:'open-close-period-control', entity:'periodControl', id:'<periodId>',
+  `etendo_action(spec:'open-close-period-control', entity:'periodControl', id:'<periodId>',
   action:'openClose', parameters:{openClose:'O'|'C'|'P'})`. `PeriodOpenCloseHandler` declares the
-  button as a contract with exactly the dialog's parameter and options, so `neo_schema` advertises
+  button as a contract with exactly the dialog's parameter and options, so `etendo_schema` advertises
   `openClose` with O/C/P (not the reference list's `docAction` with C/N/O/P), and the MCP sends the
   dialog's own body (`{fieldValues:{openClose}}`). The per-document-type `documents.openClose` the
   UI dropped is hidden from agents by `MCP_CONFIG.actions`; `periodControl.processNow` stays

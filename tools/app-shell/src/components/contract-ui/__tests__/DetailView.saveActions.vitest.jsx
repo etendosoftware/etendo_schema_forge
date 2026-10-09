@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/saveActions.jsx
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('react-router-dom', () => ({
@@ -89,7 +90,7 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import {
   handlePostSaveNavigation, reportUnnavigableSave, renderSaveActions,
@@ -582,5 +583,91 @@ describe('renderSaveActions — draftMode onlySaveButton (ETP-4839)', () => {
     }))}</>);
     expect(screen.getByTestId('action-save')).toBeInTheDocument();
     expect(screen.queryByTestId('action-save-draft')).toBeNull();
+  });
+});
+
+// draftMode.afterProcess — the window hook run after a native Confirm
+// (hook.handleSaveAndProcess) and before the post-Confirm navigation. Driven through the
+// real Confirm button so the order inside runDraftModeConfirm is what is under test.
+describe('renderSaveActions — Confirm runs draftMode.afterProcess', () => {
+  const ui = (key) => key;
+  const SAVED = { id: 'inv-1', documentStatus: 'CO', followUp: { available: ['shipment'] } };
+  let consoleError;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleError.mockRestore();
+  });
+
+  function confirmParams({ afterProcess, isNew = false, onAfterSave = vi.fn() } = {}) {
+    const hook = {
+      isSaving: false,
+      handleSave: vi.fn(() => Promise.resolve(SAVED)),
+      handleSaveAndProcess: vi.fn(() => Promise.resolve(SAVED)),
+      primeSaved: vi.fn(),
+      fetchById: vi.fn(),
+      children: [{ id: 'line-1' }],
+      childrenLoading: false,
+    };
+    return {
+      hook,
+      navigate: vi.fn(),
+      params: {
+        hook, isDirty: false, flushPendingLines: vi.fn(() => Promise.resolve(true)), data: {}, isNew,
+        windowName: 'sales-invoice', ui, onAfterCreate: null, onAfterSave, token: 'tok', apiBaseUrl: '/api',
+        saveBtnCls: '', blockSaveForBalance: false, blockCompleteForBalance: false,
+        setShowProcessingModal: vi.fn(), saveGate: {},
+        draftMode: { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process', ...(afterProcess ? { afterProcess } : {}) },
+      },
+    };
+  }
+
+  async function clickConfirm(setup) {
+    render(<>{renderSaveActions({ ...setup.params, navigate: setup.navigate })}</>);
+    fireEvent.click(screen.getByTestId('action-save'));
+    await waitFor(() => expect(setup.hook.handleSaveAndProcess).toHaveBeenCalled());
+    // Let the awaited afterProcess and the navigation settle.
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+
+  it('existing record + { stay: true }: primes the fresh record into the form and stays — no navigation, no refetch', async () => {
+    const afterProcess = vi.fn(() => ({ stay: true }));
+    const setup = confirmParams({ afterProcess });
+    await clickConfirm(setup);
+    expect(afterProcess).toHaveBeenCalledWith(SAVED);
+    expect(setup.hook.primeSaved).toHaveBeenCalledWith(SAVED);
+    expect(setup.navigate).not.toHaveBeenCalled();
+    expect(setup.hook.fetchById).not.toHaveBeenCalled();
+  });
+
+  it('new record + { stay: true }: primes the record and opens it at /{id} instead of the list', async () => {
+    const setup = confirmParams({ afterProcess: vi.fn(async () => ({ stay: true })), isNew: true });
+    await clickConfirm(setup);
+    expect(setup.hook.primeSaved).toHaveBeenCalledWith(SAVED);
+    expect(setup.navigate).toHaveBeenCalledTimes(1);
+    expect(setup.navigate).toHaveBeenCalledWith('/sales-invoice/inv-1', { replace: true, state: { justSaved: SAVED } });
+  });
+
+  it.each([
+    ['returns null', () => null],
+    ['returns { stay: false }', () => ({ stay: false })],
+    ['throws (the document IS processed, navigation must still happen)', () => { throw new Error('boom'); }],
+    ['is not a function', 'not-a-function'],
+  ])('afterProcess %s: keeps the onAfterSave navigation to the list', async (_, afterProcess) => {
+    const setup = confirmParams({ afterProcess });
+    await clickConfirm(setup);
+    expect(setup.navigate).toHaveBeenCalledWith('/sales-invoice', { replace: true, state: { savedRecord: SAVED, justSaved: SAVED } });
+    expect(setup.hook.primeSaved).not.toHaveBeenCalled();
+  });
+
+  it('without afterProcess and without onAfterSave, an existing record is still refetched as before', async () => {
+    const setup = confirmParams({ onAfterSave: null });
+    await clickConfirm(setup);
+    expect(setup.hook.fetchById).toHaveBeenCalledWith('inv-1', { force: true });
+    expect(setup.navigate).not.toHaveBeenCalled();
   });
 });

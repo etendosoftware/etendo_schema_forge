@@ -108,7 +108,7 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 ## Manual verification
 
 1. Open `/purchase-order` and confirm the list shows exactly Order Date (no red dot), Document No., Business Partner, Document Status, Total Gross Amount, Invoice Status, and Reception Status in that order, and that legacy columns such as transaction document, warehouse, price list, and priority are no longer present.
-2. Open `/purchase-order?filter=pendingReception` and confirm fully received orders are excluded while orders with remaining reception progress stay visible (ETP-5487; the query param navigated to from the dashboard's pending-tasks widget, see `docs/widget-endpoints.md`).
+2. Open `/purchase-order?filter=pendingReception` and confirm fully received orders are excluded while orders with remaining reception progress stay visible, and that the advanced filter shows both conditions populated (Document Status = Completed, Reception Status < 100) and the row count equals the dashboard card (ETP-5487/ETP-5632: the condition uses the `eTGODelivStatusPurchase` grid column; a non-grid field is silently dropped; the query param navigated to from the dashboard's pending-tasks widget, see `docs/widget-endpoints.md`).
 3. Verify the header now exposes `Warehouse` as a visible field in the second row of the header form (between Scheduled Delivery Date and Payment Method). The grid column remains hidden. Confirm it is editable on a draft order.
 4. Open a draft order at `/purchase-order/:recordId` and confirm the detail page allows line editing and exposes the draft top-bar actions for confirmation, deletion, and cloning — the Send/"Enviar" action must **not** be shown yet. Open a line for edit and confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured purchase taxes (filtered by `IsSOTrx=N` and validity against the order date), not a free-text search that returns "Sin resultados". Confirm the order and verify Send/"Enviar" now appears in the detail topbar and as a row quick action in the list.
 5. Confirm a draft order and verify the confirmation flow offers downstream procurement follow-up rather than only a status change. Confirm with **both** `Create receipt` and `Create invoice` left unchecked and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `confirmedTitle || poConfirmedTitle` ("Pedido de compra confirmado" / "Purchase order confirmed") and the page refreshes (ETP-5063). Confirm the result modal still appears, listing the created document(s), when at least one of the two checkboxes is selected.
@@ -274,14 +274,14 @@ was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../pla
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move this order through its
-workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+workflow over MCP. `etendo_schema` returns it with `invokeVia: "etendo_action"`, `actionValues` (the
 active AD list of the `C_Order.DocAction` reference) and `actionParameter: "docAction"`; its
 `agentPrompt` — defined in `decisions.json` -> `entities.header.fields.documentAction.agentPrompt`
 — states which transitions are legal and their preconditions.
 
 Booking a draft order over MCP:
 
-    neo_action { spec: "purchase-order", entity: "header", id: "<orderId>",
+    etendo_action { spec: "purchase-order", entity: "header", id: "<orderId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
 Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> RE` reactivates it back to
@@ -291,7 +291,7 @@ quantities. **This window now has a Reactivate menu action** (`window.menuAction
 `decisions.json`, added by ETP-5315), matching `sales-order`'s own conditional Reactivate.
 
 This runs `PurchaseOrderHeaderHandler` exactly as the UI does — including the pre-CO
-total-discount line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285).
+total-discount line — because `etendo_action` executes the entity's `NeoHandler` hooks (ETP-4285).
 If you change this window's workflow rules, update the `agentPrompt` in the same change: it is
 the only thing telling the agent what is legal.
 

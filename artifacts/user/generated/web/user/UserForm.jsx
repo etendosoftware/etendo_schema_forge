@@ -8,7 +8,7 @@ const fields = [
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'details', maxLength: 255 },
   { key: 'active', column: 'IsActive', type: 'checkbox', label: 'Active', required: true, section: 'security' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: 'Business Partner', section: 'details', reference: 'BusinessPartner', inputMode: 'search' },
-  { key: 'email', column: 'Email', type: 'text', label: 'Email', required: true, section: 'principal', maxLength: 255, readOnlyLogic: (record) => !!record.id },
+  { key: 'email', column: 'Email', type: 'text', label: 'Email', required: true, section: 'principal', maxLength: 255, readOnlyLogic: (record) => !!record.id && record.emailEditable !== true },
   { key: 'locked', column: 'IsLocked', type: 'checkbox', label: 'Locked', required: true, readOnly: true, section: 'security' },
   { key: 'position', column: 'Title', type: 'text', label: 'Position', section: 'details', maxLength: 40 },
   { key: 'phone', column: 'Phone', type: 'text', label: 'Phone', section: 'details', maxLength: 40 },

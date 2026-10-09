@@ -154,9 +154,13 @@ Like the contextual-selector smoke above, they get a bearer JWT through
 
 `e2e/tests/flows/system/tenant-upgrade-provisioning-failure.integration.spec.js` runs in the
 ordinary integration project through `scripts/run-e2e-full.sh`, including the local
-`make test-e2e-headless` run and the pre-push E2E gate. The runner sets
-`E2E_PROVISIONING_FAILURE=1`. A CI job that invokes this runner includes the same spec;
-the current Jenkins pipeline does not invoke the runner.
+`make test-e2e-headless` run and the pre-push E2E gate, where the runner sets
+`E2E_PROVISIONING_FAILURE=1`. Under Jenkins (detected by a non-empty `JENKINS_URL`) the
+runner sets `E2E_PROVISIONING_FAILURE=0` and the spec self-skips: on first run the backend
+fixture (`POST /sws/go/dev/provisioning-failure-fixture`) provisions a whole dedicated pool
+tenant synchronously, which takes minutes and exceeds the 15 s `actionTimeout`. An explicit
+`E2E_PROVISIONING_FAILURE` value always wins — export `E2E_PROVISIONING_FAILURE=1` to force
+the spec on (including under Jenkins), or `0` to skip it locally.
 The spec creates a paid checkout through a local backend fixture, follows the real
 `/upgrade?checkout=success` browser path, checks that the UI sends onboarding with the
 same request ID, verifies the durable `provisioning_failed` state and visible recovery
@@ -618,7 +622,7 @@ Configuration variables:
 | `E2E_MCP_OAUTH_AUTHORIZE_URL` | `${E2E_MCP_PUBLIC_BASE_URL}/etendo/oauth2/authorize` | Backend authorization endpoint |
 | `E2E_MCP_OAUTH_TOKEN_URL` | `${E2E_MCP_PUBLIC_BASE_URL}/etendo/oauth2/token` | Token endpoint for the PKCE exchange |
 | `E2E_MCP_OAUTH_REGISTRATION_URL` | `${E2E_MCP_PUBLIC_BASE_URL}/etendo/oauth2/register` | DCR endpoint |
-| `E2E_MCP_OAUTH_SCOPES` | `neo:read neo:write neo:process neo:report neo:*` | Requested MCP scopes |
+| `E2E_MCP_OAUTH_SCOPES` | `etendo:read etendo:write etendo:process etendo:report etendo:*` | Requested MCP scopes |
 | `E2E_MCP_OAUTH_CLIENT_ID` | none | Existing OAuth client ID |
 | `E2E_MCP_OAUTH_CLIENT_SECRET` | none | Optional client secret |
 | `E2E_MCP_OAUTH_TOKEN_AUTH_METHOD` | `client_secret_post` | Use `client_secret_basic`, `client_secret_post`, or `none` |
@@ -1063,12 +1067,26 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `row-quick-action-delete-confirm` | — | Destructive button inside the row delete confirm dialog |
 | `generic-preview-modal` | — | `GenericPreviewModal` card (the right-anchored panel) |
 | `preview-drop-zone` | — | Drop zone inside GenericPreviewModal managed left panel |
+| `preview-file-replace-input` | — | Hidden `<input type="file">` behind "Reemplazar archivo" in the list preview (`fileActions` mode) — use `setInputFiles()` |
+| `file-viewer-more` | — | "Más" (⋯) button on the uploaded-file mini toolbar (`UploadedFileViewer`) |
+| `file-viewer-menu` | — | Its dropdown menu |
+| `file-viewer-replace` | — | "Reemplazar archivo" menu item |
+| `file-viewer-delete` | — | "Eliminar archivo" menu item (opens `confirm-delete-dialog`) |
+| `file-viewer-expand` | — | Click target over the file preview that opens the lightbox |
+| `file-lightbox` | — | `FileLightbox` dialog container (`role="dialog"`) |
+| `file-lightbox-title` | — | File name in the lightbox header |
+| `file-lightbox-page-count` | — | Page count line (PDF only) |
+| `file-lightbox-zoom-in` / `-fit` / `-zoom-out` | — | Lightbox zoom controls |
+| `file-lightbox-replace` | — | Lightbox "Reemplazar archivo" button |
+| `file-lightbox-delete` | — | Lightbox "Eliminar archivo" button (opens `confirm-delete-dialog`) |
+| `file-lightbox-close` | — | Lightbox close (X) button |
 | `filter-{key}` | `filter-alltab`, `filter-invoicestab`, `filter-rectificativeinvoicestab` (invoices); `filter-all`, `filter-persons`, `filter-companies` (contacts) | ListView subset filter buttons (second toolbar row). `{key}` is the entry's `key`, or else its `label` as declared (the i18n key, not the translated text) lowercased — so there is no `filter-todos` |
 | `filter-status`, `filter-type`, `filter-date`, `filter-advanced` | — | ListFilterBar triggers in the first toolbar row (status, type — a column flagged `isTypeFilter` —, date range, "Filters"), each present only when the window has that filter. They share the `filter-` prefix with the subset buttons: scope a `[data-testid^="filter-"]` query to `list-toolbar-tabs-row` or `list-toolbar-main-row` |
 | `quick-filter-{name}` | `quick-filter-active` | ListView quick filter toggle buttons |
 | `list-toolbar` | — | ListView idle toolbar container; carries the toolbar/body separator (absent under `hideListBar`) |
 | `list-toolbar-main-row` | — | ListView toolbar first row: filters on the left, main actions on the right |
 | `list-toolbar-tabs-row` | — | ListView toolbar second row: subset filter buttons and the list/gallery `view-toggle`. Rendered only when the window has one of them |
+| `list-share-link` | — | ListView toolbar Share button: copies the current page URL, query string included (absent under `hideLink`) |
 | `selection-count` | — | ListView selection bar (count of selected rows) |
 | `list-progress-bar` | — | ListView loading progress indicator |
 | `global-search-trigger` | — | CommandPalette trigger button |
@@ -1080,6 +1098,7 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `topbar-more-actions` | — | TopBar kebab / 3-dot menu |
 | `topbar-title-block` | — | TopBar title + breadcrumb block (left grid column, elides) |
 | `topbar-breadcrumb` | — | TopBar breadcrumb line |
+| `topbar-record-count` | — | Record-count badge next to the list title (absent under `hideRecordCount`) |
 | `topbar-breadcrumb-current` | — | Current page level when the breadcrumb is collapsed/structured |
 | `topbar-breadcrumb-overflow` | — | Breadcrumb `⋯` trigger (>3 levels) |
 | `topbar-breadcrumb-overflow-menu` | — | Breadcrumb `⋯` dropdown |
@@ -1295,7 +1314,8 @@ The glob-crossing bug described above is not a permanent Playwright limitation �
 list toolbar's **geometry** — jsdom has no layout, so the unit suite
 (`ListView.toolbarLayout.vitest.jsx`) can only pin where each control lives in the DOM. At
 1280×720 with the navigation rail expanded it checks, for purchase-invoice, sales-invoice,
-contacts, product, warehouse, payment-in and payment-out: the second row
+contacts, product, warehouse, payment-in, payment-out and chart-of-accounts (ETP-5593 — its tree
+controls share the main row): the second row
 (`list-toolbar-tabs-row`) exists exactly when the window has a tab group and sits below the main
 row; the main row does not overflow, none of its buttons is clipped and its two clusters do not
 overlap; the toolbar paints its bottom border and ends above the grid. It also re-measures
