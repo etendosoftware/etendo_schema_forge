@@ -744,6 +744,33 @@ export async function reselectComboOption(page, fieldKey) {
 }
 
 /**
+ * Expand the header form's collapsed "Mostrar más datos" block, if there is one.
+ *
+ * Since ETP-5513 the header EntityForm renders only its first `initialRows` rows
+ * (required fields first) behind `data-testid="form-show-more-toggle"`; the fields
+ * of the collapsed block are NOT rendered at all, so a callout-derived field such as
+ * Purchase Invoice's `paymentTerms` is simply absent from the DOM until the block is
+ * opened (see `useInitialRowsCollapse` in formResponsiveLayout.js).
+ *
+ * Idempotent: it only clicks a toggle that reports `aria-expanded="false"`, so it
+ * never collapses a block that is already open — opened by a previous call, or
+ * latched open by the form itself (a hidden-field error or a blocked Save/Confirm).
+ * A form with no toggle (every field fits in the initial rows) is a no-op.
+ */
+export async function expandHeaderFields(page) {
+  const collapsed = page.locator(
+    '[data-testid="form-show-more-toggle"][aria-expanded="false"]:not([aria-disabled="true"])',
+  );
+  // Each click flips its toggle to aria-expanded="true", dropping it from `collapsed`.
+  // Bounded so a toggle that never reacts fails the assertion below instead of looping.
+  for (let attempt = 0; attempt < 5 && await collapsed.count() > 0; attempt += 1) {
+    // eslint-disable-next-line no-await-in-loop -- one toggle at a time, re-read after each click
+    await collapsed.first().click();
+  }
+  await expect(collapsed, 'Header "Mostrar más datos" block should be expanded').toHaveCount(0);
+}
+
+/**
  * Locator for the current value of a chip-or-input FK/dependent field.
  *
  * CreatableSearchSelect (and its PartnerAddressPicker/DependentFkField wrappers
@@ -775,6 +802,9 @@ export function derivedFieldLocator(page, fieldKey) {
  * Poll each shape with the accessor that actually holds its value instead.
  */
 export async function waitForDerivedFieldValue(page, fieldKey, { timeout = 30_000 } = {}) {
+  // A derived field may live in the header's collapsed block (ETP-5513), where it is
+  // not rendered at all — open it first so "not found" can only mean "not derived".
+  await expandHeaderFields(page);
   const field = derivedFieldLocator(page, fieldKey);
   await expect(field).toBeVisible({ timeout });
 
@@ -852,6 +882,11 @@ export async function selectVendorBP(page, { name } = {}) {
   // let a flaky partnerAddress assertion slip through in
   // purchase-order-to-invoice.integration.spec.js (deterministic failure: the
   // address callout hadn't landed yet when the caller sampled its value).
+  //
+  // Expand the header's collapsed block first: on purchase invoice `paymentTerms` lands
+  // there and is not rendered while collapsed, and the `warehouse` presence check below
+  // must not read a collapsed (unrendered) field as "this document has no warehouse".
+  await expandHeaderFields(page);
   await waitForDerivedFieldValue(page, 'paymentTerms', { timeout: 30_000 });
   await waitForDerivedFieldValue(page, 'partnerAddress', { timeout: 30_000 });
 
