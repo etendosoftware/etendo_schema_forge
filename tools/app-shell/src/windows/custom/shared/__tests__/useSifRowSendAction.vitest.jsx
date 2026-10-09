@@ -78,6 +78,10 @@ describe('buildSifRowMenuAction — gate', () => {
     expect(build({ row: { ...ROW, documentStatus: 'DR' } })).toBeNull();
   });
 
+  it('returns null for a voided document even with SII pending', () => {
+    expect(build({ row: { ...ROW, documentStatus: 'VO' } })).toBeNull();
+  });
+
   it('returns null when the row has no id', () => {
     expect(build({ row: { ...ROW, id: undefined } })).toBeNull();
   });

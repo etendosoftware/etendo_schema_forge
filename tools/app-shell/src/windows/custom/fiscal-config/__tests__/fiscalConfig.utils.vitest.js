@@ -31,6 +31,23 @@ import {
 // todayIsoDate
 // ---------------------------------------------------------------------------
 
+// Runs fn with process.env.TZ forced (same pattern as shared/__tests__/fiscalTargets.test.js),
+// so an east-of-UTC case is exercised whatever the host timezone is. Awaits async fns.
+async function withTimezone(tz, fn) {
+  const previous = process.env.TZ;
+  process.env.TZ = tz;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+}
+
+// 00:30 on 2026-10-09 in Europe/Madrid (CEST, UTC+2). The UTC day is still 2026-10-08,
+// so the old `toISOString().slice(0, 10)` returned yesterday here.
+const MADRID_0030 = new Date('2026-10-08T22:30:00.000Z');
+
 describe('todayIsoDate', () => {
   it('returns a string matching yyyy-mm-dd', () => {
     expect(todayIsoDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -47,6 +64,36 @@ describe('todayIsoDate', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('is the Madrid calendar day at 00:30 Madrid time, while the UTC day is still yesterday', async () => {
+    await withTimezone('Europe/Madrid', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(MADRID_0030);
+        // Guard: proves the trap is armed — the UTC-based value is the previous day.
+        expect(new Date().toISOString().slice(0, 10)).toBe('2026-10-08');
+        expect(new Date().getHours()).toBe(0);
+        expect(todayIsoDate()).toBe('2026-10-09');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it('stamps the onboarding SII and TBAI adoption dates with the Madrid day at 00:30', async () => {
+    await withTimezone('Europe/Madrid', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(MADRID_0030);
+        const p = buildOnboardingPayloads('SII+TBAI', 'bizkaia');
+        expect(p.sii.fechaAcogidaSII).toBe('2026-10-09');
+        expect(p.sii.monitordate).toBe('2026-10-09');
+        expect(p.tbai.tbaisystemdate).toBe('2026-10-09');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
 

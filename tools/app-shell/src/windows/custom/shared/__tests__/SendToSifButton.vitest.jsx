@@ -72,6 +72,11 @@ describe('SendToSifButton', () => {
     expect(screen.getByRole('button', { name: /^sendToSifLabel/ })).toBeInTheDocument();
   });
 
+  it('does not render for a voided invoice even with SII pending', () => {
+    renderButton({ status: 'VO' });
+    expect(screen.queryByRole('button', { name: /^sendToSifLabel/ })).not.toBeInTheDocument();
+  });
+
   it('regression: renders when isDocumentReadOnly is false/absent (existing behavior)', () => {
     renderButton();
     expect(screen.getByRole('button', { name: /^sendToSifLabel/ })).toBeInTheDocument();

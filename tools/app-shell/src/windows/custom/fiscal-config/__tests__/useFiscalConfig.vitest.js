@@ -223,3 +223,70 @@ describe('earliestCutoverDate', () => {
     expect(earliestCutoverDate(rows, 'tbai')).toBe('2026-10-08T23:30:00');
   });
 });
+
+// Runs fn with process.env.TZ forced (same pattern as shared/__tests__/fiscalTargets.test.js),
+// so an east-of-UTC case is exercised whatever the host timezone is. Awaits async fns.
+async function withTimezone(tz, fn) {
+  const previous = process.env.TZ;
+  process.env.TZ = tz;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+}
+
+// 00:30 on 2026-10-09 in Europe/Madrid (CEST, UTC+2). The UTC day is still 2026-10-08,
+// so the old `toISOString().slice(0, 10)` returned yesterday here.
+const MADRID_0030 = new Date('2026-10-08T22:30:00.000Z');
+
+describe('useFiscalConfig — createComplementary', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(detectProfile).mockReturnValue('tbai');
+    mockApiFetch.mockImplementation(() => makeSuccessResponse({ id: 'rec-1' }));
+    vi.mocked(useApiFetch).mockReturnValue(mockApiFetch);
+  });
+
+  function postBody() {
+    const post = mockApiFetch.mock.calls.find(([, opts]) => opts?.method === 'POST');
+    return { path: post[0], body: JSON.parse(post[1].body) };
+  }
+
+  it('stamps the SII adoption date with the Madrid day at 00:30 Madrid time', async () => {
+    await withTimezone('Europe/Madrid', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(MADRID_0030);
+        expect(new Date().toISOString().slice(0, 10)).toBe('2026-10-08');
+        const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        await result.current.createComplementary('sii', 'org-1');
+
+        const { path, body } = postBody();
+        expect(path).toBe('/sii-config/siiConfiguration');
+        expect(body).toMatchObject({
+          adOrgId: 'org-1',
+          acogidaAlSII: 'Y',
+          fechaAcogidaSII: '2026-10-09',
+          monitordate: '2026-10-09',
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it('posts only the org for a complementary TBAI record', async () => {
+    const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await result.current.createComplementary('tbai', 'org-1');
+
+    const { path, body } = postBody();
+    expect(path).toBe('/tbai-config/header');
+    expect(body).toEqual({ adOrgId: 'org-1' });
+  });
+});

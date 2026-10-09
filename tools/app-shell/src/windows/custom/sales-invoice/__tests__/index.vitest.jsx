@@ -157,6 +157,29 @@ vi.mock('../../shared/useInvoicePdf.js', () => ({
   useInvoicePdf: vi.fn(() => ({ pdfUrl: 'blob:mock-pdf', loading: false })),
 }));
 
+// ETP-5700 — the row-kebab SIF send hook is wrapped (not replaced) so the real wiring
+// keeps running while the test records its arguments and can override its result.
+let sifHookCalls = [];
+let sifHookOverride = null;
+vi.mock('../../shared/useSifRowSendAction.jsx', async () => {
+  const actual = await vi.importActual('../../shared/useSifRowSendAction.jsx');
+  return {
+    ...actual,
+    useSifRowSendAction: (args) => {
+      const out = actual.useSifRowSendAction(args);
+      const result = sifHookOverride ? { ...out, ...sifHookOverride } : out;
+      sifHookCalls.push({ args, result });
+      return result;
+    },
+  };
+});
+
+vi.mock('../../shared/SifSendModalHost.jsx', () => ({
+  default: ({ apiBaseUrl, recordId }) => (
+    <div data-testid="sif-send-modal-host" data-record-id={recordId} data-api-base-url={apiBaseUrl} />
+  ),
+}));
+
 vi.mock('../../shared/useInvoiceWindow.js', async () => {
   const actual = await vi.importActual('../../shared/useInvoiceWindow.js');
   return actual;
@@ -555,5 +578,70 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
       expect(screen.queryByTestId('bulk-document-action-unpost')).not.toBeInTheDocument();
       expect(bulkDocumentActionCalls.map((p) => p.labelKey)).not.toContain('unpost');
     });
+  });
+});
+
+describe('SalesInvoiceWindow — SIF send entry points', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    searchParams = new URLSearchParams();
+    locationState = {};
+    lastListViewProps = null;
+    lastHeaderPageProps = null;
+    fiscalProfile = null;
+    currentWindowAccessTier = 'full';
+    sifHookCalls = [];
+    sifHookOverride = null;
+  });
+
+  it('enables the row send action under the full access tier', () => {
+    render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(sifHookCalls[sifHookCalls.length - 1].args).toMatchObject({ specName: 'sales-invoice', apiBaseUrl: '/api', enabled: true });
+  });
+
+  it('disables the row send action under the read-only tier', () => {
+    currentWindowAccessTier = 'read-only';
+    render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(sifHookCalls[sifHookCalls.length - 1].args.enabled).toBe(false);
+  });
+
+  it('hands sifMenuActions to the row quick actions as extra menu entries', () => {
+    const sifMenuActions = vi.fn(() => ({ key: 'sendToSif', labelKey: 'sendToSifLabelSii' }));
+    sifHookOverride = { sifMenuActions };
+    render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    const row = { id: 'inv-1', documentStatus: 'CO', processed: 'Y', posted: 'Y' };
+    const keys = lastListViewProps.rowQuickActions.menuActions({ row }).map((a) => a.key);
+
+    expect(sifMenuActions).toHaveBeenCalledWith(row);
+    expect(keys).toEqual(['reactivate', 'sendToSif']);
+  });
+
+  it('mounts SifSendModalHost with the recordId in the form view', () => {
+    render(<SalesInvoiceWindow windowName="sales-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    const host = screen.getByTestId('sif-send-modal-host');
+    expect(host).toHaveAttribute('data-record-id', 'inv-1');
+    expect(host).toHaveAttribute('data-api-base-url', '/api');
+  });
+
+  it('does not mount SifSendModalHost in the list view', () => {
+    render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(screen.queryByTestId('sif-send-modal-host')).not.toBeInTheDocument();
+  });
+
+  it('derives showVerifactu from the row hook fiscalConfig profile', () => {
+    fiscalProfile = null;
+    sifHookOverride = { fiscalConfig: { profile: 'verifactu' } };
+    render(<SalesInvoiceWindow windowName="sales-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    expect(lastHeaderPageProps.draftMode.processingModal).toMatchObject({
+      body: 'fiscal.verifactu.processing.body',
+    });
+  });
+
+  it('shows no Verifactu processing modal when the row hook profile is not verifactu', () => {
+    fiscalProfile = 'verifactu';
+    sifHookOverride = { fiscalConfig: { profile: 'sii' } };
+    render(<SalesInvoiceWindow windowName="sales-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    expect(lastHeaderPageProps.draftMode.processingModal).toBeNull();
   });
 });
