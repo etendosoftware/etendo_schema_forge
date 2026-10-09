@@ -18,7 +18,12 @@ The generic tool is covered by the global `etendo-worktrees` skill: command tabl
 listed here. This skill carries what is specific to Etendo GO and to this machine.
 
 - **Main checkout:** `/Users/futit/Workspace/etendo_develop`. It is the user's. Its
-  config, DB and build stay untouched.
+  config, DB and build stay untouched. It is also an environment of its own: `local-env up`
+  there runs every repo as it is, on whatever branch each one has checked out (uncommitted
+  changes included), with no `worktree.conf` (that file only exists in environments made
+  with `local-env worktree`). Its branches change with `git checkout` in each repo, then
+  `up` applies the update.database and build the change needs. Ports :8080, PG 55432,
+  SPA :3100. Only the user runs it, or you after an explicit OK.
 - **Environments:** `/Users/futit/Workspace/.worktrees/<name>`, one per task.
 - **GO plugin:** `schema_forge/local-env.d/plugins/etendo-go`. What it does per hook:
   [docs/local-env-plugin.md](../../../docs/local-env-plugin.md).
@@ -110,7 +115,14 @@ listed here. This skill carries what is specific to Etendo GO and to this machin
    local-env never modifies an adopted worktree, but `make dev-local-core` can: it runs
    `npm install` for the AI BFF, which may rewrite `tools/ai-bff/package-lock.json`
    there. Tell the owner of that worktree.
-7. **Create volume data in the environment's DB only.** It is `etendo_local`, user
+7. **Export what you push to the environment's DB.** NEO config pushed with
+   `sf-push-neo` (or any AD edit) lives only in the environment's DB until
+   `local-env export`, run in `<env>`, serialises it into the modules' `src-db`. It lists
+   the changed `src-db` per module and flags APFS copies, whose changes reach no branch.
+   Export before pulling a module whose `src-db` changed: the next `up` runs
+   update.database and applies the branch XML over the unexported rows. Never run
+   `./gradlew export.database` from `etendo_develop` for an environment's data.
+8. **Create volume data in the environment's DB only.** It is `etendo_local`, user
    `tad`/`tad`, on the environment's PG port (`source <env>/build/local-env/env`), via
    `/opt/homebrew/opt/libpq/bin/psql`.
 
@@ -156,7 +168,7 @@ cd /Users/futit/Workspace/etendo_develop && local-env worktree rm <name>   # bra
 | `update.database` fails on an `AD_COLUMN` that an `ETGO_SF_FIELD` row references | A copied module is behind the GO branch (2026-10-07: go develop referenced a PSD2 column from `com.etendoerp.psd2.bank.integration` `origin/epic/ETP-3504`) | Run the module check from rule 4. Have the user pull the lagging modules in the main checkout, then `worktree rm` and recreate. Or fast-forward that module's copy inside the environment (`git -C <env>/modules/<m> fetch && merge --ff-only origin/<epic>`) |
 | smartbuild: `cannot find symbol` on a getter/setter of a column that exists in the env DB (2026-10-08: `getPSD2LastSyncDate()`), and `./gradlew generate.entities` "succeeds" without adding it | The environment carried the main checkout's `src-gen`, generated against a DB without that column. Entity generation is timestamp-based and judges the carried files up to date | local-env now handles it: when `up` swaps the DB for a snapshot other than the one `src-gen` was made for (`build/local-env/outputs.db`), it prints "Generated entities (src-gen) … marked out of date" and the build regenerates them. Only an environment made with an older local-env that already has the stale `src-gen` and keeps its live DB (no snapshot swap, so nothing ages it) can still hit it; recover from `<env>` only, after checking its config points at the env DB: `rm -rf src-gen build/classes && ./gradlew --no-daemon compile.complete -Dbuild.maxmemory=3072M` (~3 min), then `local-env up`. Deleting `src-gen` alone breaks smartbuild (`srcdir src-gen does not exist`) |
 | No `SPA` line in `local-env status`; SPA never starts | The environment's `schema_forge` branch predates the plugin | Prefix every `up`, `status` and `stop` with `LOCALENV_PLUGINS=/Users/futit/Workspace/etendo_develop/schema_forge/local-env.d/plugins`. Leaving it off a later call drops the plugin's manifest line and status misreports |
-| SPA binds 3100/3400, clashing with the main checkout | That `schema_forge` branch has no `SPA_PORT` support | Free 3100/3400 first. `/api/ai` then hits the BFF on 3400 |
+| "this branch's schema_forge/Makefile does not take SPA_PORT/BFF_PORT … Etendo GO SPA not started" | That `schema_forge` branch has no `SPA_PORT` support: it would take 3100/3400 and its `dev-local-core` kills whatever listens there, so the plugin refuses while either is in use | Free 3100/3400 (ask: usually the main checkout's SPA), then `up` again. `/api/ai` then hits the BFF on 3400 |
 | Login from the SPA: 403 "Origin not allowed" | The backend trusts only :3000/3100/4173/5173 plus `ETGO_ALLOWED_ORIGINS`, and this Tomcat started without the SPA's port in it | The plugin adds the line itself. If `up` warned that it added it while a Tomcat was already running, restart that Tomcat once (`pkill -f -- "-Dcatalina.base=<env>/"`, then `local-env up`). Check: `grep ETGO_ALLOWED_ORIGINS <env>/build/local-env/env` |
 | Tomcat: `UnknownHostException: host.docker.internal`, "El intento de conexión falló", 404 on `/etendo`, after an `up` that ran smartbuild | `docker_com.etendoerp.tomcat=true` in the user's `gradle.properties`: smartbuild's `tomcatDeploy` rewrote `bbdd.url` in `WEB-INF/Openbravo.properties` to `host.docker.internal` | Fixed in local-env (`up` forces the flag off and puts a wrong deployed `bbdd.url` back, with a warning). On an older local-env: set the flag to `false` in `<env>/gradle.properties` and `bbdd.url=jdbc:postgresql://localhost:<env PG port>` in `<env>/WebContent/WEB-INF/Openbravo.properties` and `<env>/build/local-env/catalina/webapps/etendo/WEB-INF/Openbravo.properties`, then restart Tomcat |
 | vite: `Failed to resolve import "write-excel-file/universal"` (or any core dep) | `schema_forge_core` without `node_modules`, or with ones older than its branch's `package-lock.json`. local-env now clones the source repo's ignored content (`node_modules`, `.env`, outputs) into every new `--repo`/`--module` worktree, and the GO plugin runs `npm install` in `schema_forge_core` on `up` when its lockfile is newer than the last install | Environments created with an older local-env: `cp -cR /Users/futit/Workspace/etendo_develop/schema_forge_core/node_modules <env>/schema_forge_core/`, or let the next `up` install. An adopted `schema_forge_core` is never installed into: the plugin warns and skips the SPA; install there yourself |
