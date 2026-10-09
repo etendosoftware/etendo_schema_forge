@@ -288,6 +288,67 @@ ui('orderDoc', { number: order.documentNo })
 // es_ES: "orderDoc": "Pedido #{number}"
 ```
 
+## Spanish Register and Terminology
+
+### Register per locale
+
+| Locale | Register | Vocabulary |
+|--------|----------|------------|
+| `es_ES.json` | Spain Spanish, **"tú"** (`introduce`, `selecciona`, `inténtalo`, `¿quieres…?`) | Spain terms: `importe` (not `monto`), `obligatorio` (not `requerido`), `introduce` (not `ingresá`) |
+| `es_AR.json` | Rioplatense **voseo**, on purpose (`ingresá`, `querés`, `intentalo`) | Argentine terms |
+
+Voseo in `es_ES.json` is a bug, never a style choice. When a key is added to both Spanish files,
+write each one in its own register; do not copy the `es_AR` value into `es_ES` or vice versa.
+
+### `albarán` vs `envío` (agreed with product, 2026-09-28)
+
+| Meaning | es_ES term | Examples |
+|---------|------------|----------|
+| `M_InOut` as a **document** (the record you open, list, import, return from) | **albarán / albaranes** | "Importar desde albarán", "Crear devolución desde albarán" |
+| The **action** of shipping or sending | **envío** | "Gestionar envío", shipping method/address, email sending, VERI\*FACTU / SII / TicketBAI sending |
+
+Test: if the word could be replaced by "the document", it is `albarán`; if it could be replaced by
+"the act of sending", it stays `envío`.
+
+### Regression guard: `es-ES-no-voseo.vitest.js`
+
+`tools/app-shell/src/locales/__tests__/es-ES-no-voseo.vitest.js` walks every string value in
+`es_ES.json` and fails listing each offending key path, the voseo words found and the full string.
+
+- **What it checks:** a closed denylist of whole words (case-insensitive), not an "ends in an accented
+  vowel" regex — Spain Spanish is full of legitimate `-ás`/`-és` words (`más`, `podrás`, `inglés`,
+  `después`). The denylist is derived from a `VERBS` table of infinitives: vos present (`intentás`,
+  `querés`), vos imperative (`ingresá`, `hacé`, `elegí`) and imperative + `lo/la/los/las`
+  (`intentalo`, `activala`). Reflexive forms (`asegurate`, `fijate`…) live in `REFLEXIVE_FORMS`, and
+  irregular words (`vos`, `andá`) in `EXTRA_FORMS`. A first test checks the detector itself against
+  voseo and Spain samples, so a bad `VERBS` entry fails loudly.
+- **Scope:** only `es_ES.json`. `es_AR.json` is deliberately not checked. `generated/core.es_ES.json`
+  is sliced from `es_ES.json` at build time (`tools/app-shell/vite-plugins/slice-labels.js` →
+  schema-forge-cli `slice-labels`), so guarding the source covers both — never edit `generated/`.
+- **To extend:** add the infinitive to `VERBS` (or an irregular form to `EXTRA_FORMS`). Leave out verbs
+  whose vos form equals a tú form (`estar`, `dar`, `ir`, `ver`) — they would flag valid Spain copy.
+- **Known limits:** a verb that is not in `VERBS` is not caught; and only the locale JSON is scanned —
+  hardcoded `?? 'fallback'` literals in JSX/JS are invisible to it (they are already a bug under
+  [rule 1](#1-never-hardcode-user-visible-strings)).
+
+```bash
+cd tools/app-shell && npx vitest run src/locales/__tests__/es-ES-no-voseo.vitest.js
+```
+
+### E2E specs: assert copy via `t(key)`
+
+Playwright specs must not hardcode locale strings (`'Crear Devolución desde Envío'`,
+`/Importar.*envío/i`): every copy fix then breaks an unrelated test. Resolve the text from the same
+dictionary the app uses with `t()` from `e2e/tests/helpers/i18n.js` (reads `genericLabels` of
+`es_ES` by default, `LOCALE=en_US` to override, supports `{var}` interpolation):
+
+```js
+import { t } from '../../helpers/i18n.js';
+
+await expect(dialog.getByRole('heading', { name: t('createReturnFromShipment') })).toBeVisible();
+const importBtn = page.getByText(t('importFromShipment')).first();
+```
+
 ## What Goes Where (Decision Tree)
 
 ```
@@ -467,9 +528,14 @@ import { DocChip, RelatedDocumentsShell, STATUS_KEYS, CHIP_COLORS, formatAmount,
 
 ## Testing
 
-i18n contract tests exist at `tools/app-shell/src/i18n/__tests__/`:
-- `es_ES-contract.test.js` — verifies es_ES mirrors en_US structure
-- `es_ES-structure.test.js` — structural validation
-- `useLabel.test.js`, `useMenuLabel.test.js` — hook behavior tests
+The i18n hooks (`useUI`, `useLabel`, `useMenuLabel`, …) are re-exported from
+`@etendosoftware/app-shell-core/i18n`; their behavior tests live in `schema_forge_core`, not here.
+This repo tests its own dictionaries and wiring:
 
-Run with `make test`.
+- `tools/app-shell/src/locales/__tests__/` — locale tests:
+  - `es-ES-no-voseo.vitest.js` — es_ES register guard (see [Regression guard](#regression-guard-es-es-no-voseovitestjs))
+  - `*-keys.vitest.js` / `*-locale-parity.vitest.js` — a feature's keys exist in every locale
+    (`en_US`, `es_ES`, `es_AR`)
+- `tools/app-shell/src/i18n/__tests__/` — `errorTranslator.vitest.js`, `useLocaleDictionaries.vitest.jsx`
+
+Run with `make test` (includes `vitest run` in `tools/app-shell`).
