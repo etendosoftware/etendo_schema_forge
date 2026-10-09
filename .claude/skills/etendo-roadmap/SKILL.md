@@ -5,11 +5,12 @@ description: >
   #12): pick the target repo (Etendo product issues go to etendosoftware/etendo-ai, Classic ones
   to their own repo), search for duplicates, create the issue, add it to the project and set
   Product / Team / Status, cross-link Jira, turn a Datadog finding (or the Jira task it backs)
-  into a Roadmap issue, or produce the read-only Roadmap hygiene report. Use before running `gh
+  into a Roadmap issue, mark the Datadog case it came from, or produce the read-only Roadmap hygiene report. Use before running `gh
   issue create` for an idea, bug or feature, and whenever a Roadmap item needs a field read or
   written. Triggers on: "roadmap", "Etendo Roadmap", "crear issue", "issue de GitHub", "GitHub
   issue", "etendo-ai", "Product field", "triage", "higiene del roadmap", "roadmap hygiene",
-  "datadog", "lo vi en datadog", "alerta", "monitor", "error en producción".
+  "datadog", "lo vi en datadog", "alerta", "monitor", "error en producción", "datadog case",
+  "work item", "errores conocidos", "PLATFORM-".
 ---
 
 # Etendo Roadmap
@@ -165,22 +166,38 @@ once the scope is granted, against the issue that already exists; the issue is c
 ## 5. From a Datadog finding (Etendo GO, optional)
 
 A documented path, not a mandatory one: something surfaces in Datadog (an error, a log pattern, a
-monitor alert, an incident, an APM trace, a RUM error) and ends up tracked. A finding is not always
-a bug: one that reveals a missing feature (MCP `server/discover` unsupported → ETP-5640) is labelled
-`Mejora`; a defect is labelled `bug`. Either way the body carries the `## Datadog evidence` section.
+monitor alert, a case, an incident, an APM trace, a RUM error) and ends up tracked. A finding is
+not always a bug: one that reveals a missing feature (MCP `server/discover` unsupported →
+ETP-5640) is labelled `Mejora`; a defect is labelled `bug`. Either way the body carries the `## Datadog evidence` section.
+
+### Tooling: `pup` first, the MCP as fallback
+
+Every Datadog read or write goes through the Datadog **`pup`** CLI when it is installed and
+authenticated; the Datadog MCP is the fallback for reads only. Check before the first call:
+
+```bash
+command -v pup && pup auth status        # status lists the scopes; writing a case needs cases_write
+```
+
+- **pup missing** → tell the user to install it (`brew install pup`) and run
+  `! pup auth login --site datadoghq.eu` (interactive, so the user runs it).
+- **The org is EU.** pup defaults to `datadoghq.com`, so prefix every call with
+  `DD_SITE=datadoghq.eu`; `--site` is accepted only by `pup auth login`.
+- Pass `--no-agent` for stable raw JSON, `--jq '<filter>'` to filter it, and `--yes` on writes.
+- **MCP fallback** (pup unavailable): the `mcp__plugin_datadog_mcp__*` tools
+  (`search_datadog_logs`, `get_datadog_trace`, `search_datadog_spans`, `search_datadog_monitors`,
+  `get_datadog_incident`, `search_datadog_rum_events`, `get_datadog_case`, `search_datadog_cases`)
+  and the `datadog:*` skills; follow the MCP's own instructions for loading its skill guides first.
+  The MCP and its `execute_code` SDK are **read-only** for cases, so a case is marked with pup
+  only: without pup, report the marking (below) as pending.
 
 ### Gather the evidence (every entry point)
 
-Use the Datadog MCP tools (`mcp__plugin_datadog_mcp__*` — `search_datadog_logs`,
-`get_datadog_trace`, `search_datadog_spans`, `search_datadog_monitors`, `get_datadog_incident`,
-`search_datadog_rum_events`) and the `datadog:*` skills; follow the Datadog MCP's own instructions
-for loading its skill guides first. `/datadog:ddtoolsets` enables a missing toolset; the
-`datadog://mcp/whoami` resource shows which Datadog identity the MCP runs as. Read service and env
-names from the finding itself; never assume them.
+Read service and env names from the finding itself; never assume them.
 
-Done when you hold: a link to the trace, log query or monitor; the service and env; first and last
-time seen; and the frequency (count over a stated window). Strip customer data (emails, tax IDs,
-tokens) from every pasted log line.
+Done when you hold: a link to the trace, log query, monitor or case; the service and env; first
+and last time seen; and the frequency (count over a stated window). Strip customer data (emails,
+tax IDs, tokens) from every pasted log line.
 
 ### Entry points
 
@@ -198,24 +215,64 @@ Pick the one that matches what already exists:
 - **(c) Datadog → Jira only.** Ask the user whether to publish a public issue; the user decides,
   every time. On a no, create only the Jira task inside the current epic, with the
   `## Datadog evidence` section in its description.
+- **(d) From a Datadog case.** A case (work item) already exists, typically auto-created by the
+  "errores conocidos" monitor (below). Read it:
 
-Done when every artifact the entry point calls for exists and the cross-links read back (§1).
+  ```bash
+  DD_SITE=datadoghq.eu pup --no-agent cases get PLATFORM-1      # the key or the UUID
+  ```
 
-Roles: Clerk creates the issue and the Jira task; the coordinator or the user supplies the Datadog
-evidence (or asks for it to be gathered as above).
+  Take the evidence from its description and its logs link, completed as in "Gather the
+  evidence". Then decide as in (a)–(c): search Jira and GitHub for the error key (§3); link the
+  existing Jira task or create one inside the current epic; and **ask the user, every time,
+  whether to publish a GitHub issue**.
 
-### Marking the finding in Datadog: decided scope
+Done when every artifact the entry point calls for exists, the cross-links read back (§1), and the
+case is marked (next section) or reported as pending.
 
-Traceability lives in the GitHub issue (with the Datadog query link) and the Jira task,
-cross-linked both ways. Nothing is written back into Datadog:
+Roles: Clerk creates the issue and the Jira task and marks the case; the coordinator or the user
+supplies the Datadog evidence (or asks for it to be gathered as above).
 
-- **Datadog Cases (Work Management) are not used.** Logs are immutable and a Case does not mark or
-  filter them; it is a separate work item pointing at them, duplicating the issue and the task.
-- **Error Tracking** only takes `error`-status events, so WARN lines never become Issues. Backend
-  `etendo-core` logs do not reach it at all today (only `etendo-go-web`, the SPA, does), likely
-  because Java stack traces are ingested as separate lines. For an SPA error, optionally comment
-  and triage its Error Tracking Issue; that needs the `error-tracking` toolset plus MCP write
-  permissions, which are not exposed today (see §9).
+### Marking the case in Datadog
+
+Datadog **Cases** are the in-Datadog marker and work queue. Monitor `125091579` ("errores
+conocidos") auto-creates them in project **PLATFORM**, one per value of the log attribute
+`@etendo.error_known` (e.g. `PLATFORM-1`, service `etendo-core`, key
+`mcp-metodo-no-encontrado`), with a weekly reminder. Mark a case **as soon as** a Jira task is
+created or linked for it:
+
+1. Pick the mechanism. The native Jira link works only when the Datadog Jira integration has an
+   account:
+
+   ```bash
+   DD_SITE=datadoghq.eu pup --no-agent integrations jira accounts list    # [] → comment instead
+   ```
+
+   - **Non-empty** → native link:
+
+     ```bash
+     echo '{"data":{"attributes":{"jira_issue_url":"https://etendoproject.atlassian.net/browse/ETP-XXXX"},"type":"issues"}}' > body.json
+     DD_SITE=datadoghq.eu pup --no-agent --yes cases jira link <CASE_KEY> --file body.json
+     ```
+
+   - **Empty** (the state on 2026-10-09; the link then fails with 400) → comment:
+
+     ```bash
+     DD_SITE=datadoghq.eu pup --no-agent --yes cases comments create <CASE_KEY> \
+       --body "Tracked in ETP-XXXX (https://etendoproject.atlassian.net/browse/ETP-XXXX)"
+     ```
+
+   When a GitHub issue exists too, put its URL in the same comment.
+2. Read back: `DD_SITE=datadoghq.eu pup --no-agent cases get <CASE_KEY>` — `comment_count` went up
+   (or the Jira link shows).
+
+Entry points (a)–(c) mark a case too: when one exists for the same `@etendo.error_known` key
+(`search_datadog_cases`, or the case list in project PLATFORM), mark it the same way.
+
+**Error Tracking** stays SPA-only: it takes only `error`-status events, so WARN lines never become
+Issues, and backend `etendo-core` logs do not reach it at all today (only `etendo-go-web`, the SPA,
+does), likely because Java stack traces are ingested as separate lines. For an SPA error,
+optionally triage its Error Tracking Issue; nothing is written there.
 
 ## 6. Project and field IDs
 
@@ -292,10 +349,9 @@ or edited **only** with the user's explicit authorization for that specific chan
 
 Recorded so they are not re-investigated from scratch; none is current practice.
 
-- **Datadog Cases** could later serve as a work queue with a native Jira link. Blocked so far: the
-  Datadog MCP exposes no write tools even with the Standard role — an org-level MCP write setting
-  is suspected.
+- **A Jira account in the Datadog Jira integration** would make `pup cases jira link` work, so a
+  case carries a native Jira link instead of a comment (§5, "Marking the case").
+- **Why the Datadog MCP has no write tools for cases**, even after re-auth and with the Standard
+  role — an org-level MCP write setting is suspected. pup covers writes meanwhile.
 - **Multiline log aggregation** for the Java source would let backend `etendo-core` errors reach
   Error Tracking.
-- **A log monitor** whose message carries the Jira and GitHub links is the lightweight option if
-  in-Datadog visibility is ever needed.

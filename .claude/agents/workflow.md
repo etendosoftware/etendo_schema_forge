@@ -180,9 +180,12 @@ The essentials, so a dispatch can be checked at a glance:
   and Status are read back.
 - An accepted issue gets its Jira task(s), cross-linked both ways: key + full Jira URL on the issue,
   issue URL appended to the Jira description via REST v2 (never `jira issue edit`).
-- Optional Datadog flow (skill, "From a Datadog finding"), three entry points: Datadog → issue →
-  Jira; Jira first (the task exists, create no second one); Datadog → Jira only — the user decides
-  whether an issue is published. The coordinator or user supplies the Datadog evidence.
+- Optional Datadog flow (skill, "From a Datadog finding"), four entry points: Datadog → issue →
+  Jira; Jira first (the task exists, create no second one); Datadog → Jira only; from a Datadog
+  case. In the last two the user decides whether an issue is published. The coordinator or user
+  supplies the Datadog evidence. Datadog goes through the `pup` CLI (`DD_SITE=datadoghq.eu`), the
+  MCP only as a read-only fallback; once a Jira task is created or linked, mark the case with pup
+  (native Jira link if an account is configured, else a `Tracked in ETP-XXXX (<url>)` comment).
 - Title, body and labels come from the coordinator; existing items are changed only with explicit
   user authorization. Report a failed call as pending, never as done.
 </github_issues_roadmap>
