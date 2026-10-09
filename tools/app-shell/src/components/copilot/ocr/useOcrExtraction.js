@@ -2,6 +2,15 @@ import { useCallback, useState } from 'react';
 import { executeTool, extractAnswerText, uploadFile } from '../copilotApi';
 
 /**
+ * `error` value set when the tool answered but nothing usable came out of the
+ * document (blank/corrupt PDF: all-null payload or unparseable response). It is
+ * a sentinel, not display text — the UI maps it to the translated message.
+ */
+export const OCR_NO_DATA_ERROR = 'ocr-no-data';
+
+class OcrNoDataError extends Error {}
+
+/**
  * Strip Markdown code fences that some OCR outputs still include around JSON.
  * String-based to avoid regex backtracking concerns on adversarial inputs.
  */
@@ -62,7 +71,12 @@ function parseLooseJson(text) {
  *   structuredOutput?: string,
  *   structuredOutputSchema?: object,
  *   agentId?: string,
+ *   hasData?: (payload: object) => boolean,
  * }} params
+ *
+ * `hasData` (optional) decides whether a parsed payload carries anything usable.
+ * When it returns false — or the response is unparseable — `error` becomes
+ * `OCR_NO_DATA_ERROR` and `extract` rejects, so callers never act on an empty result.
  */
 export function useOcrExtraction({
   token,
@@ -71,6 +85,7 @@ export function useOcrExtraction({
   structuredOutput,
   structuredOutputSchema,
   agentId,
+  hasData,
 }) {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState(null);
@@ -113,16 +128,19 @@ export function useOcrExtraction({
       const answer = resp?.answer ?? extractAnswerText(resp);
       const parsed = parseLooseJson(answer);
       if (!parsed || typeof parsed !== 'object') {
-        throw new Error('Tool returned an unparseable response');
+        throw new OcrNoDataError('Tool returned an unparseable response');
+      }
+      if (hasData && !hasData(parsed)) {
+        throw new OcrNoDataError('Tool returned no extractable data');
       }
       setStatus('done');
       return parsed;
     } catch (err) {
-      setError(err.message || 'Extraction failed');
+      setError(err instanceof OcrNoDataError ? OCR_NO_DATA_ERROR : (err.message || 'Extraction failed'));
       setStatus('error');
       throw err;
     }
-  }, [token, toolName, question, structuredOutput, structuredOutputSchema, agentId]);
+  }, [token, toolName, question, structuredOutput, structuredOutputSchema, agentId, hasData]);
 
   const reset = useCallback(() => {
     setStatus('idle');

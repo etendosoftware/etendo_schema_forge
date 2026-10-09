@@ -130,7 +130,7 @@ export default function ContactTypeToggle({ data, onChange }) {
         return (
           <label
             key={value}
-            className="flex flex-row items-center gap-3 cursor-pointer select-none"
+            className="group flex flex-row items-center gap-3 cursor-pointer select-none"
             onClick={(event) => {
               // ETP-5350 — `preventDefault` is load-bearing, not tidiness. This <label> wraps
               // an `sr-only` radio, so the browser's label activation behavior synthesizes a
@@ -145,21 +145,30 @@ export default function ContactTypeToggle({ data, onChange }) {
               handleSelect(value);
             }}
           >
-            <div className="relative flex items-center justify-center w-6 h-6 shrink-0">
-              <div
-                className="w-[14.5px] h-[14.5px] rounded-full bg-card flex items-center justify-center transition-colors"
-                style={{
-                  border: `1.5px solid ${isSelected ? 'hsl(var(--foreground))' : 'hsl(var(--border-control))'}`,
-                  boxShadow: isSelected ? 'none' : '0px 1px 2px hsl(var(--foreground) / 0.05)',
-                }}
+            {/* ETP-5600 — Figma `_Base Radio`. Whole-pixel geometry so the dot is exactly
+                centred: a 16px circle whose 1.5px ring is an INSET box-shadow (takes no layout
+                space, unlike a border that left a 13px content box and a 2.5px sub-pixel
+                offset), and an 8px dot pinned with `inset-1` (4px on every side). The radio
+                input stays first and carries `peer`, so its keyboard focus can draw the
+                focus ring on the visual circle (`peer-focus-visible`). */}
+            <span className="relative flex items-center justify-center w-6 h-6 shrink-0">
+              <input type="radio" className="peer sr-only" readOnly checked={isSelected} />
+              <span
+                aria-hidden="true"
+                className={[
+                  'relative block w-4 h-4 rounded-full bg-card transition-shadow',
+                  'peer-focus-visible:ring-2 peer-focus-visible:ring-focus-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-card',
+                  isSelected
+                    ? 'shadow-[inset_0_0_0_1.5px_hsl(var(--foreground))]'
+                    : 'shadow-[inset_0_0_0_1.5px_hsl(var(--border-control)),0_1px_2px_hsl(var(--foreground)/0.05)] group-hover:shadow-[inset_0_0_0_1.5px_hsl(var(--border-structural)),0_1px_2px_hsl(var(--foreground)/0.05)]',
+                ].join(' ')}
               >
                 {isSelected && (
-                  <div className="w-2 h-2 rounded-full" style={{ background: 'hsl(var(--foreground))' }} />
+                  <span className="absolute inset-1 rounded-full bg-[hsl(var(--foreground))]" />
                 )}
-              </div>
-            </div>
+              </span>
+            </span>
             <span className="text-sm text-[hsl(var(--foreground))]" style={{ lineHeight: '24px' }}>{label}</span>
-            <input type="radio" className="sr-only" readOnly checked={isSelected} />
           </label>
         );
       })}

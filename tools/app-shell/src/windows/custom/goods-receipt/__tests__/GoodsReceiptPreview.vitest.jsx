@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/goods-receipt/GoodsReceiptPreview.jsx
 // Mocks must come before imports (Vitest hoisting)
 
 const mockNavigate = vi.hoisted(() => vi.fn());
@@ -133,6 +134,14 @@ vi.mock('../../shared/preview-cards/SummaryCard.jsx', () => ({
   ),
 }));
 
+const capturedRelatedProps = vi.hoisted(() => ({ current: null }));
+vi.mock('../../shared/preview-cards/RelatedDocumentsCard.jsx', () => ({
+  default: (props) => {
+    capturedRelatedProps.current = props;
+    return <div data-testid="related-documents-card" data-doc-id={props.documentId} />;
+  },
+}));
+
 vi.mock('@/components/related-documents/constants.jsx', () => ({
   STATUS_BADGE: {},
   STATUS_KEYS: {},
@@ -140,6 +149,7 @@ vi.mock('@/components/related-documents/constants.jsx', () => ({
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { PURCHASE_RELATED_DOCS } from '@/components/related-documents';
 import GoodsReceiptPreview from '../GoodsReceiptPreview.jsx';
 
 const defaultReceipt = {
@@ -187,6 +197,16 @@ describe('GoodsReceiptPreview', () => {
   it('renders GenericPreviewModal when receipt is provided', () => {
     renderPreview();
     expect(screen.getByTestId('generic-preview-modal')).toBeInTheDocument();
+  });
+
+  // ETP-5539 — same related documents as the form. The list row lacks the detail-only
+  // linkedOrders/linkedInvoices/linkedReturns, so no `record` is passed: the card loads the detail.
+  it('renders the related-documents card from the goods-receipt definition, loading the detail record', () => {
+    renderPreview();
+    expect(screen.getByTestId('related-documents-card')).toHaveAttribute('data-doc-id', 'receipt-1');
+    expect(capturedRelatedProps.current.definition).toBe(PURCHASE_RELATED_DOCS['goods-receipt']);
+    expect(capturedRelatedProps.current.record).toBeUndefined();
+    expect(capturedRelatedProps.current.specs).toBeUndefined();
   });
 
   it('title contains documentNo', () => {

@@ -17,6 +17,7 @@ import { LAST_ENVIRONMENT_KEY } from '@etendosoftware/etendo-go-core/onboarding/
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLogout } from '@/auth/useLogout.js';
+import { SessionConflictNotice } from '@/components/access/SessionConflictNotice.jsx';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { getApiBase } from '@/hooks/useNeoResource.js';
 /**
@@ -607,48 +608,33 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     );
   }
 
-  // ETP-5202 — a different person is signed in on this browser.
+  // ETP-5202 — a different person is signed in on this browser. The body is the shared
+  // SessionConflictNotice (ETP-5675 reuses it for the app's cross-tab conflict); signing out is the
+  // emphasized action here because accepting the invitation is why the visitor came.
   if (guardApplies && sessionGuard === SESSION_GUARD.CONFLICT) {
     return (
       <AuthShell {...shellProps} data-testid="AuthShell__fa3cd9">
-        <div className="text-center" data-testid="invite-session-conflict">
-          <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-destructive/10 text-destructive">
-            <AlertCircle className="h-8 w-8" data-testid="invite-session-conflict-icon" />
-          </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]">
-            {ui('inviteSessionConflictTitle')}
-          </h1>
-          <p className="mt-3 text-base text-muted-foreground sm:text-xl">
-            {activeAccountEmail
-              ? ui('inviteSessionConflictDescription')
-                .replace('{currentUser}', activeAccountEmail)
-                .replace('{invitedEmail}', invitedEmail)
-              : ui('inviteSessionConflictDescriptionUnknown').replace('{invitedEmail}', invitedEmail)}
-          </p>
-          <Button
-            className="mt-6 h-12 w-full gap-2 rounded-lg bg-primary text-base font-medium text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
-            onClick={handleCloseSessionAndContinue}
-            data-testid="action-close-session"
-          >
-            <span>
-              {activeAccountEmail
-                ? ui('inviteSessionConflictLogout').replace('{currentUser}', activeAccountEmail)
-                : ui('inviteSessionConflictLogoutUnknown')}
-            </span>
-            <ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
-          </Button>
-          {/* Signing out is not reversible from here and it reaches every tab, so it is
-              spelled out next to the button rather than discovered afterwards. */}
-          <p className="mt-2 text-xs text-muted-foreground">{ui('inviteSessionConflictLogoutWarning')}</p>
-          <Button
-            variant="outline"
-            className="mt-4 h-12 w-full rounded-lg text-base font-medium"
-            onClick={() => setSessionGuard(SESSION_GUARD.DEFERRED)}
-            data-testid="action-defer-invitation"
-          >
-            {ui('inviteSessionConflictDefer')}
-          </Button>
-        </div>
+        <SessionConflictNotice
+          testId="invite-session-conflict"
+          title={ui('inviteSessionConflictTitle')}
+          description={activeAccountEmail
+            ? ui('inviteSessionConflictDescription')
+              .replace('{currentUser}', activeAccountEmail)
+              .replace('{invitedEmail}', invitedEmail)
+            : ui('inviteSessionConflictDescriptionUnknown').replace('{invitedEmail}', invitedEmail)}
+          emphasis="secondary"
+          secondaryLabel={activeAccountEmail
+            ? ui('inviteSessionConflictLogout').replace('{currentUser}', activeAccountEmail)
+            : ui('inviteSessionConflictLogoutUnknown')}
+          onSecondary={handleCloseSessionAndContinue}
+          secondaryTestId="action-close-session"
+          // Signing out is not reversible from here and it reaches every tab, so it is spelled
+          // out next to the button rather than discovered afterwards.
+          warning={ui('inviteSessionConflictLogoutWarning')}
+          primaryLabel={ui('inviteSessionConflictDefer')}
+          onPrimary={() => setSessionGuard(SESSION_GUARD.DEFERRED)}
+          primaryTestId="action-defer-invitation"
+          data-testid="SessionConflictNotice__fa3cd9" />
       </AuthShell>
     );
   }

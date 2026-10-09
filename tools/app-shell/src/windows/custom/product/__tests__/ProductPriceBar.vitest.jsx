@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/product/ProductPriceBar.jsx
 import { render, screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -1217,7 +1218,7 @@ describe('ProductPriceBar', () => {
     // Same column grid as the rows: title box, then the unit-price slot, then the
     // list-price slot which holds the action, right-aligned so its right edge matches
     // the right edge of the list-price steppers below.
-    expect(wrapper.parentElement.className).toContain('w-[201px]');
+    expect(header.children[2]).toBe(wrapper.parentElement);
     expect(wrapper.parentElement.className).toContain('justify-end');
     expect(header.children).toHaveLength(3);
   });
@@ -1237,5 +1238,74 @@ describe('ProductPriceBar', () => {
     const firstRow = screen.getByTestId('price-delete-price-s1');
     // Node.DOCUMENT_POSITION_FOLLOWING (4) => addRow comes before firstRow.
     expect(addRow.compareDocumentPosition(firstRow) & 4).toBeTruthy();
+  });
+
+  // -----------------------------------------------------------------------
+  // ETP-5513 — at 1280x720 (rail expanded + 320 px sidebar) the fixed-width flex
+  // columns overflowed the tab; making them shrinkable flex boxes then misaligned them
+  // (rows with a delete button shrank their columns differently from rows without) and
+  // squeezed the steppers until prices were unreadable. Every row of a section — header,
+  // column labels, add row, data rows — is now laid out on ONE grid template with fixed
+  // track definitions (min/max lengths, content-independent) and a reserved 4th
+  // row-action track, so columns align by construction and prices keep a readable
+  // minimum width. jsdom has no layout: this pins the shared template; the geometry is
+  // measured by e2e/tests/flows/platform/form-view-1280.mocked.spec.js.
+  // -----------------------------------------------------------------------
+  describe('one shared price-column grid (ETP-5513)', () => {
+    const tokens = (el) => el.className.split(/\s+/).filter(Boolean);
+    const templateOf = (el) => tokens(el).find(c => c.startsWith('grid-cols-['));
+    // Nearest ancestor laid out on a grid template = the row.
+    const rowOf = (el) => {
+      let node = el;
+      while (node && !(node.className && templateOf(node))) node = node.parentElement;
+      return node;
+    };
+
+    async function collectRows(user, section) {
+      if (section === 'purchase') await user.click(screen.getByTestId('price-tab-purchase'));
+      const header = await screen.findByTestId('price-section-header');
+      const labelRow = rowOf(screen.getByText('priceColName'));
+      const name = section === 'purchase' ? 'Purchase List v1' : 'Sales List v1';
+      const dataRow = rowOf(await screen.findByDisplayValue(name));
+      await user.click(addTariffButton());
+      const addRow = await screen.findByTestId('price-add-tariff-row');
+      return { header, labelRow, dataRow, addRow };
+    }
+
+    it.each(['sales', 'purchase'])('every %s row uses the same grid template with a reserved action track', async (section) => {
+      global.fetch = buildFetch({
+        'GET /price?parentId=': { response: { data: [salesRow(), purchaseRow()] } },
+      });
+      const user = userEvent.setup();
+      renderBar({ catalogs: catalogsWithPlv(), api: apiWithPriceSelector() });
+      await screen.findByTestId('price-delete-price-s1');
+
+      const rows = await collectRows(user, section);
+      const templates = Object.values(rows).map(templateOf);
+      expect(new Set(templates).size).toBe(1);
+      const [template] = templates;
+      // name, unit price, list price (prices with a readable floor), then the action slot.
+      expect(template).toMatch(/^grid-cols-\[minmax\(\d+px,300px\)_minmax\((\d+)px,201px\)_minmax\(\1px,201px\)_2rem\]$/);
+      expect(Number(template.match(/minmax\((\d+)px,201px\)/)[1])).toBeGreaterThanOrEqual(190);
+      for (const row of Object.values(rows)) {
+        expect(tokens(row)).toContain('grid');
+        for (const col of [...row.children].slice(0, 3)) {
+          // No per-cell width: the track decides, identically in every row.
+          expect(tokens(col).some(c => /^w-\[/.test(c) || c === 'shrink-0')).toBe(false);
+        }
+      }
+      // Rows with a row action put it in the 4th track.
+      expect(rows.dataRow.children).toHaveLength(4);
+      expect(rows.addRow.children).toHaveLength(4);
+    });
+
+    it('the section title does not truncate when its column shrinks', async () => {
+      global.fetch = buildFetch({
+        'GET /price?parentId=': { response: { data: [salesRow()] } },
+      });
+      renderBar();
+      const header = await screen.findByTestId('price-section-header');
+      expect(tokens(within(header).getByRole('heading', { level: 3 }))).toContain('whitespace-nowrap');
+    });
   });
 });
