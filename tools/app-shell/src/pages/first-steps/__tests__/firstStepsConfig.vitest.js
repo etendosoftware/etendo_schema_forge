@@ -20,6 +20,8 @@ import {
   toggleableStepIds,
   visibleFirstSteps,
 } from '../firstStepsConfig.js';
+import esES from '@/locales/es_ES.json';
+import enUS from '@/locales/en_US.json';
 import { DEMO_DATA_TRANSFER_STEP } from '../demoDataTransferStep.js';
 
 const ALL_TOGGLEABLE = ['company-data', 'fiscal-config', 'products', 'contacts',
@@ -386,6 +388,19 @@ describe('firstStepsConfig — isStepGated (ETP-5364)', () => {
 
   it('gates an unanswered, incomplete step', () => {
     expect(isStepGated(fiscal(), false, false)).toBe(true);
+  });
+
+  // ETP-5597 — the question names a "Sistema de Información Fiscal" and lists the systems in the
+  // order SII, TicketBai, Verifactu, in both shipped locales.
+  it.each([
+    ['es_ES', esES, 'Sistema de Información Fiscal (SIF)'],
+    ['en_US', enUS, 'Fiscal Information System (SIF)'],
+  ])('%s question text names the SIF and lists SII, TicketBai, Verifactu in that order', (_, dict, sifName) => {
+    const text = dict.genericLabels[fiscal().gateQuestionKey];
+    expect(text).toContain(sifName);
+    const order = ['SII', 'TicketBai', 'Verifactu'].map((name) => text.indexOf(name));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
   it('stops gating once the user answers yes', () => {

@@ -94,7 +94,8 @@ describe('FmModel303Page — exact preservation of a boundary-legal value throug
     const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
     goToResultadoFinal();
 
-    editBox(container, 77, '123456789012345.35');
+    // Typed with the instance decimal separator: amount cells group live, so '.' is thousands (ETP-5597 round 7).
+    editBox(container, 77, '123456789012345,35');
 
     expect(container.querySelector('.fm-aeat-cell__input')).not.toBeInTheDocument();
     const cell77 = findCellByNum(container, 77);
@@ -111,7 +112,7 @@ describe('FmModel303Page — exact preservation of a boundary-legal value throug
     const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
     goToResultadoFinal();
 
-    editBox(container, 70, '123456789012345.12');
+    editBox(container, 70, '123456789012345,12');
 
     const cell70 = findCellByNum(container, 70);
     const value70 = cell70.querySelector('.fm-aeat-cell__value').textContent;
@@ -122,7 +123,7 @@ describe('FmModel303Page — exact preservation of a boundary-legal value throug
     const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
     goToResultadoFinal();
 
-    editBox(container, 77, '500.25');
+    editBox(container, 77, '500,25');
 
     const cell77 = findCellByNum(container, 77);
     expect(cell77.querySelector('.fm-aeat-cell__value').textContent).toBe('500.25');

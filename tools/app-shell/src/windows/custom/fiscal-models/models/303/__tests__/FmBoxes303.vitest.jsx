@@ -178,7 +178,9 @@ describe('FmBoxes303 — editable cells', () => {
     }
   });
 
-  it('renders editable cell input as type="number" to prevent letter input', () => {
+  // ETP-5597 (CP-18) — no longer a native type="number" (whose browser-locale parsing turned
+  // "12,5" into 125): the canonical MaskedAmountInput, a text input that drops letters itself.
+  it('renders the editable cell input as a decimal text input that refuses letters', () => {
     const { container } = render(
       <FmBoxes303 {...BASE_PROPS} boxes={{}} sectionIds={['resultado_final']} />
     );
@@ -187,8 +189,10 @@ describe('FmBoxes303 — editable cells', () => {
       fireEvent.click(editBtns[0]);
       const input = container.querySelector('.fm-aeat-cell__input');
       expect(input).toBeTruthy();
-      expect(input.getAttribute('type')).toBe('number');
-      expect(input.getAttribute('step')).toBe('any');
+      expect(input.getAttribute('type')).toBe('text');
+      expect(input.getAttribute('inputmode')).toBe('decimal');
+      fireEvent.change(input, { target: { value: '12a' } });
+      expect(input.value).toBe('12');
     }
   });
 });
@@ -602,7 +606,7 @@ describe('FmBoxes303 — editable cell input events', () => {
     if (editBtns.length === 0) return;
     fireEvent.click(editBtns[0]);
     const input = container.querySelector('.fm-aeat-cell__input');
-    expect(input.value).toBe('42');
+    expect(input.value).toBe('42,00'); // idle amount display, 2 decimals (ETP-5597 round 7)
   });
 });
 
@@ -630,7 +634,7 @@ describe('FmBoxes303 — commitPendingEdit no-op guard (ETP-5409)', () => {
     if (editBtns.length === 0) return;
     fireEvent.click(editBtns[0]);
     const input = container.querySelector('.fm-aeat-cell__input');
-    expect(input.value).toBe('42');
+    expect(input.value).toBe('42,00'); // idle amount display, 2 decimals (ETP-5597 round 7)
     fireEvent.blur(input);
     expect(onBoxChange).not.toHaveBeenCalled();
   });
@@ -749,7 +753,7 @@ describe('FmBoxes303 — commitPendingEdit no-op guard (ETP-5409)', () => {
     if (!editBtn) return;
     fireEvent.click(editBtn);
     const input = infobox.querySelector('.fm-aeat-cell__input');
-    expect(input.value).toBe('50');
+    expect(input.value).toBe('50,00'); // idle amount display, 2 decimals (ETP-5597 round 7)
     fireEvent.blur(input);
     expect(onBoxChange).not.toHaveBeenCalled();
   });
@@ -859,7 +863,7 @@ describe('FmBoxes303 — commitPendingEdit no-op guard (ETP-5409)', () => {
     fireEvent.click(container.querySelectorAll('.fm-aeat-cell__edit-btn')[0]);
     input = container.querySelector('.fm-aeat-cell__input');
     // The input should reflect the corrected external value, not the stale draft.
-    expect(input.value).toBe('500');
+    expect(input.value).toBe('500,00'); // idle amount display, 2 decimals (ETP-5597 round 7)
     fireEvent.blur(input);
 
     // The stale committed "900" must NOT be resent over the new prop value "500".
@@ -928,7 +932,7 @@ describe('FmBoxes303 — editable cell re-edit does not leak a stale pending dra
     fireEvent.click(findEditBtnFor77(container));
     input = container.querySelector('.fm-aeat-cell__input');
     expect(input).toBeTruthy();
-    expect(input.value).toBe('0');
+    expect(input.value).toBe('0,00'); // idle amount display, 2 decimals (ETP-5597 round 7)
   });
 
   it('non-clamped box (76): a committed draft does not leak into the next edit session either', () => {
@@ -961,7 +965,7 @@ describe('FmBoxes303 — editable cell re-edit does not leak a stale pending dra
 
     fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
     input = container.querySelector('.fm-aeat-cell__input');
-    expect(input.value).toBe('250');
+    expect(input.value).toBe('250,00'); // idle amount display, 2 decimals (ETP-5597 round 7)
   });
 
   it('Escape clears the pending draft too — reopening does not resurrect the discarded value', () => {
@@ -984,7 +988,7 @@ describe('FmBoxes303 — editable cell re-edit does not leak a stale pending dra
 
     fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
     input = container.querySelector('.fm-aeat-cell__input');
-    expect(input.value).toBe('100');
+    expect(input.value).toBe('100,00'); // idle amount display, 2 decimals (ETP-5597 round 7)
   });
 });
 
@@ -1109,23 +1113,23 @@ describe('FmBoxes303 — rectificativa section', () => {
   // an OPTIONAL field can be cleared again through its "Seleccionar…" item (the `__empty__`
   // sentinel, mapped back to ''), like the native select allowed. A REQUIRED field offers no
   // such item.
-  it('clears an optional select (motivo_rectificacion) back to \'\' through the placeholder item', () => {
-    const onIdentChange = vi.fn();
+  // ETP-5597 (QA round 1) — motivo_rectificacion is REQUIRED while the rectificativa check is set
+  // (it is only visible then), so it no longer offers the "Seleccionar…" clear item: the required
+  // mark shows, and a blank reason is reported by the missing-required-fields gate instead.
+  it('motivo_rectificacion is required: required mark and no clear item', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['rectificativa']}
         identification={{ rectificativa: true, motivo_rectificacion: 'R' }}
-        onIdentChange={onIdentChange}
       />
     );
-    const select = container.querySelector('select');
+    const select = container.querySelector('[data-field-id="motivo_rectificacion"]');
     expect(select.value).toBe('R');
-    const emptyItem = Array.from(select.querySelectorAll('option')).find(o => o.value === '__empty__');
-    expect(emptyItem.textContent).toBe('fm.ident.decl.placeholder');
-    fireEvent.change(select, { target: { value: '__empty__' } });
-    expect(onIdentChange).toHaveBeenCalledWith('motivo_rectificacion', '');
+    expect(Array.from(select.querySelectorAll('option')).some(o => o.value === '__empty__')).toBe(false);
+    const field = select.closest('.fm-aeat-ident-inline-field');
+    expect(field.querySelector('.fm-aeat-required-mark')).toBeTruthy();
   });
 
   it('keeps an unset select controlled (value \'\') and offers no clear item on a required field', () => {
@@ -1805,11 +1809,13 @@ describe('FmBoxes303 — percent cell input attributes (colType="percent")', () 
     return container.querySelector('.fm-aeat-cell__input');
   }
 
-  it('renders max=100 and min=0 on a percent cell input (box 89 — Álava)', () => {
+  // ETP-5597 (CP-18) — the editor is a text input now, so the old max/min attributes (a UX hint
+  // only) are gone; the [0,100] range is enforced on commit by clampPercentValue (tests below).
+  it('renders a decimal text input on a percent cell (box 89 — Álava), range enforced on commit', () => {
     const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} />);
     const input = openFirstEditor(container);
-    expect(input.getAttribute('max')).toBe('100');
-    expect(input.getAttribute('min')).toBe('0');
+    expect(input.getAttribute('type')).toBe('text');
+    expect(input.getAttribute('inputmode')).toBe('decimal');
   });
 
   it('does NOT render max/min on an amount cell input (box 76, resultado_final)', () => {
@@ -1910,10 +1916,10 @@ describe('FmBoxes303 — percent cell input attributes (colType="percent")', () 
     const input = container.querySelector('.fm-aeat-cell__input');
     // Typed digit-by-digit (not pasted as one already-over-limit string) — the 3rd decimal digit
     // is refused at the keystroke, so the input settles at exactly 2 decimals.
-    fireEvent.change(input, { target: { value: '999.9' } });
-    fireEvent.change(input, { target: { value: '999.99' } });
-    fireEvent.change(input, { target: { value: '999.999' } }); // refused — no state change
-    expect(input.value).toBe('999.99');
+    fireEvent.change(input, { target: { value: '999,9' } });
+    fireEvent.change(input, { target: { value: '999,99' } });
+    fireEvent.change(input, { target: { value: '999,999' } }); // refused — no state change
+    expect(input.value).toBe('999,99');
     fireEvent.blur(input);
     // Committed EXACTLY as typed — no separate commit-time rounding pass runs for amount cells
     // (unlike percent's `clampPercentValue`), because the hard-stop already guaranteed 2 decimals.
@@ -1928,9 +1934,42 @@ describe('FmBoxes303 — percent cell input attributes (colType="percent")', () 
     const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
     fireEvent.click(editBtns[0]);
     const input = container.querySelector('.fm-aeat-cell__input');
-    fireEvent.change(input, { target: { value: '999.999999' } });
+    fireEvent.change(input, { target: { value: '999,999999' } });
     fireEvent.blur(input);
     expect(onBoxChange).not.toHaveBeenCalled();
+  });
+
+  // ETP-5597 (CP-18) — the editor used to be a native <input type="number">, which the browser
+  // parses with ITS OWN locale: Chromium under an English UI treats "," as a grouping separator
+  // and strips it, so typing "12,5" committed 125. The editor is now the canonical
+  // MaskedAmountInput with live grouping (round 7), exactly like the app's other amount fields:
+  // with the es instance separators "," is the decimal and "." the thousands separator.
+  it.each([
+    ['12,5', '12.5', '12,5'],
+    ['12.5', '125', '125'],
+    ['1.234,5', '1234.5', '1.234,5'],
+    ['-7,25', '-7.25', '-7,25'],
+  ])('an amount cell typed %s commits the clean %s and shows %s (CP-18)', (typed, clean, shown) => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303 year={2026} period="T2" boxes={{ 76: 100 }} sectionIds={['resultado_final']} onBoxChange={onBoxChange} />
+    );
+    fireEvent.click(container.querySelectorAll('.fm-aeat-cell__edit-btn')[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    expect(input.getAttribute('type')).toBe('text');
+    fireEvent.change(input, { target: { value: typed } });
+    expect(input.value).toBe(shown);
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(76, clean);
+  });
+
+  it('a percent cell accepts a decimal comma too (CP-18)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '21,5' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '21.5');
   });
 });
 
@@ -2280,35 +2319,9 @@ describe('FmBoxes303 — box 111 (rectificacion_importe) is read-only (ETP-5431 
   });
 });
 
-// ── ETP-5431 pt.2 — boxes 109/70 join the negative-not-allowed `min="0"` UX hint ─────
-// Same `NEGATIVE_NOT_ALLOWED_BOXES`-driven input attribute already covered for box 77's stale-
-// draft scenario above — boxes 109 (`devoluciones_at`) and 70 (`a_deducir`) are now also members
-// of the shared Set, so their editors must carry `min="0"` too (FmBoxes303.jsx:167).
-
-describe('FmBoxes303 — min="0" on boxes 109/70 (ETP-5431 pt.2, NEGATIVE_NOT_ALLOWED_BOXES)', () => {
-  function openEditorFor(container, boxNum) {
-    const cell = Array.from(container.querySelectorAll('.fm-aeat-cell')).find(
-      c => c.querySelector('.fm-aeat-cell__num')?.textContent === String(boxNum).padStart(2, '0')
-    );
-    fireEvent.click(cell.querySelector('.fm-aeat-cell__edit-btn'));
-    return container.querySelector('.fm-aeat-cell__input');
-  }
-
-  // Boxes 70/109 are only editable inside a rectificativa (ETP-5597 pt.4).
-  it('renders min=0 on box 109 (devoluciones_at)', () => {
-    const { container } = render(
-      <FmBoxes303 {...BASE_PROPS} boxes={{ 109: 0 }} sectionIds={['resultado_final']} identification={{ rectificativa: true }} />
-    );
-    expect(openEditorFor(container, 109).getAttribute('min')).toBe('0');
-  });
-
-  it('renders min=0 on box 70 (a_deducir)', () => {
-    const { container } = render(
-      <FmBoxes303 {...BASE_PROPS} boxes={{ 70: 0 }} sectionIds={['resultado_final']} identification={{ rectificativa: true }} />
-    );
-    expect(openEditorFor(container, 70).getAttribute('min')).toBe('0');
-  });
-});
+// ETP-5597 (CP-18) — the `min="0"` attribute tests for boxes 109/70 were removed with the native
+// number input: it was a UX hint only. Non-negativity of NEGATIVE_NOT_ALLOWED_BOXES is enforced by
+// FmModel303Page's handleBoxChange clamp (FmModel303Page.negativeBoxClamp.vitest.jsx).
 
 // ── ETP-5597 pt.4 — boxes 70/109 editable only with "Autoliquidación rectificativa" ─────
 
@@ -2343,7 +2356,7 @@ describe('FmBoxes303 — casillas 70/109 gated on rectificativa/complementaria (
   });
 });
 
-// ── ETP-5597 pt.1 — tipo_declaracion options locked while box 69 is positive ─────
+// ── ETP-5597 pt.1 — tipo_declaracion options locked by the result boxes (71 / 69+71) ─────
 
 describe('FmBoxes303 — tipo_declaracion disabled options (ETP-5597)', () => {
   const tipoSelect = (container) => Array.from(container.querySelectorAll('.fm-aeat-ident-inline-field'))
@@ -2357,8 +2370,8 @@ describe('FmBoxes303 — tipo_declaracion disabled options (ETP-5597)', () => {
     );
   }
 
-  it('disables C/D/V/X (with the reason as title) and keeps I/U/N selectable while _box69Positive', () => {
-    const { container } = renderTipo({ tipo_declaracion: 'I', _box69Positive: true });
+  it('disables C/D/V/X (with the reason as title) and keeps I/U/N selectable while box 71 is positive', () => {
+    const { container } = renderTipo({ tipo_declaracion: 'I', _tipoDeclRestriction: 'positive_result' });
     const select = tipoSelect(container);
     expect(select).toBeTruthy();
     for (const v of ['C', 'D', 'V', 'X']) {
@@ -2372,15 +2385,15 @@ describe('FmBoxes303 — tipo_declaracion disabled options (ETP-5597)', () => {
     expect(container.querySelector('[data-testid="fm-aeat-ident-tipo_declaracion-error"]')).toBeNull();
   });
 
-  it('enables every option when box 69 is not positive', () => {
-    const { container } = renderTipo({ tipo_declaracion: 'C', _box69Positive: false });
+  it('enables every option when no restriction applies', () => {
+    const { container } = renderTipo({ tipo_declaracion: 'C', _tipoDeclRestriction: null });
     const select = tipoSelect(container);
     expect(Array.from(select.options).every(o => !o.disabled)).toBe(true);
     expect(select.getAttribute('aria-invalid')).toBeNull();
   });
 
   it('keeps an already-selected disabled option selected and shows the inline error', () => {
-    const { container } = renderTipo({ tipo_declaracion: 'C', _box69Positive: true });
+    const { container } = renderTipo({ tipo_declaracion: 'C', _tipoDeclRestriction: 'positive_result' });
     const select = tipoSelect(container);
     expect(select.value).toBe('C');
     expect(select.getAttribute('aria-invalid')).toBe('true');
@@ -2388,6 +2401,23 @@ describe('FmBoxes303 — tipo_declaracion disabled options (ETP-5597)', () => {
     expect(err).toBeTruthy();
     expect(err.textContent).toBe('fm.ident.decl.disabled_positive_result');
     expect(select.getAttribute('aria-describedby')).toBe(err.id);
+  });
+
+  // QA rounds 3-4 — under the zero-only rule the page auto-sets N silently; the grid shows no
+  // error and no message at all (also when a stale I is still in the props, e.g. read-only).
+  it('box 69 > 0 and box 71 < 0: only N stays selectable, with no error and no message', () => {
+    const { container } = renderTipo({ tipo_declaracion: 'I', _tipoDeclRestriction: 'zero_only' });
+    const select = tipoSelect(container);
+    for (const v of ['C', 'D', 'I', 'U', 'V', 'X']) {
+      expect(optionByValue(select, v).disabled).toBe(true);
+      expect(optionByValue(select, v).title).toBe('fm.ident.decl.disabled_zero_only');
+    }
+    expect(optionByValue(select, 'N').disabled).toBe(false);
+    expect(container.querySelector('[data-testid="fm-aeat-ident-tipo_declaracion-error"]')).toBeNull();
+    expect(select.getAttribute('aria-invalid')).toBeNull();
+    expect(select.getAttribute('aria-describedby')).toBeNull();
+    expect(container.querySelector('[data-testid="fm-aeat-ident-tipo_declaracion-hint"]')).toBeNull();
+    expect(container.textContent).not.toContain('fm.ident.decl.disabled_zero_only');
   });
 });
 

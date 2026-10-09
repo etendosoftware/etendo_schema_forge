@@ -237,6 +237,28 @@ function filterMaskChars(raw, decimalSeparator, strictDecimal) {
   return result;
 }
 
+/**
+ * A number as plain digits with a '.' decimal point — never exponent notation. `String(n)` switches
+ * to `1e+21` from 1e21 up, which no mask filter can read back. This is a serialization of the value
+ * for the mask (the same shape `toCleanValue` produces), not a display format.
+ */
+function toPlainNumberString(n) {
+  const s = String(n);
+  if (!/e/i.test(s)) return s;
+  // >= 1e21 is always an integer in IEEE-754; smaller exponent forms are tiny fractions.
+  if (Math.abs(n) >= 1e21) return BigInt(Math.trunc(n)).toString();
+  return trimTrailingFractionZeros(n.toFixed(20));
+}
+
+/** Drops trailing '0's of the fraction and a then-trailing '.' — a plain scan, no regex. */
+function trimTrailingFractionZeros(s) {
+  if (!s.includes('.')) return s;
+  let end = s.length;
+  while (end > 0 && s[end - 1] === '0') end -= 1;
+  if (end > 0 && s[end - 1] === '.') end -= 1;
+  return s.slice(0, end);
+}
+
 function groupIntegerDigits(digits, separator) {
   if (!digits) return digits;
   let result = '';
@@ -336,12 +358,13 @@ function toIdleDisplay(value, grouping) {
  * @param {boolean} [bare=false] - skip the `Field`/label wrapper, for a dense table cell
  * @param {boolean} [grouping=true] - live thousands-grouping + 2-decimal idle format (price/amount-shaped fields); false keeps a plain, ungrouped look (quantity/integer/number/decimal/percent — matches today's behavior)
  * @param {import('react').RefObject} [inputRef] - optional external ref to the underlying input (e.g. for a caller-managed autoFocus)
+ * @param {(clean: string) => boolean} [isAllowed] - optional keystroke/paste veto on the CLEAN candidate value: returning false refuses the edit outright (the field keeps showing what it had, `onChange` does not fire) — for a hard length/precision ceiling the caller owns, e.g. an AEAT record width (ETP-5597)
  * @param {boolean} [clearZeroOnFocus=false] - ETP-5611: when the committed value is exactly 0, focus shows an empty field so the user types straight in; blurring it still blank without a keystroke commits nothing and the 0 comes back (line-grid amount cells)
  */
 export function MaskedAmountInput({
   label, required, value, onChange, onCommit, onBlur, onFocus, onKeyDown, placeholder, disabled,
   className = '', name, currency, bare = false, grouping = true, autoFocus, inputRef,
-  inputMode = 'decimal', clearZeroOnFocus = false, 'data-testid': dataTestId,
+  inputMode = 'decimal', isAllowed, clearZeroOnFocus = false, 'data-testid': dataTestId,
 }) {
   const internalRef = useRef(null);
   const activeRef = inputRef || internalRef;
@@ -399,13 +422,15 @@ export function MaskedAmountInput({
 
     const sigBeforeCursor = countSignificantChars(rawValue.slice(0, cursorPos), groupSeparator);
     const filtered = filterMaskChars(rawValue, decimalSeparator, grouping);
+    const clean = toCleanValue(filtered, decimalSeparator);
+    // Refused edit: nothing changes, so the controlled input re-renders the previous text.
+    if (isAllowed && !isAllowed(clean)) return;
     const newDisplay = grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered;
 
     desiredCursorRef.current = positionAfterSignificant(newDisplay, sigBeforeCursor, groupSeparator);
     zeroClearedRef.current = false;
     setDraft(newDisplay);
 
-    const clean = toCleanValue(filtered, decimalSeparator);
     onChange?.(clean, parseLocaleNumber(clean).value);
   };
 
@@ -438,10 +463,17 @@ export function MaskedAmountInput({
     if (parsed == null || !Number.isFinite(parsed)) return;
 
     e.preventDefault();
-    zeroClearedRef.current = false;
     const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
-    const clean = String(parsed);
-    const filtered = filterMaskChars(clean.split('.').join(decimalSeparator), decimalSeparator, grouping);
+    // The clean value is derived exactly as the typing path derives it (filter → toCleanValue),
+    // from a plain-digit rendering of the number, so `isAllowed` and `onChange` see the same shape
+    // whether the value was typed or pasted (never `String(n)`'s exponent form for huge numbers).
+    const filtered = filterMaskChars(
+      toPlainNumberString(parsed).split('.').join(decimalSeparator), decimalSeparator, grouping);
+    const clean = toCleanValue(filtered, decimalSeparator);
+    if (isAllowed && !isAllowed(clean)) return;
+    // Reset only for an ACCEPTED paste (like the typing path): a refused one changes nothing, so a
+    // clearZeroOnFocus blur must still restore the 0 instead of committing the empty draft.
+    zeroClearedRef.current = false;
     setDraft(grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered);
     onChange?.(clean, parsed);
   };

@@ -49,7 +49,7 @@ describe('FmBoxes303 — keystroke hard-stop, integer digits (ETP-5456)', () => 
     );
     const input = openEditor(container, 77);
     fireEvent.change(input, { target: { value: '123456789012345' } });
-    expect(input.value).toBe('123456789012345');
+    expect(input.value).toBe('123.456.789.012.345');
   });
 
   it('refuses the 16th integer digit on a Num box — the input value stays at 15 digits', () => {
@@ -59,7 +59,7 @@ describe('FmBoxes303 — keystroke hard-stop, integer digits (ETP-5456)', () => 
     const input = openEditor(container, 77);
     fireEvent.change(input, { target: { value: '123456789012345' } });
     fireEvent.change(input, { target: { value: '1234567890123456' } });
-    expect(input.value).toBe('123456789012345');
+    expect(input.value).toBe('123.456.789.012.345');
   });
 
   // Box 42 — N (signed), iva_deducible section ("Compensaciones Régimen Especial A.G. y P."),
@@ -70,7 +70,7 @@ describe('FmBoxes303 — keystroke hard-stop, integer digits (ETP-5456)', () => 
     );
     const input = openEditor(container, 42);
     fireEvent.change(input, { target: { value: '-12345678901234' } });
-    expect(input.value).toBe('-12345678901234');
+    expect(input.value).toBe('-12.345.678.901.234');
   });
 
   it('refuses the 15th integer digit once a N box is negative', () => {
@@ -80,7 +80,7 @@ describe('FmBoxes303 — keystroke hard-stop, integer digits (ETP-5456)', () => 
     const input = openEditor(container, 42);
     fireEvent.change(input, { target: { value: '-12345678901234' } });
     fireEvent.change(input, { target: { value: '-123456789012345' } });
-    expect(input.value).toBe('-12345678901234');
+    expect(input.value).toBe('-12.345.678.901.234');
   });
 
   it('allows the full 15 integer digits on a N box when non-negative (no sign to consume a slot)', () => {
@@ -89,18 +89,22 @@ describe('FmBoxes303 — keystroke hard-stop, integer digits (ETP-5456)', () => 
     );
     const input = openEditor(container, 42);
     fireEvent.change(input, { target: { value: '123456789012345' } });
-    expect(input.value).toBe('123456789012345');
+    expect(input.value).toBe('123.456.789.012.345');
   });
 });
 
+// ETP-5597 (CP-18, round 7) — amount cells are MaskedAmountInput with live grouping, like every
+// other amount field in the app: the instance separators apply (es: ',' decimal, '.' thousands,
+// grouped live on screen); the committed value stays clean. Integer-digit cases above therefore
+// read grouped too.
 describe('FmBoxes303 — keystroke hard-stop, decimal digits (ETP-5456, manual QA follow-up)', () => {
   it('accepts up to 2 decimal digits', () => {
     const { container } = render(
       <FmBoxes303 year={2026} period="T2" boxes={{}} sectionIds={['iva_deducible']} onBoxChange={vi.fn()} />
     );
     const input = openEditor(container, 42);
-    fireEvent.change(input, { target: { value: '9012345.20' } });
-    expect(input.value).toBe('9012345.20');
+    fireEvent.change(input, { target: { value: '9012345,20' } });
+    expect(input.value).toBe('9.012.345,20');
   });
 
   it('refuses the 3rd decimal digit — the exact box42 regression manual QA caught ("...9012345.2057")', () => {
@@ -108,11 +112,11 @@ describe('FmBoxes303 — keystroke hard-stop, decimal digits (ETP-5456, manual Q
       <FmBoxes303 year={2026} period="T2" boxes={{}} sectionIds={['iva_deducible']} onBoxChange={vi.fn()} />
     );
     const input = openEditor(container, 42);
-    fireEvent.change(input, { target: { value: '9012345.2' } });
-    fireEvent.change(input, { target: { value: '9012345.20' } });
-    fireEvent.change(input, { target: { value: '9012345.205' } });
-    fireEvent.change(input, { target: { value: '9012345.2057' } });
-    expect(input.value).toBe('9012345.20');
+    fireEvent.change(input, { target: { value: '9012345,2' } });
+    fireEvent.change(input, { target: { value: '9012345,20' } });
+    fireEvent.change(input, { target: { value: '9012345,205' } });
+    fireEvent.change(input, { target: { value: '9012345,2057' } });
+    expect(input.value).toBe('9.012.345,20');
   });
 
   it('reaching the integer ceiling does not block typing the 2 decimal digits afterward', () => {
@@ -121,9 +125,9 @@ describe('FmBoxes303 — keystroke hard-stop, decimal digits (ETP-5456, manual Q
     );
     const input = openEditor(container, 77);
     fireEvent.change(input, { target: { value: '123456789012345' } }); // at the 15-digit ceiling
-    fireEvent.change(input, { target: { value: '123456789012345.3' } });
-    fireEvent.change(input, { target: { value: '123456789012345.35' } });
-    expect(input.value).toBe('123456789012345.35');
+    fireEvent.change(input, { target: { value: '123456789012345,3' } });
+    fireEvent.change(input, { target: { value: '123456789012345,35' } });
+    expect(input.value).toBe('123.456.789.012.345,35');
   });
 
   it('reaching the decimal ceiling does not block extending the integer part further', () => {
@@ -131,9 +135,9 @@ describe('FmBoxes303 — keystroke hard-stop, decimal digits (ETP-5456, manual Q
       <FmBoxes303 year={2026} period="T2" boxes={{}} sectionIds={['resultado_final']} onBoxChange={vi.fn()} />
     );
     const input = openEditor(container, 77);
-    fireEvent.change(input, { target: { value: '123.45' } }); // at the 2-decimal ceiling
-    fireEvent.change(input, { target: { value: '1234.45' } });
-    expect(input.value).toBe('1234.45');
+    fireEvent.change(input, { target: { value: '123,45' } }); // at the 2-decimal ceiling
+    fireEvent.change(input, { target: { value: '1234,45' } });
+    expect(input.value).toBe('1.234,45');
   });
 });
 
@@ -154,6 +158,6 @@ describe('FmBoxes303 — percent cells are exempt from the amount hard-stop (ETP
     fireEvent.change(input, { target: { value: '150.999' } });
     // Unrestricted at keystroke time — clampPercentValue handles range/decimals on commit
     // (see FmBoxes303.vitest.jsx's "percent cell clamping/rounding" tests).
-    expect(input.value).toBe('150.999');
+    expect(input.value).toBe('150,999');
   });
 });
