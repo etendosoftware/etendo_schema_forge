@@ -785,6 +785,34 @@ export function derivedFieldLocator(page, fieldKey) {
 }
 
 /**
+ * Lazily make a header field rendered: if it is already in the DOM, nothing is
+ * touched; otherwise the header's collapsed "Mostrar más datos" block is opened
+ * (`expandHeaderFields`, which never closes an open block). Resolves to whether
+ * the field is rendered afterwards — `false` means this form has no such field.
+ */
+export async function hasHeaderField(page, fieldKey) {
+  const field = derivedFieldLocator(page, fieldKey);
+  if (await field.count() > 0) return true;
+  await expandHeaderFields(page);
+  return await field.count() > 0;
+}
+
+/**
+ * Reveal a header field and assert it is visible, expanding the collapsed
+ * "Mostrar más datos" block only when the field is not already rendered (see
+ * `hasHeaderField`). Fails with a message that tells "not on this form" apart
+ * from a selector typo or a slow render.
+ */
+export async function revealHeaderField(page, fieldKey, { timeout = 30_000 } = {}) {
+  await hasHeaderField(page, fieldKey);
+  const field = derivedFieldLocator(page, fieldKey);
+  await expect(field,
+    `Header field "${fieldKey}" is not on this form, not even after expanding "Mostrar más datos"`,
+  ).toBeVisible({ timeout });
+  return field;
+}
+
+/**
  * Wait until a callout/derivation-populated field shows a real value — not the
  * placeholder and not an empty chip/input. Uses an auto-retrying `expect.poll()`
  * instead of a one-shot `textContent()` sample, because fields routed through
@@ -803,10 +831,8 @@ export function derivedFieldLocator(page, fieldKey) {
  */
 export async function waitForDerivedFieldValue(page, fieldKey, { timeout = 30_000 } = {}) {
   // A derived field may live in the header's collapsed block (ETP-5513), where it is
-  // not rendered at all — open it first so "not found" can only mean "not derived".
-  await expandHeaderFields(page);
-  const field = derivedFieldLocator(page, fieldKey);
-  await expect(field).toBeVisible({ timeout });
+  // not rendered at all — reveal it (expanding only if needed) before reading it.
+  const field = await revealHeaderField(page, fieldKey, { timeout });
 
   const placeholderPattern = /^$|buscar|search|seleccionar|select/i;
   const chip = page.getByTestId(`field-${fieldKey}-chip`);
@@ -882,11 +908,6 @@ export async function selectVendorBP(page, { name } = {}) {
   // let a flaky partnerAddress assertion slip through in
   // purchase-order-to-invoice.integration.spec.js (deterministic failure: the
   // address callout hadn't landed yet when the caller sampled its value).
-  //
-  // Expand the header's collapsed block first: on purchase invoice `paymentTerms` lands
-  // there and is not rendered while collapsed, and the `warehouse` presence check below
-  // must not read a collapsed (unrendered) field as "this document has no warehouse".
-  await expandHeaderFields(page);
   await waitForDerivedFieldValue(page, 'paymentTerms', { timeout: 30_000 });
   await waitForDerivedFieldValue(page, 'partnerAddress', { timeout: 30_000 });
 
@@ -911,7 +932,11 @@ export async function selectVendorBP(page, { name } = {}) {
   // Conditional because `selectVendorBP` is shared with documents that HAVE no warehouse
   // (purchase invoice, the cash-close payment flow): absent field → nothing to settle. On a
   // document that does have one it is `required`, so waiting for it is never wrong there.
-  if (await derivedFieldLocator(page, 'warehouse').count() > 0) {
+  //
+  // The presence check goes through `hasHeaderField`, not a bare `count()`: a warehouse
+  // sitting in the header's collapsed "Mostrar más datos" block (ETP-5513) is not
+  // rendered, and must not be mistaken for "this document has no warehouse".
+  if (await hasHeaderField(page, 'warehouse')) {
     await waitForDerivedFieldValue(page, 'warehouse', { timeout: 30_000 });
   }
   await slow(page);
