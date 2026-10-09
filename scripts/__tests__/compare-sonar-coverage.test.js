@@ -11,6 +11,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   DEFAULT_COVERAGE_MINIMUM,
   DEFAULT_COVERAGE_TOLERANCE,
+  ANALYSED_BASE_BRANCHES,
+  SonarReadError,
   UsageError,
   createSonarClient,
   evaluateCoverage,
@@ -37,7 +39,7 @@ const jsonResp = (body, status = 200) => ({ ok: status < 400, status, json: asyn
  * Fake fetch routing on the URL: `ce` (the CE task responses, consumed in order),
  * `current` / `base` (coverage values or a Response-like / Error to return).
  */
-function fakeFetch({ ce = [], current, base } = {}) {
+function fakeFetch({ ce = [], current, base, baseBranch = 'develop' } = {}) {
   const calls = [];
   const queue = [...ce];
   const answer = (v) => {
@@ -47,8 +49,13 @@ function fakeFetch({ ce = [], current, base } = {}) {
   };
   const impl = async (url, init) => {
     calls.push({ url, init });
-    if (url.includes('/api/ce/task')) return jsonResp({ task: { status: queue.shift() ?? 'SUCCESS' } });
-    if (url.includes('/api/measures/component') && /[?&]branch=develop&metricKeys/.test(url)) return answer(base);
+    if (url.includes('/api/ce/task')) {
+      const next = queue.shift() ?? 'SUCCESS';
+      return typeof next === 'string' ? jsonResp({ task: { status: next } }) : answer(next);
+    }
+    if (url.includes('/api/measures/component') && url.includes(`&branch=${encodeURIComponent(baseBranch)}&metricKeys`)) {
+      return answer(base);
+    }
     if (url.includes('/api/measures/component')) return answer(current);
     return jsonResp(null, 404);
   };
@@ -208,6 +215,28 @@ describe('formatResult — ci context', () => {
     assert.equal(r.annotation, 'Coverage 77.00% < 79.00% (develop 80.00% − 1.00pp tolerance).');
   });
 
+  it('no-base on develop/main passes without a warning', () => {
+    assert.deepEqual(ANALYSED_BASE_BRANCHES, ['develop', 'main']);
+    for (const baseBranch of ANALYSED_BASE_BRANCHES) {
+      const r = formatResult({ verdict: 'no-base' }, { ...ctx, baseBranch, current: 75, base: null });
+      assert.equal(r.exitCode, 0);
+      assert.equal(r.warning, undefined);
+    }
+  });
+
+  it('no-base on any other base branch passes with a loud warning', () => {
+    const r = formatResult({ verdict: 'no-base' }, { ...ctx, baseBranch: 'epic/ETP-1', current: 75, base: null });
+    assert.equal(r.exitCode, 0);
+    assert.equal(r.warning, "Coverage drop NOT checked: 'epic/ETP-1' has no coverage on Sonar "
+      + '(only develop and main are analysed on push).');
+  });
+
+  it('push context never sets a no-base warning', () => {
+    const r = formatResult({ verdict: 'no-base' },
+      { ...ctx, context: 'push', baseBranch: 'epic/ETP-1', current: 75, base: null });
+    assert.equal(r.warning, undefined);
+  });
+
   it('no-base and ok still pass', () => {
     assert.equal(formatResult({ verdict: 'no-base' }, { ...ctx, current: 75, base: null }).exitCode, 0);
     assert.equal(formatResult({ verdict: 'ok', minRequired: 79 }, { ...ctx, current: 80, base: 80 }).exitCode, 0);
@@ -317,15 +346,41 @@ describe('createSonarClient', () => {
     assert.equal(fetchImpl.calls[0].url, 'https://other/api/ce/task?id=1');
   });
 
-  it('warns and returns null on an HTTP error or a network failure', async () => {
+  it('warns and returns null on a 404 (not found)', async () => {
     const warns = [];
     const http = createSonarClient({ hostUrl: 'https://s', token: 't',
       fetchImpl: async () => jsonResp(null, 404), warn: (w) => warns.push(w) });
     assert.equal(await http('/api/x'), null);
-    const net = createSonarClient({ hostUrl: 'https://s', token: 't',
-      fetchImpl: async () => { throw new Error('ECONNREFUSED'); }, warn: (w) => warns.push(w) });
-    assert.equal(await net('https://elsewhere/y'), null);
-    assert.deepEqual(warns, ['    WARNING: 404 on /api/x', '    WARNING: ECONNREFUSED on https://elsewhere/y']);
+    assert.deepEqual(warns, ['    WARNING: 404 on /api/x']);
+  });
+
+  for (const status of [401, 403, 500, 503]) {
+    it(`warns and throws a SonarReadError carrying the status on HTTP ${status}`, async () => {
+      const warns = [];
+      const http = createSonarClient({ hostUrl: 'https://s', token: 't',
+        fetchImpl: async () => jsonResp(null, status), warn: (w) => warns.push(w) });
+      await assert.rejects(http('/api/x'),
+        (e) => e instanceof SonarReadError && e.status === status && e.message === `HTTP ${status} on /api/x`);
+      assert.deepEqual(warns, [`    WARNING: ${status} on /api/x`]);
+    });
+  }
+
+  it('warns and throws a status-less SonarReadError on a network failure or timeout', async () => {
+    const warns = [];
+    for (const err of [new Error('ECONNREFUSED'), Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })]) {
+      const net = createSonarClient({ hostUrl: 'https://s', token: 't',
+        fetchImpl: async () => { throw err; }, warn: (w) => warns.push(w) });
+      await assert.rejects(net('https://elsewhere/y'),
+        (e) => e instanceof SonarReadError && e.status === undefined && e.message === `${err.message} on https://elsewhere/y`);
+    }
+    assert.deepEqual(warns, ['    WARNING: ECONNREFUSED on https://elsewhere/y',
+      '    WARNING: The operation was aborted due to timeout on https://elsewhere/y']);
+  });
+
+  it('throws a SonarReadError on a 200 with an unparseable body', async () => {
+    const getJson = createSonarClient({ hostUrl: 'https://s', token: 't', warn: () => {},
+      fetchImpl: async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('bad'); } }) });
+    await assert.rejects(getJson('/api/x'), (e) => e instanceof SonarReadError && /invalid JSON on \/api\/x/.test(e.message));
   });
 });
 
@@ -386,6 +441,29 @@ describe('waitForCeTask', () => {
     const s = await waitForCeTask(async () => queue.shift(), 'u', opts({ log: (l) => logs.push(l) }));
     assert.equal(s, 'SUCCESS');
     assert.equal(logs[0], '    Status: UNKNOWN (0s elapsed)');
+  });
+
+  for (const status of [401, 403]) {
+    it(`aborts with UNAUTHORIZED on the first ${status} instead of polling until the timeout`, async () => {
+      let polls = 0;
+      const s = await waitForCeTask(async () => { polls++; throw new SonarReadError(`HTTP ${status}`, status); }, 'u', opts());
+      assert.equal(s, 'UNAUTHORIZED');
+      assert.equal(polls, 1);
+    });
+  }
+
+  it('keeps polling through a 5xx or a network failure', async () => {
+    const queue = [new SonarReadError('HTTP 502', 502), new SonarReadError('ECONNRESET'), { task: { status: 'SUCCESS' } }];
+    const s = await waitForCeTask(async () => {
+      const next = queue.shift();
+      if (next instanceof Error) throw next;
+      return next;
+    }, 'u', opts());
+    assert.equal(s, 'SUCCESS');
+  });
+
+  it('rethrows an unexpected (non-Sonar) error', async () => {
+    await assert.rejects(waitForCeTask(async () => { throw new TypeError('bug'); }, 'u', opts()), /bug/);
   });
 
   it('returns TIMEOUT once the next poll would exceed the timeout', async () => {
@@ -517,6 +595,91 @@ describe('main', () => {
     assert.equal(fetchImpl.calls[0].url, 'https://sonar.example/api/ce/task?id=T1');
   });
 
+  describe('ci context: reading the base coverage', () => {
+    const ciArgs = (base = 'develop') => ['--base-branch', base, '--project-key', 'p', '--pull-request', '7', '--context', 'ci'];
+
+    it('a 404 on the base (branch not analysed) passes as no-base', async () => {
+      const r = await run(ciArgs(), { fetchImpl: fakeFetch({ current: '80', base: jsonResp(null, 404) }) });
+      assert.equal(r.code, 0);
+      assert.match(r.text, /No coverage on Sonar for 'develop' yet/);
+      assert.doesNotMatch(r.text, /::(error|warning)/);
+    });
+
+    it('a base analysis without the coverage measure passes as no-base', async () => {
+      const r = await run(ciArgs(), { fetchImpl: fakeFetch({ current: '80', base: jsonResp({ component: { measures: [] } }) }) });
+      assert.equal(r.code, 0);
+      assert.match(r.text, /No coverage on Sonar for 'develop' yet/);
+    });
+
+    const failures = [
+      { name: 'HTTP 401', base: () => jsonResp(null, 401), detail: 'HTTP 401 on /api/measures/component' },
+      { name: 'HTTP 403', base: () => jsonResp(null, 403), detail: 'HTTP 403 on /api/measures/component' },
+      { name: 'HTTP 500', base: () => jsonResp(null, 500), detail: 'HTTP 500 on /api/measures/component' },
+      { name: 'HTTP 503', base: () => jsonResp(null, 503), detail: 'HTTP 503 on /api/measures/component' },
+      { name: 'a timeout', base: () => Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }),
+        detail: 'The operation was aborted due to timeout on /api/measures/component' },
+      { name: 'a network failure', base: () => new Error('getaddrinfo ENOTFOUND'),
+        detail: 'getaddrinfo ENOTFOUND on /api/measures/component' },
+    ];
+    for (const c of failures) {
+      it(`${c.name} on the base fails closed with ::error (not no-base)`, async () => {
+        const r = await run(ciArgs(), { fetchImpl: fakeFetch({ current: '90', base: c.base() }) });
+        assert.equal(r.code, 1);
+        assert.doesNotMatch(r.text, /No coverage on Sonar/);
+        const last = r.out.at(-1);
+        assert.ok(last.startsWith(`::error title=Coverage gate::could not read the coverage of 'develop' from Sonar (${c.detail}`),
+          last);
+      });
+
+      it(`push context: ${c.name} on the base still passes as no-base`, async () => {
+        const r = await run(['--base-branch', 'develop', '--project-key', 'p'],
+          { fetchImpl: fakeFetch({ current: '80', base: c.base() }) });
+        assert.equal(r.code, 0);
+        assert.match(r.text, /No coverage on Sonar for 'develop' yet/);
+        assert.doesNotMatch(r.text, /::error/);
+      });
+    }
+
+    it('a base other than develop/main with no coverage passes with a ::warning', async () => {
+      const r = await run(ciArgs('epic/ETP-1'),
+        { fetchImpl: fakeFetch({ current: '80', base: jsonResp(null, 404), baseBranch: 'epic/ETP-1' }) });
+      assert.equal(r.code, 0);
+      assert.equal(r.out.at(-1), "::warning title=Coverage gate::Coverage drop NOT checked: 'epic/ETP-1' "
+        + 'has no coverage on Sonar (only develop and main are analysed on push).');
+      assert.doesNotMatch(r.text, /::error/);
+    });
+
+    it('main with no coverage passes without a warning', async () => {
+      const r = await run(ciArgs('main'),
+        { fetchImpl: fakeFetch({ current: '80', base: jsonResp(null, 404), baseBranch: 'main' }) });
+      assert.equal(r.code, 0);
+      assert.doesNotMatch(r.text, /::warning/);
+    });
+  });
+
+  describe('CE task rejected with 401/403', () => {
+    for (const status of [401, 403]) {
+      it(`ci context: ${status} aborts after one poll and fails with ::error`, async () => {
+        const fetchImpl = fakeFetch({ ce: [jsonResp(null, status)], current: '90', base: '80' });
+        const r = await run(['--base-branch', 'develop', '--project-key', 'p', '--context', 'ci',
+          '--report-task', reportOk], { fetchImpl });
+        assert.equal(r.code, 1);
+        assert.equal(fetchImpl.calls.filter((c) => c.url.includes('/api/ce/task')).length, 1);
+        assert.ok(!fetchImpl.calls.some((c) => c.url.includes('/api/measures/')), 'no coverage read');
+        assert.equal(r.out.at(-1),
+          '::error title=Coverage gate::Sonar rejected the token (401/403) while reading the analysis task');
+      });
+    }
+
+    it('push context: 403 aborts and skips (exit 0)', async () => {
+      const fetchImpl = fakeFetch({ ce: [jsonResp(null, 403)], current: '90', base: '80' });
+      const r = await run(['--base-branch', 'develop', '--project-key', 'p', '--report-task', reportOk], { fetchImpl });
+      assert.equal(r.code, 0);
+      assert.equal(r.out.at(-1),
+        '    SKIPPED ⚠️  Sonar rejected the token (401/403) while reading the analysis task — not blocking.');
+    });
+  });
+
   describe('foreign ceTaskUrl (the token must never leave SONAR_HOST_URL)', () => {
     let foreign;
     before(() => {
@@ -630,5 +793,27 @@ describe('wiring guardrails', () => {
     assert.match(step, /--pull-request "\$PR_NUMBER" --base-branch "\$BASE_BRANCH"/);
     assert.ok(job.indexOf('sonarqube-scan-action') < job.indexOf('Compare coverage with the base branch'),
       'compare runs after the scan');
+  });
+
+  it('the sonar job fails closed on a PR whose tests did not succeed', () => {
+    const job = /\n {2}sonar:\n([\s\S]*?)(?=\n {2}[A-Za-z_-]+:\n|$)/.exec(workflow)?.[1];
+    assert.match(job, /if: \$\{\{ !cancelled\(\) && \(github\.event_name == 'pull_request' \|\|/,
+      'the job runs on every non-cancelled PR');
+    const step = /- name: Fail when the tests did not succeed\n([\s\S]*?)(?=\n {6}- |$)/.exec(job)?.[1];
+    assert.ok(step, 'fail-closed step present');
+    assert.match(step, /if: github\.event_name == 'pull_request' && needs\.test\.result != 'success'/);
+    assert.match(step, /::error title=Coverage gate::/);
+    assert.match(step, /exit 1/);
+  });
+
+  it('pins the scan action to a commit sha and declares least-privilege permissions', () => {
+    assert.match(workflow, /sonarqube-scan-action@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+    assert.doesNotMatch(workflow, /@master\b/);
+    assert.match(workflow, /^permissions:\n {2}contents: read\n/m);
+    assert.doesNotMatch(workflow, /: write-all|: read-all/);
+  });
+
+  it('gives each push sha its own concurrency group', () => {
+    assert.match(workflow, /group: tests-\$\{\{ github\.event\.pull_request\.number \|\| github\.sha \}\}/);
   });
 });

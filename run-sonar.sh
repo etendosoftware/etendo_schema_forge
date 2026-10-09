@@ -1105,15 +1105,22 @@ if [[ "$COMPARE_COVERAGE" == "true" ]]; then
   else
     echo "==> Comparing overall coverage: $GATE_BRANCH vs $CMP_BRANCH ..."
     set +e
-    # The rule, its thresholds and its messages live in one place, shared with
-    # the GitHub `Sonar Build` job: scripts/compare-sonar-coverage.js.
+    # In this repo the rule, its thresholds and its messages live in one place,
+    # shared with the GitHub `Sonar Build` job: scripts/compare-sonar-coverage.js.
+    # (com.etendoerp.go/run-sonar.sh still carries its own Python copy.)
     CMP_ARGS=(--base-branch "$CMP_BRANCH" --label "$GATE_BRANCH" --project-key "$PROJECT_KEY")
     if [[ -n "${SONAR_PR_KEY:-}" ]]; then
       CMP_ARGS+=(--pull-request "$SONAR_PR_KEY")
     fi
-    SONAR_HOST_URL="$SONAR_HOST_URL" SONAR_TOKEN="$SONAR_TOKEN" \
-      node "$SCRIPT_DIR/scripts/compare-sonar-coverage.js" "${CMP_ARGS[@]}"
-    CMP_RC=$?
+    if ! command -v node >/dev/null 2>&1; then
+      echo "❌ COVERAGE NOT EVALUATED — 'node' is not on PATH; the coverage gate needs Node.js 22."
+      echo "   Install Node 22 (or fix PATH for git hooks), then push again."
+      CMP_RC=1
+    else
+      SONAR_HOST_URL="$SONAR_HOST_URL" SONAR_TOKEN="$SONAR_TOKEN" \
+        node "$SCRIPT_DIR/scripts/compare-sonar-coverage.js" "${CMP_ARGS[@]}"
+      CMP_RC=$?
+    fi
     set -e
   fi
 fi

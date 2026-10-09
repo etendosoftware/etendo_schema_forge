@@ -56,8 +56,10 @@ without a reviewed configuration change.
 
 Do this instead:
   1. Add or improve tests until the configured gate passes.
-  2. If the policy itself needs to change, update the reviewed default in
-     scripts/compare-sonar-coverage.js and its documentation in a dedicated change.
+  2. If the policy itself needs to change, update the reviewed default in a
+     dedicated change. In etendo_schema_forge it lives only in
+     scripts/compare-sonar-coverage.js; com.etendoerp.go/run-sonar.sh keeps a
+     known duplicate (its own Python copy) that must be changed alongside it.
   3. Do not use an environment override to bypass the gate.
 
 This hook only restricts agent-run Bash commands."

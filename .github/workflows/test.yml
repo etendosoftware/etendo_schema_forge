@@ -6,15 +6,26 @@ on:
   push:
     branches: [main, develop]
 
+# Least privilege: jobs widen only what their steps need.
+permissions:
+  contents: read
+
 concurrency:
-  group: tests-${{ github.event.pull_request.number || github.ref }}
-  # Only PR runs are cancelled; every push sha must keep its own artifact.
+  # A PR shares one group, so a new push to it cancels the stale run. Each push
+  # to main/develop gets its own group (its sha): a group holds only one pending
+  # run, so a shared push group would silently drop queued shas, and every push
+  # sha must keep its own run and its own artifact.
+  group: tests-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read   # npm install from npm.pkg.github.com
+      checks: write    # dorny/test-reporter publishes the "Test Results" check
     steps:
       # Test the PR head commit (the sha Jenkins analyzes), not the merge ref.
       - uses: actions/checkout@v4
@@ -63,10 +74,13 @@ jobs:
   sonar:
     name: Sonar Build
     needs: test
-    # PRs always report the required check; pushes scan only with real coverage.
+    # PRs always run it (it fails when `test` did not succeed, see the last
+    # step); pushes scan only with real coverage.
     if: ${{ !cancelled() && (github.event_name == 'pull_request' || needs.test.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,7 +94,7 @@ jobs:
         with:
           name: unit-coverage
 
-      - uses: sonarsource/sonarqube-scan-action@master
+      - uses: sonarsource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
           SONAR_SCANNER_OPTS: "-Xmx4096m"
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -104,3 +118,13 @@ jobs:
           node scripts/compare-sonar-coverage.js --context ci
           --pull-request "$PR_NUMBER" --base-branch "$BASE_BRANCH"
           --report-task .scannerwork/report-task.txt
+
+      # Fail closed: a PR whose tests failed (or did not finish) must not get a
+      # green required check just because the coverage comparison was skipped.
+      - name: Fail when the tests did not succeed
+        if: github.event_name == 'pull_request' && needs.test.result != 'success'
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: |
+          echo "::error title=Coverage gate::The Tests job ended '$TEST_RESULT', so coverage was not evaluated. Fix the tests and push again."
+          exit 1

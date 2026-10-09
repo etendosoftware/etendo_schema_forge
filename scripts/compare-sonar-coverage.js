@@ -1,14 +1,17 @@
 #!/usr/bin/env node
-// Coverage-decrease gate: the ONE implementation of the rule enforced by Jenkins'
+// Coverage-decrease gate: this repo's ONE implementation of the rule enforced by Jenkins'
 // "Compare Coverage Results" stage (sonarUtils.compareCoverage). Called by
 // `run-sonar.sh --compare-coverage` (pre-push) and by the `Sonar Build` job of
-// .github/workflows/test.yml. See docs/coverage-gate.md.
+// .github/workflows/test.yml. See docs/coverage-gate.md. (com.etendoerp.go's
+// run-sonar.sh still has its own Python copy — a known duplicate.)
 //
 // Rule, on OVERALL coverage read live from Sonar:
 //   current < COVERAGE_MINIMUM               → fail (no base comparison)
 //   current < base − COVERAGE_TOLERANCE      → fail
 //   otherwise                                → pass
-// A base branch with no coverage yet (first analysis) passes with a warning.
+// A base branch with no coverage yet (404 or no measure) passes with a warning.
+// In ci context any OTHER failure to read the base (401/403, 5xx, timeout,
+// network) fails closed instead.
 //
 // Usage:
 //   node scripts/compare-sonar-coverage.js --base-branch <branch>
@@ -29,7 +32,7 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..');
 
-// The reviewed thresholds. This is the only place their defaults live.
+// The reviewed thresholds. The only place their defaults live in this repo.
 export const DEFAULT_COVERAGE_TOLERANCE = 1;
 export const DEFAULT_COVERAGE_MINIMUM = 70;
 
@@ -145,26 +148,53 @@ export function isSameOrigin(url, hostUrl) {
   }
 }
 
-/** GET a Sonar API path (or absolute URL) as JSON; null (with a warning) on any failure. */
+/**
+ * A Sonar read that failed for a reason other than "not found": an HTTP error
+ * other than 404 (`status` set: 401, 403, 5xx…) or a network/DNS/timeout failure
+ * (`status` undefined). The caller decides whether that blocks.
+ */
+export class SonarReadError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.name = 'SonarReadError';
+    this.status = status;
+  }
+}
+
+/** True for the HTTP statuses that mean the token is not accepted. */
+export const isAuthFailure = (err) => err instanceof SonarReadError && (err.status === 401 || err.status === 403);
+
+/**
+ * GET a Sonar API path (or absolute URL) as JSON. Every failure is warned.
+ * A 404 (component, branch or task not found) returns null; any other failure
+ * throws a SonarReadError, so "absent" is never confused with "unreadable".
+ */
 export function createSonarClient({ hostUrl, token, fetchImpl = globalThis.fetch, warn = console.error }) {
   const base = hostUrl.replace(/\/+$/, '');
   const auth = `Basic ${Buffer.from(`${token}:`).toString('base64')}`;
   return async function getJson(pathOrUrl) {
     const url = /^https?:\/\//.test(pathOrUrl) ? pathOrUrl : `${base}${pathOrUrl}`;
     const shown = url.startsWith(base) ? url.slice(base.length) : url;
+    let resp;
     try {
-      const resp = await fetchImpl(url, {
+      resp = await fetchImpl(url, {
         headers: { Authorization: auth },
         signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
       });
-      if (!resp.ok) {
-        warn(`    WARNING: ${resp.status} on ${shown}`);
-        return null;
-      }
-      return await resp.json();
-    } catch (err) { // network/DNS — the caller decides whether that blocks
+    } catch (err) { // network/DNS/timeout
       warn(`    WARNING: ${err.message} on ${shown}`);
-      return null;
+      throw new SonarReadError(`${err.message} on ${shown}`);
+    }
+    if (!resp.ok) {
+      warn(`    WARNING: ${resp.status} on ${shown}`);
+      if (resp.status === 404) return null;
+      throw new SonarReadError(`HTTP ${resp.status} on ${shown}`, resp.status);
+    }
+    try {
+      return await resp.json();
+    } catch (err) {
+      warn(`    WARNING: invalid JSON (${err.message}) on ${shown}`);
+      throw new SonarReadError(`invalid JSON on ${shown}`, resp.status);
     }
   };
 }
@@ -172,7 +202,9 @@ export function createSonarClient({ hostUrl, token, fetchImpl = globalThis.fetch
 /**
  * Poll the Compute Engine task until it leaves PENDING/IN_PROGRESS, so the
  * measures read afterwards belong to the analysis just submitted.
- * Returns SUCCESS | FAILED | CANCELED | TIMEOUT.
+ * Returns SUCCESS | FAILED | CANCELED | TIMEOUT | UNAUTHORIZED.
+ * A 401/403 aborts at once (UNAUTHORIZED): a rejected token will not recover
+ * while polling. Any other read failure is retried until the timeout.
  */
 export async function waitForCeTask(getJson, ceTaskUrl, {
   timeoutMs, pollMs = POLL_INTERVAL_MS, log = console.log,
@@ -180,7 +212,14 @@ export async function waitForCeTask(getJson, ceTaskUrl, {
 }) {
   const start = now();
   for (;;) {
-    const status = (await getJson(ceTaskUrl))?.task?.status ?? 'UNKNOWN';
+    let doc = null;
+    try {
+      doc = await getJson(ceTaskUrl);
+    } catch (err) {
+      if (!(err instanceof SonarReadError)) throw err;
+      if (isAuthFailure(err)) return 'UNAUTHORIZED';
+    }
+    const status = doc?.task?.status ?? 'UNKNOWN';
     const elapsed = Math.round((now() - start) / 1000);
     log(`    Status: ${status} (${elapsed}s elapsed)`);
     if (['SUCCESS', 'FAILED', 'CANCELED'].includes(status)) return status;
@@ -200,6 +239,9 @@ export function evaluateCoverage({ current, base, tolerance, minimum }) {
 }
 
 const f2 = (n) => n.toFixed(2);
+
+/** Base branches whose pushes are always analysed by the `Sonar Build` job. */
+export const ANALYSED_BASE_BRANCHES = ['develop', 'main'];
 
 /**
  * Turn a verdict into output lines and an exit code. The push-context text is
@@ -231,6 +273,12 @@ export function formatResult(result, { current, base, tolerance, minimum, label,
         exitCode: 0,
         lines: [`    SKIPPED ⚠️  No coverage on Sonar for '${baseBranch}' yet — not blocking `
           + '(matches CI, which treats a missing baseline as 0%).'],
+        // develop/main are always analysed; a missing baseline elsewhere means
+        // the PR targets a branch Sonar never saw, so the drop went unchecked.
+        ...(ci && !ANALYSED_BASE_BRANCHES.includes(baseBranch) && {
+          warning: `Coverage drop NOT checked: '${baseBranch}' has no coverage on Sonar `
+            + '(only develop and main are analysed on push).',
+        }),
       };
     case 'decreased':
       return {
@@ -319,9 +367,11 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
       timeoutMs: opts.waitTimeout * 1000, log, sleep: deps.sleep, now: deps.now,
     });
     if (status !== 'SUCCESS') {
-      return toolingFailure(opts, status === 'TIMEOUT'
-        ? `Sonar did not process the analysis within ${opts.waitTimeout}s`
-        : `Sonar analysis ${status}`, log);
+      const reasons = {
+        TIMEOUT: `Sonar did not process the analysis within ${opts.waitTimeout}s`,
+        UNAUTHORIZED: 'Sonar rejected the token (401/403) while reading the analysis task',
+      };
+      return toolingFailure(opts, reasons[status] ?? `Sonar analysis ${status}`, log);
     }
   }
 
@@ -329,12 +379,26 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   let currentQuery = '';
   if (opts.pullRequest) currentQuery = `&pullRequest=${encodeURIComponent(opts.pullRequest)}`;
   else if (opts.branch) currentQuery = `&branch=${encodeURIComponent(opts.branch)}`;
+  // Any unreadable current coverage is 'no-current': ci fails, push skips.
   const current = readMetric(
-    await getJson(`/api/measures/component?component=${project}&metricKeys=coverage${currentQuery}`),
+    await getJson(`/api/measures/component?component=${project}&metricKeys=coverage${currentQuery}`)
+      .catch(() => null),
     'coverage');
-  const base = readMetric(
-    await getJson(`/api/measures/component?component=${project}&branch=${encodeURIComponent(opts.baseBranch)}&metricKeys=coverage`),
-    'coverage');
+
+  // Only "not found" (404) or an absent measure is 'no-base'. Any other failure
+  // (401/403, 5xx, timeout, network) must not pass as "first analysis" in ci.
+  let baseDoc;
+  try {
+    baseDoc = await getJson(
+      `/api/measures/component?component=${project}&branch=${encodeURIComponent(opts.baseBranch)}&metricKeys=coverage`);
+  } catch (err) {
+    if (!(err instanceof SonarReadError)) throw err;
+    if (opts.context === 'ci') {
+      return toolingFailure(opts, `could not read the coverage of '${opts.baseBranch}' from Sonar (${err.message})`, log);
+    }
+    baseDoc = null; // push: unchanged, never blocks on tooling
+  }
+  const base = readMetric(baseDoc, 'coverage');
 
   const ctx = { current, base, ...thresholds, label: opts.label, baseBranch: opts.baseBranch, context: opts.context };
   const out = formatResult(evaluateCoverage(ctx), ctx);
@@ -342,6 +406,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   if (opts.context === 'ci' && out.exitCode !== 0 && out.annotation) {
     log(`::error title=Coverage gate::${out.annotation}`);
   }
+  if (out.warning) log(`::warning title=Coverage gate::${out.warning}`);
   return out.exitCode;
 }
 
