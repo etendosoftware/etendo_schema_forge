@@ -384,7 +384,9 @@ export function CommandPalette() {
     const label = fields.join(' · ') || match.id;
     const target = vectorSearchTargetsByKey.get(match.target);
     const entityLabel = target ? tMenu(target.label) || target.label : null;
-    const score = Number.isFinite(match.score) ? `${Math.round(match.score * 100)}%` : null;
+    // One row layout for every record group: the label takes the free width, so the window
+    // tag lands in the same right-hand column whatever the label's length. The similarity
+    // score only ranks the rows (rankVectorMatches); it is not shown.
     return (
       <CommandItem
         key={`${match.target}:${match.id}`}
@@ -397,9 +399,8 @@ export function CommandPalette() {
           className="mr-2 h-4 w-4 shrink-0"
           strokeWidth={2}
           data-testid="Search__73263e" />
-        <span><HighlightedQuery text={label} query={query} data-testid="HighlightedQuery__73263e" /></span>
-        {entityLabel && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{entityLabel}</span>}
-        {score && <span className="ml-auto text-xs text-muted-foreground">{score}</span>}
+        <span className="min-w-0 flex-1 break-words" data-testid="vector-search-result-label"><HighlightedQuery text={label} query={query} data-testid="HighlightedQuery__73263e" /></span>
+        {entityLabel && <span className="ml-auto shrink-0 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground" data-testid="vector-search-result-tag">{entityLabel}</span>}
       </CommandItem>
     );
   };

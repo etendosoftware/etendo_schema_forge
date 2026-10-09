@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmDetailChrome.jsx
 // ETP-5027 — "Operadores" and "Pendientes VIES" are DISTINCT counts, not row counts.
 //
 // The operators table is at (operator x AEAT key x regular/corrective) grain, so a
@@ -37,7 +39,6 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label, valueColor, badgeBg, badgeColor }) => React.createElement(
     'div',
     {
@@ -277,5 +278,40 @@ describe('FmModel349Page — untouched neighbours (ETP-5027 regression guard)', 
     render(<FmModel349Page decl={makeDecl(LIVE_OPERATORS)} {...defaultProps} />);
     const tab = screen.getAllByRole('tab').find(b => b.textContent === 'fm.m349.tab.operators');
     expect(tab.getAttribute('data-badge')).toBe('6');
+  });
+});
+
+// ETP-5584 (P12) — one counter rule for every list tab: Operadores, Rectificaciones, Facturas
+// origen and Incidencias all show their count, 0 included.
+describe('FmModel349Page — tab counters (ETP-5584 P12)', () => {
+  const badgeOf = (labelKey) => Array.from(document.querySelectorAll('[role="tab"]'))
+    .find(b => b.textContent.includes(labelKey))?.getAttribute('data-badge');
+
+  it('shows 0 on every list tab of an empty declaration', () => {
+    render(<FmModel349Page decl={{ ...makeDecl([]), invoices: [] }} {...defaultProps} />);
+    expect(badgeOf('fm.m349.tab.operators')).toBe('0');
+    expect(badgeOf('fm.m349.tab.rectif')).toBe('0');
+    expect(badgeOf('fm.m349.tab.incidents')).toBe('0');
+  });
+
+  it('counts blocking AND warning incidents, like 303', () => {
+    render(<FmModel349Page decl={{ ...makeDecl([]), incidents: { blocking: 1, warning: 2 } }} {...defaultProps} />);
+    expect(badgeOf('fm.m349.tab.incidents')).toBe('3');
+  });
+});
+
+// ETP-5584 (P11) — an empty operators table shows the window's one empty state.
+describe('FmModel349Page — operators empty state (ETP-5584 P11)', () => {
+  it('renders the shared empty state with the "no operators" title when there are none', () => {
+    render(<FmModel349Page decl={makeDecl([])} {...defaultProps} />);
+    const empty = screen.getByTestId('fm349-operators-empty');
+    expect(empty).toHaveClass('fm-empty-state');
+    expect(empty).toHaveTextContent('fm.m349.operators.empty');
+    expect(empty).toHaveTextContent('fm.m349.operators.empty_sub');
+  });
+
+  it('is not rendered when there are operators', () => {
+    render(<FmModel349Page decl={makeDecl(LIVE_OPERATORS)} {...defaultProps} />);
+    expect(screen.queryByTestId('fm349-operators-empty')).toBeNull();
   });
 });

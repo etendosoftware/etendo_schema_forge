@@ -2,7 +2,9 @@
 
 **Status:** Active. Application API: OpenFeature. Remote control plane: ConfigCat.
 
-Components use `useFeatureFlag(key, fallback)` from `lib/flags`; SDK imports stay
+Components use `useFeatureFlag(key, fallback)` from `lib/flags` (numeric flags such as
+`import-batch-size`, ETP-5676, use `useNumberFlag(key, fallback)` with a numeric default in
+`flag-keys.js`); SDK imports stay
 in bootstrap/provider adapters. Flag keys and shipped safe boolean defaults are
 centralized in `lib/flags/flag-keys.js`. Flags are visual gating only, never an
 authorization boundary; backend access checks are independent.
@@ -21,7 +23,7 @@ authorization boundary; backend access checks are independent.
 
 | Variable | Meaning |
 |---|---|
-| `VITE_FEATURE_FLAGS` | JSON boolean map, for example `{"proof-of-concept-menu":true}` |
+| `VITE_FEATURE_FLAGS` | JSON map of flag key to boolean or finite number, for example `{"proof-of-concept-menu":true,"import-batch-size":10}` |
 | `VITE_CONFIGCAT_SDK_KEY` | ConfigCat browser SDK key for the selected environment |
 | `VITE_CONFIGCAT_POLL_SECONDS` | Positive ConfigCat refresh interval, default 60 seconds |
 

@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsSummaryWidget.jsx
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsPeriodButton.jsx
 /**
  * Tests for ContactsSummaryWidget — horizontal KPI summary in the headerContent slot.
  *
@@ -22,6 +24,10 @@ vi.mock('lucide-react', () => ({
   LineChart: () => <span data-testid="icon-line-chart" />,
   ChevronDown: () => <span data-testid="icon-chevron" />,
   Calendar: () => <span data-testid="icon-calendar" />,
+  Check: () => <span data-testid="icon-check" />,
+  // Rendered by the core Radix dropdown-menu the period selector is built on.
+  ChevronRight: () => <span data-testid="icon-chevron-right" />,
+  Circle: () => <span data-testid="icon-circle" />,
 }));
 
 vi.mock('@/hooks/useCurrency', () => ({
@@ -33,7 +39,10 @@ vi.mock('@/lib/formatCurrency', () => ({
 }));
 
 vi.mock('../BPChartSVGContent', () => ({
-  BPChartSVGContent: () => <svg data-testid="bp-chart-svg" />,
+  // Exposes the plotted series so a test can tell which period the chart follows.
+  BPChartSVGContent: ({ labels, revenue }) => (
+    <svg data-testid="bp-chart-svg" data-labels={labels.length} data-revenue={JSON.stringify(revenue)} />
+  ),
 }));
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -45,10 +54,9 @@ vi.mock('@/components/ui/dialog', () => ({
 
 // ─── Imports after mocks ─────────────────────────────────────────────────────
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ContactsFinanceProvider } from '../ContactsFinanceContext';
-import ContactsPeriodButton from '../ContactsPeriodButton';
 import ContactsSummaryWidget from '../ContactsSummaryWidget';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -230,11 +238,10 @@ describe('ContactsSummaryWidget', () => {
 
   it('recomputes trend badges when the period switches to 6M', async () => {
     const user = userEvent.setup();
-    // Both the widget and the period button share the same provider so changing
-    // the period via the button re-renders the widget badges.
+    // The period selector is rendered inside the widget (ETP-5600), so changing the
+    // period through it re-renders the widget badges.
     render(
       <Wrapper>
-        <ContactsPeriodButton />
         <ContactsSummaryWidget data={{ id: 'BP1' }} />
       </Wrapper>,
     );
@@ -243,7 +250,7 @@ describe('ContactsSummaryWidget', () => {
     // Sanity: 3M revenue badge shows +18%
     expect(screen.getByText(/\+18% bpVsLast3Months/)).toBeInTheDocument();
 
-    // Switch to 6M via the shared period button
+    // Switch to 6M via the embedded period selector
     await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
     await user.click(screen.getByText('bpLast6Months'));
 
@@ -315,6 +322,32 @@ describe('ContactsSummaryWidget', () => {
 
     expect(screen.getByTestId('dialog')).toBeInTheDocument();
     expect(screen.getByTestId('bp-chart-svg')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['3M (default)', null, 3, [1100, 1200, 1300]],
+    ['6M', 'bpLast6Months', 6, [800, 900, 1000, 1100, 1200, 1300]],
+  ])('the chart dialog has no period toggle of its own and plots the summary period: %s', async (_label, pick, labels, revenue) => {
+    const user = userEvent.setup();
+    render(
+      <Wrapper>
+        <ContactsSummaryWidget data={{ id: 'BP1' }} />
+      </Wrapper>,
+    );
+    // Wait for the trend series (the badges are computed from it), not just the stats.
+    await waitFor(() => screen.getByText(/\+18% bpVsLast3Months/));
+    if (pick) {
+      await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
+      await user.click(screen.getByText(pick));
+      await waitFor(() => screen.getByText(/\+63% bpVsLast6Months/));
+    }
+    await user.click(screen.getByText('bpViewChart'));
+
+    const dialog = screen.getByTestId('dialog');
+    expect(within(dialog).queryByText(/bpLast[36]Months/)).toBeNull();
+    const chart = within(dialog).getByTestId('bp-chart-svg');
+    expect(chart).toHaveAttribute('data-labels', String(labels));
+    expect(JSON.parse(chart.getAttribute('data-revenue'))).toEqual(revenue);
   });
 
   // ── Fetch wiring ───────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/warehouse/index.jsx
 const toastWarning = vi.fn();
 
 vi.mock('sonner', () => ({
@@ -10,10 +11,6 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('@/components/ui/custom-icons', () => ({
-  SortIcon: (props) => <span data-testid="sort-icon" {...props} />,
-  RefreshIcon: (props) => <span data-testid="refresh-icon" {...props} />,
-}));
 
 vi.mock('../WarehouseSummary', () => ({
   default: ({ data, token, apiBaseUrl }) => (
@@ -67,14 +64,17 @@ describe('WarehouseWindow', () => {
     globalThis.fetch = vi.fn(async () => ({ ok: true }));
   });
 
-  it('passes custom table, sidebar, icon, and tab wiring into WarehousePage', () => {
+  it('passes custom table, sidebar, and tab wiring (no custom icons) into WarehousePage', () => {
     render(<WarehouseWindow token="tkn" apiBaseUrl="/api" extraProp="kept" />);
 
     expect(screen.getByTestId('warehouse-page')).toBeInTheDocument();
     expect(screen.getByTestId('warehouse-summary')).toHaveAttribute('data-token', 'tkn');
     expect(screen.getByTestId('warehouse-custom-table')).toBeInTheDocument();
-    expect(screen.getByTestId('sort-icon')).toBeInTheDocument();
-    expect(screen.getByTestId('refresh-icon')).toBeInTheDocument();
+    // Default list icons are used: the wrapper no longer injects custom ones.
+    expect(lastWarehousePageProps.SortIconComponent).toBeUndefined();
+    expect(lastWarehousePageProps.RefreshIconComponent).toBeUndefined();
+    expect(screen.queryByTestId('sort-icon')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('refresh-icon')).not.toBeInTheDocument();
     expect(lastWarehousePageProps.extraProp).toBe('kept');
     expect(lastWarehousePageProps.secondaryTabs.map((tab) => tab.key)).toEqual([
       'products',
@@ -101,6 +101,16 @@ describe('WarehouseWindow', () => {
       compactSidebarPadding: true,
       noHeaderBorder: true,
     });
+  });
+
+  // ETP-5513 — the sidebar is a fixed 320 px column, not a share of the viewport
+  // (w-[30%]), so the form keeps its width at 1280x720.
+  it('renders the sidebar as a fixed 320 px, non-shrinking column', () => {
+    render(<WarehouseWindow token="tkn" apiBaseUrl="/api" />);
+
+    const classes = lastWarehousePageProps.sidebarClassName.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(['w-[320px]', 'shrink-0']));
+    expect(classes.some((c) => /^w-\[\d+%\]$/.test(c))).toBe(false);
   });
 
   it('creates a default storage bin after creating a warehouse', async () => {

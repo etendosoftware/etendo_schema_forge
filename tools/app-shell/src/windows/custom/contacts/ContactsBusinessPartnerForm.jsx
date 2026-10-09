@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import BusinessPartnerForm from '@generated/contacts/generated/web/contacts/BusinessPartnerForm';
 import { useContactsType } from './ContactsContext';
+import { useChromelessEmbed } from '@/lib/embeddedWindow.js';
 
 /* eslint-disable react/prop-types */
 
@@ -18,11 +19,19 @@ export default function ContactsBusinessPartnerForm({ registerGateExclusions, ..
   useEffect(() => {
     registerGateExclusions?.(excludeFields);
   }, [registerGateExclusions, excludeFields]);
+  // ETP-5600 — `contacts-header-form` scopes the Figma 20px row gap (contacts.css) to this
+  // window's header form; the core ROW_GAP_Y density token (12px) stays for every other window.
+  // Not applied inside the "Nuevo contacto" quick-create popup (RecordCreateModal →
+  // EmbeddedWindowRoute, chromeless embed), which keeps the compact 12px rhythm to save the
+  // vertical space ETP-5332 recovered there.
+  const chromeless = useChromelessEmbed();
   return (
-    <BusinessPartnerForm
-      {...props}
-      excludeFields={excludeFields}
-      data-testid="BusinessPartnerForm__2c74bf" />
+    <div className={chromeless ? undefined : 'contacts-header-form'}>
+      <BusinessPartnerForm
+        {...props}
+        excludeFields={excludeFields}
+        data-testid="BusinessPartnerForm__2c74bf" />
+    </div>
   );
 }
 

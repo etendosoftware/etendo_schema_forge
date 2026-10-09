@@ -6,7 +6,9 @@ import { SELECTABLE_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { FileText, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
-import { formatPeriod, showIaeActivityReminder } from './fiscalModelsUtils.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatPeriod, showIaeActivityReminder, RECEIPT_ATTACHMENT_CONFIG } from './fiscalModelsUtils.js';
+import { buildAcceptAttribute, buildTypesLabel, isFileTypeAllowed } from '@/components/attachments/attachmentPolicy.js';
 import { isValidFormerStatement } from './formerStatement.js';
 import './fiscal-models.css';
 
@@ -57,22 +59,25 @@ function PresentOptionCard({ p, selected, onSelect, t, acuseFile, onPickFile, fi
           {t(p.descKey)}
         </div>
         {p.id === 'submitted_ack' && selected && (
-          <div style={{ marginTop: 10 }}>
+          // Fixed-height row (`.fm-present-acuse-upload`, ETP-5584 P6): its height is
+          // the exact amount PresentModalColumn reserves while it is hidden, so the
+          // modal keeps its size when "Con acuse de recibo" is picked.
+          <div className="fm-present-acuse-upload" data-testid="PresentModal__acuseUpload">
             <button
               type="button"
-              style={{
-                fontSize: 12, padding: '5px 12px',
-                border: '1px solid hsl(var(--border-control))', borderRadius: 8,
-                cursor: 'pointer', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
-              }}
+              className="fm-btn fm-present-acuse-upload__btn"
+              title={acuseFile ? acuseFile.name : undefined}
               onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
             >
-              {acuseFile ? acuseFile.name : t('fm.present.upload_acuse')}
+              {acuseFile ? acuseFile.name : t('fm.present.upload_acuse', { types: buildTypesLabel(RECEIPT_ATTACHMENT_CONFIG, t) })}
             </button>
+            {/* ETP-5584 P13 — label and `accept` derive from the same constant as the
+                "Justificante" tab, so the three can never disagree again. */}
             <input
               ref={fileRef}
               type="file"
-              accept=".pdf,.xml"
+              accept={buildAcceptAttribute(RECEIPT_ATTACHMENT_CONFIG)}
+              data-testid="PresentModal__acuseInput"
               style={{ display: 'none' }}
               onChange={onPickFile}
             />
@@ -94,13 +99,28 @@ function PresentOptionCard({ p, selected, onSelect, t, acuseFile, onPickFile, fi
 
 // PresentModalColumn — one of the two columns in the redesigned picker: a small
 // section icon + title + description, followed by its stack of PresentOptionCard.
-function PresentModalColumn({ icon, titleKey, descKey, paths, path, setPath, t, acuseFile, onPickFile, fileRef }) {
+//
+// ETP-5584 P6/P8 — stable modal size: picking "Con acuse de recibo" reveals the
+// upload row inside its card. While that row is NOT shown, the column holding the
+// submitted_ack path renders an empty slot of exactly the same height
+// (`.fm-present-acuse-slot`, sized from the same CSS variable as the row), so the
+// column — and therefore the modal — is always as tall as its expanded state.
+// The slot sits after the card stack (outside its flex gap) so the reserved height
+// is identical to what the upload row adds, independently of the locale.
+//
+// `showHeading` (ETP-5584 P14): the single-column variant (349) is already titled
+// "Registrar presentación", so repeating it as the column heading is dropped there; the
+// column description stays.
+function PresentModalColumn({ icon, titleKey, descKey, paths, path, setPath, t, acuseFile, onPickFile, fileRef, showHeading = true }) {
+  const reservesAcuseSlot = paths.some(p => p.id === 'submitted_ack') && path !== 'submitted_ack';
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <span style={{ color: 'hsl(var(--text-disabled))', display: 'flex' }}>{icon}</span>
-        <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{t(titleKey)}</div>
-      </div>
+      {showHeading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }} data-testid="PresentModal__columnHeading">
+          <span style={{ color: 'hsl(var(--text-disabled))', display: 'flex' }}>{icon}</span>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{t(titleKey)}</div>
+        </div>
+      )}
       <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', lineHeight: '16px', marginBottom: 12 }}>
         {t(descKey)}
       </div>
@@ -118,6 +138,9 @@ function PresentModalColumn({ icon, titleKey, descKey, paths, path, setPath, t, 
             data-testid="PresentOptionCard__cda0bb" />
         ))}
       </div>
+      {reservesAcuseSlot && (
+        <div className="fm-present-acuse-slot" aria-hidden="true" data-testid="PresentModal__acuseSlot" />
+      )}
     </div>
   );
 }
@@ -161,7 +184,20 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
     onClose();
   }
 
-  const onPickFile = (e) => setAcuseFile(e.target.files?.[0] ?? null);
+  // ETP-5584 P13 — `accept` only steers the OS picker ("All files" bypasses it), so the
+  // picked file is checked against the same RECEIPT_ATTACHMENT_CONFIG the "Justificante"
+  // tab's dropzone enforces, with the dropzone's own message. A rejected file is never
+  // kept, so "Confirmar" stays disabled and nothing is uploaded.
+  const onPickFile = (e) => {
+    const file = e.target.files?.[0] ?? null;
+    if (file && !isFileTypeAllowed(file, RECEIPT_ATTACHMENT_CONFIG)) {
+      toast.error(t('attachmentsInvalidType'));
+      e.target.value = '';
+      setAcuseFile(null);
+      return;
+    }
+    setAcuseFile(file);
+  };
 
   const REGISTER_PATHS = [
     { id: 'submitted_ack', titleKey: 'fm.present.path.acuse',     descKey: 'fm.present.path.acuse_desc' },
@@ -181,12 +217,20 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
 
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="fm-config-modal fm-present-modal" style={{ maxWidth: showAeatPath ? 760 : 500 }} onClick={e => e.stopPropagation()}>
+      <div
+        className={`fm-config-modal fm-present-modal${showAeatPath ? ' fm-present-modal--two-col' : ''}`}
+        onClick={e => e.stopPropagation()}
+        data-testid="PresentModal__dialog"
+      >
 
         {/* Header */}
         <div className="fm-config-modal__header">
           <div className="fm-config-modal__titles">
-            <div className="fm-config-modal__title">{t('fm.present.title')}</div>
+            {/* ETP-5584 P14 — without the AEAT path (349: no telematic submission in the
+                backend) the popup only registers a presentation, so it says so. */}
+            <div className="fm-config-modal__title" data-testid="PresentModal__title">
+              {showAeatPath ? t('fm.present.title') : t('fm.present.title_register_only')}
+            </div>
             <div className="fm-config-modal__sub">{subtitle}</div>
           </div>
           <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
@@ -194,7 +238,7 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
 
         {/* Body — two columns divided by a vertical separator when the AEAT
             path is available; a single full-width column otherwise (349). */}
-        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="fm-config-modal__body">
           <div style={{ display: 'flex', gap: 20 }}>
           <PresentModalColumn
             icon={<FileText size={16} strokeWidth={1.75} data-testid="FileText__cda0bb" />}
@@ -207,11 +251,12 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
             acuseFile={acuseFile}
             onPickFile={onPickFile}
             fileRef={fileRef}
+            showHeading={!!showAeatPath}
             data-testid="PresentModalColumn__cda0bb" />
 
           {showAeatPath && (
             <>
-              <div style={{ width: 1, alignSelf: 'stretch', background: 'hsl(var(--border-subtle))' }} aria-hidden="true" />
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'hsl(var(--border-subtle))' }} aria-hidden="true" data-testid="PresentModal__columnDivider" />
               <PresentModalColumn
                 icon={<Landmark size={16} strokeWidth={1.75} data-testid="Landmark__cda0bb" />}
                 titleKey="fm.present.aeat_section.title"
@@ -887,27 +932,24 @@ const INPUT_ST = {
   background: 'hsl(var(--card))',
 };
 
-function CfgSection303({ t }) {
+// CfgSelect — the app's shared Select (Radix) for the config modal's option
+// pickers. Replaces the former browser-native select elements (ETP-5584: no
+// browser-styled selects in this window). Uncontrolled, like the native ones
+// were: these options are not persisted yet, so only the initial value matters.
+// The content is lifted above `.fm-modal-overlay` (z-index 100) so the list is
+// never painted behind the modal that opened it.
+function CfgSelect({ options, defaultValue, ariaLabel, testId }) {
   return (
-    <CfgSection title={t('fm.config.m303.title')} data-testid="CfgSection__cda0bb">
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: 8 }}>
-        <input type="checkbox" defaultChecked />
-        {t('fm.config.m303.redeme')}
-      </label>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: 12 }}>
-        <input type="checkbox" />
-        {t('fm.config.m303.recc')}
-      </label>
-      <CfgField label={t('fm.config.m303.prorata')} data-testid="CfgField__cda0bb">
-        <select style={INPUT_ST}>
-          <option>{t('fm.config.m303.prorata_general')}</option>
-          <option>{t('fm.config.m303.prorata_especial')}</option>
-        </select>
-      </CfgField>
-      <CfgField label={t('fm.config.m303.iban')} data-testid="CfgField__cda0bb">
-        <input type="text" placeholder="ES00 0000 0000 0000 0000 0000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
-      </CfgField>
-    </CfgSection>
+    <Select defaultValue={defaultValue ?? options[0]?.value} data-testid={`${testId}__select`}>
+      <SelectTrigger aria-label={ariaLabel} data-testid={testId}>
+        <SelectValue data-testid={`${testId}__value`} />
+      </SelectTrigger>
+      <SelectContent className="z-[110]" data-testid={`${testId}__content`}>
+        {options.map(o => (
+          <SelectItem key={o.value} value={o.value} data-testid={`${testId}__item`}>{o.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -919,11 +961,15 @@ function CfgSection349({ t }) {
           label={t('fm.config.m349.periodicity')}
           style={{ flex: 1 }}
           data-testid="CfgField__cda0bb">
-          <select style={INPUT_ST}>
-            <option>{t('fm.config.m349.periodicity_monthly')}</option>
-            <option>{t('fm.config.m349.periodicity_quarterly')}</option>
-            <option>{t('fm.config.m349.periodicity_annual')}</option>
-          </select>
+          <CfgSelect
+            ariaLabel={t('fm.config.m349.periodicity')}
+            testId="ConfigDrawer__periodicity"
+            options={[
+              { value: 'monthly',   label: t('fm.config.m349.periodicity_monthly') },
+              { value: 'quarterly', label: t('fm.config.m349.periodicity_quarterly') },
+              { value: 'annual',    label: t('fm.config.m349.periodicity_annual') },
+            ]}
+            data-testid="CfgSelect__cda0bb" />
         </CfgField>
         <CfgField
           label={t('fm.config.m349.threshold')}
@@ -933,10 +979,14 @@ function CfgSection349({ t }) {
         </CfgField>
       </div>
       <CfgField label={t('fm.config.m349.viespref')} data-testid="CfgField__cda0bb">
-        <select style={INPUT_ST}>
-          <option>{t('fm.config.m349.viespref_auto')}</option>
-          <option>{t('fm.config.m349.viespref_manual')}</option>
-        </select>
+        <CfgSelect
+          ariaLabel={t('fm.config.m349.viespref')}
+          testId="ConfigDrawer__viesPref"
+          options={[
+            { value: 'auto',   label: t('fm.config.m349.viespref_auto') },
+            { value: 'manual', label: t('fm.config.m349.viespref_manual') },
+          ]}
+          data-testid="CfgSelect__cda0bb" />
       </CfgField>
       <CfgField label={t('fm.config.m349.keys')} data-testid="CfgField__cda0bb">
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1118,10 +1168,14 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
                 <CfgField
                   label={t('fm.config.m303.prorata') ?? 'Prorrata'}
                   data-testid="CfgField__cda0bb">
-                  <select style={INPUT_ST}>
-                    <option>{t('fm.config.m303.prorata_general') ?? 'General'}</option>
-                    <option>{t('fm.config.m303.prorata_especial') ?? 'Especial'}</option>
-                  </select>
+                  <CfgSelect
+                    ariaLabel={t('fm.config.m303.prorata') ?? 'Prorrata'}
+                    testId="ConfigDrawer__prorata"
+                    options={[
+                      { value: 'general',  label: t('fm.config.m303.prorata_general') ?? 'General' },
+                      { value: 'especial', label: t('fm.config.m303.prorata_especial') ?? 'Especial' },
+                    ]}
+                    data-testid="CfgSelect__cda0bb" />
                 </CfgField>
                 <CfgField
                   label={t('fm.config.m303.iban') ?? 'IBAN Domiciliación'}
