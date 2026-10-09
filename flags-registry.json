@@ -817,7 +817,7 @@
         "key": "mcp-modern-era-disabled",
         "defaultValue": false,
         "ttl": "2027-01-31",
-        "ttlNote": "PLACEHOLDER, not a commitment: retirement condition is 'modern era stable in production'. Retiring it ships the modern path unconditionally: delete the flag check in McpRequestEra.modernEnabled() and the GoFeatureFlags constant, keep every modern-era class. Revisit the date once the modern era has run in production without a rollback.",
+        "ttlNote": "Agreed date, confirmed by the owner on 2026-10-09. Retirement condition: the modern era is stable in production. Retiring it ships the modern path unconditionally: delete the flag check in McpRequestEra.modernEnabled() and the GoFeatureFlags constant, keep every modern-era class.",
         "symbols": [
           "mcp-modern-era-disabled",
           "FLAG_MCP_MODERN_ERA_DISABLED",
