@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { declareNoSession } from '../../helpers/auth.js';
 
 const LOCALE_LABELS = {
   es_ES: {
@@ -34,12 +35,14 @@ function labelsFor(locale) {
 }
 
 async function installOnboardingMocks(page, { invalidDocumentType = false, expectedLanguage = 'es_ES' } = {}) {
+  await declareNoSession(page);
+  // No session until registration succeeds, as on the server. Answering 401 after it too used to
+  // pass only because a failed /me read was ignored; since ETP-5675 it means the session was lost.
+  let registered = null;
   await page.route('**/sws/go/me', async route => {
-    await route.fulfill({
-      status: 401,
-      contentType: 'application/json',
-      body: JSON.stringify({ error: { message: 'invalid' } }),
-    });
+    await route.fulfill(registered
+      ? { status: 200, contentType: 'application/json', body: JSON.stringify(registered) }
+      : { status: 401, contentType: 'application/json', body: JSON.stringify({ error: { message: 'invalid' } }) });
   });
 
   await page.route('**/sws/go/session/register', async route => {
@@ -48,6 +51,7 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
       name: 'QA Onboarding User',
       email: /qa-onboarding-.+@example\.com/,
     });
+    registered = { name: body.name, email: body.email };
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

@@ -20,9 +20,23 @@ const PAD_RIGHT = 4;
 const PAD_Y = 10;
 const PAD_BOTTOM = 24;
 
+// Max px per bar. 60 keeps a 1-bucket series from rendering ~39%-wide bars while leaving
+// 6-12 buckets (income-only bars are ~51px wide at 12 months) and dense series untouched.
+const MAX_BAR_W = 60;
+
+/**
+ * Single source of truth for the X of bucket `i` of `len`. One bucket is centered in the plot
+ * (a lone point glued to the left edge reads as an axis artifact); 2+ buckets span edge to edge.
+ * The line, markers, axis labels, hover columns and tooltip all use this so they cannot diverge.
+ */
+export function pointX(i, len, plotW) {
+  if (len <= 1) return PAD_X + plotW / 2;
+  return PAD_X + (i / (len - 1)) * plotW;
+}
+
 function toBezierPath(pts) {
-  if (pts.length === 0) return '';
-  if (pts.length === 1) return `M ${pts[0].x},${pts[0].y}`;
+  // A single point has no segment to stroke (`M x,y` alone draws nothing): it is drawn as a marker.
+  if (pts.length < 2) return '';
   let d = `M ${pts[0].x},${pts[0].y}`;
   for (let i = 1; i < pts.length; i++) {
     const prev = pts[i - 1];
@@ -34,7 +48,7 @@ function toBezierPath(pts) {
 }
 
 function toBezierFillPath(pts, baseY) {
-  if (pts.length === 0) return '';
+  if (pts.length < 2) return '';
   return `${toBezierPath(pts)} L ${pts[pts.length - 1].x},${baseY} L ${pts[0].x},${baseY} Z`;
 }
 
@@ -230,10 +244,11 @@ export function FinancialTrendChart({
   const { niceMax, ticks: yTicks } = niceScale(maxVal);
 
   const toPoint = (v, i, len) => ({
-    x: PAD_X + (i / Math.max(len - 1, 1)) * plotW,
+    x: pointX(i, len, plotW),
     y: PAD_Y + plotH - (Math.max(v, 0) / niceMax) * plotH,
   });
 
+  const isSinglePoint = values.length === 1;
   const revPts = values.map((v, i) => toPoint(v, i, values.length));
   const expPts = hasExpenses ? normalizedExpenses.map((v, i) => toPoint(v, i, normalizedExpenses.length)) : [];
 
@@ -241,7 +256,7 @@ export function FinancialTrendChart({
   const slotW    = plotW / (values.length || 1);
   const groupW   = slotW * 0.78;
   const innerGap = hasExpenses ? 4 : 0;
-  const barW     = hasExpenses ? (groupW - innerGap) / 2 : groupW;
+  const barW     = Math.min(hasExpenses ? (groupW - innerGap) / 2 : groupW, MAX_BAR_W);
 
   const showTooltip = (i) => {
     if (i < 0 || i >= values.length) return;
@@ -511,25 +526,35 @@ export function FinancialTrendChart({
                 );
               })}
 
-              {/* Expenses area + line */}
-              {hasExpenses && (
-                <path d={toBezierFillPath(expPts, baseY)} fill="url(#trend-expense-fill)" />
-              )}
-              {hasExpenses && (
-                <path d={toBezierPath(expPts)} fill="none" stroke="hsl(var(--destructive))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              {/* Area + line per series (expenses first so income paints on top). A single bucket has no segment to stroke and is drawn as a dot below. */}
+              {!isSinglePoint && (
+                <>
+                  {hasExpenses && (
+                    <path d={toBezierFillPath(expPts, baseY)} fill="url(#trend-expense-fill)" />
+                  )}
+                  {hasExpenses && (
+                    <path d={toBezierPath(expPts)} fill="none" stroke="hsl(var(--destructive))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  )}
+                  <path d={toBezierFillPath(revPts, baseY)} fill="url(#trend-income-fill)" />
+                  <path d={toBezierPath(revPts)} fill="none" stroke="var(--status-success-fg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </>
               )}
 
-              {/* Income area + line */}
-              <path d={toBezierFillPath(revPts, baseY)} fill="url(#trend-income-fill)" />
-              <path d={toBezierPath(revPts)} fill="none" stroke="var(--status-success-fg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              {/* One bucket: no segment can be stroked, so each series is a filled dot */}
+              {isSinglePoint && hasExpenses && expPts[0] && (
+                <circle data-testid="financial-trend-marker-expense" cx={expPts[0].x} cy={expPts[0].y} r="5" fill="hsl(var(--destructive))" />
+              )}
+              {isSinglePoint && revPts[0] && (
+                <circle data-testid="financial-trend-marker-income" cx={revPts[0].x} cy={revPts[0].y} r="5" fill="var(--status-success-fg)" />
+              )}
 
               {/* X-axis month labels */}
               {axisLabels.map(({ key, label }, i) => (axisLabelVisible(i) && (
                 <text
                   key={key}
-                  x={PAD_X + (i / Math.max(axisLabels.length - 1, 1)) * plotW}
+                  x={pointX(i, axisLabels.length, plotW)}
                   y={CHART_H - 5}
-                  textAnchor={i === axisLabels.length - 1 ? 'end' : 'middle'}
+                  textAnchor={i === axisLabels.length - 1 && axisLabels.length > 1 ? 'end' : 'middle'}
                   fill="hsl(var(--muted-foreground))"
                   style={{ fontSize: '12px', fontFamily: 'Inter', fontWeight: '400' }}
                 >{label}</text>
@@ -537,7 +562,7 @@ export function FinancialTrendChart({
 
               {/* Invisible hover columns */}
               {values.map((_, i) => {
-                const x        = PAD_X + (i / Math.max(values.length - 1, 1)) * plotW;
+                const x        = pointX(i, values.length, plotW);
                 const halfSlot = plotW / Math.max(values.length - 1, 1) / 2;
                 return (
                   <rect

@@ -52,6 +52,20 @@ async function extractErrorMessage(res) {
   }
 }
 
+const EMPTY_ITEMS = [];
+const EMPTY_LIST_STATE = { key: null, items: EMPTY_ITEMS, loaded: false };
+const EMPTY_COUNT_STATE = { key: null, count: null };
+
+// Cache entities: the full list and the lightweight count of the same record
+// are cached separately (different payloads) and invalidated together.
+const LIST_ENTITY = 'attachments';
+const COUNT_ENTITY = 'attachments-count';
+
+/** Identity of the attachment list of one record. */
+function recordKey(tableName, recordId) {
+  return `${tableName}/${recordId}`;
+}
+
 /**
  * Hook that drives the AttachmentsTab UI: list / upload / download / remove /
  * update-description, optimistic state, inflight cancellation, and lazy load
@@ -66,8 +80,16 @@ async function extractErrorMessage(res) {
  *                                     Used to lazy-load only when needed.
  * @param {object} [params.config]   - Optional config (currently unused here,
  *                                     reserved for future extensions).
+ * @param {boolean} [params.prefetchCount=false] - ETP-5526: while the tab is
+ *                                     inactive, fetch only the attachment COUNT of
+ *                                     the record (`GET .../{recordId}/count`) so a
+ *                                     badge can show it on record open. The full
+ *                                     list stays lazy. Opt-in: consumers without a
+ *                                     badge (upload-only, always-active) pay nothing.
  * @returns {{
  *   items: object[],
+ *   loaded: boolean,
+ *   count: number|null,
  *   loading: boolean,
  *   error: Error|null,
  *   uploadingFiles: Map<string, { name: string, size: number }>,
@@ -81,7 +103,9 @@ async function extractErrorMessage(res) {
  *   formatBytes: (bytes: number) => string,
  * }}
  */
-export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActive, config }) {
+export function useAttachments({
+  tableName, recordId, token, apiBaseUrl, isActive, config, prefetchCount = false,
+}) {
   const ui = useUI();
 
   // apiBaseUrl may be the full spec URL (e.g. http://host/sws/neo/sales-order).
@@ -109,21 +133,47 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   // (ETP-4315 QA follow-up's saveBeforeAttach path) and clobber the correct
   // items with an empty result.
   const hasRealRecord = !!(tableName && recordId && recordId !== 'new');
+  const currentKey = hasRealRecord ? recordKey(tableName, recordId) : null;
 
-  const [items, setItems] = useState([]);
+  // ETP-5526: the list state is owned by the record it was read for. `items`
+  // and `loaded` are derived against the current record below, so switching
+  // records never shows (or counts) the previous record's files, and a write
+  // that resolves for another record — e.g. the saveBeforeAttach upload, which
+  // targets the just-saved id before this hook's `recordId` prop catches up —
+  // lands under its own key instead of being dropped or leaking.
+  const [listState, setListState] = useState(EMPTY_LIST_STATE);
+  const ownsCurrent = currentKey !== null && listState.key === currentKey;
+  const items = ownsCurrent ? listState.items : EMPTY_ITEMS;
+  // True once the full list of the CURRENT record has been read from the server
+  // at least once, i.e. `items.length` is the real count. False while the tab
+  // has never been opened (lazy load, ETP-4564), after a failed first read, and
+  // right after the record changes — a consumer must treat the count as unknown.
+  const loaded = ownsCurrent && listState.loaded;
+  // ETP-5526: the count fetched from the lightweight endpoint, owned by the
+  // record it was read for (same keyed approach as the list). `null` = unknown.
+  const [countState, setCountState] = useState(EMPTY_COUNT_STATE);
+  const fetchedCount = currentKey !== null && countState.key === currentKey ? countState.count : null;
+  // The single number a badge shows: the real list length once the list was
+  // read, otherwise the fetched count, otherwise null (unknown — never a fake 0).
+  const count = loaded ? items.length : fetchedCount;
   const [loading, setLoading] = useState(hasRealRecord && active);
   const [error, setError] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
 
   // AbortController shared by all read requests for the current record.
   const abortRef = useRef(null);
+  // Separate controller + generation for count reads: a count read must never
+  // abort (or be aborted by) a list read, and only the latest one commits. The
+  // controller is used only on the uncached path — see fetchCount.
+  const countAbortRef = useRef(null);
+  const countGenerationRef = useRef(0);
 
   // Monotonic guard against out-of-order writes to `items` (ETP-4315 QA
   // follow-up): the saveBeforeAttach path force-saves the header, which
   // updates this hook's own `recordId` prop mid-flight (before the upload
   // that triggered the save has even resolved) and re-fires the mount
   // effect's list() below. If that list() call resolves *after* upload()'s
-  // own setItems, it silently overwrites the correct (just-uploaded) state
+  // own items write, it silently overwrites the correct (just-uploaded) state
   // with a now-stale read. Every write bumps this ref first and only
   // commits if it's still the most recent write by the time its async work
   // resolves — a request that started earlier but resolves later is
@@ -143,6 +193,24 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   // them before a setState updater runs (React 18 defers the updater function).
   const itemsRef = useRef(items);
   useEffect(() => { itemsRef.current = items; }, [items]);
+  // Same, for upload() to tell whether the target record's list is authoritative.
+  const listStateRef = useRef(listState);
+  useEffect(() => { listStateRef.current = listState; }, [listState]);
+  // The record this hook shows NOW — read by upload() after its POST resolves,
+  // when the user may already be on another record.
+  const currentKeyRef = useRef(currentKey);
+  useEffect(() => { currentKeyRef.current = currentKey; }, [currentKey]);
+  // Whether the CURRENT record's list was read — read by async callbacks that
+  // decide between "the list already gives the count" and "refresh the count".
+  const loadedRef = useRef(loaded);
+  useEffect(() => { loadedRef.current = loaded; }, [loaded]);
+
+  // Replace the items of one record's list, leaving `loaded` untouched. A no-op
+  // when the list state has meanwhile moved to another record, so a late
+  // optimistic write or rollback can never land on the wrong record.
+  const replaceItems = useCallback((key, nextItems) => {
+    setListState((prev) => (prev.key === key ? { ...prev, items: nextItems } : prev));
+  }, []);
 
   const resetAbortController = useCallback(() => {
     if (abortRef.current) {
@@ -154,20 +222,106 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   }, []);
 
   // The attachment list for a record is identified by table + record, isolated
-  // by session/org/role via the cache scope.
-  const listKey = useCallback(() => (
+  // by session/org/role via the cache scope. Both helpers take the record the
+  // caller actually targets (`opts.recordId` overrides, see list()/upload()), so
+  // a read for a just-saved record is not cached under the stale "new" id.
+  const listKey = useCallback((targetRecordId = recordId) => (
     cacheScope
-      ? createQueryKey({ ...cacheScope, apiBase: attachmentsBase, entity: 'attachments', spec: tableName, recordId })
+      ? createQueryKey({ ...cacheScope, apiBase: attachmentsBase, entity: LIST_ENTITY, spec: tableName, recordId: targetRecordId })
       : null
   ), [cacheScope, attachmentsBase, tableName, recordId]);
 
-  // Mark the cached attachment list stale so the next read revalidates. Called
-  // after any mutation (upload / remove / update) so a reopened tab is fresh.
-  const invalidateList = useCallback(() => {
+  const countKey = useCallback((targetRecordId = recordId) => (
+    cacheScope
+      ? createQueryKey({ ...cacheScope, apiBase: attachmentsBase, entity: COUNT_ENTITY, spec: tableName, recordId: targetRecordId })
+      : null
+  ), [cacheScope, attachmentsBase, tableName, recordId]);
+
+  // Mark the cached attachment list AND count stale so the next read
+  // revalidates. Called after any mutation (upload / remove / update) and on a
+  // change announced by another view, so a reopened tab / badge is fresh.
+  const invalidateList = useCallback((targetRecordId = recordId) => {
     if (dataCache?.cache && cacheScope) {
-      dataCache.cache.invalidate({ entity: 'attachments', spec: tableName, recordId });
+      dataCache.cache.invalidate({ entity: LIST_ENTITY, spec: tableName, recordId: targetRecordId });
+      dataCache.cache.invalidate({ entity: COUNT_ENTITY, spec: tableName, recordId: targetRecordId });
     }
   }, [dataCache, cacheScope, tableName, recordId]);
+
+  // ── count (ETP-5526) ────────────────────────────────────────────────────
+  // Reads only the number of attachments of the current record, for the tab
+  // badge while the full list is still lazy. Optional by design: frontend and
+  // backend deploy separately. An older backend ignores the unknown `/count`
+  // segment and answers the list (`200 { items }`), which fails the integer
+  // check below; that, a 404/405, a network error or any other failure leaves
+  // the count silently `null` (no number) — no toast, unlike the list. A 401 still follows apiFetch's default logout
+  // path: an expired session is not a missing endpoint.
+  const fetchCount = useCallback(async (opts = {}) => {
+    const { force = false } = opts;
+    if (!hasRealRecord) return;
+    const key = recordKey(tableName, recordId);
+    const generation = ++countGenerationRef.current;
+    const fetcher = async (signal) => {
+      const res = await apiFetch(
+        `/sws/neo/attachments/${tableName}/${recordId}/count`,
+        { signal, token },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const value = json?.count ?? json?.response?.data?.count ?? json?.data?.count;
+      if (!Number.isInteger(value) || value < 0) throw new Error('Invalid attachments count');
+      return value;
+    };
+    try {
+      let value;
+      if (dataCache?.cache && cacheScope) {
+        // No consumer signal on the shared cached read. The cache hands ONE
+        // in-flight promise to every concurrent caller, and that promise runs
+        // with the signal of whoever started it: aborting it on unmount or on
+        // a re-call killed the request for everybody — the caller that joined
+        // got an AbortError and kept `null`, and a consumer mounting after the
+        // rejection found neither an in-flight request nor a cached entry and
+        // asked again (two /count requests for one record open). Letting the
+        // tiny COUNT read finish populates the cache for the next reader; a
+        // superseded or unmounted caller is kept from writing state by the
+        // generation guard below (bumped on unmount too).
+        value = await dataCache.cache.fetchQuery({
+          key: countKey(recordId),
+          fetcher: () => fetcher(undefined),
+          force,
+          staleTime: dataCache.recordStaleTime,
+        });
+      } else {
+        // Uncached: the request belongs to this caller alone, so cancelling the
+        // superseded one is safe.
+        if (countAbortRef.current) countAbortRef.current.abort();
+        const ctrl = new AbortController();
+        countAbortRef.current = ctrl;
+        value = await fetcher(ctrl.signal);
+      }
+      // Out-of-order guard: a slower read started for an earlier record (or an
+      // earlier refresh) never overwrites a newer one.
+      if (generation === countGenerationRef.current) {
+        setCountState({ key, count: value });
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+      if (generation === countGenerationRef.current) {
+        setCountState({ key, count: null });
+      }
+      // eslint-disable-next-line no-console
+      console.debug('[attachments] count unavailable, badge shows no number:', err?.message);
+    }
+  }, [apiFetch, tableName, recordId, token, hasRealRecord, dataCache, cacheScope, countKey]);
+
+  // After a change while the list of the current record is NOT loaded, the
+  // fetched count is the only source of the badge: re-read it (forced, so the
+  // cache cannot answer). Re-reading beats adjusting it by ±1 — the fetched
+  // value may itself be in flight or stale, and another view may have written
+  // too; one COUNT query is authoritative. Once the list is loaded the badge
+  // derives from it and no count request is needed.
+  const refreshCountIfUnloaded = useCallback(() => {
+    if (prefetchCount && !loadedRef.current) fetchCount({ force: true });
+  }, [prefetchCount, fetchCount]);
 
   // ── list ────────────────────────────────────────────────────────────────
   // `opts.recordId` mirrors upload()'s override (ETP-4315 QA follow-up): the
@@ -205,7 +359,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       let data;
       if (dataCache?.cache && cacheScope) {
         data = await dataCache.cache.fetchQuery({
-          key: listKey(),
+          key: listKey(targetRecordId),
           fetcher: ({ signal }) => fetcher(signal),
           force,
           staleTime: dataCache.recordStaleTime,
@@ -215,8 +369,10 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         data = await fetcher(ctrl.signal);
       }
       // Out-of-order guard (ETP-4315): only the most recent list() commits.
+      // A committed read is the authoritative list of `targetRecordId`, so it
+      // also marks that list as loaded (ETP-5526: the tab badge shows a count).
       if (generation === stateGenerationRef.current) {
-        setItems(data);
+        setListState({ key: recordKey(tableName, targetRecordId), items: data, loaded: true });
       }
     } catch (err) {
       if (err.name === 'AbortError') return;
@@ -238,6 +394,9 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   // Cancel inflight when record/table changes or component unmounts.
   useEffect(() => () => {
     if (abortRef.current) abortRef.current.abort();
+    if (countAbortRef.current) countAbortRef.current.abort();
+    // Discard any count read still pending (the cached one is not aborted).
+    countGenerationRef.current += 1;
   }, []);
 
   // Lazy load: fetch only once the tab is active (ETP-4564). `active` defaults to
@@ -252,9 +411,34 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableName, recordId, hasRealRecord, active]);
 
+  // ETP-5526: count on record open. Only for a consumer that shows a badge
+  // (`prefetchCount`), only while the tab is inactive and the list of this
+  // record has not been read — an active tab loads the list, whose length IS
+  // the count, so a parallel count request would be wasted.
+  useEffect(() => {
+    if (prefetchCount && hasRealRecord && !active && !loadedRef.current) {
+      fetchCount();
+    }
+    // Same rationale as the list effect above: re-run on record/visibility
+    // changes only, not on callback identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableName, recordId, hasRealRecord, active, prefetchCount]);
+
   // Reload when another view attaches or deletes a file on this record — e.g.
-  // the OCR side panel, which is mounted alongside this tab in form view.
-  useAttachmentsChanged({ tableName, recordId, source: sourceRef.current }, list);
+  // the OCR side panel, which is mounted alongside this tab in form view. That
+  // view does not touch the shared cache, so mark it stale first (otherwise a
+  // fresh cached list/count would answer with the pre-change data). A badge
+  // consumer whose list was never read refreshes only the count, keeping the
+  // full list lazy (ETP-4564); every other case reloads the list as before.
+  const onExternalChange = useCallback(() => {
+    invalidateList();
+    if (prefetchCount && !active && !loadedRef.current) {
+      fetchCount({ force: true });
+      return;
+    }
+    list();
+  }, [invalidateList, prefetchCount, active, fetchCount, list]);
+  useAttachmentsChanged({ tableName, recordId, source: sourceRef.current }, onExternalChange);
 
   // ── upload ──────────────────────────────────────────────────────────────
   // `opts.recordId` lets a caller upload against a record it just created but
@@ -262,9 +446,10 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   // follow-up — a new/unsaved header has no persisted id to attach to, so
   // AttachmentsTab force-saves the header first and passes the freshly
   // returned id here instead of waiting for a re-render).
+  // ETP-5309: "new" is not a persisted id — mirror hasRealRecord instead of POSTing it.
   const upload = useCallback(async (file, opts = {}) => {
     const targetRecordId = opts.recordId || recordId;
-    if (!file || !tableName || !targetRecordId) return;
+    if (!file || !tableName || !targetRecordId || targetRecordId === 'new') return;
     const tempId = `upload-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
     setUploadingFiles((prev) => {
       const next = new Map(prev);
@@ -285,13 +470,41 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       }
       const json = await res.json();
       const created = json?.response?.data ?? json?.data ?? json;
-      if (created && created.id) {
+      const targetKey = recordKey(tableName, targetRecordId);
+      const known = listStateRef.current;
+      const targetLoaded = known.key === targetKey && known.loaded;
+      // ETP-5526: the hook may have moved to another record while the POST was
+      // in flight. Adopting the target's list then (forced read or prepend)
+      // would take the newest generation and replace the CURRENT record's list
+      // with the old one's, leaving an empty table and no badge. Only write
+      // state when the hook still shows the target, or shows no real record
+      // yet (saveBeforeAttach: the prop is still "new" while the file goes to
+      // the just-saved id). Otherwise just mark the target's cached list stale.
+      const showingTarget = currentKeyRef.current === targetKey || currentKeyRef.current === null;
+      if (!showingTarget) {
+        invalidateList(targetRecordId);
+      } else if (created && created.id && !targetLoaded && active) {
+        // ETP-5526: prepending to a list that was never read (an upload racing
+        // the first list(), or saveBeforeAttach's just-saved record) would make
+        // the badge claim "1" while older files may exist. The tab is visible,
+        // so read the real list instead; this also supersedes the racing read.
+        invalidateList(targetRecordId);
+        await list({ recordId: targetRecordId, force: true });
+      } else if (created && created.id) {
         // Bump first: invalidates any list() already in flight (e.g. the one
         // saveBeforeAttach's force-save just re-triggered via the recordId
         // prop update) so it can't overwrite this with a stale read.
         stateGenerationRef.current += 1;
-        setItems((prev) => [created, ...prev]);
-        invalidateList(); // cached list is now stale for other/future readers
+        // An inactive, never-loaded instance (e.g. the fiscal models' upload-only
+        // hook) keeps its lazy contract: no extra read, and `loaded` stays false
+        // because these items are not the full list.
+        setListState((prev) => (prev.key === targetKey
+          ? { ...prev, items: [created, ...prev.items] }
+          : { key: targetKey, items: [created], loaded: false }));
+        invalidateList(targetRecordId); // cached list is now stale for other/future readers
+        // The prepended items are not the full list, so a badge still reads
+        // the fetched count — which this upload just made stale.
+        if (targetKey === currentKeyRef.current) refreshCountIfUnloaded();
       } else {
         // Fallback: force a fresh reload when the server did not return the item.
         // Pass targetRecordId explicitly rather than calling list() bare:
@@ -314,7 +527,7 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         return next;
       });
     }
-  }, [apiFetch, tableName, recordId, token, list, ui, invalidateList, announceChange]);
+  }, [apiFetch, tableName, recordId, token, active, list, ui, invalidateList, announceChange, refreshCountIfUnloaded]);
 
   // ── download (single) ───────────────────────────────────────────────────
   const download = useCallback(async (attachment) => {
@@ -359,8 +572,9 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   // ── remove (optimistic) ─────────────────────────────────────────────────
   const remove = useCallback(async (attachmentId) => {
     if (!attachmentId) return;
+    const key = currentKey;
     const snapshot = itemsRef.current;
-    setItems(snapshot.filter((it) => it.id !== attachmentId));
+    replaceItems(key, snapshot.filter((it) => it.id !== attachmentId));
     try {
       const res = await apiFetch(
         `/sws/neo/attachments/file/${attachmentId}`,
@@ -371,19 +585,21 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         throw new Error(msg || `HTTP ${res.status}`);
       }
       invalidateList();
+      refreshCountIfUnloaded();
       announceChange();
       toast.success(ui('attachmentsDeleteSuccess'));
     } catch (err) {
-      setItems(snapshot);
+      replaceItems(key, snapshot);
       toast.error(err.message || ui('attachmentsDeleteError'));
     }
-  }, [apiFetch, token, ui, invalidateList, announceChange]);
+  }, [apiFetch, token, ui, invalidateList, refreshCountIfUnloaded, announceChange, currentKey, replaceItems]);
 
   // ── removeAll (optimistic) ──────────────────────────────────────────────
   const removeAll = useCallback(async () => {
+    const key = currentKey;
     const snapshot = itemsRef.current;
     if (!snapshot.length) return;
-    setItems([]);
+    replaceItems(key, []);
     try {
       await Promise.all(
         snapshot.map((it) =>
@@ -396,19 +612,21 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
         )
       );
       invalidateList();
+      refreshCountIfUnloaded();
       announceChange();
       toast.success(ui('attachmentsDeleteAllSuccess'));
     } catch (err) {
-      setItems(snapshot);
+      replaceItems(key, snapshot);
       toast.error(err.message || ui('attachmentsDeleteAllError'));
     }
-  }, [apiFetch, token, ui, invalidateList, announceChange]);
+  }, [apiFetch, token, ui, invalidateList, refreshCountIfUnloaded, announceChange, currentKey, replaceItems]);
 
   // ── update description (optimistic) ─────────────────────────────────────
   const updateDescription = useCallback(async (attachmentId, description) => {
     if (!attachmentId) return;
+    const key = currentKey;
     const snapshot = itemsRef.current;
-    setItems(snapshot.map((it) => (it.id === attachmentId ? { ...it, description } : it)));
+    replaceItems(key, snapshot.map((it) => (it.id === attachmentId ? { ...it, description } : it)));
     try {
       const res = await apiFetch(
         `/sws/neo/attachments/file/${attachmentId}`,
@@ -425,13 +643,15 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
       invalidateList();
       toast.success(ui('attachmentsUpdateSuccess'));
     } catch (err) {
-      setItems(snapshot);
+      replaceItems(key, snapshot);
       toast.error(err.message || ui('attachmentsUpdateError'));
     }
-  }, [apiFetch, token, ui, invalidateList]);
+  }, [apiFetch, token, ui, invalidateList, currentKey, replaceItems]);
 
   return {
     items,
+    loaded,
+    count,
     loading,
     error,
     uploadingFiles,

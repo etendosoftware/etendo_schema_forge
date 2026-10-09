@@ -1,5 +1,5 @@
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
-import { deriveContactsApiBase } from '../contactApi.js';
+import { buildSearchUrl, deriveSelectorUrl, deriveSpecBase, readSearchRows } from '../ocrQuery.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 /**
@@ -56,11 +56,72 @@ export async function checkBpHasLocation({ token, apiBaseUrl, bpId }) {
   return known ? 'missing' : 'unknown';
 }
 
+const DUPLICATE_LOOKUP_LIMIT = 10;
+
+function docStatusCode(value) {
+  if (value && typeof value === 'object') return value.id ?? value.value ?? null;
+  return value ?? null;
+}
+
+/**
+ * Existing purchase invoices of `bpId` carrying the same supplier document number
+ * ("Nº documento", sent as `orderReference` by the descriptor), so the review modal can warn
+ * before a second invoice is created from the same PDF (ETP-5654). Warn-only: the caller never
+ * blocks on the answer.
+ *
+ * Narrowed server-side with the same SmartClient `criteria` the list windows send (no HQL, so
+ * the production WAF lets it through): partner `equals`, document number `iEquals`
+ * (case-insensitive exact), status `notEqual` 'VO' (voided invoices do not count; drafts and
+ * completed ones do). The rows are re-checked here — trimmed, case-insensitive, non-voided —
+ * so a backend that ignores an operator still cannot produce a false warning (a row that does
+ * not carry `orderReference` at all is trusted to the server-side filter).
+ *
+ * @returns {Promise<{status: 'none'|'duplicate'|'unknown', invoices: Array<{id: string, documentNo: string|null}>}>}
+ */
+export async function findDuplicatePurchaseInvoices({ token, apiBaseUrl, bpId, documentNo }) {
+  const wanted = String(documentNo ?? '').trim();
+  if (!apiBaseUrl || !bpId || !wanted) return { status: 'unknown', invoices: [] };
+  const criteria = [
+    { fieldName: 'businessPartner', operator: 'equals', value: bpId },
+    { fieldName: 'orderReference', operator: 'iEquals', value: wanted },
+    { fieldName: 'documentStatus', operator: 'notEqual', value: 'VO' },
+  ];
+  const qs = new URLSearchParams({
+    _startRow: '0',
+    _endRow: String(DUPLICATE_LOOKUP_LIMIT - 1),
+    criteria: JSON.stringify(criteria),
+  });
+  const url = `${deriveSpecBase(apiBaseUrl, 'purchase-invoice')}/header?${qs.toString()}`;
+  try {
+    const res = await apiFetch(url, { baseUrl: '', token });
+    if (!res.ok) {
+      console.warn('[OCR][findDuplicatePurchaseInvoices] non-OK', res.status, url);
+      return { status: 'unknown', invoices: [] };
+    }
+    const json = await res.json().catch(() => null);
+    if (!json) return { status: 'unknown', invoices: [] };
+    const needle = wanted.toLowerCase();
+    const invoices = readSearchRows(json)
+      .filter((row) => row?.id
+        && (row.orderReference === undefined || String(row.orderReference ?? '').trim().toLowerCase() === needle)
+        && docStatusCode(row.documentStatus) !== 'VO')
+      .map((row) => ({ id: row.id, documentNo: row.documentNo ?? null }));
+    return { status: invoices.length ? 'duplicate' : 'none', invoices };
+  } catch (e) {
+    console.warn('[OCR][findDuplicatePurchaseInvoices] fetch failed', e);
+    return { status: 'unknown', invoices: [] };
+  }
+}
+
 async function lookupBpLocation({ token, apiBaseUrl, bpId }) {
   if (!apiBaseUrl || !bpId) return { locationId: null, known: false };
-  const contactsBase = apiBaseUrl.replace(/\/[^/]+$/, '/contacts');
-  const where = encodeURIComponent(`businessPartner.id = '${bpId}' and active = true`);
-  const url = `${contactsBase}/locationAddress?_neoWhere=${where}&limit=1`;
+  // The header's own partnerAddress selector, fed the vendor the way the invoice form feeds
+  // it: no HQL in the query string (see ocrQuery.js), and it applies the same validation the
+  // form applies, so the address picked here is one the form would accept.
+  const url = buildSearchUrl(
+    deriveSelectorUrl(apiBaseUrl, 'purchase-invoice', 'header', 'C_BPartner_Location_ID'),
+    { limit: 1, params: { ...VENDOR_SELECTOR_PARAMS, C_BPartner_ID: bpId } },
+  );
   try {
     const res = await apiFetch(url, { baseUrl: '', token });
     if (!res.ok) {
@@ -69,8 +130,7 @@ async function lookupBpLocation({ token, apiBaseUrl, bpId }) {
     }
     const json = await res.json().catch(() => null);
     if (!json) return { locationId: null, known: false };
-    const data = json?.response?.data ?? json?.data ?? [];
-    return { locationId: data[0]?.id || null, known: true };
+    return { locationId: readSearchRows(json)[0]?.id || null, known: true };
   } catch (e) {
     console.warn('[OCR][findBpLocation] fetch failed', e);
     return { locationId: null, known: false };
@@ -78,49 +138,53 @@ async function lookupBpLocation({ token, apiBaseUrl, bpId }) {
 }
 
 /**
- * Look up an existing BusinessPartner by taxID then name, using the contacts
- * spec selector. Returns the BP id when a single active match is found,
- * otherwise null. Multiple-candidate disambiguation is intentionally left to
- * the popup — by the time we trigger it the user is already in the loop.
+ * Context the invoice form hands the vendor selectors of a purchase invoice.
  */
-export async function findBp({ token, apiBaseUrl, taxId, name }) {
-  if (!apiBaseUrl) return null;
-  // apiBaseUrl points at the host spec (e.g. /sws/neo/purchase-invoice).
-  // The contacts spec lives at the sibling /sws/neo/contacts; derive it the
-  // same way ContactCreatePopup does so we hit a real endpoint, not the
-  // host spec's nested path.
-  const contactsBase = deriveContactsApiBase(apiBaseUrl);
+export const VENDOR_SELECTOR_PARAMS = Object.freeze({ isSOTrx: 'N', isVendor: 'Y' });
 
-  const tryQuery = async (property, value) => {
-    if (!nonBlank(value)) return null;
-    // NEO's NeoCrudHandler accepts `_neoWhere` as an extra HQL fragment
-    // appended to the tab filter. Plain `?name=...` query params don't
-    // reliably map to DAL field filters here, so we use the explicit clause.
-    // Property names are HQL (DAL) properties, not DB columns: `taxID`, `name`,
-    // `active`. Single quotes are escaped per HQL convention.
-    const escaped = String(value).replace(/'/g, "''");
-    const where = encodeURIComponent(`${property} = '${escaped}' and active = true`);
-    const url = `${contactsBase}/businessPartner?_neoWhere=${where}`;
-    try {
-      const res = await apiFetch(url, { baseUrl: '', token });
-      if (!res.ok) {
-        console.warn('[OCR][findBp] non-OK', res.status, url);
-        return null;
-      }
-      const json = await res.json().catch(() => null);
-      const data = json?.response?.data ?? json?.data ?? [];
-      console.log('[OCR][findBp]', property, '=', value, '→', data.length, 'match(es)');
-      // Only resolve when exactly one row matches — multiple matches surface
-      // the popup so the user can disambiguate.
-      return data.length === 1 ? data[0]?.id : null;
-    } catch (e) {
-      console.warn('[OCR][findBp] fetch failed', e);
+/**
+ * Search the purchase-invoice vendor selector by name. Returns the matching rows
+ * (`{ id, name }`), or null when the request could not be made or answered non-OK.
+ */
+export async function searchVendors({ token, apiBaseUrl, name, limit }) {
+  if (!apiBaseUrl || !nonBlank(name)) return null;
+  const url = buildSearchUrl(
+    deriveSelectorUrl(apiBaseUrl, 'purchase-invoice', 'header', 'C_BPartner_ID'),
+    { query: name, limit, params: VENDOR_SELECTOR_PARAMS },
+  );
+  try {
+    const res = await apiFetch(url, { baseUrl: '', token });
+    if (!res.ok) {
+      console.warn('[OCR][searchVendors] non-OK', res.status, url);
       return null;
     }
-  };
-
-  return (await tryQuery('taxID', taxId)) || (await tryQuery('name', name)) || null;
+    const json = await res.json().catch(() => null);
+    return readSearchRows(json);
+  } catch (e) {
+    console.warn('[OCR][searchVendors] fetch failed', e);
+    return null;
+  }
 }
+
+function normalizeName(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+/**
+ * Look up an existing vendor whose name equals the extracted one (case-insensitive).
+ * The selector's `q` is a contains-search, so the exact match is picked out here.
+ * Returns the BP id when exactly one vendor matches, otherwise null — several
+ * candidates are left to the popup, where the user is already in the loop.
+ */
+export async function findBp({ token, apiBaseUrl, name }) {
+  const rows = await searchVendors({ token, apiBaseUrl, name });
+  if (!rows) return null;
+  const wanted = normalizeName(name);
+  const exact = rows.filter((row) => normalizeName(row.name) === wanted);
+  return exact.length === 1 ? exact[0].id : null;
+}
+
+const PRODUCT_SIM_QTY_RESULTS = 3;
 
 /**
  * Run simSearch on the line descriptions. Returns an empty array when there
@@ -134,8 +198,33 @@ async function runProductSimSearch({ token, lines }) {
     entityName: 'Product',
     items: productHints,
     minSimPercent: 30,
-    qtyResults: 1,
+    // More than one so an ambiguous exact-name match (two products with the same name)
+    // is detectable; the best candidate is still the first one.
+    qtyResults: PRODUCT_SIM_QTY_RESULTS,
   });
+}
+
+/**
+ * Decide what to do with the simSearch result of one line description.
+ *  - exactly one candidate whose name equals the description (trim + case-insensitive)
+ *    → `{ id }`: safe to auto-assign;
+ *  - otherwise, when there is any candidate (>= minSimPercent) → `{ suggestion }` with the
+ *    best one: the user must confirm it in the popup, it is never assigned silently
+ *    (a partial name such as "Mantenimiento Web" vs "Servicio de desarrollo y mantenimiento
+ *    web" is a different product);
+ *  - no candidates → `{}`.
+ * Exported for testing.
+ */
+export function classifyProductMatch(description, match) {
+  const candidates = (Array.isArray(match?.candidates) && match.candidates.length > 0
+    ? match.candidates
+    : [match]).filter((c) => c?.id);
+  if (candidates.length === 0) return {};
+  const wanted = normalizeName(description);
+  const exact = wanted ? candidates.filter((c) => normalizeName(c.name) === wanted) : [];
+  if (exact.length === 1) return { id: exact[0].id };
+  const best = candidates[0];
+  return { suggestion: { id: best.id, name: String(best.name ?? best.id) } };
 }
 
 /**
@@ -216,7 +305,6 @@ async function resolveBpOrAskUser({ token, apiBaseUrl, safe, askUserForBp }) {
   const bpId = await findBp({
     token,
     apiBaseUrl,
-    taxId: safe.tax_id,
     name: safe.vendor_name,
   });
   if (bpId) return { bpId, bpCreate: null, locationCreate: null };
@@ -278,14 +366,16 @@ async function resolveProductsForLines({ lines, productMatches, askUserForProduc
   const productByIdx = {};
   const needsUserPick = [];
   lines.forEach((line, idx) => {
-    const id = productMatches[idx]?.id;
+    const description = String(line?.description ?? `line ${idx + 1}`).trim();
+    const { id, suggestion } = classifyProductMatch(line?.description, productMatches[idx]);
     if (id) {
       productByIdx[idx] = id;
       return;
     }
     needsUserPick.push({
       idx,
-      description: String(line?.description ?? `line ${idx + 1}`).trim(),
+      description,
+      suggestion: suggestion ?? null,
       quantity: nonBlank(line?.quantity) ? Number(line.quantity) : null,
       unitPrice: nonBlank(line?.unit_price) ? Number(line.unit_price) : null,
     });
@@ -293,12 +383,17 @@ async function resolveProductsForLines({ lines, productMatches, askUserForProduc
   if (needsUserPick.length === 0 || typeof askUserForProducts !== 'function') {
     return { productByIdx };
   }
-  // Sibling product spec — same shape used elsewhere (`/sws/neo/<host>` → `/sws/neo/product`).
-  // We use the standalone product entity list, NOT the line-context selector,
-  // because the line selector filters by parent invoice's price list, which
-  // we don't have at OCR time.
+  // Sibling product spec (`/sws/neo/<host>` → `/sws/neo/product`) — the popup creates
+  // products there and reads its UoM / tax-category selectors.
   const productSpecUrl = apiBaseUrl ? apiBaseUrl.replace(/\/[^/]+$/, '/product') : null;
-  const selectorUrl = productSpecUrl ? `${productSpecUrl}/product` : null;
+  // Product search goes through a selector with a plain `q` (see ocrQuery.js), but NOT the
+  // line's own M_Product_ID selector: that one is ProductSimple, built over
+  // PricingProductPrice, so it hides every product without a price and repeats the rest
+  // once per price list version. The intrastat tab's M_Product_ID is the plain product search
+  // (reference 800060, no validation rule) and lives in the same spec as the invoice.
+  const selectorUrl = apiBaseUrl
+    ? deriveSelectorUrl(apiBaseUrl, 'purchase-invoice', 'intrastat', 'M_Product_ID')
+    : null;
   const picks = await askUserForProducts({ unmatched: needsUserPick, selectorUrl, productSpecUrl });
   if (picks === null) return { cancelled: true };
   for (const [idxStr, productId] of Object.entries(picks || {})) {

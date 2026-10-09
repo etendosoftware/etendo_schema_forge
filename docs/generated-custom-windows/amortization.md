@@ -119,16 +119,18 @@ Records are typically created from the **Assets** window via the **Create Amorti
 
 Changes landed in `feature/ETP-4103`. Covers visual polish, sidebar simplification, custom lines table, and a Java process bug fix for the Amortization window.
 
+> ETP-5601: the record (form view) toolbar is now standardized on every window (56px, 40px controls). The `toolbarBorderBottom`, `toolbarButtonSize` and `toolbarPaddingX` keys listed below no longer have any effect; see `docs/list-filters.md` (Visual parity).
+
 ### Visual polish
 
-- `toolbarBorderBottom: true` in `decisions.json` — adds a horizontal divider line below the toolbar buttons row.
-- `toolbarButtonSize: "default"` in `decisions.json` — toolbar buttons (including the kebab menu) are now `h-10 w-10`, matching the Contacts window. Previously `sm` (`h-9`).
+- `toolbarBorderBottom: true` in `decisions.json` — added a horizontal divider line below the toolbar buttons row. No effect since ETP-5601 (the record toolbar is standardized; the divider is part of the standard toolbar).
+- `toolbarButtonSize: "default"` in `decisions.json` — toolbar buttons (including the kebab menu) are now `h-10 w-10`, matching the Contacts window. Previously `sm` (`h-9`). No effect since ETP-5601 (all record-toolbar buttons are standardized at 40px).
 - `listbarPaddingX: "px-2"` and `tablePaddingX: "px-2"` in `decisions.json` — list-view toolbar and table horizontal padding reduced from 24 px to 8 px.
 - `whiteFormBackground: true` in `decisions.json` — forces white background on form inputs and textareas, overriding the `bg-[#F5F7F9]` default on inputs and `bg-background` on textareas. Disabled textareas use `opacity-50` instead of `bg-muted/50` for visual consistency.
 - `noHeaderBorder: true` in `decisions.json` — removes the rounded card border around the header form fields, matching the Contacts window layout.
 - `primaryTabsVariant: "pill"` in `decisions.json` — tab strip uses pill style, matching Contacts.
 - `tabsBarPaddingX: "px-2"` in `decisions.json` — tabs bar horizontal padding set to 8 px.
-- `toolbarPaddingX: "px-2"` in `decisions.json` — toolbar horizontal padding set to 8 px.
+- `toolbarPaddingX: "px-2"` in `decisions.json` — toolbar horizontal padding set to 8 px. No effect since ETP-5601 (the record toolbar is standardized).
 
 ### Status pill + total footer (replaces sidebar)
 
@@ -141,7 +143,7 @@ Changes landed in `feature/ETP-4103`. Covers visual polish, sidebar simplificati
 - `customLinesComponent: "AmortizationLinesTable"` in `decisions.json` — the standard InlineLinesPanel is replaced by a custom component at `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx`.
 - Table shows columns: Asset | Amortization % | Amount | Accounting dimensions. _(Superseded by ETP-4610: the "Accounting dimensions" column was removed — see the ETP-4610 section below.)_
 - **Multi-select checkboxes**: every row has a checkbox; the header has a select-all checkbox (indeterminate when partially selected). In read-only/processed mode checkboxes remain visible but are disabled (matching Sales Order behaviour). Selecting ≥1 row shows the shared `SelectionToolbar` (same as Sales Order; ETP-4972 — a true viewport-fixed portal, not anchored to a scrolled element) — a floating bar pinned bottom-center of the screen with the selection count, a red icon-only trash/delete button, and an × cancel button. Bulk delete issues concurrent DELETE requests via `Promise.all`.
-- **Circular expand toggle**: each row has a circular icon button (24 px, border `#D1D4DB`, rounded-full, shadow xs, `ChevronDown #828FA3`) that toggles the accounting dimensions panel. Rotates 180° when expanded. _(Still current — ETP-4610 added a second, equivalent entry point next to it; see below.)_
+- **Circular expand toggle**: each row has a circular icon button (24 px, border `#D1D4DB`, rounded-full, shadow xs, `ChevronDown #828FA3`) that toggles the accounting dimensions panel. Rotates 180° when expanded. _(Still current — ETP-4610 added a second, equivalent entry point next to it; see below.)_ Since ETP-5593 the button is the shared `RowExpandToggle` (`components/contract-ui/RowExpandToggle.jsx`, 28 px, semantic `border-control` / `muted-foreground` tokens) instead of inline markup; behavior is unchanged.
 - **Inline editing** (pencil icon): clicking the pencil on a row makes the 3 core fields (Asset, %, Amount) editable inline within the same row. Save happens on blur — no confirm button needed. Same pattern as Sales Order.
 - **Expandable dimensions panel**: expanding a row reveals a white-background panel (no section title, no filled-count counter) with a read-only Organisation field and dimension selectors. Selectors have a hover background (`#F5F7F9`) on pointer-over. _(Superseded by ETP-4429: the selector set was trimmed to Project, Cost Center, and Contact — see the ETP-4429 section below.)_
 - Dimension selectors auto-save on `onChange` — immediate PUT per field, no Save button required.
@@ -193,12 +195,12 @@ Changes landed in `feature/ETP-4173`. Covers AD_Message error token resolution a
 
 ### Line `asset` no longer inherits the header id (bug fix)
 
-- Root cause: `A_Amortizationline` has two `isparent='Y'` columns in AD — `A_Amortization_ID` (the real header FK) and `A_Asset_ID`. The NEO defaults link-to-parent logic injected the `parentId` (header id) into **every** parent-link column, so `neo_defaults` for `lines` returned the header id as the `asset` value.
+- Root cause: `A_Amortizationline` has two `isparent='Y'` columns in AD — `A_Amortization_ID` (the real header FK) and `A_Asset_ID`. The NEO defaults link-to-parent logic injected the `parentId` (header id) into **every** parent-link column, so `etendo_defaults` for `lines` returned the header id as the `asset` value.
 - Fix (generic, in `NeoDefaultsService`): the `parentId` is now applied only to the parent-link column whose referenced entity matches the parent tab's table (`A_Amortization`). `A_Asset_ID` references `A_Asset`, so it no longer receives the header id and falls through to normal resolution (→ `null` when the header has no asset). Benefits any child entity with multiple `isparent` FKs.
 
 ### Header defaults — `name` and `accountingDate`
 
-- `accountingDate`: `decisions.json` header field now has `defaultExpr: "@#Date@"` → `neo_defaults` returns the current system date. Editable; an explicit value on create still wins.
+- `accountingDate`: `decisions.json` header field now has `defaultExpr: "@#Date@"` → `etendo_defaults` returns the current system date. Editable; an explicit value on create still wins.
 - `name`: computed dynamically by a new `AmortizationHeaderHandler` (`@Named("amortizationHeaderHandler")`, wired via `entities.header.javaQualifier` in `decisions.json`). On the `DEFAULTS` endpoint it reads the `assetId` query param, loads the asset, and returns `"Amortización - {asset name} - {amortizationStartDate}"`. Falls back to `"Amortización"` when no `assetId` is present, the asset is not found, or any lookup error occurs — never blocks the defaults call. It only fills `name` when not already set, so an explicit value on create wins.
 
 ### Deferred to a follow-up

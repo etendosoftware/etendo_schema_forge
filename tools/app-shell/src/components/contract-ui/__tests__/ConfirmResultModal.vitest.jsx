@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 vi.mock('@/i18n', () => ({
   useUI: () => (key, vars) => {
     if (vars) return key.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? `{${k}}`);
@@ -111,13 +112,28 @@ describe('ConfirmResultModal', () => {
     expect(screen.queryByRole('button', { name: /view/i })).not.toBeInTheDocument();
   });
 
-  it('activates doc card with Enter key', () => {
+  // Both shells render their own card component (DocCard / PopupDocCard).
+  it.each(['default', 'popup'])('activates doc card with Enter key (%s variant)', (variant) => {
     const navigate = vi.fn();
     const onClose  = vi.fn();
-    renderModal({ navigate, onClose });
+    renderModal({ navigate, onClose, variant });
     fireEvent.keyDown(screen.getByText('GR-001').closest('[role="button"]'), { key: 'Enter' });
     expect(onClose).toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith('/goods-receipt/1');
+  });
+
+  // The ~13 default-variant callers rely on the backdrop NOT dismissing the notice; only the
+  // popup shell (ActionChoiceModal look) closes on it.
+  it.each([
+    ['default', undefined, null, 0],
+    ['popup', 'popup', 'popup', 1],
+  ])('backdrop click on the %s variant closes it only in the popup shell', (_label, variant, dataVariant, closeCalls) => {
+    const onClose = vi.fn();
+    renderModal({ onClose, variant });
+    const backdrop = screen.getByTestId('confirm-result-modal');
+    expect(backdrop.getAttribute('data-variant')).toBe(dataVariant);
+    fireEvent.click(backdrop);
+    expect(onClose).toHaveBeenCalledTimes(closeCalls);
   });
 
   it('activates doc card with Space key', () => {
@@ -154,9 +170,17 @@ describe('ConfirmResultModal', () => {
     expect(screen.getByText('Completado')).toBeInTheDocument();
   });
 
-  it('falls back to statusDraft when doc.status is not provided', () => {
-    renderModal({ docs: [{ type: 'entrada', num: 'GR-Y', route: '/r' }] });
-    expect(screen.getByText('statusDraft')).toBeInTheDocument();
+  // Without doc.status the badge is derived from documentStatus: 'CO' → completed, anything
+  // else (draft, missing) → draft — in both shells.
+  it.each([
+    ['default', 'CO', 'statusCompleted', 'statusDraft'],
+    ['default', undefined, 'statusDraft', 'statusCompleted'],
+    ['popup', 'CO', 'statusCompleted', 'statusDraft'],
+    ['popup', 'DR', 'statusDraft', 'statusCompleted'],
+  ])('%s variant: documentStatus %s shows the %s badge', (variant, documentStatus, shown, absent) => {
+    renderModal({ variant, docs: [{ type: 'entrada', num: 'GR-Y', route: '/r', documentStatus }] });
+    expect(screen.getByText(shown)).toBeInTheDocument();
+    expect(screen.queryByText(absent)).toBeNull();
   });
 
   it('formats the doc amount grouped with the real currency symbol, never the raw ISO code', () => {

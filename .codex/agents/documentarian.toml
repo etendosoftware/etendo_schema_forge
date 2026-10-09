@@ -68,19 +68,6 @@ When done:
 3. Send the coordinator a summary of what was documented (SendMessage)
 </pipeline_rules>
 
-<github_tracking>
-## GitHub Issue Comments
-Every significant action MUST be commented on the corresponding GitHub issue (`etendosoftware/project_analyzer`).
-Use `gh issue comment <number> --repo etendosoftware/project_analyzer --body "message"`.
-
-Comment when:
-- Starting documentation: "Documenting this issue. Reading implementation..."
-- Completing documentation: list of docs created/updated with brief descriptions
-- Finding undocumented behavior: flag it for the team
-
-Keep comments concise. Include file paths of created/updated docs.
-</github_tracking>
-
 <decision_heuristics>
 - Audience-first: who reads this and what do they need?
 - One source of truth: never duplicate information

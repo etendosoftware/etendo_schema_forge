@@ -1,23 +1,40 @@
 {
-  "version": "0.25.0",
+  "version": "0.31.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-09-24T10:36:53.766Z",
-  "checksum": "f187308c4752b0b3",
+  "updatedAt": "2026-10-07T11:18:35.384Z",
+  "checksum": "2c1166f3c38ea559",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
       "name": "Simple G/L Journal",
       "primaryEntity": "gLJournal",
       "category": "finance",
+      "hideDeleteWhenComplete": true,
+      "hidePrint": true,
       "breadcrumb": "Finance / Manual Journals",
+      "customComponents": {
+        "bottomSection": "SimpleGLJournalBottomPanel"
+      },
       "menuActions": [
+        {
+          "key": "reactivate",
+          "label": "Reactivate",
+          "labelKey": "reactivate",
+          "documentAction": "RE",
+          "visibleWhenStatus": "CO",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "reactivated",
+          "_note": "ETP-5611 — Completed, not-posted journals can be reactivated back to Draft (GlJournalHeaderHandler routes RE through FIN_AddPaymentFromJournal). A posted journal must be unposted first."
+        },
         {
           "key": "post",
           "label": "Post",
           "labelKey": "post",
           "action": "post",
           "visibleWhenFieldFalse": "posted",
-          "successKey": "documentPosted"
+          "successKey": "documentPosted",
+          "visibleWhenStatus": "CO",
+          "_note": "ETP-5611 — Post is only offered on a Completed journal (AND-combined with posted=false)."
         },
         {
           "key": "unpost",
@@ -29,10 +46,69 @@
           "destructive": true
         }
       ],
+      "summaryFields": [],
+      "rowQuickActions": {
+        "actions": {
+          "delete": {
+            "visibleWhen": "@DocumentStatus@='DR'"
+          }
+        }
+      },
       "layoutType": "default",
       "balanceFooter": {
         "debitField": "foreignCurrencyDebit",
         "creditField": "foreignCurrencyCredit"
+      },
+      "actions": {
+        "documentAction": {
+          "preconditions": [
+            {
+              "field": "documentStatus",
+              "operator": "in",
+              "values": [
+                "DR"
+              ],
+              "appliesTo": {
+                "docAction": [
+                  "CO"
+                ]
+              },
+              "description": "Complete (CO) requires a Draft journal whose debit and credit totals are equal and greater than zero"
+            },
+            {
+              "field": "documentStatus",
+              "operator": "in",
+              "values": [
+                "CO"
+              ],
+              "appliesTo": {
+                "docAction": [
+                  "RE"
+                ]
+              },
+              "description": "Reactivate (RE) requires a Completed journal"
+            },
+            {
+              "field": "posted",
+              "operator": "eq",
+              "values": [
+                "N"
+              ],
+              "appliesTo": {
+                "docAction": [
+                  "RE"
+                ]
+              },
+              "description": "Reactivate (RE) is rejected once the journal is posted — unpost first"
+            }
+          ],
+          "edgeCases": [
+            "Complete with unbalanced or all-zero lines is rejected",
+            "Reactivate on a posted journal is rejected (GLJournalDocumentPosted)",
+            "Reactivate when Open Items lines have related payments succeeds with a warning; payments are not deleted"
+          ],
+          "_note": "ETP-5611 — curated MCP contract override; replaces the generic documentStatus in [DR, IP] precondition inferred for every documentAction."
+        }
       },
       "statusPills": [
         {
@@ -156,7 +232,7 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
@@ -168,6 +244,7 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
+            "section": "principal",
             "gridOrder": 4,
             "validation": {
               "required": true,
@@ -175,10 +252,6 @@
             },
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Journal_Period"
-            },
-            "readOnlyLogic": {
-              "js": "record['processed'] === true",
-              "evaluable": true
             }
           },
           {
@@ -198,6 +271,7 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "section": "other",
             "validation": {
               "required": true,
               "maxLength": 1
@@ -224,6 +298,7 @@
               "source": "N"
             },
             "defaultValue": "N",
+            "section": "other",
             "validation": {
               "required": true,
               "maxLength": 1
@@ -265,10 +340,6 @@
                 "en_US": "Not posted",
                 "es_ES": "Sin contabilizar"
               }
-            },
-            "badgeVariants": {
-              "true": "green",
-              "false": "orange"
             },
             "gridOrder": 6,
             "validation": {
@@ -576,33 +647,6 @@
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "lineNo",
-            "apiKey": "lineNo",
-            "column": "Line",
-            "label": "LineNo",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@"
-            },
-            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@",
-            "validation": {
-              "required": true,
-              "maxLength": 10
-            },
-            "readOnlyLogic": {
-              "raw": "@Processed@='Y'",
-              "evaluable": true,
-              "js": "(record['processed'] === true || record['processed'] === 'Y')"
-            }
-          },
-          {
             "name": "accountingCombination",
             "apiKey": "accountingCombination",
             "column": "C_ValidCombination_ID",
@@ -616,7 +660,7 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "lookup": true,
-            "columnWidth": 280,
+            "columnWidth": 220,
             "validation": {
               "maxLength": 32
             },
@@ -677,6 +721,7 @@
               "es_ES": "Crédito"
             },
             "clearsField": "foreignCurrencyDebit",
+            "noTrailing": true,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -860,13 +905,6 @@
         "searchableFields": [],
         "computedFields": [
           {
-            "name": "lineNo",
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@"
-            }
-          },
-          {
             "name": "openItems",
             "derivation": {
               "type": "computed",
@@ -883,15 +921,32 @@
       "name": "Simple G/L Journal",
       "primaryEntity": "gLJournal",
       "category": "finance",
+      "hideDeleteWhenComplete": true,
+      "hidePrint": true,
       "breadcrumb": "Finance / Manual Journals",
+      "customComponents": {
+        "bottomSection": "SimpleGLJournalBottomPanel"
+      },
       "menuActions": [
+        {
+          "key": "reactivate",
+          "label": "Reactivate",
+          "labelKey": "reactivate",
+          "documentAction": "RE",
+          "visibleWhenStatus": "CO",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "reactivated",
+          "_note": "ETP-5611 — Completed, not-posted journals can be reactivated back to Draft (GlJournalHeaderHandler routes RE through FIN_AddPaymentFromJournal). A posted journal must be unposted first."
+        },
         {
           "key": "post",
           "label": "Post",
           "labelKey": "post",
           "action": "post",
           "visibleWhenFieldFalse": "posted",
-          "successKey": "documentPosted"
+          "successKey": "documentPosted",
+          "visibleWhenStatus": "CO",
+          "_note": "ETP-5611 — Post is only offered on a Completed journal (AND-combined with posted=false)."
         },
         {
           "key": "unpost",
@@ -903,9 +958,68 @@
           "destructive": true
         }
       ],
+      "summaryFields": [],
+      "rowQuickActions": {
+        "actions": {
+          "delete": {
+            "visibleWhen": "@DocumentStatus@='DR'"
+          }
+        }
+      },
       "balanceFooter": {
         "debitField": "foreignCurrencyDebit",
         "creditField": "foreignCurrencyCredit"
+      },
+      "actions": {
+        "documentAction": {
+          "preconditions": [
+            {
+              "field": "documentStatus",
+              "operator": "in",
+              "values": [
+                "DR"
+              ],
+              "appliesTo": {
+                "docAction": [
+                  "CO"
+                ]
+              },
+              "description": "Complete (CO) requires a Draft journal whose debit and credit totals are equal and greater than zero"
+            },
+            {
+              "field": "documentStatus",
+              "operator": "in",
+              "values": [
+                "CO"
+              ],
+              "appliesTo": {
+                "docAction": [
+                  "RE"
+                ]
+              },
+              "description": "Reactivate (RE) requires a Completed journal"
+            },
+            {
+              "field": "posted",
+              "operator": "eq",
+              "values": [
+                "N"
+              ],
+              "appliesTo": {
+                "docAction": [
+                  "RE"
+                ]
+              },
+              "description": "Reactivate (RE) is rejected once the journal is posted — unpost first"
+            }
+          ],
+          "edgeCases": [
+            "Complete with unbalanced or all-zero lines is rejected",
+            "Reactivate on a posted journal is rejected (GLJournalDocumentPosted)",
+            "Reactivate when Open Items lines have related payments succeeds with a warning; payments are not deleted"
+          ],
+          "_note": "ETP-5611 — curated MCP contract override; replaces the generic documentStatus in [DR, IP] precondition inferred for every documentAction."
+        }
       },
       "statusPills": [
         {
@@ -991,7 +1105,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1287,7 +1401,7 @@
             "apiKey": "lineNo",
             "column": "Line",
             "type": "integer",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -1986,14 +2100,6 @@
         "description": "Default value for 'posted' in gLJournal should be a string"
       },
       {
-        "id": "t-default-value-type-gLJournalLine-lineNo",
-        "category": "default-value-type",
-        "entity": "gLJournalLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Default value for 'lineNo' in gLJournalLine should be a string"
-      },
-      {
         "id": "t-default-value-type-gLJournalLine-openItems",
         "category": "default-value-type",
         "entity": "gLJournalLine",
@@ -2322,14 +2428,6 @@
         "description": "Field 'foreignCurrencyDebit' should be present in gLJournalLine"
       },
       {
-        "id": "t-field-presence-gLJournalLine-lineNo",
-        "category": "field-presence",
-        "entity": "gLJournalLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Field 'lineNo' should be present in gLJournalLine"
-      },
-      {
         "id": "t-field-presence-gLJournalLine-openItems",
         "category": "field-presence",
         "entity": "gLJournalLine",
@@ -2498,14 +2596,6 @@
         "description": "Field 'foreignCurrencyDebit' should have type 'number' in gLJournalLine"
       },
       {
-        "id": "t-field-type-gLJournalLine-lineNo",
-        "category": "field-type",
-        "entity": "gLJournalLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Field 'lineNo' should have type 'number' in gLJournalLine"
-      },
-      {
         "id": "t-field-type-gLJournalLine-openItems",
         "category": "field-type",
         "entity": "gLJournalLine",
@@ -2552,14 +2642,6 @@
         "field": "costCenter",
         "runner": "node",
         "description": "Read-only logic for 'costCenter' in gLJournal should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-gLJournal-currency",
-        "category": "readonlylogic-evaluable",
-        "entity": "gLJournal",
-        "field": "currency",
-        "runner": "node",
-        "description": "Read-only logic for 'currency' in gLJournal should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-gLJournal-description",
@@ -2658,14 +2740,6 @@
         "description": "Read-only logic for 'foreignCurrencyDebit' in gLJournalLine should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-gLJournalLine-lineNo",
-        "category": "readonlylogic-evaluable",
-        "entity": "gLJournalLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Read-only logic for 'lineNo' in gLJournalLine should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-gLJournalLine-product",
         "category": "readonlylogic-evaluable",
         "entity": "gLJournalLine",
@@ -2704,14 +2778,6 @@
         "field": "costCenter",
         "runner": "node",
         "description": "Read-only logic for 'costCenter' in gLJournal should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-gLJournal-currency",
-        "category": "readonlylogic-valid",
-        "entity": "gLJournal",
-        "field": "currency",
-        "runner": "node",
-        "description": "Read-only logic for 'currency' in gLJournal should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-gLJournal-description",
@@ -2808,14 +2874,6 @@
         "field": "foreignCurrencyDebit",
         "runner": "node",
         "description": "Read-only logic for 'foreignCurrencyDebit' in gLJournalLine should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-gLJournalLine-lineNo",
-        "category": "readonlylogic-valid",
-        "entity": "gLJournalLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Read-only logic for 'lineNo' in gLJournalLine should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-gLJournalLine-product",
@@ -4223,6 +4281,14 @@
         "description": "System field 'journalEntry' should exist in backend but not frontend for gLJournalLine"
       },
       {
+        "id": "t-system-field-gLJournalLine-lineNo",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "System field 'lineNo' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
         "id": "t-system-field-gLJournalLine-ndDimension",
         "category": "system-field",
         "entity": "gLJournalLine",
@@ -4366,25 +4432,25 @@
       }
     ],
     "summary": {
-      "total": 327,
+      "total": 321,
       "byCategory": {
         "action-endpoint": 4,
         "crud-flags": 2,
-        "default-value-type": 10,
+        "default-value-type": 9,
         "displaylogic-evaluable": 11,
         "displaylogic-valid": 11,
-        "field-presence": 22,
-        "field-type": 22,
-        "readonlylogic-evaluable": 19,
-        "readonlylogic-valid": 19,
+        "field-presence": 21,
+        "field-type": 21,
+        "readonlylogic-evaluable": 17,
+        "readonlylogic-valid": 17,
         "rule-declared": 123,
         "searchable-filters": 6,
         "selector-endpoint": 12,
-        "system-field": 64,
+        "system-field": 65,
         "visibility": 2
       },
       "byRunner": {
-        "node": 327,
+        "node": 321,
         "junit": 0
       }
     }

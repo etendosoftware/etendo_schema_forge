@@ -115,6 +115,37 @@ describe('track', () => {
   });
 });
 
+describe('addFeatureFlagEvaluation', () => {
+  it('forwards only to initialized providers with feature flag capability', async () => {
+    const obs = createObservability();
+    const datadog = makeProvider('datadog', {
+      capabilities: ['featureFlagTracking'],
+      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
+    });
+    const other = makeProvider('mixpanel', {
+      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
+    });
+    await obs.initObservability({ providers: [datadog, other] });
+
+    await obs.addFeatureFlagEvaluation('sample_flag', true);
+
+    expect(datadog.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
+    expect(other.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+  });
+
+  it('does not load or call providers before initialization', async () => {
+    const obs = createObservability();
+    const provider = makeProvider('datadog', {
+      capabilities: ['featureFlagTracking'],
+      addFeatureFlagEvaluation: vi.fn(),
+    });
+
+    await obs.addFeatureFlagEvaluation('sample_flag', true);
+
+    expect(provider.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+  });
+});
+
 describe('page', () => {
   it('calls provider.page with normalized route', async () => {
     const obs = createObservability();

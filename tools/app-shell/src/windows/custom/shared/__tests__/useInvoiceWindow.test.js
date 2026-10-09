@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -67,6 +68,26 @@ describe('useInvoiceWindow', () => {
         assert.deepEqual(draftMode.keepSaveWhenCompletedFields, ['orderReference']);
         assert.deepEqual(draftMode.processingModal, { body: '__fiscal.verifactu.processing.body__' });
       });
+    });
+
+    // The post-Confirm hook (saveActions.jsx runAfterProcess) the invoice windows pass to
+    // open the follow-up modal: forwarded only when it is a function, so every other caller
+    // keeps a byte-identical draftMode.
+    describe('afterProcess', () => {
+      it('forwards a function as is', () => {
+        const afterProcess = () => ({ stay: true });
+        assert.equal(getInvoiceDraftMode(fakeUi, { afterProcess }).afterProcess, afterProcess);
+      });
+
+      for (const [name, options] of [
+        ['no options arg', undefined],
+        ['an undefined afterProcess', { afterProcess: undefined }],
+        ['a non-function afterProcess', { afterProcess: { stay: true } }],
+      ]) {
+        it(`omits the key entirely with ${name}`, () => {
+          assert.equal('afterProcess' in getInvoiceDraftMode(fakeUi, options), false);
+        });
+      }
     });
   });
 

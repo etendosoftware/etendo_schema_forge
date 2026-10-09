@@ -36,7 +36,7 @@ const ELEVATED_SHADOW =
 /** A labelled switch, matching the design's filter-bar toggles. */
 function ToggleFilter({ label, checked, onCheckedChange, testId }) {
   return (
-    <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] leading-[18px] text-[hsl(var(--foreground))]">
+    <label className="inline-flex cursor-pointer items-center gap-2 text-sm leading-6 text-[#121217]">
       <Switch checked={checked} onCheckedChange={onCheckedChange} data-testid={testId} />
       {label}
     </label>
@@ -134,15 +134,15 @@ export function CashCloseMovementsPanel({
         </div>
       ) : null}
       {/* Barra de filtros */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[hsl(var(--border-subtle))] px-6 py-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[hsl(var(--border-subtle))] p-2">
         <button
           type="button"
           aria-label={ui('financeAccountDetailBack')}
           data-testid="cash-close-back"
           onClick={() => navigate(-1)}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-[#828FA3] transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__64d56f" />
+          <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__64d56f" />
         </button>
         <ToggleFilter
           label={ui('financeAccountCashCloseHideCleared')}
@@ -163,7 +163,7 @@ export function CashCloseMovementsPanel({
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={ui('financeAccountCashCloseSearchPlaceholder')}
           data-testid="cash-close-search"
-          className="h-9 w-60 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground)_/_0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
+          className="h-10 w-60 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))] shadow-[0_1px_2px_hsl(var(--foreground)_/_0.05)] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] focus:ring-offset-1"
         />
       </div>
       {/* Tabla */}

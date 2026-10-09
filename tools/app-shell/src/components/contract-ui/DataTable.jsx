@@ -835,9 +835,26 @@ function TableSkeleton({ columns }) {
 
 /**
  * Empty state shown when the table has no data (or all rows are filtered out).
+ *
+ * `override` (DataTable's `emptyState` prop, ETP-5591) replaces the built-in copy for a
+ * caller whose empty case means something else — e.g. a hand-built toolbar with its own
+ * filters, where "create a new record" is wrong. `{ title, description?, action?, testId? }`;
+ * `action` is any node (typically a "clear filters" button).
  */
-function EmptyState({ hasFilter, totalCount }) {
+function EmptyState({ hasFilter, totalCount, override }) {
   const ui = useUI();
+  if (override) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center py-12 text-muted-foreground"
+        data-testid={override.testId}>
+        <Inbox className="h-10 w-10 mb-3 opacity-40" data-testid="Inbox__eb5261" />
+        <p className="text-sm font-medium">{override.title}</p>
+        {override.description && <p className="text-xs mt-1">{override.description}</p>}
+        {override.action && <div className="mt-4">{override.action}</div>}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
       <Inbox className="h-10 w-10 mb-3 opacity-40" data-testid="Inbox__eb5261" />
@@ -1041,6 +1058,7 @@ function renderNumericInputCell({
       <MaskedAmountInput
         bare
         grouping={isTwoDecimal}
+        clearZeroOnFocus
         inputMode={numericInputMode}
         inputRef={isFirst ? firstInputRef : undefined}
         value={values[field.key]}
@@ -2900,6 +2918,7 @@ function TableDataRow({
  */
 function renderTableRows({
   hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
+  emptyState,
   ...rowProps
 }) {
   if (hideDataRows) return null;
@@ -2910,6 +2929,7 @@ function renderTableRows({
           <EmptyState
             hasFilter={hasActiveFilter}
             totalCount={data.length}
+            override={emptyState}
             data-testid="EmptyState__eb5261" />
         </TableCell>
       </TableRow>
@@ -2983,6 +3003,9 @@ function renderFooterRow({
  *  - onDeleteRow: (row) => void — when provided, renders a per-row delete button (trash icon)
  *      that appears on row hover and on keyboard focus. Invoked with the row object; click
  *      propagation is stopped so it does not trigger row selection or navigation.
+ *  - emptyState: { title, description?, action?, testId? } | undefined — replaces the
+ *      built-in "no records / no matches" copy when the table renders no rows (ETP-5591).
+ *      Opt-in; omitted ⇒ the default empty state, unchanged.
  *  - balanceFooter: object | null — presence (not shape) suppresses this table's own generic
  *      per-amount-column footer-totals row, regardless of showFooterTotals. Set when a caller
  *      renders a specialized, grid-aligned totals row elsewhere (e.g. InlineLinesPanel's
@@ -3084,6 +3107,7 @@ export function DataTable({
   deselectRowIds = [],
   hideHeader = false,
   hideDataRows = false,
+  emptyState,
 }) {
   const t = useLabel(labelOverrides);
   const tMenu = useMenuLabel();
@@ -3536,6 +3560,7 @@ export function DataTable({
           <TableBody data-testid="TableBody__eb5261">
             {renderTableRows({
               hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
+              emptyState,
               selectable, isRowSelectable, toggleRow, visibleColumns,
               renderCellValue, onRowClick, onNavigate, selectedRowBg, selectedId, selectedRowId,
               rowHoverStyle,

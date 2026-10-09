@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { declareNoSession } from '../../helpers/auth.js';
 
 /**
  * Onboarding — Two continuous E2E flows (mocked, no backend).
@@ -18,9 +19,14 @@ import { test, expect } from '@playwright/test';
 // ── Mock installer ───────────────────────────────────────────────────────────
 
 async function installMocks(page, { registerBehavior = 'success', loginBehavior = 'success' } = {}) {
-  await page.route('**/sws/go/me', route =>
-    route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"invalid"}}' })
-  );
+  await declareNoSession(page);
+  // No session until a login succeeds, as on the server. Answering 401 after it too used to pass
+  // only because a failed /me read was ignored; since ETP-5675 it means the session was lost.
+  let signedIn = false;
+  await page.route('**/sws/go/me', route => (signedIn
+    ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ name: 'QA User', email: 'qa@test.com' }) })
+    : route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"invalid"}}' })
+  ));
 
   await page.route('**/sws/go/session/register', async route => {
     if (registerBehavior === 'fail') {
@@ -31,6 +37,7 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
       });
     }
     const body = route.request().postDataJSON();
+    signedIn = true;
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -72,6 +79,7 @@ async function installMocks(page, { registerBehavior = 'success', loginBehavior 
           body: JSON.stringify({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid credentials', userMessage: 'Credenciales incorrectas' } }),
         });
       }
+      signedIn = true;
       return route.fulfill({
         status: 200,
         contentType: 'application/json',

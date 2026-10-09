@@ -30,6 +30,12 @@ export function AccountsToolbar({
   rows = [],
   onNewAccount,
   onMatchingRules,
+  // ETP-5457 — the financial-account window's "read-only" access tier: "Nueva cuenta", the
+  // toolbar's only write entry point, is not rendered. Filters, search, sort and refresh stay.
+  windowReadOnly = false,
+  // ETP-5457 — "Reglas de matcheo" navigates to another window (match-rule), so whether it is
+  // offered follows the role's access to THAT window, decided by the caller. Default: shown.
+  showMatchingRules = true,
   // Rendered node rather than sort props: the toolbar stays presentational, and the slot that
   // owns the ListView sort state decides what goes here. Absent = nothing rendered, so this is
   // inert for any other caller.
@@ -51,8 +57,8 @@ export function AccountsToolbar({
           value={typeFilter}
           onChange={onTypeFilterChange}
           data-testid="AccountTypeFilter__c01b81" />
-        {/* h-10 to match every other control in this toolbar; the button's own
-            base height is h-9 (see docs/list-filters.md "Visual parity"). */}
+        {/* h-10 to match every other control in this toolbar (see
+            docs/list-filters.md "Visual parity"). */}
         <AdvancedFilterButton
           columns={filterColumns}
           rows={rows}
@@ -65,14 +71,14 @@ export function AccountsToolbar({
       <div className="flex items-center gap-2">
         <div className="relative h-10 w-[232px]">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[hsl(var(--text-disabled))]"
+            className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#828FA3]"
             data-testid="Search__c01b81" />
           <Input
             type="search"
             value={search ?? ''}
             onChange={(e) => onSearchChange?.(e.target.value)}
             placeholder={ui('financeAccountsSearchPlaceholder')}
-            className="h-10 rounded-lg border-[hsl(var(--border-control))] bg-card pl-10 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] placeholder:text-[hsl(var(--muted-foreground))]"
+            className="h-10 rounded-lg border-[hsl(var(--border-control))] bg-card pl-10 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] placeholder:text-[hsl(var(--muted-foreground))]"
             data-testid="cuentas-search-input"
           />
         </div>
@@ -84,28 +90,32 @@ export function AccountsToolbar({
           label={ui('refresh')}
           data-testid="RefreshButton__c01b81" />
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onMatchingRules}
-          className="h-10 w-[188px] gap-1 rounded-lg border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))] [&_svg]:size-5"
-          data-testid="cuentas-matching-rules-button"
-        >
-          <Filter className="text-[hsl(var(--text-disabled))]" data-testid="Filter__c01b81" />
-          {ui('financeAccountsMatchingRules')}
-        </Button>
+        {showMatchingRules && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onMatchingRules}
+            className="h-10 w-[188px] gap-1 rounded-lg border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))] [&_svg]:size-5"
+            data-testid="cuentas-matching-rules-button"
+          >
+            <Filter className="text-[#828FA3]" data-testid="Filter__c01b81" />
+            {ui('financeAccountsMatchingRules')}
+          </Button>
+        )}
 
-        <Button
-          type="button"
-          onClick={onNewAccount}
-          className="group h-10 w-[153px] gap-1 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] [&_svg]:size-5"
-          data-testid="cuentas-new-account-button"
-        >
-          <Plus
-            className="text-primary-foreground/90 group-hover:text-[hsl(var(--accent-highlight-foreground))]"
-            data-testid="Plus__c01b81" />
-          {ui('financeAccountsNewAccount')}
-        </Button>
+        {!windowReadOnly && (
+          <Button
+            type="button"
+            onClick={onNewAccount}
+            className="group h-10 w-[153px] gap-2 rounded-lg bg-[#121217] pl-2 pr-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] [&_svg]:size-5"
+            data-testid="cuentas-new-account-button"
+          >
+            <Plus
+              className="text-white/90 group-hover:text-[hsl(var(--accent-highlight-foreground))]"
+              data-testid="Plus__c01b81" />
+            {ui('financeAccountsNewAccount')}
+          </Button>
+        )}
       </div>
     </div>
   );

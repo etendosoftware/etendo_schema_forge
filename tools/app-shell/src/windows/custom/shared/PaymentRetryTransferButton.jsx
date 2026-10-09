@@ -135,17 +135,14 @@ export default function PaymentRetryTransferButton({
       onClick={onRetry}
       disabled={retrying}
       data-testid="payment-retry-transfer"
-      className="transition-opacity hover:opacity-80 disabled:opacity-50"
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6,
-        padding: '4px 10px', borderRadius: 360, border: 'none',
-        background: 'var(--status-destructive-bg)', color: 'var(--status-destructive-fg)',
-        fontFamily: 'Inter', fontWeight: 600, fontSize: 14, lineHeight: '20px',
-        whiteSpace: 'nowrap', cursor: retrying ? 'default' : 'pointer',
-      }}
+      // ETP-5601 — record-toolbar secondary button (Figma): 40px, 8px radius, text-sm/leading-6
+      // in #121217, 20px icon. The icon keeps the destructive color so the "transfer failed" cue
+      // survives the move from a red pill to a standard button.
+      className="inline-flex items-center justify-center gap-2 h-10 px-3 shrink-0 whitespace-nowrap rounded-lg border border-border bg-card text-[#121217] text-sm leading-6 font-medium transition-colors hover:bg-muted/30 disabled:opacity-50 disabled:cursor-default"
     >
       <RotateCcw
-        size={15}
+        size={20}
+        className="text-[var(--status-destructive-fg)]"
         strokeWidth={2.5}
         aria-hidden="true"
         data-testid="RotateCcw__8d4aeb" />

@@ -30,7 +30,7 @@ The list uses `WarehouseCustomTable` in place of the default generated table. Co
 | **Location** | Resolved from `locationAddress$_identifier`, falls back to raw `locationAddress`. Not sortable. |
 | **Products** | Dynamic count cell (`WarehouseProductCountCell`): fetches storageBins then binContents per warehouse row, aggregates via `aggregateProducts`, displays count of products with `qty != 0` (includes negative stock, excludes exact zero — see "Stock filtering semantics" below). Shows `—` while loading or on error. Not sortable. |
 
-Print and Link buttons are hidden (`hidePrint`, `hideLink`). Custom sort and refresh icons match the Products window style (`SortIcon`, `RefreshIcon` from `@/components/ui/custom-icons`). List toolbar and table use 8 px horizontal/vertical padding throughout (`listbarPaddingX="px-2"`, `tablePaddingX="px-2"`, etc.).
+Print and Link buttons are hidden (`hidePrint`, `hideLink`). The sort and refresh toolbar icons are the default `ListView` icons, same as `/sales-order` (ETP-5601). List toolbar and table use 8 px horizontal/vertical padding throughout (`listbarPaddingX="px-2"`, `tablePaddingX="px-2"`, etc.).
 
 Search filters on `searchKey` and `name`.
 
@@ -41,9 +41,9 @@ Search filters on `searchKey` and `name`.
 The detail page uses a split layout:
 
 - **Left side**: header form + tabs below it.
-- **Right sidebar** (30% width, `w-[30%]`): contains only `WarehouseSummary`. The sidebar is constrained to the area above the tabs (`sidebarAboveTabsOnly`), so tabs span the full width below the form.
+- **Right sidebar** (fixed 320 px, `w-[320px]` — ETP-5513; it was `w-[30%]`, which grew with the viewport and squeezed the form at 1280x720): contains only `WarehouseSummary`. The sidebar is constrained to the area above the tabs (`sidebarAboveTabsOnly`), so tabs span the full width below the form.
 
-Visual separators: `toolbarBorderBottom` draws a line between the toolbar and the form area; `tabsSeparator` draws a line between the form/sidebar and the tabs strip. The form area uses `p-2` (`formCardPadding`), scroll areas use `px-2` (`formScrollPaddingX`), and the tab content area uses `p-2 overflow-y-auto max-h-[calc(100vh-380px)]`.
+Visual separators: the toolbar's bottom rule is part of the standard record toolbar since ETP-5601 (the `toolbarBorderBottom` key no longer has any effect); `tabsSeparator` draws a line between the form/sidebar and the tabs strip. The form area uses `p-2` (`formCardPadding`), scroll areas use `px-2` (`formScrollPaddingX`), and the tab content area uses `p-2 overflow-y-auto max-h-[calc(100vh-380px)]`.
 
 `noHeaderBorder` removes the default form card border.
 
@@ -56,7 +56,7 @@ Visual separators: `toolbarBorderBottom` draws a line between the toolbar and th
 | Search Key | 1 | 1 | Searchable, shown in grid |
 | Name | 2 | 1 | Searchable, shown in grid |
 | Location / Address | 3 | 2 | Shown in grid |
-| Description | 4 | 4 (full row) | `rows: 1` (single-line height) |
+| Description | 4 | 4 (full row) | `rows: 1` in decisions, rendered at 2 rows: `EntityForm` never renders a textarea below 2 rows (ETP-5513) |
 
 Discarded fields (not shown anywhere): `warehouseRule`, `storageBinSeparator`, `shipmentVehicle`, `shipperCode`, `fromDocumentNo`, `toDocumentNo`, `mReturnlocatorID`, `allocated`. The `discardPatterns: ["EM_*"]` rule additionally suppresses all Etendo module extension fields from the header form.
 
@@ -362,3 +362,4 @@ Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=wareh
 12. Confirm positive quantities are green with a leading `+` and negative quantities are red.
 13. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file, download it, and delete it. When multiple files exist, confirm **Download all (ZIP)** and **Delete all** (with confirmation dialog) appear.
 14. Open the **Accounting** tab and confirm the Warehouse Differences selector is editable and required. Confirm no delete (trash) affordance is available on the accounting row.
+15. (ETP-5509) At 1280×720 with the navigation rail expanded, confirm the list toolbar is a **single row** — this window has no tab group, so no empty second row is rendered — and that a gray separator line runs under it, above the grid (provisional: it is drawn in addition to the existing line under the column headers, pending product confirmation). Layout reference: `docs/list-filters.md` → "Toolbar layout".

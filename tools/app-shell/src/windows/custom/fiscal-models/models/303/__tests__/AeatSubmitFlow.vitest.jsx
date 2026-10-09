@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/AeatSubmitFlow.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/fiscalModelsUtils.js
 // Vitest tests for AeatSubmitFlow — the ETP-4456 Phase 2 AEAT 303 electronic
 // submission flow. Covers the pure helpers (response-status branching,
 // NRC/test-mode body shape, error-code-to-message mapping) plus the
@@ -181,11 +183,43 @@ describe('AeatSubmitFlow — confirm screen', () => {
     expect(screen.getByTestId('AeatSubmitFlow__presenterName')).toHaveValue('F&B España, S.A');
   });
 
+  // ETP-5584 P7 — the warning is always laid out (so the modal never changes height)
+  // and only its visibility toggles. "Shown" therefore means: the slot carries the
+  // visible modifier and is exposed to assistive tech.
   it('shows the test-mode warning banner only when the checkbox is checked', () => {
     renderFlow();
-    expect(screen.queryByText('fm.aeat.test_mode.warning')).not.toBeInTheDocument();
+    const slot = screen.getByTestId('AeatSubmitFlow__testModeSlot');
+    expect(slot).toHaveClass('fm-aeat-testmode-slot');
+    expect(slot).not.toHaveClass('fm-aeat-testmode-slot--visible');
+    expect(slot).toHaveAttribute('aria-hidden', 'true');
     fireEvent.click(screen.getByTestId('AeatSubmitFlow__testMode'));
-    expect(screen.getByText('fm.aeat.test_mode.warning')).toBeInTheDocument();
+    expect(slot).toHaveClass('fm-aeat-testmode-slot--visible');
+    expect(slot).toHaveAttribute('aria-hidden', 'false');
+    expect(slot).toContainElement(screen.getByText('fm.aeat.test_mode.warning'));
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__testMode'));
+    expect(slot).not.toHaveClass('fm-aeat-testmode-slot--visible');
+  });
+
+  it('reserves the test-mode warning space even while unchecked (stable modal height)', () => {
+    renderFlow();
+    // Present in the DOM before the checkbox is ever touched — only hidden.
+    expect(screen.getByTestId('AeatSubmitFlow__testModeSlot')).toContainElement(
+      screen.getByText('fm.aeat.test_mode.warning'),
+    );
+  });
+
+  it('lays out the presenter fields full-width with the shared Input (no fixed width, no monospace NRC)', () => {
+    renderFlow();
+    expect(screen.getByTestId('AeatSubmitFlow__dialog')).toHaveClass('fm-config-modal', 'fm-aeat-modal');
+    for (const id of ['AeatSubmitFlow__presenterNif', 'AeatSubmitFlow__presenterName', 'AeatSubmitFlow__nrc']) {
+      const input = screen.getByTestId(id);
+      expect(input.closest('.fm-aeat-field')).not.toBeNull();
+      expect(input).toHaveClass('w-full');
+      expect(input.style.width).toBe('');
+      expect(input.style.fontFamily).toBe('');
+    }
+    // Each label is bound to its input.
+    expect(screen.getByLabelText(/^fm\.aeat\.nrc\.label/)).toBe(screen.getByTestId('AeatSubmitFlow__nrc'));
   });
 
   it('calls onClose when the close (✕) button is clicked', () => {
@@ -289,7 +323,11 @@ describe('AeatSubmitFlow — forwards manualOverrides to AEAT (ETP-5431 Fix 3, p
 
   it('appends BOX_PARAM_MAP params (e.g. RectifyingAmount for box 111) when manualOverrides carries values', async () => {
     stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
-    renderFlow({ manualOverrides: { 111: 2.10, 70: 43.52 } });
+    // ETP-5597 pt.4 — box 70 is only forwarded inside a rectificativa, so the fixture checks it.
+    renderFlow({
+      identChecks: { tipo_declaracion: 'I', rectificativa: true, bank_iban: 'ES7620770024003102575766' },
+      manualOverrides: { 111: 2.10, 70: 43.52 },
+    });
 
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
 
@@ -298,6 +336,37 @@ describe('AeatSubmitFlow — forwards manualOverrides to AEAT (ETP-5431 Fix 3, p
     const params = new URLSearchParams(path.split('?')[1]);
     expect(params.get('RectifyingAmount')).toBe('2.1');
     expect(params.get('ComplementaryAmt')).toBe('43.52');
+  });
+
+  // ETP-5597 pt.4 — a declaration persisted before the 70/109 gating may still carry those
+  // overrides; the AEAT submission must drop them when neither rectificativa nor complementaria
+  // is checked, while every other manual box is still forwarded.
+  it('drops boxes 70/109 (ComplementaryAmt/ReturnsPendingSettlement) without rectificativa/complementaria', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({ manualOverrides: { 111: 2.10, 70: 43.52, 109: 9.5, 78: 12 } });
+
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    const params = new URLSearchParams(stableApiFetch.mock.calls[0][0].split('?')[1]);
+    expect(params.has('ComplementaryAmt')).toBe(false);
+    expect(params.has('ReturnsPendingSettlement')).toBe(false);
+    expect(params.get('RectifyingAmount')).toBe('2.1');
+    expect(params.get('PreviousPeriodAmtApplied')).toBe('12');
+  });
+
+  it('forwards box 109 when "complementaria" (pre-Oct-2024 layouts) is checked', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({
+      identChecks: { tipo_declaracion: 'I', complementaria: true, bank_iban: 'ES7620770024003102575766' },
+      manualOverrides: { 109: 9.5 },
+    });
+
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    const params = new URLSearchParams(stableApiFetch.mock.calls[0][0].split('?')[1]);
+    expect(params.get('ReturnsPendingSettlement')).toBe('9.5');
   });
 
   it('does NOT append any BOX_PARAM_MAP param when manualOverrides is null/absent (same guard as generate303File)', async () => {

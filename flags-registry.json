@@ -576,7 +576,7 @@
         "backend": []
       },
       "$pathsComment": "Only the two call sites that decide WHAT opens are owned. lookupCreateTargets.js, RecordCreateModal.jsx and EmbeddedWindowRoute.jsx are owned by lookup-create-product; this feature adds an entry and two props to them. useEntity.js and DetailView.jsx are touch points, not owned: `initialData` is a general capability every window can use, not code that would be deleted with this feature. No runtime flag — the registry entry itself is the switch, compile-time and greppable in one place, same reasoning as lookup-create-product.",
-      "$knownGapComment": "USABLE SLICE WITH ACCEPTED DEBT: `initialData` seeds the HEADER record only, so the Copilot OCR flow no longer pre-fills the four address fields that live on the `locationAddress` child tab (`ocr-contact-address-prefill`). NOT a gap, recorded because it was investigated and wrongly suspected of being one: a contact created from the popup can have zero locations, where the deleted CreateContactModal required an address and always POSTed one. That is harmless. The document's `partnerAddress` field routes through `PartnerAddressPicker` (EntityForm.DependentFkField dispatches on column C_BPartner_Location_ID), which offers '+ Añadir dirección' and opens LocationEditorModal with `bpId` set to the partner just selected — so the user creates the address inline on the document. The old modal's mandatory address was redundant against that picker. The Contacts window itself has always allowed a partner with no location.",
+      "$knownGapComment": "`initialData` seeds the HEADER record only; the OCR address (address, postal code, city, country) reaches the `locationAddress` child tab through `initialChildData` (ETP-5654, closes the former `ocr-contact-address-prefill` debt). Region is deliberately never prefilled. NOT a gap, recorded because it was investigated and wrongly suspected of being one: a contact created from the popup can have zero locations, where the deleted CreateContactModal required an address and always POSTed one. That is harmless. The document's `partnerAddress` field routes through `PartnerAddressPicker` (EntityForm.DependentFkField dispatches on column C_BPartner_Location_ID), which offers '+ Añadir dirección' and opens LocationEditorModal with `bpId` set to the partner just selected — so the user creates the address inline on the document. The old modal's mandatory address was redundant against that picker. The Contacts window itself has always allowed a partner with no location.",
       "deferredItems": [
         {
           "id": "secondary-row-update-no-required-validation",
@@ -586,16 +586,6 @@
             "tools/app-shell/src/components/contract-ui/DetailView.jsx:239 - getSecondaryRowUpdateHandler, the async (row, fieldKey, value, opts) => {...} handler; the PATCH fires with no isMissingRequired-style check before it",
             "tools/app-shell/src/components/contract-ui/DataTable.jsx:347 - isMissingRequired, the only required-field check in this file, used solely by the inline ADD-row's submitLine (line ~912) — never reused here",
             "Proposed fix: before the PATCH in getSecondaryRowUpdateHandler, resolve the field's `required` from st's Form/Table field descriptor and refuse (revert the optimistic value via handleUpdateChild, toast the same 'missing required' message the add-row uses) when the new value is blank. Needs the descriptor threaded through `ctx` since the handler currently only receives `st, linesLayout, ctx` — st doesn't carry the field list today."
-          ]
-        },
-        {
-          "id": "ocr-contact-address-prefill",
-          "kind": "open",
-          "note": "The OCR create-contact popup no longer pre-fills address / postalCode / city / country. `createPrefilledFrom` in ocrDocTypes.js still declares them, but `buildOcrContactSeed` can only forward the four keys that are businessPartner HEADER fields (name, taxID, etgoEmail, etgoPhone); the rest live on the `locationAddress` child tab, which `initialData` does not reach. The user retypes them. Closing this means a seeding mechanism for a child tab's new row, parallel to useEntity.handleNew.",
-          "refs": [
-            "ETP-4855 Error 1 - the ticket that added the rich OCR prefill being partially lost here",
-            "tools/app-shell/src/components/copilot/ocr/CreateContactModalAdapter.jsx - buildOcrContactSeed",
-            "tools/app-shell/src/hooks/useEntity.js - handleNew, the header-only seam"
           ]
         },
         {
@@ -717,6 +707,102 @@
             "root": "frontend",
             "path": "e2e/tests/flows/first-steps-demo-data-transfer.mocked.spec.js",
             "note": "Covers RUNNING progress, FAILED retry, and row absence with the flag off."
+          }
+        ]
+      }
+    },
+    {
+      "id": "unified-calendar-poc",
+      "description": "PROOF OF CONCEPT. Unified Calendar page: one month view overlaying several event sources (purchase invoice due dates, holidays, employee vacations) toggled from a side panel driven by a pluggable source registry. All events are static mock data; the page makes no backend request. Exists to validate the UX before any real source is wired.",
+      "owner": "valenvivaldi",
+      "jira": "ETP-5309",
+      "created": "2026-10-05",
+      "flag": {
+        "key": "unified-calendar-poc",
+        "defaultValue": false,
+        "ttl": "2026-11-30",
+        "ttlNote": "Short PoC TTL. By this date the PoC is either killed (delete the owned paths) or replaced by a real feature with real sources (purchase-invoice EM_ETGO_Due_Date, C_NonBusinessDay, an HR source) under its own flag.",
+        "symbols": [
+          "unified-calendar-poc",
+          "UNIFIED_CALENDAR_POC",
+          "UnifiedCalendarPage",
+          "unified-calendar",
+          "Unified Calendar",
+          "ucal"
+        ],
+        "$symbolsComment": "UnifiedCalendarPage is how runtime-routes.jsx references the feature without naming the flag; `unified-calendar` is the menu.json item name, the route path and the navigationExpectations.js catalog entry; `Unified Calendar` is the menu label key in the ui section of en_US/es_ES/es_AR; `ucal` is the prefix of every genericLabels key this feature adds to the three locale files, none of which contains the flag key."
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/pages/UnifiedCalendarPage.jsx",
+          "tools/app-shell/src/pages/unified-calendar/"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Owned code only. menu.json, runtime-routes.jsx, SideMenu.jsx, CommandPalette.jsx, flag-keys.js, lib/flags/index.js, the three locale files and navigationExpectations.js are shared toggle points. The menu item sits in the Proof of Concept group, so it is visible only when BOTH proof-of-concept-menu (group gate in SideMenu.jsx) and this flag are on; retiring proof-of-concept-menu first would hide this page too.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/unified-calendar/__tests__/calendarGrid.vitest.js",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/UnifiedCalendarPage.vitest.jsx",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/layout/SideMenu/__tests__/SideMenu.vitest.jsx",
+            "expected": true,
+            "note": "Shared spec; the on/off case for the unified-calendar-poc item flag (independent of proof-of-concept-menu) is still to be added (item visible only with both proof-of-concept-menu and unified-calendar-poc on)."
+          }
+        ]
+      }
+    },
+    {
+      "id": "import-batch-size",
+      "description": "Global NUMERIC operational override of how many rows the generic import sends per POST /sws/neo/batch. 0 or unset means no override: each window's window.import.limit.batchSize applies (default 1). A valid number (rounded down, clamped to 1..50 by the engine) wins over every window. One flag, no per-window variants; concurrency is not affected.",
+      "owner": "valenvivaldi",
+      "jira": "ETP-5676",
+      "created": "2026-10-08",
+      "flag": {
+        "key": "import-batch-size",
+        "defaultValue": 0,
+        "ttl": "2027-03-31",
+        "ttlNote": "Operational lever while multi-row import batching is being measured on real tenants. Retire it (delete the flag, keep window.import.limit.batchSize) once the per-window values are settled.",
+        "symbols": [
+          "import-batch-size",
+          "IMPORT_BATCH_SIZE",
+          "useNumberFlag",
+          "resolveImportBatchSize",
+          "importBatchSize"
+        ]
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/lib/importBatchSize.js"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Owned code only. flag-keys.js, lib/flags/index.js, useFeatureFlag.js (useNumberFlag), bootstrap.js and useWindowImportDialog.js are shared toggle points.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/importBatchSize.vitest.js",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/flags/__tests__/useFeatureFlag.vitest.jsx",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ListView.importLabels.vitest.jsx",
+            "expected": true
           }
         ]
       }

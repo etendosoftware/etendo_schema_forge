@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/InvoicePreview.jsx
 // Mocks must come before imports (Vitest hoisting).
 // Mirrors OrderPreview.vitest.jsx's isolated-mock approach so we can assert
 // directly on the dual-currency props passed to SummaryCard (ETP-4029).
@@ -1158,5 +1159,116 @@ describe('InvoicePreview — Solo-Lectura tier (ETP-5205)', () => {
     expect(screen.getByText('invoicePreviewSend')).toBeInTheDocument();
     expect(screen.getByText('invoicePreviewAddCollection')).toBeInTheDocument();
     expect(lastAttachmentConfig().readOnly).toBe(false);
+  });
+});
+
+// ── ETP-5518: file actions menu + lightbox, purchase branch only ──────────────
+// GenericPreviewModal's `fileActions` is opt-in. Only the purchase branch sets it (the slot
+// holds the supplier's own uploaded document); the sales branch caches a PDF we generate
+// ourselves and must keep the plain viewer.
+describe('InvoicePreview — attachmentConfig.fileActions (ETP-5518)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useDocumentCurrency.mockReturnValue({ orgCurrencyCode: 'EUR', isSameCurrency: true, exchangeRate: null });
+  });
+
+  function lastAttachmentConfig() {
+    return vi.mocked(GenericPreviewModal).mock.calls.at(-1)[0].attachmentConfig;
+  }
+
+  it('purchase invoice opts into fileActions (drop-zone mode)', () => {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook());
+
+    renderInvoicePreview();
+
+    const cfg = lastAttachmentConfig();
+    expect(cfg.fileActions).toBe(true);
+    expect(cfg.autoFetch).toBe(false);
+  });
+
+  it('purchase invoice keeps fileActions under Solo-Lectura; readOnly is what gates the writes', () => {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook());
+
+    renderInvoicePreview({ readOnly: true });
+
+    const cfg = lastAttachmentConfig();
+    expect(cfg.fileActions).toBe(true);
+    expect(cfg.readOnly).toBe(true);
+  });
+
+  it('sales invoice does not set fileActions', () => {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ isSalesInvoice: true, pdfUrl: 'blob:inv' }));
+
+    renderInvoicePreview({ specName: 'sales-invoice', windowName: 'sales-invoice', apiBaseUrl: '/api/sales-invoice' });
+
+    const cfg = lastAttachmentConfig();
+    expect(cfg.autoFetch).toBe(true);
+    expect(cfg).not.toHaveProperty('fileActions');
+  });
+});
+
+describe('InvoicePreview — delivery row (ETP-5549)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useDocumentCurrency.mockReturnValue({
+      orgCurrencyCode: null,
+      exchangeRate: null,
+      isSameCurrency: true,
+      loading: false,
+      convertAmount: (amount) => amount,
+    });
+  });
+
+  const lastSummaryProps = () => SummaryCard.mock.calls.at(-1)[0];
+
+  function renderWithDelivery(specName, eTGODeliveryStatus) {
+    const inv = { ...defaultInvoice, eTGODeliveryStatus };
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+      displayInvoice: inv,
+      isSalesInvoice: specName === 'sales-invoice',
+    }));
+    return renderInvoicePreview({ specName, invoice: inv });
+  }
+
+  it('sales invoice with 100 passes deliveryPercent 100 and the default label', () => {
+    renderWithDelivery('sales-invoice', 100);
+    expect(lastSummaryProps().deliveryPercent).toBe(100);
+    expect(lastSummaryProps().deliveryLabel).toBeUndefined();
+  });
+
+  it('purchase invoice with 40 passes deliveryPercent 40 and the Received label', () => {
+    renderWithDelivery('purchase-invoice', 40);
+    expect(lastSummaryProps().deliveryPercent).toBe(40);
+    expect(lastSummaryProps().deliveryLabel).toBe('previewCardReceivedPercent');
+  });
+
+  it('coerces a numeric string to a number', () => {
+    renderWithDelivery('purchase-invoice', '40');
+    expect(lastSummaryProps().deliveryPercent).toBe(40);
+  });
+
+  it('keeps the row for 0 (zero is a real value, not absent)', () => {
+    renderWithDelivery('sales-invoice', 0);
+    expect(lastSummaryProps().deliveryPercent).toBe(0);
+  });
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['empty string', ''],
+    ['non-numeric string', 'abc'],
+  ])('passes no deliveryPercent when eTGODeliveryStatus is %s', (_label, value) => {
+    renderWithDelivery('sales-invoice', value);
+    expect(lastSummaryProps().deliveryPercent).toBeUndefined();
+  });
+
+  it('still forwards status and fiscal rows alongside the delivery props', () => {
+    getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
+    renderWithDelivery('purchase-invoice', 40);
+    const props = lastSummaryProps();
+    expect(props.statusCode).toBe('CO');
+    expect(props.statusLabel).toBe('Completed');
+    const rows = (props.children || []).filter(Boolean);
+    expect(rows.some((el) => el?.props?.label === 'invoicePreview.fiscalStatus.tbaiPurchase')).toBe(true);
   });
 });

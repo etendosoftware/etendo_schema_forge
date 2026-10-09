@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/financial-accounts/AccountsToolbar.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 
 const toast = vi.fn();
@@ -108,8 +109,8 @@ describe('AccountsToolbar', () => {
     expect(trigger).toHaveTextContent('filters');
   });
 
-  // The button's own base height is h-9 (see docs/list-filters.md "Visual parity"); every
-  // control in THIS toolbar is 40px tall, so the window passes h-10 explicitly.
+  // The button's own base height is h-10 (40px, see docs/list-filters.md "Visual parity");
+  // the window still passes h-10 explicitly so this toolbar never depends on that default.
   it('overrides the funnel height to match the rest of the toolbar', () => {
     render(
       <AccountsToolbar
@@ -253,5 +254,110 @@ describe('AccountsToolbar', () => {
     );
     const button = screen.getByTestId('cuentas-new-account-button');
     expect(button).not.toBeDisabled();
+  });
+});
+
+// ETP-5457 — the financial-account window's "read-only" access tier. "Nueva cuenta" is the
+// toolbar's only write entry point, so it is the only control `windowReadOnly` removes; filters,
+// search, sort and refresh are reading tools and stay. "Reglas de matcheo" navigates to ANOTHER
+// window, so it follows `showMatchingRules` (the caller's view of the match-rule tier) and is
+// independent of `windowReadOnly`. Every read-only case has a full-access twin.
+describe('AccountsToolbar — read-only access tier (ETP-5457)', () => {
+  function renderToolbar(props = {}) {
+    return render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        advancedFilter={null}
+        onAdvancedFilterChange={vi.fn()}
+        onRefresh={vi.fn()}
+        sortControl={<button type="button" data-testid="sort-slot">sort</button>}
+        {...props}
+      />,
+    );
+  }
+
+  it('hides "Nueva cuenta" under the read-only tier (ETP-5457)', () => {
+    renderToolbar({ windowReadOnly: true, onNewAccount: vi.fn() });
+
+    expect(screen.queryByTestId('cuentas-new-account-button')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nueva cuenta')).not.toBeInTheDocument();
+  });
+
+  it('shows "Nueva cuenta" and wires its click under full access (ETP-5457 twin)', () => {
+    const onNewAccount = vi.fn();
+    renderToolbar({ windowReadOnly: false, onNewAccount });
+
+    fireEvent.click(screen.getByTestId('cuentas-new-account-button'));
+
+    expect(onNewAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it('defaults windowReadOnly to false, keeping "Nueva cuenta" for other callers (ETP-5457)', () => {
+    renderToolbar();
+
+    expect(screen.getByTestId('cuentas-new-account-button')).toBeInTheDocument();
+  });
+
+  it('keeps every reading control under the read-only tier (ETP-5457)', () => {
+    const onSearchChange = vi.fn();
+    const onRefresh = vi.fn();
+    renderToolbar({ windowReadOnly: true, onSearchChange, onRefresh });
+
+    expect(screen.getByTestId('account-type-filter-trigger')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-advanced-filter')).toBeInTheDocument();
+    expect(screen.getByTestId('sort-slot')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('cuentas-search-input'), { target: { value: 'BBVA' } });
+    fireEvent.click(screen.getByTestId('finance-refresh-button'));
+
+    expect(onSearchChange).toHaveBeenCalledWith('BBVA');
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the same reading controls under full access (ETP-5457 twin)', () => {
+    renderToolbar({ windowReadOnly: false });
+
+    expect(screen.getByTestId('account-type-filter-trigger')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-advanced-filter')).toBeInTheDocument();
+    expect(screen.getByTestId('sort-slot')).toBeInTheDocument();
+    expect(screen.getByTestId('cuentas-search-input')).toBeInTheDocument();
+    expect(screen.getByTestId('finance-refresh-button')).toBeInTheDocument();
+  });
+
+  it('shows "Reglas de matcheo" by default when showMatchingRules is not passed (ETP-5457)', () => {
+    renderToolbar();
+
+    expect(screen.getByTestId('cuentas-matching-rules-button')).toBeInTheDocument();
+  });
+
+  // The button's visibility is decided by showMatchingRules alone — windowReadOnly never touches it.
+  it.each([
+    { windowReadOnly: true, showMatchingRules: false, visible: false },
+    { windowReadOnly: true, showMatchingRules: true, visible: true },
+    { windowReadOnly: false, showMatchingRules: false, visible: false },
+    { windowReadOnly: false, showMatchingRules: true, visible: true },
+  ])(
+    'windowReadOnly=$windowReadOnly + showMatchingRules=$showMatchingRules → "Reglas de matcheo" visible=$visible (ETP-5457)',
+    ({ windowReadOnly, showMatchingRules, visible }) => {
+      renderToolbar({ windowReadOnly, showMatchingRules });
+
+      if (visible) {
+        expect(screen.getByTestId('cuentas-matching-rules-button')).toBeInTheDocument();
+      } else {
+        expect(screen.queryByTestId('cuentas-matching-rules-button')).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it('still navigates through onMatchingRules under the read-only tier (ETP-5457)', () => {
+    const onMatchingRules = vi.fn();
+    renderToolbar({ windowReadOnly: true, showMatchingRules: true, onMatchingRules });
+
+    fireEvent.click(screen.getByTestId('cuentas-matching-rules-button'));
+
+    expect(onMatchingRules).toHaveBeenCalledTimes(1);
   });
 });

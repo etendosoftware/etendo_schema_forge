@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/layout/TopBar/TopBar.jsx
 /**
  * TopBar — the app shell header. Covers the title truncation fix (ETP-4764 follow-up): a long
  * record name (e.g. a bank account's full name + IBAN) used to overflow the header and run
@@ -86,12 +87,19 @@ describe('TopBar title', () => {
     expect(indicator.querySelector('[style*="width"]')).toBeTruthy();
   });
 
+  // ETP-5509: the bound that lets `truncate` act is no longer a fixed max-w cap on the title
+  // block but the left grid column itself — every box between the column and the text must be
+  // shrinkable (`min-w-0`), otherwise the text's min-content width would widen the column.
   it('truncates a long title instead of letting it overflow the header', () => {
     render(<TopBar title={LONG_NAME} />);
     const title = screen.getByText(LONG_NAME);
-    expect(title.className).toMatch(/truncate/);
-    // The block itself must be capped — truncate has no effect on an unbounded container.
-    expect(title.closest('[class*="max-w-"]')).toBeTruthy();
+    expect(title.className).toMatch(/\btruncate\b/);
+    expect(title.className).toMatch(/\bmin-w-0\b/);
+    const block = screen.getByTestId('topbar-title-block');
+    expect(block.className).toMatch(/\bmin-w-0\b/);
+    const leftColumn = block.parentElement;
+    expect(leftColumn.className).toMatch(/\bcol-start-1\b/);
+    expect(leftColumn.className).toMatch(/\bmin-w-0\b/);
   });
 
   // The full name is wired as the tooltip's own content — not asserted by actually opening the
@@ -135,6 +143,14 @@ describe('TopBar title', () => {
     });
     document.removeEventListener('schema-forge:vector-search-scope', recordScopeEvent);
     window.history.pushState({}, '', '/');
+  });
+
+  // ETP-5602: the mic rendered as a role="button" with no handler — a control that does nothing.
+  // It stays hidden until voice search exists.
+  it('does not render a voice-search control in the global search box', () => {
+    render(<TopBar title="Inicio" />);
+    expect(screen.queryByTestId('Mic__133e64')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'searchWithVoice' })).not.toBeInTheDocument();
   });
 
   it('clears the scope pill when Backspace is pressed at the start of a non-empty query', async () => {
@@ -288,22 +304,57 @@ describe('TopBar layout (ETP-5504)', () => {
     navigateMock.mockReset();
   });
 
-  it('caps the title/breadcrumb block at 256px', () => {
+  // ETP-5509 — the header is a 3-column grid (left | search | right) whose side tracks are equal
+  // `1fr`, which is what keeps the search at the exact center of the bar. jsdom has no layout, so
+  // these pin the classes that produce it; the geometry itself is measured by
+  // e2e/tests/flows/platform/topbar-centered-search.mocked.spec.js.
+  it('lets the title/breadcrumb block use the whole left grid column (no fixed width cap)', () => {
     render(<TopBar title={LONG_NAME} breadcrumb={`Finanzas / Cuentas / ${LONG_NAME}`} />);
     const block = screen.getByTestId('topbar-title-block');
-    expect(block.className).toMatch(/max-w-\[256px\]/);
-    expect(block.className).not.toMatch(/max-w-\[320px\]/);
+    expect(block.className).not.toMatch(/max-w-/);
+    expect(block.className).toMatch(/\bmin-w-0\b/);
     expect(block).toContainElement(screen.getByTestId('topbar-breadcrumb'));
+    const leftColumn = block.parentElement;
+    expect(leftColumn.className).toMatch(/\bcol-start-1\b/);
+    expect(leftColumn.className).toMatch(/\bmin-w-0\b/);
+    expect(leftColumn.className).not.toMatch(/max-w-/);
+    // The string breadcrumb elides inside the block.
+    expect(screen.getByTestId('topbar-breadcrumb').className).toMatch(/\btruncate\b/);
   });
 
-  it('keeps the search in the flex flow with a fixed 392px width (no absolute overlay)', () => {
-    render(<TopBar title="Plan de cuentas" />);
+  it('lays the header out as a 3-column grid with the search in the middle column', () => {
+    const { container } = render(
+      <TopBar title="Plan de cuentas" menuAction={{ label: 'x', onClick: vi.fn() }} />,
+    );
+    const header = container.querySelector('header');
+    expect(header.className).toMatch(/\bgrid\b/);
+    expect(header.className).toContain('grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)]');
+    expect(header.className).not.toMatch(/(^|\s)flex(\s|$)/);
+
     const trigger = screen.getByTestId('global-search-trigger');
     expect(trigger.className).toMatch(/w-\[392px\]/);
     const slot = screen.getByTestId('topbar-search-slot');
-    expect(slot.className).toMatch(/flex-1/);
+    expect(slot.className).toMatch(/\bcol-start-2\b/);
+    expect(slot.className).not.toMatch(/flex-1/);
     expect(slot.className).not.toMatch(/absolute/);
     expect(slot.className).not.toMatch(/inset-0/);
+
+    const right = screen.getByTestId('topbar-quick-actions');
+    expect(right.className).toMatch(/\bcol-start-3\b/);
+    expect(right.className).toMatch(/\bjustify-self-end\b/);
+
+    // The kebab never gives up width to the title.
+    expect(screen.getByTestId('topbar-more-actions').className).toMatch(/\bshrink-0\b/);
+  });
+
+  it('keeps the search in the middle column when there is no title and no back button', () => {
+    const { container } = render(<TopBar />);
+    expect(screen.queryByTestId('topbar-title-block')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('topbar-back')).not.toBeInTheDocument();
+    expect(container.querySelector('header').className).toMatch(/\bgrid\b/);
+    // Explicit placement: without it, auto-placement would drop the slot into column 1.
+    expect(screen.getByTestId('topbar-search-slot').className).toMatch(/\bcol-start-2\b/);
+    expect(screen.getByTestId('topbar-quick-actions').className).toMatch(/\bcol-start-3\b/);
   });
 
   it('still lays out with a back button present', () => {
@@ -680,5 +731,170 @@ describe('TopBar breadcrumb navigation goes through the unsaved-changes guard (E
   it('renders nothing for an empty array breadcrumb', () => {
     render(<TopBar title="X" breadcrumb={[]} />);
     expect(screen.queryByTestId('topbar-breadcrumb')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-5504 QA follow-up. jsdom has no layout, so these pin the declarative inputs that produce
+// the geometry (classes, the breadcrumb grid template, DOM placement); the geometry itself — the
+// 20px gap to the search and "only the current level elides" — is measured by
+// e2e/tests/flows/platform/topbar-centered-search.mocked.spec.js.
+describe('TopBar header gap, breadcrumb shrink priority and title ⋯ placement (ETP-5504 QA)', () => {
+  const ANCESTOR_TRACK = 'minmax(0,max-content)';
+  const OVERFLOW_TRACK = 'max-content';
+  const CURRENT_TRACK = 'minmax(4rem,1fr)';
+
+  const gridColumnsOf = (nav) => nav.style.gridTemplateColumns.replaceAll(', ', ',');
+  // An ancestor level is the first child of a `flex min-w-0` wrapper placed directly in the nav
+  // (the overflow wrapper is `shrink-0`, the current level has no wrapper).
+  const ancestorLevels = (nav) => Array.from(nav.querySelectorAll(':scope > span.flex.min-w-0'))
+    .map((wrapper) => wrapper.firstElementChild);
+
+  afterEach(() => {
+    navigateMock.mockReset();
+    resetUnsavedChangesForTests();
+  });
+
+  it('separates the header grid columns by 20px (gap-5), not the former 16px', () => {
+    const { container } = render(<TopBar title="Plan de cuentas" />);
+    const header = container.querySelector('header');
+    expect(header.className).toMatch(/\bgap-5\b/);
+    expect(header.className).not.toMatch(/\bgap-4\b/);
+  });
+
+  it('lays a structured breadcrumb out as a one-row grid, not a flex row', () => {
+    render(<TopBar title="FAC-1" breadcrumb={[{ label: 'Ventas' }, { label: 'Factura', href: '/sales-invoice' }, 'FAC-1']} />);
+    const nav = screen.getByTestId('topbar-breadcrumb');
+    expect(nav.tagName).toBe('NAV');
+    expect(nav.className).toMatch(/(^|\s)grid(\s|$)/);
+    expect(nav.className).not.toMatch(/(^|\s)flex(\s|$)/);
+  });
+
+  it('gives one ancestor a content-sized track and the current page the 4rem..1fr track', () => {
+    render(<TopBar title="FAC-1" breadcrumb={[{ label: 'Factura', href: '/sales-invoice' }, 'FAC-1']} />);
+    expect(gridColumnsOf(screen.getByTestId('topbar-breadcrumb')))
+      .toBe(`${ANCESTOR_TRACK} ${CURRENT_TRACK}`);
+  });
+
+  it('gives each of two ancestors its own content-sized track before the current page', () => {
+    render(<TopBar title="FAC-1" breadcrumb={[{ label: 'Ventas' }, { label: 'Factura', href: '/sales-invoice' }, 'FAC-1']} />);
+    expect(gridColumnsOf(screen.getByTestId('topbar-breadcrumb')))
+      .toBe(`${ANCESTOR_TRACK} ${ANCESTOR_TRACK} ${CURRENT_TRACK}`);
+  });
+
+  it('adds a max-content track for the "⋯" between the first level and the current page (>3 levels)', () => {
+    render(
+      <TopBar
+        title="Canasta"
+        breadcrumb={[{ label: 'Inventario' }, { label: 'Categorías', href: '/c' }, { label: 'Equipamiento', href: '/c/e' }, 'Canasta']}
+      />,
+    );
+    expect(screen.getByTestId('topbar-breadcrumb-overflow')).toBeInTheDocument();
+    expect(gridColumnsOf(screen.getByTestId('topbar-breadcrumb')))
+      .toBe(`${ANCESTOR_TRACK} ${OVERFLOW_TRACK} ${CURRENT_TRACK}`);
+  });
+
+  it('renders a single (ancestor-less) level as a plain line with no grid template', () => {
+    render(<TopBar title="Informes" breadcrumb={[{ label: 'Informes', href: '/report-viewer' }]} />);
+    const crumb = screen.getByTestId('topbar-breadcrumb');
+    expect(crumb.tagName).toBe('SPAN');
+    expect(crumb).toHaveTextContent('Informes');
+    expect(crumb.style.gridTemplateColumns).toBe('');
+  });
+
+  it('caps every ancestor label at 160px with an ellipsis, and leaves the current level uncapped', () => {
+    render(
+      <TopBar
+        title={LONG_NAME}
+        breadcrumb={[{ label: 'Compras' }, { label: 'Relación albarán-factura', href: '/x' }, LONG_NAME]}
+      />,
+    );
+    const nav = screen.getByTestId('topbar-breadcrumb');
+    const ancestors = ancestorLevels(nav);
+    expect(ancestors.map((el) => el.textContent)).toEqual(['Compras', 'Relación albarán-factura']);
+    for (const level of ancestors) {
+      expect(level.className).toContain('max-w-[160px]');
+      expect(level.className).toMatch(/\btruncate\b/);
+      expect(level.className).toMatch(/\bmin-w-0\b/);
+    }
+    const current = screen.getByTestId('topbar-breadcrumb-current');
+    expect(current).toHaveTextContent(LONG_NAME);
+    expect(current.className).toMatch(/\bmin-w-0\b/);
+    expect(current.className).toMatch(/\btruncate\b/);
+    expect(current.className).not.toMatch(/max-w-/);
+  });
+
+  it('does not let an ancestor wrapper be a flex-shrink share-taker (no `shrink` class left)', () => {
+    render(<TopBar title="FAC-1" breadcrumb={[{ label: 'Ventas' }, { label: 'Factura', href: '/sales-invoice' }, 'FAC-1']} />);
+    const nav = screen.getByTestId('topbar-breadcrumb');
+    const wrappers = ancestorLevels(nav).map((level) => level.parentElement);
+    expect(wrappers).toHaveLength(2);
+    for (const wrapper of wrappers) {
+      expect(wrapper.parentElement).toBe(nav);
+      expect(wrapper.className).not.toMatch(/(^|\s)shrink(\s|$)/);
+    }
+  });
+
+  it('places the title ⋯ in the title row, right after the title, not beside the whole block', () => {
+    render(
+      <TopBar
+        title="Plan de cuentas"
+        recordCount={7}
+        breadcrumb="Finanzas / Plan de cuentas"
+        onAddToFavorites={vi.fn()}
+      />,
+    );
+    const kebab = screen.getByTestId('topbar-more-actions');
+    const title = screen.getByText('Plan de cuentas', { selector: 'span.text-xl' });
+    const titleRow = title.parentElement;
+    const block = screen.getByTestId('topbar-title-block');
+    expect(kebab.parentElement).toBe(titleRow);
+    expect(titleRow.parentElement).toBe(block);
+    expect(kebab.parentElement).not.toBe(block.parentElement);
+    // After the title and its count, as the last item of the row.
+    expect(titleRow.lastElementChild).toBe(kebab);
+    expect(Array.from(titleRow.children).indexOf(title)).toBeLessThan(Array.from(titleRow.children).indexOf(kebab));
+    // It sits on the title row, not on the breadcrumb's line.
+    expect(screen.getByTestId('topbar-breadcrumb')).not.toContainElement(kebab);
+    expect(kebab.className).toMatch(/(^|\s)-ml-1(\s|$)/);
+  });
+
+  // `onPageHelp` defaults to a no-op, so the menu only disappears when the page opts out of it.
+  it('renders no title ⋯ at all when there is nothing to put in it', () => {
+    render(<TopBar title="Plan de cuentas" breadcrumb="Finanzas / Plan de cuentas" onPageHelp={null} />);
+    expect(screen.getByText('Plan de cuentas', { selector: 'span.text-xl' })).toBeInTheDocument();
+    expect(screen.queryByTestId('topbar-more-actions')).not.toBeInTheDocument();
+  });
+
+  // The report viewer's breadcrumb shape (ReportViewerPage.jsx): category (plain) / Informes
+  // (catalog link) / report title (current).
+  it('navigates to the catalog from the report viewer "Reports" level and keeps the category inert', () => {
+    render(
+      <TopBar
+        title="Relación albarán-factura"
+        breadcrumb={[
+          { label: 'Compras' },
+          { label: 'Informes', href: '/report-viewer?category=purchases' },
+          { label: 'Relación albarán-factura' },
+        ]}
+      />,
+    );
+    const reports = screen.getByRole('button', { name: 'Informes' });
+    expect(screen.queryByRole('button', { name: 'Compras' })).not.toBeInTheDocument();
+    expect(screen.getByText('Compras').tagName).toBe('SPAN');
+    fireEvent.click(screen.getByText('Compras'));
+    expect(navigateMock).not.toHaveBeenCalled();
+    fireEvent.click(reports);
+    expect(navigateMock).toHaveBeenCalledWith('/report-viewer?category=purchases');
+  });
+
+  it('navigates to the unfiltered catalog when the report viewer has no category', () => {
+    render(
+      <TopBar
+        title="Informe"
+        breadcrumb={[{ label: 'Informes', href: '/report-viewer' }, { label: 'Informe' }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Informes' }));
+    expect(navigateMock).toHaveBeenCalledWith('/report-viewer');
   });
 });

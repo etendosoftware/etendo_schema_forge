@@ -1,3 +1,7 @@
+// @covers tools/app-shell/src/components/contract-ui/ReconciliationSplitPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/useReconciliationConversion.js
+// @covers tools/app-shell/src/components/contract-ui/ReconciliationConversionSection.jsx
+//
 // ETP-4502 iteration 2 — multi-currency (foreign-invoice) reconciliation behavior of
 // ReconciliationSplitPanel. Focused companion to ReconciliationSplitPanel.vitest.jsx.
 //
@@ -14,6 +18,14 @@
 //   - The payment-method modal opens only in invoice mode, only when the account has payment
 //     methods configured for the line's direction, and threads the chosen method id into the
 //     reconcile payload.
+//
+// Plus the panel wiring of the bank-rate conversion block (every selected invoice in ONE foreign
+// currency): the modal opens even with no method (picker hidden, conversion title), the payload
+// carries actualPayment / conversionRate / convertedAmount, a rate far from the invoice's raises
+// no warning (Classic parity), the footer keeps its invoice-rate totals plus an exchange-difference
+// notice, the write-off is never offered on top of it, and every close drops the edits. The
+// block's own rules are in reconciliationConversionMath.test.js and
+// ReconciliationConversionSection.vitest.jsx.
 
 // Mocks BEFORE imports.
 vi.mock('@/i18n', () => ({
@@ -36,9 +48,13 @@ vi.mock('sonner', () => ({
 // useLookup, so a test can exercise the hook's filtering branch (not just its unfiltered list).
 // The initial query is '' — exactly what the previous stub passed — so every other test that only
 // reads the options is unaffected.
-vi.mock('@/components/forms/fields', async () => {
+// MaskedAmountInput stays REAL: the bank-rate conversion block types into it, and its
+// (clean, parsed) contract — a decimal comma reported as a dot — is part of what those tests guard.
+vi.mock('@/components/forms/fields', async (importOriginal) => {
   const { useState } = await import('react');
+  const { MaskedAmountInput } = await importOriginal();
   return {
+    MaskedAmountInput,
     ChipSelect: ({ value, onChange, useLookup, testId }) => {
       const [query, setQuery] = useState('');
       const { results } = useLookup(query);
@@ -66,6 +82,12 @@ vi.mock('@/components/forms/fields', async () => {
   };
 });
 
+// The accounting-concept setup dialog (reached on GL_ITEM_REQUIRED) feeds its picker from this
+// lookup; a static empty list keeps it off the network.
+vi.mock('@/hooks/useMovementLookups', () => ({
+  useGLItemLookup: () => ({ results: [], loading: false }),
+}));
+
 const linesState = { lines: [], total: 0, counts: {}, loading: false, reload: vi.fn() };
 const candidatesState = { candidates: [], loading: false };
 const reconcileState = { reconcile: vi.fn().mockResolvedValue({ reconciliationId: 'R1' }), loading: false };
@@ -92,7 +114,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
 // Expected amounts go through the same canonical formatter MoneyAmount uses, so the assertions
 // follow the instance-wide separators instead of hardcoding '29,03 €'.
-import { formatCurrency } from '@/lib/formatCurrency';
+import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency';
+import { formatSigned } from '@/lib/formatSigned';
+import { toast } from 'sonner';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 // The panel's account currency is EUR (see renderPanel).
@@ -161,6 +185,9 @@ const CAND_TRANSACTION = {
   id: 'TX1', date: '2026-06-01T00:00:00Z', documentNo: 'TX-1', partnerName: 'ACME',
   amount: 100, pendingBalance: 100, status: 'pending', suggested: false,
 };
+
+/** The approximate marker the unreconciled account-currency equivalent carries. */
+const APPROX = '\u2248';
 
 const PM_RECEIPT_DEFAULT = { id: 'pm-1', name: 'Wire', isDefault: true, payinAllow: true, payoutAllow: false };
 const PM_RECEIPT_OTHER = { id: 'pm-2', name: 'Cash', isDefault: false, payinAllow: true, payoutAllow: false };
@@ -303,6 +330,66 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       // Still gets the currency badge (it IS foreign) but no base-amount secondary line.
       expect(within(row).getByTestId('recon-cand-currency-badge')).toBeInTheDocument();
       expect(within(row).queryByTestId('recon-cand-amount-base')).not.toBeInTheDocument();
+      // …and so nothing to mark as approximate.
+      expect(row.textContent).not.toContain(APPROX);
+    });
+
+    // While a candidate is unreconciled its amountBase is a preview at the invoice's own rate, not
+    // what the bank booked: both cells mark it "≈", with a title hint and a screen-reader copy.
+    it('marks the account-currency equivalent of an unreconciled foreign candidate as approximate', () => {
+      setLines([LINE_EUR]);
+      setCandidates([CAND_FOREIGN_USD]);
+      renderPanel({ currency: 'EUR' });
+      selectLine('L27');
+
+      const bases = within(screen.getByTestId('recon-cand-row-C-USD')).getAllByTestId('recon-cand-amount-base');
+      expect(bases).toHaveLength(2);
+      for (const base of bases) {
+        expect(base).toHaveAttribute('title', 'financeReconcileCandApproxAmount');
+        // The visible sign is aria-hidden and glued to the amount by a no-break space…
+        const sign = base.querySelector('[aria-hidden="true"]');
+        expect(sign.textContent).toBe(`${APPROX}\u00A0`);
+        // …and the meaning is spelled out for screen readers instead.
+        expect(base.querySelector('.sr-only')).toHaveTextContent('financeReconcileCandApproxAmount');
+        expect(base.textContent).toContain(formatCurrency('EUR', 27));
+        expect(base.textContent.indexOf(APPROX)).toBeLessThan(base.textContent.indexOf(formatCurrency('EUR', 27)));
+      }
+    });
+
+    it('marks it in invoice mode too, once the candidate is selected', () => {
+      setLines([LINE_EUR]);
+      setCandidates([CAND_FOREIGN_USD]);
+      renderPanel({ currency: 'EUR' });
+      selectLine('L27');
+      switchToSalesInvoices();
+      fireEvent.click(screen.getByTestId('recon-cand-check-C-USD'));
+
+      const bases = within(screen.getByTestId('recon-cand-row-C-USD')).getAllByTestId('recon-cand-amount-base');
+      expect(bases).toHaveLength(2);
+      bases.forEach((base) => expect(base.textContent).toContain(APPROX));
+    });
+
+    it('puts no "≈" on a same-currency row', () => {
+      setLines([LINE_EUR]);
+      setCandidates([CAND_SAME]);
+      renderPanel({ currency: 'EUR' });
+      selectLine('L27');
+
+      const row = screen.getByTestId('recon-cand-row-C-EUR');
+      expect(row.textContent).not.toContain(APPROX);
+      expect(within(row).queryByTitle('financeReconcileCandApproxAmount')).not.toBeInTheDocument();
+    });
+
+    it('marks only the foreign row in a mixed list', () => {
+      setLines([LINE_MULTI]);
+      setCandidates([CAND_FOREIGN_USD, CAND_SAME, CAND_FOREIGN_NO_BASE]);
+      renderPanel({ currency: 'EUR' });
+      selectLine('LM');
+
+      expect(screen.getByTestId('recon-cand-row-C-USD').textContent).toContain(APPROX);
+      expect(screen.getByTestId('recon-cand-row-C-EUR').textContent).not.toContain(APPROX);
+      expect(screen.getByTestId('recon-cand-row-C-NOBASE').textContent).not.toContain(APPROX);
+      expect(screen.getAllByTitle('financeReconcileCandApproxAmount')).toHaveLength(2);
     });
   });
 
@@ -589,6 +676,629 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       expect(payload.paymentMethodId).toBeUndefined();
       await waitFor(() => expect(props.onReconcileSuccess).toHaveBeenCalled());
     });
+
+    // ETP-5457 — the window's "read-only" access tier. Conciliar is disabled under it, so the only
+    // way to reach an open method modal is to open it while writable and re-render under the tier.
+    it('forces the payment method modal shut once the tier turns read-only, without reconciling (ETP-5457)', async () => {
+      setLines([LINE_POS]);
+      setCandidates([CAND_INVOICE_COVERING]);
+      const { rerender, props } = renderPanel({
+        currency: 'EUR', paymentMethods: [PM_RECEIPT_DEFAULT, PM_RECEIPT_OTHER],
+      });
+      selectLine('LP');
+      switchToSalesInvoices();
+      fireEvent.click(screen.getByTestId('recon-cand-check-CI'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      expect(screen.getByTestId('recon-payment-method-dialog')).toBeInTheDocument();
+
+      rerender(<ReconciliationSplitPanel {...props} windowReadOnly />);
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument());
+      // The invoice selection survives (browsing stays), but Conciliar is now disabled.
+      expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Bank-rate conversion: every selected invoice shares ONE foreign currency ──
+  //
+  // The reference case of docs/generated-custom-windows/financial-account.md ("Bank-rate
+  // conversion block"): a 27,87 € line against FV1000024 for 40,91 USD, whose own rate is
+  // ≈ 0,680286 (so its amountBase is 27,83 €). Classic parity: pay 40,91 USD, book 27,87 €, derive
+  // 0,681252 — the line ends fully reconciled and Core books the +0,04 € as exchange difference.
+  describe('bank-rate conversion (single foreign currency)', () => {
+    const LINE_CONV = {
+      id: 'LC', date: '2026-05-13T00:00:00Z', description: 'USD wire ACME',
+      status: 'pending', amount: 27.87,
+    };
+    const CAND_CONV_USD = {
+      id: 'C-FV', date: '2026-06-13T00:00:00Z', documentNo: 'FV1000024', partnerName: 'ACME',
+      amount: 40.91, pendingBalance: 40.91, status: 'pending', suggested: false,
+      kind: 'invoice', invoiceId: 'inv-fv', scheduleId: 'sch-fv', currency: 'USD',
+      amountBase: 27.83, baseCurrency: 'EUR', rate: 0.680286,
+    };
+    const DEFAULT_CONVERSION = {
+      actualPayment: '40.91', conversionRate: '0.681252', convertedAmount: '27.87',
+    };
+
+    /** Selects the line, switches to sales invoices and ticks the given candidates. */
+    function selectInvoices(lineId, ids) {
+      selectLine(lineId);
+      switchToSalesInvoices();
+      ids.forEach((id) => fireEvent.click(screen.getByTestId(`recon-cand-check-${id}`)));
+    }
+
+    function openConversionModal({ paymentMethods = [PM_RECEIPT_DEFAULT], line = LINE_CONV,
+      candidates = [CAND_CONV_USD] } = {}) {
+      setLines([line]);
+      setCandidates(candidates);
+      const rendered = renderPanel({ currency: 'EUR', paymentMethods });
+      selectInvoices(line.id, candidates.map((c) => c.id));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      return rendered;
+    }
+
+    const conversionInput = (id) => screen.getByTestId(`recon-conversion-${id}-input`);
+
+    /** Classic parity: the conversion block offers no advisory about the rate — no action, no alert. */
+    function expectNoAdvisory() {
+      const section = screen.getByTestId('recon-conversion-section');
+      expect(within(section).queryByRole('button')).not.toBeInTheDocument();
+      expect(within(section).queryByRole('alert')).not.toBeInTheDocument();
+      // Nor a reference rate or gain/loss row: Classic shows neither.
+      expect(within(section).queryByTestId('recon-conversion-reference')).not.toBeInTheDocument();
+      expect(within(section).queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
+    }
+    const footerRow = (key) => screen.getByText(key).closest('div').textContent;
+
+    async function confirmAndGetPayload() {
+      fireEvent.click(screen.getByTestId('recon-payment-method-confirm'));
+      await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+      return reconcileState.reconcile.mock.calls[0][0];
+    }
+
+    it('shows the conversion block inside the method modal, prefilled with the Classic defaults', () => {
+      openConversionModal();
+      // The statement amount is a disabled field showing the line's pending amount.
+      expect(screen.getByTestId('recon-conversion-statement')).toHaveValue(formatCurrency(undefined, 27.87));
+      expect(screen.getByTestId('recon-conversion-statement')).toBeDisabled();
+
+      const dialog = screen.getByTestId('recon-payment-method-dialog');
+      expect(within(dialog).getByTestId('recon-conversion-section')).toBeInTheDocument();
+      // A shown picker keeps the method copy.
+      expect(within(dialog).getByText('financeReconcileMethodModalTitle')).toBeInTheDocument();
+      expect(within(dialog).getByTestId('recon-payment-method-value')).toHaveTextContent('pm-1');
+      expect(conversionInput('actual')).toHaveValue(formatCurrency(undefined, 40.91));
+      expect(conversionInput('converted')).toHaveValue(formatCurrency(undefined, 27.87));
+      expect(screen.getByTestId('recon-payment-method-confirm')).not.toBeDisabled();
+    });
+
+    it('on a PARTIAL line the statement field and the defaults use the pending remainder, sent to the sub-line', async () => {
+      const partial = {
+        id: 'LCPART', date: '2026-05-14T00:00:00Z', description: 'USD wire, partly matched',
+        status: 'pending', reconcileStatus: 'PARTIAL', amount: 100, pendingAmount: 27.87,
+        reconciledAmount: 72.13, reconciledPct: 72, matchGroupId: 'GCP', remainderLineId: 'LCPART-rem',
+        partial: true,
+        txns: [{ transactionId: 'TXP', documentNo: 'PAY-1', contact: 'ACME', amount: 72.13, autoCreated: false }],
+      };
+      openConversionModal({ line: partial });
+
+      expect(screen.getByTestId('recon-conversion-statement')).toHaveValue(formatCurrency(undefined, 27.87));
+      expect(screen.getByTestId('recon-conversion-statement')).toBeDisabled();
+      expect(conversionInput('converted')).toHaveValue(formatCurrency(undefined, 27.87));
+
+      const payload = await confirmAndGetPayload();
+      expect(payload).toMatchObject({ statementLineId: 'LCPART-rem', ...DEFAULT_CONVERSION });
+    });
+
+    it('confirms the defaults with the three conversion fields and the chosen method', async () => {
+      const { props } = openConversionModal();
+
+      const payload = await confirmAndGetPayload();
+      expect(payload).toEqual({
+        financialAccountId: 'ACC-1',
+        statementLineId: 'LC',
+        invoices: [{ invoiceId: 'inv-fv', scheduleId: 'sch-fv' }],
+        paymentMethodId: 'pm-1',
+        ...DEFAULT_CONVERSION,
+      });
+      await waitFor(() => expect(props.onReconcileSuccess).toHaveBeenCalled());
+      expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument();
+    });
+
+    it('opens the modal with NO method configured: picker hidden, conversion copy, no paymentMethodId', async () => {
+      openConversionModal({ paymentMethods: [] });
+
+      const dialog = screen.getByTestId('recon-payment-method-dialog');
+      expect(within(dialog).queryByTestId('recon-payment-method-value')).not.toBeInTheDocument();
+      expect(within(dialog).getByText('financeReconcileConversionModalTitle')).toBeInTheDocument();
+      expect(within(dialog).getByText('financeReconcileConversionModalBody')).toBeInTheDocument();
+      expect(within(dialog).queryByText('financeReconcileMethodModalTitle')).not.toBeInTheDocument();
+      // No picker means nothing to pick: the confirm is not held back by an empty method.
+      expect(screen.getByTestId('recon-payment-method-confirm')).not.toBeDisabled();
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+
+      const payload = await confirmAndGetPayload();
+      expect(payload).toEqual({
+        financialAccountId: 'ACC-1',
+        statementLineId: 'LC',
+        invoices: [{ invoiceId: 'inv-fv', scheduleId: 'sch-fv' }],
+        ...DEFAULT_CONVERSION,
+      });
+      expect(payload).not.toHaveProperty('paymentMethodId');
+    });
+
+    it('opens the modal for a payment line too, labelling the amount "to pay" and sending it unsigned', async () => {
+      const line = { ...LINE_CONV, id: 'LCP', amount: -27.87 };
+      const cand = {
+        ...CAND_CONV_USD, id: 'C-FVP', amount: -40.91, pendingBalance: -40.91, amountBase: -27.83,
+      };
+      setLines([line]);
+      setCandidates([cand]);
+      renderPanel({ currency: 'EUR', paymentMethods: [PM_RECEIPT_DEFAULT] });
+      selectLine('LCP');
+      // A negative line opens on "payments"; purchase invoices are the invoice source for it.
+      fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+      fireEvent.click(screen.getByText(/financeReconcileSourcePurchaseInvoices/));
+      fireEvent.click(screen.getByTestId('recon-cand-check-C-FVP'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+
+      // The only configured method is payin, so the picker is hidden for this payout.
+      expect(screen.getByTestId('recon-conversion-section')).toBeInTheDocument();
+      expect(screen.queryByTestId('recon-payment-method-value')).not.toBeInTheDocument();
+      expect(screen.getByText('financeReconcileConversionActualPayment')).toBeInTheDocument();
+      // Paying 27,87 € for invoices worth 27,83 € is a LOSS on a payment — told by the footer only.
+      expect(screen.queryByTestId('recon-conversion-fx-difference')).not.toBeInTheDocument();
+      expect(screen.getByTestId('recon-action-fx-notice'))
+        .toHaveTextContent('financeReconcileBarFxLossAtBankRate');
+
+      const payload = await confirmAndGetPayload();
+      expect(payload).toMatchObject(DEFAULT_CONVERSION);
+      expect(payload).not.toHaveProperty('paymentMethodId');
+    });
+
+    it('editing the amount keeps the converted amount pinned to the statement', async () => {
+      openConversionModal();
+      fireEvent.change(conversionInput('actual'), { target: { value: '21,34' } });
+
+      expect(conversionInput('converted')).toHaveValue(formatCurrency(undefined, 27.87));
+      // The derived 1,305998 is ~92 % off the invoice rate: no warning, Confirmar stays enabled.
+      expectNoAdvisory();
+      expect(screen.getByTestId('recon-payment-method-confirm')).not.toBeDisabled();
+
+      const payload = await confirmAndGetPayload();
+      expect(payload).toMatchObject({
+        actualPayment: '21.34', conversionRate: '1.305998', convertedAmount: '27.87',
+      });
+    });
+
+    it('sends a rate typed with a decimal comma as the dot-decimal text the user typed', async () => {
+      openConversionModal();
+      fireEvent.change(conversionInput('rate'), { target: { value: '0,68125' } });
+
+      const payload = await confirmAndGetPayload();
+      expect(payload).toMatchObject({
+        actualPayment: '40.91', conversionRate: '0.68125', convertedAmount: '27.87',
+      });
+    });
+
+    it('disables Confirmar while the converted amount exceeds the line, even by one cent', () => {
+      openConversionModal();
+      fireEvent.change(conversionInput('converted'), { target: { value: '27,88' } });
+
+      expect(screen.getByTestId('recon-conversion-converted-error')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-payment-method-confirm')).toBeDisabled();
+
+      fireEvent.change(conversionInput('converted'), { target: { value: '27,87' } });
+      expect(screen.getByTestId('recon-payment-method-confirm')).not.toBeDisabled();
+    });
+
+    it('disables Confirmar while the amount to collect exceeds the outstanding total', () => {
+      openConversionModal({ paymentMethods: [] });
+      fireEvent.change(conversionInput('actual'), { target: { value: '41' } });
+
+      expect(screen.getByTestId('recon-conversion-actual-error')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-payment-method-confirm')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('recon-payment-method-confirm'));
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    });
+
+    /** The three conversion fields of the modal hold the Classic defaults. */
+    function expectDefaultFields() {
+      expect(conversionInput('actual')).toHaveValue(formatCurrency(undefined, 40.91));
+      expect(conversionInput('rate')).toHaveValue(formatPlainDecimal(0.681252));
+      expect(conversionInput('converted')).toHaveValue(formatCurrency(undefined, 27.87));
+    }
+
+    it('a large deviation (27,75 € line vs 78,26 USD): no warning, Confirmar enabled, the three fields sent', async () => {
+      const line = { ...LINE_CONV, id: 'LCD', amount: 27.75 };
+      const cand = { ...CAND_CONV_USD, amount: 78.26, pendingBalance: 78.26, amountBase: 53.24 };
+      openConversionModal({ line, candidates: [cand] });
+
+      // 27,75 / 78,26 = 0,354587 against the invoice's 0,680286 — Classic books it as asked.
+      expect(conversionInput('rate')).toHaveValue(formatPlainDecimal(0.354587));
+      expectNoAdvisory();
+      // The 25,49 € loss is announced by the footer, not inside the modal.
+      expect(screen.getByTestId('recon-action-fx-notice'))
+        .toHaveTextContent('financeReconcileBarFxLossAtBankRate');
+      expect(screen.getByTestId('recon-payment-method-confirm')).not.toBeDisabled();
+
+      const payload = await confirmAndGetPayload();
+      expect(payload).toEqual({
+        financialAccountId: 'ACC-1',
+        statementLineId: 'LCD',
+        invoices: [{ invoiceId: 'inv-fv', scheduleId: 'sch-fv' }],
+        paymentMethodId: 'pm-1',
+        actualPayment: '78.26',
+        conversionRate: '0.354587',
+        convertedAmount: '27.75',
+      });
+    });
+
+    it('several invoices of one currency at different rates: the defaults are sent, invoices in request order', async () => {
+      const line = { ...LINE_CONV, id: 'LAB', amount: 10 };
+      const candA = {
+        ...CAND_CONV_USD, id: 'C-A', documentNo: 'FV-A', invoiceId: 'inv-a', scheduleId: 'sch-a',
+        amount: 10, pendingBalance: 10, amountBase: 6, rate: 0.6,
+      };
+      const candB = {
+        ...CAND_CONV_USD, id: 'C-B', documentNo: 'FV-B', invoiceId: 'inv-b', scheduleId: 'sch-b',
+        amount: 10, pendingBalance: 10, amountBase: 8, rate: 0.8,
+      };
+      openConversionModal({ line, candidates: [candA, candB] });
+
+      // 20 USD for the 10 € the bank sent: rate 0,5, a loss against the 14 € they were worth.
+      expect(conversionInput('rate')).toHaveValue(formatPlainDecimal(0.5));
+      expect(screen.getByTestId('recon-action-fx-notice'))
+        .toHaveTextContent('financeReconcileBarFxLossAtBankRate');
+      expectNoAdvisory();
+
+      const payload = await confirmAndGetPayload();
+      expect(payload.invoices).toEqual([
+        { invoiceId: 'inv-a', scheduleId: 'sch-a' },
+        { invoiceId: 'inv-b', scheduleId: 'sch-b' },
+      ]);
+      expect(payload).toMatchObject({
+        actualPayment: '20', conversionRate: '0.5', convertedAmount: '10',
+      });
+    });
+
+    it('the footer keeps the invoice-rate totals (+27,83 € / +0,04 €) and adds the bank-rate gain notice', () => {
+      setLines([LINE_CONV]);
+      setCandidates([CAND_CONV_USD]);
+      renderPanel({ currency: 'EUR', paymentMethods: [PM_RECEIPT_DEFAULT] });
+      selectInvoices('LC', ['C-FV']);
+
+      // Σ amountBase at the invoice rate, exactly as before the conversion existed.
+      expect(footerRow('financeReconcileBarSelected')).toContain(formatSigned(27.83, 'EUR'));
+      expect(footerRow('financeReconcileBarRemaining')).toContain(formatSigned(0.04, 'EUR'));
+      expect(screen.getByTestId('recon-action-fx-notice'))
+        .toHaveTextContent('financeReconcileBarFxGainAtBankRate');
+      // The exchange difference is its own hint, not the "difference will be posted" notice.
+      expect(screen.queryByTestId('recon-action-difference-notice')).not.toBeInTheDocument();
+    });
+
+    it('the footer shows no notice when the selected invoice carries no rate', () => {
+      setLines([LINE_CONV]);
+      setCandidates([{ ...CAND_CONV_USD, rate: undefined }]);
+      renderPanel({ currency: 'EUR', paymentMethods: [PM_RECEIPT_DEFAULT] });
+      selectInvoices('LC', ['C-FV']);
+
+      expect(footerRow('financeReconcileBarSelected')).toContain(formatSigned(27.83, 'EUR'));
+      expect(screen.queryByTestId('recon-action-fx-notice')).not.toBeInTheDocument();
+    });
+
+    it('shows no footer line for a negligible difference', () => {
+      // At 0,681252 the invoice is worth exactly the 27,87 € the bank sent.
+      setLines([LINE_CONV]);
+      setCandidates([{ ...CAND_CONV_USD, amountBase: 27.87, rate: 0.681252 }]);
+      renderPanel({ currency: 'EUR', paymentMethods: [PM_RECEIPT_DEFAULT] });
+      selectInvoices('LC', ['C-FV']);
+      expect(screen.queryByTestId('recon-action-fx-notice')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      expect(screen.getByTestId('recon-conversion-section')).toBeInTheDocument();
+    });
+
+    it('the footer ignores the modal edits', () => {
+      openConversionModal();
+      fireEvent.change(conversionInput('converted'), { target: { value: '27' } });
+
+      expect(footerRow('financeReconcileBarSelected')).toContain(formatSigned(27.83, 'EUR'));
+      expect(footerRow('financeReconcileBarRemaining')).toContain(formatSigned(0.04, 'EUR'));
+      expect(screen.getByTestId('recon-action-fx-notice'))
+        .toHaveTextContent('financeReconcileBarFxGainAtBankRate');
+    });
+
+    it('cancelling the modal drops the edits: it reopens on the defaults', () => {
+      openConversionModal();
+      fireEvent.change(conversionInput('actual'), { target: { value: '21,34' } });
+      fireEvent.change(conversionInput('converted'), { target: { value: '27' } });
+
+      fireEvent.click(screen.getByTestId('recon-payment-method-cancel'));
+      expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument();
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      expectDefaultFields();
+    });
+
+    it('a successful reconcile drops the edits, so the same match reopens on the defaults', async () => {
+      const { props } = openConversionModal();
+      fireEvent.change(conversionInput('converted'), { target: { value: '27' } });
+      await confirmAndGetPayload();
+      await waitFor(() => expect(props.onReconcileSuccess).toHaveBeenCalled());
+
+      // Same line, same invoice, same outstanding: the edit would match this selection again.
+      selectInvoices('LC', ['C-FV']);
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      expectDefaultFields();
+    });
+
+    it('GL_ITEM_REQUIRED hands over to the account setup and drops the edits', async () => {
+      const err = new Error('An accounting concept is required');
+      err.status = 400;
+      err.code = 'GL_ITEM_REQUIRED';
+      reconcileState.reconcile = vi.fn().mockRejectedValueOnce(err);
+      openConversionModal();
+      fireEvent.change(conversionInput('converted'), { target: { value: '27' } });
+      fireEvent.click(screen.getByTestId('recon-payment-method-confirm'));
+
+      await screen.findByTestId('recon-glitem-setup-modal');
+      expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('recon-glitem-setup-cancel'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      expectDefaultFields();
+    });
+
+    // A 409 on the group head names the pending sub-line to target instead. The panel moves the
+    // selection there, so the modal — confirming a selection that no longer exists — must close
+    // rather than let one more click submit the retargeted line unreviewed.
+    describe('409 retarget to the remainder sub-line', () => {
+      const LINE_REM = {
+        id: 'L-REM', date: '2026-05-13T00:00:00Z', description: 'USD wire ACME (remainder)',
+        status: 'pending', amount: 27.87,
+      };
+
+      function retargetError() {
+        const err = new Error('Statement line already reconciled');
+        err.status = 409;
+        err.body = { remainderLineId: 'L-REM' };
+        return err;
+      }
+
+      async function confirmIntoRetarget(paymentMethods) {
+        toast.error.mockClear();
+        reconcileState.reconcile = vi.fn().mockRejectedValueOnce(retargetError());
+        setLines([LINE_CONV, LINE_REM]);
+        setCandidates([CAND_CONV_USD]);
+        renderPanel({ currency: 'EUR', paymentMethods });
+        selectInvoices('LC', ['C-FV']);
+        fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+        fireEvent.change(conversionInput('converted'), { target: { value: '27' } });
+        fireEvent.click(screen.getByTestId('recon-payment-method-confirm'));
+        await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+      }
+
+      it('closes the method modal, moves to the sub-line with nothing selected, and reopens on the defaults', async () => {
+        await confirmIntoRetarget([PM_RECEIPT_DEFAULT]);
+
+        await waitFor(() =>
+          expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument());
+        expect(toast.error).toHaveBeenCalledWith('Statement line already reconciled');
+        expect(linesState.reload).toHaveBeenCalled();
+        expect(screen.getByTestId('recon-line-radio-L-REM')).toBeChecked();
+        expect(screen.getByTestId('recon-line-radio-LC')).not.toBeChecked();
+        expect(candidateCheckbox('C-FV')).not.toBeChecked();
+        // Nothing was resubmitted behind the user's back.
+        expect(reconcileState.reconcile).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByTestId('recon-cand-check-C-FV'));
+        fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+        expectDefaultFields();
+      });
+
+      it('closes the conversion-only modal too (no payment method configured)', async () => {
+        await confirmIntoRetarget([]);
+
+        await waitFor(() =>
+          expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument());
+        expect(screen.getByTestId('recon-line-radio-L-REM')).toBeChecked();
+        expect(candidateCheckbox('C-FV')).not.toBeChecked();
+        expect(reconcileState.reconcile).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByTestId('recon-cand-check-C-FV'));
+        fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+        expect(screen.getByText('financeReconcileConversionModalTitle')).toBeInTheDocument();
+        expectDefaultFields();
+      });
+
+      it('keeps the modal open when the 409 names the line already targeted', async () => {
+        // Nothing to retarget to: the selection still stands, so the user can retry or cancel.
+        toast.error.mockClear();
+        const err = retargetError();
+        err.body = { remainderLineId: 'LC' };
+        reconcileState.reconcile = vi.fn().mockRejectedValueOnce(err);
+        openConversionModal();
+        fireEvent.click(screen.getByTestId('recon-payment-method-confirm'));
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalled());
+        expect(screen.getByTestId('recon-payment-method-dialog')).toBeInTheDocument();
+        // The open dialog hides the panel from the accessibility tree, hence `hidden: true`.
+        expect(within(screen.getByTestId('recon-cand-check-C-FV'))
+          .getByRole('checkbox', { hidden: true })).toBeChecked();
+      });
+    });
+
+    // isMethodConfirmDisabled, observed through the modal's Confirmar.
+    describe('Confirmar gating', () => {
+      const INACTIVE_USD = { ...CAND_CONV_USD, amount: 0, pendingBalance: 0, amountBase: 0 };
+
+      it('no method + active, valid conversion → enabled', () => {
+        openConversionModal({ paymentMethods: [] });
+        expect(screen.getByTestId('recon-conversion-section')).toBeInTheDocument();
+        expect(screen.getByTestId('recon-payment-method-confirm')).not.toBeDisabled();
+      });
+
+      it('no method + active, invalid conversion → disabled', () => {
+        openConversionModal({ paymentMethods: [] });
+        fireEvent.change(conversionInput('rate'), { target: { value: '0' } });
+        expect(screen.getByTestId('recon-payment-method-confirm')).toBeDisabled();
+      });
+
+      it('no method + eligible but inactive conversion → the modal does not even open', async () => {
+        setLines([LINE_CONV]);
+        setCandidates([INACTIVE_USD]);
+        renderPanel({ currency: 'EUR', paymentMethods: [] });
+        selectInvoices('LC', ['C-FV']);
+        fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+        expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument();
+        await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+      });
+
+      it('no method + a conversion that turns inactive while the modal is open → disabled, nothing to confirm', () => {
+        const { rerender, props } = openConversionModal({ paymentMethods: [] });
+        expect(screen.getByTestId('recon-payment-method-confirm')).not.toBeDisabled();
+
+        // A background refresh brings the invoice back with nothing outstanding.
+        setCandidates([INACTIVE_USD]);
+        rerender(<ReconciliationSplitPanel {...props} />);
+
+        expect(screen.getByTestId('recon-payment-method-dialog')).toBeInTheDocument();
+        expect(screen.queryByTestId('recon-conversion-section')).not.toBeInTheDocument();
+        expect(screen.getByTestId('recon-payment-method-confirm')).toBeDisabled();
+        fireEvent.click(screen.getByTestId('recon-payment-method-confirm'));
+        expect(reconcileState.reconcile).not.toHaveBeenCalled();
+      });
+
+      it('with a method picked, the same refresh leaves a plain method confirmation → enabled', () => {
+        const { rerender, props } = openConversionModal({ paymentMethods: [PM_RECEIPT_DEFAULT] });
+        setCandidates([INACTIVE_USD]);
+        rerender(<ReconciliationSplitPanel {...props} />);
+
+        expect(screen.queryByTestId('recon-conversion-section')).not.toBeInTheDocument();
+        expect(screen.getByTestId('recon-payment-method-value')).toHaveTextContent('pm-1');
+        expect(screen.getByTestId('recon-payment-method-confirm')).not.toBeDisabled();
+      });
+    });
+
+    it('does not open the modal for an eligible but inactive selection with no method', async () => {
+      // One USD invoice with nothing outstanding: same currency rule, but nothing to convert.
+      setLines([LINE_CONV]);
+      setCandidates([{ ...CAND_CONV_USD, amount: 0, pendingBalance: 0, amountBase: 0 }]);
+      renderPanel({ currency: 'EUR', paymentMethods: [] });
+      selectInvoices('LC', ['C-FV']);
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+
+      expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument();
+      await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+      expect(reconcileState.reconcile.mock.calls[0][0]).not.toHaveProperty('actualPayment');
+    });
+
+    it('never offers the write-off on top of a conversion, and never sends writeoffDifference', async () => {
+      // 27,00 € line vs a 27,83 € invoice: without the conversion this gap is a write-off offer.
+      const line = { ...LINE_CONV, id: 'LCW', amount: 27 };
+      openConversionModal({ line });
+
+      expect(screen.getByTestId('recon-conversion-section')).toBeInTheDocument();
+      expect(screen.queryByTestId('recon-writeoff-breakdown')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-writeoff-toggle')).not.toBeInTheDocument();
+
+      const payload = await confirmAndGetPayload();
+      expect(payload).not.toHaveProperty('writeoffDifference');
+      expect(payload).toMatchObject({ actualPayment: '40.91', convertedAmount: '27' });
+    });
+
+    it('still offers the write-off for the same gap on a same-currency invoice (control)', () => {
+      const line = { ...LINE_CONV, id: 'LCE', amount: 27 };
+      const sameCurrency = {
+        ...CAND_CONV_USD, id: 'C-EUR-W', currency: 'EUR', amount: 27.83, pendingBalance: 27.83,
+        amountBase: undefined, baseCurrency: undefined, rate: undefined,
+      };
+      openConversionModal({ line, candidates: [sameCurrency] });
+
+      expect(screen.queryByTestId('recon-conversion-section')).not.toBeInTheDocument();
+      expect(screen.getByTestId('recon-writeoff-breakdown')).toBeInTheDocument();
+    });
+
+    it('a mixed USD + EUR selection keeps the invoice-rate flow: no block, no conversion fields', async () => {
+      setLines([LINE_MULTI]);
+      setCandidates([CAND_SAME, CAND_FOREIGN_USD]);
+      renderPanel({ currency: 'EUR', paymentMethods: [PM_RECEIPT_DEFAULT] });
+      selectInvoices('LM', ['C-EUR', 'C-USD']);
+
+      expect(screen.queryByTestId('recon-action-fx-notice')).not.toBeInTheDocument();
+      expect(footerRow('financeReconcileBarSelected')).toContain(formatSigned(47, 'EUR'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      expect(screen.getByText('financeReconcileMethodModalTitle')).toBeInTheDocument();
+      expect(screen.queryByTestId('recon-conversion-section')).not.toBeInTheDocument();
+
+      const payload = await confirmAndGetPayload();
+      expect(Object.keys(payload).sort()).toEqual(
+        ['financialAccountId', 'invoices', 'paymentMethodId', 'statementLineId']);
+    });
+
+    it('a mixed selection with no method reconciles straight away, without the modal', async () => {
+      setLines([LINE_MULTI]);
+      setCandidates([CAND_SAME, CAND_FOREIGN_USD]);
+      renderPanel({ currency: 'EUR', paymentMethods: [] });
+      selectInvoices('LM', ['C-EUR', 'C-USD']);
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+
+      expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument();
+      await waitFor(() => expect(reconcileState.reconcile).toHaveBeenCalledTimes(1));
+      expect(reconcileState.reconcile.mock.calls[0][0]).not.toHaveProperty('actualPayment');
+    });
+
+    it('two foreign currencies are not converted either', () => {
+      setLines([LINE_MULTI]);
+      setCandidates([CAND_FOREIGN_USD, CAND_FOREIGN_GBP]);
+      renderPanel({ currency: 'EUR', paymentMethods: [] });
+      selectInvoices('LM', ['C-USD', 'C-GBP']);
+
+      expect(screen.queryByTestId('recon-action-fx-notice')).not.toBeInTheDocument();
+      expect(footerRow('financeReconcileBarSelected')).toContain(formatSigned(39, 'EUR'));
+    });
+
+    it('forces the conversion-only modal shut once the tier turns read-only, without reconciling (ETP-5457)', async () => {
+      const { rerender, props } = openConversionModal({ paymentMethods: [] });
+      expect(screen.getByTestId('recon-conversion-section')).toBeInTheDocument();
+
+      rerender(<ReconciliationSplitPanel {...props} windowReadOnly />);
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument());
+      expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    });
+
+    it('drops the edits when the read-only tier force-closes the modal', async () => {
+      const { rerender, props } = openConversionModal({ paymentMethods: [] });
+      fireEvent.change(conversionInput('actual'), { target: { value: '21,34' } });
+      fireEvent.change(conversionInput('converted'), { target: { value: '27' } });
+
+      rerender(<ReconciliationSplitPanel {...props} windowReadOnly />);
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument());
+
+      // The panel keeps the modal flagged open, so lifting the tier shows it again WITHOUT going
+      // through Conciliar (whose own reset would hide a missing one): only the hook's reset on the
+      // tier switch brings the defaults back.
+      rerender(<ReconciliationSplitPanel {...props} />);
+      await screen.findByTestId('recon-payment-method-dialog');
+      expectDefaultFields();
+    });
+
+    it('keeps the modal shut under the read-only tier from the start', () => {
+      setLines([LINE_CONV]);
+      setCandidates([CAND_CONV_USD]);
+      renderPanel({ currency: 'EUR', paymentMethods: [], windowReadOnly: true });
+      selectInvoices('LC', ['C-FV']);
+
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument();
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    });
   });
 
   // ── ETP-5450: dual-currency display of RECONCILED documents ─────────────────
@@ -685,6 +1395,18 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
         expect(within(importeCell).getByTestId('recon-cand-amount-base')).toBe(bases[1]);
       });
 
+      it('puts no "≈" on a reconciled line\'s linked foreign document — that amount was booked', () => {
+        setLines([LINE_RECONCILED_FOREIGN]);
+        setCandidates([RECON_CAND_FOREIGN]);
+        renderPanel({ currency: 'EUR' });
+        selectLine('LRF');
+
+        const row = screen.getByTestId('recon-cand-row-TF');
+        expect(within(row).getAllByTestId('recon-cand-amount-base')).toHaveLength(2);
+        expect(row.textContent).not.toContain(APPROX);
+        expect(within(row).queryByTitle('financeReconcileCandApproxAmount')).not.toBeInTheDocument();
+      });
+
       it('per-row unlink of a foreign reconciled document un-reconciles that transaction', async () => {
         setLines([LINE_RECONCILED_FOREIGN]);
         setCandidates([RECON_CAND_FOREIGN]);
@@ -762,6 +1484,21 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
         expectEurOnTopForeignBelow(
           within(row).getByTestId('recon-matched-amount-base-TXF'), EUR_29(), USD_42());
         expect(within(row).getByTestId('recon-unlink-TXF')).toBeInTheDocument();
+      });
+
+      it('puts no "≈" on a matched transaction of the "conciliado" block', () => {
+        setLines([partialLine([TXN_FOREIGN])]);
+        renderPanel({ currency: 'EUR' });
+        selectLine('LPF');
+        expandMatchedBlock();
+
+        const row = screen.getByTestId('recon-matched-row-TXF');
+        const base = within(row).getByTestId('recon-matched-amount-base-TXF');
+        expect(base.textContent).toBe(EUR_29());
+        expect(base).not.toHaveAttribute('title');
+        expect(row.textContent).not.toContain(APPROX);
+        // The block header total is the booked amount too.
+        expect(screen.getByTestId('recon-matched-toggle').textContent).not.toContain(APPROX);
       });
 
       it('shows magnitudes only for a foreign matched payment (the block is unsigned)', () => {

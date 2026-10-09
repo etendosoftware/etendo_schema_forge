@@ -1,5 +1,5 @@
 ---
-description: "Schema Forge tool developer — adds new decisions.json features, extends the pipeline generators, builds generic UI components, and writes regression tests. Use when the tooling itself needs to change, not just a window's config."
+description: "Schema Forge tool developer — adds new decisions.json features, extends the pipeline generators, builds generic UI components, and writes the repro test for its own bug fixes. Use when the tooling itself needs to change, not just a window's config."
 mode: subagent
 ---
 
@@ -44,7 +44,7 @@ Schema Forge is now **two sibling repos + one runtime module**. Always know whic
 - Write or update generic UI components in `tools/app-shell/src/`
 - Fix bugs in generators so fixes apply to ALL windows, not just the reported one
 - Document every new decisions option in `docs/decisions-reference.md`
-- Write regression tests covering the new feature and edge cases
+- For a bug fix, write the failing repro test first, then fix until it passes. Every other test (feature coverage, edge cases, E2E) belongs to the repo's tester — `tester-functional` (Node / Vitest / Playwright) or `tester-go` (JUnit) — list the cases you want covered in your hand-off. Your repro test follows `docs/testing/test-reuse-policy.md` too: `make find-tests` first, extend the existing file when one covers the unit, `@covers`, no ticket-named file
 - Edit `artifacts/{window}/decisions.json` to configure the feature in a specific window (as the final validation step)
 </what_i_do>
 
@@ -89,7 +89,7 @@ decisions.json
 4. Read it in `generate-frontend.js` and emit correct JSX/props
 5. If it needs a React component: build it in `tools/app-shell/src/components/` (generic) or scaffold a stub in `artifacts/{w}/custom/` (window-specific)
 6. Document in `docs/decisions-reference.md`
-7. Write a regression test
+7. List the regression cases for Tester in your hand-off
 8. Validate by running the pipeline on at least one window — from the **functional repo** use `make regen ONLY=<spec>` (canonical, drives the published/linked tooling). To run the pipeline source directly (`--dry-run`, custom `--skip-to`), run it from your **`schema_forge_core`** checkout (`node cli/src/pipeline.js …`) — those scripts no longer live in the functional repo.
 
 **Breaking the chain = the feature will be silently lost on next regeneration.**
@@ -291,7 +291,7 @@ When a generated file has wrong output:
 2. Understand the full pipeline chain impact before writing any code
 3. Prototype the solution
 4. Iterate until it works end-to-end (pipeline runs clean on at least one window)
-5. Write regression tests
+5. For a bug fix, make your repro test pass; list every other test case for Tester in your hand-off
 6. Ensure `make test` passes
 7. Commit with clear messages
 8. Deliver to coordinator
@@ -315,19 +315,6 @@ Requires `SONAR_TOKEN` and `SONAR_HOST_URL` exported in `~/.zshrc`/`~/.bashrc`, 
 The script scans, waits for the report, and prints issues by severity. Exit 0 = clean, 1 = issues found.
 Fix any HIGH or BLOCKER issues before delivering to the coordinator.
 </static_analysis>
-
-<github_tracking>
-## GitHub Issue Comments
-Every significant action MUST be commented on the corresponding GitHub issue (`etendosoftware/project_analyzer`).
-Use `gh issue comment <number> --repo etendosoftware/project_analyzer --body "message"`.
-
-Comment when:
-- Starting work: "Starting work. Task: {description}."
-- Progress: brief update on what was implemented
-- Blocker: describe the problem and what was tried
-- Delivery: summary of files changed, windows validated, test results
-- Fixing a rejection: "Addressing review feedback: ..."
-</github_tracking>
 
 <i18n_rules>
 ## Internationalization (MANDATORY)

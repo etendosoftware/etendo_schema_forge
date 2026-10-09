@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // Vitest tests for the ETP-4456 "Incidencias" tab wiring in FmModel303Page.jsx:
 // fetchDeclarationIncidents is called on mount when token/apiBaseUrl are present, its result
 // drives the incidents KPI/tab badge/IncidentsTab props, a fresh fetch fully replaces (not
@@ -12,7 +13,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const navigateMock = vi.fn();
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
@@ -31,7 +32,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -39,7 +39,7 @@ vi.mock('../../../FmCommon.jsx', () => ({
     { role: 'tablist' },
     tabs.map(t => React.createElement(
       'button',
-      { key: t.id, role: 'tab', 'aria-selected': String(t.id === active), 'data-badge': t.badge ?? '', onClick: () => onSelect(t.id) },
+      { key: t.id, role: 'tab', 'aria-selected': String(t.id === active), 'data-badge': t.badge ?? '', 'data-badge-tone': t.badgeTone ?? '', onClick: () => onSelect(t.id) },
       t.label
     ))
   ),
@@ -48,9 +48,12 @@ vi.mock('../../../FmCommon.jsx', () => ({
   EmptyState: () => null,
   // Exposes label/value/badge via data-* attrs, keyed by label (an i18n key here, e.g.
   // 'fm.tab.incidents'), so a test can target the "Incidencias" KPI card specifically.
-  KpiWidget: ({ label, value, badge }) => React.createElement(
+  KpiWidget: ({ label, value, badge, badgeBg, badgeColor }) => React.createElement(
     'div',
-    { 'data-testid': `kpi-${label}`, 'data-value': value, 'data-badge': badge ?? '' },
+    {
+      'data-testid': `kpi-${label}`, 'data-value': value, 'data-badge': badge ?? '',
+      'data-badge-bg': badgeBg ?? '', 'data-badge-color': badgeColor ?? '',
+    },
     `${label}:${value}`,
   ),
 }));
@@ -71,6 +74,8 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
@@ -178,7 +183,8 @@ describe('FmModel303Page — incidents fetched on mount (ETP-4456)', () => {
     await waitFor(() => expect(screen.getByTestId('kpi-fm.tab.incidents').getAttribute('data-value')).toBe('0'));
 
     const tabBtn = incidentsTabButton();
-    expect(tabBtn.getAttribute('data-badge')).toBe('');
+    // ETP-5584 (P12) — every list tab shows its count, 0 included.
+    expect(tabBtn.getAttribute('data-badge')).toBe('0');
 
     fireEvent.click(tabBtn);
     const incidentsMock = screen.getByTestId('incidents-tab-mock');
@@ -237,3 +243,25 @@ describe('FmModel303Page — demo/mock mode does not overwrite seeded incidents 
     expect(incidentsMock.getAttribute('data-origins')).toBe('SEED');
   });
 });
+
+// ETP-5597 — the incidents KPI card and tab badge take their variant from the shared
+// `getIncidentIndicator`: blocking → destructive "Requiere revisión", warning-only → amber
+// "Advertencia", none → no badge.
+describe('FmModel303Page — incidents KPI/tab severity variant (ETP-5597)', () => {
+  it.each([
+    [{ blocking: 2, warning: 1 }, 'fm.kpi.incidents_sub', 'var(--status-destructive-bg)', 'hsl(var(--destructive))', 'danger'],
+    [{ blocking: 0, warning: 3 }, 'fm.incidents.severity.warn', 'var(--status-warning-bg)', 'var(--status-warning-fg)', 'warn'],
+    [{ blocking: 0, warning: 0 }, '', 'var(--status-warning-bg)', 'var(--status-warning-fg)', ''],
+  ])('incidents %j → KPI badge %j (%s / %s), tab tone %j', (counts, badge, bg, color, tone) => {
+    const decl = { ...BASE_DECL, incidents: { ...counts, items: [] } };
+    render(<FmModel303Page decl={decl} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    const kpi = screen.getByTestId('kpi-fm.tab.incidents');
+    expect(kpi.getAttribute('data-badge')).toBe(badge);
+    if (badge) {
+      expect(kpi.getAttribute('data-badge-bg')).toBe(bg);
+      expect(kpi.getAttribute('data-badge-color')).toBe(color);
+    }
+    expect(incidentsTabButton().getAttribute('data-badge-tone')).toBe(tone);
+  });
+});
+

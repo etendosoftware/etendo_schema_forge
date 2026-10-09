@@ -31,7 +31,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 - Visibility: visible from the Finance menu as **Assets**.
 - Implementation type: generated window route with custom detail surfaces layered into the generated page (`AssetsConfigPanel`, `AssetsAmortizationPanel`, `AssetsSidebar`).
 - Window shape: master-child. The master entity is `assets`; the child surfaces are `amortizationLine` and `assetAcct`.
-- Detail layout: the detail page uses a sidebar layout, exposes an **Overview** tab plus a **Depreciation Setup** tab, and hides print, more-menu, more-details chrome.
+- Detail layout: the detail page uses a sidebar layout (right sidebar fixed at 320 px via `window.sidebarClassName` → `w-[320px]`, ETP-5513; it was `w-[30%]`), exposes an **Overview** tab plus a **Depreciation Setup** tab, and hides print, more-menu, more-details chrome.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - List toolbar: shows an **"All statuses ▾"** dropdown to filter by `fullyDepreciated` (Fully deprecated / Still in progress) and a funnel icon for the Conditional Filter. The `fullyDepreciated` column is hidden from visual display (`hiddenColumns`) but present in the columns array to power the status dropdown.
 - List columns include a **Depreciate** (`IsDepreciated`) Sí/No badge column (green/gray pill, same pattern as Payment Term's "Default" column) between "Purchase Date" and "Depreciation Start Date", filterable via the Conditional Filter's boolean value picker (ETP-4549).
@@ -77,7 +77,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 4c. With **Depreciate** enabled, scroll to the **Financiero** (Financial Info) section and confirm a **Contacto** (Business Partner) selector appears there, as the last field, after "Previously Depreciated Amount" — unlike Producto (4a), Contacto is NOT unconditionally visible: it appears and disappears together with the rest of the Financiero group as **Depreciate** is toggled on/off, per its raw AD `DisplayLogic: @IsDepreciated@='Y'` (ETP-4914). Unlike the Dimensiones contables group in 4b, Contacto is never hidden by the client's GL/accounting-dimension configuration — it is config-independent (matrix value: Siempre). Open the selector and confirm it returns Business Partner options; select a value, save and reopen the asset — the value persists.
 5. Save an asset with depreciation enabled and confirm the **Create Amortization** action is available.
 6. Trigger **Create Amortization** against a live backend and confirm the amortization plan tab refreshes and shows ordered schedule rows. Confirm that line status badges read "Pendiente" (not "Planificado") and "Confirmado" (not "Procesado").
-7. Review the right sidebar and confirm it shows four cards in order: Valor actual → Pendiente de Amortizar → Amortización planificada → Amortizado %. Confirm "Pendiente de Amortizar" equals Valor a Amortizar minus the accumulated amortized amount (not the "Valor residual" form field, which is independently editable and can be 0 mid-schedule). Confirm that "Progreso de depreciación" is absent. Confirm that the sidebar ends above the tabs row — tabs (Plan de amortización, Adjuntos) span the full width below the form area.
+7. Review the right sidebar and confirm it is 320 px wide (rail expanded or collapsed) and shows four cards in order: Valor actual → Pendiente de Amortizar → Amortización planificada → Amortizado %. Confirm "Pendiente de Amortizar" equals Valor a Amortizar minus the accumulated amortized amount (not the "Valor residual" form field, which is independently editable and can be 0 mid-schedule). Confirm that "Progreso de depreciación" is absent. Confirm that the sidebar ends above the tabs row — tabs (Plan de amortización, Adjuntos) span the full width below the form area.
 7a. In the Amortization Plan tab, click the **Período** link on any row and confirm it navigates to `/amortization/{id}`, opening the corresponding amortization document. Clicking elsewhere on the row does not navigate.
 8. Open the **Asset Amortization** child surface and confirm line ordering follows sequence number, with processed rows becoming non-editable.
 9. Open the **Accounting** child surface and confirm the record exposes selectors for general ledger, accumulated depreciation, and depreciation accounts.
@@ -149,11 +149,13 @@ The effect only re-runs when `isNewRecord` or `d.currency` changes, not when `on
 
 Changes landed in `feature/ETP-4103`. Covers visual polish, full-form restructure, sidebar updates, and list-view adjustments specific to the Assets window.
 
+> ETP-5601: the record (form view) toolbar is now standardized on every window (56px, 40px controls). The `toolbarBorderBottom`, `toolbarButtonSize` and `toolbarPaddingX` keys listed below no longer have any effect; see `docs/list-filters.md` (Visual parity).
+
 ### Visual polish
 
-- `toolbarBorderBottom: true` in `decisions.json` — adds a horizontal divider line below the toolbar buttons row.
+- `toolbarBorderBottom: true` in `decisions.json` — added a horizontal divider line below the toolbar buttons row. No effect since ETP-5601 (the record toolbar is standardized; the divider is part of the standard toolbar).
 - `sidebarClassName: "w-[30%] shrink-0 overflow-y-auto border-l border-[#E8EAEF] p-2"` in `decisions.json` — sidebar is now proportional (30% of detail width) with a left-border divider and 8 px internal padding. Previously fixed at `w-96`.
-- `toolbarButtonSize: "default"` in `decisions.json` — toolbar buttons (including the kebab menu) are now `h-10 w-10`, matching the Contacts window. Previously `sm` (`h-9`).
+- `toolbarButtonSize: "default"` in `decisions.json` — toolbar buttons (including the kebab menu) are now `h-10 w-10`, matching the Contacts window. Previously `sm` (`h-9`). No effect since ETP-5601 (all record-toolbar buttons are standardized at 40px).
 - `listbarPaddingX: "px-2"` and `tablePaddingX: "px-2"` in `decisions.json` — list-view toolbar and table horizontal padding reduced from 24 px to 8 px.
 - `tools/app-shell/src/windows/custom/assets/AssetsSidebar.jsx` — outer `rounded-2xl border bg-white shadow-sm` card wrapper removed; the sidebar `border-l` divider from `sidebarClassName` makes the wrapper border redundant.
 - `whiteFormBackground: true` in `decisions.json` — forces white background on form inputs and textareas, overriding the `bg-[#F5F7F9]` default on inputs and `bg-background` on textareas. Disabled textareas use `opacity-50` instead of `bg-muted/50` for visual consistency.
@@ -224,8 +226,8 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 
 ### Default values fix
 
-- `decisions.json`: `depreciate` field now has `defaultExpr: "Y"` — `neo_defaults` returns `depreciate: true` (boolean, coerced from Yes/No column). Previously returned null.
-- `decisions.json`: `calculateType` field now has `defaultExpr: "TI"` — `neo_defaults` returns `calculateType: "TI"` (Time-based). Previously returned `"PE"` (Percentage), which was the wrong default for the standard amortization flow.
+- `decisions.json`: `depreciate` field now has `defaultExpr: "Y"` — `etendo_defaults` returns `depreciate: true` (boolean, coerced from Yes/No column). Previously returned null.
+- `decisions.json`: `calculateType` field now has `defaultExpr: "TI"` — `etendo_defaults` returns `calculateType: "TI"` (Time-based). Previously returned `"PE"` (Percentage), which was the wrong default for the standard amortization flow.
 - Both values are written to `ETGO_SF_FIELD.DefaultValue` via `push-to-neo.js` and persisted to `src-db/database/sourcedata/ETGO_SF_FIELD.xml` via `export.database`.
 
 ### depreciationEndDate auto-computation (AssetsHandler)
@@ -252,7 +254,7 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 ### What this does NOT change
 
 - No UI behavior is affected. The flag is advisory metadata only: it surfaces in the
-  `neo_schema` MCP response (`businessCritical: true/false` per field) so that AI
+  `etendo_schema` MCP response (`businessCritical: true/false` per field) so that AI
   agents know which fields to ask for explicitly. The window renders identically.
 - `depreciationEndDate` is intentionally excluded — it is auto-computed by
   `AssetsHandler` from `depreciationStartDate + usableLifeMonths` and should not be
@@ -939,7 +941,7 @@ Three assertions in the existing test suite encoded the previous behavior and we
 
 ### What changed (MCP-only, derived from `preconditions`)
 
-`neo_schema` now derives a per-field `userRequired` signal from the **same** `ETGO_SF_ENTITY.preconditions` declaration that the runtime gate enforces (single source of truth — no separate `decisions.json` flag, no duplication). When a field is named in the entity's `preconditions`, the schema emits:
+`etendo_schema` now derives a per-field `userRequired` signal from the **same** `ETGO_SF_ENTITY.preconditions` declaration that the runtime gate enforces (single source of truth — no separate `decisions.json` flag, no duplication). When a field is named in the entity's `preconditions`, the schema emits:
 
 - `userRequired: true`
 - `requiredWhen: "<expr>"` — only when the rule is conditional, so the agent knows the requirement depends on other field values (e.g. `usableLifeMonths` is `@calculateType@ != 'PE' && @amortize@ != 'YE'`; `usableLifeYears` is `@amortize@ == 'YE'`; `currency` is unconditional, so no `requiredWhen`).
@@ -951,24 +953,24 @@ Three assertions in the existing test suite encoded the previous behavior and we
 
 | Layer | Where | When | Behavior |
 |-------|-------|------|----------|
-| Proactive hint (this change) | `neo_schema` → `userRequired`/`requiredWhen` | at schema discovery | advisory — tells the agent to fill the field |
+| Proactive hint (this change) | `etendo_schema` → `userRequired`/`requiredWhen` | at schema discovery | advisory — tells the agent to fill the field |
 | Reactive gate (ETP-4275) | `NeoProcessPreconditionValidator` | at process execution | enforcing — returns `PRECONDITIONS_UNMET` (400) |
 
 Both read `ETGO_SF_ENTITY.preconditions`. The hint is best-effort (the condition is dynamic and the client may ignore it); the gate is the guarantee. The proactive hint does **not** make the gate obsolete.
 
 ### Create → amortization flow (agent-facing)
 
-1. **schema** — `neo_schema` for the assets window now flags `usableLifeMonths`/`usableLifeYears` + `currency` as `userRequired` (with `requiredWhen` where conditional).
-2. **defaults** — `neo_defaults` resolves server-side defaults (e.g. `currency` from `@C_Currency_ID@`).
+1. **schema** — `etendo_schema` for the assets window now flags `usableLifeMonths`/`usableLifeYears` + `currency` as `userRequired` (with `requiredWhen` where conditional).
+2. **defaults** — `etendo_defaults` resolves server-side defaults (e.g. `currency` from `@C_Currency_ID@`).
 3. **selectors** — resolve foreign keys via the per-field selector endpoints (e.g. asset category, product, accounting dimensions).
-4. **create** — `neo_create` the asset with `depreciate` on and the depreciation setup filled.
+4. **create** — `etendo_create` the asset with `depreciate` on and the depreciation setup filled.
 5. **verify state / callouts** — re-read the record: the asset-category callout may change `calculateType`, which flips whether `usableLifeMonths` vs `usableLifeYears` applies (mirrors the reactive-behavior section above).
 6. **action `Processed`** — invoke the "Create Amortization" action. If a precondition is still unmet, the gate returns `PRECONDITIONS_UNMET` with the missing field names instead of an opaque PL/SQL error.
 7. **list `amortizationLine`** — read the generated schedule (child amortization lines, sorted by `sEQNoAsset asc`).
 
 ### Manual verification (ETP-4276)
 
-1. Call `neo_schema` for the assets window and confirm `usableLifeMonths`, `usableLifeYears` and `currency` carry `userRequired: true`; confirm `usableLifeMonths`/`usableLifeYears` also carry `requiredWhen` and `currency` does not.
+1. Call `etendo_schema` for the assets window and confirm `usableLifeMonths`, `usableLifeYears` and `currency` carry `userRequired: true`; confirm `usableLifeMonths`/`usableLifeYears` also carry `requiredWhen` and `currency` does not.
 2. Confirm a field **not** listed in `preconditions` carries no `userRequired` from this path (unchanged behavior).
 
 ## ETP-4984 — Name/Description overlong-save prevention + backend "too long" message translation

@@ -6,6 +6,12 @@ This guide explains how to write automated end-to-end tests for Schema Forge UI 
 2. **Discover + Automate** — Explore with agent-browser, then write Playwright tests
 3. **Manual** — Write tests from scratch using known selectors
 
+**Before writing a spec**, follow the reuse-first protocol in
+[`testing/test-reuse-policy.md`](testing/test-reuse-policy.md): run
+`make find-tests FILE=<path>` and extend an existing spec when one covers the flow, add
+`// @covers <path>` for the component(s) the spec drives, and never name a spec after a ticket.
+Playwright specs are written by the `tester-functional` agent.
+
 ## Prerequisites
 
 ```bash
@@ -141,6 +147,59 @@ E2E_NEO_ETP4793_CONTRACTS=1 ETENDO_URL=http://localhost:8080/etendo npx playwrig
 
 Like the contextual-selector smoke above, they get a bearer JWT through
 `scripts/neo-token-groupadmin.sh` unless `E2E_ETENDOGO_JWT` is already set.
+
+---
+
+## Paid Provisioning Failure Integration (ETP-5548)
+
+`e2e/tests/flows/system/tenant-upgrade-provisioning-failure.integration.spec.js` runs in the
+ordinary integration project through `scripts/run-e2e-full.sh`, including the local
+`make test-e2e-headless` run and the pre-push E2E gate, where the runner sets
+`E2E_PROVISIONING_FAILURE=1`. Under Jenkins (detected by a non-empty `JENKINS_URL`) the
+runner sets `E2E_PROVISIONING_FAILURE=0` and the spec self-skips: on first run the backend
+fixture (`POST /sws/go/dev/provisioning-failure-fixture`) provisions a whole dedicated pool
+tenant synchronously, which takes minutes and exceeds the 15 s `actionTimeout`. An explicit
+`E2E_PROVISIONING_FAILURE` value always wins — export `E2E_PROVISIONING_FAILURE=1` to force
+the spec on (including under Jenkins), or `0` to skip it locally.
+The spec creates a paid checkout through a local backend fixture, follows the real
+`/upgrade?checkout=success` browser path, checks that the UI sends onboarding with the
+same request ID, verifies the durable `provisioning_failed` state and visible recovery
+control, then deletes the fixture checkout and returns its dedicated pool row to
+`READY`. It never contacts Stripe or deletes an `AD_Client`.
+
+The Etendo GO backend running behind the frontend must use the local runtime:
+
+```properties
+etendo.go.runtime.environment=local
+```
+
+This belongs in the properties read by the running Tomcat (or the equivalent JVM
+system property/environment variable `ETGO_RUNTIME_ENVIRONMENT=local`). The fixture provisions or
+reuses its own dedicated pool client; no client ID is configured in Playwright.
+If the backend is missing this setup, the integration spec fails at fixture creation
+with the HTTP status and response body instead of reporting a skipped test.
+
+To run this spec alone with the same built frontend and real backend as the full
+integration suite:
+
+```bash
+E2E_SUITE=integration \
+E2E_FILES=tests/flows/system/tenant-upgrade-provisioning-failure.integration.spec.js \
+make test-e2e-headless
+```
+
+For this spec, a targeted `E2E_FILES` run starts onboarding setup unless both
+`E2E_USER` and `E2E_PASSWORD` are explicitly set. A complete explicit pair takes
+priority over `e2e/.auth-credentials.json`; otherwise setup refreshes that file
+before the fixture test. Setting only `E2E_USER` fails before the frontend build,
+since the runner cannot safely pair it with its default password. This avoids
+reusing an account from an older local database.
+The fixture endpoint accepts requests only when the backend environment is `local`,
+and the spec requires a local frontend `BASE_URL`.
+
+The companion `.mocked.spec.js` validates the recovery control and same-token retry
+without a live backend. The real integration spec stops after the failed attempt so
+its fixture cleanup can restore the pooled client safely.
 
 ---
 
@@ -563,7 +622,7 @@ Configuration variables:
 | `E2E_MCP_OAUTH_AUTHORIZE_URL` | `${E2E_MCP_PUBLIC_BASE_URL}/etendo/oauth2/authorize` | Backend authorization endpoint |
 | `E2E_MCP_OAUTH_TOKEN_URL` | `${E2E_MCP_PUBLIC_BASE_URL}/etendo/oauth2/token` | Token endpoint for the PKCE exchange |
 | `E2E_MCP_OAUTH_REGISTRATION_URL` | `${E2E_MCP_PUBLIC_BASE_URL}/etendo/oauth2/register` | DCR endpoint |
-| `E2E_MCP_OAUTH_SCOPES` | `neo:read neo:write neo:process neo:report neo:*` | Requested MCP scopes |
+| `E2E_MCP_OAUTH_SCOPES` | `etendo:read etendo:write etendo:process etendo:report etendo:*` | Requested MCP scopes |
 | `E2E_MCP_OAUTH_CLIENT_ID` | none | Existing OAuth client ID |
 | `E2E_MCP_OAUTH_CLIENT_SECRET` | none | Optional client secret |
 | `E2E_MCP_OAUTH_TOKEN_AUTH_METHOD` | `client_secret_post` | Use `client_secret_basic`, `client_secret_post`, or `none` |
@@ -1008,8 +1067,27 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `row-quick-action-delete-confirm` | — | Destructive button inside the row delete confirm dialog |
 | `generic-preview-modal` | — | `GenericPreviewModal` card (the right-anchored panel) |
 | `preview-drop-zone` | — | Drop zone inside GenericPreviewModal managed left panel |
-| `filter-{name}` | `filter-todos`, `filter-personas` | ListView subset filter buttons |
+| `preview-file-replace-input` | — | Hidden `<input type="file">` behind "Reemplazar archivo" in the list preview (`fileActions` mode) — use `setInputFiles()` |
+| `file-viewer-more` | — | "Más" (⋯) button on the uploaded-file mini toolbar (`UploadedFileViewer`) |
+| `file-viewer-menu` | — | Its dropdown menu |
+| `file-viewer-replace` | — | "Reemplazar archivo" menu item |
+| `file-viewer-delete` | — | "Eliminar archivo" menu item (opens `confirm-delete-dialog`) |
+| `file-viewer-expand` | — | Click target over the file preview that opens the lightbox |
+| `file-lightbox` | — | `FileLightbox` dialog container (`role="dialog"`) |
+| `file-lightbox-title` | — | File name in the lightbox header |
+| `file-lightbox-page-count` | — | Page count line (PDF only) |
+| `file-lightbox-zoom-in` / `-fit` / `-zoom-out` | — | Lightbox zoom controls |
+| `file-lightbox-replace` | — | Lightbox "Reemplazar archivo" button |
+| `file-lightbox-delete` | — | Lightbox "Eliminar archivo" button (opens `confirm-delete-dialog`) |
+| `file-lightbox-close` | — | Lightbox close (X) button |
+| `filter-{key}` | `filter-alltab`, `filter-invoicestab`, `filter-rectificativeinvoicestab` (invoices); `filter-all`, `filter-persons`, `filter-companies` (contacts) | ListView subset filter buttons (second toolbar row). `{key}` is the entry's `key`, or else its `label` as declared (the i18n key, not the translated text) lowercased — so there is no `filter-todos` |
+| `filter-status`, `filter-type`, `filter-date`, `filter-advanced` | — | ListFilterBar triggers in the first toolbar row (status, type — a column flagged `isTypeFilter` —, date range, "Filters"), each present only when the window has that filter. They share the `filter-` prefix with the subset buttons: scope a `[data-testid^="filter-"]` query to `list-toolbar-tabs` or `list-toolbar-filters` |
 | `quick-filter-{name}` | `quick-filter-active` | ListView quick filter toggle buttons |
+| `list-toolbar` | — | ListView idle toolbar container; carries the toolbar/body separator (absent under `hideListBar`) |
+| `list-toolbar-main-row` | — | ListView toolbar flex-wrap row holding the subset tabs, the filters cluster and the actions cluster; `data-tabs-placement` = `inline` / `wrapped` when the window has subset tabs |
+| `list-toolbar-tabs` | — | ListView toolbar subset tabs (`filter-<key>` buttons). First child of `list-toolbar-main-row` while they fit; the same element moves to its own line below (`data-tabs-placement="wrapped"` on the main row) when they do not. Absent without `subsetFilters` |
+| `list-toolbar-filters` / `list-toolbar-actions` | — | ListView toolbar clusters: quick filters, ListFilterBar triggers and the `view-toggle` (last) / main actions |
+| `list-share-link` | — | ListView toolbar Share button: copies the current page URL, query string included (absent under `hideLink`) |
 | `selection-count` | — | ListView selection bar (count of selected rows) |
 | `list-progress-bar` | — | ListView loading progress indicator |
 | `global-search-trigger` | — | CommandPalette trigger button |
@@ -1019,13 +1097,14 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `topbar-notifications` | — | TopBar notification bell |
 | `topbar-back` | — | TopBar back navigation button |
 | `topbar-more-actions` | — | TopBar kebab / 3-dot menu |
-| `topbar-title-block` | — | TopBar title + breadcrumb block (256px cap) |
+| `topbar-title-block` | — | TopBar title + breadcrumb block (left grid column, elides) |
 | `topbar-breadcrumb` | — | TopBar breadcrumb line |
+| `topbar-record-count` | — | Record-count badge next to the list title (absent under `hideRecordCount`) |
 | `topbar-breadcrumb-current` | — | Current page level when the breadcrumb is collapsed/structured |
 | `topbar-breadcrumb-overflow` | — | Breadcrumb `⋯` trigger (>3 levels) |
 | `topbar-breadcrumb-overflow-menu` | — | Breadcrumb `⋯` dropdown |
 | `topbar-breadcrumb-overflow-item` | — | Hidden intermediate level inside the dropdown |
-| `topbar-search-slot` | — | Flex slot that centers the 392px search |
+| `topbar-search-slot` | — | Middle grid column holding the 392px search, centered in the visible bar (header border box) |
 | `topbar-quick-actions` | — | Right-side quick actions group |
 | `topbar-quick-action-{id}` | `topbar-quick-action-notifications` | Page-supplied quick action (inline or in the right `⋯`) |
 | `topbar-quick-actions-overflow` | — | Right-side `⋯` trigger (compact breakpoint only) |
@@ -1071,7 +1150,7 @@ Every new UI component MUST include:
 
 `{context}-{element}` or `{context}-{element}-{identifier}`
 
-Examples: `filter-todos`, `subtab-row-{id}`, `location-field-city`, `action-bulk-delete`
+Examples: `filter-status`, `subtab-row-{id}`, `location-field-city`, `action-bulk-delete`
 
 ### Codemod
 
@@ -1228,7 +1307,35 @@ The glob-crossing bug described above is not a permanent Playwright limitation �
 
 ### Canonical reference
 
-`e2e/tests/flows/row-quick-actions.mocked.spec.js` covers the four pilot windows (sales-order, purchase-order, sales-invoice, purchase-invoice) and is the recommended starting point for any list-row UI test. It demonstrates: mocked list+detail endpoints, per-window expected-button matrix, hover→overlay assertion, edit-navigates-to-detail flow, and delete-opens-dialog flow.
+`e2e/tests/flows/platform/row-quick-actions.mocked.spec.js` covers the four pilot windows (sales-order, purchase-order, sales-invoice, purchase-invoice) and is the recommended starting point for any list-row UI test. It demonstrates: mocked list+detail endpoints, per-window expected-button matrix, hover→overlay assertion, edit-navigates-to-detail flow, and delete-opens-dialog flow.
+
+### Layout reference: list toolbar at 1280×720 (ETP-5509)
+
+`e2e/tests/flows/platform/list-toolbar-1280.mocked.spec.js` is the only automated guard for the
+list toolbar's **geometry** — jsdom has no layout, so the unit suite
+(`ListView.toolbarLayout.vitest.jsx`) feeds the fit check stubbed widths. At 1280×720 with the
+navigation rail expanded it checks, for purchase-invoice, sales-invoice, contacts, product,
+warehouse, payment-in, payment-out and chart-of-accounts (ETP-5593 — its tree controls share the
+main row): the subset tabs (`list-toolbar-tabs`) are rendered once, either opening the first line
+or on a line of their own below it (`data-tabs-placement`); the main row does not overflow, none
+of its buttons is clipped and the filters and actions clusters keep their 16px minimum gap; the
+toolbar paints its bottom border and ends above the grid. It also re-measures sales-invoice with a
+date range and a status applied, checks payment-in and every subset-tab window at 1920×1080
+(single row there), resizes purchase-invoice down to 960px and back to prove the tabs move and
+return live without losing focus, and pins Product's view toggle after "Filtros" (the
+pre-ETP-5509 order) at both resolutions. Layout reference: `docs/list-filters.md` → "Toolbar
+layout (ETP-5509)".
+
+```bash
+cd e2e
+CI=1 E2E_RETRIES=0 npx playwright test tests/flows/platform/list-toolbar-1280.mocked.spec.js --project=mocked
+```
+
+- Run it against plain `make dev`, **not** `make dev-mock` — it feeds the lists through
+  `page.route()` (see the `VITE_MOCK` gotcha below). `CI=1` runs headless and `E2E_RETRIES=0`
+  turns retries off, so a layout failure is reported on the first attempt.
+- The `login()` mock session renders in `es_ES`, the wider of the two locales. That is kept on
+  purpose: the fit assertions are measured against the longer labels.
 
 ## Mock-mode Tests (No Backend Required)
 

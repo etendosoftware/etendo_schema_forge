@@ -13,6 +13,8 @@ from typing import Any
 
 import yaml
 
+from .steps import Step, parse_steps
+
 # Tokens interpolated into prompts and expectEffect args (design §8). An unknown
 # `{{...}}` is left untouched rather than silently blanked, so a typo is visible
 # in the prompt the agent actually received.
@@ -49,6 +51,9 @@ class Probe:
     mode: str
     prompt: str
     expect_effect: ExpectEffect | None = None
+    # Deterministic tool calls the runner makes itself, outside the agent (D41).
+    setup: tuple[Step, ...] = ()
+    teardown: tuple[Step, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -106,6 +111,10 @@ def load_suite(path: str | Path) -> Suite:
                 mode=mode,
                 prompt=entry["prompt"].strip(),
                 expect_effect=effect,
+                setup=tuple(parse_steps(entry.get("setup"), probe_id=probe_id, phase="setup")),
+                teardown=tuple(
+                    parse_steps(entry.get("teardown"), probe_id=probe_id, phase="teardown")
+                ),
             )
         )
 

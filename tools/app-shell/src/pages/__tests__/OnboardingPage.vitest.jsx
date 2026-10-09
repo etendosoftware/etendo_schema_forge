@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/OnboardingPage.jsx
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -61,25 +62,29 @@ vi.mock('@etendosoftware/app-shell-core/i18n', () => ({
 }));
 
 // Mock onboarding API
+const MOCK_AUTH_ERROR_UI_KEYS = vi.hoisted(() => ({
+  WEAK_PASSWORD: 'onboardingWeakPassword',
+  INVALID_REQUEST: 'onboardingInvalidRequest',
+  REGISTER_MISSING_FIELDS: 'onboardingRegisterMissingFields',
+  REGISTER_EMPTY_FIELDS: 'onboardingRegisterEmptyFields',
+  INVALID_EMAIL_FORMAT: 'onboardingInvalidEmailFormat',
+  EMAIL_ALREADY_REGISTERED: 'onboardingEmailAlreadyRegistered',
+  REGISTER_SERVER_ERROR: 'onboardingRegisterServerError',
+  LOGIN_MISSING_FIELDS: 'onboardingLoginMissingFields',
+  INVALID_CREDENTIALS: 'onboardingInvalidCredentials',
+  LOGIN_SERVER_ERROR: 'onboardingLoginServerError',
+  INTERNAL_ERROR: 'onboardingConnectionError',
+  PASSWORD_RESET_INVALID: 'onboardingCredentialResetFailed',
+}));
 vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
   ONBOARDING_ERROR_CODES: {},
   // ETP-4664: RegisterStep/LoginStep resolve the backend's stable error code through this
   // table before rendering it. Mirrored from the real module — a factory mock replaces the
   // whole module, so omitting it makes AUTH_ERROR_UI_KEYS[err.code] throw inside the catch
   // and the error message is silently never rendered.
-  AUTH_ERROR_UI_KEYS: {
-    WEAK_PASSWORD: 'onboardingWeakPassword',
-    INVALID_REQUEST: 'onboardingInvalidRequest',
-    REGISTER_MISSING_FIELDS: 'onboardingRegisterMissingFields',
-    REGISTER_EMPTY_FIELDS: 'onboardingRegisterEmptyFields',
-    INVALID_EMAIL_FORMAT: 'onboardingInvalidEmailFormat',
-    EMAIL_ALREADY_REGISTERED: 'onboardingEmailAlreadyRegistered',
-    REGISTER_SERVER_ERROR: 'onboardingRegisterServerError',
-    LOGIN_MISSING_FIELDS: 'onboardingLoginMissingFields',
-    INVALID_CREDENTIALS: 'onboardingInvalidCredentials',
-    LOGIN_SERVER_ERROR: 'onboardingLoginServerError',
-    INTERNAL_ERROR: 'onboardingConnectionError',
-  },
+  AUTH_ERROR_UI_KEYS: MOCK_AUTH_ERROR_UI_KEYS,
+  // ETP-5258: the reset/forgot views translate through this helper; same contract as core.
+  resolveAuthErrorMessage: (ui, err, fallbackKey) => ui(MOCK_AUTH_ERROR_UI_KEYS[err?.code] || fallbackKey),
   changePassword: vi.fn(),
   confirmPasswordReset: vi.fn(),
   // ETP-4576 — OnboardingFlow reads GET /sws/go/session on mount for the CSRF proof, so a
@@ -95,6 +100,10 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
   registerAccount: vi.fn(),
   requestPasswordReset: vi.fn(),
   runOnboardingStream: vi.fn(),
+  // ETP-5675 — OnboardingFlow binds the page to its account and stops on a lost session; a
+  // factory mock without these makes every render throw on the first bind/unbind.
+  bindOnboardingAccount: vi.fn(),
+  isSessionLostError: (err) => err?.status === 401,
 }));
 
 // One provider is returned so the module-level SSO_PROVIDERS list (evaluated at
@@ -127,6 +136,9 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/state', () => ({
   ],
   isCompanyStepValid: () => true,
   isProfileStepValid: () => true,
+  // ETP-5426: CompanyStep reads it to decide whether to render the sample-data opt-in. False keeps
+  // the checkbox out of these flows, which predate it; its own coverage lives in etendo-go-core.
+  isSampleDataOffered: () => false,
   // ETP-5195: OnboardingFlow.jsx and SetupProgressStep.jsx both call this during
   // auto-login/environment-entry (right after loginEnvironment resolves a token) to
   // replace the ambient session + persist the sf_auth_* keys. Its return value is
@@ -862,8 +874,11 @@ describe('OnboardingPage', () => {
     expect(screen.getByText('onboardingResetPasswordSuccess')).toBeInTheDocument();
   });
 
-  it('renders invalid or expired reset link errors', async () => {
-    confirmPasswordReset.mockRejectedValue({ userMessage: 'Invalid or expired reset link' });
+  it('renders invalid or expired reset link errors translated by code', async () => {
+    confirmPasswordReset.mockRejectedValue({
+      code: 'PASSWORD_RESET_INVALID',
+      userMessage: 'Invalid or expired reset link',
+    });
     window.history.replaceState(null, '', '/onboarding?resetToken=used-token');
 
     await renderOnboarding();
@@ -876,7 +891,49 @@ describe('OnboardingPage', () => {
     });
     fireEvent.submit(screen.getByTestId('action-reset-password-submit').closest('form'));
 
-    expect(await screen.findByText('Invalid or expired reset link')).toBeInTheDocument();
+    expect(await screen.findByText('onboardingCredentialResetFailed')).toBeInTheDocument();
+    expect(screen.queryByText('Invalid or expired reset link')).not.toBeInTheDocument();
+  });
+
+  // ETP-5258 — the reset view (also the SSO "set a password" link) shows the same live checklist
+  // as registration and holds the submit until the policy is met.
+  it('shows the password checklist on the reset view and gates the submit', async () => {
+    window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
+    await renderOnboarding();
+
+    expect(screen.queryByTestId('reset-password-requirements')).not.toBeInTheDocument();
+    const newPassword = screen.getByLabelText(/onboardingNewPasswordLabel/);
+
+    fireEvent.change(newPassword, { target: { value: 'weak' } });
+    expect(screen.getByTestId('reset-password-requirements')).toBeInTheDocument();
+    expect(screen.getByTestId('reset-password-rule-uppercase')).toHaveAttribute('data-met', 'false');
+    expect(screen.getByTestId('action-reset-password-submit')).toBeDisabled();
+
+    fireEvent.change(newPassword, { target: { value: 'Str0ng!Pass' } });
+    ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
+      expect(screen.getByTestId(`reset-password-rule-${rule}`)).toHaveAttribute('data-met', 'true');
+    });
+    expect(screen.getByTestId('action-reset-password-submit')).not.toBeDisabled();
+  });
+
+  it('translates a weak-password refusal on the reset view instead of the English text', async () => {
+    confirmPasswordReset.mockRejectedValue({
+      code: 'WEAK_PASSWORD',
+      userMessage: 'Password must include at least 8 characters',
+    });
+    window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
+    await renderOnboarding();
+
+    fireEvent.change(screen.getByLabelText(/onboardingNewPasswordLabel/), {
+      target: { value: 'Str0ng!Pass' },
+    });
+    fireEvent.change(screen.getByLabelText(/onboardingConfirmPasswordLabel/), {
+      target: { value: 'Str0ng!Pass' },
+    });
+    fireEvent.submit(screen.getByTestId('action-reset-password-submit').closest('form'));
+
+    expect(await screen.findByText('onboardingWeakPassword')).toBeInTheDocument();
+    expect(screen.queryByText('Password must include at least 8 characters')).not.toBeInTheDocument();
   });
 
   it('tracks setup back navigation from company step', async () => {
@@ -1672,7 +1729,7 @@ describe('OnboardingPage', () => {
       expect(await screen.findByText('SSO button broke')).toBeInTheDocument();
     });
 
-    it('renders a forgot-password failure message', async () => {
+    it('renders a translated forgot-password failure message', async () => {
       requestPasswordReset.mockRejectedValue({ userMessage: 'Reset request failed' });
       // The flow lands on the login view by default (core 0.3.4).
       localStorage.removeItem('sf_platform_token');
@@ -1681,7 +1738,9 @@ describe('OnboardingPage', () => {
       fireEvent.click(screen.getByText('onboardingForgotPasswordAction'));
       fireEvent.submit(screen.getByTestId('action-forgot-password-submit').closest('form'));
 
-      expect(await screen.findByText('Reset request failed')).toBeInTheDocument();
+      // ETP-5258: the English userMessage is never shown; an unmapped failure gets the fallback.
+      expect(await screen.findByText('onboardingCredentialResetFailed')).toBeInTheDocument();
+      expect(screen.queryByText('Reset request failed')).not.toBeInTheDocument();
     });
 
     it('returns to the login view from the forgot-password view', async () => {

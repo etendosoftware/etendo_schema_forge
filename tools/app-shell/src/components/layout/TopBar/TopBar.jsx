@@ -33,7 +33,6 @@ import {
 } from '@/components/ui/popover.jsx';
 import {
   Search,
-  Mic,
   Sparkles,
   MoreVertical,
   MoreHorizontal,
@@ -54,9 +53,10 @@ import {
  * Tutorials + a "more actions" menu. UX has not confirmed the exact value yet (target is the
  * 1280×720 minimum resolution); change it here and nowhere else.
  *
- * Why 1366: with the rail expanded (240px) the header gets `viewport - 240`. The full bar needs
- * ~1076px (title group 324 + search 392 + Tutorials/Copilot + 5 quick actions ~304 + gaps and
- * padding ~56), which fits from 1366 up but not at 1280 (1040px). So 1280-class screens go
+ * Why 1366: with the rail expanded (240px) the header gets `viewport - 240`. The search is
+ * centered in the bar (see HEADER_GRID), so each side column gets `(header - search 392 - 2 gaps
+ * 40) / 2`, and the actions get that minus their own 24px right inset: ~323px at 1366, enough for
+ * Tutorials/Copilot + 5 quick actions (~304px), but only ~280px at 1280. So 1280-class screens go
  * compact and the common 1366 laptop keeps every action inline.
  */
 export const TOPBAR_COMPACT_BELOW_PX = 1366;
@@ -82,10 +82,42 @@ function useIsCompactTopBar() {
 }
 
 /**
- * Title / breadcrumb block width cap (UX: 256px). `max-width` still clamps a flex item even when
- * its wrapper is `shrink-0`, which is what lets `truncate` inside it activate.
+ * ETP-5509 — three-column grid: left (title block) | search | right (quick actions).
+ * The two side tracks are equal `1fr` tracks, so the `auto` search track sits at the exact
+ * center of the bar whatever the side contents are. The left track has a 0 minimum: it takes
+ * all the space beside the search and its title/breadcrumb elide inside it. The right track's
+ * minimum is its `max-content`: the icons are never cut; only if they ever needed more than half
+ * of the free space would the search shift left (instead of being overlapped). Each block is
+ * placed on an explicit column so the search stays in the middle when there is no left block.
+ * The header itself has no horizontal padding (the 24px right inset lives on the actions group,
+ * inside its own track), so the tracks span the whole visible bar and the search is centered on
+ * the header's border box, not on a padding-shifted content box. The column gap is 20px (`gap-5`,
+ * ETP-5504 QA): the left column, and so the title/breadcrumb block, ends exactly 20px before the
+ * search's left edge.
  */
-const TITLE_BLOCK_MAX_W = 'max-w-[256px]';
+const HEADER_GRID = 'grid grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)]';
+
+/**
+ * ETP-5504 QA (OBS-1) — shrink priority of the breadcrumb levels. The structured breadcrumb is a
+ * one-row grid, not a flex row: with flex, every shrinkable level takes a share of the shortage,
+ * and even a sub-pixel share makes `text-overflow: ellipsis` eat the end of a short ancestor
+ * ("Compr…"). Grid sizing gives the `minmax(0,max-content)` ancestor tracks their whole width
+ * first and hands only the leftover to the current page's `minmax(4rem,1fr)` track, so the
+ * current page elides first; the ancestors give way (equally) only when even 4rem is not left.
+ * Each ancestor label is also capped (beyond it, it elides; the whole trail is in the tooltip).
+ * Cap value pending UX confirmation.
+ */
+const BREADCRUMB_ANCESTOR_CLASS = 'max-w-[160px]';
+const BREADCRUMB_ANCESTOR_TRACK = 'minmax(0,max-content)';
+const BREADCRUMB_OVERFLOW_TRACK = 'max-content';
+const BREADCRUMB_CURRENT_TRACK = 'minmax(4rem,1fr)';
+
+function breadcrumbGridColumns(ancestorCount, hasOverflow) {
+  const tracks = Array.from({ length: ancestorCount }, () => BREADCRUMB_ANCESTOR_TRACK);
+  if (hasOverflow) tracks.push(BREADCRUMB_OVERFLOW_TRACK);
+  tracks.push(BREADCRUMB_CURRENT_TRACK);
+  return tracks.join(' ');
+}
 
 function BreadcrumbLevel({ item, onNavigate, className }) {
   const navigable = Boolean(item.href || item.onClick);
@@ -152,12 +184,18 @@ function TopBarBreadcrumb({ breadcrumb, ui }) {
       <TooltipTrigger asChild data-testid="TooltipTrigger__topbar-breadcrumb">
         <nav
           aria-label={ui('topbarBreadcrumb')}
-          className="flex min-w-0 items-center text-xs leading-4 text-topbar-breadcrumb"
+          className="grid min-w-0 items-center text-xs leading-4 text-topbar-breadcrumb"
+          style={{ gridTemplateColumns: breadcrumbGridColumns(head.length, hidden.length > 0) }}
           data-testid="topbar-breadcrumb"
         >
           {head.map((item, index) => (
-            <span key={`${item.label}-${index}`} className="flex min-w-0 shrink items-center">
-              <BreadcrumbLevel item={item} onNavigate={handleNavigate} data-testid="BreadcrumbLevel__topbar" />
+            <span key={`${item.label}-${index}`} className="flex min-w-0 items-center">
+              <BreadcrumbLevel
+                item={item}
+                onNavigate={handleNavigate}
+                className={BREADCRUMB_ANCESTOR_CLASS}
+                data-testid="BreadcrumbLevel__topbar"
+              />
               {separator}
             </span>
           ))}
@@ -482,13 +520,15 @@ export default function TopBar({
         <DemoTrialIndicator ui={ui} data-testid="DemoTrialIndicator__133e64" />
         <header
           className={cn(
-            'relative flex h-[62px] shrink-0 items-center gap-4 pl-0 pr-6 bg-page-bg',
+            'relative h-[62px] shrink-0 items-center gap-5 px-0 bg-page-bg',
+            HEADER_GRID,
             className
           )}
         >
-        {/* Left: back button + title + breadcrumb + 3-dot menu */}
+        {/* Left: back button + title + breadcrumb + 3-dot menu. Stretches over the whole left
+            column (min-w-0) so the title block can use all of it and shrink below it. */}
         {(title || onBack) && (
-          <div className="relative z-10 flex items-center gap-1 shrink-0 min-w-0">
+          <div className="relative z-10 col-start-1 flex min-w-0 items-center gap-1">
             {onBack && (
               <button
                 type="button"
@@ -500,17 +540,16 @@ export default function TopBar({
                 <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__133e64" />
               </button>
             )}
-            {/* max-w caps this block regardless of the wrapper's shrink-0 above (max-width still
-                clamps a flex item even when it won't shrink under sibling pressure) — without it,
-                `truncate` below never activates and a long title/breadcrumb (e.g. a bank
-                account's full name + IBAN) just grows instead of eliding. ETP-5504: 256px (UX).
-                No `items-start`: that made this column's children size to their own content
-                instead of stretching to the max-w cap, so the cap capped this box but never
-                propagated down to the title row / breadcrumb span for `truncate` to act on —
-                they simply overflowed the (non-clipping) parent. Text stays left-aligned either
-                way; only the box-stretch behavior needed to change. */}
+            {/* ETP-5509: no fixed width cap. This block is content-sized and shrinkable
+                (`min-w-0`), so it uses the whole left grid column when needed and a long
+                title/breadcrumb (e.g. a bank account's full name + IBAN) elides at the column
+                edge instead of pushing the search. No `items-start`: the title row and the
+                breadcrumb must stretch to this block's width for their `truncate` to act.
+                ETP-5504 QA: the title `⋯` lives in the title row, right after the title, not
+                beside this block — so a long breadcrumb or title reaches the column edge (20px
+                before the search) instead of stopping a kebab's width short of it. */}
             <div
-              className={cn('flex flex-col justify-center min-w-0 h-12', TITLE_BLOCK_MAX_W)}
+              className="flex flex-col justify-center min-w-0 h-12"
               data-testid="topbar-title-block"
             >
               <div className="flex min-w-0 items-center gap-2">
@@ -523,79 +562,79 @@ export default function TopBar({
                   <TooltipContent data-testid="TooltipContent__topbar-title">{title}</TooltipContent>
                 </Tooltip>
                 {recordCount != null && (
-                  <span className="inline-flex items-center justify-center w-7 h-6 px-2 py-1 text-xs font-medium text-muted-foreground bg-page-bg border border-[hsl(var(--border-control))] rounded-lg shrink-0">
+                  <span
+                    className="inline-flex items-center justify-center w-7 h-6 px-2 py-1 text-xs font-medium text-muted-foreground bg-page-bg border border-[hsl(var(--border-control))] rounded-lg shrink-0"
+                    data-testid="topbar-record-count">
                     {recordCount}
                   </span>
                 )}
                 {titleExtra && (
                   <span className="flex items-center shrink-0">{titleExtra}</span>
                 )}
+                {hasMenu && (
+                  <DropdownMenu data-testid="DropdownMenu__133e64">
+                    <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__133e64">
+                      <button
+                        type="button"
+                        aria-label={ui('more')}
+                        data-testid="topbar-more-actions"
+                        className="-ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-topbar-icon hover:bg-muted hover:text-foreground transition-colors"
+                      >
+                        <MoreVertical className="h-4 w-4" data-testid="MoreVertical__133e64" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-52" data-testid="DropdownMenuContent__133e64">
+                      {onAddToFavorites && (
+                        <DropdownMenuItem onClick={onAddToFavorites} data-testid="DropdownMenuItem__133e64">
+                          <Star
+                            className={cn(
+                              'h-4 w-4 mr-2',
+                              isFavorite
+                                ? 'fill-accent-highlight text-accent-highlight'
+                                : 'text-muted-foreground'
+                            )}
+                            data-testid="Star__133e64" />
+                          {isFavorite ? ui('removeFromFavorites') : ui('addToFavorites')}
+                        </DropdownMenuItem>
+                      )}
+                      {onPageHelp && (
+                        <DropdownMenuItem onClick={onPageHelp} data-testid="DropdownMenuItem__133e64">
+                          <HelpCircle
+                            className="h-4 w-4 mr-2 text-muted-foreground"
+                            data-testid="HelpCircle__133e64" />
+                          {ui('pageHelp')}
+                        </DropdownMenuItem>
+                      )}
+                      {menuAction && (onAddToFavorites || onPageHelp) && (
+                        <DropdownMenuSeparator data-testid="DropdownMenuSeparator__133e64" />
+                      )}
+                      {menuAction && (
+                        <DropdownMenuItem
+                          onClick={menuAction.onClick}
+                          disabled={menuAction.disabled}
+                          data-testid="DropdownMenuItem__133e64">
+                          {menuAction.icon && (
+                            <menuAction.icon className="h-4 w-4 mr-2 text-muted-foreground" />
+                          )}
+                          {menuAction.label}
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
               {breadcrumb && (
                 <TopBarBreadcrumb breadcrumb={breadcrumb} ui={ui} data-testid="TopBarBreadcrumb__133e64" />
               )}
             </div>
-
-            {hasMenu && (
-              <DropdownMenu data-testid="DropdownMenu__133e64">
-                <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__133e64">
-                  <button
-                    type="button"
-                    aria-label={ui('more')}
-                    data-testid="topbar-more-actions"
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-topbar-icon hover:bg-muted hover:text-foreground transition-colors"
-                  >
-                    <MoreVertical className="h-4 w-4" data-testid="MoreVertical__133e64" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-52" data-testid="DropdownMenuContent__133e64">
-                  {onAddToFavorites && (
-                    <DropdownMenuItem onClick={onAddToFavorites} data-testid="DropdownMenuItem__133e64">
-                      <Star
-                        className={cn(
-                          'h-4 w-4 mr-2',
-                          isFavorite
-                            ? 'fill-accent-highlight text-accent-highlight'
-                            : 'text-muted-foreground'
-                        )}
-                        data-testid="Star__133e64" />
-                      {isFavorite ? ui('removeFromFavorites') : ui('addToFavorites')}
-                    </DropdownMenuItem>
-                  )}
-                  {onPageHelp && (
-                    <DropdownMenuItem onClick={onPageHelp} data-testid="DropdownMenuItem__133e64">
-                      <HelpCircle
-                        className="h-4 w-4 mr-2 text-muted-foreground"
-                        data-testid="HelpCircle__133e64" />
-                      {ui('pageHelp')}
-                    </DropdownMenuItem>
-                  )}
-                  {menuAction && (onAddToFavorites || onPageHelp) && (
-                    <DropdownMenuSeparator data-testid="DropdownMenuSeparator__133e64" />
-                  )}
-                  {menuAction && (
-                    <DropdownMenuItem
-                      onClick={menuAction.onClick}
-                      disabled={menuAction.disabled}
-                      data-testid="DropdownMenuItem__133e64">
-                      {menuAction.icon && (
-                        <menuAction.icon className="h-4 w-4 mr-2 text-muted-foreground" />
-                      )}
-                      {menuAction.label}
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
           </div>
         )}
 
-        {/* Center: search — ETP-5504: fixed 392px, in the normal flex flow and centered in the
-            free space between the title block and the actions. It used to be `absolute inset-0`
-            over the whole header, which ignored the Navigation Rail width and covered the title
-            at 1280px. `min-w-0` + `max-w-full` let it shrink instead of overlapping if the free
-            space ever gets narrower than 392px. */}
-        <div className="flex min-w-0 flex-1 items-center justify-center" data-testid="topbar-search-slot">
+        {/* Center: search — fixed 392px in the middle grid column (ETP-5509: exactly centered in
+            the bar, see HEADER_GRID). It used to be `absolute inset-0` over the whole header,
+            which ignored the Navigation Rail width and covered the title at 1280px. `min-w-0` +
+            `max-w-full` let it shrink instead of overlapping if the bar ever gets too narrow. */}
+        <div className="col-start-2 flex min-w-0 items-center justify-center" data-testid="topbar-search-slot">
           <div
             className="relative flex h-11 w-[392px] max-w-full items-center rounded-full border border-transparent bg-search-bg px-4 text-sm transition-colors hover:bg-search-bg/80 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
             onClick={(event) => {
@@ -675,19 +714,11 @@ export default function TopBar({
               className="min-w-0 flex-1 bg-transparent text-left text-sm text-foreground outline-none placeholder:text-search-placeholder"
               data-testid="global-search-input"
             />
-            <Tooltip delayDuration={0} data-testid="Tooltip__133e64">
-              <TooltipTrigger asChild data-testid="TooltipTrigger__133e64">
-                <span role="button" tabIndex={-1} aria-label={ui('searchWithVoice')} className="ml-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-search-placeholder">
-                  <Mic className="h-4 w-4" data-testid="Mic__133e64" />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" data-testid="TooltipContent__133e64">{ui('searchWithVoice')}</TooltipContent>
-            </Tooltip>
           </div>
         </div>
 
         {/* Right: action icons */}
-        <div className="flex items-center gap-1 shrink-0" data-testid="topbar-quick-actions">
+        <div className="col-start-3 flex items-center justify-self-end gap-1 shrink-0 pr-6" data-testid="topbar-quick-actions">
           {/* ETP-5144 — guided walkthroughs. Hardcoded here rather than passed
               via `rightExtras` (which comes from per-page PageMeta) so the
               entry point is reachable from every screen. Renders nothing when

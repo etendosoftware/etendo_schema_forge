@@ -12,6 +12,7 @@ import { useRowDelete } from '@/hooks/useRowDelete';
 import HeaderPage from '@generated/sales-invoice/generated/web/sales-invoice/HeaderPage';
 import InvoiceHeaderTable from '@generated/sales-invoice/custom/InvoiceHeaderTable.jsx';
 import InvoicePreview from '../shared/InvoicePreview.jsx';
+import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
 import SalesInvoiceTopbar from './SalesInvoiceTopbar.jsx';
 import SalesInvoiceSecondaryActions from './SalesInvoiceSecondaryActions.jsx';
 import InvoiceBottomPanel from '@generated/sales-invoice/custom/InvoiceBottomPanel.jsx';
@@ -21,6 +22,8 @@ import { CreateContactContext } from '@/components/contract-ui/CreateContactCont
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import { useInvoicePdf } from '../shared/useInvoicePdf.js';
 import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord } from '../shared/useInvoiceWindow.js';
+import { SALES_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
+import { createFollowUpAfterProcess } from '@/components/follow-up-documents/followUpDocuments.js';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
@@ -35,6 +38,11 @@ import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
 const LINE_TAX_SIF_TRIGGER_ENABLED = true;
 
 /* eslint-disable react/prop-types */
+
+// ETP-5576 — after a Confirm that leaves a shipment pending, stay on the invoice and open
+// the follow-up modal (rendered by the topbar's FollowUpDocumentButton) instead of
+// navigating to the list. Built once: the config is static.
+const FOLLOW_UP_AFTER_PROCESS = createFollowUpAfterProcess(SALES_INVOICE_FOLLOW_UP.spec, SALES_INVOICE_FOLLOW_UP.options);
 
 const LIST_COLUMNS = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
@@ -188,7 +196,7 @@ export default function SalesInvoiceWindow(props) {
   // DetailView: the generated HeaderPage sets draftMode from the contract but expands
   // {...props} AFTER it, so this value wins and the contract's never applies here (ETP-5273).
   // draft-mode-allowlist-sync.test.js fails if the two drift apart.
-  const draftModeOverride = getInvoiceDraftMode(ui, { showVerifactuProcessingModal: showVerifactu, keepSaveWhenCompletedFields: ['accountingDate'] });
+  const draftModeOverride = getInvoiceDraftMode(ui, { showVerifactuProcessingModal: showVerifactu, keepSaveWhenCompletedFields: ['accountingDate'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
 
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
@@ -290,6 +298,7 @@ export default function SalesInvoiceWindow(props) {
           <InvoicePreview
             invoice={row}
             specName="sales-invoice"
+            relatedDocs={SALES_RELATED_DOCS['sales-invoice']}
             token={token}
             apiBaseUrl={apiBaseUrl}
             windowName={windowName}

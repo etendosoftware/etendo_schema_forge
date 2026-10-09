@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmBoxes303.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
 // Vitest component tests for FmBoxes303.jsx
 import { vi, describe, it, expect } from 'vitest';
 import React from 'react';
@@ -6,6 +8,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
+// ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
+vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
 vi.mock('lucide-react', () => ({
   TrendingUp: () => null,
   TrendingDown: () => null,
@@ -1101,6 +1105,38 @@ describe('FmBoxes303 — rectificativa section', () => {
     expect(onIdentChange).toHaveBeenCalledWith('motivo_rectificacion', 'R');
   });
 
+  // ETP-5584 (review W5) — the Radix Select stays controlled ('' when unset, never undefined) and
+  // an OPTIONAL field can be cleared again through its "Seleccionar…" item (the `__empty__`
+  // sentinel, mapped back to ''), like the native select allowed. A REQUIRED field offers no
+  // such item.
+  it('clears an optional select (motivo_rectificacion) back to \'\' through the placeholder item', () => {
+    const onIdentChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['rectificativa']}
+        identification={{ rectificativa: true, motivo_rectificacion: 'R' }}
+        onIdentChange={onIdentChange}
+      />
+    );
+    const select = container.querySelector('select');
+    expect(select.value).toBe('R');
+    const emptyItem = Array.from(select.querySelectorAll('option')).find(o => o.value === '__empty__');
+    expect(emptyItem.textContent).toBe('fm.ident.decl.placeholder');
+    fireEvent.change(select, { target: { value: '__empty__' } });
+    expect(onIdentChange).toHaveBeenCalledWith('motivo_rectificacion', '');
+  });
+
+  it('keeps an unset select controlled (value \'\') and offers no clear item on a required field', () => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{}} sectionIds={['identificacion']} identification={{}} />
+    );
+    const select = container.querySelector('[data-field-id="tipo_declaracion"]');
+    expect(select.value).toBe('');
+    expect(Array.from(select.querySelectorAll('option')).some(o => o.value === '__empty__')).toBe(false);
+  });
+
   it('renders section title key', () => {
     render(<FmBoxes303 {...BASE_PROPS} boxes={{}} sectionIds={['rectificativa']} />);
     expect(document.body.textContent).toContain('fm.section.rectificativa');
@@ -1468,7 +1504,9 @@ describe('FmBoxes303 — datos_bancarios required-mark rendering (ETP-5393 follo
   // rectificativa checked) to even render.
   const DVX_GATED_LABEL_KEYS = ALL_BANK_LABEL_KEYS.filter(k => k !== 'fm.ident.bank.iban');
 
-  it('tipo D (plain devolución, condition A alone) → only bank_iban carries the required-mark ("*"); the other 6 render WITHOUT it', () => {
+  // ETP-5597 pt.2 — the marca SEPA is required wherever it is shown, so a plain devolución now
+  // marks bank_iban AND bank_sepa; the other 5 render without the mark until marca 3.
+  it('tipo D (plain devolución, no marca) → bank_iban and bank_sepa carry the required-mark ("*"); the other 5 render WITHOUT it', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
@@ -1479,10 +1517,55 @@ describe('FmBoxes303 — datos_bancarios required-mark rendering (ETP-5393 follo
     );
     const labels = rawBankFieldLabels(container);
     expect(labels).toContain('fm.ident.bank.iban*');
-    DVX_GATED_LABEL_KEYS.forEach(key => {
+    expect(labels).toContain('fm.ident.bank.sepa*');
+    DVX_GATED_LABEL_KEYS.filter(k => k !== 'fm.ident.bank.sepa').forEach(key => {
       expect(labels).toContain(key);
       expect(labels).not.toContain(`${key}*`);
     });
+  });
+
+  it('tipo D at marca 3 → every bank field carries the mark and IBAN is relabelled "Cuenta bancaria"', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D', rectificativa: false, bank_sepa: '3' }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    expect(labels).toContain('fm.ident.bank.account*');
+    expect(labels).not.toContain('fm.ident.bank.iban*');
+    DVX_GATED_LABEL_KEYS.forEach(key => expect(labels).toContain(`${key}*`));
+  });
+
+  it('tipo U with a stale marca 3 → IBAN keeps its own label (the relabel is scoped to D/V/X / Nota 3)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'U', bank_sepa: '3' }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    expect(labels).toContain('fm.ident.bank.iban*');
+    expect(labels.some(l => l.startsWith('fm.ident.bank.account'))).toBe(false);
+  });
+
+  // ETP-5597 — the section has no "Devolución"/"Domiciliación" heading any more.
+  it.each(['D', 'U', 'X'])('tipo %s → the bank section renders with no Devolución/Domiciliación title', (tipo) => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: tipo }}
+      />
+    );
+    expect(rawBankFieldLabels(container).length).toBeGreaterThan(0);
+    expect(container.textContent).not.toContain('fm.section.devolucion');
+    expect(container.textContent).not.toContain('fm.section.domiciliacion');
   });
 
   it('tipo I + rectificativa false → no bank field renders at all (section hidden, nothing to mark)', () => {
@@ -1554,7 +1637,8 @@ describe('FmBoxes303 — datos_bancarios required-mark rendering (ETP-5393 follo
     expect(labels).toContain('fm.ident.bank.sepa*');
   });
 
-  it('marca 2 → SWIFT-BIC appears with the mark, the four foreign-bank fields still do not render', () => {
+  // ETP-5597 pt.2 — marca 2 shows SWIFT-BIC but it is optional (only marca 3 requires it).
+  it('marca 2 → SWIFT-BIC appears WITHOUT the mark, the four foreign-bank fields still do not render', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
@@ -1564,7 +1648,10 @@ describe('FmBoxes303 — datos_bancarios required-mark rendering (ETP-5393 follo
       />
     );
     const labels = rawBankFieldLabels(container);
-    expect(labels).toContain('fm.ident.bank.swift_bic*');
+    expect(labels).toContain('fm.ident.bank.swift_bic');
+    expect(labels).not.toContain('fm.ident.bank.swift_bic*');
+    expect(labels).toContain('fm.ident.bank.iban*');
+    expect(labels).toContain('fm.ident.bank.sepa*');
     ['fm.ident.bank.nombre', 'fm.ident.bank.direccion', 'fm.ident.bank.ciudad', 'fm.ident.bank.pais']
       .forEach(key => expect(labels).not.toContain(key));
   });
@@ -2159,8 +2246,9 @@ describe('FmBoxes303 — box 111 (rectificacion_importe) is read-only (ETP-5431 
   }
 
   it('renders no edit button for box 111, unlike its still-editable sibling box 70', () => {
+    // Box 70 is editable only inside a rectificativa (ETP-5597 pt.4), so the fixture checks it.
     const { container } = render(
-      <FmBoxes303 {...BASE_PROPS} boxes={{ 70: 10, 111: 5 }} sectionIds={['resultado_final']} />
+      <FmBoxes303 {...BASE_PROPS} boxes={{ 70: 10, 111: 5 }} sectionIds={['resultado_final']} identification={{ rectificativa: true }} />
     );
     const cell111 = findCell111(container);
     expect(cell111).toBeTruthy();
@@ -2206,18 +2294,100 @@ describe('FmBoxes303 — min="0" on boxes 109/70 (ETP-5431 pt.2, NEGATIVE_NOT_AL
     return container.querySelector('.fm-aeat-cell__input');
   }
 
+  // Boxes 70/109 are only editable inside a rectificativa (ETP-5597 pt.4).
   it('renders min=0 on box 109 (devoluciones_at)', () => {
     const { container } = render(
-      <FmBoxes303 {...BASE_PROPS} boxes={{ 109: 0 }} sectionIds={['resultado_final']} />
+      <FmBoxes303 {...BASE_PROPS} boxes={{ 109: 0 }} sectionIds={['resultado_final']} identification={{ rectificativa: true }} />
     );
     expect(openEditorFor(container, 109).getAttribute('min')).toBe('0');
   });
 
   it('renders min=0 on box 70 (a_deducir)', () => {
     const { container } = render(
-      <FmBoxes303 {...BASE_PROPS} boxes={{ 70: 0 }} sectionIds={['resultado_final']} />
+      <FmBoxes303 {...BASE_PROPS} boxes={{ 70: 0 }} sectionIds={['resultado_final']} identification={{ rectificativa: true }} />
     );
     expect(openEditorFor(container, 70).getAttribute('min')).toBe('0');
+  });
+});
+
+// ── ETP-5597 pt.4 — boxes 70/109 editable only with "Autoliquidación rectificativa" ─────
+
+describe('FmBoxes303 — casillas 70/109 gated on rectificativa/complementaria (ETP-5597)', () => {
+  const findCell = (container, boxNum) => Array.from(container.querySelectorAll('.fm-aeat-cell')).find(
+    c => c.querySelector('.fm-aeat-cell__num')?.textContent === String(boxNum).padStart(2, '0')
+  );
+
+  it.each([70, 109])('2026: box %s has no edit button without rectificativa', (box) => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{ 70: 0, 109: 0 }} sectionIds={['resultado_final']} identification={{ rectificativa: false }} />
+    );
+    const cell = findCell(container, box);
+    expect(cell).toBeTruthy();
+    expect(cell.querySelector('.fm-aeat-cell__edit-btn')).toBeNull();
+  });
+
+  it.each([70, 109])('2026: box %s gets an edit button once rectificativa is checked', (box) => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{ 70: 0, 109: 0 }} sectionIds={['resultado_final']} identification={{ rectificativa: true }} />
+    );
+    expect(findCell(container, box).querySelector('.fm-aeat-cell__edit-btn')).toBeTruthy();
+  });
+
+  it('2023 (complementaria layout): box 70 is editable with complementaria, locked without it', () => {
+    const props = { year: 2023, period: 'T2', boxes: { 70: 0 }, sectionIds: ['resultado_final'] };
+    const { container, unmount } = render(<FmBoxes303 {...props} identification={{ complementaria: false }} />);
+    expect(findCell(container, 70).querySelector('.fm-aeat-cell__edit-btn')).toBeNull();
+    unmount();
+    const { container: c2 } = render(<FmBoxes303 {...props} identification={{ complementaria: true }} />);
+    expect(findCell(c2, 70).querySelector('.fm-aeat-cell__edit-btn')).toBeTruthy();
+  });
+});
+
+// ── ETP-5597 pt.1 — tipo_declaracion options locked while box 69 is positive ─────
+
+describe('FmBoxes303 — tipo_declaracion disabled options (ETP-5597)', () => {
+  const tipoSelect = (container) => Array.from(container.querySelectorAll('.fm-aeat-ident-inline-field'))
+    .find(el => el.querySelector('.fm-aeat-ident-inline-field__label')?.textContent.startsWith('fm.ident.tipo_declaracion'))
+    ?.querySelector('select');
+  const optionByValue = (select, v) => Array.from(select.options).find(o => o.value === v);
+
+  function renderTipo(identification) {
+    return render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{}} sectionIds={['identificacion']} identification={identification} />
+    );
+  }
+
+  it('disables C/D/V/X (with the reason as title) and keeps I/U/N selectable while _box69Positive', () => {
+    const { container } = renderTipo({ tipo_declaracion: 'I', _box69Positive: true });
+    const select = tipoSelect(container);
+    expect(select).toBeTruthy();
+    for (const v of ['C', 'D', 'V', 'X']) {
+      expect(optionByValue(select, v).disabled).toBe(true);
+      expect(optionByValue(select, v).title).toBe('fm.ident.decl.disabled_positive_result');
+      // ETP-5584 — the core SelectItem's `data-[disabled]:pointer-events-none` would swallow the
+      // hover that shows that title; the item re-enables pointer events (jsdom cannot hover).
+      expect(optionByValue(select, v).className).toContain('data-[disabled]:pointer-events-auto');
+    }
+    for (const v of ['I', 'U', 'N']) expect(optionByValue(select, v).disabled).toBe(false);
+    expect(container.querySelector('[data-testid="fm-aeat-ident-tipo_declaracion-error"]')).toBeNull();
+  });
+
+  it('enables every option when box 69 is not positive', () => {
+    const { container } = renderTipo({ tipo_declaracion: 'C', _box69Positive: false });
+    const select = tipoSelect(container);
+    expect(Array.from(select.options).every(o => !o.disabled)).toBe(true);
+    expect(select.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('keeps an already-selected disabled option selected and shows the inline error', () => {
+    const { container } = renderTipo({ tipo_declaracion: 'C', _box69Positive: true });
+    const select = tipoSelect(container);
+    expect(select.value).toBe('C');
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+    const err = container.querySelector('[data-testid="fm-aeat-ident-tipo_declaracion-error"]');
+    expect(err).toBeTruthy();
+    expect(err.textContent).toBe('fm.ident.decl.disabled_positive_result');
+    expect(select.getAttribute('aria-describedby')).toBe(err.id);
   });
 });
 

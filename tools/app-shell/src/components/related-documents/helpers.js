@@ -38,6 +38,20 @@ export function fetchById(specName, entityName, id, token, apiBaseUrl) {
     .catch(() => null);
 }
 
+/**
+ * Invoices of an order-like document (sales order or sales quotation) through the
+ * `listInvoices` header action (CreateDraftInvoiceHandler#handleList). Unlike a plain
+ * `salesOrder` criteria query it also finds invoices linked only through their lines
+ * (C_InvoiceLine.C_OrderLine_ID), e.g. partial invoicing or classic-UI invoices.
+ */
+export function fetchListInvoices(specName, entityName, id, token, apiBaseUrl) {
+  const base = neoBase(apiBaseUrl);
+  return apiFetch(`${base}/${specName}/${entityName}/${encodeURIComponent(id)}/action/listInvoices`, { baseUrl: '', token })
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => j?.response?.data ?? [])
+    .catch(() => []);
+}
+
 // Cross-spec PATCH-by-id — sibling of `fetchById` above. Mirrors useEntity.js's own
 // save shape (getUrl/getMethod: PATCH `${apiBaseUrl}/${entity}/${id}`, response parsed
 // via `response.data[0]`), but targeting a DIFFERENT spec/entity than the one the
@@ -63,4 +77,23 @@ export function patchById(specName, entityName, id, payload, token, apiBaseUrl, 
   })
     .then(r => (r.ok ? r.json() : r.text().then(msg => Promise.reject(new Error(msg || `Request failed (${r.status})`)))))
     .then(j => j?.response?.data?.[0] || null);
+}
+
+/**
+ * Invoices manually linked through "Import from Source Invoice" (ETP-4737/ETP-4919),
+ * as a source `fetch` for the given invoice spec. `originInvoices` is an array of
+ * {id, documentNo}; the legacy singular `originInvoice` (bare id) is kept as a
+ * fallback for an older response shape.
+ */
+export function fetchOriginInvoicesOf(specName) {
+  return async function fetchOriginInvoices({ record, token, apiBaseUrl }) {
+    const ids = Array.isArray(record?.originInvoices)
+      ? record.originInvoices.map(o => o?.id).filter(Boolean)
+      : [record?.originInvoice].filter(Boolean);
+    if (ids.length === 0) return [];
+    const invoices = await Promise.all(
+      ids.map(invId => fetchById(specName, 'header', invId, token, apiBaseUrl))
+    );
+    return invoices.filter(Boolean);
+  };
 }

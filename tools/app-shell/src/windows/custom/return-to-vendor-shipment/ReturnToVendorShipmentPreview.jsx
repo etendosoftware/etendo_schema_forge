@@ -5,6 +5,7 @@ import GenericPreviewModal from '../shared/GenericPreviewModal.jsx';
 import { PreviewPdfPanel, usePreviewSendModal, ReceiptSendModal } from '../shared/PreviewActionButtons.jsx';
 import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
+import { PURCHASE_RELATED_DOCS } from '@/components/related-documents';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
 
 export default function ReturnToVendorShipmentPreview({ shipment, token, apiBaseUrl, windowName, onClose, onEdit, readOnly = false }) {
@@ -62,11 +63,6 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
       }
     : { storeCondition: false, documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl };
 
-  const specs = [
-    { key: 'sourceReceipts', type: 'goods-receipt', fetch: async () => shipment?.sourceReceipts ?? [] },
-    { key: 'returnInvoices', type: 'purchase-invoice', fetch: async () => shipment?.returnInvoices ?? [] },
-  ];
-
   const leftPanel = (
     <PreviewPdfPanel
       pdfLoading={pdfLoading}
@@ -84,7 +80,10 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   // applies.
   const { actionButtons, tabs } = buildReturnPreviewContent({
     doc: shipment, pdfBlob, handleDownload, modalRef,
-    specs, partnerName, movementDate, token, apiBaseUrl, ui,
+    relatedDefinition: PURCHASE_RELATED_DOCS['return-to-vendor-shipment'],
+    // The list row lacks the detail-only sourceReceipts/returnInvoices: the card loads the detail.
+    relatedLoadsDetail: true,
+    partnerName, movementDate, token, apiBaseUrl, ui,
     canDownload: isDownloadable,
     onEmail: isSendable ? sendModal.openEmailModal : undefined,
     emailsCard: {

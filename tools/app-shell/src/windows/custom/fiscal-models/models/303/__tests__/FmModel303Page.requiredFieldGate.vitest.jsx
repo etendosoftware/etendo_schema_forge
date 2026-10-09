@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
 // Vitest tests for FmModel303Page's ETP-5187 required-field pre-flight gate:
 // blocks "Generar fichero 303" / "Marcar como Presentado" — including their
 // button-level pre-checks, which must stop the modal from even opening — when
@@ -19,9 +21,12 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 const navigateMock = vi.fn();
+// Spy so a test can read the interpolation params (e.g. the `fields` list of a toast).
+const tSpy = vi.hoisted(() => vi.fn((key) => key));
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
+  useUI: () => tSpy,
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('sonner', () => ({
@@ -42,7 +47,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -63,9 +67,17 @@ vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
   IncidentsTab: () => null,
 }));
-vi.mock('../FmBoxes303.jsx', () => ({
-  default: () => React.createElement('div', { 'data-testid': 'fm-boxes-303' }, 'boxes'),
-}));
+// Stubbed by default; a test that needs the real grid (inline error under the tipo select, a
+// real box edit) flips `boxesMode.real` — the ETP-5597 box-69-turns-positive case below.
+const boxesMode = vi.hoisted(() => ({ real: false }));
+vi.mock('../FmBoxes303.jsx', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    default: (props) => (boxesMode.real
+      ? React.createElement(actual.default, props)
+      : React.createElement('div', { 'data-testid': 'fm-boxes-303' }, 'boxes')),
+  };
+});
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: () => React.createElement('div', { 'data-testid': 'PresentModal-mock' }, 'present-modal'),
   FileGenModal303: () => React.createElement('div', { 'data-testid': 'FileGenModal303-mock' }, 'filegen-modal'),
@@ -74,11 +86,15 @@ vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null,
   useAttachments: () => ({ upload: vi.fn() }),
 }));
+// ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
+vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
   CircleCheck: () => null, Calculator: () => null, Loader2: () => null,
   TrendingUp: () => null, TrendingDown: () => null, ClipboardCheck: () => null,
-  ReceiptText: () => null, FileCheck: () => null,
+  ReceiptText: () => null, FileCheck: () => null, Pencil: () => null,
 }));
 
 import FmModel303Page from '../FmModel303Page.jsx';
@@ -123,6 +139,7 @@ const submitBtn = () => Array.from(document.querySelectorAll('button'))
 
 beforeEach(() => {
   vi.clearAllMocks();
+  boxesMode.real = false;
 });
 
 describe('FmModel303Page — required-field gate proactive toast', () => {
@@ -212,3 +229,118 @@ describe('FmModel303Page — required-field gate blocks "Marcar como Presentado"
     expect(toast.error).not.toHaveBeenCalledWith('fm.duplicate_period.warning');
   });
 });
+
+// ── ETP-5597 pt.1 — tipo Compensación/Devolución with a positive casilla 69 ───────────────
+// box 68 (reg_anual) = 1000 is the only input to box 69 in this fixture → box 69 = 1000 > 0.
+const POSITIVE_69 = { _precomputed: { boxes: [{ num: 68, value: 1000 }] } };
+const NEGATIVE_69 = { _precomputed: { boxes: [{ num: 68, value: -1000 }] } };
+
+describe('FmModel303Page — a negative-result tipo with box 69 positive blocks generate/present (ETP-5597)', () => {
+  it.each(['C', 'V'])('tipo %s + box 69 > 0: "Generar fichero 303" toasts the reason and never opens the modal', async (tipo) => {
+    const { toast } = await import('sonner');
+    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: tipo }, POSITIVE_69)} {...defaultProps} />);
+    fireEvent.click(genBtn());
+    expect(screen.queryByTestId('FileGenModal303-mock')).not.toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith('fm.ident.decl.disabled_positive_result');
+    expect(generate303File).not.toHaveBeenCalled();
+  });
+
+  it('tipo C + box 69 > 0: "Registrar/Presentar" toasts the reason and never opens the modal', async () => {
+    const { toast } = await import('sonner');
+    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' }, POSITIVE_69)} {...defaultProps} />);
+    fireEvent.click(submitBtn());
+    expect(screen.queryByTestId('PresentModal-mock')).not.toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith('fm.ident.decl.disabled_positive_result');
+  });
+
+  it('tipo I + box 69 > 0 is a valid combination — the generate modal opens', () => {
+    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'I' }, POSITIVE_69)} {...defaultProps} />);
+    fireEvent.click(genBtn());
+    expect(screen.getByTestId('FileGenModal303-mock')).toBeInTheDocument();
+  });
+
+  it('tipo C + box 69 < 0 is not blocked', async () => {
+    const { toast } = await import('sonner');
+    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' }, NEGATIVE_69)} {...defaultProps} />);
+    fireEvent.click(genBtn());
+    expect(screen.getByTestId('FileGenModal303-mock')).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalledWith('fm.ident.decl.disabled_positive_result');
+  });
+
+  it('tipo C with no box 69 computed yet is not blocked', () => {
+    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' })} {...defaultProps} />);
+    fireEvent.click(submitBtn());
+    expect(screen.getByTestId('PresentModal-mock')).toBeInTheDocument();
+  });
+});
+
+// ETP-5597 pt.1 — the transition case: tipo C chosen while box 69 is negative (valid), then
+// box 69 turns positive through a box edit + recompute. Uses the REAL FmBoxes303 grid.
+describe('FmModel303Page — box 69 turning positive under tipo C (ETP-5597)', () => {
+  function findCellByNum(container, num) {
+    const padded = String(num).padStart(2, '0');
+    return Array.from(container.querySelectorAll('.fm-aeat-cell')).find(
+      (cell) => cell.querySelector('.fm-aeat-cell__num')?.textContent === padded,
+    );
+  }
+  function editBox(container, num, rawValue) {
+    fireEvent.click(findCellByNum(container, num).querySelector('.fm-aeat-cell__edit-btn'));
+    const input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: rawValue } });
+    fireEvent.blur(input);
+  }
+  const tipoSelect = (container) => Array.from(container.querySelectorAll('select'))
+    .find(sel => Array.from(sel.options).some(o => o.value === 'C'));
+
+  const goToPage = (titleKey) => fireEvent.click(
+    Array.from(document.querySelectorAll('button')).find(b => b.textContent === titleKey),
+  );
+
+  it('shows the inline error, blocks generate and keeps tipo C selected', async () => {
+    const { toast } = await import('sonner');
+    boxesMode.real = true;
+    const { container } = render(
+      <FmModel303Page decl={makeDecl({ tipo_declaracion: 'C' }, NEGATIVE_69)} {...defaultProps} />,
+    );
+
+    // Identificación page (default): box 69 negative, so tipo C is a valid choice — no error.
+    expect(tipoSelect(container).value).toBe('C');
+    expect(screen.queryByTestId('fm-aeat-ident-tipo_declaracion-error')).not.toBeInTheDocument();
+
+    // Resultado final page: box 68 edited to +1000 → recompute makes box 69 = 1000 > 0.
+    goToPage('fm.page.resultado_final');
+    editBox(container, 68, '1000');
+    expect(findCellByNum(container, 69).querySelector('.fm-aeat-cell__value').textContent).toContain('1000');
+
+    goToPage('fm.page.identificacion');
+    const error = screen.getByTestId('fm-aeat-ident-tipo_declaracion-error');
+    expect(error.textContent).toBe('fm.ident.decl.disabled_positive_result');
+    // Never cleared automatically: the user's choice stays, the declaration is blocked instead.
+    expect(tipoSelect(container).value).toBe('C');
+    expect(tipoSelect(container)).toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.click(genBtn());
+    expect(screen.queryByTestId('FileGenModal303-mock')).not.toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith('fm.ident.decl.disabled_positive_result');
+    expect(generate303File).not.toHaveBeenCalled();
+  });
+});
+
+// ── ETP-5597 pt.3 — the missing-fields toast names the field as it is labelled on screen ──
+describe('FmModel303Page — missing-field names follow the dynamic label (ETP-5597)', () => {
+  it('under marca SEPA 3 a blank IBAN is reported as "Cuenta bancaria"', () => {
+    render(<FmModel303Page decl={makeDecl({
+      tipo_declaracion: 'D', bank_sepa: '3', bank_swift_bic: 'X', bank_nombre: 'X',
+      bank_direccion: 'X', bank_ciudad: 'X', bank_pais: 'CH',
+    })} {...defaultProps} />);
+    fireEvent.click(genBtn());
+    expect(tSpy).toHaveBeenCalledWith('fm.validation.missing_required_generate', { fields: "'fm.ident.bank.account'" });
+  });
+
+  it('under marca SEPA 1 the same field is reported as "IBAN"', () => {
+    render(<FmModel303Page decl={makeDecl({ tipo_declaracion: 'D', bank_sepa: '1' })} {...defaultProps} />);
+    fireEvent.click(genBtn());
+    expect(tSpy).toHaveBeenCalledWith('fm.validation.missing_required_generate', { fields: "'fm.ident.bank.iban'" });
+  });
+});
+

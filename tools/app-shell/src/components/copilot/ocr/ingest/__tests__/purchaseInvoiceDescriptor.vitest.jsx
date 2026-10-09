@@ -1,12 +1,13 @@
-import { nonBlank, toIsoDate, buildTaxSearchTerm, buildLineOps, findBp, resolveTaxesForLines, findTax, checkBpHasLocation } from '../purchaseInvoiceDescriptor';
+// @covers tools/app-shell/src/components/copilot/ocr/ingest/purchaseInvoiceDescriptor.js
+import { classifyProductMatch, nonBlank, toIsoDate, buildTaxSearchTerm, buildLineOps, findBp, resolveTaxesForLines, findTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
 
-// Mock simSearch and contactApi to test findBp/resolveTaxesForLines without network
+// Mock simSearch to test findBp/resolveTaxesForLines without network
 vi.mock('@etendosoftware/app-shell-core/lib/simSearch.js', () => ({
   simSearch: vi.fn().mockResolvedValue([]),
 }));
-vi.mock('../../contactApi.js', () => ({
-  deriveContactsApiBase: (url) => url.replace(/\/[^/]+$/, '/contacts'),
-}));
+
+// A NEO selector response: `{ items: [{ id, label }] }`.
+const selectorItems = (items) => ({ ok: true, json: async () => ({ items, totalCount: items.length }) });
 
 describe('purchaseInvoiceDescriptor', () => {
   describe('nonBlank', () => {
@@ -160,47 +161,55 @@ describe('purchaseInvoiceDescriptor', () => {
       vi.restoreAllMocks();
     });
 
-    it('returns null when no apiBaseUrl or token', async () => {
-      expect(await findBp({ token: null, apiBaseUrl: '/api', taxId: 'X' })).toBeNull();
-      expect(await findBp({ token: 'tk', apiBaseUrl: '', taxId: 'X' })).toBeNull();
+    it('returns null without an apiBaseUrl or a name, and never fetches', async () => {
+      expect(await findBp({ token: 'tk', apiBaseUrl: '', name: 'Acme' })).toBeNull();
+      expect(await findBp({ token: 'tk', apiBaseUrl: '/api/purchase-invoice', name: '  ' })).toBeNull();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it('returns bp id when taxId matches exactly one', async () => {
-      globalThis.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ response: { data: [{ id: 'BP1' }] } }),
-      });
-      const result = await findBp({ token: 'tk', apiBaseUrl: '/api/purchase-invoice', taxId: '12345', name: 'Acme' });
-      expect(result).toBe('BP1');
+    // The production WAF blocks an HQL predicate in the query string (403), so the lookup
+    // must go through the invoice's vendor selector with a plain `q`.
+    it('searches the purchase-invoice vendor selector by name, with no _neoWhere', async () => {
+      globalThis.fetch.mockResolvedValue(selectorItems([{ id: 'BP1', label: 'Acme' }]));
+      await findBp({ token: 'tk', apiBaseUrl: 'http://test/neo/purchase-invoice', name: "Acme's" });
+      const url = globalThis.fetch.mock.calls[0][0];
+      expect(url).toContain('http://test/neo/purchase-invoice/header/selectors/C_BPartner_ID?');
+      const params = new URL(url).searchParams;
+      expect(params.get('q')).toBe("Acme's");
+      expect(params.get('isVendor')).toBe('Y');
+      expect(params.get('isSOTrx')).toBe('N');
+      expect(url).not.toContain('_neoWhere');
     });
 
-    it('returns null when multiple matches (ambiguous)', async () => {
-      globalThis.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ response: { data: [{ id: 'BP1' }, { id: 'BP2' }] } }),
-      });
-      const result = await findBp({ token: 'tk', apiBaseUrl: '/api/pi', taxId: 'X', name: 'Y' });
-      expect(result).toBeNull();
+    it('returns the id of the single vendor whose name matches, ignoring case and blanks', async () => {
+      globalThis.fetch.mockResolvedValue(selectorItems([
+        { id: 'BP1', label: 'ACME ' },
+        { id: 'BP2', label: 'Acme Logistics' },
+      ]));
+      expect(await findBp({ token: 'tk', apiBaseUrl: '/api/purchase-invoice', name: 'acme' })).toBe('BP1');
     });
 
-    it('falls back to name search when taxId is blank', async () => {
-      // When taxId is blank, nonBlank returns false, so only name query fires
-      globalThis.fetch
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ response: { data: [{ id: 'BP_NAME' }] } }) });
-      const result = await findBp({ token: 'tk', apiBaseUrl: '/api/pi', taxId: '', name: 'Acme' });
-      expect(result).toBe('BP_NAME');
+    it('returns null when only partial matches come back', async () => {
+      globalThis.fetch.mockResolvedValue(selectorItems([{ id: 'BP2', label: 'Acme Logistics' }]));
+      expect(await findBp({ token: 'tk', apiBaseUrl: '/api/pi', name: 'Acme' })).toBeNull();
+    });
+
+    it('returns null when several vendors share the exact name (ambiguous)', async () => {
+      globalThis.fetch.mockResolvedValue(selectorItems([
+        { id: 'BP1', label: 'Acme' },
+        { id: 'BP2', label: 'Acme' },
+      ]));
+      expect(await findBp({ token: 'tk', apiBaseUrl: '/api/pi', name: 'Acme' })).toBeNull();
     });
 
     it('returns null on fetch error', async () => {
       globalThis.fetch.mockRejectedValue(new Error('network'));
-      const result = await findBp({ token: 'tk', apiBaseUrl: '/api/pi', taxId: 'X' });
-      expect(result).toBeNull();
+      expect(await findBp({ token: 'tk', apiBaseUrl: '/api/pi', name: 'Acme' })).toBeNull();
     });
 
     it('returns null on non-ok response', async () => {
-      globalThis.fetch.mockResolvedValue({ ok: false, status: 500 });
-      const result = await findBp({ token: 'tk', apiBaseUrl: '/api/pi', taxId: 'X' });
-      expect(result).toBeNull();
+      globalThis.fetch.mockResolvedValue({ ok: false, status: 403 });
+      expect(await findBp({ token: 'tk', apiBaseUrl: '/api/pi', name: 'Acme' })).toBeNull();
     });
   });
 
@@ -387,23 +396,12 @@ describe('purchaseInvoiceDescriptor', () => {
       vi.restoreAllMocks();
     });
 
-    it('returns bp id when response uses .data instead of .response.data', async () => {
-      // Some endpoints return { data: [...] } instead of { response: { data: [...] } }
+    it('reads a CRUD-shaped { data: [...] } response by its name field', async () => {
       globalThis.fetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ data: [{ id: 'BP-DATA' }] }),
+        json: async () => ({ data: [{ id: 'BP-DATA', name: 'Test' }] }),
       });
-      const result = await findBp({ token: 'tk', apiBaseUrl: '/api/purchase-invoice', taxId: '99999', name: 'Test' });
-      expect(result).toBe('BP-DATA');
-    });
-
-    it('returns null when taxId matches multiple (ambiguous) via .data format', async () => {
-      globalThis.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ data: [{ id: 'BP1' }, { id: 'BP2' }] }),
-      });
-      const result = await findBp({ token: 'tk', apiBaseUrl: '/api/pi', taxId: 'DUPE', name: 'X' });
-      expect(result).toBeNull();
+      expect(await findBp({ token: 'tk', apiBaseUrl: '/api/purchase-invoice', name: 'Test' })).toBe('BP-DATA');
     });
 
     it('returns null when json() parsing fails', async () => {
@@ -411,8 +409,7 @@ describe('purchaseInvoiceDescriptor', () => {
         ok: true,
         json: async () => { throw new Error('invalid json'); },
       });
-      const result = await findBp({ token: 'tk', apiBaseUrl: '/api/pi', taxId: 'X' });
-      expect(result).toBeNull();
+      expect(await findBp({ token: 'tk', apiBaseUrl: '/api/pi', name: 'X' })).toBeNull();
     });
   });
 
@@ -491,14 +488,10 @@ describe('purchaseInvoiceDescriptor', () => {
     });
 
     it('returns ops with header when vendor found via findBp', async () => {
-      // findBp finds a match by taxID
+      // findBp finds the vendor by name, and its address through the header selector
       globalThis.fetch.mockImplementation(async (url) => {
-        if (url.includes('businessPartner')) {
-          return { ok: true, json: async () => ({ response: { data: [{ id: 'bp-1' }] } }) };
-        }
-        if (url.includes('locationAddress')) {
-          return { ok: true, json: async () => ({ response: { data: [{ id: 'loc-1' }] } }) };
-        }
+        if (url.includes('/selectors/C_BPartner_Location_ID')) return selectorItems([{ id: 'loc-1', label: 'c123' }]);
+        if (url.includes('/selectors/C_BPartner_ID')) return selectorItems([{ id: 'bp-1', label: 'Acme' }]);
         return { ok: true, json: async () => ({ response: { data: [] } }) };
       });
       // simSearch: product match for all lines, no tax
@@ -515,7 +508,7 @@ describe('purchaseInvoiceDescriptor', () => {
       expect(header).toBeTruthy();
       expect(header.body.businessPartner).toBe('bp-1');
       // partnerAddress is resolved via findBpLocation which also uses the mocked fetch
-      expect(header.body.partnerAddress).toBeTruthy();
+      expect(header.body.partnerAddress).toBe('loc-1');
       const line = result.ops.find(o => o.entity === 'Lines');
       expect(line).toBeTruthy();
       expect(line.body.product).toBe('prod-1');
@@ -540,7 +533,7 @@ describe('purchaseInvoiceDescriptor', () => {
 
     it('creates bpCreate op when user fills popup with location', async () => {
       globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: [] } }) });
-      simSearchMock.mockResolvedValue([{ id: 'prod-1' }]);
+      simSearchMock.mockResolvedValue([{ id: 'prod-1', name: 'Widget' }]);
 
       const result = await buildPurchaseInvoiceBatch(
         { vendor_name: 'New Co', line_items: [{ description: 'X', quantity: 1, unit_price: 5 }] },
@@ -568,7 +561,7 @@ describe('purchaseInvoiceDescriptor', () => {
     });
 
     it('uses reviewedHeader.vendor when present', async () => {
-      simSearchMock.mockResolvedValue([{ id: 'prod-1' }]);
+      simSearchMock.mockResolvedValue([{ id: 'prod-1', name: 'Widget' }]);
 
       const result = await buildPurchaseInvoiceBatch(
         { line_items: [{ description: 'X', quantity: 1 }] },
@@ -593,7 +586,7 @@ describe('purchaseInvoiceDescriptor', () => {
     it('returns cancelled when user dismisses product popup', async () => {
       // findBp succeeds
       globalThis.fetch.mockImplementation(async (url) => {
-        if (url.includes('businessPartner')) return { ok: true, json: async () => ({ response: { data: [{ id: 'bp-1' }] } }) };
+        if (url.includes('/selectors/C_BPartner_ID')) return selectorItems([{ id: 'bp-1', label: 'Acme' }]);
         return { ok: true, json: async () => ({ response: { data: [] } }) };
       });
       // No product matches
@@ -611,13 +604,105 @@ describe('purchaseInvoiceDescriptor', () => {
       expect(result.cancelled).toBe(true);
     });
 
+    // The line's own M_Product_ID selector is ProductSimple (built over product prices), which
+    // hides unpriced products; the popup searches the plain product selector instead.
+    it('hands the product popup the plain product selector and the product spec', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+      simSearchMock.mockResolvedValue([]);
+      const askUserForProducts = vi.fn(async () => ({}));
+
+      await buildPurchaseInvoiceBatch(
+        { line_items: [{ description: 'Unknown product' }] },
+        {
+          token: 'tok',
+          apiBaseUrl: 'http://test/neo/purchase-invoice',
+          reviewedHeader: { vendor: { bpId: 'bp-1' } },
+          askUserForProducts,
+        },
+      );
+
+      expect(askUserForProducts).toHaveBeenCalledWith(expect.objectContaining({
+        selectorUrl: 'http://test/neo/purchase-invoice/intrastat/selectors/M_Product_ID',
+        productSpecUrl: 'http://test/neo/product',
+      }));
+    });
+
+    describe('product matching (no silent partial matches)', () => {
+      const run = async (description, simResult) => {
+        globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+        simSearchMock.mockImplementation(async ({ entityName }) => (entityName === 'Product' ? simResult : []));
+        const askUserForProducts = vi.fn(async () => ({}));
+        const result = await buildPurchaseInvoiceBatch(
+          { line_items: [{ description, quantity: 1 }] },
+          {
+            token: 'tok',
+            apiBaseUrl: 'http://test/neo/purchase-invoice',
+            reviewedHeader: { vendor: { bpId: 'bp-1' } },
+            askUserForProducts,
+          },
+        );
+        return { result, askUserForProducts };
+      };
+
+      it('sends a partial-similarity candidate to the popup as a suggestion, not assigned', async () => {
+        const { result, askUserForProducts } = await run('Servicio de desarrollo y mantenimiento web', [
+          { id: 'p-mw', name: 'Mantenimiento Web', similarityPercent: 55, candidates: [{ id: 'p-mw', name: 'Mantenimiento Web' }] },
+        ]);
+        expect(askUserForProducts).toHaveBeenCalledTimes(1);
+        const { unmatched } = askUserForProducts.mock.calls[0][0];
+        expect(unmatched[0].suggestion).toEqual({ id: 'p-mw', name: 'Mantenimiento Web' });
+        expect(result.ops.find(o => o.entity === 'Lines')).toBeUndefined();
+      });
+
+      it('requests several candidates so an ambiguous exact match can be detected', async () => {
+        await run('Widget', []);
+        expect(simSearchMock).toHaveBeenCalledWith(expect.objectContaining({ entityName: 'Product', qtyResults: 3, minSimPercent: 30 }));
+      });
+
+      it('auto-assigns an exact name match ignoring case and surrounding spaces', async () => {
+        const { result, askUserForProducts } = await run('  mantenimiento WEB ', [
+          { id: 'p-mw', name: 'Mantenimiento Web', candidates: [{ id: 'p-mw', name: 'Mantenimiento Web' }] },
+        ]);
+        expect(askUserForProducts).not.toHaveBeenCalled();
+        expect(result.ops.find(o => o.entity === 'Lines').body.product).toBe('p-mw');
+      });
+
+      it('sends two exact-name candidates to the popup instead of picking one', async () => {
+        const cands = [{ id: 'p1', name: 'Widget' }, { id: 'p2', name: 'widget' }];
+        const { askUserForProducts } = await run('Widget', [{ ...cands[0], candidates: cands }]);
+        expect(askUserForProducts).toHaveBeenCalledTimes(1);
+        expect(askUserForProducts.mock.calls[0][0].unmatched[0].suggestion).toEqual({ id: 'p1', name: 'Widget' });
+      });
+
+      it('sends a line with no candidates to the popup without a suggestion', async () => {
+        const { askUserForProducts } = await run('Unknown thing', [null]);
+        expect(askUserForProducts.mock.calls[0][0].unmatched[0].suggestion).toBeNull();
+      });
+    });
+
+    describe('classifyProductMatch', () => {
+      it('returns an empty object for null, id-less or missing matches', () => {
+        expect(classifyProductMatch('x', null)).toEqual({});
+        expect(classifyProductMatch('x', { name: 'x' })).toEqual({});
+      });
+
+      it('does not auto-assign a match without name info', () => {
+        expect(classifyProductMatch('Widget', { id: 'p1' })).toEqual({ suggestion: { id: 'p1', name: 'p1' } });
+      });
+
+      it('picks the exact candidate even when it is not the first one', () => {
+        const candidates = [{ id: 'a', name: 'Widget Pro' }, { id: 'b', name: 'Widget' }];
+        expect(classifyProductMatch('widget', { ...candidates[0], candidates })).toEqual({ id: 'b' });
+      });
+    });
+
     it('merges reviewedLines overrides', async () => {
       globalThis.fetch.mockImplementation(async (url) => {
-        if (url.includes('businessPartner')) return { ok: true, json: async () => ({ response: { data: [{ id: 'bp-1' }] } }) };
-        if (url.includes('locationAddress')) return { ok: true, json: async () => ({ response: { data: [{ id: 'loc-1' }] } }) };
+        if (url.includes('/selectors/C_BPartner_Location_ID')) return selectorItems([{ id: 'loc-1', label: 'c123' }]);
+        if (url.includes('/selectors/C_BPartner_ID')) return selectorItems([{ id: 'bp-1', label: 'A' }]);
         return { ok: true, json: async () => ({ response: { data: [] } }) };
       });
-      simSearchMock.mockResolvedValue([{ id: 'prod-1' }]);
+      simSearchMock.mockResolvedValue([{ id: 'prod-1', name: 'Edited Widget' }]);
 
       const result = await buildPurchaseInvoiceBatch(
         {
@@ -667,7 +752,7 @@ describe('purchaseInvoiceDescriptor', () => {
       globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: [{ id: 'bp-1' }] } }) });
       // Only first product matches
       simSearchMock.mockImplementation(async ({ items }) => {
-        return items.map((item, i) => i === 0 ? { id: 'prod-1' } : null);
+        return items.map((item, i) => i === 0 ? { id: 'prod-1', name: 'Matched' } : null);
       });
 
       const result = await buildPurchaseInvoiceBatch(
@@ -688,7 +773,7 @@ describe('purchaseInvoiceDescriptor', () => {
 
     it('skips BP popup when askUserForBp is not a function', async () => {
       globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: [] } }) });
-      simSearchMock.mockResolvedValue([{ id: 'prod-1' }]);
+      simSearchMock.mockResolvedValue([{ id: 'prod-1', name: 'Widget' }]);
 
       const result = await buildPurchaseInvoiceBatch(
         { vendor_name: 'X', line_items: [{ description: 'Y', quantity: 1 }] },
@@ -707,14 +792,14 @@ describe('purchaseInvoiceDescriptor', () => {
 
     it('uses tax from simSearch when no reviewedLine _tax_id', async () => {
       globalThis.fetch.mockImplementation(async (url) => {
-        if (url.includes('businessPartner')) return { ok: true, json: async () => ({ response: { data: [{ id: 'bp-1' }] } }) };
+        if (url.includes('/selectors/C_BPartner_ID')) return selectorItems([{ id: 'bp-1', label: 'A' }]);
         return { ok: true, json: async () => ({ response: { data: [] } }) };
       });
 
       // First call: product simSearch, second call: tax simSearch
       let callCount = 0;
       simSearchMock.mockImplementation(async ({ entityName }) => {
-        if (entityName === 'Product') return [{ id: 'prod-1' }];
+        if (entityName === 'Product') return [{ id: 'prod-1', name: 'Widget' }];
         if (entityName === 'FinancialMgmtTaxRate') return [{ id: 'tax-sim' }];
         return [];
       });
@@ -761,6 +846,72 @@ describe('purchaseInvoiceDescriptor', () => {
     });
   });
 
+  // ETP-5654 — same vendor + same supplier document number warns about a duplicate upload.
+  describe('findDuplicatePurchaseInvoices', () => {
+    const ctx = { token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1', documentNo: ' ABC-1 ' };
+    const crudRows = (data) => ({ ok: true, json: async () => ({ response: { data } }) });
+
+    beforeEach(() => {
+      globalThis.fetch = vi.fn();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('queries the purchase-invoice header list, narrowing by vendor, document number and non-void status', async () => {
+      globalThis.fetch.mockResolvedValue(crudRows([]));
+      expect(await findDuplicatePurchaseInvoices(ctx)).toEqual({ status: 'none', invoices: [] });
+      const url = new URL(globalThis.fetch.mock.calls[0][0]);
+      expect(url.origin + url.pathname).toBe('http://test/neo/purchase-invoice/header');
+      expect(JSON.parse(url.searchParams.get('criteria'))).toEqual([
+        { fieldName: 'businessPartner', operator: 'equals', value: 'bp-1' },
+        { fieldName: 'orderReference', operator: 'iEquals', value: 'ABC-1' },
+        { fieldName: 'documentStatus', operator: 'notEqual', value: 'VO' },
+      ]);
+      expect(url.search).not.toContain('_neoWhere');
+    });
+
+    it('reports a duplicate matching the document number trimmed and case-insensitive', async () => {
+      globalThis.fetch.mockResolvedValue(crudRows([
+        { id: 'inv-1', documentNo: '1000123', orderReference: ' abc-1 ', documentStatus: 'DR' },
+      ]));
+      expect(await findDuplicatePurchaseInvoices(ctx)).toEqual({
+        status: 'duplicate',
+        invoices: [{ id: 'inv-1', documentNo: '1000123' }],
+      });
+    });
+
+    it('ignores voided invoices and rows with another document number', async () => {
+      globalThis.fetch.mockResolvedValue(crudRows([
+        { id: 'inv-1', documentNo: '1', orderReference: 'ABC-1', documentStatus: 'VO' },
+        { id: 'inv-2', documentNo: '2', orderReference: 'ABC-10', documentStatus: 'CO' },
+        { id: 'inv-3', documentNo: '3', orderReference: 'ABC-1', documentStatus: { id: 'VO' } },
+      ]));
+      expect((await findDuplicatePurchaseInvoices(ctx)).status).toBe('none');
+    });
+
+    it('trusts the server filter for rows that do not carry orderReference', async () => {
+      globalThis.fetch.mockResolvedValue(crudRows([{ id: 'inv-1', documentNo: '7' }]));
+      expect((await findDuplicatePurchaseInvoices(ctx)).status).toBe('duplicate');
+    });
+
+    it('returns unknown when the lookup fails, answers non-OK or unreadable', async () => {
+      globalThis.fetch.mockRejectedValueOnce(new Error('network'));
+      expect((await findDuplicatePurchaseInvoices(ctx)).status).toBe('unknown');
+      globalThis.fetch.mockResolvedValueOnce({ ok: false, status: 500 });
+      expect((await findDuplicatePurchaseInvoices(ctx)).status).toBe('unknown');
+      globalThis.fetch.mockResolvedValueOnce({ ok: true, json: async () => { throw new Error('bad'); } });
+      expect((await findDuplicatePurchaseInvoices(ctx)).status).toBe('unknown');
+    });
+
+    it('returns unknown without a vendor or a document number, without calling the backend', async () => {
+      expect((await findDuplicatePurchaseInvoices({ ...ctx, bpId: null })).status).toBe('unknown');
+      expect((await findDuplicatePurchaseInvoices({ ...ctx, documentNo: '  ' })).status).toBe('unknown');
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+  });
+
   // ETP-5289 — the review modal blocks only on a known-missing address, never on a failed lookup.
   describe('checkBpHasLocation', () => {
     const ctx = { token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1' };
@@ -774,13 +925,18 @@ describe('purchaseInvoiceDescriptor', () => {
     });
 
     it('returns present when the vendor has an active address', async () => {
-      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: [{ id: 'loc-1' }] } }) });
+      globalThis.fetch.mockResolvedValue(selectorItems([{ id: 'loc-1', label: 'c123' }]));
       expect(await checkBpHasLocation(ctx)).toBe('present');
-      expect(globalThis.fetch.mock.calls[0][0]).toContain('/contacts/locationAddress');
+      const url = globalThis.fetch.mock.calls[0][0];
+      // The header's partnerAddress selector fed the vendor — no HQL in the query string,
+      // which the production WAF answers with 403.
+      expect(url).toContain('http://test/neo/purchase-invoice/header/selectors/C_BPartner_Location_ID?');
+      expect(new URL(url).searchParams.get('C_BPartner_ID')).toBe('bp-1');
+      expect(url).not.toContain('_neoWhere');
     });
 
     it('returns missing when the lookup answers with no address', async () => {
-      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: [] } }) });
+      globalThis.fetch.mockResolvedValue(selectorItems([]));
       expect(await checkBpHasLocation(ctx)).toBe('missing');
     });
 

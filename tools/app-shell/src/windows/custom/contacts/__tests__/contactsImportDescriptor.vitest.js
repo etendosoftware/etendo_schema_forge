@@ -1,6 +1,12 @@
-import { describe, it, vi } from 'vitest';
+// @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
+// @covers tools/app-shell/src/windows/custom/contacts/contactsFkResolvers.js
+import { describe, it, vi, afterEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { buildOperations } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
+import { runImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
+import { runImport, SEND_STATUS } from '@etendosoftware/app-shell-core/lib/import/importEngine.js';
+import { resetImportRun } from '@etendosoftware/app-shell-core/lib/import/importRunState.js';
+import '../contactsFkResolvers.js'; // registers the 'contacts-country' resolver the send path looks up
 import '../contactsImportDescriptor.js';
 
 const baseRow = {
@@ -265,6 +271,42 @@ describe('contacts import descriptor', () => {
     });
   });
 
+  // ETP-5544: before the Cliente/Proveedor columns existed every imported row landed on the DB
+  // defaults (IsCustomer='Y', IsVendor='N'), so a supplier list became a list of customers. The
+  // two cells are read TOGETHER: only when both are blank do the old defaults apply.
+  describe('Cliente / Proveedor roles (ETP-5544)', () => {
+    const config = { spec: 'contacts', descriptorName: 'contacts', token: 't' };
+
+    it.each([
+      ['both columns absent (template from before ETP-5544)', {}, 'Y', 'N'],
+      ['both cells blank or whitespace', { customer: '', vendor: '   ' }, 'Y', 'N'],
+      ['only Proveedor = Sí (vendor-only, the reported bug)', { vendor: 'Sí' }, 'N', 'Y'],
+      ['only Proveedor = Sí, Cliente present but blank', { customer: '  ', vendor: 'Sí' }, 'N', 'Y'],
+      ['only Cliente = No', { customer: 'No' }, 'N', 'N'],
+      ['only Cliente = Sí', { customer: 'Sí' }, 'Y', 'N'],
+      ['both Sí', { customer: 'Sí', vendor: 'Sí' }, 'Y', 'Y'],
+      ['both No (neither role is allowed)', { customer: 'No', vendor: 'No' }, 'N', 'N'],
+      ['accent/case variants "si" / "SÍ"', { customer: 'si', vendor: 'SÍ' }, 'Y', 'Y'],
+      ['spreadsheet tick "x" and a lower-case "no"', { customer: ' x ', vendor: 'no' }, 'Y', 'N'],
+      ['raw AD codes from an Etendo export', { customer: 'n', vendor: 'Y' }, 'N', 'Y'],
+    ])('%s -> customer %s / vendor %s', async (_label, cells, customer, vendor) => {
+      const [bp] = await buildOperations({ name: 'Acme Corp', ...cells }, config);
+      // Strict equality to the code also proves the raw cell text ('Sí', 'x', …) never travels.
+      assert.equal(bp.body.customer, customer);
+      assert.equal(bp.body.vendor, vendor);
+    });
+
+    it('flags an unrecognized value against its own cell in review, and fails the row at send', async () => {
+      for (const target of ['customer', 'vendor']) {
+        const row = { name: 'Acme Corp', [target]: 'Quizás' };
+        const errors = runImportRowValidator('contacts', row);
+        assert.deepEqual(errors.map((e) => e.target), [target]);
+        assert.match(errors[0].message, /Quizás.*Accepted values.*Y \(Sí\).*N \(No\)/s);
+        await assert.rejects(() => buildOperations(row, config), /Quizás.*Accepted values/s);
+      }
+    });
+  });
+
   // ETP-4995: a CSV whose only name column was "nombre" used to map to etgoFirstname,
   // leaving both the commercial name and the derived searchKey empty — a silently
   // malformed business partner. "nombre" now maps to `name`; this guards the descriptor
@@ -319,23 +361,16 @@ describe('contacts import descriptor', () => {
       // BusinessPartnerHandler's server-side domain-shape check now requires.
       etgoWeb: 'acme.example',
       taxID: 'B12345678',
+      // ETP-5544 — no Cliente/Proveedor columns on the row: the pre-ETP-5544 defaults.
+      customer: 'Y',
+      vendor: 'N',
       searchKey: 'Acme Iberia',
     });
   });
 
-  it('strips a bare http:// scheme from etgoWeb too', async () => {
-    const ops = await buildOperations({
-      name: 'Acme Iberia', etgoWeb: 'http://acme.example',
-    }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
-    assert.equal(ops[0].body.etgoWeb, 'acme.example');
-  });
-
-  it('leaves an already-bare etgoWeb value untouched', async () => {
-    const ops = await buildOperations({
-      name: 'Acme Iberia', etgoWeb: 'acme.example',
-    }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
-    assert.equal(ops[0].body.etgoWeb, 'acme.example');
-  });
+  // The scheme variants (http://, any case, already bare) are stripUrlScheme's own behavior,
+  // shared with the list's website cell since contactsWebUrl.js: they are covered once, in
+  // ContactsTable.vitest.jsx. The case above proves the import applies it.
 
   it('builds a location operation when an imported contact includes address data', async () => {
     const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-ES', name: 'Spain' });
@@ -527,5 +562,109 @@ describe('contacts import descriptor', () => {
         /Category service unavailable/,
       );
     });
+  });
+});
+
+// ETP-5676 — same redundant per-row resolution as the product unit of measure, for the country.
+describe('contacts import descriptor — FK reuse and run reset (ETP-5676)', () => {
+  const calls = (fetchMock, part) => fetchMock.mock.calls.filter(([url]) => String(url).includes(part));
+
+  function stubFetch() {
+    const fetchMock = vi.fn(async (url) => {
+      const u = String(url);
+      if (u.includes('/simsearch')) {
+        return { ok: true, json: async () => ({ item_0: { data: [{ id: 'C-AR', name: 'Argentina', similarity_percent: 100 }] } }) };
+      }
+      return { ok: true, json: async () => ({ response: { data: [{ id: 'BPG-CLIENTS', searchKey: 'CLIENTS', name: 'Clientes' }] } }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('asks the backend for no country the preview already resolved', async () => {
+    const fetchMock = stubFetch();
+    const fkResolutions = new Map([['country', new Map([['Argentina', { status: 'auto-resolved', id: 'C-PREVIEW', name: 'Argentina' }]])]]);
+    const results = await Promise.all(Array.from({ length: 5 }, () => buildOperations(
+      baseRow, { spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-prev', fkResolutions },
+    )));
+    assert.deepEqual(results.map((ops) => ops[1].body.country), Array(5).fill('C-PREVIEW'));
+    assert.equal(calls(fetchMock, '/simsearch').length, 0);
+  });
+
+  it('resolves an unpreviewed country once for all concurrent rows', async () => {
+    const fetchMock = stubFetch();
+    await Promise.all(Array.from({ length: 8 }, () => buildOperations(
+      baseRow, { spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-memo' },
+    )));
+    assert.ok(calls(fetchMock, '/simsearch').length <= 3);
+  });
+
+  it('reads the contact category catalogue once per run and again after a run reset', async () => {
+    const fetchMock = stubFetch();
+    const run = () => buildOperations(
+      { name: 'Acme', category: 'CLIENTS' }, { spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-cat' },
+    );
+    await run();
+    await run();
+    assert.equal(calls(fetchMock, '/business-partner-category/').length, 1);
+    resetImportRun();
+    await run();
+    assert.equal(calls(fetchMock, '/business-partner-category/').length, 2);
+  });
+});
+
+// ETP-5676 — contacts rows have a variable number of ops (bp, optional location, optional
+// contact), all linked by `parentRef: 'bp'`. In a chunk those ids must stay unique and keep
+// pointing at their OWN row's bp.
+describe('contacts import descriptor — rows in a multi-row batch (ETP-5676)', () => {
+  const countryResolution = { status: 'auto-resolved', id: 'C-AR', name: 'Argentina' };
+
+  /** Mimics BatchService's own checks: unique op ids, `parentRef` naming an EARLIER op. */
+  function batchServiceLike() {
+    const requests = [];
+    const postBatch = async (ops) => {
+      requests.push(ops);
+      const seen = new Set();
+      for (const op of ops) {
+        if (seen.has(op.id)) return { committed: false, atomic: true, persisted: [], error: { message: `duplicate id ${op.id}` } };
+        if (op.parentRef && !seen.has(op.parentRef)) {
+          return { committed: false, atomic: true, persisted: [], error: { message: `bad parentRef ${op.parentRef}` } };
+        }
+        seen.add(op.id);
+      }
+      return { committed: true, operations: ops.map((op) => ({ id: op.id, ok: true, recordId: `REC-${op.id}` })) };
+    };
+    return { postBatch, requests };
+  }
+
+  it('keeps every row\'s ops linked to its own bp when rows have 1, 2 or 3 ops', async () => {
+    const { postBatch, requests } = batchServiceLike();
+    const createCategoryFn = vi.fn(async ({ searchKey, name }) => ({ id: 'BPG-NEW', searchKey, name }));
+    const rows = [
+      { name: 'Solo Name', category: 'Retail' },
+      { ...baseRow, name: 'With Address', category: 'Retail' },
+      { name: 'Person', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'l@x.com', category: 'Retail' },
+      { ...baseRow, name: 'Full', category: 'Retail' },
+    ];
+    const config = {
+      spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-chunk', existingCategories: [],
+      createCategoryFn, resolveCountryFn: async () => countryResolution,
+    };
+    const { results } = await runImport(rows, {
+      buildRowOperations: (row) => buildOperations(row, config),
+      postBatch, concurrency: 1, batchSize: 10,
+    });
+    assert.equal(requests.length, 1);
+    assert.ok(results.every((r) => r.status === SEND_STATUS.OK), JSON.stringify(results.map((r) => r.error?.message)));
+    // each row's recordId is the one of ITS OWN bp op, in row order
+    assert.deepEqual(results.map((r) => r.recordId), rows.map((_, i) => `REC-r${i}.bp`));
+    for (const op of requests[0].filter((o) => o.parentRef)) {
+      assert.match(op.parentRef, /^r\d+\.bp$/);
+      assert.equal(op.id.split('.')[0], op.parentRef.split('.')[0], 'a child op must point at its own row\'s bp');
+    }
+    // the four rows share one new category: created once, outside the request
+    assert.equal(createCategoryFn.mock.calls.length, 1);
   });
 });

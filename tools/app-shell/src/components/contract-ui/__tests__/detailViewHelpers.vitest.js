@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
+//
 // Direct unit tests for the helper module extracted from DetailView (ETP-4730).
 //
 // The pre-existing DetailView.*Helpers suites reach these same functions through
@@ -33,6 +35,8 @@ import {
   getSecondaryLinesTableRef,
   getSecondaryEditRowHandler,
   getLinesToolbarClassName,
+  getSqBtnSize,
+  getSaveBtnCls,
   getLineMenuActionsRef,
   getAddLineMenuActions,
   getSidebarSlideClassName,
@@ -45,11 +49,20 @@ import {
   runAddLineAction,
   resolveAddLineLabel,
   buildInitialTabs,
+  getCustomTabSaveFirstHint,
   buildLineRowClickHandler,
   maybeSaveBeforeProcess,
   maybeSaveBeforeConfirm,
   buildHeaderFormData,
   buildCustomAddModalOnSaved,
+  resolveCustomAddModalSeed,
+  buildCustomAddModalSeed,
+  buildCustomAddModalOnParentRefresh,
+  buildPostCreateState,
+  getButtonClass,
+  getProcessButtonVariant,
+  getDangerIconClass,
+  isDangerProcess,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -405,11 +418,22 @@ describe('class-name and small value helpers', () => {
     expect(getAddLineWrapperClassName('table')).toBe('relative');
     expect(getInlineEditableShrinkClassName('inlineEditable')).toBe('shrink-0');
     expect(getInlineEditableShrinkClassName('table')).toBe('');
-    expect(getLinesToolbarClassName('inlineEditable', 'px-4', false)).toContain('p-2');
-    expect(getLinesToolbarClassName('inlineEditable', 'px-4', false)).toContain('border-b');
-    expect(getLinesToolbarClassName('table', 'px-4', false)).toContain('px-4 py-2');
-    expect(getLinesToolbarClassName('table', 'px-4', false)).not.toContain('border-b');
-    expect(getLinesToolbarClassName('table', 'px-4', true)).toContain('border-b');
+  });
+
+  it('uses one constant record-toolbar class: p-2 plus the inset bottom rule, no border-b', () => {
+    const cls = getLinesToolbarClassName();
+    expect(cls).toContain('p-2');
+    expect(cls).toContain('shadow-[inset_0_-1px_0_var(--status-neutral-border)]');
+    expect(cls).not.toContain('border-b');
+    expect(getLinesToolbarClassName('table', 'px-4', true)).toBe(cls);
+  });
+
+  it('always sizes square buttons h-10 w-10 and the save button h-10', () => {
+    expect(getSqBtnSize()).toBe('h-10 w-10');
+    expect(getSqBtnSize('default')).toBe('h-10 w-10');
+    expect(getSqBtnSize('sm')).toBe('h-10 w-10');
+    expect(getSaveBtnCls()).toContain('h-10');
+    expect(getSaveBtnCls('sm')).toContain('h-10');
   });
 
   it('stacks the side panel below the content until lg', () => {
@@ -759,6 +783,126 @@ describe('buildInitialTabs (ETP-4415 — cross-group tabOrder sort)', () => {
   });
 });
 
+// A 'tab'-placement custom component that cannot work on an unsaved record declares
+// `requiresSavedRecord` (true or a predicate over its props) and `savedRecordHintKey`.
+describe('getCustomTabSaveFirstHint', () => {
+  const ui = (key) => `t:${key}`;
+
+  function SavedOnly() { return null; }
+  SavedOnly.requiresSavedRecord = true;
+  SavedOnly.savedRecordHintKey = 'savedOnlyHint';
+
+  function Attachments() { return null; }
+  Attachments.requiresSavedRecord = (props = {}) => !props.config?.saveBeforeAttach;
+  Attachments.savedRecordHintKey = 'attachmentsSaveFirstHint';
+
+  function Plain() { return null; }
+
+  it('returns the translated hint for a new record when the static is true', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: SavedOnly }, true, ui)).toBe('t:savedOnlyHint');
+  });
+
+  it('returns null for a saved record', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: SavedOnly }, false, ui)).toBeNull();
+  });
+
+  it('returns null for a component without the static', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Plain }, true, ui)).toBeNull();
+  });
+
+  it('returns null for a tab entry without a Component', () => {
+    expect(getCustomTabSaveFirstHint({ key: 'x' }, true, ui)).toBeNull();
+    expect(getCustomTabSaveFirstHint(null, true, ui)).toBeNull();
+  });
+
+  it('evaluates a predicate static against the tab props: attachments without saveBeforeAttach is gated', () => {
+    const ct = { key: 'attachments', Component: Attachments, props: { config: {} } };
+    expect(getCustomTabSaveFirstHint(ct, true, ui)).toBe('t:attachmentsSaveFirstHint');
+  });
+
+  it('attachments with saveBeforeAttach: true is not gated (the tab saves the header itself)', () => {
+    const ct = { key: 'attachments', Component: Attachments, props: { config: { saveBeforeAttach: true } } };
+    expect(getCustomTabSaveFirstHint(ct, true, ui)).toBeNull();
+  });
+
+  it('passes an empty object to the predicate when the tab has no props', () => {
+    const predicate = vi.fn(() => true);
+    function Comp() { return null; }
+    Comp.requiresSavedRecord = predicate;
+    Comp.savedRecordHintKey = 'k';
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Comp }, true, ui)).toBe('t:k');
+    expect(predicate).toHaveBeenCalledWith({});
+  });
+
+  it('does not evaluate the predicate for a saved record', () => {
+    const predicate = vi.fn(() => true);
+    function Comp() { return null; }
+    Comp.requiresSavedRecord = predicate;
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Comp }, false, ui)).toBeNull();
+    expect(predicate).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty (non-null) hint when the static is set without a hint key, so the tab still disables', () => {
+    function Comp() { return null; }
+    Comp.requiresSavedRecord = true;
+    expect(getCustomTabSaveFirstHint({ key: 'x', Component: Comp }, true, ui)).toBe('');
+  });
+});
+
+describe('buildInitialTabs — saveFirstHint on custom tab entries', () => {
+  function Attachments() { return null; }
+  Attachments.requiresSavedRecord = (props = {}) => !props.config?.saveBeforeAttach;
+  Attachments.savedRecordHintKey = 'attachmentsSaveFirstHint';
+  function Pricing() { return null; }
+
+  function makeProps(overrides = {}) {
+    return {
+      secondaryTabs: [{ key: 'accounting', label: 'Accounting' }],
+      secondaryHooks: [],
+      panelCounts: {},
+      ui: (key) => `t:${key}`,
+      DetailTable: null,
+      detailLabel: 'Lines',
+      detailEntity: 'orderLine',
+      hook: { children: [] },
+      CustomLines: null,
+      customTabsAfterBottom: false,
+      tabCustomTabs: [
+        { key: 'pricing', label: 'Price', placement: 'tab', Component: Pricing },
+        { key: 'attachments', labelKey: 'attachments', placement: 'tab', Component: Attachments, props: { config: {} } },
+      ],
+      customTabCounts: {},
+      customTabVisibility: {},
+      ...overrides,
+    };
+  }
+
+  const byKey = (tabs) => Object.fromEntries(tabs.map(t => [t.key, t]));
+
+  it('new record: the gated custom tab carries the translated hint, the others carry null', () => {
+    const tabs = byKey(buildInitialTabs(makeProps({ isNew: true })));
+    expect(tabs['custom:attachments'].saveFirstHint).toBe('t:attachmentsSaveFirstHint');
+    expect(tabs['custom:pricing'].saveFirstHint).toBeNull();
+    expect(tabs.accounting.saveFirstHint).toBeUndefined();
+  });
+
+  it('saved record: no custom tab carries a hint', () => {
+    const tabs = byKey(buildInitialTabs(makeProps({ isNew: false })));
+    expect(tabs['custom:attachments'].saveFirstHint).toBeNull();
+    expect(tabs['custom:pricing'].saveFirstHint).toBeNull();
+  });
+
+  it('new record with saveBeforeAttach: the attachments tab stays enabled', () => {
+    const tabs = byKey(buildInitialTabs(makeProps({
+      isNew: true,
+      tabCustomTabs: [
+        { key: 'attachments', labelKey: 'attachments', placement: 'tab', Component: Attachments, props: { config: { saveBeforeAttach: true } } },
+      ],
+    })));
+    expect(tabs['custom:attachments'].saveFirstHint).toBeNull();
+  });
+});
+
 // ETP-4542 — moved here from DetailView.jsx (growth-guarded, see
 // .claude/hooks/check-detailview-growth.mjs) alongside maybeSaveBeforeConfirm
 // below. DetailView.dispatchProcessAction.vitest.jsx already covers this
@@ -952,5 +1096,137 @@ describe('buildCustomAddModalOnSaved (ETP-5366)', () => {
     expect(() => onSaved()).not.toThrow();
     expect(secondaryHooks[0].handleSelect).toHaveBeenCalledWith(parent);
     expect(setCustomModalState).toHaveBeenCalledWith({ key: null, rowId: null });
+  });
+});
+
+describe('resolveCustomAddModalSeed (ETP-5654)', () => {
+  const seed = { address: 'Gran Via 45' };
+  const initialChildData = { locationAddress: seed };
+
+  it('passes the seed for a new first row', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'locationAddress', rowId: null, rows: [] })).toBe(seed);
+  });
+
+  it('passes the seed while the rows are not loaded as an array yet', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'locationAddress', rowId: null, rows: undefined })).toBe(seed);
+  });
+
+  it('does not seed when editing a row', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'locationAddress', rowId: 'row-1', rows: [] })).toBeNull();
+  });
+
+  it('does not seed when the tab already has rows', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'locationAddress', rowId: null, rows: [{ id: 'a' }] })).toBeNull();
+  });
+
+  it('returns null for another tab or without initialChildData', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'contact', rowId: null, rows: [] })).toBeNull();
+    expect(resolveCustomAddModalSeed({ initialChildData: null, tabKey: 'locationAddress', rowId: null, rows: [] })).toBeNull();
+  });
+});
+
+describe('buildPostCreateState (ETP-5654 auto-open after first save)', () => {
+  const Modal = () => null;
+  const secondaryTabs = [{ key: 'contact' }, { key: 'locationAddress', customAddModal: Modal }];
+  const initialChildData = { locationAddress: { address: 'Gran Via 45' } };
+  const justSaved = { id: 'bp-1' };
+
+  it('asks to open the seeded tab\'s add modal on the first save of a new record', () => {
+    expect(buildPostCreateState({ locationState: { justSaved }, initialChildData, secondaryTabs }))
+      .toEqual({ justSaved: undefined, openSecondaryTab: 'locationAddress', openAddSecondaryLine: true });
+  });
+
+  it('only clears the marker without initialChildData (behaviour unchanged)', () => {
+    expect(buildPostCreateState({ locationState: { justSaved }, initialChildData: null, secondaryTabs }))
+      .toEqual({ justSaved: undefined });
+  });
+
+  it('does nothing when the tab has no customAddModal or no seed', () => {
+    expect(buildPostCreateState({ locationState: { justSaved }, initialChildData, secondaryTabs: [{ key: 'locationAddress' }] }))
+      .toEqual({ justSaved: undefined });
+    expect(buildPostCreateState({ locationState: { justSaved }, initialChildData: { other: {} }, secondaryTabs }))
+      .toEqual({ justSaved: undefined });
+  });
+
+  it('does not reopen after a cancel: the follow-up state carries no justSaved', () => {
+    const first = buildPostCreateState({ locationState: { justSaved }, initialChildData, secondaryTabs });
+    // the open-modal effect then clears the state; later navigations carry no marker
+    expect(buildPostCreateState({ locationState: {}, initialChildData, secondaryTabs })).toEqual({ justSaved: undefined });
+    expect(first.openSecondaryTab).toBe('locationAddress');
+  });
+
+  it('keeps an explicit openSecondaryTab request', () => {
+    const locationState = { justSaved, openSecondaryTab: 'contact', openAddSecondaryLine: true };
+    expect(buildPostCreateState({ locationState, initialChildData, secondaryTabs }).openSecondaryTab).toBe('contact');
+  });
+
+  it('the auto-opened modal receives the seed (create mode, no rows)', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'locationAddress', rowId: null, rows: [] }))
+      .toBe(initialChildData.locationAddress);
+  });
+});
+
+describe('header process button styles (primary-danger / ghost-danger)', () => {
+  it('maps primary-danger to the design-system destructive variant', () => {
+    expect(getProcessButtonVariant({ style: 'primary-danger' })).toBe('destructive');
+  });
+
+  it('keeps positive as the default (filled) variant', () => {
+    expect(getProcessButtonVariant({ style: 'positive' })).toBe('default');
+  });
+
+  it('falls back to outline for every other style', () => {
+    expect(getProcessButtonVariant({ style: 'ghost-danger' })).toBe('outline');
+    expect(getProcessButtonVariant({ style: 'destructive' })).toBe('outline');
+    expect(getProcessButtonVariant({ style: 'outline' })).toBe('outline');
+    expect(getProcessButtonVariant({})).toBe('outline');
+  });
+
+  it('adds no colour classes for primary-danger, with or without salesTheme', () => {
+    const p = { style: 'primary-danger' };
+    const plain = getButtonClass(false, p, false);
+    const themed = getButtonClass(true, p, false);
+    expect(plain).toBe('font-medium');
+    // salesTheme would otherwise repaint a button amber (bg-status-warning).
+    expect(themed).toBe(plain);
+    expect(plain).not.toMatch(/\b(bg|text|border)-/);
+  });
+
+  it('still paints ghost-danger red (contrast with primary-danger)', () => {
+    expect(getButtonClass(false, { style: 'ghost-danger' }, false)).toContain('text-[hsl(var(--destructive))]');
+  });
+
+  it('colours the Undo icon red only on ghost-danger', () => {
+    expect(getDangerIconClass({ style: 'ghost-danger' })).toBe('mr-1 text-[hsl(var(--destructive))]');
+    expect(getDangerIconClass({ style: 'primary-danger' })).toBe('mr-1');
+    expect(getDangerIconClass({ style: 'positive' })).toBe('mr-1');
+  });
+
+  it('treats both danger styles, and only them, as danger processes', () => {
+    expect(isDangerProcess({ style: 'ghost-danger' })).toBe(true);
+    expect(isDangerProcess({ style: 'primary-danger' })).toBe(true);
+    expect(isDangerProcess({ style: 'destructive' })).toBe(false);
+    expect(isDangerProcess(null)).toBe(false);
+  });
+});
+
+describe('buildCustomAddModalSeed / buildCustomAddModalOnParentRefresh (ETP-5654)', () => {
+  const seed = { address: 'Gran Via 45' };
+
+  it('seeds a new first row of the tab from the modal state and loaded rows', () => {
+    const args = { initialChildData: { locationAddress: seed }, st: { key: 'locationAddress' }, customModalState: { rowId: null }, secondaryHooks: [{ children: [] }], idx: 0 };
+    expect(buildCustomAddModalSeed(args)).toBe(seed);
+    expect(buildCustomAddModalSeed({ ...args, customModalState: { rowId: 'r1' } })).toBeNull();
+    expect(buildCustomAddModalSeed({ ...args, secondaryHooks: [{ children: [{ id: 'a' }] }] })).toBeNull();
+    expect(buildCustomAddModalSeed({ ...args, secondaryHooks: [] })).toBe(seed);
+  });
+
+  it('refreshes the parent forcing a refetch, and is a no-op without a parent id', () => {
+    const hook = { invalidateEntityCache: vi.fn(), fetchById: vi.fn() };
+    buildCustomAddModalOnParentRefresh({ hook, parentRecordId: null })();
+    expect(hook.fetchById).not.toHaveBeenCalled();
+    buildCustomAddModalOnParentRefresh({ hook, parentRecordId: 'p1' })();
+    expect(hook.invalidateEntityCache).toHaveBeenCalled();
+    expect(hook.fetchById).toHaveBeenCalledWith('p1', { force: true });
   });
 });

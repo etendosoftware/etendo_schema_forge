@@ -1,9 +1,13 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/incidentSeverity.js
 // Vitest component tests for FmListPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { registerApiSession, resetApiSessionForTests } from '@/auth/api.js';
+import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -93,7 +97,6 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: ({ title, message, cta }) =>
     React.createElement(
@@ -105,10 +108,15 @@ vi.mock('../FmCommon.jsx', () => ({
   // Forwards onClick/active (ETP-4755, click-to-filter) so tests can exercise
   // FmListPage's own filtering wiring — the rendered textContent stays just
   // `value` (unchanged) so pre-existing index-based assertions keep working.
-  KpiWidget: ({ value, label, onClick, active }) =>
+  // ETP-5597 — also exposes badge/badgeBg/badgeColor as data-* so the incidents KPI's severity
+  // variant can be asserted; textContent is still just `value`.
+  KpiWidget: ({ value, label, onClick, active, badge, badgeBg, badgeColor }) =>
     React.createElement(
       'button',
-      { type: 'button', className: 'test-kpi', 'data-kpi-label': label, 'data-active': String(!!active), onClick },
+      {
+        type: 'button', className: 'test-kpi', 'data-kpi-label': label, 'data-active': String(!!active), onClick,
+        'data-badge': badge ?? '', 'data-badge-bg': badgeBg ?? '', 'data-badge-color': badgeColor ?? '',
+      },
       value,
     ),
 }));
@@ -200,16 +208,20 @@ describe('FmListPage — rendering', () => {
     expect(document.body).toBeTruthy();
   });
 
-  it('renders the title key', () => {
+  it('renders no list title in the page content — the title lives in the TopBar (ETP-5584)', () => {
     render(<FmListPage declarations={[]} {...defaultProps} />);
-    expect(document.body.textContent).toContain('fm.list.title');
+    expect(document.body.textContent).not.toContain('fm.list.title');
+    expect(document.body.textContent).not.toContain('fm.breadcrumb.section');
   });
 
-  it('shows declaration count badge', () => {
-    // The count badge reflects raw `decls.length`, unaffected by activeModels.
+  it('publishes the declaration count as the TopBar record count (ETP-5584)', () => {
+    // The count reflects raw `decls.length`, unaffected by activeModels. Since ETP-5584 it is
+    // the TopBar badge (useSetPageMeta.recordCount), not an in-content badge.
     const decls = [makeDecl(), makeDecl()];
-    render(<FmListPage declarations={decls} {...defaultProps} />);
-    expect(document.body.textContent).toContain('2');
+    let meta = null;
+    function Probe() { meta = usePageMeta(); return null; }
+    render(<PageMetaProvider><FmListPage declarations={decls} {...defaultProps} /><Probe /></PageMetaProvider>);
+    expect(meta.recordCount).toBe(2);
   });
 
   it('renders the table when declarations exist', async () => {
@@ -768,6 +780,19 @@ describe('FmListPage — active-models filtering (regression)', () => {
 // column) and never for a legacy row with no submissionMethod at all.
 
 describe('FmListPage — submissionMethod sub-label (ETP-4755)', () => {
+  // ETP-5584 — the Estado cell is the invoice lists' own chip (core StatusTag), toned like them.
+  it('renders the status as the invoice lists\' StatusTag, green for submitted and grey for draft', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decls = [
+      makeDecl({ id: 'st-1', status: 'submitted' }),
+      makeDecl({ id: 'st-2', status: 'draft', period: '2T' }),
+    ];
+    const { container } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    const tags = Array.from(container.querySelectorAll('tbody .status-tag'));
+    expect(tags.map(t => t.className).sort()).toEqual(['status-tag status-tag--neutral', 'status-tag status-tag--success']);
+  });
+
   it('renders the sub-label for a submitted_ack row with submissionMethod present', async () => {
     globalThis.fetch = mockCatalogFetch();
     const decl = makeDecl({ id: 'sm-1', status: 'submitted_ack', submissionMethod: 'manual_ack' });
@@ -1301,3 +1326,57 @@ describe('FmListPage — ETP-5030 selected-row shading', () => {
     expect(selectionClasses(rowByPeriod(container, 'T1'))).toEqual(['fm-table__row--current']);
   });
 });
+
+// ── Incidencias KPI badge follows the worst severity (ETP-5597) ───────────────
+describe('FmListPage — incidents KPI severity variant (ETP-5597)', () => {
+  function incidentsKpi(container) {
+    return container.querySelectorAll('.test-kpi')[2];
+  }
+
+  it('no incidents → muted "Sin incidencias" badge (never red)', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch();
+    const decl = makeDecl({ id: 'k-none', status: 'submitted' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    const kpi = incidentsKpi(container);
+    expect(kpi.textContent).toBe('0');
+    expect(kpi.getAttribute('data-badge')).toBe('fm.incidents.none');
+    expect(kpi.getAttribute('data-badge-bg')).toBe('hsl(var(--muted))');
+    expect(kpi.getAttribute('data-badge-color')).toBe('hsl(var(--muted-foreground))');
+  });
+
+  it('warnings only → amber "Advertencia" badge', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch({
+      incidentsByDeclId: { 'k-warn': [{ code: 'W', message: 'w', severity: 'warn' }] },
+    });
+    const decl = makeDecl({ id: 'k-warn', status: 'submitted' });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    await waitFor(() => expect(incidentsKpi(container).textContent).toBe('1'));
+    const kpi = incidentsKpi(container);
+    expect(kpi.getAttribute('data-badge')).toBe('fm.incidents.severity.warn');
+    expect(kpi.getAttribute('data-badge-bg')).toBe('var(--status-warning-bg)');
+    expect(kpi.getAttribute('data-badge-color')).toBe('var(--status-warning-fg)');
+  });
+
+  it('any blocking incident (even alongside warnings elsewhere) → red "Requiere revisión" badge', async () => {
+    globalThis.fetch = mockCatalogAndIncidentsFetch({
+      incidentsByDeclId: {
+        'k-w': [{ code: 'W', message: 'w', severity: 'warn' }],
+        'k-b': [{ code: 'B', message: 'b', severity: 'block' }],
+      },
+    });
+    const decls = [
+      makeDecl({ id: 'k-w', status: 'submitted', period: 'T1' }),
+      makeDecl({ id: 'k-b', status: 'submitted', period: 'T2' }),
+    ];
+    const { container } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    await waitFor(() => expect(incidentsKpi(container).textContent).toBe('2'));
+    const kpi = incidentsKpi(container);
+    expect(kpi.getAttribute('data-badge')).toBe('fm.kpi.incidents_sub');
+    expect(kpi.getAttribute('data-badge-bg')).toBe('var(--status-destructive-bg)');
+    expect(kpi.getAttribute('data-badge-color')).toBe('hsl(var(--destructive))');
+  });
+});
+

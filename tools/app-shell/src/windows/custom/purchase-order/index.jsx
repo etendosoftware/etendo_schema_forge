@@ -186,13 +186,17 @@ export default function PurchaseOrderWindow(props) {
   // criterion: completed purchase orders (Estado doc. = Completado) whose
   // reception is not yet finished (Estado de recepcion < 100). Mirrors the
   // `?filter=overdue`/`paymentsDue` pattern in purchase-invoice/index.jsx.
+  // The status condition MUST use the visible grid column (`eTGODelivStatusPurchase`, a stored
+  // computed column), not the core virtual column of the same concept: the
+  // virtual one is `grid: false`, so the advanced filter cannot resolve it and
+  // silently drops the condition, leaving only the doc-status clause (ETP-5632).
   const isPendingReception = searchParams.get('filter') === 'pendingReception';
   const initialAdvancedFilter = isPendingReception
     ? {
         rowOperator: 'and',
         conditions: [
           { field: 'documentStatus', operator: 'equals', value: 'CO' },
-          { field: 'deliveryStatusPurchase', operator: 'lessThan', value: 100 },
+          { field: 'eTGODelivStatusPurchase', operator: 'lessThan', value: 100 },
         ],
       }
     : null;

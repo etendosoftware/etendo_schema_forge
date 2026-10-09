@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/InvoicePreview.jsx
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
 
@@ -86,9 +87,12 @@ vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
 }));
 
 const capturedRelatedSpecs = { current: null };
+const capturedRelatedProps = { current: null };
 vi.mock('@/windows/custom/shared/preview-cards/RelatedDocumentsCard.jsx', () => ({
-  default: ({ documentId, specs }) => {
+  default: (props) => {
+    const { documentId, specs } = props;
     capturedRelatedSpecs.current = specs;
+    capturedRelatedProps.current = props;
     return <div data-testid="related-docs-card" data-doc-id={documentId} />;
   },
 }));
@@ -367,70 +371,34 @@ describe('InvoicePreviewModal', () => {
     expect(screen.getByTestId('preview-drop-zone')).toBeInTheDocument();
   });
 
-  describe('invoiceRelatedSpecs — salesOrder branch', () => {
-    const invoiceWithOrder = {
-      ...sampleInvoice,
-      salesOrder: 'so-42',
-    };
+  // ETP-5527 / ETP-5539 — the related-documents card renders ONLY from a shared definition
+  // (`relatedDocs`): sales invoices pass SALES_RELATED_DOCS, purchase invoices pass
+  // PURCHASE_RELATED_DOCS. The legacy per-invoice salesOrder/shipment specs are gone.
+  describe('related documents card — driven by the relatedDocs definition', () => {
+    const invoiceWithOrder = { ...sampleInvoice, salesOrder: 'so-42' };
 
     beforeEach(() => {
-      capturedRelatedSpecs.current = null;
+      capturedRelatedProps.current = null;
       fetchById.mockReset();
       fetchByCriteria.mockReset();
     });
 
-    it('renders RelatedDocumentsCard when invoice has a salesOrder', () => {
+    it('renders no card without a relatedDocs definition, even when the invoice has a salesOrder', () => {
       renderPreview({ invoice: invoiceWithOrder });
-      expect(screen.getByTestId('related-docs-card')).toBeInTheDocument();
+      expect(screen.queryByTestId('related-docs-card')).not.toBeInTheDocument();
+      expect(fetchById).not.toHaveBeenCalled();
+      expect(fetchByCriteria).not.toHaveBeenCalled();
     });
 
-    it('passes 2 specs when invoice has a salesOrder', () => {
-      renderPreview({ invoice: invoiceWithOrder });
-      expect(capturedRelatedSpecs.current).toHaveLength(2);
-    });
-
-    it('spec keys are sales-order and shipment', () => {
-      renderPreview({ invoice: invoiceWithOrder });
-      const specs = capturedRelatedSpecs.current;
-      expect(specs[0].key).toBe('sales-order');
-      expect(specs[0].type).toBe('sales-order');
-      expect(specs[1].key).toBe('shipment');
-      expect(specs[1].type).toBe('shipment');
-    });
-
-    it('passes empty specs array when invoice has no salesOrder', () => {
-      renderPreview({ invoice: sampleInvoice });
-      expect(capturedRelatedSpecs.current).toEqual([]);
-    });
-
-    it('sales-order spec calls fetchById and resolves to a 1-item array', async () => {
-      const orderRecord = { id: 'so-42', documentNo: 'SO-042' };
-      fetchById.mockResolvedValue(orderRecord);
-      renderPreview({ invoice: invoiceWithOrder });
-      const specs = capturedRelatedSpecs.current;
-      const result = await specs[0].fetch('inv-1', 'tok', '/api/sales-invoice');
-      expect(fetchById).toHaveBeenCalledWith('sales-order', 'header', 'so-42', 'tok', '/api/sales-invoice');
-      expect(result).toEqual([orderRecord]);
-    });
-
-    it('sales-order spec resolves to empty array when fetchById returns null', async () => {
-      fetchById.mockResolvedValue(null);
-      renderPreview({ invoice: invoiceWithOrder });
-      const specs = capturedRelatedSpecs.current;
-      const result = await specs[0].fetch('inv-1', 'tok', '/api/sales-invoice');
-      expect(result).toEqual([]);
-    });
-
-    it('shipment spec calls fetchByCriteria with the correct arguments', async () => {
-      const shipmentRows = [{ id: 'ship-1' }, { id: 'ship-2' }];
-      fetchByCriteria.mockResolvedValue(shipmentRows);
-      renderPreview({ invoice: invoiceWithOrder });
-      const specs = capturedRelatedSpecs.current;
-      const result = await specs[1].fetch('inv-1', 'tok', '/api/sales-invoice');
-      expect(fetchByCriteria).toHaveBeenCalledWith(
-        'goods-shipment', 'goodsShipment', 'salesOrder', 'so-42', 'tok', '/api/sales-invoice',
-      );
-      expect(result).toEqual(shipmentRows);
+    it('renders the card with the definition (no legacy specs) and the refresh signal', () => {
+      const definition = { spec: 'purchase-invoice', entity: 'header', sources: [] };
+      renderPreview({ invoice: { ...invoiceWithOrder, updated: 'u-1' }, relatedDocs: definition });
+      expect(screen.getByTestId('related-docs-card')).toHaveAttribute('data-doc-id', 'inv-1');
+      expect(capturedRelatedProps.current.definition).toBe(definition);
+      expect(capturedRelatedProps.current.specs).toBeUndefined();
+      expect(capturedRelatedProps.current.docsRefreshSignal).toBe('u-1');
+      expect(fetchById).not.toHaveBeenCalled();
+      expect(fetchByCriteria).not.toHaveBeenCalled();
     });
   });
 });

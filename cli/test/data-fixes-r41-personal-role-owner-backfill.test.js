@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseFix, parseFixTimestamp, inlineParams } from '../src/data-fixes/parse-fix.js';
@@ -51,15 +51,15 @@ describe('R41 data-fix — header metadata', () => {
     assert.ok(fix.report.length > 0, '@report lists the roles left without an owner');
   });
 
-  it('sorts after every other fix in the catalog', () => {
+  // Pinned to the latest fix that existed when R41 shipped (ETP-5537 resorted it after R42), not to
+  // "every other fix": a later fix (R44, ETP-5575) legitimately sorts after R41.
+  it('sorts after R42-generic-category-trl-cleanup, the latest fix when it shipped', () => {
     const ts = parseFixTimestamp(FIX_ID);
     assert.equal(ts.toISOString(), '2026-09-28T14:00:00.000Z');
-    const others = readdirSync(SQL_DIR)
-      .filter((f) => f.endsWith('.sql') && f !== FIX_FILE)
-      .map((f) => basename(f, '.sql'));
-    for (const other of others) {
-      assert.ok(other < FIX_ID, `${FIX_ID} must sort after ${other}`);
-    }
+    assert.ok(
+      FIX_ID > '20260928T130000Z__R42-generic-category-trl-cleanup',
+      `${FIX_ID} must sort after R42-generic-category-trl-cleanup`,
+    );
   });
 });
 

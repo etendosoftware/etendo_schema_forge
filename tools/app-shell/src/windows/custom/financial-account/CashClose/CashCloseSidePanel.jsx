@@ -17,9 +17,14 @@ import { FieldRow } from '../formFields.jsx';
  * matching the standard product windows. Padding is 20/24 so it lines up with the table grid.
  *
  * Purely presentational — every number arrives already computed by `cashCloseMath.summarize()`.
+ *
+ * `windowReadOnly` (ETP-5457) is the window's "read-only" access tier: both actions are DISABLED
+ * rather than hidden (hiding them would leave the pinned footer empty), and so are the two inputs,
+ * which only feed those actions. The live summary keeps rendering.
  */
 
-const SECTION = 'border-b border-[hsl(var(--border-subtle))] px-6 py-5 last:border-b-0';
+// ETP-5601 — 8px padding on every side, the same as the toolbars above the table.
+const SECTION = 'border-b border-[hsl(var(--border-subtle))] p-2 last:border-b-0';
 const SECTION_TITLE = 'text-sm font-bold leading-5 text-[hsl(var(--foreground))] mb-3.5';
 const BTN_BASE = 'inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60';
 const BTN_PRIMARY = `${BTN_BASE} bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:hover:bg-[hsl(var(--foreground))] disabled:hover:text-primary-foreground`;
@@ -44,7 +49,7 @@ function SummaryRow({ label, children, separated = false, testId }) {
 export function CashCloseSidePanel({
   currency, summary, statementDate, onStatementDateChange,
   declaredInput, onDeclaredInputChange, glItemDifference,
-  busy, onConfirm, onSaveDraft,
+  busy, onConfirm, onSaveDraft, windowReadOnly = false,
 }) {
   const ui = useUI();
   // ETP-4314 follow-up: symbol side read from C_CURRENCY.ISSYMBOLRIGHTSIDE, not hardcoded.
@@ -63,6 +68,7 @@ export function CashCloseSidePanel({
               <DateField
                 value={statementDate}
                 onChange={onStatementDateChange}
+                disabled={windowReadOnly}
                 data-testid="cash-close-statement-date" />
             </FieldRow>
             <FieldRow
@@ -78,6 +84,7 @@ export function CashCloseSidePanel({
                   placeholder={ui('financeAccountAmountPlaceholder')}
                   value={declaredInput}
                   onChange={(clean) => onDeclaredInputChange(clean)}
+                  disabled={windowReadOnly}
                   data-testid="cash-close-declared-balance" />
                 <span
                   className={`pointer-events-none absolute ${rightSide ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground`}>
@@ -180,7 +187,7 @@ export function CashCloseSidePanel({
 
         {/* Pendientes para el próximo cierre */}
         <div
-          className={cn(SECTION, 'flex items-center gap-3 py-4')}
+          className={cn(SECTION, 'flex items-center gap-3')}
           data-testid="cash-close-pending-card"
         >
           <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[hsl(var(--muted))] px-2 text-xs font-semibold text-[hsl(var(--foreground))]">
@@ -193,13 +200,13 @@ export function CashCloseSidePanel({
       </div>
       {/* Acciones — ancladas al pie de la misma superficie, precedidas por un hairline. */}
       <div
-        className="flex shrink-0 flex-col gap-2.5 border-t border-[hsl(var(--border-subtle))] px-6 py-5"
+        className="flex shrink-0 flex-col gap-2.5 border-t border-[hsl(var(--border-subtle))] p-2"
         data-testid="cash-close-actions"
       >
         <button
           type="button"
           className={BTN_PRIMARY}
-          disabled={busy}
+          disabled={busy || windowReadOnly}
           onClick={onConfirm}
           data-testid="cash-close-confirm"
         >
@@ -209,7 +216,7 @@ export function CashCloseSidePanel({
         <button
           type="button"
           className={BTN_SECONDARY}
-          disabled={busy}
+          disabled={busy || windowReadOnly}
           onClick={onSaveDraft}
           data-testid="cash-close-save-draft"
         >

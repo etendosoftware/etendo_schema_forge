@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/OrderPreview.jsx
 // ETP-4372 regression — the "Enviar email" link inside the EMAILS section of
 // the OrderPreview side panel must open the SendDocumentModal.
 //
@@ -92,10 +93,10 @@ vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
   default: () => <div data-testid="rel-docs-card" />,
 }));
 
+// ETP-5527 / ETP-5539 — the previews only read the shared definition from the barrel.
 vi.mock('@/components/related-documents', () => ({
-  fetchByCriteria: vi.fn(),
-  fetchChild: vi.fn(),
-  fetchById: vi.fn(),
+  getSalesRelatedDocs: (spec) => (['sales-order', 'sales-quotation'].includes(spec) ? { spec } : null),
+  getPurchaseRelatedDocs: (spec) => (spec === 'purchase-order' ? { spec } : null),
 }));
 
 vi.mock('@/lib/statusBadge.js', () => ({

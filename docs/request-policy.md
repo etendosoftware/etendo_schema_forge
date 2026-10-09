@@ -28,6 +28,7 @@ A raw `fetch` also re-decided four other things, each an independent chance to g
 | `credentials: 'include'` | easy to omit | always set (overridable) |
 | `FormData` boundary | manual `delete headers['Content-Type']` | automatic |
 | 401 / expired session | nothing, or a bespoke handler per site | routed to the logout choke point |
+| 402 / environment blocked | read only by `windowaccessmap` | recorded in the environment-access gate from any response |
 
 ## How to make a request
 
@@ -257,6 +258,59 @@ loses its token, which covers the ambient (non-React) path too.
 That is why the local `@/auth/useApiFetch.js` **wraps** the core hook instead of re-exporting
 it: taking the core's own `useAuth().logout` would silently skip the clear.
 
+## 402 and the blocked-access screen (ETP-5642)
+
+When an environment's commercial access is cut (demo trial expired, subscription grace elapsed),
+the backend answers **402** `Environment access is not available: <DECISION>` to every request
+that touches it — NEO, Copilot, MCP and the account endpoints acting on the tenant. `apiFetch`
+treats that answer like the 401: as a statement about the whole session, not about the request.
+Its single response exit (`finish()` in the core's `auth/api.js`) reads a **clone** of every 402
+and, when the decision is `DEMO_TRIAL_EXPIRED` or `SUBSCRIPTION_REQUIRED`, records it in the
+environment-access gate (`@etendosoftware/app-shell-core/lib/environmentAccessGate.js`, re-exported
+as `@/lib/environmentAccessGate.js`). `AppLayout` reads the gate and replaces the UI with the
+blocked-access screen.
+
+- The caller still gets its response, unread and unchanged — handle the 402 as before, or not at all.
+- The transport only ever **sets** a block. A 200 from another endpoint proves nothing (the account
+  API stays reachable while ERP access is blocked); only a successful `/sws/neo/windowaccessmap`
+  clears it.
+- A 402 that arrives after the session changed identity (an environment switch) is not recorded.
+- Before this, the block was detected only from `windowaccessmap`. A tab already open when the
+  trial expired showed empty lists and an empty dashboard indefinitely — the silent refresh stops
+  at `/sws/neo/refreshtoken`'s 402 and never reaches `windowaccessmap`.
+
+## 403 "Session belongs to another account" and the conflict screen (ETP-5675)
+
+The session cookie belongs to the browser profile, not to a tab, and production is one domain for
+every customer. When another tab signs in as a different account, a tab still showing the previous
+one used to read the new account's tenant data under the old name and avatar. So every request
+carries `X-Go-Account` — the `account.id` the tab restored from `GET /sws/go/session`, published by
+`AuthProvider` through `sessionCredentials.js` exactly like the CSRF proof (cookie scheme only) —
+and the backend refuses a mismatch with **403** `Session belongs to another account`.
+
+- `apiFetch`'s single exit reads a clone of every 403 and, for that message, records the conflict in
+  the core's `auth/sessionConflict.js`. `useAuth().sessionConflict` exposes it, and `AppLayout`
+  replaces the page — before every other gate — with `SessionConflictScreen`: *continue as the other
+  account* (a full reload, so nothing of the previous account stays cached) or *sign out of this
+  browser and sign in again* (revokes the browser's live session — the other account's — with its
+  own proof and account, only on an explicit click, then goes to the login). The login is reached
+  only once that session is revoked or confirmed absent: one that cannot be read may still be
+  alive, and the onboarding on `/login` would restore it, so the screen stays and says so.
+- Two cheaper signals raise the same screen before any request goes out: the tab that signs in or
+  out announces the account on a `BroadcastChannel` (`etendo-go-session`), and a tab returning to
+  the foreground compares its account with the live session (at most every 30 s). A session that
+  cannot be read (a deploy) is never a conflict. Another tab signing the browser **out** signs this
+  one out locally, without a revoke.
+- Same account, other company, is **not** a conflict: that is the ETP-5550 environment switch,
+  handled by the CSRF recovery. Only `account.id` is compared.
+- The caller still gets its 403. Never send `X-Go-Account` by hand: it comes from the header
+  builders, like every other credential header.
+
+The onboarding (`etendo-go-core`) does the same with its own binding (`bindOnboardingAccount`):
+a lost or foreign session replaces the step with "Tu sesión se cerró" instead of failing at
+provisioning with the backend's raw `Missing or invalid Authorization header`, and its "Cerrar
+sesión" now revokes the session server-side.
+
 ## Writes to child documents invalidate the parent order's cache (ETP-5525)
 
 The shared record cache (`@etendosoftware/app-shell-core/data`, 30 s `recordStaleTime`) is
@@ -273,12 +327,26 @@ query of the dependent specs is marked stale (`cache.invalidate({ spec })`) and 
 refetches. The response itself is returned untouched, and without a `DataProvider` the hook
 returns the plain core client.
 
+A POST is not always a write: a URL whose **last** path segment is in `READ_ONLY_SUB_ENDPOINTS`
+— `evaluate-display` (fired on every record open) and `callout` (fired on field edits) — never
+invalidates anything (`isReadOnlySubEndpoint`). Without that rule a callout on a shipment field
+marked the sales order stale.
+
 | A write to | Marks stale |
 |---|---|
 | `goods-shipment`, `sales-invoice` | `sales-order` |
+| `goods-shipment` | `sales-invoice` (ETP-5576) |
+| `goods-receipt` | `purchase-invoice` (ETP-5576) |
 
-The Purchase equivalent (`goods-receipt` / `purchase-invoice` → `purchase-order`) is intentionally
-not included yet: it is owned by the Purchase cell, and adding it is just those two map entries.
+The invoice rows (ETP-5576) exist because an invoice shows values derived from its shipments /
+receipts — the `followUp` annotation behind «Gestionar envío / recepción», the delivery status and
+the `linkedShipments` / `linkedReceipts` Related Documents chips. Without them, completing the
+shipment created from the invoice's follow-up popup and going back to the invoice showed the
+pre-completion status (e.g. «Entregado 50%», shipment «Borrador») until a manual reload.
+
+The order-side Purchase equivalent (`goods-receipt` / `purchase-invoice` → `purchase-order`) is
+intentionally not included yet: it is owned by the Purchase cell, and adding it is just those two
+map entries.
 
 Add a row there when a new spec starts displaying values derived from another spec's documents.
 Not covered: writes made through the plain-module `apiFetch` (`@etendosoftware/app-shell-core/auth/api`,
@@ -288,6 +356,32 @@ Also not covered: hook-based writes made inside app-shell-core itself, which go 
 `useApiFetch` rather than this wrapper, and the in-flight read race: an order GET already in flight
 when the child write completes can store pre-write data as fresh (the core cache only discards such
 a response on `clear()`). That race is rare in this flow, which is a navigation after the write.
+
+### Writes to Contactos invalidate every cached selector page (ETP-5571)
+
+Selector option pages (`CreatableSearchSelect`, `SelectorInput`) are cached under
+`entity: 'selector'` for `catalogStaleTime` (5 min), keyed by the selector URL of the document
+that renders them — they belong to no spec that `WRITE_INVALIDATES_SPECS` could name. Renaming a
+contact in Contactos therefore left the Contacto selector of every Sales/Purchase document serving
+the old name until a full reload: re-opening the selector goes through `fetchQuery`, which returns
+the cached page while it is still fresh.
+
+A second map in the same module, `WRITE_INVALIDATES_ENTITIES`, covers caches keyed by entity: a
+successful non-GET whose URL has a listed path segment marks every cached query of the dependent
+entities stale (`cache.invalidate({ entity })`). Matching is the same whole-path-segment rule,
+and the same read-only sub-endpoints are excluded: opening a contact POSTs `evaluate-display`, and
+counting it as a write wiped every cached selector page on each open.
+
+| A write to | Marks stale |
+|---|---|
+| `contacts` (any entity: `businessPartner`, `basicDiscount`, …) | every `selector` entry |
+
+The invalidation is intentionally broad — a selector entry does not record which table its options
+come from, so all selector pages are marked, at the cost of one extra GET the next time each is
+opened. Only `contacts` is declared; other master-data specs are added when a ticket needs them.
+
+Not covered: the Contacts CSV/XLSX import (`contactsImportDescriptor.js`) writes through the
+plain-module `apiFetch`, so selector pages still wait out `catalogStaleTime` after an import.
 
 ## Working without an AuthProvider
 

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/lookupCreateTargets.js
 /**
  * ETP-5254 — `lookupCreateTargets.js` is the single greppable scope switch for the
  * "create a record from inside a lookup" affordance. Everything it needs is derived from
@@ -10,7 +11,7 @@
  * The allowlist is asserted exhaustively (all 7 entries) on purpose: dropping a spec from
  * it silently removes the button from that window with no other failing test.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import productDecisions from '@generated/product/decisions.json';
 // Read as TEXT rather than imported: `ProductPage.jsx` is the module the registry exists to
 // avoid pulling in (DetailView, ListView, the sidebar, the price bar, the gallery). The drift
@@ -18,7 +19,9 @@ import productDecisions from '@generated/product/decisions.json';
 import productPageSource from '@generated/product/generated/web/product/ProductPage.jsx?raw';
 import {
   CREATE_PRODUCT_SPECS,
+  CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE,
   LOOKUP_CREATE_TARGETS,
+  resolveContactCategorySeed,
   parseSelectorUrl,
   resolveLookupCreateTarget,
 } from '../lookupCreateTargets.js';
@@ -348,5 +351,60 @@ describe('resolveLookupCreateTarget', () => {
     });
     expect(target).not.toBe(LOOKUP_CREATE_TARGETS.product);
     expect(LOOKUP_CREATE_TARGETS.product.apiBaseUrl).toBeUndefined();
+  });
+});
+
+describe('resolveContactCategorySeed (ETP-5654: contact category follows the document nature)', () => {
+  const ok = items => ({ ok: true, json: async () => ({ items }) });
+  const GROUPS = [
+    { id: 'G-CLI', label: 'Cliente' },
+    { id: 'G-PRO', label: 'Proveedor' },
+    { id: 'G-ACR', label: 'Acreedor' },
+  ];
+
+  it('maps purchase to Proveedor and sale to Cliente, by search key', () => {
+    expect(CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE).toEqual({ purchase: 'Proveedor', sale: 'Cliente' });
+  });
+
+  it('seeds the Proveedor group, id and label, for a purchase document', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(ok(GROUPS));
+    const seed = await resolveContactCategorySeed({ apiFetch, documentType: 'purchase' });
+    expect(seed).toEqual({
+      businessPartnerCategory: 'G-PRO',
+      'businessPartnerCategory$_identifier': 'Proveedor',
+    });
+    const [url] = apiFetch.mock.calls[0];
+    expect(url).toMatch(/^\/businessPartner\/selectors\/businessPartnerCategory\?/);
+    expect(new URLSearchParams(url.split('?')[1]).get('q')).toBe('Proveedor');
+  });
+
+  it('seeds the Cliente group explicitly for a sale document', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(ok(GROUPS));
+    const seed = await resolveContactCategorySeed({ apiFetch, documentType: 'sale' });
+    expect(seed.businessPartnerCategory).toBe('G-CLI');
+  });
+
+  it('ignores a custom group that merely contains the key (exact match only)', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(ok([{ id: 'G-X', label: 'Proveedor local' }]));
+    expect(await resolveContactCategorySeed({ apiFetch, documentType: 'purchase' })).toEqual({});
+  });
+
+  it('returns no category key when the group does not exist, so the default is kept', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(ok([]));
+    expect(await resolveContactCategorySeed({ apiFetch, documentType: 'purchase' })).toEqual({});
+  });
+
+  it('does not throw and seeds nothing when the lookup fails or answers non-OK', async () => {
+    const boom = vi.fn().mockRejectedValue(new Error('network'));
+    expect(await resolveContactCategorySeed({ apiFetch: boom, documentType: 'purchase' })).toEqual({});
+    const notOk = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    expect(await resolveContactCategorySeed({ apiFetch: notOk, documentType: 'purchase' })).toEqual({});
+  });
+
+  it('does not query at all for an unknown or absent document type', async () => {
+    const apiFetch = vi.fn();
+    expect(await resolveContactCategorySeed({ apiFetch, documentType: null })).toEqual({});
+    expect(await resolveContactCategorySeed({ apiFetch, documentType: 'other' })).toEqual({});
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 });

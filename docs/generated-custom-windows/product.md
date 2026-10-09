@@ -32,7 +32,7 @@ identity of separate data series and is not a UI status or theme role.
 - **Implementation type:** generated window route loaded through `tools/app-shell/src/windows/registry.js`, with product-specific custom surfaces embedded in the generated page: `ProductGallery`, `ProductAdditionalInfoPanel`, `ProductPriceBar`, and `ProductSidebar`.
 - **Window shape:** master-child workspace. The selected product is the master entity, and product-related child datasets are attached to that record.
 
-The list surface is gallery-based rather than a plain grid. Product cards show the image when one exists and fall back to a package icon when no image is available. Opening a record takes the user into a detail screen with two primary tabs: `General` and `Additional Info`.
+The list surface is gallery-based rather than a plain grid. Product cards show the image when one exists and fall back to a package icon when no image is available. The cards are laid out by the shared width-driven `GalleryGrid` (ETP-5516): each card is at least `GALLERY_CARD_MIN_WIDTH_PX` (220 px) wide and the number of cards per row follows the width of the list area, not the viewport — at 1280 px wide that is 5 per row with the Navigation Rail collapsed and 4 with it expanded; cards that do not fit wrap to the next row, and long names are truncated with an ellipsis only when they exceed the card width. Opening a record takes the user into a detail screen with two primary tabs: `General` and `Additional Info`.
 
 The detail screen also changes the standard generated behavior in six visible ways:
 - the product's standard-cost history is surfaced through a **Cost** tab (classic grid+form, `CostingTable`/`CostingForm`), declared via `secondaryTabs` in `decisions.json` (ETP-5245)
@@ -130,7 +130,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
   - `inline: true` on the image field — keeps the image inside the four-column form grid
   - `autoSaveOnBlur: true` — all header fields (name, description, type, category, UOM, etc.) save automatically on blur, matching the behavior of Contacts, Assets, and Sales Order. The image field is explicitly excluded: image changes require the manual Save button.
   - `labelOverrides` — overrides `M_Product_Category_ID` to "Category"/"Categoría" and `ProductType` to "Type"/"Tipo" using the locale-nested format `{ "en_US": {...}, "es_ES": {...} }`
-  - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX`, `tabsBarPaddingX`, `listbarPaddingX`, `tablePaddingX` — layout props for 30%-width sidebar with left border, 8px horizontal padding throughout
+  - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX` (no effect since ETP-5601 — the record toolbar is standardized), `tabsBarPaddingX`, `listbarPaddingX`, `tablePaddingX` — layout props for the fixed 320 px sidebar (`w-[320px]`, ETP-5513 — was `w-[30%]`) with left border, 8px horizontal padding throughout
   - `primaryTabsVariant: "pill"` — pill-style primary tab bar
   - `secondaryTabs.accounting` — exposes the GL-accounting tab (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) in the unified secondary tab strip (`tabOrder: 1`, so it renders first, ahead of the `customPanelTabs` entries), using the classic grid+form layout (not `inlineEditable`). `detailEntity` is explicitly `null` (not omitted — an omitted key falls back to auto-selecting the first non-primary entity, which would have picked `price` and produced an unintended extra detail section)
   - `vectorSearch.target: "product"` — opts Product into the global semantic search; windows without this declaration do not participate.
@@ -1445,3 +1445,94 @@ memory:
 The keyed coded/FK values are the point where parts 2 and 3 meet: an English template writes
 `Unit`, `Item` and `Spain`, and part 2 is what makes those resolve for a Spanish user who receives
 that file.
+
+## List toolbar: one row, view toggle after "Filtros" — ETP-5509
+
+The list toolbar is laid out by the shared `ListView` as **one row**, in the same order as before
+ETP-5509: "Filtros" and then the **list / gallery view toggle** on the left, and sort, refresh,
+import, export and "New …" on the right, followed by a gray separator line between toolbar and
+body. This window declares no subset tabs, so it has nothing that moves to a second line: the
+toolbar is a single row at 1280×720 and 1920×1080, and the filters and the actions always keep at
+least 16px between them (far below 1280px the filter controls wrap first, and only then do the
+actions drop below them).
+
+ETP-5509 review: the first iterations put the toggle on a second row (always, then whenever it
+did not fit) and later at the start of the row; UX asked for the toolbar to look as before, so
+the toggle is no longer treated as part of the tab group and keeps its place after "Filtros".
+
+Nothing changed in this window's own files or in `decisions.json` — the layout and the reasoning
+live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: with the rail expanded, open `/product` at 1280×720 and at 1920×1080 and
+confirm one toolbar row — "Filtros", then the view toggle, then the main actions on the right,
+untruncated — and no empty second row; switching view still swaps grid and gallery.
+
+## Price tab and sidebar at 1280x720 — ETP-5513
+
+At the 1280x720 minimum viewport with the navigation rail expanded, the `Price` tab's fixed
+300 / 201 / 201 px columns (Name / Unit price / List price) overflowed the tab by ~100 px and cut
+the List price stepper. In `ProductPriceBar.jsx` every row of a section — the title header, the
+column labels, the add-tariff row and each saved row — is now laid out on ONE CSS grid template
+(`PRICE_ROW_GRID`): `minmax(120px,300px) minmax(192px,201px) minmax(192px,201px) 2rem`. The tracks
+depend only on the container width, never on content, so a column starts at the same x in every
+row; the 4th track is the row-action slot (delete / cancel-add), reserved even in rows without a
+button. Prices never drop below 192 px, so a value like `12.345,67` stays readable next to the
+currency prefix and the +/- buttons; the Name column gives way first. When the whole panel is
+narrower than 780 px (`PRICE_STACK_BELOW_PX`, measured with `useElementWidth`), the
+Venta/Compra switch moves from the left column to a row above the section, which is what makes
+the grid fit at 1280x720 with the rail expanded. The section title stays on one line
+(`whitespace-nowrap`) and may overflow into the empty Unit price cell of the header.
+
+The sidebar is a fixed 320 px (`window.sidebarClassName` → `w-[320px]`), with the rail expanded
+or collapsed, instead of `w-[30%]`.
+
+**Verify:** at 1280x720 with the rail expanded, open a product → `Price`, in both `Venta` and
+`Compra`: the switch sits above the section, Name, Unit price and List price are fully visible
+(prices not truncated), the columns line up under their labels, and the tab has no horizontal scroll.
+
+## ETP-5676 — The import stops re-resolving foreign keys per row
+
+The preview resolves each FK column once (one batched `simSearch` per column), but the send phase
+resolved the unit of measure AGAIN for every row — 2-3 GETs each, one per language — and ignored
+what the preview had found. Now:
+
+- `ImportDialog` passes its `fkResolutions` (popover picks included, stored by id) into the
+  descriptor config. `resolveUom` hands them to the registered `product-uom` resolver, whose
+  `registerFkResolver` wrapper answers a previewed value with no request.
+- A value the preview did not resolve is memoised per run: concurrent rows share one in-flight
+  promise, keyed by resolver + normalised value + token; a rejected promise is evicted so a retry
+  is a real retry.
+- The category creation cache key is normalised, so "Bebidas" and "BEBIDAS" create one category.
+- The descriptor's per-token caches (categories, product defaults, price list versions) register a
+  reset with `importRunState`, run when a new file is loaded, so a second file in the same tab no
+  longer reads the first file's snapshot.
+
+Behaviour is otherwise identical: same ops per row, same concurrency, same `/batch` contract.
+
+The same ticket adds a processed-records counter to the import's sending step (generic, every
+window with an import): "1,234 / 2,000 processed" next to the percentage, grouped per the session
+locale (`importProgressCounter`, en_US / es_ES / es_AR). It restarts from zero on every send,
+including the resend of fixed rows from the result step, and its updates are throttled (~150 ms)
+so a 2,000-row file does not re-render the dialog per row.
+
+Product's import now sends 10 rows per `/batch` request (`window.import.limit.batchSize: 10`; the
+default for other windows stays 1). Each row's op ids are prefixed (`r<row>.product`,
+`r<row>.salesPrice`, ...) and the whole chunk is one transaction. If a chunk is rejected, its rows
+are resent one by one, so a single bad row no longer hides which of its neighbours were fine. If a
+chunk gets no definite response (network error), its rows are shown as failed/unknown and are not
+resent automatically, because the batch may have committed. Progress is still counted in rows.
+
+Known limitation (import caches): "Close anyway" during a send does not stop it — `handleSend` keeps
+running while the dialog is unmounted. If the user reopens the import and picks a NEW file while
+that old send is still in flight, loading the file starts a new run and clears the per-run caches
+(`resetImportRun`) under the old workers. A remaining old row may then try to create a product
+category that already exists and fail with a unique-key conflict: that row is reported FAILED, nothing
+is lost and nothing is duplicated. Wait for the running import to finish before loading another file.
+
+Generic import dialog: after a file is attached, the dropzone is replaced by a "Reading file…"
+spinner (`importReadingFile`) until the preview is ready, so nothing can be attached on top of the
+file being read; it is also removed when the file is refused and the error step appears.
+
+Every import run reports one `import_completed` telemetry event (counts, timings, batch size and
+concurrency used, mapped columns, foreign keys resolved/created; never row content). See
+`decisions-reference.md` → *Import Limits* → Telemetry.

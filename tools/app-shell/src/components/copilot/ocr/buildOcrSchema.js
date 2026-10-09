@@ -22,9 +22,19 @@ const KIND_TO_JSON_TYPE = {
 };
 
 function fieldSchema(field) {
+  // ETP-5585 — a nested object field: `kind: 'object'` with `properties` (same field shape).
+  // Nullable as a whole, strict inside (every property required + nullable).
+  if (field.kind === 'object' && Array.isArray(field.properties)) {
+    const nested = buildObjectSchema(field.properties);
+    const schema = { ...nested, type: ['object', 'null'] };
+    if (field.description) schema.description = field.description;
+    return schema;
+  }
   const baseType = KIND_TO_JSON_TYPE[field.kind] || 'string';
   const schema = { type: [baseType, 'null'] };
   if (field.description) schema.description = field.description;
+  // `enum` values stay nullable too, as strict mode needs `null` listed in the enum itself.
+  if (Array.isArray(field.enum)) schema.enum = [...field.enum, null];
   return schema;
 }
 

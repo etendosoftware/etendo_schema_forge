@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
 /**
  * Coverage top-up for DetailView branches around:
  *  - the saved-currency exchange-rate effect (activeCurrencyConversionRef sync)
@@ -10,7 +12,7 @@
  * (non-exported) helpers, so they are only reachable through a full render with
  * a DetailTable mock that surfaces onSelectionChange, plus a mocked fetch.
  */
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { DetailView } from '../DetailView.jsx';
@@ -341,5 +343,43 @@ describe('DetailView process display-logic (evalDisplayLogicRaw)', () => {
     renderView({ processes });
     expect(screen.getByText('Reopen')).toBeInTheDocument();
     mockHook.editing = { id: '123', documentNo: 'SO-001', documentStatus: 'DR', processed: false, currency: 'CUR-EUR', orderDate: '2026-01-15', 'currency$_identifier': 'EUR' };
+  });
+});
+
+// ETP-5519: `primary-danger` is the filled-red Primary destructive header process button. The
+// real design-system Button renders `variant="destructive"` as `bg-destructive`, so the class is
+// the observable outcome of the variant DetailView passes.
+describe('DetailView header process button variants', () => {
+  afterEach(() => vi.clearAllMocks());
+
+  function headerButton(label) {
+    return screen.getByText(label).closest('button');
+  }
+  const classes = (el) => el.className.split(/\s+/);
+
+  it('renders a primary-danger process with the destructive Button variant', () => {
+    renderView({ processes: [{ name: 'reactivate', label: 'Reactivate', style: 'primary-danger' }] });
+    const btn = headerButton('Reactivate');
+    expect(classes(btn)).toContain('bg-destructive');
+    expect(classes(btn)).toContain('text-destructive-foreground');
+    expect(classes(btn)).not.toContain('bg-primary');
+    // Same Undo icon as ghost-danger, but not forced red on the filled button.
+    const icon = within(btn).getByTestId('Undo2__fa3275');
+    expect(icon.getAttribute('class')).not.toContain('--destructive');
+  });
+
+  it('keeps ghost-danger on the outline variant with a red Undo icon', () => {
+    renderView({ processes: [{ name: 'reactivate', label: 'Reactivate', style: 'ghost-danger' }] });
+    const btn = headerButton('Reactivate');
+    // Outline variant (`border shadow-sm`), red via getButtonClass — never the filled destructive.
+    expect(classes(btn)).toContain('border');
+    expect(classes(btn)).toContain('border-[hsl(var(--destructive))]');
+    expect(classes(btn)).not.toContain('bg-destructive');
+    expect(within(btn).getByTestId('Undo2__fa3275').getAttribute('class')).toContain('--destructive');
+  });
+
+  it('keeps positive on the default (filled primary) variant', () => {
+    renderView({ processes: [{ name: 'complete', label: 'Complete', style: 'positive' }] });
+    expect(classes(headerButton('Complete'))).toContain('bg-primary');
   });
 });

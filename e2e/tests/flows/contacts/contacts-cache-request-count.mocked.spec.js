@@ -20,6 +20,9 @@ import { login } from '../../helpers/auth.js';
  *   kpi:bp-stats                  GET .../contacts/bp-stats?businessPartnerId=...
  *   kpi:bp-trend                  GET .../contacts/bp-trend?businessPartnerId=...
  *   attachments                   GET .../sws/neo/attachments/{table}/{recordId}
+ *   attachmentsCount              GET .../sws/neo/attachments/{table}/{recordId}/count
+ *                                 (ETP-5526: tab-badge count, fetched on detail open
+ *                                 while the list itself stays lazy)
  *   selector:<Column>             GET .../selectors/<Column>?...  (per FK column)
  *   selectors                     aggregate of every selector:<Column> hit
  *   defaults:businessPartner      GET .../contacts/businessPartner/defaults    (out of cache scope)
@@ -112,6 +115,8 @@ function classify(url, method) {
   if (method !== 'GET') return null;
   const path = new URL(url).pathname;
 
+  // ETP-5526: the badge count is its own read — keep it out of the lazy list label.
+  if (/\/sws\/neo\/attachments\/[^/]+\/[^/]+\/count$/.test(path)) return 'attachmentsCount';
   if (/\/sws\/neo\/attachments\//.test(path)) return 'attachments';
   if (path.includes('/selectors/')) {
     // Key selectors per FK column so the exercised one (M_PriceList_ID) can be
@@ -180,6 +185,9 @@ async function installCountingMock(page, counts) {
       }
       if (label === 'attachments') {
         return jsonBody(route, { items: [] });
+      }
+      if (label === 'attachmentsCount') {
+        return jsonBody(route, { count: 0 });
       }
       if (label === 'defaults:businessPartner' || label?.startsWith('child-defaults:')) {
         return jsonBody(route, { defaults: {} });
@@ -333,6 +341,13 @@ test.describe('Contacts client-cache — request amplification (mocked)', () => 
     // (a) Attachments are lazy: none before the tab, at least one after.
     expect(get(afterFirstOpen, 'attachments')).toBe(0);
     expect(get(afterAttachments, 'attachments')).toBeGreaterThanOrEqual(1);
+
+    // (a2) ETP-5526: the tab badge reads only the count on detail open — at most
+    //      one request for the first open (in-flight dedupe), and none on the
+    //      reopens within the cache window (cached count, or the list is loaded).
+    expect(get(afterAttachments, 'attachmentsCount')).toBeLessThanOrEqual(1);
+    expect(get(afterSecondOpen, 'attachmentsCount')).toBe(get(afterAttachments, 'attachmentsCount'));
+    expect(get(afterThirdOpen, 'attachmentsCount')).toBe(get(afterAttachments, 'attachmentsCount'));
 
     // (b) Reopening contact A does NOT re-issue the record GET (cache win).
     expect(get(afterSecondOpen, 'record:businessPartner'))

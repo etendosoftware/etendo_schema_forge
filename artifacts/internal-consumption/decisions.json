@@ -17,7 +17,6 @@
     "listViewOptions": {
       "hideStatusFilter": true
     },
-    "customListIcons": true,
     "noHeaderBorder": true,
     "menuActions": [
       {
@@ -106,10 +105,6 @@
           "badgeLabels": {
             "true":  { "en_US": "Posted",     "es_ES": "Contabilizado"   },
             "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
-          },
-          "badgeVariants": {
-            "true": "green",
-            "false": "orange"
           },
           "reason": "ETP-5445 — accounting status badge in the list (mirrors physical-inventory). Post/Unpost handled by the internal-consumption NeoHandler via DocumentPostingService."
         },

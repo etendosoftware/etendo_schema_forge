@@ -4,12 +4,15 @@
 # Export the MCP usage telemetry table (ETGO_MCP_USAGE) from a deployed Etendo
 # instance, and optionally mark the exported rows as reviewed.
 #
-# The instance is named by its SSH alias — the only connection argument. The
-# script reads that host's own gradle.properties for the DB credentials and runs
-# psql there, so no credential ever travels to this machine or into a shell
-# history (see CLAUDE.md: "Do NOT hardcode DB credentials").
+# The instance is named by a remote-connection profile
+# (~/.config/schema-forge/remote/<name>.env: SSH_HOST + GRADLE_PROPERTIES, the
+# path of gradle.properties on that host) or by a bare SSH alias. The script
+# reads that host's own gradle.properties for the DB credentials and runs psql
+# there, so no credential ever travels to this machine or into a shell history
+# (see CLAUDE.md: "Do NOT hardcode DB credentials"). Connection logic:
+# scripts/lib/remote-etendo-psql.sh.
 #
-#   scripts/mcp-usage-dump.sh etendo-go-experimental
+#   scripts/mcp-usage-dump.sh production
 #   scripts/mcp-usage-dump.sh etendo-go-production --mark-reviewed
 #
 # REVIEWED = isactive 'N'
@@ -30,7 +33,7 @@
 # with:  jq -r 'select(.row_type=="feedback") | .payload | fromjson'
 #
 # Usage:
-#     scripts/mcp-usage-dump.sh [options] <ssh-host>
+#     scripts/mcp-usage-dump.sh [options] <profile|ssh-host>
 #
 # Options:
 #     --mark-reviewed       Mark every exported row isactive='N' (writes to the DB)
@@ -40,7 +43,9 @@
 #     --row-type <type>     tool_call | feedback
 #     --limit <n>           Export at most n rows (oldest first)
 #     --out <file>          Output file (default mcp-usage/<host>-<timestamp>.jsonl)
-#     --etendo-root <path>  Remote Etendo directory (default /opt/EtendoERP)
+#     --gradle-properties <path>  gradle.properties on the host (overrides the profile;
+#                           default /opt/EtendoERP/gradle.properties)
+#     --etendo-root <path>  Same, given as the Etendo directory
 #     --count               Only report how many rows match; export nothing, write nothing
 #     --yes                 Do not prompt before --mark-reviewed
 #     -h, --help            This help
@@ -50,8 +55,8 @@ set -euo pipefail
 # Dumps default into the repo's gitignored mcp-usage/ folder, whatever the cwd.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-SSH_HOST=""
-ETENDO_ROOT="/opt/EtendoERP"
+TARGET=""
+GRADLE_OVERRIDE=""
 OUT=""
 MARK_REVIEWED=0
 INCLUDE_REVIEWED=0
@@ -63,7 +68,7 @@ ROW_TYPE=""
 LIMIT=""
 
 die() { printf 'mcp-usage-dump: %s\n' "$1" >&2; exit 1; }
-usage() { sed -n '3,46p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,51p' "$0" | sed 's/^# \{0,1\}//'; }
 
 need_value() { [[ -n "${2:-}" ]] || die "$1 needs a value"; }
 
@@ -78,14 +83,19 @@ while [[ $# -gt 0 ]]; do
     --row-type)         need_value "$1" "${2:-}"; ROW_TYPE="$2"; shift 2 ;;
     --limit)            need_value "$1" "${2:-}"; LIMIT="$2"; shift 2 ;;
     --out)              need_value "$1" "${2:-}"; OUT="$2"; shift 2 ;;
-    --etendo-root)      need_value "$1" "${2:-}"; ETENDO_ROOT="$2"; shift 2 ;;
+    --gradle-properties) need_value "$1" "${2:-}"; GRADLE_OVERRIDE="$2"; shift 2 ;;
+    --etendo-root)      need_value "$1" "${2:-}"; GRADLE_OVERRIDE="${2%/}/gradle.properties"; shift 2 ;;
     -h|--help)          usage; exit 0 ;;
     -*)                 die "unknown option: $1 (try --help)" ;;
-    *)                  [[ -z "$SSH_HOST" ]] || die "only one ssh host is accepted"; SSH_HOST="$1"; shift ;;
+    *)                  [[ -z "$TARGET" ]] || die "only one profile/ssh host is accepted"; TARGET="$1"; shift ;;
   esac
 done
 
-[[ -n "$SSH_HOST" ]] || { usage; exit 1; }
+[[ -n "$TARGET" ]] || { usage; exit 1; }
+
+# shellcheck source=lib/remote-etendo-psql.sh
+source "$REPO_ROOT/scripts/lib/remote-etendo-psql.sh"
+resolve_remote_target "$TARGET" "$GRADLE_OVERRIDE" || die "cannot resolve target '$TARGET'"
 [[ -z "$ROW_TYPE" || "$ROW_TYPE" == "tool_call" || "$ROW_TYPE" == "feedback" ]] \
   || die "--row-type must be tool_call or feedback"
 [[ -z "$LIMIT" || "$LIMIT" =~ ^[1-9][0-9]*$ ]] || die "--limit must be a positive integer"
@@ -156,21 +166,7 @@ fi
 
 # --- Remote psql ----------------------------------------------------------
 
-# Runs ON the remote host: reads gradle.properties, execs psql with the SQL fed
-# on stdin. Single-quoted here so every expansion happens remotely; the only
-# interpolation is the Etendo root, quoted below.
-REMOTE_CMD='
-set -eu
-cd "$0" || { echo "mcp-usage-dump: no such directory on the remote host: $0" >&2; exit 1; }
-[ -f gradle.properties ] || { echo "mcp-usage-dump: no gradle.properties in $0" >&2; exit 1; }
-prop() { sed -n "s/^$1=//p" gradle.properties | head -1 | tr -d "\r"; }
-command -v psql >/dev/null 2>&1 || { echo "mcp-usage-dump: psql not found on the remote host" >&2; exit 1; }
-PGPASSWORD="$(prop bbdd\.password)" \
-exec psql -h "$(prop bbdd\.host)" -p "$(prop bbdd\.port)" -U "$(prop bbdd\.user)" \
-     -d "$(prop bbdd\.sid)" -v ON_ERROR_STOP=1 -At -f -
-'
-
-run_remote() { ssh "$SSH_HOST" "bash -c '$REMOTE_CMD' $(printf '%q' "$ETENDO_ROOT")"; }
+run_remote() { remote_psql -At; }
 
 scope_note() {
   local s="rows"

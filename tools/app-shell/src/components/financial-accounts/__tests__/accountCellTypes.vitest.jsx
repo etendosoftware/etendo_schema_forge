@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/financial-accounts/accountCellTypes.jsx
 /**
  * accountCellTypes — the Cuentas list's cellType → renderer registry.
  *
@@ -22,6 +23,7 @@ vi.mock('@/i18n', () => ({
     if (key === 'financeAccountsReconcilePending') return `Conciliar (${params.count})`;
     return key;
   },
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
 }));
 
 import * as registry from '../accountCellTypes.jsx';
@@ -94,6 +96,25 @@ describe('ACCOUNT_CELL_TYPES — accountName', () => {
     fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'));
 
     expect(onConnect).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-1' }));
+  });
+});
+
+// ETP-5457 — the cell context carries the window's "read-only" access tier; the accountName
+// renderer must hand it to NameCell, or the inline "Conectar banco" CTA survives the tier.
+describe('ACCOUNT_CELL_TYPES — accountName under the read-only access tier (ETP-5457)', () => {
+  const OFFLINE = { ...ACCOUNT, bankConnected: false };
+
+  it('drops the connect affordance when the context says windowReadOnly (ETP-5457)', () => {
+    renderCell('accountName', OFFLINE, { ui: UI, onConnect: vi.fn(), windowReadOnly: true });
+
+    expect(screen.getByTestId('cell')).toHaveTextContent('BBVA Principal');
+    expect(screen.queryByTestId('account-sync-connect-acc-1')).not.toBeInTheDocument();
+  });
+
+  it('keeps the connect affordance when the context says full access (ETP-5457 twin)', () => {
+    renderCell('accountName', OFFLINE, { ui: UI, onConnect: vi.fn(), windowReadOnly: false });
+
+    expect(screen.getByTestId('account-sync-connect-acc-1')).toBeInTheDocument();
   });
 });
 

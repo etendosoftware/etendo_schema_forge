@@ -6,7 +6,7 @@ How to connect an MCP client (Claude Code or OpenAI Codex CLI) to the Etendo GO 
 - **LOCAL** — the MCP running on your own machine (Tomcat `:8080` behind the Vite dev server `:3100`).
 - **EXPERIMENTAL** — the shared cloud server at `go.experimental.etendo.cloud`.
 
-These let a developer drive the MCP tools (`neo_*`, `generate_*`) from their PC, either against
+These let a developer drive the MCP tools (`etendo_*`, `generate_*`) from their PC, either against
 their own build or against the experimental server for testing.
 
 > **Always name the registered server after its environment** (`etendo-mcp-local` vs

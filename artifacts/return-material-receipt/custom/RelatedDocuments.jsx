@@ -1,40 +1,19 @@
-import { useNavigate } from 'react-router-dom';
-import { DocChip, RelatedDocumentsShell, docChipProps } from '@/components/related-documents';
-import { useUI } from '@/i18n';
+import { RelatedDocumentsSection, SALES_RELATED_DOCS } from '@/components/related-documents';
 
-export default function RelatedDocuments({ data }) {
-  const navigate = useNavigate();
-  const ui = useUI();
-
-  // sourceShipments and returnInvoices are injected by ReturnMaterialReceiptHeaderHandler.afterHandle
-  // with full data: {id, documentNo, documentStatus} for shipments and
-  // {id, documentNo, documentStatus, grandTotalAmount, currency$_identifier} for invoices.
-  const sourceShipments = Array.isArray(data?.sourceShipments) ? data.sourceShipments : [];
-  const returnInvoices = Array.isArray(data?.returnInvoices) ? data.returnInvoices : [];
-
-  const chips = [];
-
-  sourceShipments.forEach((shipment) => {
-    chips.push(
-      <DocChip
-        key={`source-shipment-${shipment.id}`}
-        {...docChipProps({ type: 'shipment', doc: shipment, ui, navigate })}
-      />
-    );
-  });
-
-  returnInvoices.forEach((inv) => {
-    chips.push(
-      <DocChip
-        key={`return-invoice-${inv.id}`}
-        {...docChipProps({ type: 'sales-invoice', doc: inv, ui, navigate })}
-      />
-    );
-  });
-
+/**
+ * "Related documents" section of the form. ETP-5527: the documents, criteria, chips
+ * and statuses come from the shared definition SALES_RELATED_DOCS['return-material-receipt'], the
+ * same one the list preview renders, so the form and the preview always match.
+ */
+export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, docsRefreshSignal }) {
   return (
-    <RelatedDocumentsShell loading={false}>
-      {chips}
-    </RelatedDocumentsShell>
+    <RelatedDocumentsSection
+      definition={SALES_RELATED_DOCS['return-material-receipt']}
+      recordId={recordId ?? data?.id}
+      record={data}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
+      docsRefreshSignal={docsRefreshSignal}
+      data-testid="RelatedDocumentsSection__61ddbc" />
   );
 }

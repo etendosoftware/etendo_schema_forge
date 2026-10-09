@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // ETP-5456 — autocalculated boxes out of the AEAT record-length range (FINAL behavior, fiscal-
 // advisory correction). A derived box (69, 71, or anything that cascades: 46, 64, 66, …) that
 // overflows its range is NEVER rounded/truncated/saturated — `recomputeDerivedBoxes` leaves the
@@ -23,7 +24,7 @@ const { toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn(), toastSuccessMock: vi.fn(),
 }));
 
-vi.mock('@/i18n', () => ({ useUI: () => (key, params) => {
+vi.mock('@/i18n', () => ({ useLocaleSwitch: () => ({ locale: 'es_ES' }), useUI: () => (key, params) => {
   // Minimal real interpolation so the plural/singular assertions below can check actual text,
   // mirroring the real dictionary strings (en_US.json/es_ES.json) closely enough to assert on.
   const DICTIONARY = {
@@ -60,7 +61,7 @@ vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
-  StatusPillMenu: () => null, MoreOptionsMenu: () => null, ResultPill: () => null,
+  StatusPillMenu: () => null, ResultPill: () => null,
   SummaryCard: () => null, Tabs: () => null, Banner: () => null, SectionCard: () => null,
   EmptyState: () => null, KpiWidget: () => null,
 }));
@@ -74,6 +75,8 @@ vi.mock('../AeatSubmitFlow.jsx', () => ({
   default: () => null, isMissingDefaultIaeActivity: () => false,
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,

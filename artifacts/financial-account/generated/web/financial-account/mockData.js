@@ -37,7 +37,8 @@ export const account = [
     "pSD2ConnectionStatus": "DR",
     "eTGOAmountTolerance": 99.44,
     "eTGODateTolerance": 90,
-    "eTGOPendingCount": 90
+    "eTGOPendingCount": 90,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-002",
@@ -75,7 +76,8 @@ export const account = [
     "pSD2ConnectionStatus": "CO",
     "eTGOAmountTolerance": 96.94,
     "eTGODateTolerance": 93,
-    "eTGOPendingCount": 93
+    "eTGOPendingCount": 93,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-003",
@@ -113,7 +115,8 @@ export const account = [
     "pSD2ConnectionStatus": "VO",
     "eTGOAmountTolerance": 12.48,
     "eTGODateTolerance": 8,
-    "eTGOPendingCount": 8
+    "eTGOPendingCount": 8,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-004",
@@ -151,7 +154,8 @@ export const account = [
     "pSD2ConnectionStatus": "IP",
     "eTGOAmountTolerance": 96.31,
     "eTGODateTolerance": 91,
-    "eTGOPendingCount": 91
+    "eTGOPendingCount": 91,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-005",
@@ -189,7 +193,8 @@ export const account = [
     "pSD2ConnectionStatus": "DR",
     "eTGOAmountTolerance": 31.27,
     "eTGODateTolerance": 72,
-    "eTGOPendingCount": 72
+    "eTGOPendingCount": 72,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-006",
@@ -227,7 +232,8 @@ export const account = [
     "pSD2ConnectionStatus": "CO",
     "eTGOAmountTolerance": 76.52,
     "eTGODateTolerance": 78,
-    "eTGOPendingCount": 78
+    "eTGOPendingCount": 78,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-007",
@@ -265,7 +271,8 @@ export const account = [
     "pSD2ConnectionStatus": "VO",
     "eTGOAmountTolerance": 2.66,
     "eTGODateTolerance": 31,
-    "eTGOPendingCount": 31
+    "eTGOPendingCount": 31,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-008",
@@ -303,7 +310,8 @@ export const account = [
     "pSD2ConnectionStatus": "IP",
     "eTGOAmountTolerance": 10.03,
     "eTGODateTolerance": 97,
-    "eTGOPendingCount": 97
+    "eTGOPendingCount": 97,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-009",
@@ -341,7 +349,8 @@ export const account = [
     "pSD2ConnectionStatus": "DR",
     "eTGOAmountTolerance": 93.97,
     "eTGODateTolerance": 70,
-    "eTGOPendingCount": 70
+    "eTGOPendingCount": 70,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-010",
@@ -379,7 +388,8 @@ export const account = [
     "pSD2ConnectionStatus": "CO",
     "eTGOAmountTolerance": 1.1,
     "eTGODateTolerance": 77,
-    "eTGOPendingCount": 77
+    "eTGOPendingCount": 77,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-011",
@@ -417,7 +427,8 @@ export const account = [
     "pSD2ConnectionStatus": "VO",
     "eTGOAmountTolerance": 79.99,
     "eTGODateTolerance": 32,
-    "eTGOPendingCount": 32
+    "eTGOPendingCount": 32,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   },
   {
     "id": "mock-account-012",
@@ -455,7 +466,8 @@ export const account = [
     "pSD2ConnectionStatus": "IP",
     "eTGOAmountTolerance": 53.61,
     "eTGODateTolerance": 26,
-    "eTGOPendingCount": 26
+    "eTGOPendingCount": 26,
+    "pSD2LastSyncDate": "Sample pSD2LastSyncDate"
   }
 ];
 

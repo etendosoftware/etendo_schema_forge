@@ -1,19 +1,44 @@
+// @covers tools/app-shell/src/components/dashboard/FinancialSummaryCard.jsx
+// @covers tools/app-shell/src/lib/dashboardValueTypography.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { getDashboardValueTypography } from '../../../lib/dashboardValueTypography.js';
 
-// getMetricValueTypography: inline pure function from FinancialSummaryCard.jsx.
-// Adjusts font-size based on formatted value length to prevent overflow at high zoom levels.
-// Three tiers: default 30px, medium ≥10 chars → 24px, long ≥12 chars → 20px.
+// FinancialSummaryCard sizes each KPI value with `getDashboardValueTypography`
+// (`lib/dashboardValueTypography.js`). Only the dashboard uses it: the Financial Accounts
+// "Saldo" total is fixed at 30px and ellipsises instead (ETP-5580). These tests exercise the
+// REAL function, so a change to the dashboard thresholds is caught here. Three tiers:
+// default 30px, medium ≥10 chars → 24px, long ≥12 chars → 20px.
 //
 // Example values below use the ETP-4314 output shape (es-ES separators, currency
 // symbol after the amount, e.g. "1.234,56 €") rather than the old literal ISO
 // code prefix ("EUR 1,234.56") — that literal-code format no longer exists.
-function getMetricValueTypography(value) {
-  const length = String(value ?? '').replace(/^-/, '').length;
-  if (length >= 12) return { fontSize: '20px', lineHeight: '24px' };
-  if (length >= 10) return { fontSize: '24px', lineHeight: '28px' };
-  return { fontSize: '30px', lineHeight: '32px' };
-}
+const getMetricValueTypography = getDashboardValueTypography;
+
+const CARD_SOURCE = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'FinancialSummaryCard.jsx'),
+  'utf8',
+);
+
+describe('FinancialSummaryCard — uses the shared typography rule', () => {
+  it('imports getDashboardValueTypography from the shared lib module', () => {
+    assert.match(
+      CARD_SOURCE,
+      /import\s*\{\s*getDashboardValueTypography\s*\}\s*from\s*'@\/lib\/dashboardValueTypography\.js'/,
+    );
+  });
+
+  it('sizes the KPI value with it', () => {
+    assert.match(CARD_SOURCE, /getDashboardValueTypography\(formattedValue\)/);
+  });
+
+  it('no longer defines its own inline copy of the rule', () => {
+    assert.doesNotMatch(CARD_SOURCE, /function\s+getMetricValueTypography\s*\(/);
+  });
+});
 
 describe('FinancialSummaryCard — getMetricValueTypography overflow tiers', () => {
   describe('default tier (< 10 chars → 30px)', () => {

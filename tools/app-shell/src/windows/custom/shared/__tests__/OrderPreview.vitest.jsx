@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/OrderPreview.jsx
 // Mocks must come before imports (Vitest hoisting)
 
 vi.mock('@/i18n', () => ({
@@ -99,13 +100,13 @@ vi.mock('../preview-cards/EmailsCard.jsx', () => ({
 }));
 
 vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
-  default: () => <div data-testid="rel-docs-card" />,
+  default: ({ definition }) => <div data-testid="rel-docs-card" data-definition-spec={definition?.spec} />,
 }));
 
+// ETP-5527 / ETP-5539 — the previews only read the shared definition from the barrel.
 vi.mock('@/components/related-documents', () => ({
-  fetchByCriteria: vi.fn(),
-  fetchChild: vi.fn(),
-  fetchById: vi.fn(),
+  getSalesRelatedDocs: (spec) => (['sales-order', 'sales-quotation'].includes(spec) ? { spec } : null),
+  getPurchaseRelatedDocs: (spec) => (spec === 'purchase-order' ? { spec } : null),
 }));
 
 vi.mock('@/lib/statusBadge.js', () => ({
@@ -222,6 +223,18 @@ describe('OrderPreview', () => {
     useOrderPdf.mockReturnValue({ pdfUrl: 'blob:test', pdfBlob: new Blob(), loading: false, error: null });
     renderOrderPreview({ specName: 'sales-order' });
     expect(screen.getByTestId('download-btn')).not.toBeDisabled();
+  });
+
+  // ETP-5527 / ETP-5539 — both order windows render the shared definition of their own spec
+  // (same as the form's RelatedDocuments section).
+  it.each([
+    ['sales-order', 'sales-order'],
+    ['purchase-order', 'purchase-order'],
+  ])('related-documents card for %s', (specName, expectedDefinitionSpec) => {
+    renderOrderPreview({ specName });
+    const card = screen.queryByTestId('rel-docs-card');
+    if (expectedDefinitionSpec) expect(card).toHaveAttribute('data-definition-spec', expectedDefinitionSpec);
+    else expect(card).not.toBeInTheDocument();
   });
 
   it('uses Purchase Order window label when specName is purchase-order', () => {
@@ -573,5 +586,30 @@ describe('OrderPreview — Solo-Lectura tier (ETP-5205)', () => {
 
     expect(screen.getByTestId('email-btn')).toBeInTheDocument();
     expect(lastAttachmentConfig().readOnly).toBeFalsy();
+  });
+});
+
+describe('OrderPreview — delivery row label (ETP-5549)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+    usePurchaseOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+  });
+
+  const lastSummaryProps = () => SummaryCard.mock.calls.at(-1)[0];
+
+  it('sales order leaves deliveryLabel undefined so SummaryCard shows the default Delivered label', () => {
+    renderOrderPreview({ specName: 'sales-order' });
+    expect(lastSummaryProps().deliveryLabel).toBeUndefined();
+    expect(lastSummaryProps().deliveryPercent).toBe(75);
+  });
+
+  it('purchase order passes the previewCardReceivedPercent label', () => {
+    renderOrderPreview({
+      specName: 'purchase-order',
+      order: { ...defaultOrder, deliveryStatusPurchase: 30 },
+    });
+    expect(lastSummaryProps().deliveryLabel).toBe('previewCardReceivedPercent');
+    expect(lastSummaryProps().deliveryPercent).toBe(30);
   });
 });

@@ -23,6 +23,8 @@
 
 | File | Description |
 |------|-------------|
+| [testing/test-reuse-policy.md](testing/test-reuse-policy.md) | **Test reuse policy** (reuse-first protocol): locate existing tests with `make find-tests`, Extend / Rewrite / New with justification, the `@covers` tag, no ticket-named files, stop-and-escalate on a correct failing test, and the `test-hygiene` CI checks in both repos. Single source for `tester-functional`, `tester-go`, the dev repro exception and Alex |
+| [testing/etendo-test-skill-review.md](testing/etendo-test-skill-review.md) | Where the `dev-assistant:etendo-test` skill conflicts with the test reuse policy, plus the upstream change request |
 | [e2e-testing-guide.md](e2e-testing-guide.md) | E2E testing guide: discover with agent-browser, automate with Playwright |
 | [etp-5045-durable-payment-state.md](etp-5045-durable-payment-state.md) | **ETP-5045 as one summary** (both repos): why payment state moved out of process memory into `ETGO_CHECKOUT_REQUEST` and `ETGO_BILLING_EVENT`, the forward-only checkout lifecycle, the webhook claim and its at-most-once crash window, why check ordering is a security control, the two Stripe credentials, and the `smartbuild` sampledata gap |
 | [stripe-local-testing.md](stripe-local-testing.md) | Stripe hosted Checkout local testing: offline webhook simulator and session stub, Test Mode forwarding, durable checkout/billing-event state (`ETGO_CHECKOUT_REQUEST`, `ETGO_BILLING_EVENT`), restart replay matrix, plus the ETP-5443 subscription lifecycle (grace anchor, correlation, offline/Test Mode recipes, the two account endpoints) |
@@ -33,6 +35,7 @@
 |------|-------------|
 | [sonarqube-access.md](sonarqube-access.md) | **SonarQube quick access**: bypass RTK with `rtk proxy`, project keys, useful endpoints, local scanner fallback |
 | [xml-regeneration-check.md](xml-regeneration-check.md) | **XML regeneration check**: compare original module XML vs export.database output without DB access |
+| [local-env-plugin.md](local-env-plugin.md) | **local-env plugin** (`local-env.d/plugins/etendo-go`): seeds the GO sample client into local-env's cached DB and starts one Etendo GO SPA per environment on its own `SPA_PORT`/`BFF_PORT`; how `make dev` / `make dev-local-core` honour those ports |
 | [ci-parity-install.md](ci-parity-install.md) | **CI parity install** (`make ci-parity`): bring the local Etendo checkout to the module/branch set CI installs, then clean DB + install — dry-run by default |
 
 ## Field & Pipeline Reference
@@ -42,9 +45,10 @@
 | [decisions-reference.md](decisions-reference.md) | **Complete reference for all `decisions.json` options**: visibility, draftMode, sections, selectors, rules, discard patterns |
 | [field-visibility-types.md](field-visibility-types.md) | Field visibility types (editable, readOnly, system, discarded): behavior across pipeline, NEO Headless, and frontend |
 | [ui-customization.md](ui-customization.md) | **UI customization guide**: all extension points driven by `decisions.json` (statusBar, listKpiCards, customComponents, menuActions, layoutType, etc.) with real examples and decision tree |
+| [vector-search-configuration.md](vector-search-configuration.md) | **Global search (vector search) how-to**: how the palette finds records (one semantic request, top 10, text/best/other grouping, score formula), the current window → target → indexed-columns table, and step-by-step procedures to add/edit an indexed column (incl. stored computed columns for values in other tables), add a window (`SEARCH_KEY` = `vectorSearch.target` = spec name), remove a column/window and clean its vectors; troubleshooting and checklist |
 | [ui-design-guidelines.md](ui-design-guidelines.md) | **UI design guidelines**: z-index scale, scrim opacity, overlay/drawer patterns, monetary amount formatting (`formatCurrency` vs `formatDashboardAmount`), column alignment |
 | [walkthrough-flows.md](walkthrough-flows.md) | **Guided walkthroughs**: the flow JSON contract (step shape, `advance` modes, route/target resolution), where the engine vs. the flow data lives, failure behaviour, and the checklist for adding a flow |
-| [list-filters.md](list-filters.md) | **List view filters reference**: subset filters, quick filters, document-type filters, advanced filter popover — composition rules, URL-param hooks, when to use which |
+| [list-filters.md](list-filters.md) | **List view filters reference**: subset filters, quick filters, document-type filters, advanced filter popover — composition rules, URL-param hooks, when to use which; plus the list toolbar layout (two rows + separator, ETP-5509) |
 | [pipeline-validator-reference.md](pipeline-validator-reference.md) | **Pipeline completeness validator**: rules F1–F10, artifact classification, CLI flags, exit codes, and troubleshooting |
 | [document-printables.md](document-printables.md) | **Document printables** — the TWO document designs and which button shows each, the criteria a change must meet, the PDF cache and its (missing) invalidation, and the decisions on record. Governing skill: `/document-printables` |
 | [contract-generation-ownership.md](contract-generation-ownership.md) | **Contract/generated output ownership**: producers, consumers, regeneration triggers, and split-ready artifact rules |
@@ -134,6 +138,7 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | [ops/window-doc-freshness.md](ops/window-doc-freshness.md) | Window-specific doc freshness warning: diff-based CI review for `docs/generated-custom-windows/<window>.md` |
 | [ops/epic-rollup-report.md](ops/epic-rollup-report.md) | Develop-targeted epic rollout report: included feature PRs, prior review findings, and aggregated release-risk summary |
 | [ops/server-logs.md](ops/server-logs.md) | **Server logs**: tailing CloudWatch for experimental/production/demo1 (`make logs`), the per-env/per-service log group matrix, AWS CLI setup and troubleshooting |
+| [ops/mcp-copilot-metrics.md](ops/mcp-copilot-metrics.md) | **MCP / Copilot usage metrics**: `make mcp-metrics` (MCP calls, feedback, Copilot conversations/messages, total or per day) and `make mcp-usage` export; remote profile with `SSH_HOST` + `GRADLE_PROPERTIES` |
 | [ops/app-shell-observability.md](ops/app-shell-observability.md) | App Shell observability: providers, env vars, v1 events, privacy rules, and extension guide |
 | [ops/mixpanel-kpi-emission-spec.md](ops/mixpanel-kpi-emission-spec.md) | Mixpanel KPI emission spec: frontend/backend runtime config, emitted events, advanced KPI gaps, and validation evidence |
 | [ops/saas-kpis/README.md](ops/saas-kpis/README.md) | Etendo SaaS KPI instrumentation catalog grouped by dimension, with Mixpanel-ready contracts and backend/definition gaps |

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  TriangleAlert, OctagonAlert, CircleCheck, ChevronRight,
+  TriangleAlert, OctagonAlert, CircleCheck, ChevronRight, ReceiptText,
 } from 'lucide-react';
 import { EmptyState } from './FmCommon.jsx';
 import { formatAmount } from './fiscalModelsUtils.js';
@@ -17,7 +17,10 @@ function buildBoxIncidentMap(incidents) {
   return map;
 }
 
-export function SourcesTab({ decl, t }) {
+// `showTaxColumns` (default true) renders the 303-only columns — Cuota, Total and
+// Casillas. Modelo 349 declares taxable bases per intra-community operator, so those
+// columns carry no meaning there and its caller passes `false` (ETP-5597).
+export function SourcesTab({ decl, t, showTaxColumns = true }) {
   const [onlyIncidents, setOnlyIncidents] = useState(false);
   const sources = decl.sources ?? [];
   const boxIncidentMap = buildBoxIncidentMap(decl.incidents?.items ?? []);
@@ -66,11 +69,12 @@ export function SourcesTab({ decl, t }) {
         </div>
       )}
       {sources.length === 0 ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {t('fm.sources.empty') ?? 'Sin facturas'}
-          </span>
-        </div>
+        // ETP-5584 (P11) — the window's one empty state (icon + title + text).
+        <EmptyState
+          icon={<ReceiptText size={28} strokeWidth={1.5} data-testid="ReceiptText__931756" />}
+          title={t('fm.sources.empty') ?? 'Sin facturas'}
+          sub={t('fm.sources.empty_sub')}
+          data-testid="fm-sources-empty" />
       ) : (
         <div className="fm-table-wrap">
           <table className="fm-dtable fm-dtable--plain">
@@ -82,14 +86,18 @@ export function SourcesTab({ decl, t }) {
                 <th>{t('fm.sources.col.type')}</th>
                 <th>{t('fm.sources.col.party')}</th>
                 <th className="num">{t('fm.sources.col.base')}</th>
-                <th className="num">{t('fm.sources.col.vat')}</th>
-                <th className="num">{t('fm.sources.col.total')}</th>
-                <th>{t('fm.sources.col.boxes')}</th>
+                {showTaxColumns && (
+                  <>
+                    <th className="num">{t('fm.sources.col.vat')}</th>
+                    <th className="num">{t('fm.sources.col.total')}</th>
+                    <th>{t('fm.sources.col.boxes')}</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
               {visible.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign:'center', color:'hsl(var(--text-disabled))', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
+                <tr><td colSpan={showTaxColumns ? 9 : 6} style={{ textAlign:'center', color:'hsl(var(--text-disabled))', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
               )}
               {visible.map((r) => {
                 const incs = rowIncidents(r);
@@ -104,16 +112,19 @@ export function SourcesTab({ decl, t }) {
                   // AR/AP numbering sequences are independent and can legitimately collide
                   // (e.g. two different invoices both numbered REC-1000000). Fall back to
                   // `ref` only for rows from a backend that hasn't been redeployed yet.
-                  <tr key={r.id ?? r.ref} className={rowClass}>
+                  // ETP-5597: a 349 invoice mixing goods and services emits one row per
+                  // AEAT349 key with the same id, so (id, key) is the unique pair. 303 rows
+                  // carry no `key` and keep the plain id.
+                  <tr key={r.key ? `${r.id ?? r.ref}|${r.key}` : (r.id ?? r.ref)} className={rowClass}>
                     <td className="strong">{fmtDate(r.date)}</td>
                     <td>{fmtDate(r.accountingDate)}</td>
                     <td>{r.ref}</td>
                     <td>{typeLabel(r.type)}</td>
                     <td>{r.party}</td>
                     <td className="num strong">{formatAmount(r.base)}</td>
-                    <td className="num">{r.vat != null ? formatAmount(r.vat) : '—'}</td>
-                    <td className="num strong">{formatAmount(r.total)}</td>
-                    <td>
+                    {showTaxColumns && <td className="num">{r.vat != null ? formatAmount(r.vat) : '—'}</td>}
+                    {showTaxColumns && <td className="num strong">{formatAmount(r.total)}</td>}
+                    {showTaxColumns && <td>
                       {fmtBoxes(r.boxes)}
                       {incs.length > 0 && (
                         <span
@@ -126,7 +137,7 @@ export function SourcesTab({ decl, t }) {
                           }
                         </span>
                       )}
-                    </td>
+                    </td>}
                   </tr>
                 );
               })}
@@ -152,12 +163,13 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
   }, [blocking, warning]);
 
   if (blocking === 0 && warning === 0) {
+    // ETP-5584 (P11) — same empty state (icon + title + text) as every other tab.
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-          {t('fm.incidents.empty') ?? 'Sin incidencias'}
-        </span>
-      </div>
+      <EmptyState
+        icon={<CircleCheck size={28} strokeWidth={1.5} data-testid="CircleCheck__incidentsEmpty" />}
+        title={t('fm.incidents.empty') ?? 'Sin incidencias'}
+        sub={t('fm.incidents.empty_sub')}
+        data-testid="fm-incidents-empty" />
     );
   }
 
@@ -169,6 +181,16 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
   // when no row has anything to show, instead of rendering permanently-empty '—' cells.
   const hasSuggestion = sorted.some((inc) => inc.suggestion);
   const hasAction = sorted.some((inc) => inc.origin?.match(/Casilla\s+\d+/i));
+  // ETP-5597 — the banner follows the real severity: any blocking incident keeps the "resolve
+  // before generating the file" text in the destructive role; warnings only get an amber,
+  // non-blocking message (warnings never prevent file generation).
+  const hasBlocking = blocking > 0;
+  const bannerBg = hasBlocking ? 'var(--status-destructive-bg)' : 'var(--status-warning-bg)';
+  const bannerBorder = hasBlocking ? 'hsl(var(--destructive) / 0.3)' : 'var(--status-warning-border)';
+  const bannerFg = hasBlocking ? 'hsl(var(--destructive))' : 'var(--status-warning-fg)';
+  const bannerText = hasBlocking
+    ? (t('fm.incidents.block_sub') ?? 'Resuélvelas antes de generar el fichero')
+    : (t('fm.incidents.warn_sub') ?? 'Revisa las advertencias. No impiden generar el fichero.');
 
   return (
     <div style={{ flex: 1, overflow: 'auto', marginTop: '-8px' }}>
@@ -176,11 +198,11 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
           padding: '12px 24px', marginBottom: 0,
-          background: 'var(--status-warning-bg)', borderTop: '1px solid var(--status-warning-border)',
+          background: bannerBg, borderTop: `1px solid ${bannerBorder}`,
           fontSize: 14,
         }}>
-          <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:18, height:18, borderRadius:'50%', background:'var(--status-warning-fg)', fontSize:11, fontWeight:700, color:'hsl(var(--card))', fontStyle:'normal', flexShrink:0 }}>i</span>
-          <span style={{ flex: 1, color: 'var(--status-warning-fg)' }}>{t('fm.incidents.block_sub') ?? 'Resuélvelas antes de generar el fichero'}</span>
+          <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:18, height:18, borderRadius:'50%', background:bannerFg, fontSize:11, fontWeight:700, color:'hsl(var(--card))', fontStyle:'normal', flexShrink:0 }}>i</span>
+          <span style={{ flex: 1, color: bannerFg }}>{bannerText}</span>
           <button
             type="button"
             onClick={() => setDismissed(true)}

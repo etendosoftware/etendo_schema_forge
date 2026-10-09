@@ -30,7 +30,8 @@ import { buildTypesLabel } from './attachmentPolicy';
  *                       (recordId is the literal string "new"). Passed by
  *                       DetailView to every 'tab'-placement custom component.
  *   onSaveHeader      - ({ navigateAfter? }) => Promise<record|null>. Force-saves
- *                       the header. Only present (non-undefined) while isNew.
+ *                       the header; null means the host already told the user
+ *                       why. Only present (non-undefined) while isNew.
  *   onGoToSavedRecord - (savedRecord) => void. Navigates to the just-saved
  *                       record with this tab re-opened. Only present while isNew.
  *   readOnly          - When true, hides the single-row and "delete all" delete
@@ -52,6 +53,11 @@ import { buildTypesLabel } from './attachmentPolicy';
  * today's behavior until its own follow-up) because forcing a save just to
  * attach a file is the right UX for a document-capture-first flow (purchase
  * invoice) but not necessarily for the rest.
+ *
+ * ETP-5309: without `saveBeforeAttach`, a new record renders a save-first hint
+ * instead of the dropzone (the upload used to POST against "new" and surface a
+ * raw backend 500). DetailView also disables the tab button itself through the
+ * `requiresSavedRecord` / `savedRecordHintKey` statics declared below.
  */
 // eslint-disable-next-line no-unused-vars
 export default function AttachmentsTab({
@@ -82,6 +88,7 @@ export default function AttachmentsTab({
   // stopped doing anything.
   const effectiveReadOnly = !!isDocumentReadOnly || !!readOnly;
   const saveBeforeAttach = !!config.saveBeforeAttach;
+  const needsSavedRecord = !!isNew && !saveBeforeAttach;
   const [isSavingBeforeAttach, setIsSavingBeforeAttach] = useState(false);
 
   // ETP-5038: the accepted types and the max size come from the backend
@@ -116,6 +123,7 @@ export default function AttachmentsTab({
 
   const {
     items,
+    count,
     loading,
     uploadingFiles,
     upload,
@@ -131,6 +139,8 @@ export default function AttachmentsTab({
     apiBaseUrl,
     isActive,
     config: effectiveConfig,
+    // ETP-5526: only a tab that reports a badge pays for the count request.
+    prefetchCount: Boolean(onCountChange),
   });
 
   const [deletingAttachment, setDeletingAttachment] = useState(null);
@@ -139,9 +149,15 @@ export default function AttachmentsTab({
 
   const onCountChangeRef = useRef(onCountChange);
   useEffect(() => { onCountChangeRef.current = onCountChange; });
+  // ETP-5526: report the real count as soon as the record opens — the hook
+  // fetches it from the lightweight count endpoint while the full list stays
+  // lazy (ETP-4564), and switches to the list length once the list is read.
+  // `null` when it is still unknown or cannot be fetched (e.g. an older
+  // backend without the endpoint): the badge then shows no number, never a
+  // fake 0 that reads as "the file was lost".
   useEffect(() => {
-    if (!loading) onCountChangeRef.current?.(items.length);
-  }, [items.length, loading]);
+    if (!loading) onCountChangeRef.current?.(count);
+  }, [count, loading]);
 
   const uploadToNewRecord = useCallback(async (file) => {
     if (!onSaveHeader) return;
@@ -175,14 +191,20 @@ export default function AttachmentsTab({
 
   return (
     <div className="space-y-2" data-testid="attachments-tab-panel">
-      <UploadDropzone
-        onFiles={handleUpload}
-        config={effectiveConfig}
-        // Upload stays gated by `isDocumentReadOnly` only — the bespoke `readOnly`
-        // prop is delete-only by contract (see JSDoc above: "download/upload stay
-        // available"), so it must not disable the dropzone.
-        disabled={!recordId || isSavingBeforeAttach || isDocumentReadOnly}
-        data-testid="UploadDropzone__281340" />
+      {needsSavedRecord ? (
+        <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground" data-testid="attachments-save-first-hint">
+          {ui('attachmentsSaveFirstHint')}
+        </p>
+      ) : (
+        <UploadDropzone
+          onFiles={handleUpload}
+          config={effectiveConfig}
+          // Upload stays gated by `isDocumentReadOnly` only — the bespoke `readOnly`
+          // prop is delete-only by contract (see JSDoc above: "download/upload stay
+          // available"), so it must not disable the dropzone.
+          disabled={!recordId || isSavingBeforeAttach || isDocumentReadOnly}
+          data-testid="UploadDropzone__281340" />
+      )}
       <AttachmentsTable
         items={items}
         loading={loading}
@@ -224,3 +246,8 @@ export default function AttachmentsTab({
     </div>
   );
 }
+
+// Read by DetailView (getCustomTabSaveFirstHint) to disable this tab's button on a
+// new record: a tab with `saveBeforeAttach` saves the header itself, so it stays usable.
+AttachmentsTab.requiresSavedRecord = (props = {}) => !props.config?.saveBeforeAttach;
+AttachmentsTab.savedRecordHintKey = 'attachmentsSaveFirstHint';

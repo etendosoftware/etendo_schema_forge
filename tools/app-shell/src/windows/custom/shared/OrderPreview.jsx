@@ -11,38 +11,15 @@ import { downloadFromCachedAttachment } from './downloadFromCachedAttachment.js'
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
-import { fetchByCriteria, fetchChild, fetchById } from '@/components/related-documents';
+import { getSalesRelatedDocs, getPurchaseRelatedDocs } from '@/components/related-documents';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
-
-// ── SO related-documents helpers ─────────────────────────────────────────────
-
-const SO_SPECS = [
-  { key: 'shipment',      type: 'shipment',      fetch: (id, token, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', id, token, base) },
-  { key: 'sales-invoice', type: 'sales-invoice', fetch: (id, token, base) => fetchByCriteria('sales-invoice',  'header',        'salesOrder', id, token, base) },
-];
-
-async function fetchPaymentsIn(orderId, token, apiBaseUrl) {
-  const plans = await fetchChild('sales-order', 'paymentPlan', orderId, token, apiBaseUrl);
-  if (plans.length === 0) return [];
-  const detailResults = await Promise.all(
-    plans.map(plan => fetchChild('sales-order', 'paymentDetails', plan.id, token, apiBaseUrl))
-  );
-  const seen = new Set();
-  const paymentIds = detailResults.flat()
-    .filter(d => d.payment && !seen.has(d.payment))
-    .map(d => { seen.add(d.payment); return d.payment; });
-  if (paymentIds.length === 0) return [];
-  const results = await Promise.all(
-    paymentIds.map(id => fetchById('payment-in', 'finPayment', id, token, apiBaseUrl))
-  );
-  return results.filter(Boolean).map(doc => ({ type: 'payment-in', doc }));
-}
 
 // ── General tab content ───────────────────────────────────────────────────────
 
 function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, onSend, emailsRefreshSignal }) {
   const ui = useUI();
   const isSalesOrder = specName === 'sales-order';
+  const relatedDefinition = getSalesRelatedDocs(specName) ?? getPurchaseRelatedDocs(specName);
 
   const statusCode = order.documentStatus;
   const statusLabel = resolveStatusLabel(statusCode, null, ui);
@@ -66,6 +43,7 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
         statusLabel={statusLabel}
         invoicePercent={invoicePercent}
         deliveryPercent={deliveryPercent != null ? deliveryPercent : undefined}
+        deliveryLabel={isSalesOrder ? undefined : ui('previewCardReceivedPercent')}
         orgCurrencyCode={orgCurrencyCode}
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
@@ -77,13 +55,14 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
         apiBaseUrl={apiBaseUrl}
         refreshSignal={emailsRefreshSignal}
         data-testid="EmailsCard__90f59a" />
-      {isSalesOrder && (
+      {relatedDefinition && (
         <RelatedDocumentsCard
           documentId={order.id}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          specs={SO_SPECS}
-          fetchExtra={fetchPaymentsIn}
+          // ETP-5527 / ETP-5539 — same definition as the form's RelatedDocuments
+          // section, for both sales-order and purchase-order.
+          definition={relatedDefinition}
           data-testid="RelatedDocumentsCard__90f59a" />
       )}
     </div>

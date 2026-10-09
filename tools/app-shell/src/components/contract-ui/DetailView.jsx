@@ -6,49 +6,8 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
-import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
-import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
-
-const TAB_ICONS = {
-  'custom:attachments': AttachmentIcon,
-  'custom:sif': Shield,
-  'custom:pricing': PricingIcon,
-  'products': WarehouseProductsIcon,
-};
-
-function TabStripButton({
-  iconKey, label, count, isActive, onClick,
-  paddingY = 'py-2.5', showHoverLine = false, indicatorCls, tMenu, testId,
-}) {
-  const defaultCls = 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full';
-  return (
-    <button
-      onClick={onClick}
-      data-testid={testId}
-      className={[
-        `${showHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${paddingY} text-sm font-medium transition-colors relative`,
-        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-      ].join(' ')}
-    >
-      {React.createElement(TAB_ICONS[iconKey] ?? List, { className: 'h-4 w-4' })}
-      {tMenu(label)}
-      {count != null && (
-        <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground">
-          {count}
-        </span>
-      )}
-      {showHoverLine ? (
-        <span className={[
-          'absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-colors',
-          isActive ? 'bg-foreground' : 'bg-transparent group-hover:bg-muted-foreground/30',
-        ].join(' ')} />
-      ) : (
-        isActive && <span className={indicatorCls || defaultCls} />
-      )}
-    </button>
-  );
-}
+import { X, Check, Save, Printer, Mail, Trash2, Loader2, Lock, Undo2 } from 'lucide-react';
+import TabStripButton from './TabStripButton.jsx';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
@@ -119,7 +78,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 // wherever it happens.
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, buildCustomAddModalOnSaved, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, refreshHeaderCurrencyRate, withExchangeRateHeaderSync, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -269,28 +228,9 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
       // NEO wraps the saved record in {response:{data:[...]}}.
       const serverRow = updated?.response?.data?.[0] ?? null;
       if (serverRow) secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, serverRow);
-      // ETP-4029: editing rate/foreignAmount here also updates the invoice
-      // header's hidden eTGOCurrencyRate on the backend (reverse sync — see
-      // InvoiceExchangeRateHandler). Without this, the header's currency-rate
-      // picker keeps showing the stale value until a manual reload.
-      // refreshHeaderTotals is the same lightweight, non-disruptive header
-      // refresh already used after primary-line edits — it re-GETs the header
-      // and merges in only the fields the user hasn't touched, so any of the
-      // user's own in-progress unsaved header edits survive untouched.
-      //
-      // clearUserChangedKey('eTGOCurrencyRate') runs first, and ONLY for this
-      // one field: if the user had earlier edited the rate via the header's
-      // own CurrencyRatePicker in this same visit (already saved), that edit
-      // permanently marks eTGOCurrencyRate as "user changed" for the rest of
-      // the session (see useEntity.handleChange) — refreshHeaderTotals would
-      // then refuse to overwrite it, leaving the header stuck on the old
-      // value even though the tab's edit just persisted a newer one. This is
-      // a narrow, deliberate exception for this specific cross-surface sync;
-      // see the full rationale on clearUserChangedKey's definition.
-      if (st.key === 'exchangeRates' && hook?.selected?.id) {
-        hook.clearUserChangedKey('eTGOCurrencyRate');
-        hook.refreshHeaderTotals(hook.selected.id);
-      }
+      // ETP-4029: a rate edit here also moves the header's eTGOCurrencyRate on the backend;
+      // re-read it (rationale on refreshHeaderCurrencyRate). Add/delete: withExchangeRateHeaderSync.
+      if (st.key === EXCHANGE_RATES_TAB_KEY) refreshHeaderCurrencyRate(hook);
     } else {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
       const msg = await extractErrorMessage(res);
@@ -396,14 +336,14 @@ export function buildSecondaryLineHandlers(deps) {
       // Accounts/Movements/Statements bulk delete already use (see batchDelete.js).
       // Replaces the old two-independent-if (`recordsDeleted` + `recordsCouldNotBeDeleted`)
       // stacked-toast pattern this function predates.
-      const { succeeded, failed } = await runBatchDelete(rows, (row) => {
+      const { succeeded, failed, errors } = await runBatchDelete(rows, (row) => {
         const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
             || `${apiBaseUrl}/${st.key}/${row.id}`;
         return apiFetch(childUrl, {
           method: 'DELETE',
           token, baseUrl: '',
-        }).then(res => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        }).then(async res => { // reason + 4xx status travel for the toast (as useBulkRowDelete)
+          if (!res.ok) throw Object.assign(new Error(await extractErrorMessage(res)), { status: res.status });
           return row;
         });
       });
@@ -418,7 +358,7 @@ export function buildSecondaryLineHandlers(deps) {
       secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
       setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
 
-      toastBatchDeleteOutcome(ui, { succeeded, failed, total: rows.length });
+      toastBatchDeleteOutcome(ui, { succeeded, failed, errors, total: rows.length });
     } catch (err) {
       toast.error(err.message || ui('networkError'));
     } finally {
@@ -1062,7 +1002,7 @@ export function DetailCancelButton({ chromeless, label, onCancel }) {
   if (chromeless) return null;
   return (
     <Button
-      className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
+      className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[#121217] text-sm leading-6 font-medium hover:bg-[hsl(var(--muted))] transition-colors"
       data-testid="action-cancel"
       onClick={onCancel}
     >
@@ -1152,7 +1092,6 @@ export function DetailView({
   hideMoreMenu = false,
   hideMoreDetails = false,
   noHeaderBorder = false,
-  toolbarBorderBottom = false,
   compactSidebarPadding = false,
   whiteFormBackground = false,
   hideFormCard = false,
@@ -1175,7 +1114,7 @@ export function DetailView({
   // ETP-4933: opt-in for windows that render their own primary action next to Save
   // (the return windows put a Confirm button in the topbarRight slot). Save then takes
   // the secondary/outline look instead of competing as a second primary button.
-  hasExternalPrimaryAction = false,
+  hasExternalPrimaryAction = false, primarySave = false, // ETP-5600 primarySave: existing-record Save keeps the primary look (saveActions.jsx)
   statusFieldLabel = null,
   statusEnumLabels = null,
   salesTheme = false,
@@ -1196,12 +1135,10 @@ export function DetailView({
   sidebarClassName = 'w-96 shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5',
   linesLayout = 'inlineEditable',
   autoSaveOnBlur = false,
-  toolbarPaddingX = 'px-6',
   tabsBarPaddingX = 'px-6',
   formScrollPaddingX = null,
   contentOverflow = 'auto',
   formCardPadding = 'p-6',
-  toolbarButtonSize = 'sm',
   primaryTabsVariant = 'default',
   refetchAfterSave = false,
   secondaryTabsPaddingY = 'py-2.5',
@@ -1233,7 +1170,7 @@ export function DetailView({
   // `displayLogic`) are willing to trust as config-driven dimension-macro
   // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
   // above for why the global allowlist itself must never include 'product'.
-  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, initialData = null, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md). ETP-5332: initialData seeds a new record — see useEntity.
+  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, initialData = null, initialChildData = null, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md). ETP-5332: initialData seeds a new record — see useEntity. ETP-5654: initialChildData[tabKey] seeds a customAddModal.
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -1305,7 +1242,7 @@ export function DetailView({
   const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHooks = withHeaderRefreshOnChildWrite([secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4], hook);
+  const secondaryHooks = withExchangeRateHeaderSync(withHeaderRefreshOnChildWrite([secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4], hook), secondaryTabs, hook);
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
   // "From" currency for secondary-tab inline add-rows. The parent document's
   // currency is a read-only column on those tabs (e.g. exchange rates), so the
@@ -1588,8 +1525,8 @@ export function DetailView({
     () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui, draftMode, isDraftModeCompleted, dirtyFieldKeys: hook.dirtyHeaderFieldKeys, gateFields }),
     [hook.isValid, hook.missingRequiredFields, tField, ui, draftMode, isDraftModeCompleted, hook.dirtyHeaderFieldKeys, gateFields],
   );
-  const sqBtnSize = getSqBtnSize(toolbarButtonSize);
-  const saveBtnCls = getSaveBtnCls(toolbarButtonSize);
+  const sqBtnSize = getSqBtnSize();
+  const saveBtnCls = getSaveBtnCls();
   const [showPrint, setShowPrint] = useState(false);
   const [confirmProcess, setConfirmProcess] = useState(null);
   // ETP-4779: bumped whenever a menu action generates a derived document
@@ -2048,7 +1985,7 @@ export function DetailView({
   const handleAddLineClick = useCallback(async () => {
     if (isNew) {
       const saved = await hook.handleSave();
-      if (!saved?.id) return;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return; }
       hook.primeSaved?.(saved);
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
@@ -2070,7 +2007,7 @@ export function DetailView({
         setEditingChild(null);
       },
     });
-  }, [isNew, hook, navigate, windowName, addingLine]);
+  }, [isNew, hook, navigate, windowName, addingLine, ui]);
 
   // Save header first (if new → navigate with flag; if existing → save in place), then open import modal.
   // modalType ('order' | 'invoice') is forwarded in navigation state so the destination component
@@ -2079,7 +2016,7 @@ export function DetailView({
     if (isNew) {
       // Concurrent clicks share one create — see handleAddLineClick.
       const saved = await hook.handleSave();
-      if (!saved?.id) return false;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return false; }
       hook.primeSaved?.(saved);
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
@@ -2089,7 +2026,7 @@ export function DetailView({
     }
     await hook.handleSave();
     return true;
-  }, [isNew, hook, navigate, windowName]);
+  }, [isNew, hook, navigate, windowName, ui]);
 
   // ETP-5147: shared runSecondaryAddLineFlow saves-and-navigates for a brand-new
   // requireSavedRecord tab, otherwise gates on a dirty header before onOpen.
@@ -2191,7 +2128,7 @@ export function DetailView({
       // One-shot: clear the marker so a manual reload of /:id still fetches.
       navigate(location.pathname, {
         replace: true,
-        state: { ...location.state, justSaved: undefined },
+        state: buildPostCreateState({ locationState: location.state, initialChildData, secondaryTabs }),
       });
       return;
     }
@@ -2240,7 +2177,7 @@ export function DetailView({
   // — so this tab needs the same refetch whenever that total changes.
   useEffect(() => {
     if (!hook.selected?.id) return;
-    const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === 'exchangeRates');
+    const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === EXCHANGE_RATES_TAB_KEY);
     if (exchangeRatesIdx < 0) return;
     secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2679,7 +2616,7 @@ export function DetailView({
   const tabs = buildInitialTabs({
     secondaryTabs, secondaryHooks, panelCounts, DetailTable, detailLabel, detailEntity,
     hook, detailTabIndex, detailTabOrder, CustomLines, customLinesLabel, customLinesCount,
-    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities,
+    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities, isNew,
   });
 
   // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
@@ -2766,15 +2703,15 @@ export function DetailView({
       if (prev[ct.key] === count) return prev;
       return { ...prev, [ct.key]: count };
     });
-    // Save-header-first support for custom tabs (child rows need a persisted
-    // parent FK). The tab decides WHEN: onSaveHeader({ navigateAfter: false })
-    // just persists and returns the saved record (the tab keeps its in-progress
-    // form and posts the child row itself), then calls onGoToSavedRecord to land
-    // on the saved record with this tab re-opened. The default (navigateAfter
-    // true) mirrors handleAddLineClick: save, navigate, re-open the add form.
+    // Save-header-first support for custom tabs (child rows need a persisted parent FK). The tab
+    // decides WHEN: onSaveHeader({ navigateAfter: false }) persists and returns the saved record,
+    // or null once the user has already been told why — the tab must not toast again. The tab keeps
+    // its in-progress form, posts the child row itself, then calls onGoToSavedRecord to land on the
+    // saved record with this tab re-opened. The default (navigateAfter true) mirrors
+    // handleAddLineClick: save, navigate, re-open the add form.
     const saveHeaderForCustomTab = async ({ navigateAfter = true } = {}) => {
       const saved = await hook.handleSave();
-      if (!saved?.id) return null;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return null; }
       hook.primeSaved?.(saved);
       if (navigateAfter) {
         navigate(`/${windowName}/${saved.id}`, {
@@ -2785,7 +2722,7 @@ export function DetailView({
       return saved;
     };
     const goToSavedRecord = (saved, { reopenAdd = false, draft = null, error = null } = {}) => {
-      if (!saved?.id) return;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return; }
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
         state: {
@@ -2877,7 +2814,7 @@ export function DetailView({
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, saveBusy,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-    setShowProcessingModal, saveGate, hasExternalPrimaryAction, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
+    setShowProcessingModal, saveGate, hasExternalPrimaryAction, primarySave, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
@@ -2906,8 +2843,8 @@ export function DetailView({
       <div className={`flex-1 flex flex-col ${contentBg} rounded-tl-2xl overflow-hidden min-h-0`}>
         {/* Action bar: Cancel + status | actions + save */}
         {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels) : (
-        <div className={getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom)}>
-          <div className="flex items-center gap-3">
+        <div className={getLinesToolbarClassName()}>
+          <div className="flex items-center gap-2">
             <DetailCancelButton
               chromeless={chromeless}
               label={ui('cancel')}
@@ -2947,22 +2884,22 @@ export function DetailView({
               {documentPreview && !isNew && recordId && (
                 <button
                   onClick={() => setShowPrint(true)}
-                  className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors"
+                  className={`${sqBtnSize} flex items-center justify-center rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors`}
                   title={ui('sendPreview')}
                   data-testid="action-document-preview"
                 >
-                  <Mail className="h-[15px] w-[15px]" data-testid="Mail__fa3275" />
+                  <Mail className="h-5 w-5" data-testid="Mail__fa3275" />
                 </button>
               )}
               {/* Print document — shown when documentPreview is not provided */}
               {!documentPreview && !hidePrint && !isNew && recordId && !evaluateFieldCondition(hidePrintWhen, data) && (
                 <button
                   onClick={() => setShowPrint(true)}
-                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors`}
+                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors`}
                   title={ui('print')}
                   data-testid="action-document-print"
                 >
-                  <Printer className="h-4 w-4" data-testid="Printer__fa3275" />
+                  <Printer className="h-5 w-5" data-testid="Printer__fa3275" />
                 </button>
               )}
               {/* Delete record — hidden unconditionally when hideDeleteButton is set; otherwise shown for a deleteAction-backed delete at any lifecycle stage (except RPVOID), or when hideDeleteWhenComplete/isProcessed rules allow it */}
@@ -2985,7 +2922,7 @@ export function DetailView({
                   title={ui('delete')}
                   data-testid="action-delete"
                 >
-                  <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
+                  <Trash2 className="h-5 w-5" data-testid="Trash2__fa3275" />
                 </button>
               )}
               {/* Extra action buttons from page */}
@@ -3030,7 +2967,7 @@ export function DetailView({
                   return (
                     <Button
                       key={p.name}
-                      variant={isPrimary ? 'default' : 'outline'}
+                      variant={getProcessButtonVariant(p)}
                       size="default"
                       className={`${btnClass} ${saveBtnCls}`.trim()}
                       disabled={isRunning}
@@ -3061,7 +2998,7 @@ export function DetailView({
                         )
                         : (
                           <>
-                            {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[hsl(var(--destructive))]" data-testid="Undo2__fa3275" />}{p.style === 'positive' && <Check size={16} className="mr-1" data-testid="Check__process" />}
+                            {isDangerProcess(p) && <Undo2 size={16} className={getDangerIconClass(p)} data-testid="Undo2__fa3275" />}{p.style === 'positive' && <Check size={16} className="mr-1" data-testid="Check__process" />}
                             {tMenu(resolveProcessLabel(p, data))}
                           </>
                         )}
@@ -3138,7 +3075,7 @@ export function DetailView({
           () => setConfirmProcess(null),
           data,
           apiBaseUrl,
-          () => hook.fetchById?.(data?.id || recordId),
+          () => refreshRecordAfterMutation(hook, data?.id || recordId), // ETP-5547: force-refetch, not cached
         )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
@@ -3221,8 +3158,7 @@ export function DetailView({
                     if (!parentId) return;
                     // ETP-5378 — a line write can change the header column the grid shows.
                     hook.invalidateEntityCache?.();
-                    hook.fetchChildren?.(parentId, { force: true });
-                    hook.fetchById?.(parentId, { force: true });
+                    hook.fetchById?.(parentId, { force: true }); // forced: re-reads the lines too
                   },
                   onRefreshChildren: () => hook.fetchChildren?.(data?.id || recordId, { force: true }),
                 };
@@ -3308,7 +3244,7 @@ export function DetailView({
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
                               layout="horizontal"
-                              section="principal"
+                              section="principal" initialRows={2}
                               readOnly={windowReadOnly} navigate={navigate}
                               displayLogic={displayLogic}
                               api={api}
@@ -3396,6 +3332,7 @@ export function DetailView({
                                 indicatorCls={tabIndicatorCls}
                                 tMenu={tMenu}
                                 testId={`tab-${tab.key}`}
+                                disabledHint={tab.saveFirstHint}
                                 data-testid="TabStripButton__fa3275" />
                             );
                           })}
@@ -3436,8 +3373,7 @@ export function DetailView({
                                 apiBaseUrl={apiBaseUrl}
                                 onRefresh={() => {
                                   hook.invalidateEntityCache?.();
-                                  hook.fetchChildren?.(data?.id || recordId, { force: true });
-                                  hook.fetchById?.(data?.id || recordId, { force: true });
+                                  hook.fetchById?.(data?.id || recordId, { force: true }); // forced: re-reads the lines too
                                 }}
                                 onSave={handleImportClick}
                                 forceOpen={forceOpenImport}
@@ -3642,8 +3578,7 @@ export function DetailView({
                                         apiBaseUrl={apiBaseUrl}
                                         onRefresh={() => {
                                           hook.invalidateEntityCache?.();
-                                          hook.fetchChildren?.(data?.id || recordId, { force: true });
-                                          hook.fetchById?.(data?.id || recordId, { force: true });
+                                          hook.fetchById?.(data?.id || recordId, { force: true }); // forced: re-reads the lines too
                                         }}
                                         onSave={handleImportClick}
                                         forceOpen={forceOpenImport}
@@ -3853,7 +3788,7 @@ export function DetailView({
                               catalogs={catalogs}
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
-                              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
+                              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                               isNew={isNew}
                               onSave={async () => {
                                 const saved = await hook.handleSave(data);
@@ -4149,6 +4084,7 @@ export function DetailView({
                                 onClick={() => setActiveCustomBelowTab(idx)}
                                 tMenu={tMenu}
                                 testId={`tab-${customTabKey(ct)}`}
+                                disabledHint={getCustomTabSaveFirstHint(ct, isNew, ui)}
                                 data-testid="TabStripButton__fa3275" />
                             );
                           })}
@@ -4332,13 +4268,9 @@ export function DetailView({
             open={customModalState.key === st.key}
             onClose={() => setCustomModalState({ key: null, rowId: null })}
             onSaved={buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCustomModalState })}
-            onParentRefresh={() => {
-              if (!parentRecordId) return;
-              // ETP-5378 — the modal just wrote the parent; the cached list holds the old row.
-              hook.invalidateEntityCache?.();
-              hook.fetchById(parentRecordId, { force: true });
-            }}
+            onParentRefresh={buildCustomAddModalOnParentRefresh({ hook, parentRecordId })}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
+            initialValues={buildCustomAddModalSeed({ initialChildData, st, customModalState, secondaryHooks, idx })}
             bpId={parentRecordId}
             apiBase={apiBaseUrl}
             token={token}

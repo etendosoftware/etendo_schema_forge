@@ -10,15 +10,81 @@ const ZOOM_STEP = 0.15;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3.0;
 const A4_ASPECT = 842 / 595; // portrait height/width ratio
+const roundScale = (value) => Math.round(value * 100) / 100;
+// Default colours of the floating zoom bar (each one overridable through `controlColors`).
+const DEFAULT_CONTROL_COLORS = {
+  background: 'hsl(var(--card))',
+  border: 'hsl(var(--border-control))',
+  divider: 'hsl(var(--border-subtle))',
+  shadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
+  icon: 'hsl(var(--text-disabled))',
+  iconActive: 'hsl(var(--foreground))',
+};
+// Default gap around the sheet: 8px above and below, 16px split across both sides.
+const DEFAULT_PADDING = { top: 8, right: 8, bottom: 8, left: 8 };
 
-export default function PdfViewer({ url }) {
-  const ui = useUI();
-  const [numPages, setNumPages] = useState(0);
+/**
+ * Zoom state of a PdfViewer. The viewer owns one by default; a caller that draws its own
+ * controls (the file lightbox header, ETP-5518) creates it here and hands it over as `zoom`.
+ * Zoom steps are rounded so repeated steps stay exact (1 + 0.15 - 0.15 would otherwise be
+ * 0.9999…), ETP-5598.
+ */
+export function usePdfZoom({ initialFitMode = 'width' } = {}) {
   const [scale, setScale] = useState(1.0);
+  const [fitMode, setFitMode] = useState(initialFitMode); // 'width' | 'page'
+
+  const zoomIn = useCallback(() => setScale((s) => roundScale(Math.min(s + ZOOM_STEP, MAX_ZOOM))), []);
+  const zoomOut = useCallback(() => setScale((s) => roundScale(Math.max(s - ZOOM_STEP, MIN_ZOOM))), []);
+  const toggleFitMode = useCallback(() => {
+    setFitMode((m) => (m === 'width' ? 'page' : 'width'));
+    setScale(1.0);
+  }, []);
+  const fitToPage = useCallback(() => {
+    setFitMode('page');
+    setScale(1.0);
+  }, []);
+
+  return {
+    scale, fitMode, zoomIn, zoomOut, toggleFitMode, fitToPage,
+    canZoomIn: scale < MAX_ZOOM,
+    canZoomOut: scale > MIN_ZOOM,
+  };
+}
+
+/**
+ * Shared react-pdf viewer: pages fitted to the container width, with a floating zoom
+ * bar at the top right (zoom in / fit-to-page toggle / zoom out).
+ *
+ * Optional props (omitting them keeps the original behaviour for every caller):
+ * - zoom: external zoom state from `usePdfZoom`; omitted → internal (ETP-5518).
+ * - hideToolbar: drop the floating zoom group (the caller draws its own) (ETP-5518).
+ * - toolbarExtra: extra control appended to the floating zoom group (ETP-5518).
+ * - onExpand: when set, clicking the rendered pages calls it (ETP-5518).
+ * - onNumPages: reports the page count once the document loads (ETP-5518).
+ * - contentPadding: { top, right, bottom, left } in px — the space kept around the
+ *   sheet; the fitted width is the container width minus left + right. While not
+ *   zoomed in the x-axis is clipped (the sheet always fits), so a vertical scrollbar
+ *   can only eat into the empty right padding, never surface a horizontal scrollbar.
+ * - fitIcon: lucide icon component for the fit button (default `Maximize2`).
+ * - controlColors: partial { background, border, divider, shadow, icon, iconActive } CSS
+ *   colours for the zoom bar; missing keys keep the defaults above.
+ */
+export default function PdfViewer({
+  url, zoom, hideToolbar = false, toolbarExtra = null, onExpand, onNumPages,
+  contentPadding, fitIcon: FitIcon = Maximize2, controlColors,
+}) {
+  const colors = { ...DEFAULT_CONTROL_COLORS, ...controlColors };
+  const ui = useUI();
+  const ownZoom = usePdfZoom();
+  const { scale, fitMode, zoomIn, zoomOut, toggleFitMode } = zoom ?? ownZoom;
+  const [numPages, setNumPages] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);
   const [containerHeight, setContainerHeight] = useState(0);
+  // contentPadding only: the scroll box's client width. Its scrollbar gutter is
+  // `stable`, so this width does not change when zooming adds or removes overflow —
+  // reading it here cannot start the resize loop described below.
+  const [scrollClientWidth, setScrollClientWidth] = useState(0);
   const [pageAspect, setPageAspect] = useState(A4_ASPECT);
-  const [fitMode, setFitMode] = useState('width'); // 'width' | 'page'
   const [loadError, setLoadError] = useState(null);
   const containerRef = useRef(null);
   const scrollRef = useRef(null);
@@ -34,18 +100,14 @@ export default function PdfViewer({ url }) {
       for (const e of entries) {
         setContainerWidth(e.contentRect.width);
         setContainerHeight(e.contentRect.height);
+        setScrollClientWidth(scrollRef.current?.clientWidth ?? 0);
       }
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const zoomIn = useCallback(() => setScale((s) => Math.min(s + ZOOM_STEP, MAX_ZOOM)), []);
-  const zoomOut = useCallback(() => setScale((s) => Math.max(s - ZOOM_STEP, MIN_ZOOM)), []);
-  const toggleFitMode = useCallback(() => {
-    setFitMode((m) => (m === 'width' ? 'page' : 'width'));
-    setScale(1.0);
-  }, []);
+  const fitActive = fitMode === 'page';
 
   const handlePageLoad = useCallback((page) => {
     const w = page?.originalWidth ?? page?.width;
@@ -53,8 +115,15 @@ export default function PdfViewer({ url }) {
     if (w > 0 && h > 0) setPageAspect(h / w);
   }, []);
 
-  const widthFit = containerWidth > 32 ? containerWidth - 16 : 0;
-  const heightFit = containerHeight > 32 ? (containerHeight - 16) / pageAspect : 0;
+  const padding = contentPadding ?? DEFAULT_PADDING;
+  const horizontalPadding = padding.left + padding.right;
+  // With contentPadding the sheet is sized against the scroll box's client width, so a
+  // classic (non-overlay) scrollbar does not eat into the right gap: left and right
+  // gaps stay equal. jsdom reports 0, hence the container-width fallback.
+  const fitBoxWidth = contentPadding && scrollClientWidth > 0 ? scrollClientWidth : containerWidth;
+  const widthFit = fitBoxWidth > 2 * horizontalPadding ? fitBoxWidth - horizontalPadding : 0;
+  const availableHeight = containerHeight - padding.top - padding.bottom;
+  const heightFit = availableHeight > 16 ? availableHeight / pageAspect : 0;
   const baseWidth = fitMode === 'page' && heightFit > 0
     ? Math.min(widthFit, heightFit)
     : widthFit;
@@ -63,11 +132,12 @@ export default function PdfViewer({ url }) {
   return (
     <div ref={containerRef} className="relative w-full h-full flex flex-col">
       {/* Button Group — top-right floating */}
-      <div
-        className="absolute top-2 right-2 z-10 flex items-stretch bg-card rounded-lg overflow-hidden"
+      {!hideToolbar && (<div
+        className="absolute top-2 right-2 z-10 flex items-stretch rounded-lg overflow-hidden"
         style={{
-          border: '1px solid hsl(var(--border-control))',
-          boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
+          background: colors.background,
+          border: `1px solid ${colors.border}`,
+          boxShadow: colors.shadow,
         }}
       >
         <button
@@ -77,21 +147,22 @@ export default function PdfViewer({ url }) {
           className="w-12 h-[38px] flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label={ui('pdfViewerZoomIn')}
         >
-          <ZoomIn size={20} style={{ color: 'hsl(var(--text-disabled))' }} data-testid="ZoomIn__fca188" />
+          <ZoomIn size={20} style={{ color: colors.icon }} data-testid="ZoomIn__fca188" />
         </button>
-        <div style={{ width: 1, backgroundColor: 'hsl(var(--border-subtle))' }} />
+        <div style={{ width: 1, backgroundColor: colors.divider }} />
         <button
           type="button"
           onClick={toggleFitMode}
+          aria-pressed={fitActive}
           className="w-12 h-[38px] flex items-center justify-center hover:bg-muted transition-colors"
           aria-label={ui('pdfViewerFitToPage')}
         >
-          <Maximize2
+          <FitIcon
             size={20}
-            style={{ color: fitMode === 'page' ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))' }}
+            style={{ color: fitActive ? colors.iconActive : colors.icon }}
             data-testid="Maximize2__fca188" />
         </button>
-        <div style={{ width: 1, backgroundColor: 'hsl(var(--border-subtle))' }} />
+        <div style={{ width: 1, backgroundColor: colors.divider }} />
         <button
           type="button"
           onClick={zoomOut}
@@ -99,15 +170,30 @@ export default function PdfViewer({ url }) {
           className="w-12 h-[38px] flex items-center justify-center hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label={ui('pdfViewerZoomOut')}
         >
-          <ZoomOut size={20} style={{ color: 'hsl(var(--text-disabled))' }} data-testid="ZoomOut__fca188" />
+          <ZoomOut size={20} style={{ color: colors.icon }} data-testid="ZoomOut__fca188" />
         </button>
-      </div>
+        {toolbarExtra && (
+          <>
+            <div style={{ width: 1, backgroundColor: colors.divider }} />
+            {toolbarExtra}
+          </>
+        )}
+      </div>)}
       {/* PDF scroll container */}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto">
-        <div className="w-fit mx-auto py-2">
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-auto"
+        style={contentPadding ? { scrollbarGutter: 'stable', ...(scale <= 1 ? { overflowX: 'hidden' } : {}) } : undefined}
+      >
+        <div
+          className="relative w-fit mx-auto"
+          style={contentPadding
+            ? { padding: `${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px` }
+            : { paddingTop: padding.top, paddingBottom: padding.bottom }}
+        >
           <Document
             file={url}
-            onLoadSuccess={({ numPages }) => { setNumPages(numPages); setLoadError(null); }}
+            onLoadSuccess={({ numPages }) => { setNumPages(numPages); setLoadError(null); onNumPages?.(numPages); }}
             onLoadError={(err) => setLoadError(err?.message || 'Error')}
             loading={(
               <div className="flex items-center justify-center gap-2 text-muted-foreground p-12">
@@ -135,6 +221,18 @@ export default function PdfViewer({ url }) {
                 data-testid="Page__fca188" />
             ))}
           </Document>
+          {/* A transparent button over the pages rather than a click handler on them: it is
+              keyboard-reachable and scrolls with the document. */}
+          {onExpand && numPages > 0 && (
+            <button
+              type="button"
+              onClick={onExpand}
+              className="absolute inset-0 cursor-zoom-in"
+              aria-label={ui('fileViewerExpand')}
+              title={ui('fileViewerExpand')}
+              data-testid="file-viewer-expand"
+            />
+          )}
         </div>
       </div>
     </div>

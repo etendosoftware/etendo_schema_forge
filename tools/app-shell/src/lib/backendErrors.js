@@ -87,6 +87,24 @@ const BACKEND_ERROR_MAP = {
     'backendError.conversionRateMustDifferFromOne',
   'Invalid conversion rate format': 'backendError.conversionRateInvalidFormat',
   'Conversion rate must be greater than zero': 'backendError.conversionRateNotPositive',
+  // ETP-5657 — reconcileGroup with the bank-rate conversion fields (`actualPayment`,
+  // `conversionRate`, `convertedAmount`), refused by com.etendoerp.go
+  // ReconciliationConversionSupport. Plain English literals, no AD_MESSAGE: the Java text is the
+  // wire contract. The modal pre-checks the amount bounds, so these are mostly reached by a stale
+  // selection or an MCP client; a typed rate reuses the conversion-rate messages above. The modal
+  // always sends `actualPayment`, so the "required" refusal is mapped for MCP parity only.
+  'actualPayment is required when conversionRate or convertedAmount is sent':
+    'backendError.reconcileConversionActualRequired',
+  'Conversion fields require all selected invoices to share one currency different from the account currency':
+    'backendError.reconcileConversionCurrencyMismatch',
+  'Conversion fields cannot be combined with existing transactions or a write-off':
+    'backendError.reconcileConversionNotCombinable',
+  'The amount to pay must be greater than zero and not exceed the outstanding amount of the selected invoices':
+    'backendError.reconcileConversionActualOutOfRange',
+  'The converted amount must be greater than zero and not exceed the statement line amount':
+    'backendError.reconcileConversionConvertedOutOfRange',
+  'The converted amount is too small to allocate across the selected invoices':
+    'backendError.reconcileConversionTooSmall',
   'Country needed in an IBAN account.': 'backendError.countryIban',
   // ETP-4896 (FinancialAccountCountrySupport / FinancialAccountHandler). Same meaning as the DB's
   // 'Country needed in an IBAN account.' above, so it reuses that key rather than adding a second
@@ -262,11 +280,12 @@ const BACKEND_ERROR_MAP = {
   // popup's price-list picker was left empty (ETP-4942).
   'No Price List could be resolved for this invoice: select a tariff or configure a default Price List for the Business Partner':
     'backendError.shipmentPriceListRequired',
-  // Exchange Rates tab (ConversionRateDocLockObserver, com.smf.currency.conversionrate
-  // AD_MESSAGE `SMFCR_CannotModifyRateNonDraft`) — that module ships no es_ES
-  // AD_MESSAGE_TRL, so OBException falls back to the raw English MSGTEXT (ETP-4837).
-  'Cannot modify document conversion rate when the invoice is not in draft status.':
-    'backendError.conversionRateNotDraft',
+  // Exchange Rates tab (ConversionRateDocDeleteGuardObserver, com.smf.currency.conversionrate —
+  // ETP-5657): a completed invoice's rate may be edited but not deleted. AD_MESSAGE
+  // `SMFCR_CannotDeleteRateCompleted`; the module ships no es_ES AD_MESSAGE_TRL, so the English
+  // MSGTEXT reaches the toast and is translated here.
+  'The exchange rate of a completed invoice cannot be deleted. Edit it instead.':
+    'backendError.conversionRateDeleteCompleted',
   // Cash close (CashCloseSupport, com.etendoerp.go — ETP-4795) — hardcoded English literals with
   // no AD_Message involvement, so they reach the toast untranslated whatever the session locale.
   'The close date cannot be in the future.': 'backendError.cashCloseDateInFuture',
@@ -319,6 +338,20 @@ const BACKEND_ERROR_MAP = {
   // this one reaches the toast untranslated regardless of session locale.
   'This user is the tenant owner — only the owner can modify this account':
     'backendError.cannotModifyOwnerAccount',
+  // UserRoleAssignmentHandler#rejectEmailChange (com.etendoerp.go, ETP-5194) — hardcoded English
+  // literals. The first is the refusal outside the email-correction window (the form already
+  // locks the field there, so it is reached only from a stale form or an API call); the other two
+  // reject a correction that clears the address or does not look like one.
+  ...sameKeyEntries('backendError.userEmailLocked',
+    "Field 'email' can only be changed while the user's invitation has expired or could not be delivered"),
+  ...sameKeyEntries('backendError.userEmailRequired', "Field 'email' is required"),
+  ...sameKeyEntries('backendError.userEmailNotAGoUser',
+    "This user was never invited to Etendo (for example, a business partner contact person): edit its email through spec 'contacts', entity 'contact'"),
+  ...sameKeyEntries('backendError.userEmailInvalid', 'Invalid email format'),
+  // ContactHandler (com.etendoerp.go, ETP-5194) — an email change on a business partner's contact
+  // person that is actually an Etendo user (owner, or invited) must go through the Users window.
+  ...sameKeyEntries('backendError.contactEmailIsGoUser',
+    "This contact is an Etendo user: change its email through spec 'user', entity 'user'"),
   // NeoRequestRouter.java:132,191 (com.etendoerp.go) — hardcoded English literal sent on every
   // 403 for a spec/window/report the current role cannot access, regardless of session locale
   // (ETP-5205). Read-only-role users hit this whenever a control that should have been disabled
@@ -365,6 +398,10 @@ const BACKEND_ERROR_KEY_MAP = {
   // Consumption pre-check (ETP-5445). Mapped to
   // the same generic retry-later copy as the other two costing messages in BACKEND_ERROR_MAP.
   NotCalculatedCost: 'backendError.costNotCalculated',
+  // ETP-5529 — core `OtherPostingProcessActive` ("This record is being posted by another
+  // process"), the STATUS_DocumentLocked message DocumentPostingService names in `messageKeys`
+  // when another posting process holds the record (or AcctServer cannot take its lock).
+  OtherPostingProcessActive: 'backendError.recordBeingPosted',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -717,7 +754,7 @@ function matchCashCloseLineInClosedPeriod(msg) {
 // `PSD2_IBANAutoFillFailed` AD_MESSAGE ("IBAN could not be set automatically (%0). Please enter it
 // manually in the Financial Account."), shown when the connected bank account's own IBAN implies a
 // country that conflicts with the Financial Account's configured country (e.g. a Spain-registered
-// account linked to a German IBAN). Like `SMFCR_CannotModifyRateNonDraft` above, the owning module
+// account linked to a German IBAN). The owning module
 // (`com.etendoerp.psd2`) ships no real es_ES AD_MESSAGE_TRL for its ~108 messages — the es_ES row is
 // a verbatim copy of the English text — so Core resolves the same English string regardless of
 // session locale. `%0` is substituted server-side with the IBAN before this reaches the frontend, so

@@ -81,9 +81,15 @@ import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
  * the parent's Export button can decide what to export: the filtered statement
  * headers (no selection) or the lines of the selected statement(s).
  *
- * @param {{ account: object }} props
+ * `windowReadOnly` (ETP-5457) is the window's "read-only" access tier (ETP-5205). Under it the tab
+ * is browse-only: the import / manual-create / bank-sync actions, the per-row edit / delete / kebab,
+ * the selection checkboxes and the bulk-delete bar are hidden, the three dialogs stay shut, and the
+ * mutating handlers return early. Filters, search, sort, refresh, row expansion, the lines sub-view
+ * and the parent's CSV export (which, with no selection, exports the filtered headers) keep working.
+ *
+ * @param {{ account: object, windowReadOnly?: boolean }} props
  */
-export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({ account }, ref) {
+export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({ account, windowReadOnly = false, onSynced }, ref) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   // The `name` sort accessor formats a periodFrom–periodTo range for statements with no name,
@@ -199,11 +205,13 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // "Sync now"). The bridge mirrors Classic's "Get Bank Statement": it returns a status
   // (Success/WARNING/ERROR) plus the localized process message rather than throwing.
   const handleSyncStatements = async () => {
-    if (!accountId || syncing) return;
+    if (windowReadOnly || !accountId || syncing) return;
     setSyncing(true);
     try {
       const res = await sync(accountId);
       refreshStatements();
+      // ETP-5582: a finished sync moves the account's lastSyncDate (detail header label).
+      onSynced?.();
       // ETP-4891 follow-up: com.etendoerp.psd2 ships no real es_ES translation for these
       // AD_MESSAGEs (see backendErrors.js), so Core always resolves the English text — route it
       // through the same frontend translation map every other untranslated backend message uses.
@@ -250,7 +258,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
 
   const runConfirm = async () => {
     const { variant, statement } = confirm;
-    if (!statement) return;
+    if (windowReadOnly || !statement) return;
     const cfg = CONFIRM_ACTIONS[variant] ?? CONFIRM_ACTIONS.process;
     try {
       await cfg.run(statement.id);
@@ -360,13 +368,16 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* ETP-4972 — BulkDeleteSelectionBar now portals to a floating,
           viewport-fixed pill via SelectionToolbar; it no longer occupies a
-          slot in this flow. */}
-      <BulkDeleteSelectionBar
-        count={selectedIds.size}
-        deleting={bulkDeleting}
-        onCancel={clearSelection}
-        onDelete={() => requestBatchDelete(Array.from(selectedIds))}
-        data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
+          slot in this flow. ETP-5457 — not rendered at all under the read-only
+          tier (its only action is a delete). */}
+      {!windowReadOnly && (
+        <BulkDeleteSelectionBar
+          count={selectedIds.size}
+          deleting={bulkDeleting}
+          onCancel={clearSelection}
+          onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+          data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
+      )}
       <StatementsToolbar
         search={search}
         onSearchChange={setSearch}
@@ -383,6 +394,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         onSyncClick={handleSyncStatements}
         syncing={syncing}
         onRefresh={refreshStatements}
+        windowReadOnly={windowReadOnly}
         sortControl={(
           <ListSortPopover
             columns={sortColumns}
@@ -412,18 +424,21 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
           onSelectionChange={handleSelectionChange}
           linesRefreshToken={linesRefreshToken}
           bankConnected={bankConnectionSynced}
+          windowReadOnly={windowReadOnly}
           data-testid="StatementsTable__6f147a" />
       </div>
-      {batchDeleteDialog}
+      {/* ETP-5457 — every dialog below leads to a write, so under the read-only tier they are
+          kept shut regardless of their own open state (same pattern as the host's modals). */}
+      {windowReadOnly ? null : batchDeleteDialog}
       <ImportStatementModal
-        open={importOpen}
+        open={importOpen && !windowReadOnly}
         accountId={accountId}
         accountCurrency={currency}
         onClose={() => setImportOpen(false)}
         onSuccess={refreshStatements}
         data-testid="ImportStatementModal__6f147a" />
       <ManualStatementModal
-        open={manualOpen || !!editingStatement}
+        open={(manualOpen || !!editingStatement) && !windowReadOnly}
         accountId={accountId}
         accountCurrency={currency}
         statement={editingStatement}
@@ -431,7 +446,8 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         onSuccess={refreshStatements}
         data-testid="ManualStatementModal__6f147a" />
       <StatementConfirmDialog
-        variant={confirm.variant}
+        // The dialog derives `open` from variant + statement; a null variant keeps it shut.
+        variant={windowReadOnly ? null : confirm.variant}
         statement={confirm.statement}
         busy={busy}
         onConfirm={runConfirm}

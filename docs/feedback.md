@@ -947,6 +947,11 @@ window-scoped task — would touch every AD-generated window). `fiscal-models`' 
 (`useSupportChat().actions.open()` + `setTab('ayuda')`) instead of replicating the dead
 `onPageHelp` prop. Sales/Purchase Invoice and every other window still show the same dead item today.
 
+**Update (ETP-5584):** `fiscal-models` now publishes a real `onPageHelp` through `useSetPageMeta`
+(`FmListPage.jsx`, `FmDetailChrome.jsx`), opening the same support-chat "Ayuda" tab, and its in-page
+`MoreOptionsMenu` was deleted. That is the pattern to copy for the app-wide fix. The generic
+`TopBar` no-op default, and with it the dead item on every other window, is still open.
+
 **Lesson:** before wiring a new window's kebab menu to "the same items window X already has," verify
 each item is actually functional in window X, not just visually present — a prop can render a
 correctly-styled, correctly-labelled menu entry while being permanently disconnected from any
@@ -2865,6 +2870,32 @@ developer-only debug/mock profile override the same way. Regression test added t
 scheme.~~ **Retracted (2026-09-23):** the 401 came from a scripted `page.request` call, not the app;
 promoting/demoting through the real UI works under cookie sessions. Not a bug.
 
+**One more instance found later (2026-10-05, ETP-5546): `fiscal-models`.** Same exact gap —
+`tools/app-shell/src/windows/custom/fiscal-models/index.jsx` was a bare
+`export { default } from './FiscalModelsPage'` with zero `useWindowAccess`/`WindowAccessGuard`
+wiring, so a role without the "Modelos Fiscales" grant (the Tax Report window,
+`3E8FEA1EA7404D979306C9EE7FD2E7E8`, per the ETP-5116 window-access-proxy convention) rendered the
+full page on direct navigation to `/fiscal-models`. This case was worse than
+`organization`/`fiscal-config`/`fiscal-monitor` above: on the backend, `AbstractFiscalHandler`
+(every `/fiscal303/*`/`/fiscal349/*` sub-route) and the separate
+`fiscal-models-catalog` endpoint had **no access check of their own either** — so the missing
+frontend guard was not merely showing an ugly raw error, as in the three cases above, the API
+itself answered `200` to any authenticated role. Fixed on both sides: frontend guard wired
+identically (`FISCAL_MODELS_WINDOW_ID` + `useWindowAccess`/`WindowAccessGuard` in `index.jsx`),
+plus two new backend gates (`AbstractFiscalHandler.handle()`'s single entry point, and
+`NeoBuiltInEndpointHandler.handleFiscalModelsCatalogEndpoint` separately) both calling
+`NeoAccessHelper.hasWindowAccess(TAX_REPORT_WINDOW_ID, method)`. See
+`docs/generated-custom-windows/fiscal-models.md` → "Access control (ETP-5546)" and
+`com.etendoerp.go`'s `docs/neo-headless.md` §7 for the full writeup.
+
+**Extended lesson:** this ETP-5395 sweep covered the custom windows known at the time; it was not
+exhaustive, and a missing frontend guard can mask (or be masked by) a missing *backend* gate on the
+same window — fixing only the visible UI symptom without checking whether the API itself enforces
+the grant leaves the real vulnerability (any role, any client, direct API call) wide open even
+after the UI "looks" gated. When auditing one custom window for this gate, grep sibling custom
+windows for the same `export { default } from` bare re-export shape AND independently verify the
+backend entry point(s) it calls — don't assume either side implies the other.
+
 ---
 
 ## Post/Unpost menuActions Declared Without Backend Routing or Field (ETP-5436)
@@ -2966,3 +2997,140 @@ attempts are capped. Regression tests: `PersonalRoleOwnerIntegrationTest` (real 
 **Lesson:** a display name is not an identity. When a row must be found again later by "who it belongs to",
 store that link when the row is created. "Nobody else is assigned to it" is not proof it is yours: deletion leaves
 the same state behind.
+
+---
+
+## [2026-10-02] ETP-5579 — Country names served in English to a Spanish UI (two sites left, flagged not fixed)
+
+**Component:** `com.etendoerp.go` — `FinancialAccountsPageHandler.ACCOUNTS_SQL`,
+`FinancialAccountHandler.applyOrgCountryDefault` and `FinancialAccountCountrySupport.buildIbanRules`
+(fixed); `BusinessPartnerHandler.PRIMARY_LOCATIONS_SQL` and
+`OnboardingCompanyDataService.formatAddress` (not fixed).
+
+**Symptom:** the Cuentas list País column, the Edit Account modal and the New Account wizard's
+Country chip showed "Spain" to an es_ES user. `c_country.name` holds only the base (English) name;
+the translated name lives in `c_country_trl`.
+
+**Fix (ETP-5579):**
+
+- `ACCOUNTS_SQL` LEFT JOINs `c_country_trl` on the GO request language (`Accept-Language` →
+  `OBContext` language, applied by `NeoAuthenticator`) and returns `COALESCE(ctryt.name, ctry.name)`,
+  so an untranslated country falls back to the base name. Same join as `TaxReportHandler`
+  (ETP-5013). See `docs/generated-custom-windows/financial-accounts-page.md` → "Backend contract".
+- `applyOrgCountryDefault` (`defaults.country$_identifier`) and `buildIbanRules`
+  (`countryIbanRules[].name`) switched from `getName()` to `getIdentifier()`, which translates
+  through `C_Country_Trl` in the OBContext language (same reasoning as ETP-5022). `buildIbanRules`
+  was the real source of the New Account chip text (`AccountFormStep.jsx`,
+  `displayValue={selectedCountry?.name}`), so fixing the defaults identifier alone would not have
+  changed what the user sees.
+- `IBAN_RULES_CACHE` is now keyed per language (`"countryIbanRules:" + NeoLanguage.currentCode()`,
+  bounded, 24h TTL). It used to be one JVM-wide entry: once `name` became translated, the first
+  language to fill it would have been served to every user for 24h.
+
+**Same issue, out of scope, still open:**
+
+1. `BusinessPartnerHandler.PRIMARY_LOCATIONS_SQL` selects `cty.name AS country` with no
+   `c_country_trl` join — contact primary addresses show the English country name.
+2. `OnboardingCompanyDataService.formatAddress` appends `location.getCountry().getName()` — the
+   onboarding company address shows the English country name.
+
+The country name interpolated into the IBAN validation messages
+(`FinancialAccountCountrySupport.validateIbanCountryPair`) is a separate i18n gap, recorded in
+`docs/generated-custom-windows/financial-account.md` → "Not implemented yet". Seed data:
+LT's es_ES `c_country_trl` name is "Lithuania" instead of "Lituania".
+
+**Lesson:** a `*.name` read from a translatable reference table (`c_country`, `c_uom`,
+`ad_ref_list`, …) is the base-language value. Anything a user reads needs the `_trl` join (SQL) or
+`getIdentifier()` (DAL) on the request language with a base-name fallback. Two follow-ups when
+fixing one: grep for the sibling reads of the same table, and trace the label the UI actually
+renders back to its source — here it was a catalog, not the field the bug was reported on. And a
+cache in front of translated text must include the language in its key.
+
+## [2026-10-05] ETP-5593 — A debounced URL write dropped a filter picked during the pause
+
+**Component:** `artifacts/chart-of-accounts/custom/chartOfAccountsFilters.js`
+(`useChartOfAccountsFilters`), written by the search box of `ChartOfAccountsToolbarSlot.jsx`.
+
+**Symptom:** in Plan de cuentas, typing in Buscar and picking a Tipo de cuenta within the 250 ms
+search debounce left the URL, and the tree, with the search but without the account type. The
+mocked E2E for the same flow was flaky.
+
+**Root cause:** the hook wrote with react-router's functional updater,
+`setSearchParams((prev) => …)`. That `prev` is the params of the render that created the
+callback, not the live URL. The debounce timer held a callback from before the type was picked,
+so its write rebuilt the URL from the old params and removed `accountType`.
+
+**Fix:** writes start from `latestParamsRef.current`, a ref updated with the params on every
+render. The search box also flushes a pending write on blur, so pressing Share right after typing
+copies a URL that already has `q`. Regression tests: `AccountTreeView.vitest.jsx` ("a pending
+search write keeps an account type picked during the pause", "leaving the search box writes the
+pending search immediately") and `chart-of-accounts-tree.mocked.spec.js` ("a search typed just
+before picking a type keeps both filters").
+
+**Lesson:** a URL write that runs later (a timer, a debounce, an awaited request) must not trust
+the router's functional `prev`. Read the latest params from a ref. The rule is also recorded in
+`docs/ui-customization.md` → `Table.ToolbarQuickFilter`.
+
+## [2026-10-05] ETP-5611 — Manual journals: four platform gaps found while fixing the window
+
+Found while fixing `simple-g-l-journal` (window guide: `docs/generated-custom-windows/simple-g-l-journal.md`
+→ "Manual journal fixes — ETP-5611"). Two are fixed generically, two are only worked around.
+
+**Fixed generically:**
+
+1. **Child-tab lists came back in random order.** With no `_sortBy`, `DefaultJsonDataService`
+   orders by `id` (UUID), and NEO never read the AD tab's `HQL_OrderBy_Clause`. Every lines tab
+   (orders, invoices, shipments, journals…) jumped after a save. NEO now applies a plain-property
+   tab order-by when no sort is given, on both REST and MCP — `com.etendoerp.go/docs/neo-headless.md`
+   §6.1.
+2. **Classic processes that read their action from the HTTP request.** `FIN_AddPaymentFromJournal`
+   reads `inpdocaction`, falling back to `CO`, so a NEO Reactivate silently completed the journal
+   again. Pattern documented in `docs/neo-headless-extensibility.md` (classic-process intercept).
+
+**Worked around, still open:**
+
+3. **A pre-hook's copy into a hidden field is dropped on PATCH/PUT.** `filterWriteRequest` runs
+   after the pre-hook and only `accountingDate` has a carve-out. The body-only `accountingDate →
+   documentDate` mirror passed its unit tests and failed on the first live PATCH; the handler now
+   writes the record instead. See `docs/neo-headless-extensibility.md` (date-mirror section).
+4. **`hideDeleteWhenComplete` does not reach the generated list.** The generator only forwards
+   `window.rowQuickActions` to `ListView`, so the list-row Delete stays visible on completed
+   documents. Worked around per window with `rowQuickActions.actions.delete.visibleWhen`;
+   forwarding the flag belongs in `schema_forge_core`'s generator (follow-up).
+
+**Also observed, not touched:** deleting a processed record answers `500 "Document
+posted/processed"` instead of a 4xx; `e2e/tests/flows/finance/reconciliation-difference.mocked.spec.js`
+is flaky on `develop` too (2/5 failures with the ETP-5611 UI files reverted).
+
+**Lesson:** for any pre-hook that writes to the request body, test the PATCH path against a live
+backend, not only POST — the NEO update filter is invisible to handler unit tests.
+
+---
+
+## [2026-10-05] ETP-5597 — Modelo 303 rectificativa with box 111 ≠ 0 passes the Go bank-data gate but Classic rejects it (known gap, not fixed)
+
+**Component:** `tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js`
+(bank-block requiredness) vs. Classic `org.openbravo.module.aeat303.es`,
+`AEAT303Report2024#checkBox111MandatoryParams` / `#checkIsDeclarationRMandatoryParams`.
+
+**Symptom:** a Modelo 303 autoliquidación rectificativa with a non-zero box 111 and marca SEPA
+`1` (Cuenta España) or `2` (Unión Europea SEPA) passes every Go pre-flight check with only marca
+SEPA + IBAN filled, but "Generar fichero 303" (and the AEAT telematic submission, which builds the
+same file) fails with Classic's `@AEAT303_section_bank_empty@` — "Debe rellenar los datos de la
+sección Devolución."
+
+**Root cause:** ETP-5597 made bank-block requiredness depend on the marca SEPA alone (marca 1/2 →
+marca SEPA + IBAN; marca 3 → every bank field). Classic still requires SWIFT-BIC, Banco, Dirección,
+Ciudad and Código País for **any** rectificativa with box 111 ≠ 0, whatever the marca. The two
+layers now disagree on that one case.
+
+**Decision:** deliberately not changed (2026-10-05). Classic is not patched under ETP-5597; the
+functional rule stands on the Go side. Workaround: for such a rectificativa, fill SWIFT-BIC and the
+Banco/Dirección/Ciudad/País fields (switching to marca 3 shows them).
+
+**Lesson:** when the Go UI relaxes a requiredness rule whose final validator lives in Classic, check
+the Classic writer's own mandatory-parameter checks in the same change — otherwise the UI gate
+passes and the failure only surfaces at file generation.
+
+**Reference:** `docs/generated-custom-windows/fiscal-models.md` → "Tipo de declaración vs. casilla
+69, bank block requiredness and boxes 70/109 (ETP-5597)", part 2.
