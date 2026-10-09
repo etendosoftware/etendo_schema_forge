@@ -150,7 +150,6 @@
           "searchable": true,
           "lookup": true,
           "lookupDrawer": "product-stock",
-          "lookupTitle": "Product + Warehouse",
           "onSelectMappings": [
             {
               "from": "_aux._LOC",

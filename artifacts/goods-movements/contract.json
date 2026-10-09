@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.23.0",
   "generatedAt": "2026-07-29T14:51:09.206Z",
-  "updatedAt": "2026-10-07T11:18:33.870Z",
-  "checksum": "d97ca0425f5303dc",
+  "updatedAt": "2026-10-09T16:43:30.475Z",
+  "checksum": "a60311221a333a87",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -429,7 +429,6 @@
             "inputMode": "search",
             "lookup": true,
             "lookupDrawer": "product-stock",
-            "lookupTitle": "Product",
             "onSelectMappings": [
               {
                 "from": "_aux._LOC",

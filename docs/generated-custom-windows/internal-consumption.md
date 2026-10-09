@@ -170,4 +170,7 @@ controls the appearance.
   edit already did.
 - `onSelectMappings` (the storage-bin fill from `_aux._LOC`) is still applied caller-side by the grid only
   (`DataTable.applyOnSelectMappings`), so the form behaves as before for that mapping.
-- No `decisions.json` change for this window.
+- `decisions.json`: only the `lookupTitle` removal below.
+- **Drawer title translated.** The product field no longer declares `lookupTitle`, which was a literal English string
+  ("Product" / "Product + Warehouse") that made the drawer search read "Buscar Product..." in Spanish. The title and the
+  placeholder now come from the field's translated label ("Buscar Producto...").
