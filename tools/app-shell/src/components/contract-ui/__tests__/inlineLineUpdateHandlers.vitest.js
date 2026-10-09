@@ -26,7 +26,9 @@ vi.mock('sonner', () => ({
 }));
 
 import { toast } from 'sonner';
-import { buildCompletedLineFieldUpdateHandler } from '../inlineLineUpdateHandlers.js';
+import {
+  buildCompletedLineFieldUpdateHandler, buildLineRowUpdateHandler, resolveCompletedLineFieldGate,
+} from '../inlineLineUpdateHandlers.js';
 // Response doubles the REAL core apiFetch can harvest `updated` from; importing the module also
 // resets the per-record version cache and write chains before every test.
 import { neoResponse, writeCalls, bodyOf } from '@/test/realApiFetch.js';
@@ -93,6 +95,73 @@ describe('buildCompletedLineFieldUpdateHandler — factory gating', () => {
 
   it('returns an async handler when a gate is given', () => {
     expect(typeof buildCompletedLineFieldUpdateHandler(makeArgs())).toBe('function');
+  });
+});
+
+// The two selectors DetailView delegates to (moved out of it for its cognitive-complexity
+// budget): which gate the inline grid gets, and which `onUpdateRow` handler it gets.
+describe('resolveCompletedLineFieldGate', () => {
+  const DRAFT_MODE = { editableLineFieldsWhenCompleted: ['project', 'costcenter'] };
+  const LINE_FIELDS = [{ key: 'project', column: 'C_Project_ID' }, { key: 'quantity' }];
+  const gateFor = (overrides = {}) => resolveCompletedLineFieldGate({
+    draftMode: DRAFT_MODE, lockWhenProcessed: true, headerRecord: { processed: 'Y' },
+    windowReadOnly: false, lineFields: LINE_FIELDS, ...overrides,
+  });
+
+  it('returns the field gate on a processed document under lockWhenProcessed', () => {
+    const gate = gateFor();
+    expect(typeof gate).toBe('function');
+    expect(gate(ROW, 'project')).toBe(true);
+    expect(gate(ROW, 'quantity')).toBe(false);
+  });
+
+  it('returns undefined (never null) when the lines are not locked by completion', () => {
+    expect(gateFor({ headerRecord: { processed: 'N' } })).toBeUndefined();
+    expect(gateFor({ lockWhenProcessed: false })).toBeUndefined();
+  });
+
+  it('returns undefined for a window-wide read-only role, even on a processed document', () => {
+    expect(gateFor({ windowReadOnly: true })).toBeUndefined();
+  });
+
+  it('returns undefined when the window declares no editable line fields', () => {
+    expect(gateFor({ draftMode: {} })).toBeUndefined();
+  });
+});
+
+describe('buildLineRowUpdateHandler', () => {
+  const ctx = (overrides = {}) => {
+    const { canEditField, ...rest } = makeArgs();
+    return {
+      ...rest,
+      linesLayout: 'inlineEditable',
+      isDocumentReadOnly: false,
+      handleLineFieldChange: vi.fn(),
+      prepareLineForPost: vi.fn(),
+      completedLineFieldGate: canEditField,
+      ...overrides,
+    };
+  };
+
+  it('uses the draft-time autosave handler on an editable document', () => {
+    const handler = buildLineRowUpdateHandler(ctx());
+    expect(typeof handler).toBe('function');
+  });
+
+  it('falls back to the completed-field handler on a read-only inline grid, honouring the gate', async () => {
+    const args = ctx({ isDocumentReadOnly: true });
+    const handler = buildLineRowUpdateHandler(args);
+    await handler(ROW, 'project', 'PRJ-NEW');
+    expect(args.completedLineFieldGate).toHaveBeenCalledWith(ROW, 'project');
+    expect(lastBody()).toEqual({ project: 'PRJ-NEW' });
+  });
+
+  it('returns undefined on a read-only grid without a gate', () => {
+    expect(buildLineRowUpdateHandler(ctx({ isDocumentReadOnly: true, completedLineFieldGate: undefined }))).toBeUndefined();
+  });
+
+  it('returns undefined for a non-inline layout, even with a gate', () => {
+    expect(buildLineRowUpdateHandler(ctx({ linesLayout: 'sidebar', isDocumentReadOnly: true }))).toBeUndefined();
   });
 });
 

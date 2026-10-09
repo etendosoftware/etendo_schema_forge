@@ -9,8 +9,10 @@ import { toast } from 'sonner';
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 import {
   applyLocalChildRowUpdate, applySelectedItemMappings, buildRowValueCoercer, collectRowFieldValues,
-  mergeSelectorAuxFields, mergeSelectorContextFields, preserveGridReadOnlyValues, pruneInheritedParentKeys,
+  getDocumentReadOnly, mergeSelectorAuxFields, mergeSelectorContextFields, preserveGridReadOnlyValues,
+  pruneInheritedParentKeys,
 } from './detailViewHelpers.jsx';
+import { buildCompletedLineFieldGate } from '@/lib/completedLineEdits.js';
 
 export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields, lineFields, raiseRowSaveConflict }) {
   return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
@@ -161,4 +163,29 @@ export function buildCompletedLineFieldUpdateHandler({ canEditField, api, detail
     if (!raised) toast.error(msg || ui('networkError'));
     throw Object.assign(new Error(msg || 'PATCH failed'), { userNotified: true });
   };
+}
+
+/**
+ * ETP-5692 — the completed-document line gate DetailView hands to InlineLinesPanel
+ * (`isFieldEditableWhenReadOnly`) and to {@link buildLineRowUpdateHandler}. The lines are locked
+ * by completion when the header is processed under `lockWhenProcessed` and the window itself is
+ * not read-only; `draftMode.editableLineFieldsWhenCompleted` then decides which fields stay
+ * editable (see lib/completedLineEdits.js). `undefined` — never `null` — when nothing stays
+ * editable, so it goes straight into an optional prop.
+ */
+export function resolveCompletedLineFieldGate({ draftMode, lockWhenProcessed, headerRecord, windowReadOnly, lineFields }) {
+  const lockedByCompletion = getDocumentReadOnly(lockWhenProcessed, headerRecord) && !windowReadOnly;
+  return buildCompletedLineFieldGate({ draftMode, lockedByCompletion, headerRecord, lineFields }) ?? undefined;
+}
+
+/**
+ * ETP-5692 — InlineLinesPanel's `onUpdateRow`: the draft-time autosave handler when it applies,
+ * otherwise, on an `inlineEditable` layout, the completed-document single-field handler gated by
+ * `completedLineFieldGate`; `undefined` when neither applies (the grid stays read-only).
+ */
+export function buildLineRowUpdateHandler({ completedLineFieldGate, ...ctx }) {
+  return buildInlineRowUpdateHandler(ctx)
+    ?? (ctx.linesLayout === 'inlineEditable'
+      ? buildCompletedLineFieldUpdateHandler({ ...ctx, canEditField: completedLineFieldGate })
+      : undefined);
 }
