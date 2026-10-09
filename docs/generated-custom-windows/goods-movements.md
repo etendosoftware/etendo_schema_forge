@@ -254,3 +254,13 @@ contabilizados" window could post a movement, because that window calls
   `schema_forge_core` publish (or `LOCAL_CORE=1`) before `make regen` picks it up** — until
   then the generated `extraBadges` array silently omits `hintKeys`, same as any window that
   never declares it.
+
+## Design changes — ETP-5681
+
+- **The line form opens the same product drawer as the grid.** `EntityForm.LookupFormField` used to hardcode
+  `ProductSearchDrawer` and ignore the field's `lookupDrawer`. It now resolves the drawer through
+  `lookupDrawers.js`, so the line form opens the declared `product-stock` drawer as the add row and the inline
+  edit already did.
+- `onSelectMappings` (the storage-bin fill from `_aux._LOC`) is still applied caller-side by the grid only
+  (`DataTable.applyOnSelectMappings`), so the form behaves as before for that mapping.
+- No `decisions.json` change for this window.
