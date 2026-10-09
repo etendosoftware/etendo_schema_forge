@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useUI } from '@/i18n';
-import { SIF_OPEN_SEND_EVENT, isSifSendRequestFor } from './sifSending.js';
 import { useInvoiceSifSending } from './useInvoiceSifSending.js';
 import SifSendingModal from './SifSendingModal.jsx';
 
-export default function SendToSifButton({ data, recordId, apiBaseUrl, status, onSave, isDirty, isDocumentReadOnly }) {
+export default function SendToSifButton({ data, recordId, apiBaseUrl, status, onSave, isDirty, windowReadOnly }) {
   const ui = useUI();
   const [modalOpen, setModalOpen] = useState(false);
   const [sentSuccessfully, setSentSuccessfully] = useState(false);
@@ -13,20 +12,11 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status, on
   const { specName, pendingTargets, hasPendingTargets, labelKey, bodyKey, base } =
     useInvoiceSifSending({ data, apiBaseUrl });
   const updateEventName = `${specName}:invoice-updated`;
-  const canSend = status === 'CO' && hasPendingTargets && !isDocumentReadOnly;
-  // Same id resolution SifSendMenuItem uses when it addresses the request.
-  const currentId = data?.id || recordId;
-
-  // ETP-5700 — the form kebab entry (SifSendMenuItem) asks this button to open its modal:
-  // the kebab unmounts its own content as soon as the menu closes, so it cannot host it.
-  useEffect(() => {
-    if (!canSend) return undefined;
-    const onRequest = (event) => {
-      if (isSifSendRequestFor(event, specName, currentId)) setModalOpen(true);
-    };
-    window.addEventListener(SIF_OPEN_SEND_EVENT, onRequest);
-    return () => window.removeEventListener(SIF_OPEN_SEND_EVENT, onRequest);
-  }, [canSend, specName, currentId]);
+  // ETP-5205 hides the button under the Solo Lectura tier — that is `windowReadOnly`.
+  // ETP-5700: it used to read `isDocumentReadOnly`, which DetailView ALSO sets for every
+  // processed document (lockWhenProcessed), i.e. for every completed invoice — the only
+  // state in which sending is possible — so the button never showed where it applies.
+  const canSend = status === 'CO' && hasPendingTargets && !windowReadOnly;
 
   if (!canSend) return null;
 

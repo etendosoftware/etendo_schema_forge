@@ -16,14 +16,16 @@ import { useInvoiceSifSending } from './useInvoiceSifSending.js';
  * when nothing is pending also lets the kebab hide itself when it would be empty.
  *
  * The click does NOT open a modal here: the kebab unmounts its content as soon as the
- * menu closes, and a click inside the modal closes it. It asks the topbar button of the
- * same record — which owns the send modal — to open it (`requestSifSendModal`).
+ * menu closes, and a click inside the modal closes it. It hands the request to
+ * `SifSendModalHost`, which the invoice window keeps mounted next to the form
+ * (`requestSifSendModal`). It must not depend on the topbar `SendToSifButton`, which is
+ * conditionally rendered.
  *
  * Receives the `customMenuContent` props: `data`, `recordId`, `apiBaseUrl`, `onClose`.
  */
 export default function SifSendMenuItem({ data, recordId, apiBaseUrl, onClose }) {
   const ui = useUI();
-  const { specName, hasPendingTargets, labelKey } = useInvoiceSifSending({ data, apiBaseUrl });
+  const { specName, pendingTargets, hasPendingTargets, labelKey } = useInvoiceSifSending({ data, apiBaseUrl });
   const currentId = data?.id || recordId;
 
   if (data?.documentStatus !== 'CO' || !hasPendingTargets || !currentId) return null;
@@ -36,7 +38,7 @@ export default function SifSendMenuItem({ data, recordId, apiBaseUrl, onClose })
       data-testid="menu-action-sendToSif"
       onClick={() => {
         onClose?.();
-        requestSifSendModal(specName, currentId);
+        requestSifSendModal(specName, currentId, pendingTargets);
       }}
       className="w-full text-left px-2 py-1 text-sm leading-6 transition-colors flex items-center gap-2 text-foreground hover:bg-secondary"
       style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400 }}

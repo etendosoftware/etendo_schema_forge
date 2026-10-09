@@ -118,24 +118,31 @@ export function getSifTbaiErrorKey(specName) {
  * ETP-5700 — the form-view kebab entry (`SifSendMenuItem`, wired through
  * `decisions.json → window.customComponents.moreMenuContent`) cannot host the send
  * modal itself: `DetailMoreActionsMenu` unmounts its content the moment the menu
- * closes, which a click inside the modal does. It asks the topbar `SendToSifButton`
- * of the same record — always mounted in the form view and already the owner of
- * that modal — to open it instead, through this window event. Same mechanism as the
- * existing `${specName}:invoice-updated` event.
+ * closes, which a click inside the modal does. It hands the request — with the targets
+ * it already computed — to `SifSendModalHost`, which each invoice window mounts next to
+ * its form for as long as the record is open, through this window event (same mechanism
+ * as the existing `${specName}:invoice-updated` event).
+ *
+ * The host must NOT be a component that is itself conditionally rendered: the first
+ * version asked the topbar `SendToSifButton`, which renders nothing on a completed
+ * invoice whose form is locked, so the kebab entry did nothing.
  */
 export const SIF_OPEN_SEND_EVENT = 'sif:open-send-modal';
 
 /**
  * @param {string} specName kebab-case spec of the window
  * @param {string} recordId invoice id
+ * @param {{sendSii: boolean, sendTbai: boolean}} pendingTargets targets to send, from
+ *   {@link getPendingSifTargets}
  */
-export function requestSifSendModal(specName, recordId) {
+export function requestSifSendModal(specName, recordId, pendingTargets) {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(SIF_OPEN_SEND_EVENT, { detail: { specName, recordId } }));
+  window.dispatchEvent(new CustomEvent(SIF_OPEN_SEND_EVENT, { detail: { specName, recordId, pendingTargets } }));
 }
 
 /**
  * Whether a {@link SIF_OPEN_SEND_EVENT} is addressed to this record of this window.
+ * Ids are compared as strings, like `useInvoiceUpdatedListener`.
  *
  * @param {Event|null|undefined} event
  * @param {string} specName
@@ -144,5 +151,6 @@ export function requestSifSendModal(specName, recordId) {
  */
 export function isSifSendRequestFor(event, specName, recordId) {
   const detail = event?.detail;
-  return !!detail && detail.specName === specName && !!recordId && detail.recordId === recordId;
+  return !!detail && detail.specName === specName && recordId != null
+    && String(detail.recordId) === String(recordId);
 }

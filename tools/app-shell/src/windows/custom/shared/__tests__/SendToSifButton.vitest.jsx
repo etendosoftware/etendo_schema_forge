@@ -59,9 +59,17 @@ describe('SendToSifButton', () => {
     vi.restoreAllMocks();
   });
 
-  it('does not render when isDocumentReadOnly is true, even with pending SII/TBAI targets (ETP-5205)', () => {
-    renderButton({ isDocumentReadOnly: true });
+  it('does not render under the Solo Lectura tier (windowReadOnly), even with pending SII/TBAI targets (ETP-5205)', () => {
+    renderButton({ windowReadOnly: true, isDocumentReadOnly: true });
     expect(screen.queryByRole('button', { name: /^sendToSifLabel/ })).not.toBeInTheDocument();
+  });
+
+  // ETP-5700 repro: DetailView's isDocumentReadOnly is ALSO true for every processed
+  // document (lockWhenProcessed), i.e. for every completed invoice — the only state in
+  // which sending is possible. Gating on it hid the button on every invoice it applies to.
+  it('renders on a completed invoice whose form is locked by the processed flag (ETP-5700)', () => {
+    renderButton({ isDocumentReadOnly: true, windowReadOnly: false });
+    expect(screen.getByRole('button', { name: /^sendToSifLabel/ })).toBeInTheDocument();
   });
 
   it('regression: renders when isDocumentReadOnly is false/absent (existing behavior)', () => {

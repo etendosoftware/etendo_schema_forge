@@ -26,6 +26,7 @@ import { SALES_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
 import { createFollowUpAfterProcess } from '@/components/follow-up-documents/followUpDocuments.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 import { useSifRowSendAction } from '../shared/useSifRowSendAction.jsx';
+import SifSendModalHost from '../shared/SifSendModalHost.jsx';
 import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
 
 // Mirrors artifacts/sales-invoice/decisions.json → window.lineTaxSifTrigger (ETP-4888
@@ -245,6 +246,13 @@ export default function SalesInvoiceWindow(props) {
           data-testid="HeaderPage__c01c21" />
         {contactPortal}
         {taxSifModal}
+        {/* ETP-5700 — hosts the send modal for the form kebab entry (SifSendMenuItem). Mounted
+            unconditionally: the kebab unmounts its own content on close, and the topbar
+            button is not always rendered. */}
+        <SifSendModalHost
+          apiBaseUrl={apiBaseUrl}
+          recordId={recordId}
+          data-testid="SifSendModalHost__c01c21" />
       </CreateContactContext.Provider>
     );
   }

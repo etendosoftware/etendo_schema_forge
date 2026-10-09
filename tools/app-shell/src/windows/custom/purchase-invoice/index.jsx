@@ -24,6 +24,7 @@ import { PURCHASE_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
 import { createFollowUpAfterProcess } from '@/components/follow-up-documents/followUpDocuments.js';
 import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
 import { useSifRowSendAction } from '../shared/useSifRowSendAction.jsx';
+import SifSendModalHost from '../shared/SifSendModalHost.jsx';
 
 /* eslint-disable react/prop-types */
 
@@ -251,6 +252,13 @@ export default function PurchaseInvoiceWindow(props) {
           data-testid="HeaderPage__c20e53" />
         {contactPortal}
         {taxSifModal}
+        {/* ETP-5700 — hosts the send modal for the form kebab entry (SifSendMenuItem). Mounted
+            unconditionally: the kebab unmounts its own content on close, and the topbar
+            button is not always rendered. */}
+        <SifSendModalHost
+          apiBaseUrl={apiBaseUrl}
+          recordId={recordId}
+          data-testid="SifSendModalHost__c20e53" />
       </CreateContactContext.Provider>
     );
   }
