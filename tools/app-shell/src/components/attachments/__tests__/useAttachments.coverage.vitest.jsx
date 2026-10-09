@@ -1,8 +1,10 @@
 /**
  * Complements useAttachments.vitest.jsx (list / upload / remove / patch happy
  * paths) with the branches it never reaches: formatBytes, the download and
- * download-all blob plumbing, removeAll, the backend error-message extraction
- * fallbacks, the early-return guards and the abort path.
+ * download-all blob plumbing, removeAll/removeMany, downloadSelection, the backend
+ * error-message extraction fallbacks, the early-return guards and the abort path.
+ *
+ * @covers tools/app-shell/src/components/attachments/useAttachments.js
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
 
@@ -392,6 +394,63 @@ describe('useAttachments — remaining branches', () => {
 
       expect(toast.error).toHaveBeenCalledWith('HTTP 500');
       expect(anchorClick).not.toHaveBeenCalled();
+    });
+  });
+
+  // ETP-5526 — the selection bar's two actions. They share their machinery with
+  // downloadAll/removeAll, so what is worth pinning is the part that differs: the
+  // id list reaching the wire, and nothing else being touched.
+  describe('downloadSelection', () => {
+    it('asks the zip endpoint for exactly the given ids', async () => {
+      const { result } = await setup();
+      globalThis.fetch.mockClear();
+
+      await act(async () => { await result.current.downloadSelection(['b', 'a', 'b']); });
+
+      expect(globalThis.fetch.mock.calls[0][0]).toBe(
+        'http://api.test/sws/neo/attachments/C_Order/REC-1/zip?ids=b,a',
+      );
+    });
+
+    it('does not call the endpoint at all for an empty selection', async () => {
+      const { result } = await setup();
+      globalThis.fetch.mockClear();
+
+      await act(async () => { await result.current.downloadSelection([]); });
+
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeMany', () => {
+    it('deletes only the selected ids and leaves the rest in the list', async () => {
+      globalThis.fetch.mockResolvedValue(jsonResponse({ items: [{ id: 'x' }, { id: 'y' }] }));
+      const { result } = await setup();
+      globalThis.fetch.mockClear();
+      globalThis.fetch.mockResolvedValue(jsonResponse({}));
+
+      await act(async () => { await result.current.removeMany(['y']); });
+
+      expect(globalThis.fetch.mock.calls.map(c => c[0])).toEqual([
+        'http://api.test/sws/neo/attachments/file/y',
+      ]);
+      expect(result.current.items.map(i => i.id)).toEqual(['x']);
+      expect(toast.success).toHaveBeenCalledWith('attachmentsDeleteSelectedSuccess');
+    });
+
+    it('restores the whole list when one of the deletes fails', async () => {
+      globalThis.fetch.mockResolvedValue(jsonResponse({ items: [{ id: 'x' }, { id: 'y' }] }));
+      const { result } = await setup();
+      globalThis.fetch.mockImplementation((url) => Promise.resolve(
+        url.endsWith('/y')
+          ? textResponse('cannot delete', { status: 409 })
+          : jsonResponse({}),
+      ));
+
+      await act(async () => { await result.current.removeMany(['x', 'y']); });
+
+      await waitFor(() => expect(result.current.items.map(i => i.id)).toEqual(['x', 'y']));
+      expect(toast.error).toHaveBeenCalledWith('cannot delete');
     });
   });
 

@@ -350,7 +350,9 @@ test.describe('Suite H — Sales Order: delete (mocked)', () => {
     await expect(row).toBeVisible({ timeout: 3_000 });
   });
 
-  test('H3: Delete All removes all attachments and resets the badge', async ({ page }) => {
+  // ETP-5526 — the header-wide "Eliminar todo" control is gone; bulk delete now
+  // goes through the selection bar, which still asks for confirmation.
+  test('H3: the selection bar deletes the selected attachments and resets the badge', async ({ page }) => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1, SO_ATT_2] });
     await gotoSalesOrder(page);
@@ -359,13 +361,25 @@ test.describe('Suite H — Sales Order: delete (mocked)', () => {
     await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).toBeVisible({ timeout: 6_000 });
     await expect(page.getByTestId(`attachment-row-${SO_ATT_2.id}`)).toBeVisible({ timeout: 3_000 });
 
-    await page.getByTestId('attachments-delete-all').click();
+    // The two header-wide controls no longer exist on this screen.
+    await expect(page.getByTestId('attachments-delete-all')).toHaveCount(0);
+    await expect(page.getByTestId('attachments-download-all')).toHaveCount(0);
+
+    // Nothing selected yet → no bar.
+    await expect(page.getByTestId('attachments-selection-bar')).toHaveCount(0);
+
+    await page.getByTestId('attachments-select-all').click();
+    await expect(page.getByTestId('attachments-selection-bar')).toBeVisible({ timeout: 3_000 });
+
+    await page.getByTestId('attachments-delete-selected').click();
     await expect(page.getByTestId('confirm-delete-dialog')).toBeVisible({ timeout: 4_000 });
     await page.getByTestId('confirm-delete-confirm').click();
 
     await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).not.toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId(`attachment-row-${SO_ATT_2.id}`)).not.toBeVisible({ timeout: 3_000 });
     await expect(page.getByTestId('attachments-empty-state')).toBeVisible({ timeout: 4_000 });
+    // The bar goes with the selection it described.
+    await expect(page.getByTestId('attachments-selection-bar')).toHaveCount(0);
 
     const tabBtn = page.getByTestId('tab-custom:attachments');
     const badge = tabBtn.locator('span.inline-flex');
@@ -408,13 +422,17 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     await expect.poll(() => downloadCalled, { timeout: 5_000 }).toBe(true);
   });
 
-  test('I2: Download All (ZIP) calls the zip endpoint', async ({ page }) => {
-    let zipCalled = false;
+  // ETP-5526 — "Descargar todo (ZIP)" left the header; the bar downloads exactly the
+  // ticked rows, which the client expresses as `?ids=` on the same zip endpoint. The
+  // assertion is on the query string, not merely on the endpoint being hit: hitting
+  // /zip with no ids is the old whole-record behaviour and would pass a bare check.
+  test('I2: the selection bar zips only the selected attachments', async ({ page }) => {
+    let zipUrl = null;
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1, SO_ATT_2] });
 
-    await page.route('**/sws/neo/attachments/**/zip{/**,}**', async (route) => {
-      zipCalled = true;
+    await page.route('**/sws/neo/attachments/**/zip**', async (route) => {
+      zipUrl = route.request().url();
       await route.fulfill({
         status: 200,
         contentType: 'application/zip',
@@ -426,9 +444,12 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     await openAttachmentsTab(page, page.getByTestId(`attachment-row-${SO_ATT_1.id}`));
 
     await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).toBeVisible({ timeout: 6_000 });
-    await page.getByTestId('attachments-download-all').click();
+    await page.getByTestId(`attachment-select-${SO_ATT_1.id}`).click();
+    await expect(page.getByTestId('attachments-selection-bar')).toBeVisible({ timeout: 3_000 });
+    await page.getByTestId('attachments-download-selected').click();
 
-    await expect.poll(() => zipCalled, { timeout: 5_000 }).toBe(true);
+    await expect.poll(() => zipUrl, { timeout: 5_000 }).toContain(`ids=${SO_ATT_1.id}`);
+    expect(zipUrl).not.toContain(SO_ATT_2.id);
   });
 });
 

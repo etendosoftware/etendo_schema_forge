@@ -118,7 +118,7 @@ Use this window to register stock consumed inside the organization rather than s
 
 ### Cross-window
 17. Open "Documentos no contabilizados" (`/not-posted-documents`) and confirm Internal Consumption appears as a document-type filter option and that an unposted Internal Consumption row can be posted from there.
-18. Open a saved record and confirm the **Attachments** tab works (upload, download, delete; 'Download all (ZIP)' and 'Delete all' with confirmation when multiple files exist).
+18. Open a saved record and confirm the **Attachments** tab works (upload, download, delete; with two rows ticked, the selection bar offers a ZIP download of just those and a delete with confirmation — the header has no bulk controls since ETP-5526).
 
 ## Automated evidence
 

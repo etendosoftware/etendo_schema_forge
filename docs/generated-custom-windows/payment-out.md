@@ -57,7 +57,7 @@ Use this window to register and complete outgoing payments to vendors or other p
 6b. Confirm the detail-view "more" (⋮) button is no longer rendered at all on the payment-out detail page, in any status — the kebab-menu **Remove Payment** entry was removed in ETP-4479 as redundant with the trash-icon delete button.
 7. Verify whether **Execution History**, **Exchange rates**, **Used Credit Source**, and **Accounting** are reachable anywhere in the current payment-out detail UI. If they are not visible, record that as a confirmed app-shell gap rather than assuming backend support is enough.
 8. If multi-currency or credit scenarios are available, verify whether exchange-rate rows, used-credit rows, header totals, and accounting review data update after line or lifecycle changes.
-9. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+9. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 
 ## Automated evidence
 
