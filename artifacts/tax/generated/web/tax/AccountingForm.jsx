@@ -2,8 +2,8 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:accounting
 const fields = [
-  { key: 'taxDue', column: 'T_Due_Acct', type: 'selector', label: 'Tax Due', required: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
-  { key: 'taxCredit', column: 'T_Credit_Acct', type: 'selector', label: 'Tax Credit', required: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
+  { key: 'taxDue', column: 'T_Due_Acct', type: 'selector', label: 'Tax Due', required: true, lookup: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
+  { key: 'taxCredit', column: 'T_Credit_Acct', type: 'selector', label: 'Tax Credit', required: true, lookup: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
 ];
 // @sf-generated-end fields:accounting
 

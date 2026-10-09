@@ -319,3 +319,14 @@ Verified in `artifacts/asset-group/contract.json` and the regenerated
 ## ETP-5116 — Accounting tab hidden for roles without the accounting capability
 
 `window.secondaryTabs.accounting.visibleWhenCapability: "showAccountingFields"` added in `decisions.json`. For a role where the `showAccountingFields` capability (`AD_Role.EM_ETGO_Show_Acct_Fields`) resolves `false`, the whole Accounting tab is omitted from the tab strip (not merely disabled) and its `openSecondaryTab` deep link silently no-ops. Full mechanism reference: `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)" and `docs/ui-customization.md` §17.
+
+## Account selectors — ETP-5681
+
+Every account field of the **Accounting** tab (`accumulatedDepreciation`, `depreciation`) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+

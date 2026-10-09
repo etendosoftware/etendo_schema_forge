@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/lookupDrawers.js
 /**
  * Unit test for the lookup drawer registry. Verifies resolveLookupDrawer maps a
  * field's `lookupDrawer` key to the correct drawer component (by reference) and
@@ -11,6 +12,7 @@
 import { LOOKUP_DRAWERS, resolveLookupDrawer } from '../lookupDrawers.js';
 import ProductSearchDrawer from '../ProductSearchDrawer.jsx';
 import ProductStockSearchDrawer from '../ProductStockSearchDrawer.jsx';
+import AccountLookupPopup from '../AccountLookupPopup.jsx';
 
 describe('lookupDrawers registry', () => {
   it('maps product-stock to ProductStockSearchDrawer', () => {
@@ -23,6 +25,11 @@ describe('lookupDrawers registry', () => {
 
   it('maps the legacy internal-consumption-product key to ProductStockSearchDrawer', () => {
     expect(resolveLookupDrawer('internal-consumption-product')).toBe(ProductStockSearchDrawer);
+  });
+
+  // ETP-5681 — account fields (the G/L journal line Account) open the shared search popup.
+  it('maps account to AccountLookupPopup', () => {
+    expect(resolveLookupDrawer('account')).toBe(AccountLookupPopup);
   });
 
   it('falls back to ProductSearchDrawer for undefined lookupDrawer', () => {

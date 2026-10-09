@@ -161,3 +161,16 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Design changes — ETP-5681
+
+- **The line form opens the same product drawer as the grid.** `EntityForm.LookupFormField` used to hardcode
+  `ProductSearchDrawer` and ignore the field's `lookupDrawer`. It now resolves the drawer through
+  `lookupDrawers.js`, so the line form opens the declared `product-stock` drawer as the add row and the inline
+  edit already did.
+- `onSelectMappings` (the storage-bin fill from `_aux._LOC`) is still applied caller-side by the grid only
+  (`DataTable.applyOnSelectMappings`), so the form behaves as before for that mapping.
+- `decisions.json`: only the `lookupTitle` removal below.
+- **Drawer title translated.** The product field no longer declares `lookupTitle`, which was a literal English string
+  ("Product" / "Product + Warehouse") that made the drawer search read "Buscar Product..." in Spanish. The title and the
+  placeholder now come from the field's translated label ("Buscar Producto...").

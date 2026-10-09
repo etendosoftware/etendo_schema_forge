@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
+import { needsSelectorRevalidation } from '@/lib/selectorRevalidation.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const SELECTOR_PAGE = 50;
@@ -69,30 +70,48 @@ export function SelectorInput({
   // depends on it) re-identify on every render and re-trigger fetches indefinitely.
   const contextKey = JSON.stringify(selectorContext ?? {});
 
-  const fetchPage = useCallback((offset) => {
+  // When the first page currently shown was loaded (cache or network). Lets a reopen decide
+  // whether to revalidate even without a DataProvider (ETP-5681).
+  const firstPageLoadedAtRef = useRef(0);
+
+  const pageKey = useCallback((offset) => createQueryKey({
+    ...cacheScope, apiBase: selectorUrl, entity: 'selector', filters: selectorContext ?? {}, recordId: `offset:${offset}`,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [cacheScope, selectorUrl, contextKey]);
+
+  const fetchPage = useCallback((offset, { force = false } = {}) => {
     if (!selectorUrl || loadingRef.current || !hasMoreRef.current) return;
     loadingRef.current = true;
     setFetching(true);
+    if (offset === 0) setHasMore(true);
     const url = buildUrlWithParams(selectorUrl, {
       ...selectorContext,
       limit: SELECTOR_PAGE,
       offset,
     });
+    // ETP-5681: a failed request rejects instead of resolving `null` — the shared cache stores
+    // any resolved value, so a resolved `null` was replayed as "no options" for the whole
+    // catalog window.
     const fetcher = (signal) => apiFetch(url, { baseUrl: '', signal })
-      .then(res => (res.ok ? res.json() : null));
+      .then(res => {
+        if (!res.ok) throw new Error(`Selector request failed: ${res.status}`);
+        return res.json();
+      });
     // Cache pages by URL + normalized context + offset (scope-isolated); catalog
     // freshness — selectors are relatively stable lookup data.
     const run = (dataCache?.cache && cacheScope)
       ? dataCache.cache.fetchQuery({
-        key: createQueryKey({ ...cacheScope, apiBase: selectorUrl, entity: 'selector', filters: selectorContext ?? {}, recordId: `offset:${offset}` }),
+        key: pageKey(offset),
         fetcher: ({ signal }) => fetcher(signal),
         staleTime: dataCache.catalogStaleTime,
+        force,
       })
       : fetcher();
     run
       .then(data => {
         loadingRef.current = false;
         if (!isMountedRef.current) return;
+        if (offset === 0) firstPageLoadedAtRef.current = Date.now();
         const items = data?.items ?? data?.response?.data ?? (Array.isArray(data) ? data : null);
         if (items) {
           const mapped = items.map(i => ({ id: i.id, name: i.label ?? i.name ?? i.id }));
@@ -108,9 +127,32 @@ export function SelectorInput({
       })
       .catch(() => {
         loadingRef.current = false;
-        if (isMountedRef.current) setFetching(false);
+        if (!isMountedRef.current) return;
+        setFetching(false);
+        // Hide the "loading" footer for a failed request. Only the STATE: hasMoreRef stays as it
+        // was, so the next open retries (a failure is never cached, ETP-5681).
+        setHasMore(false);
       });
-  }, [selectorUrl, contextKey, token, apiFetch, dataCache, cacheScope]);
+  }, [selectorUrl, contextKey, token, apiFetch, dataCache, cacheScope, pageKey]);
+
+  // ETP-5681: reopening a selector that already has options revalidates its first page when
+  // the copy on screen is old or was invalidated (e.g. a cost center deactivated in its own
+  // window), instead of showing the list loaded at first open for as long as the selector
+  // stays mounted — the line dimension selectors stay mounted for the whole document. The old
+  // list stays visible until the fresh page replaces it.
+  const revalidateFirstPage = useCallback(() => {
+    if (!selectorUrl || loadingRef.current) return;
+    // With the shared cache, its entry decides — a missing entry (cleared on a session change,
+    // or re-keyed) counts as "must refetch". Without one, the component's own load time does.
+    const entry = (dataCache?.cache && cacheScope)
+      ? dataCache.cache.getEntry(pageKey(0))
+      : { updatedAt: firstPageLoadedAtRef.current };
+    if (!needsSelectorRevalidation(entry)) return;
+    offsetRef.current = 0;
+    hasMoreRef.current = true;
+    setHasMore(true);
+    fetchPage(0, { force: true });
+  }, [selectorUrl, dataCache, cacheScope, pageKey, fetchPage]);
 
   // Invalidate cached options when the URL or the selector context changes.
   // We do NOT eager-fetch here — the identifier (`<field>$_identifier`) usually
@@ -131,13 +173,15 @@ export function SelectorInput({
     if (!node || !selectorUrl) return;
     if (serverOptions === null && !loadingRef.current) {
       fetchPage(0);
+    } else if (serverOptions !== null) {
+      revalidateFirstPage();
     }
     const viewport = node.querySelector('[data-radix-select-viewport]') ?? node;
     viewport.addEventListener('scroll', () => {
       const { scrollTop, scrollHeight, clientHeight } = viewport;
       if (scrollHeight - scrollTop - clientHeight < 100) fetchPage(offsetRef.current);
     }, { passive: true });
-  }, [fetchPage, selectorUrl, serverOptions]);
+  }, [fetchPage, revalidateFirstPage, selectorUrl, serverOptions]);
 
   const baseOptions = serverOptions ?? catalogOptions;
   const hasValue = value && baseOptions.some(opt => opt.id === value);

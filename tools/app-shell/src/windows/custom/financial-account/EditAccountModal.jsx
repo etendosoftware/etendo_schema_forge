@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Info, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -25,6 +25,7 @@ import { useFinancialAccountAccounting } from '@/hooks/useFinancialAccountAccoun
 import { getApiBase } from '@/hooks/useNeoResource.js';
 import { DateInput, Field, ChipSelect } from '@/components/forms/fields';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect';
+import { AccountSelect } from '@/components/contract-ui/AccountSelect.jsx';
 import { useGLItemLookup } from '@/hooks/useMovementLookups.js';
 import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEligibility.js';
@@ -1075,6 +1076,12 @@ function useAccountingConfiguration(open, account) {
 // `financeAccountsAccountingBankAssetRequiredSummary` i18n key is left in the locale files —
 // deliberately unused — pending QA confirmation the "no field required" behavior is final.
 function AccountingConfigurationSection({ ui, accounting, accountType }) {
+  // The catalog's `name` is already the full "<code> - <name>" label; drop `code` so AccountSelect
+  // shows it as-is instead of prefixing the code a second time.
+  const catalogOptions = useMemo(
+    () => accounting.catalog.map((o) => ({ id: o.id, name: o.name })),
+    [accounting.catalog],
+  );
   if (accounting.loading) {
     return (
       <p className="text-xs text-muted-foreground" data-testid="accounting-configuration-loading">
@@ -1122,16 +1129,15 @@ function AccountingConfigurationSection({ ui, accounting, accountType }) {
                 key={fieldMeta.key}
                 label={ui(fieldMeta.labelKey)}
                 data-testid={`Field__accounting-${fieldMeta.key}`}>
-                <CreatableSearchSelect
-                  field={{ key: fieldMeta.key, id: fieldMeta.id }}
-                  value={accounting.values[fieldMeta.key]?.value || ''}
+                {/* ETP-5681 — the shared account search popup (AccountSelect → SearchPopup), the
+                    same picker every other account field uses. */}
+                <AccountSelect
+                  value={accounting.values[fieldMeta.key]?.value || null}
                   displayValue={accounting.values[fieldMeta.key]?.label || ''}
                   onChange={(id, label) => accounting.setFieldValue(fieldMeta.key, id, label)}
-                  formData={{}}
-                  resolvedLabel={ui(fieldMeta.labelKey)}
-                  staticOptions={accounting.catalog}
-                  emptyOptionLabel={ui('financeAccountsAccountingNone')}
-                  data-testid={fieldMeta.id} />
+                  options={catalogOptions}
+                  popupTitle={ui(fieldMeta.labelKey)}
+                  data-testid={fieldMeta.key} />
               </Field>
             ))}
           </div>

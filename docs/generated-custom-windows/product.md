@@ -1536,3 +1536,14 @@ file being read; it is also removed when the file is refused and the error step 
 Every import run reports one `import_completed` telemetry event (counts, timings, batch size and
 concurrency used, mapped columns, foreign keys resolved/created; never row content). See
 `decisions-reference.md` → *Import Limits* → Telemetry.
+
+## Account selectors — ETP-5681
+
+Every account field of the **Contabilidad** tab (`fixedAsset`, `productExpense`, `productRevenue`, `productCOGS`, `invoicePriceVariance`) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+

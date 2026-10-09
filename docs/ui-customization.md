@@ -2140,11 +2140,13 @@ at all.
 
 - **Why an allowlist and not "every window using the default product drawer":** ~10 other specs share
   that drawer (requisition, physical inventory, cost adjustment, return to vendor…), and the
-  goods-movements / internal-consumption **line forms** reach it too, because
-  `EntityForm.LookupFormField` hardcodes `ProductSearchDrawer` instead of honouring the window's
+  goods-movements / internal-consumption **line forms** used to reach it too, because
+  `EntityForm.LookupFormField` hardcoded `ProductSearchDrawer` instead of honouring the window's
   `lookupDrawer` (the key documented in [`docs/decisions-reference.md`](decisions-reference.md) →
-  *Lookup Drawer Override*). That inconsistency is a separate ticket; the allowlist keeps this feature
-  out of its blast radius in the meantime.
+  *Lookup Drawer Override*). ETP-5681 closed that inconsistency: `LookupFormField` now resolves the
+  drawer through the same `lookupDrawers.js` registry as the add-row and the inline edit, so those two
+  line forms open their declared `product-stock` drawer (which does not forward `createEnabled`). The
+  allowlist still keeps the feature to the specs that asked for it.
 - **The `product-stock` variant never shows the row.** Creating a stockless product inside a picker
   that filters by stock returns an immediately empty result, so the stock drawer opts out simply by
   not forwarding the flag. Multi-select pickers (`keepOpenOnSelect`, e.g. the report viewer) opt out

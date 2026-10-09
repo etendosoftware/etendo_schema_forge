@@ -714,6 +714,8 @@
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "customerReceivablesNo": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "required": true,
@@ -724,6 +726,8 @@
           }
         },
         "customerPrepayment": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "section": "principal",
@@ -740,6 +744,8 @@
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "vendorLiability": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "required": true,
@@ -750,6 +756,8 @@
           }
         },
         "vendorPrepayment": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "section": "principal",

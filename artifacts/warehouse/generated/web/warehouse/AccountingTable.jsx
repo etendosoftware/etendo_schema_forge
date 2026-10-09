@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:accounting
 const columns = [
-  { key: 'warehouseDifferences', column: 'W_Differences_Acct', type: 'selector', label: 'Warehouse Differences', required: true, lookup: true, grow: true },
+  { key: 'warehouseDifferences', column: 'W_Differences_Acct', type: 'selector', label: 'Warehouse Differences', required: true, lookup: true, lookupDrawer: 'account', grow: true },
 ];
 // @sf-generated-end columns:accounting
 

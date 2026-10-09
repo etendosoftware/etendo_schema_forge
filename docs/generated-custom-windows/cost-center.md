@@ -9,7 +9,7 @@ Maintain the flat Cost Center master used as an accounting dimension for cost al
 - Create a cost center with Search Key (required), Name (required), Description (optional), and Active (checkbox, defaults to `true`).
 - Open an existing cost center and update those same fields.
 - Delete a cost center through the standard generated entity flow.
-- Deactivate a cost center via the Active checkbox; inactive cost centers stop appearing in document selectors (standard `NeoSelectorService` `Active=Y` default filter — no custom selector logic in this window).
+- Deactivate a cost center via the Active checkbox; inactive cost centers stop appearing in document selectors (standard `NeoSelectorService` `Active=Y` default filter — no custom selector logic in this window). Since ETP-5681 a save here also marks every cached selector page stale (`cost-center` in `crossSpecCacheInvalidation.js`), so the change shows on the next selector open in the same session; changes made elsewhere show within 30 s (`selectorRevalidation.js`).
 
 ## Interaction model
 - Route: `/cost-center` for the list and `/cost-center/:recordId` for record detail.

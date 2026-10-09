@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.23.0",
   "generatedAt": "2026-04-29T18:11:37.816Z",
-  "updatedAt": "2026-09-07T16:05:38.409Z",
-  "checksum": "b5f1e44bf34e418e",
+  "updatedAt": "2026-10-09T15:04:45.174Z",
+  "checksum": "eb5701ba9551cefa",
   "frontendContract": {
     "window": {
       "id": "139",
@@ -812,6 +812,7 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "lookup": true,
+            "lookupDrawer": "account",
             "seq": 1,
             "grow": true,
             "validation": {

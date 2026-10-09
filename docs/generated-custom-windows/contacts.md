@@ -1460,3 +1460,14 @@ handler raises an exception instead (for example a value too long for a C_Locati
 of the chunk as `persisted`; the engine then cannot prove a clean rollback, so ALL rows of that chunk
 are shown as failed/unknown and are not resent automatically (nothing is duplicated; re-check and
 retry the rows once the data is fixed).
+
+## Account selectors — ETP-5681
+
+Every account field of the **Customer Accounting / Vendor Accounting** tab (the receivable/payable account fields) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+

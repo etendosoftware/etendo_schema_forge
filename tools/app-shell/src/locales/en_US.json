@@ -17901,6 +17901,7 @@
     "suggestions": "Suggestions",
     "askSomething": "Ask something...",
     "noResults": "No results",
+    "searchPopupError": "Couldn't load the results",
     "noResultsFor": "No results for",
     "noResultsFound": "No results found.",
     "oauthAuthorizeConnection": "Authorize connection",

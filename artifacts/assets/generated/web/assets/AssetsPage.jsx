@@ -272,8 +272,8 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
         secondaryTabs={[
           { key: 'assetAcct', label: 'Accounting', Table: AssetAcctTable, Form: AssetAcctForm, addLineFields: { entry: [
           { key: 'accountingSchema', column: 'C_AcctSchema_ID', type: 'selector', required: true, label: 'General Ledger', reference: 'AcctSchema', inputMode: 'selector' },
-          { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', required: true, label: 'Accumulated Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
-          { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', required: true, label: 'Depreciation', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', required: true, label: 'Accumulated Depreciation', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
+          { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', required: true, label: 'Depreciation', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
           ], derived: [], hidden: [] }, requireSavedRecord: true, tabOrder: 1000, visibleWhenCapability: 'showAccountingFields' },
         ]}
         formFooter={AssetsDetailPanel}

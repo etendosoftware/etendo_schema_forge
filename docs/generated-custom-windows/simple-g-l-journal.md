@@ -61,7 +61,7 @@ The add-row form exposes the **Open Items** checkbox, which gates the `asset` fi
 | Field (curated) | Column | Grid? | Visibility | Notes |
 |---|---|---|---|---|
 | `lineNo` | Line | — | system | **ETP-5611:** no longer a grid column. Still assigned server-side by the AD default (`MAX(Line)+10`) and used as the list order (see "ETP-5611" below). |
-| `accountingCombination` | C_ValidCombination_ID | grid | editable | Accounting-combination selector (label **Account**, lookup, `columnWidth: 220` — narrowed from 280 in ETP-5611). Now the first grid column. |
+| `accountingCombination` | C_ValidCombination_ID | grid | editable | Accounting-combination selector (label **Account**, `columnWidth: 220` — narrowed from 280 in ETP-5611). Now the first grid column. Opens the shared account search popup since ETP-5681 (`lookup: true`, `lookupDrawer: "account"`); lists posting accounts only. |
 | `foreignCurrencyDebit` | AmtSourceDr | grid | editable, amount, required | **Debit** — feeds the balance footer Σ debit. |
 | `foreignCurrencyCredit` | AmtSourceCr | grid | editable, amount, required | **Credit** — feeds the balance footer Σ credit. `noTrailing: true` (ETP-5611) so the hover actions take their own slot instead of covering it. |
 | `openItems` | Open_Items | form-only | editable | **Open Items** checkbox in the add-row form; toggling it reveals the `asset` field below. `businessPartner`/`product`/`project`/`costCenter` are reached via the grid's hover action instead — see below. |
@@ -343,3 +343,35 @@ the contract for agents. See `docs/decisions-reference.md`.
 `section` is pinned on `currency` (principal), `opening` and `multigeneralLedger` (other), and
 `summaryFields: []` keeps the read-only currency out of the summary strip.
 
+## Selectors: load on open, active records, posting accounts — ETP-5681
+
+Accounting feedback after the demo, three fixes on this window's selectors (all shared code, so
+they also apply to every other window with the same selectors):
+
+- **Header Cost Center / Project load on open.** They showed nothing until the user typed. The
+  header selectors are `CreatableSearchSelect` (server-search mode); an EMPTY first page hides its
+  dropdown entirely, and that first page went through the shared selector cache (5 min) — a
+  failed request was even cached as an empty page — so one bad first load was replayed on every
+  open. Now a failed page is never cached, an empty cached page is never trusted, a cached page
+  older than 30 s (`SELECTOR_REVALIDATE_AFTER_MS`, `tools/app-shell/src/lib/selectorRevalidation.js`)
+  is shown at once and refreshed in the background, and clicking an already-focused selector (after
+  Esc) opens it.
+- **Line dimensions show only active records.** The server always filtered `active = 'Y'`
+  (verified live); the stale list came from the client. The "Dimensiones contables" selectors
+  (`SelectorInput`) stay mounted for the whole document and used to load once; they now revalidate
+  their first page on reopen with the same 30 s rule, and a write in Cost Center / Project
+  (`cost-center`, `project`, `service-project` in `crossSpecCacheInvalidation.js`) marks every
+  cached selector page stale at once.
+- **Account column.** `accountingCombination` declares `lookup: true` + `lookupDrawer: "account"`:
+  clicking the cell opens `AccountLookupPopup`, the shared centered search popup (`SearchPopup`,
+  the same one the report filters use for "Desde la cuenta") over the column's own
+  `C_ValidCombination_ID` selector. It shows each `"<code> - <name>"` in full; the product lookup
+  drawer it used before cut long account names off. Applies to the add-line row, inline edit and
+  the line form. Like every account selector, it lists **posting accounts only** — summary
+  (heading) accounts are hidden by `PostingAccountCombinationSelectorPolicy` in
+  `com.etendoerp.go`. Saving a summary account through the API/MCP is not rejected yet (ETP-5693).
+
+Manual check: open a draft journal, click the header Cost Center → the list appears without
+typing; deactivate a cost center in its window, come back, open a line's dimensions → it is gone;
+click the Account cell of a new line → a centered popup opens; type "640" → only posting accounts
+(e.g. `64000000`), never the `640` heading.

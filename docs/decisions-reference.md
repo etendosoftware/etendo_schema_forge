@@ -1535,8 +1535,8 @@ selected.
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
 | `lookup` | boolean | `false` | Enables the drawer-style picker for this field (instead of a plain search input). |
-| `lookupDrawer` | string \| null | `null` (→ `"default"`) | Key into `LOOKUP_DRAWERS` (`tools/app-shell/src/components/contract-ui/lookupDrawers.js`). `"default"` is the plain `ProductSearchDrawer`. `"product-stock"` is the shared, window-agnostic product+stock picker (groups by product, warehouse-filter pills, expand/collapse per-locator rows) — used by any window whose product field needs to resolve a storage bin/warehouse on selection. |
-| `lookupTitle` | string \| null | Field label | Title shown in the drawer header. |
+| `lookupDrawer` | string \| null | `null` (→ `"default"`) | Key into `LOOKUP_DRAWERS` (`tools/app-shell/src/components/contract-ui/lookupDrawers.js`). `"default"` is the plain `ProductSearchDrawer`. `"product-stock"` is the shared, window-agnostic product+stock picker (groups by product, warehouse-filter pills, expand/collapse per-locator rows) — used by any window whose product field needs to resolve a storage bin/warehouse on selection. `"account"` (ETP-5681) is `AccountLookupPopup`: the shared centered `SearchPopup` (the report filters' "Desde la cuenta" popup) over the field's own selector, showing each `"<code> - <name>"` in full — used by the G/L journal line Account and by every ValidCombination (account) field of the generated accounting tabs (asset group, assets, business partner category, contacts, product, product category, tax, warehouse), each declared with `"lookup": true, "lookupDrawer": "account"`. Honoured by all three lookup paths: add-row (`DataTable`), inline edit (`InlineLinesPanel`) and the side-panel form (`EntityForm`). In the add-row, a field that names a `lookupDrawer` is a lookup even when its type is `selector` (the generator flags only the first `search`-type add-line field as `lookup`). |
+| `lookupTitle` | string \| null | Field label (translated) | Title shown in the drawer header and in its search placeholder ("Buscar <title>..."). It is a **literal, untranslated** string, so leave it unset: the default is the field's locale-resolved label. ETP-5681 dropped `"Product"` / `"Product + Warehouse"` from goods-movements and internal-consumption because Spanish users saw "Buscar Product...". |
 | `onSelectMappings` | array \| null | `null` | Maps data from the selected raw selector row onto other fields in the same line. Each entry: `{ "from": "<path into the row, e.g. _aux._LOC>", "to": "<sibling field key>", "labelFrom": ["<row key>", ...] }`. `labelFrom` is tried in order — the first non-empty value becomes the label shown for `to`. Applied by `applyOnSelectMappings` in `DataTable.jsx`, caller-side; the drawer itself never writes to sibling fields. |
 
 ```json
@@ -1544,7 +1544,6 @@ selected.
   "grid": true,
   "lookup": true,
   "lookupDrawer": "product-stock",
-  "lookupTitle": "Product",
   "onSelectMappings": [
     { "from": "_aux._LOC", "to": "storageBin", "labelFrom": ["warehouse", "warehouse$_identifier", "storageBin"] }
   ]
