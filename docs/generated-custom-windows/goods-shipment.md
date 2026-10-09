@@ -409,3 +409,19 @@ header via `onRefresh` (ETP-4779). Contract, type table and `data-testid`s: `doc
 above (no amount, «Completada» badge); press Esc and verify it closes and the header refreshes.
 
 **Automated evidence.** `e2e/tests/flows/sales/goods-shipment-confirm-and-invoice.mocked.spec.js`.
+
+## List toolbar: gap between filters and actions — ETP-5509
+
+At narrow widths the "Filtros" button used to touch the actions on the right (sort, refresh,
+"Imprimir", "Nuevo albarán"): nothing reserved space between the two clusters of the shared list
+bar. The bar (`ListView.jsx`) now keeps a 16px minimum gap between them at every width, and when
+space runs out the filters yield — the status / date / "Filtros" buttons wrap onto an extra line
+inside their cluster, the actions never shrink, and only far below the supported 1280px do the
+actions drop below the filters. They never touch or overlap. This window has no tab group, so its
+toolbar is otherwise a single row. Nothing changed in this window's own files or in
+`decisions.json`; see `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: with the rail expanded, open `/goods-shipment` at 1280×720 and confirm one
+toolbar row with clear space between "Filtros" and the sort button; narrow the window (≈1000px)
+and confirm the filter buttons wrap onto a second line while the actions stay on the right with
+the same gap.

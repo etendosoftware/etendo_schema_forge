@@ -471,3 +471,12 @@ and verify the title, the «Completada» badge and that «Ver factura» opens th
 **Automated evidence.** `tools/app-shell/src/windows/custom/return-to-vendor-shipment/__tests__/ConfirmWithCreditButton.spec.jsx`,
 `tools/app-shell/src/windows/custom/return-to-vendor-shipment/__tests__/index.test.js`,
 `e2e/tests/flows/purchases/return-to-vendor-shipment.mocked.spec.js`.
+
+## Related documents — form and list preview share one definition — ETP-5539
+
+The form's Related Documents tab (`artifacts/return-to-vendor-shipment/custom/RelatedDocuments.jsx`,
+now a thin wrapper over `RelatedDocumentsSection`) and the preview card
+(`ReturnToVendorShipmentPreview.jsx`) render `PURCHASE_RELATED_DOCS['return-to-vendor-shipment']`:
+source goods receipts (`sourceReceipts`) and return invoices (`returnInvoices`). The preview passes
+`relatedLoadsDetail` so the card loads the detail record instead of reading the list row. See
+`docs/ui-customization.md` §7.a.

@@ -223,4 +223,14 @@ describe('ConfirmResultModal', () => {
     const overriding = [...overlay.querySelectorAll('*')].filter((el) => el.style?.fontFamily);
     expect(overriding).toEqual([]);
   });
+
+  // Ported from the ETP-5576 popup variant: the backdrop dismisses the popup, a click inside
+  // the dialog (here, its title) does not.
+  it('a backdrop click closes it, a click inside the dialog does not', () => {
+    const { props } = renderModal();
+    fireEvent.click(title());
+    expect(props.onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('confirm-result-modal'));
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
 });

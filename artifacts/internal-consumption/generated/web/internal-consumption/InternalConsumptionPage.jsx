@@ -2,7 +2,6 @@ import { useMemo, useEffect } from 'react';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import { toast } from 'sonner';
 import InternalConsumptionTable from './InternalConsumptionTable';
 import InternalConsumptionForm from './InternalConsumptionForm';
@@ -238,8 +237,6 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
       dateFilterKey="movementDate"
       hidePrint
       hideLink
-      SortIconComponent={SortIcon}
-      RefreshIconComponent={RefreshIcon}
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       {...props} window={effectiveWindow}

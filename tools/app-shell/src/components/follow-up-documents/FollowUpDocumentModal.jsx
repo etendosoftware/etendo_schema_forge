@@ -13,7 +13,8 @@ import { followUpInputLabels, readConfiguredFollowUpEntries, readFollowUpInputVa
 /**
  * ETP-5576 — generic follow-up document modal: the choice → loading → result flow on top
  * of ActionChoiceModal (choice, Figma "PopUps") and ConfirmResultModal (result, link to the
- * created document). It renders nothing while `session` is null.
+ * created document — since ETP-5674 ConfirmResultModal IS the Figma PopUps design, so the two
+ * phases look like one dialog). It renders nothing while `session` is null.
  *
  * Layout (product decision, ETP-5576) — decided ONLY by how many configured follow-ups are
  * available, nothing window-specific:

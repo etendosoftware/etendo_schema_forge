@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/FiscalMonitorPage.jsx
 // Real-locale breadcrumb regression coverage (ETP-4945).
 //
 // FiscalMonitorPage.jsx used to build a 4-segment breadcrumb
@@ -28,7 +29,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
-vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
+vi.mock('@/components/related-documents/helpers.js', async (importOriginal) => ({ ...(await importOriginal()), neoBase: (u) => u }));
 
 const setMetaMock = vi.fn();
 vi.mock('@/components/layout/PageMetaContext', () => ({

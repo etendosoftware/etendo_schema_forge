@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/LocationEditorModal.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // --- Global stubs for browser APIs not available in jsdom -----------------
@@ -36,6 +37,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 
 import LocationEditorModal from '../LocationEditorModal.jsx';
 import { toast } from 'sonner';
+import { hasUnsavedChanges } from '@/lib/unsavedChanges.js';
 
 // --- Helpers --------------------------------------------------------------
 
@@ -973,5 +975,83 @@ describe('LocationEditorModal', () => {
 
       resolveSave({ ok: true, json: () => Promise.resolve({ response: { status: 0, data: [] } }) });
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5654 — `initialValues` seed for a NEW address (OCR vendor address)
+// ---------------------------------------------------------------------------
+
+describe('LocationEditorModal — initialValues seed (ETP-5654)', () => {
+  const SPAIN = { id: '106', label: 'España' };
+  const ARGENTINA = { id: 'AR', label: 'Argentina' };
+  const SEED = { address: ' Gran Vía 45 ', postalCode: '28013', city: 'Madrid', countryName: 'Argentina' };
+
+  /** Answer `?q=<term>` pages from `byQuery`; anything else gets the catalog. */
+  function mockSelectors(byQuery) {
+    global.fetch = vi.fn((url) => {
+      const match = Object.keys(byQuery).find(term => String(url).includes(`q=${term}`));
+      const items = match ? byQuery[match] : [ARGENTINA];
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items, hasMore: false }) });
+    });
+  }
+
+  const countryButton = () =>
+    screen.getAllByRole('button').find(b => b.getAttribute('aria-haspopup') === 'dialog');
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('applies the seed text, resolves the country from its name and is not dirty', async () => {
+    mockSelectors({ Argentina: [ARGENTINA], Spain: [SPAIN] });
+    renderModal({ initialValues: SEED });
+
+    await vi.waitFor(() => expect(countryButton()).toHaveTextContent('Argentina'));
+    const inputs = screen.getAllByRole('textbox');
+    expect(inputs[0]).toHaveValue('Gran Vía 45');
+    expect(screen.getByDisplayValue('28013')).toBeTruthy();
+    expect(screen.getByDisplayValue('Madrid')).toBeTruthy();
+    expect(hasUnsavedChanges()).toBe(false);
+  });
+
+  it('falls back to Spain when the country name does not resolve', async () => {
+    mockSelectors({ Atlantis: [], Spain: [SPAIN] });
+    renderModal({ initialValues: { ...SEED, countryName: 'Atlantis' } });
+
+    await vi.waitFor(() => expect(countryButton()).toHaveTextContent('España'));
+  });
+
+  it('falls back to Spain when the seed carries no country', async () => {
+    mockSelectors({ Spain: [SPAIN] });
+    renderModal({ initialValues: { ...SEED, countryName: '' } });
+
+    await vi.waitFor(() => expect(countryButton()).toHaveTextContent('España'));
+  });
+
+  it('ignores the seed in edit mode', async () => {
+    global.fetch = vi.fn((url, opts) => {
+      if (String(url).includes('/locationAddress/loc-1') && !opts?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ response: { data: [{ id: 'loc-1', address: 'Real Street 1', country: 'FR', 'country$_identifier': 'Francia' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [ARGENTINA], hasMore: false }) });
+    });
+    renderModal({ rowId: 'loc-1', initialValues: SEED });
+
+    await vi.waitFor(() => expect(screen.getByDisplayValue('Real Street 1')).toBeTruthy());
+    expect(screen.queryByDisplayValue('Gran Vía 45')).toBeNull();
+    expect(screen.queryByDisplayValue('Madrid')).toBeNull();
+  });
+
+  it('behaves as before without initialValues', async () => {
+    mockSelectors({ Spain: [SPAIN] });
+    renderModal();
+
+    await vi.waitFor(() => expect(countryButton()).toHaveTextContent('España'));
+    expect(screen.getAllByRole('textbox')[0]).toHaveValue('');
+    expect(hasUnsavedChanges()).toBe(false);
   });
 });

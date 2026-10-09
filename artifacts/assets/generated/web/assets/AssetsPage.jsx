@@ -286,7 +286,7 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
         hideFormCard
         sidebarAboveTabsOnly
         tabsSeparator
-        sidebarClassName="w-[30%] shrink-0 border-l border-border-subtle p-2"
+        sidebarClassName="w-[320px] shrink-0 border-l border-border-subtle p-2"
         toolbarPaddingX="px-2"
         toolbarButtonSize="default"
         contentBg="bg-card"

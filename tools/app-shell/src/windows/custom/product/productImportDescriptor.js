@@ -4,6 +4,7 @@ import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/i
 // cannot disagree about whether a price cell is a number (ETP-4996).
 import { parseImportNumber } from '@etendosoftware/app-shell-core/lib/import/parseImportNumber.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
+import { registerImportRunReset } from '@etendosoftware/app-shell-core/lib/import/importRunState.js';
 import { fetchNeoList } from '@etendosoftware/app-shell-core/lib/import/fetchNeoList.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import {
@@ -106,11 +107,11 @@ function extractId(value) {
 // bounded-concurrency pool's first few rows don't each fire the same fetch.
 const salesPlvCache = new Map();
 
-// Batch operations do not pass through the product NeoHandler, so they cannot
-// receive the product defaults injected by ProductDefaultsHandler. Resolve the
-// same official defaults endpoint once per import run and carry the UOM into
-// every product operation explicitly. This keeps the value tenant-configurable
-// and avoids duplicating a database ID in the frontend.
+// Resolve the org's product defaults once per import run and carry the UOM into every product
+// operation explicitly, so a blank unit cell keeps the tenant-configured default. Since ETP-5415
+// batch operations DO pass through the product NeoHandler (and so receive the defaults injected by
+// ProductDefaultsHandler); this stays because the descriptor needs the value to decide the unit
+// itself, and to avoid duplicating a database ID in the frontend.
 const productDefaultsCache = new Map();
 
 async function fetchProductDefaults(token) {
@@ -176,6 +177,14 @@ function resolvePlv(spec, token, wantSales) {
 // Existing product categories cache per token/run
 const productCategoriesCache = new Map();
 
+// ETP-5676: these caches are keyed by token, so a second file in the same tab would be answered
+// from the first file's snapshot. A new file starts a new run (see `importRunState`).
+registerImportRunReset(() => {
+  productCategoriesCache.clear();
+  productDefaultsCache.clear();
+  salesPlvCache.clear();
+});
+
 /**
  * ETP-5227: this used to ask for `?limit=1000` — not a parameter NEO reads — and NEO's own
  * default capped the answer at the first 100 categories, silently. A tenant with more than that
@@ -203,7 +212,7 @@ async function resolveUom(row, config, productDefaults) {
   const raw = String(row.uOM ?? '').trim();
   if (!raw) return productDefaults.uOM ?? undefined;
   const resolveUomFn = config.resolveUomFn || getFkResolver('product-uom');
-  const result = await resolveUomFn(raw, { token: config.token });
+  const result = await resolveUomFn(raw, { token: config.token, fkResolutions: config.fkResolutions });
   if (result.status !== 'auto-resolved') {
     const message = typeof config.translate === 'function'
       ? config.translate('importErrorUomUnresolved', { uom: raw })

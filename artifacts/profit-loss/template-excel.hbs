@@ -1,7 +1,17 @@
 {{!-- Excel-only template (ETP-4899) — flattens the indented tree into a plain,
       calculation-friendly grid. The HTML preview conveys hierarchy with left
-      padding, which Excel cannot express, so depth becomes its own sortable
-      "Level" column plus separate code/name columns.
+      padding, which Excel cannot express, so the tree indent becomes its own
+      sortable "Depth" column plus separate code/name columns.
+      "Depth" is the position in the report tree, NOT the account type: the
+      same type can sit at different depths in different branches. The "Type"
+      column (ETP-5663) is the account's ElementLevel (Heading / Account /
+      Breakdown / Subaccount, contract `labels.E|C|D|S`), or "Total"
+      (`labels.T`) for a formula HEADING (`isFormula` + level E: A.TOTAL,
+      P.TOTAL, P.G.A..D). A formula at another level is a mirror account such
+      as (5510) = -1 x 5510, not a total, so it keeps its own type. Built
+      from the Handlebars built-ins `if`/`lookup` plus the canonical `ifCond`,
+      so it needs no report-specific helper. Every header comes from
+      `meta.labels`, with the same keys as template-csv.hbs.
       Amount cells use data-cell-type="number" with the RAW value (no
       formatCurrency) — html-to-xlsx does `parseFloat(cell.innerText)` for that
       type, so a formatted amount would silently truncate at the thousands
@@ -17,10 +27,11 @@
 <body>
   <table>
     <thead><tr>
-      <th>Group</th>
-      <th>Level</th>
-      <th>Code</th>
-      <th>Name</th>
+      <th>{{meta.labels.hdrGroup}}</th>
+      <th>{{meta.labels.hdrDepth}}</th>
+      <th>{{meta.labels.hdrType}}</th>
+      <th>{{meta.labels.hdrCode}}</th>
+      <th>{{meta.labels.hdrName}}</th>
       <th>{{meta.labels.amount}}</th>
       {{#ifCond meta.params.compareTo '===' 'true'}}<th>{{meta.labels.amount_ref}}</th>{{/ifCond}}
     </tr></thead>
@@ -29,6 +40,7 @@
       <tr>
         <td>{{this.group}}</td>
         <td data-cell-type="number">{{this.indent}}</td>
+        <td>{{#if this.isFormula}}{{#ifCond this.elementlevel '===' 'E'}}{{@root.meta.labels.T}}{{else}}{{lookup @root.meta.labels this.elementlevel}}{{/ifCond}}{{else}}{{lookup @root.meta.labels this.elementlevel}}{{/if}}</td>
         <td>{{this.value}}</td>
         <td>{{this.name}}</td>
         <td data-cell-type="number">{{this.amount}}</td>

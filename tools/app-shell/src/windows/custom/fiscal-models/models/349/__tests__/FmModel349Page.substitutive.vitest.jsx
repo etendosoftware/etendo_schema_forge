@@ -42,7 +42,6 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div',
     { className: 'test-kpi349' },
@@ -229,6 +228,10 @@ describe('FmModel349Page — substitutive banner + identifier (ETP-5597)', () =>
     render(<FmModel349Page decl={SUSTITUTIVA_DECL({ formerStatement: '349000000000A' })} {...defaultProps} />);
     expect(presentBtn().disabled).toBe(true);
     expect(presentBtn().getAttribute('title')).toBe('fm.m349.present_disabled.former_statement');
+    // ETP-5584 — the core Button's `disabled:pointer-events-none` would swallow the hover that
+    // shows that title; FmDetailButton re-enables pointer events (jsdom cannot hover).
+    expect(presentBtn().className).toContain('disabled:pointer-events-auto');
+    expect(presentBtn().className).toContain('disabled:cursor-not-allowed');
   });
 
   it('Registrar/Presentar is enabled for a Normal declaration even without identifier', () => {

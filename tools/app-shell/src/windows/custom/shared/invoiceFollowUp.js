@@ -13,8 +13,12 @@ import { PackageCheck, Truck } from 'lucide-react';
 // title `titleKey`, the summary (its «Líneas» column is the pending line count), the window's
 // `questionKey`, ONE static option card (`labelKey` + `badgeKey`/`badgeTone` + description)
 // and a primary `actionLabelKey` button.
+// `documentNo` is the INTERNAL document number on both sides (e.g. «FC1000000»). On a
+// purchase invoice it must never be `orderReference` (POReference): that is the supplier's
+// own invoice number, a free-text reconciliation field, not the document being confirmed.
 const INVOICE_SUMMARY = {
   documentLabelKey: 'invoice',
+  documentNoField: 'documentNo',
   dateLabelKey: 'date',
   dateField: 'invoiceDate',
   contactField: 'businessPartner$_identifier',
@@ -28,7 +32,7 @@ const INVOICE_QUESTION_KEY = 'followUpInvoiceQuestion';
 export const SALES_INVOICE_FOLLOW_UP = {
   spec: 'sales-invoice',
   questionKey: INVOICE_QUESTION_KEY,
-  summary: { ...INVOICE_SUMMARY, documentNoField: 'documentNo' },
+  summary: INVOICE_SUMMARY,
   options: {
     shipment: {
       titleKey: 'followUpManageShipmentTitle',
@@ -50,7 +54,7 @@ export const PURCHASE_INVOICE_FOLLOW_UP = {
   questionKey: INVOICE_QUESTION_KEY,
   // The supplier's number ("Nº documento") is what the purchase invoice is known by; the
   // internal DocumentNo is the fallback (see purchase-invoice LABEL_OVERRIDES).
-  summary: { ...INVOICE_SUMMARY, documentNoField: 'orderReference' },
+  summary: INVOICE_SUMMARY,
   options: {
     receipt: {
       titleKey: 'followUpManageReceiptTitle',

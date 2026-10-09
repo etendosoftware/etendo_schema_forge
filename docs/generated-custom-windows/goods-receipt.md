@@ -669,3 +669,12 @@ no amount.
 
 **Automated evidence.** `tools/app-shell/src/windows/custom/goods-receipt/__tests__/GoodsReceiptActions.vitest.jsx`
 (`purchase return result`).
+
+## Related documents — form and list preview share one definition — ETP-5539
+
+The form's Related Documents tab (`tools/app-shell/src/windows/custom/goods-receipt/RelatedDocuments.jsx`,
+now a thin wrapper over `RelatedDocumentsSection`) and the preview's `RelatedDocumentsCard`
+(`GoodsReceiptPreview.jsx`) render `PURCHASE_RELATED_DOCS['goods-receipt']`: linked purchase orders,
+purchase invoices and return-to-vendor shipments (`linkedOrders` / `linkedInvoices` / `linkedReturns`).
+The backend injects these on the detail GET only, so the preview no longer reads them from the list
+row (which left the card empty): it loads the detail record itself. See `docs/ui-customization.md` §7.a.

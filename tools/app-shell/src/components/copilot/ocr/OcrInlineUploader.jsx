@@ -8,7 +8,8 @@ import { useCopilot } from '@/components/CopilotContext';
 import { getOcrDocType } from './ocrDocTypes';
 import { uploadAndMarkMainAttachment } from './listAttachments';
 import { buildOcrSchema } from './buildOcrSchema';
-import { useOcrExtraction } from './useOcrExtraction';
+import { useOcrExtraction, OCR_NO_DATA_ERROR } from './useOcrExtraction';
+import { hasExtractedData } from './hasExtractedData';
 import { useOcrFlow } from './useOcrFlow';
 
 /* eslint-disable react/prop-types */
@@ -93,6 +94,8 @@ export default function OcrInlineUploader({
     question: docType?.question,
     structuredOutput: docType?.structuredOutput,
     structuredOutputSchema: docType ? buildOcrSchema(docType) : null,
+    // An all-null payload (blank/corrupt PDF) must not open the review modal.
+    hasData: (payload) => hasExtractedData(docType, payload),
   });
 
   if (!isNew || !docType) return null;
@@ -240,7 +243,7 @@ export default function OcrInlineUploader({
       {status === 'error' && (
         <div className="flex items-start gap-2 text-xs text-destructive">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
-          <span>{error || ui('ocrFailed')}</span>
+          <span>{error === OCR_NO_DATA_ERROR ? ui('ocrNoDataExtracted') : (error || ui('ocrFailed'))}</span>
         </div>
       )}
       {pickError && (

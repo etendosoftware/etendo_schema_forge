@@ -323,8 +323,12 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     }
   };
 
-  const sqBtn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: 36, width: 36, borderRadius: 6, border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', cursor: 'pointer', boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)', flexShrink: 0 };
-  const textBtn = { display: 'inline-flex', alignItems: 'center', gap: 6, height: 36, padding: '0 12px', borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer', flexShrink: 0 };
+  // ETP-5601 — record-toolbar controls (Figma): 40px, 8px radius, text-sm/leading-6, 20px icons.
+  // Secondary/icon buttons: white with a border, #121217 text, #828FA3 icons; primary: #121217
+  // fill with white text.
+  const secondaryBtnCls = 'inline-flex items-center justify-center gap-2 h-10 px-3 shrink-0 rounded-lg border border-border bg-card text-[#121217] text-sm leading-6 font-medium hover:bg-muted/30 transition-colors';
+  const primaryBtnCls = 'inline-flex items-center justify-center gap-2 h-10 px-3 shrink-0 rounded-lg bg-[#121217] text-white text-sm leading-6 font-medium hover:bg-[#121217]/90 transition-colors';
+  const iconBtnCls = 'inline-flex items-center justify-center h-10 w-10 shrink-0 rounded-lg border border-border bg-card text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors';
 
   return (
     <>
@@ -336,11 +340,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         <button
           type="button"
           onClick={() => setWizardOpen(true)}
-          style={{ ...textBtn, border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--card))'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--card))'; }}
+          className={secondaryBtnCls}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg width="20" height="20" className="text-[#828FA3]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-5" />
             <path d="M12 15l-3 3 3 3" />
             <path d="M9 18h8" />
@@ -359,12 +361,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
           // The `1px solid var(--status-info-border)` ring was a leftover from that same
           // badge styling — the real `Confirmar` button (DraftModeConfirmButton) has no
           // border at all, just the dark fill.
-          style={{ ...textBtn, border: 'none', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
-          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
-          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
+          className={primaryBtnCls}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
             <polyline points="14 2 14 8 20 8" />
             <line x1="16" y1="13" x2="8" y2="13" />
@@ -447,11 +446,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
           href={previewAttachment.storedFile.objectUrl}
           download={previewAttachment.storedFile.fileName}
           title={previewAttachment.storedFile.fileName}
-          style={{ ...sqBtn, textDecoration: 'none' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--card))'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--card))'; }}
+          className={`${iconBtnCls} no-underline`}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>

@@ -133,14 +133,15 @@ function DocCard({ doc, index, ui, onOpen }) {
  *
  * Keyboard: focus moves to the primary button on open (so Enter runs the primary action), Tab
  * cycles inside the dialog, Esc closes, Enter/Space on a card opens that document, and focus
- * goes back to the opener on unmount.
+ * goes back to the opener on unmount. A click on the backdrop closes it too (same rule as the
+ * PopUps choice modal, ActionChoiceModal); a click inside the dialog does not.
  *
  * @param {object} props
  * @param {Array<{type: string, num: string, documentStatus?: string|null, route?: string}>} props.docs
  *   Created documents. `type` is a TYPE_CONFIG key; `documentStatus === 'CO'` badges it as
  *   completed (anything else as draft); a doc without `route` is shown but not navigable.
  * @param {(route: string) => void} props.navigate Opens a document route.
- * @param {() => void} props.onClose Close button, close icon and Esc.
+ * @param {() => void} props.onClose Close button, close icon, Esc and backdrop click.
  * @param {() => void} [props.onNavigate] Runs instead of `onClose` right before navigating
  *   (defaults to `onClose`).
  */
@@ -200,7 +201,7 @@ export function ConfirmResultModal({ docs = [], navigate, onClose, onNavigate })
     // card it covered completely while a tour pointed at this very modal.
     // Nothing needs to sit above a confirmation result except toasts, which are
     // already higher.
-    <div data-testid="confirm-result-modal" style={overlayStyle}>
+    <div data-testid="confirm-result-modal" onClick={onClose} style={overlayStyle}>
       {/*
         ETP-5108: no `fontFamily` here on purpose. The design system declares the
         family in exactly one place — `body` in the core's styles.css — and every
@@ -216,6 +217,7 @@ export function ConfirmResultModal({ docs = [], navigate, onClose, onNavigate })
         aria-labelledby={titleId}
         tabIndex={-1}
         data-testid="confirm-result-dialog"
+        // Keeps a click inside the dialog from reaching the backdrop's close handler.
         onClick={e => e.stopPropagation()}
         onKeyDown={handleKeyDown}
         style={dialogStyle}

@@ -9,6 +9,14 @@ import { AdvancedFilterBuilder } from './AdvancedFilterBuilder.jsx';
 import { DistinctValuesList } from './DistinctValuesList.jsx';
 import { DateRangePopoverContent } from '@/components/ui/date-range-popover.jsx';
 
+// ETP-5601 — Figma's toolbar type: text-sm/leading-6/font-medium in #121217 for every text
+// control, idle or active. An active filter is told apart by its border alone. `text-[#121217]`
+// already has a dark-mode remap in the core stylesheet. Icons are 20px in
+// #828FA3; `[&_svg]:` is needed because the core Button forces `[&_svg]:size-4` on its children.
+// The chevron is the exception: `!size-4` (16px box, ~8px glyph as in Figma) must beat the
+// parent `[&_svg]:size-5` selector, which outranks a plain class on the icon itself.
+const TOOLBAR_SELECT_CLASS = 'gap-1.5 text-sm leading-6 font-medium text-[#121217] h-10 px-3 rounded-lg bg-card [&_svg]:size-5 [&_svg]:text-[#828FA3]';
+
 /**
  * Quick-filter toolbar rendered above the list table.
  *
@@ -38,6 +46,10 @@ export function ListFilterBar({
   onDeletePreset = null,
   labelOverrides = null,
   hideStatusFilter = false,
+  // ETP-5509 — render the controls as items of the PARENT flex container (`display: contents`)
+  // instead of a nowrap row of their own, so a wrapping parent (the list toolbar's filters
+  // cluster) can move them onto a new line one by one when space runs out.
+  flowInParent = false,
 }) {
   const ui = useUI();
   const dictionary = useLocale();
@@ -316,7 +328,7 @@ export function ListFilterBar({
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className={flowInParent ? 'contents' : 'flex items-center gap-2'}>
       {statusCol && !hideStatusFilter && (
         <Popover
           open={statusMenuOpen}
@@ -328,8 +340,8 @@ export function ListFilterBar({
               variant="outline"
               size="sm"
               className={[
-                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-card',
-                activeStatusCode ? 'text-foreground border-primary/40' : 'text-muted-foreground',
+                TOOLBAR_SELECT_CLASS,
+                activeStatusCode ? 'border-primary/40' : '',
               ].join(' ')}
             >
               {activeStatusLabel}
@@ -338,7 +350,7 @@ export function ListFilterBar({
                   className="h-3.5 w-3.5 animate-spin text-muted-foreground"
                   data-testid="Loader2__6d5e90" />
               )}
-              <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__6d5e90" />
+              <ChevronDown className="!size-4" data-testid="ChevronDown__6d5e90" />
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-64 p-0" data-testid="PopoverContent__6d5e90">
@@ -368,8 +380,8 @@ export function ListFilterBar({
               variant="outline"
               size="sm"
               className={[
-                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-card',
-                activeTypeCode ? 'text-foreground border-primary/40' : 'text-muted-foreground',
+                TOOLBAR_SELECT_CLASS,
+                activeTypeCode ? 'border-primary/40' : '',
               ].join(' ')}
             >
               {activeTypeLabel}
@@ -378,7 +390,7 @@ export function ListFilterBar({
                   className="h-3.5 w-3.5 animate-spin text-muted-foreground"
                   data-testid="Loader2__6d5e90" />
               )}
-              <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__6d5e90" />
+              <ChevronDown className="!size-4" data-testid="ChevronDown__6d5e90" />
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-64 p-0" data-testid="PopoverContent__6d5e90">
@@ -408,13 +420,13 @@ export function ListFilterBar({
               variant="outline"
               size="sm"
               className={[
-                'gap-1.5 font-normal h-9 px-3 rounded-lg bg-card',
-                hasActiveDate ? 'text-foreground border-primary/40' : 'text-muted-foreground',
+                TOOLBAR_SELECT_CLASS,
+                hasActiveDate ? 'border-primary/40' : '',
               ].join(' ')}
             >
               <CalendarDays className="h-3.5 w-3.5" data-testid="CalendarDays__6d5e90" />
               {activeDateLabel}
-              <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__6d5e90" />
+              <ChevronDown className="!size-4" data-testid="ChevronDown__6d5e90" />
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto p-0" data-testid="PopoverContent__6d5e90">
@@ -434,9 +446,9 @@ export function ListFilterBar({
           <button
             type="button"
             data-testid="filter-advanced"
-            className="relative inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-[hsl(var(--muted))]"
+            className="relative inline-flex h-10 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm leading-6 font-medium text-[#121217] transition-colors hover:bg-[hsl(var(--muted))]"
           >
-            <Filter className="h-4 w-4 text-muted-foreground" data-testid="Filter__6d5e90" />
+            <Filter className="h-5 w-5 text-[#828FA3]" data-testid="Filter__6d5e90" />
             <span>{ui('filters')}</span>
             {hasActiveAdvancedFilter && (
               <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-[hsl(var(--foreground))] text-primary-foreground text-[10px] font-semibold leading-none">

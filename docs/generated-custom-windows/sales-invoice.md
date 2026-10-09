@@ -256,6 +256,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
   while something is pending (never for a read-only window). After a creation the record is
   re-read (the button disappears; a partial movement later offers only what is still missing)
   and `sales-invoice:document-created` refreshes the related documents (`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`).
+  Completing (or editing / deleting) that shipment later marks the invoice's cached record stale
+  (`goods-shipment → sales-invoice` in `lib/crossSpecCacheInvalidation.js`), so coming back to the
+  invoice shows the new delivery status and shipment status without a manual reload.
 - Config: `SALES_INVOICE_FOLLOW_UP` in `tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js`.
 
 The previous ad-hoc «¿Gestionar envío?» dialog in `artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`
@@ -2225,18 +2228,27 @@ with the full text on hover. See `docs/ui-customization.md` §7.a for the shared
 
 - Preview panel progress row (ETP-5549): the `InvoicePreview` General tab shows a "Delivered: [PercentBar] N%" row under Status, fed by the invoice's `eTGODeliveryStatus` (`em_etgo_delivery_status`, the same field as the grid column and header badge). Like the order preview it renders whenever the value is non-null, regardless of document status. `PercentBar` renders the shared `ProgressCircle` (circle first, label beside it; grey track at 0%, black arc at 1-99%, green at 100% or more, label always black; above 100% the arc is clamped but the label shows the real value), so the preview matches the grid column (ETP-5545).
 
-## List toolbar: tab group on its own row — ETP-5509
+## List toolbar: tab group wraps only when it does not fit — ETP-5509
 
-The list toolbar is laid out by the shared `ListView` in up to two rows: quick filters, "Filtros"
-and the main actions (sort, refresh, print, "New …") on the first, and the **Todos / Facturas / Facturas rectificativas** subset tabs on a second row
-below it, followed by a gray separator line between toolbar and body. Before ETP-5509 the tab
-group opened the first row and, at 1280×720 with the navigation rail expanded, competed for width
-with the filters and the actions. The tabs are on the second row at every width, and they behave
-as before: choosing another entry filters the grid and highlights the selection.
+The list toolbar is laid out by the shared `ListView` as **one row**: the **Todos / Facturas / Facturas rectificativas** subset
+tabs, the status and date filters and "Filtros" on the left and the main actions (sort, refresh, print, "New …") on the right, followed by a gray
+separator line between toolbar and body. The tabs move — alone, the same element, so a focused tab keeps focus — to a line of their own
+below only when
+the whole row does not fit at the current width (a measurement, not a breakpoint), so no grid row
+is lost when there is room. The filters and the actions always keep at least 16px between them.
+At 1280×720 with the rail expanded the extra Print button makes the row too wide, so the tabs sit on the second row there; at 1920×1080 everything is one row. The tabs behave the same in either row: choosing another entry filters the grid and
+highlights the selection.
 
-Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
-(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+ETP-5509 review: the first iteration put the tabs on the second row at every width, which cost a
+visible grid row even where everything fit; UX asked for a single row that wraps only when needed.
 
-Manual verification: at 1280×720 with the rail expanded, open `/sales-invoice` and confirm the status and date
-filters and "Filtros" sit on the first row with the main actions on the right, untruncated; the
-three tabs sit on the second row; switching tab still filters the grid.
+Nothing changed in this window's own files or in `decisions.json` — the layout, the fit check
+(`useListToolbarTabsFit`), the test ids (`list-toolbar-tabs`, `data-tabs-placement`) and the
+reasoning live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: with the rail expanded, open `/sales-invoice` at 1920×1080 and confirm one toolbar
+row (tabs, filters, "Filtros", then the actions on the right, untruncated). Narrow the window
+until it no longer fits and confirm only the tabs drop to a second row, with no gap collapse
+between "Filtros" and the actions; widen it again and confirm they come back. Switching tab
+filters the grid from either row.
+
