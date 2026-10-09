@@ -51,8 +51,10 @@ The target repo is a rule, not a choice:
 Product issues are filed centrally in `etendo-ai` so they all land on the Roadmap; the code repo is
 named inside the body (an `Affected components` / `Repo:` line), not by where the issue lives.
 
-`etendo-ai` labels to use: `bug`, `enhancement`, `idea` (plus the `Celula*` team labels when the
-user names a team). Read the current set with `gh label list -R etendosoftware/etendo-ai`.
+`etendo-ai` labels: `bug` for a bug, **`Mejora`** for a feature or improvement, `idea` for an
+idea, plus a `Celula*` team label when the user names a team. The repo also carries GitHub's
+default `enhancement`; leave it unused, since the team tags improvements as `Mejora` (14 issues
+vs 0 on 2026-10-09). Read the current set with `gh label list -R etendosoftware/etendo-ai`.
 
 ## 3. Search for duplicates
 
@@ -61,7 +63,7 @@ the code repos:
 
 ```bash
 gh issue list -R etendosoftware/etendo-ai --state all --search "<keywords>" --limit 20
-gh search issues --owner etendosoftware --state open "<keywords>" --limit 20
+gh search issues --owner etendosoftware "<keywords>" --limit 20      # open and closed
 ```
 
 A match → report it with its URL and stop; add it to the Roadmap (step 4) if it is missing there,
@@ -76,7 +78,7 @@ feature issue **must** end up on the Roadmap with **Product** set. Also set Team
 gives them.
 
 ```bash
-gh issue create -R etendosoftware/etendo-ai --title "<title>" --body-file <file> --label <bug|enhancement|idea>
+gh issue create -R etendosoftware/etendo-ai --title "<title>" --body-file <file> --label <bug|Mejora|idea>
 gh project item-add 12 --owner etendosoftware --url <issue-url> --format json      # → .id = ITEM_ID
 
 # Product (GraphQL only — see the gotcha below). Etendo = 4d19f0bf, Classic = 0a7608fb
@@ -88,7 +90,9 @@ gh project item-edit --project-id PVT_kwDOBlBfO84BPs5X --id <ITEM_ID> \
   --field-id PVTSSF_lADOBlBfO84BPs5Xzg-CQWI --single-select-option-id <team-option>   # Team
 gh project item-edit --project-id PVT_kwDOBlBfO84BPs5X --id <ITEM_ID> \
   --field-id PVTSSF_lADOBlBfO84BPs5Xzg-CQJ0 --single-select-option-id f75ad846        # Status=Todo
-# Dates: --date YYYY-MM-DD; Score: --number N; Quarter: --iteration-id <id>
+gh project item-edit --project-id PVT_kwDOBlBfO84BPs5X --id <ITEM_ID> \
+  --field-id PVTIF_lADOBlBfO84BPs5Xzg-CQWQ --iteration-id <quarter-id>              # Quarter
+# Dates: --date YYYY-MM-DD; Score: --number N
 ```
 
 Done when the Product value has been **read back** (query below) and matches, and the report lists
