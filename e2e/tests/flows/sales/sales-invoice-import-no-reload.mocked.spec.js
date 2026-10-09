@@ -1,5 +1,8 @@
+// @covers artifacts/sales-invoice/custom/ImportFromShipmentModal.jsx
+// @covers artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
+import { t } from '../../helpers/i18n.js';
 import { clickLastCheckbox } from '../../helpers/selectors.js';
 
 /**
@@ -134,12 +137,12 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Empty state with the import button should be visible
-    const importBtn = page.getByText(/Import.*Shipment|Importar.*envío/i).first();
+    const importBtn = page.getByText(t('importFromShipment')).first();
     await expect(importBtn).toBeVisible({ timeout: 8_000 });
     await importBtn.click();
 
     // Modal opens and shows the shipment document
-    const modalTitle = page.getByText(/Import.*Shipment|Importar.*envío/i).first();
+    const modalTitle = page.getByText(t('importFromShipment')).first();
     await expect(modalTitle).toBeVisible({ timeout: 5_000 });
 
     const shipmentRow = page.getByText(/SHIP-MOCK-001/i).first();
@@ -200,7 +203,7 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     await page.goto(`/sales-invoice/${INVOICE_ID}`);
     await page.waitForLoadState('domcontentloaded');
 
-    const importBtn = page.getByText(/Import.*Shipment|Importar.*envío/i).first();
+    const importBtn = page.getByText(t('importFromShipment')).first();
     await expect(importBtn).toBeVisible({ timeout: 8_000 });
     await importBtn.click();
 
@@ -318,7 +321,7 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
     await page.goto(`/sales-invoice/${INVOICE_ID}`);
     await page.waitForLoadState('domcontentloaded');
 
-    const importBtn = page.getByText(/Import.*Shipment|Importar.*envío/i).first();
+    const importBtn = page.getByText(t('importFromShipment')).first();
     await expect(importBtn).toBeVisible({ timeout: 8_000 });
     await importBtn.click();
 
