@@ -5,11 +5,11 @@ description: >
   #12): pick the target repo (Etendo product issues go to etendosoftware/etendo-ai, Classic ones
   to their own repo), search for duplicates, create the issue, add it to the project and set
   Product / Team / Status, cross-link Jira, turn a Datadog finding (or the Jira task it backs)
-  into a Roadmap issue, or produce the read-only Roadmap hygiene report. Use before running `gh issue create` for
-  an idea, bug or feature, and whenever a Roadmap item needs a field read or written. Triggers
-  on: "roadmap", "Etendo Roadmap", "crear issue", "issue de GitHub", "GitHub issue", "etendo-ai",
-  "Product field", "triage", "higiene del roadmap", "roadmap hygiene", "datadog", "lo vi en
-  datadog", "alerta", "monitor", "error en producción".
+  into a Roadmap issue, or produce the read-only Roadmap hygiene report. Use before running `gh
+  issue create` for an idea, bug or feature, and whenever a Roadmap item needs a field read or
+  written. Triggers on: "roadmap", "Etendo Roadmap", "crear issue", "issue de GitHub", "GitHub
+  issue", "etendo-ai", "Product field", "triage", "higiene del roadmap", "roadmap hygiene",
+  "datadog", "lo vi en datadog", "alerta", "monitor", "error en producción".
 ---
 
 # Etendo Roadmap
@@ -65,7 +65,9 @@ head -c "$(wc -c < "$D/old")" "$D/after" 2>/dev/null | cmp -s - "$D/old" && grep
 ```
 
 Done when the comment exists and the read-back prints `LINK-OK`: the old description is an exact
-prefix of the new one, so the append replaced nothing.
+prefix of the new one, so the append replaced nothing. A missing `LINK-OK` means "inspect the
+description by hand", not "the append failed": Jira may normalize CRLF or trailing whitespace on
+save. Never re-append blindly, since that duplicates the line.
 
 ## 2. Route it to a repo
 
@@ -104,7 +106,7 @@ Pair a generic term with a distinctive one: on its own, "MCP spec" pulls in ever
 issue. The same search answers the reverse question "I see this log line — is it tracked?": run
 the log text against `etendo-ai` and Jira (`jira issue list -q 'text ~ "<fragment>"'`).
 
-A match → report it with its URL and stop; add it to the Roadmap (step 4) if it is missing there,
+A match → report it with its URL and stop; add it to the Roadmap (§4) if it is missing there,
 instead of filing a twin. Done when every variant has run through both commands and every hit is
 either linked or ruled out with a one-line reason (`#41 — NEO spec loader, unrelated`).
 
@@ -249,7 +251,7 @@ read and written through GraphQL only. The write takes `multiSelectOptionIds: [S
 Read an item's value back with the combined query in §4.
 
 The mutation's input shape was confirmed by schema introspection
-(`__type(name:"ProjectV2FieldValue")`), not by mutating a real item, so the read-back in step 4 is
+(`__type(name:"ProjectV2FieldValue")`), not by mutating a real item, so the read-back in §4 is
 what proves a write.
 
 ## 7. Auth
