@@ -17628,6 +17628,7 @@
     "sendModalNoSubject": "Enter a subject",
     "invalidAmount": "Enter a valid amount",
     "productSearchNoResults": "No results for \"{query}\"",
+    "productSearchError": "The search could not be completed. Please try again.",
     "productSearchCount": "{count} products",
     "productSearchNavigate": "navigate",
     "productSearchSelect": "select",
