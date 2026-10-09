@@ -71,7 +71,8 @@ Show a summary:
 Title:     [title]
 Component: [affected files/layer]
 Assignee:  valenvivaldi
-GH Repo:   etendosoftware/etendo_schema_forge
+GH Repo:   etendosoftware/etendo-ai
+Roadmap:   project #12, Product = Etendo
 ```
 
 Wait for user confirmation.
@@ -93,9 +94,14 @@ If the fix is unknown or too complex to determine, write a detailed analysis of 
 
 ## Step 5: Create the GitHub issue
 
+Schema Forge is part of the Etendo product, so its bugs are filed in `etendosoftware/etendo-ai`,
+not in a code repo — the `etendo-roadmap` skill owns that routing rule and the duplicate search
+to run first. Name the code repo (`etendo_schema_forge` / `schema_forge_core`) under
+`Affected components`.
+
 ```bash
 gh issue create \
-  --repo etendosoftware/etendo_schema_forge \
+  --repo etendosoftware/etendo-ai \
   --title "[title]" \
   --label "bug" \
   --assignee "valenvivaldi" \
@@ -135,9 +141,16 @@ EOF
 )"
 ```
 
+## Step 6: Add it to the Etendo Roadmap
+
+Follow the `etendo-roadmap` skill, step 4: add the issue to project #12 and set
+**Product = Etendo** (plus Team/Status when known), then read Product back. The IDs and the
+GraphQL call live only in that skill.
+
 Report to user:
 ```
-GitHub: etendosoftware/etendo_schema_forge#N — [title]
+GitHub:  etendosoftware/etendo-ai#N — [title]
+Roadmap: added, Product = Etendo (read back)   ← or what is still pending
 ```
 
 ---
@@ -235,5 +248,6 @@ The pipeline ignores this field and always generates an **Add** button for every
 
 - Always verify the bug is not already in the Known Bug Patterns section before creating a new issue.
 - Bug titles must be in English, imperative form, max 80 chars (Git Police limit for commit messages).
-- The GitHub repo for this tool is `etendosoftware/etendo_schema_forge`.
+- Bugs for this tool are filed in `etendosoftware/etendo-ai` and added to the Etendo Roadmap
+  (`etendo-roadmap` skill).
 - Do NOT create issues for: wrong field classification in a specific window, user preference decisions, Etendo AD data gaps.

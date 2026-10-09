@@ -130,8 +130,8 @@ All commits MUST follow Etendo Git Police conventions as defined by the `/etendo
 - Branch naming: `feature/ETP-1234`, `hotfix/#N-ETP-1234`, `epic/ETP-1234`
 
 ## Resolving GitHub Issues
-Create a Jira task inside the current epic, then delegate branch + PR creation to Clerk. PR must reference the GitHub issue (e.g., `Fixes #141`).
-An accepted GitHub feature/bug has one or more Jira tasks, cross-linked both ways; the reverse is not required — internal work stays Jira-only, and only public ideas/bugs/features get a GitHub issue (Clerk `<github_issues_roadmap>`).
+Create a Jira task inside the current epic, then delegate branch + PR creation to Clerk. PR must reference the GitHub issue (e.g., `Fixes etendosoftware/etendo-ai#141`; plain `#141` only for a same-repo issue).
+Only public ideas/bugs/features get a GitHub issue (internal work stays Jira-only). Etendo-product issues (schema_forge, schema_forge_core, com.etendoerp.go) are filed in `etendosoftware/etendo-ai`, Classic ones in their own repo; every one lands on the Etendo Roadmap with Product set. An accepted issue gets one or more cross-linked Jira tasks; a Jira task needs no issue. Procedure and IDs: the `etendo-roadmap` skill.
 
 </pipeline_rules>
 
@@ -167,7 +167,7 @@ An accepted GitHub feature/bug has one or more Jira tasks, cross-linked both way
 | Assign Jira issue | ✅ |
 | Create / merge PR | ✅ |
 | Check epic status | ✅ |
-| Create / triage GitHub issue + add to Etendo Roadmap (Product set) | ✅ |
+| Create / triage GitHub issue (Etendo → `etendo-ai`) + add to Etendo Roadmap, per `etendo-roadmap` skill | ✅ |
 
 Clerk agent file: `.claude/agents/workflow.md`
 Spawn with: `subagent_type="workflow"` and the operation to perform.
