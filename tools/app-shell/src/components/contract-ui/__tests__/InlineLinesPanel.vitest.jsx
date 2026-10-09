@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 /**
  * Integration test for InlineLinesPanel — renders the component in jsdom
  * with minimal mocks. No server, no DB, no browser needed.
@@ -1947,6 +1948,141 @@ describe('InlineLinesPanel', () => {
       await act(async () => { await userEvent.hover(emptyRow); });
       const emptyAction = within(emptyRow).getByTestId('line-action-add-dimensions');
       expect(emptyAction).toHaveAttribute('title', 'editDimensionsTooltip');
+    });
+
+    // `isFieldEditableWhenReadOnly` — draftMode.editableLineFieldsWhenCompleted: on a
+    // completed (read-only) document, the dimension fields the gate accepts stay editable in
+    // the sub-row and are saved through commitField; every other field stays locked.
+    describe('isFieldEditableWhenReadOnly (completed document)', () => {
+      async function expandRow() {
+        const row = screen.getByTestId('line-row-L1');
+        await act(async () => {
+          await userEvent.click(within(row).getByTestId('dimensions-panel-toggle'));
+        });
+        return screen.getByTestId('dimensions-panel-L1');
+      }
+
+      it('renders only the accepted field as editable on a read-only document', async () => {
+        const gate = vi.fn((row, key) => key === 'project');
+        renderDimensionsPanel([], { isDocumentReadOnly: true, isFieldEditableWhenReadOnly: gate });
+        const subRow = await expandRow();
+        expect(within(subRow).getByTestId('dimension-field-project')).toBeInTheDocument();
+        expect(within(subRow).queryByTestId('dimension-field-costcenter')).toBeNull();
+        expect(within(subRow).getByDisplayValue('HQ')).toBeDisabled();
+        expect(gate).toHaveBeenCalledWith(dimensionRows[0], 'project');
+        expect(gate).toHaveBeenCalledWith(dimensionRows[0], 'costcenter');
+      });
+
+      it('saves an accepted field through onUpdateRow', async () => {
+        const onUpdateRow = vi.fn().mockResolvedValue();
+        renderDimensionsPanel([], {
+          isDocumentReadOnly: true,
+          isFieldEditableWhenReadOnly: (row, key) => key === 'project',
+          onUpdateRow,
+        });
+        const subRow = await expandRow();
+        await act(async () => {
+          await userEvent.click(within(subRow).getByTestId('dimension-field-project-set'));
+        });
+        expect(onUpdateRow).toHaveBeenCalledTimes(1);
+        const [row, key, value] = onUpdateRow.mock.calls[0];
+        expect(row.id).toBe('L1');
+        expect(key).toBe('project');
+        expect(value).toBe('NEWVAL');
+      });
+
+      it('blocks commitField for a field the gate rejects at save time', async () => {
+        // The gate accepts while the sub-row renders, then rejects (e.g. the document got
+        // posted meanwhile): commitField re-asks it and must not reach onUpdateRow.
+        let allow = true;
+        const onUpdateRow = vi.fn().mockResolvedValue();
+        renderDimensionsPanel([], {
+          isDocumentReadOnly: true,
+          isFieldEditableWhenReadOnly: (row, key) => allow && key === 'project',
+          onUpdateRow,
+        });
+        const subRow = await expandRow();
+        allow = false;
+        await act(async () => {
+          await userEvent.click(within(subRow).getByTestId('dimension-field-project-set'));
+        });
+        expect(onUpdateRow).not.toHaveBeenCalled();
+      });
+
+      it('flips with the gate on re-render, without remounting (header posted Y → N → Y)', async () => {
+        // DetailView rebuilds the gate from the current header on every render; the grid must
+        // follow the NEW gate it is handed, with the sub-row left open.
+        const lockedGate = () => false;
+        const unpostedGate = (row, key) => key === 'project' || key === 'costcenter';
+        const { rerender } = renderDimensionsPanel([], { isDocumentReadOnly: true, isFieldEditableWhenReadOnly: lockedGate });
+        let subRow = await expandRow();
+        expect(within(subRow).queryByTestId('dimension-field-project')).toBeNull();
+        expect(within(subRow).getByDisplayValue('Project Alpha')).toBeDisabled();
+
+        const props = {
+          columns: dimensionColumns, data: dimensionRows, hiddenColumns: [], entity: 'lines', token: 'test',
+          apiBaseUrl: '/api', selectorContext: {}, onSelectionChange: vi.fn(),
+          onUpdateRow: vi.fn().mockResolvedValue(), onDeleteRow: vi.fn().mockResolvedValue(), isDocumentReadOnly: true,
+        };
+        rerender(<InlineLinesPanel {...props} isFieldEditableWhenReadOnly={unpostedGate} />);
+        subRow = screen.getByTestId('dimensions-panel-L1');
+        expect(within(subRow).getByTestId('dimension-field-project')).toBeInTheDocument();
+        expect(within(subRow).getByTestId('dimension-field-costcenter')).toBeInTheDocument();
+        await act(async () => {
+          await userEvent.click(within(subRow).getByTestId('dimension-field-costcenter-set'));
+        });
+        expect(props.onUpdateRow).toHaveBeenCalledWith(expect.objectContaining({ id: 'L1' }), 'costcenter', 'NEWVAL', expect.anything());
+
+        rerender(<InlineLinesPanel {...props} isFieldEditableWhenReadOnly={lockedGate} />);
+        subRow = screen.getByTestId('dimensions-panel-L1');
+        expect(within(subRow).queryByTestId('dimension-field-project')).toBeNull();
+        expect(within(subRow).queryByTestId('dimension-field-costcenter')).toBeNull();
+      });
+
+      it('keeps every other line column locked and offers no edit / delete / add action', async () => {
+        const columns = [{ key: 'invoicedQuantity', label: 'Qty', type: 'number' }, ...dimensionColumns];
+        const data = [{ ...dimensionRows[0], invoicedQuantity: 3 }];
+        const onUpdateRow = vi.fn().mockResolvedValue();
+        const onEditRow = vi.fn();
+        renderDimensionsPanel([], {
+          columns, data, isDocumentReadOnly: true, onUpdateRow, onEditRow,
+          isFieldEditableWhenReadOnly: (row, key) => key === 'project' || key === 'costcenter',
+        });
+        const row = screen.getByTestId('line-row-L1');
+        await act(async () => {
+          await userEvent.hover(row);
+          await userEvent.click(within(row).getByText('3'));
+        });
+        // No inline editor opened for the non-dimension column, no edit modal requested.
+        expect(within(row).queryByTestId('field-invoicedQuantity')).toBeNull();
+        expect(onEditRow).not.toHaveBeenCalled();
+        expect(onUpdateRow).not.toHaveBeenCalled();
+        // The hover strip renders no buttons at all (no Pencil, no Trash, no add-dimensions).
+        const actions = within(row).queryByTestId('line-actions');
+        if (actions) expect(within(actions).queryAllByRole('button')).toHaveLength(0);
+        expect(within(row).queryByTestId('Pencil__3b7ec2')).toBeNull();
+        expect(within(row).queryByTestId('Trash2__3b7ec2')).toBeNull();
+        expect(screen.queryByTestId('inline-add-row-host')).toBeNull();
+      });
+
+      it('without the prop, a read-only document keeps every dimension field locked (unchanged)', async () => {
+        const onUpdateRow = vi.fn().mockResolvedValue();
+        renderDimensionsPanel([], { isDocumentReadOnly: true, onUpdateRow });
+        const subRow = await expandRow();
+        expect(within(subRow).queryByTestId('dimension-field-project')).toBeNull();
+        expect(within(subRow).queryByTestId('dimension-field-costcenter')).toBeNull();
+        expect(within(subRow).getByDisplayValue('Project Alpha')).toBeDisabled();
+        expect(within(subRow).getByDisplayValue('HQ')).toBeDisabled();
+      });
+
+      it('is ignored on an editable (draft) document: every dimension field stays editable', async () => {
+        const gate = vi.fn(() => false);
+        renderDimensionsPanel([], { isDocumentReadOnly: false, isFieldEditableWhenReadOnly: gate });
+        const subRow = await expandRow();
+        expect(within(subRow).getByTestId('dimension-field-project')).toBeInTheDocument();
+        expect(within(subRow).getByTestId('dimension-field-costcenter')).toBeInTheDocument();
+        expect(gate).not.toHaveBeenCalled();
+      });
     });
   });
 

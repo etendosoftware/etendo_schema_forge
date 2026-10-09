@@ -1,12 +1,24 @@
 // @covers tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js
-import { describe, it } from 'node:test';
+import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { getInvoiceDraftMode, buildInvoiceRowQuickActions } from '../useInvoiceWindow.js';
+import { toast } from 'sonner';
+import {
+  getInvoiceDraftMode, buildInvoiceRowQuickActions, buildInvoiceUnpostActions, invoiceUnpostRowFilter,
+} from '../useInvoiceWindow.js';
 
 const src = readFileSync(new URL('../useInvoiceWindow.js', import.meta.url), 'utf8');
 
 const fakeUi = (key) => `__${key}__`;
+
+// ETP-5692 — the row-kebab Unpost entry, same shape as the albarán windows' one.
+const UNPOST_ENTRY = {
+  key: 'unpost',
+  labelKey: 'unpost',
+  neoAction: 'unpost',
+  successKey: 'documentUnposted',
+  destructive: true,
+};
 
 describe('useInvoiceWindow', () => {
   describe('getInvoiceDraftMode', () => {
@@ -88,6 +100,39 @@ describe('useInvoiceWindow', () => {
           assert.equal('afterProcess' in getInvoiceDraftMode(fakeUi, options), false);
         });
       }
+    });
+
+    // draftMode.editableLineFieldsWhenCompleted — the line dimensions that stay editable on
+    // a completed (unposted) invoice. Emitted only as a non-empty array, like the header list.
+    describe('editableLineFieldsWhenCompleted', () => {
+      for (const [name, options] of [
+        ['no options arg', undefined],
+        ['an empty array', { editableLineFieldsWhenCompleted: [] }],
+        ['a non-array value', { editableLineFieldsWhenCompleted: 'project' }],
+      ]) {
+        it(`omits the key entirely with ${name}`, () => {
+          assert.equal('editableLineFieldsWhenCompleted' in getInvoiceDraftMode(fakeUi, options), false);
+        });
+      }
+
+      it('sets the given array when non-empty', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi, { editableLineFieldsWhenCompleted: ['project', 'costcenter'] });
+        assert.deepEqual(draftMode.editableLineFieldsWhenCompleted, ['project', 'costcenter']);
+      });
+
+      it('is independent from keepSaveWhenCompletedFields — the invoice call shape sets both', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi, {
+          keepSaveWhenCompletedFields: ['accountingDate', 'project', 'costcenter'],
+          editableLineFieldsWhenCompleted: ['project', 'costcenter'],
+        });
+        assert.deepEqual(draftMode.keepSaveWhenCompletedFields, ['accountingDate', 'project', 'costcenter']);
+        assert.deepEqual(draftMode.editableLineFieldsWhenCompleted, ['project', 'costcenter']);
+      });
+
+      it('does not leak into keepSaveWhenCompletedFields when only the line list is given', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi, { editableLineFieldsWhenCompleted: ['project'] });
+        assert.equal('keepSaveWhenCompletedFields' in draftMode, false);
+      });
     });
   });
 
@@ -226,9 +271,10 @@ describe('useInvoiceWindow', () => {
         assert.deepEqual(actions, [REACTIVATE, POST]);
       });
 
-      it('completed and posted -> Reactivate only (never Post)', () => {
+      // ETP-5692 — reverses ETP-5302: a posted invoice offers a standalone Unpost too.
+      it('completed and posted -> Reactivate AND Unpost, in that order (never Post)', () => {
         const actions = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: 'Y' } });
-        assert.deepEqual(actions, [REACTIVATE]);
+        assert.deepEqual(actions, [REACTIVATE, UNPOST_ENTRY]);
       });
 
       it('draft -> Confirm only, never Reactivate or Post', () => {
@@ -259,6 +305,67 @@ describe('useInvoiceWindow', () => {
         ]) {
           assert.ok(!build().menuActions({ row }).some(a => a.key === 'confirm'));
         }
+      });
+    });
+
+    // Standalone Unpost in the row kebab: only a Completed AND posted invoice, never next to
+    // Post, never on a draft or voided one. `posted` counts only as 'Y' / true — 'N', the
+    // posting-error 'i' and 'E' all mean not posted.
+    describe('menuActions — standalone Unpost gate', () => {
+      const build = () => buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+      const keys = (row) => build().menuActions({ row }).map((a) => a.key);
+
+      it('offers Unpost on a Completed invoice posted as true (boolean)', () => {
+        const actions = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: true } });
+        assert.deepEqual(actions.find((a) => a.key === 'unpost'), UNPOST_ENTRY);
+      });
+
+      for (const posted of ['N', 'i', 'E', false, null, undefined]) {
+        it(`does not offer Unpost on a Completed invoice with posted=${JSON.stringify(posted)}`, () => {
+          assert.ok(!keys({ documentStatus: 'CO', processed: true, posted }).includes('unpost'));
+        });
+      }
+
+      for (const documentStatus of ['DR', 'VO']) {
+        it(`does not offer Unpost on a posted ${documentStatus} invoice`, () => {
+          assert.ok(!keys({ documentStatus, processed: documentStatus === 'VO', posted: 'Y' }).includes('unpost'));
+        });
+      }
+
+      it('never offers Unpost together with Post', () => {
+        for (const posted of ['Y', true, 'N', 'i', 'E', false]) {
+          for (const documentStatus of ['CO', 'DR', 'VO']) {
+            const k = keys({ documentStatus, processed: documentStatus !== 'DR', posted });
+            assert.ok(!(k.includes('unpost') && k.includes('post')), `${documentStatus}/${posted}: ${k}`);
+          }
+        }
+      });
+    });
+
+    describe('onMenuActionExecuted — failure toast forwards messageKeys', () => {
+      afterEach(() => mock.restoreAll());
+
+      it('translates a row-kebab Unpost rejected for a closed period through messageKeys', () => {
+        const errorSpy = mock.method(toast, 'error', () => {});
+        const ui = (k) => (k === 'backendError.periodClosedForUnposting' ? 'PERIODO CERRADO' : k);
+        let refreshCalls = 0;
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, {
+          ui, onRefresh: () => { refreshCalls += 1; },
+        });
+        result.onMenuActionExecuted(
+          UNPOST_ENTRY,
+          { success: false, message: 'Already-resolved prose nobody maps', messageKeys: ['PeriodClosedForUnPosting'] },
+        );
+        assert.equal(errorSpy.mock.callCount(), 1);
+        assert.equal(errorSpy.mock.calls[0].arguments[0], 'PERIODO CERRADO');
+        assert.equal(refreshCalls, 1);
+      });
+
+      it('toasts the Unpost success key on success', () => {
+        const successSpy = mock.method(toast, 'success', () => {});
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, { ui: fakeUi });
+        result.onMenuActionExecuted(UNPOST_ENTRY, { success: true });
+        assert.equal(successSpy.mock.calls[0].arguments[0], '__documentUnposted__');
       });
     });
 
@@ -295,6 +402,72 @@ describe('useInvoiceWindow', () => {
         });
         result.onMenuActionExecuted({ documentAction: 'RE', successKey: 'reactivated' }, { success: true });
         assert.equal(refreshCalls, 1);
+      });
+    });
+  });
+
+  // The invoice bulk "Descontabilizar" pair: only Completed AND posted rows run.
+  describe('buildInvoiceUnpostActions / invoiceUnpostRowFilter', () => {
+    const CO_POSTED = { id: 'a', documentStatus: 'CO', posted: 'Y' };
+    const CO_NOT_POSTED = { id: 'b', documentStatus: 'CO', posted: 'N' };
+    const VO_POSTED = { id: 'c', documentStatus: 'VO', posted: 'Y' };
+    const UNPOST_ACTION = [{ value: 'unpost', labelKey: 'unpost' }];
+
+    describe('buildInvoiceUnpostActions', () => {
+      it('offers unpost when at least one row is Completed and posted', () => {
+        assert.deepEqual(buildInvoiceUnpostActions([CO_NOT_POSTED, CO_POSTED, VO_POSTED]), UNPOST_ACTION);
+      });
+
+      it('offers nothing when no row is Completed and posted', () => {
+        assert.deepEqual(buildInvoiceUnpostActions([CO_NOT_POSTED, VO_POSTED]), []);
+        assert.deepEqual(buildInvoiceUnpostActions([]), []);
+      });
+
+      it('accepts posted=true and the legacy docStatus key', () => {
+        assert.deepEqual(buildInvoiceUnpostActions([{ docStatus: 'CO', posted: true }]), UNPOST_ACTION);
+      });
+
+      it('treats the posting-error statuses as not posted', () => {
+        assert.deepEqual(buildInvoiceUnpostActions([
+          { documentStatus: 'CO', posted: 'i' },
+          { documentStatus: 'CO', posted: 'E' },
+        ]), []);
+      });
+    });
+
+    describe('invoiceUnpostRowFilter', () => {
+      it('lets a Completed and posted row run', () => {
+        assert.equal(invoiceUnpostRowFilter(CO_POSTED, 'unpost', fakeUi), true);
+      });
+
+      it('rejects a not-posted row with bulkRowNotPosted', () => {
+        assert.equal(invoiceUnpostRowFilter(CO_NOT_POSTED, 'unpost', fakeUi), '__bulkRowNotPosted__');
+        assert.equal(invoiceUnpostRowFilter({ documentStatus: 'CO', posted: 'i' }, 'unpost', fakeUi), '__bulkRowNotPosted__');
+      });
+
+      it('rejects a posted row that is not Completed with bulkRowNotCompleted', () => {
+        assert.equal(invoiceUnpostRowFilter(VO_POSTED, 'unpost', fakeUi), '__bulkRowNotCompleted__');
+        assert.equal(invoiceUnpostRowFilter({ documentStatus: 'DR', posted: true }, 'unpost', fakeUi), '__bulkRowNotCompleted__');
+      });
+
+      it('reads the status from docStatus when documentStatus is absent', () => {
+        assert.equal(invoiceUnpostRowFilter({ docStatus: 'CO', posted: 'Y' }, 'unpost', fakeUi), true);
+        assert.equal(invoiceUnpostRowFilter({ docStatus: 'VO', posted: 'Y' }, 'unpost', fakeUi), '__bulkRowNotCompleted__');
+      });
+
+      it('prefers documentStatus over docStatus', () => {
+        assert.equal(invoiceUnpostRowFilter({ documentStatus: 'CO', docStatus: 'VO', posted: 'Y' }, 'unpost', fakeUi), true);
+      });
+
+      it('in a mixed selection, only the Completed and posted rows pass', () => {
+        const rows = [CO_POSTED, CO_NOT_POSTED, VO_POSTED, { id: 'd', documentStatus: 'CO', posted: true }];
+        const runnable = rows.filter((r) => invoiceUnpostRowFilter(r, 'unpost', fakeUi) === true).map((r) => r.id);
+        assert.deepEqual(runnable, ['a', 'd']);
+      });
+
+      it('lets every row through for an action other than unpost', () => {
+        assert.equal(invoiceUnpostRowFilter(CO_NOT_POSTED, 'post', fakeUi), true);
+        assert.equal(invoiceUnpostRowFilter(VO_POSTED, 'other', fakeUi), true);
       });
     });
   });

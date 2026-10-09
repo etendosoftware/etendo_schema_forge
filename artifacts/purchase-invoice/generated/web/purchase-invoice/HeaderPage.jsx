@@ -50,7 +50,13 @@ const draftMode = {
   "label": "Confirm",
   "keepSaveWhenCompletedFields": [
     "orderReference",
-    "accountingDate"
+    "accountingDate",
+    "project",
+    "costcenter"
+  ],
+  "editableLineFieldsWhenCompleted": [
+    "project",
+    "costcenter"
   ]
 };
 // @sf-generated-end draftMode:header
@@ -1065,7 +1071,8 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         topbarExtra={PurchaseInvoiceReceiptBadge}
         menuActions={({ data, status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },
-          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'unpost', label: 'Unpost', destructive: true, visible: status === 'CO' && (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}

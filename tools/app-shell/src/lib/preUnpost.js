@@ -11,6 +11,12 @@
  * rejected it with "Factura contabilizada". Two implementations of one rule is what let
  * them diverge, so there is now exactly one.
  *
+ * Scope: this module covers the unpost step INSIDE a reactivation only. A standalone
+ * "Descontabilizar" (unpost and stay Completed) is a separate, explicit menu/bulk action —
+ * offered by the albarán windows and, since ETP-5692, by sales-invoice and purchase-invoice
+ * too — that calls the same `unpost` endpoint directly and never goes through here. `isPosted`
+ * below is the shared posted predicate both kinds of action gate on.
+ *
  * Deliberately NOT a hook: `BulkDocumentAction` is rendered inside a `bulkActions` slot
  * that `ListView` invokes as a plain function call, so anything reached from there must
  * stay hook-free (see the ETP-5209 note in BulkDocumentAction.jsx).
@@ -27,9 +33,12 @@ export const isPosted = (row) => row?.posted === 'Y' || row?.posted === true;
  * @param {object}   params.record    row/header data, read only for its `posted` flag
  * @param {boolean}  params.enabled   the action's `preUnpost` flag
  * @param {function} params.execute   `useNeoAction().execute` — resolves `{success, message}`
- * @returns {Promise<{ran: boolean, success: boolean, message?: string}>}
+ * @returns {Promise<{ran: boolean, success: boolean, message?: string, messageKeys?: string[],
+ *   messageParams?: object}>}
  *   `ran: false` when the step did not apply (not enabled, or the record was not posted);
- *   callers treat that as success and carry on to the document action.
+ *   callers treat that as success and carry on to the document action. A failure carries the
+ *   backend's `messageKeys` / `messageParams` (ETP-5692), so the caller translates the refusal by
+ *   identity — pass `preUnpostErrorIdentity(result)` as `translateBackendError`'s options.
  */
 export async function runPreUnpost({ recordId, record, enabled, execute }) {
   if (!enabled || !isPosted(record)) return { ran: false, success: true };
@@ -38,5 +47,20 @@ export async function runPreUnpost({ recordId, record, enabled, execute }) {
     ran: true,
     success: Boolean(result?.success),
     message: result?.message,
+    ...(result?.messageKeys ? { messageKeys: result.messageKeys } : {}),
+    ...(result?.messageParams ? { messageParams: result.messageParams } : {}),
   };
 }
+
+/**
+ * The `translateBackendError` options of a failed `runPreUnpost` (ETP-5692). A stale screen can
+ * still show an invoice as posted after it was unposted elsewhere; its unpost is then refused with
+ * a plain-English sentence whose only translatable part is the key.
+ *
+ * @param {{messageKeys?: string[], messageParams?: object}} pre the `runPreUnpost` result
+ * @returns {{messageKeys?: string[], messageParams?: object}}
+ */
+export const preUnpostErrorIdentity = (pre) => ({
+  messageKeys: pre?.messageKeys,
+  messageParams: pre?.messageParams,
+});

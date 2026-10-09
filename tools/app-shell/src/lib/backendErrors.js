@@ -402,6 +402,28 @@ const BACKEND_ERROR_KEY_MAP = {
   // process"), the STATUS_DocumentLocked message DocumentPostingService names in `messageKeys`
   // when another posting process holds the record (or AcctServer cannot take its lock).
   OtherPostingProcessActive: 'backendError.recordBeingPosted',
+  // ETP-5692 — the invoice post/unpost refusals (com.etendoerp.go CompletedInvoiceWriteFence,
+  // InvoicePostingGate, InvoiceExchangeRateHandler, DocumentPostingService). These are NOT
+  // AD_MESSAGE records: the backend sends plain English plus these stable identity strings, so
+  // this map is the ONLY place they become Spanish. The SPA's own gates (readOnlyLogic, the
+  // posted-only unpost action) keep them off the normal path; they surface on a stale screen —
+  // the invoice was posted, unposted or voided in another tab or by another user. Every entry is
+  // a generic sentence on purpose: the fence's `messageParams.fields` are API property names
+  // (`accountingDate`, `costcenter`) and `docStatus` is a raw code (`VO`), neither fit to show,
+  // and each locked set is small and fixed enough to name in the sentence itself.
+  ETGO_InvoiceFieldsLockedPosted: 'backendError.invoicePostedFieldsLocked',
+  ETGO_InvoiceExchangeRateLockedPosted: 'backendError.invoicePostedExchangeRateLocked',
+  ETGO_InvoiceUnpostNotPosted: 'backendError.invoiceUnpostNotPosted',
+  ETGO_InvoiceUnpostNotCompleted: 'backendError.invoiceUnpostNotCompleted',
+  ETGO_PostingDocumentNotProcessed: 'backendError.postingDocumentNotProcessed',
+  ETGO_CompletedInvoiceFieldsLocked: 'backendError.completedInvoiceFieldsLocked',
+  ETGO_InvoiceFieldsLockedStatus: 'backendError.invoiceStatusDimensionsLocked',
+  ETGO_InvoiceFieldsLockedSiiSent: 'backendError.invoiceSiiSentReferenceLocked',
+  // ETP-5692 — core `PostedDocument` ("Document already Posted."), which DocumentPostingService
+  // now names instead of the misleading "being posted by another process" when a post hits a
+  // document someone else already posted. Resolved in the GO locale server-side, so mapping it
+  // here only aligns it with the UI locale, like OtherPostingProcessActive above.
+  PostedDocument: 'backendError.documentAlreadyPosted',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -1126,24 +1148,56 @@ function extractFirstResponseErrorsMessage(data) {
   return undefined;
 }
 
-export async function parseBackendErrorMessage(res) {
-  let raw;
+function pickBackendErrorText(data) {
+  // NEO Headless top-level format: { error: { message, status } }
+  if (data?.error?.message) return data.error.message;
+  // Etendo JsonDataService format: { response: { error: { message } | string } }
+  const err = data?.response?.error;
+  if (err?.message) return err.message;
+  if (typeof err === 'string') return err;
+  if (data?.message) return data.message;
+  return extractFirstResponseErrorsMessage(data);
+}
+
+/**
+ * Reads a failed response's body ONCE and returns its message together with its identity
+ * (`messageKeys` / `messageParams`), whatever envelope it arrived in. Every field is `undefined`
+ * for a non-JSON body.
+ *
+ * @param {Response} res the failed response (its body is consumed)
+ * @returns {Promise<{message?: string, messageKeys?: string[], messageParams?: object}>}
+ */
+export async function parseBackendError(res) {
+  let data;
   try {
-    const data = await res.json();
-    // NEO Headless top-level format: { error: { message, status } }
-    if (data?.error?.message) raw = data.error.message;
-    else {
-      // Etendo JsonDataService format: { response: { error: { message } | string } }
-      const err = data?.response?.error;
-      if (err?.message) raw = err.message;
-      else if (typeof err === 'string') raw = err;
-      else if (data?.message) raw = data.message;
-      else raw = extractFirstResponseErrorsMessage(data);
-    }
+    data = await res.json();
   } catch {
-    // Ignore non-JSON error bodies.
+    return {};
   }
-  return raw;
+  return {
+    message: pickBackendErrorText(data),
+    messageKeys: extractBackendMessageKeys(data),
+    messageParams: extractBackendMessageParams(data),
+  };
+}
+
+export async function parseBackendErrorMessage(res) {
+  return (await parseBackendError(res)).message;
+}
+
+/**
+ * Parses a failed response and translates it, identity included (ETP-5692): a caller that went
+ * through `parseBackendErrorMessage` + `translateBackendError` dropped the body's `messageKeys`, so
+ * a refusal the backend sends only in English plus a key (the invoice write fence) reached the user
+ * untranslated. Falls back to `Error <status>` when the body carries no message.
+ *
+ * @param {Response} res the failed response (its body is consumed)
+ * @param {function} t the `ui` function from `useUI()`
+ * @returns {Promise<string>} the translated message
+ */
+export async function translateBackendErrorResponse(res, t) {
+  const { message, messageKeys, messageParams } = await parseBackendError(res);
+  return translateBackendError(message ?? `Error ${res.status}`, t, { messageKeys, messageParams });
 }
 
 const ACCOUNT_DELETE_BLOCKED_PREFIX = 'Cannot delete this account. ';

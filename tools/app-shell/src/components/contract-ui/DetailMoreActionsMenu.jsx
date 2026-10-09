@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
-import { runPreUnpost } from '@/lib/preUnpost.js';
+import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
 
 /**
  * Kebab ("more actions") menu of the detail toolbar.
@@ -97,7 +97,7 @@ export function DetailMoreActionsMenu({
       recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
     });
     if (!preUnpost.success) {
-      toast.error(translateBackendError(preUnpost.message, ui) || ui('actionFailed'));
+      toast.error(translateBackendError(preUnpost.message, ui, preUnpostErrorIdentity(preUnpost)) || ui('actionFailed'));
       return false;
     }
     try {
@@ -195,7 +195,7 @@ export function DetailMoreActionsMenu({
                   recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
                 });
                 if (!preUnpost.success) {
-                  toast.error(translateBackendError(preUnpost.message, ui) || ui('actionFailed'));
+                  toast.error(translateBackendError(preUnpost.message, ui, preUnpostErrorIdentity(preUnpost)) || ui('actionFailed'));
                   return;
                 }
                 if (action.columnName) {

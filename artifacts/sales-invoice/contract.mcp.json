@@ -1,7 +1,8 @@
 {
-  "version": "0.90.0",
+  "version": "0.91.0",
   "generatedAt": "2026-09-17T15:12:05.781Z",
-  "contractChecksum": "25004bf9e7a9a8d3",
+  "updatedAt": "2026-10-09T12:19:29.647Z",
+  "contractChecksum": "590546491145066c",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1089,10 +1090,10 @@
             "defaultValue": "@#Date@"
           },
           "project": {
-            "readOnlyLogic": "@Posted@='Y'"
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')"
           },
           "costcenter": {
-            "readOnlyLogic": "@Posted@='Y'"
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')"
           },
           "etsgDateOperation": {
             "readOnlyLogic": "@processed@='Y'",
@@ -1220,10 +1221,10 @@
             "defaultValue": "0"
           },
           "project": {
-            "readOnlyLogic": "@Posted@='Y'"
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')"
           },
           "costcenter": {
-            "readOnlyLogic": "@Posted@='Y'"
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')"
           }
         }
       },
@@ -1522,5 +1523,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "ca732ac197129e44"
+  "checksum": "9b0833956cb9e5d5"
 }

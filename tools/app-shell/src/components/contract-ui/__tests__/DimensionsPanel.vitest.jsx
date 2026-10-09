@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DimensionsPanel.jsx
 /**
  * Render tests for DimensionsPanel's `DimensionGrid` — the expanded
  * "Dimensiones contables" sub-row shared by `InlineLinesPanel.jsx` (generic
@@ -170,5 +171,59 @@ describe('DimensionGrid ellipsis + tooltip on long values (ETP-5133)', () => {
     const titledAncestor = trigger.closest('[title]');
     expect(titledAncestor).not.toBeNull();
     expect(titledAncestor).toHaveAttribute('title', LONG_VALUE);
+  });
+});
+
+// `isFieldReadOnly` — the per-field override used by `draftMode.editableLineFieldsWhenCompleted`:
+// on a completed document the grid is read-only except for the fields the host accepts.
+describe('DimensionGrid per-field isFieldReadOnly', () => {
+  const twoFields = [
+    { key: 'project', column: 'C_Project_ID', label: 'Project' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', label: 'Cost center' },
+  ];
+  const data = { project: 'PRJ1', costcenter: 'CC1' };
+
+  it('takes precedence over a panel-level readOnly: an accepted field renders the editable selector', () => {
+    renderGrid({
+      fields: twoFields,
+      data,
+      readOnly: true,
+      isCompleted: true,
+      isFieldReadOnly: (f) => f.key !== 'project',
+    });
+    expect(screen.getByTestId('field-project')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('PRJ1')).toBeNull();
+    expect(screen.getByDisplayValue('CC1')).toBeDisabled();
+    expect(screen.queryByTestId('field-costcenter')).toBeNull();
+  });
+
+  it('takes precedence over a panel-level readOnly=false: a refused field renders read-only', () => {
+    renderGrid({
+      fields: twoFields,
+      data,
+      readOnly: false,
+      isFieldReadOnly: (f) => f.key === 'costcenter',
+    });
+    expect(screen.getByTestId('field-project')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('CC1')).toBeDisabled();
+  });
+
+  it('is asked once per visible field, with the field descriptor', () => {
+    const isFieldReadOnly = vi.fn(() => true);
+    renderGrid({ fields: twoFields, data, readOnly: true, isFieldReadOnly });
+    expect(isFieldReadOnly.mock.calls.map(([f]) => f.key)).toEqual(['project', 'costcenter']);
+  });
+
+  it('without the prop, every field follows the panel-level readOnly (unchanged behaviour)', () => {
+    renderGrid({ fields: twoFields, data, readOnly: true, isCompleted: true });
+    expect(screen.getByDisplayValue('PRJ1')).toBeDisabled();
+    expect(screen.getByDisplayValue('CC1')).toBeDisabled();
+    expect(screen.queryByTestId('field-project')).toBeNull();
+  });
+
+  it('ignores a non-function isFieldReadOnly and falls back to readOnly', () => {
+    renderGrid({ fields: twoFields, data, readOnly: true, isFieldReadOnly: false });
+    expect(screen.getByDisplayValue('PRJ1')).toBeDisabled();
+    expect(screen.getByDisplayValue('CC1')).toBeDisabled();
   });
 });

@@ -114,8 +114,11 @@ export function DimSummary({ line, onClick, processed, labelOverrides, fields, e
  *   URL and resolve mock catalogs (`${apiBaseUrl}/${entityName}/selectors/${column}`).
  *   Defaults to 'lines' — the detail entity name every current caller (Amortización,
  *   InlineLinesPanel's `dimensionsPanel` column) happens to use.
+ * @param isFieldReadOnly - ETP-5692, optional `(field) => boolean` that decides read-only
+ *   PER FIELD and, when given, takes precedence over the grid-wide `readOnly` (used for
+ *   `draftMode.editableLineFieldsWhenCompleted`). Absent → every field follows `readOnly`.
  */
-export function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl, token, catalogs, readOnly, isCompleted, labelOverrides, entityName = 'lines' }) {
+export function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl, token, catalogs, readOnly, isFieldReadOnly, isCompleted, labelOverrides, entityName = 'lines' }) {
   const t = useLabel(labelOverrides);
   return (
     <div
@@ -142,7 +145,7 @@ export function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl,
         return (
           <div key={f.key} className="space-y-1.5 min-w-0">
             <label className="text-xs font-medium text-muted-foreground block">{label}</label>
-            {readOnly ? (
+            {(typeof isFieldReadOnly === 'function' ? isFieldReadOnly(f) : readOnly) ? (
               <input
                 className="flex h-8 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm truncate disabled:cursor-not-allowed disabled:opacity-50"
                 value={fullValue}

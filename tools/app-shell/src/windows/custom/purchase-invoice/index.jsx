@@ -18,7 +18,7 @@ import OcrSidePanel, { ReadOnlyOcrSidePanel } from '../shared/OcrSidePanel.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
-import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord } from '../shared/useInvoiceWindow.js';
+import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord, buildInvoiceUnpostActions, invoiceUnpostRowFilter } from '../shared/useInvoiceWindow.js';
 import { PURCHASE_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
 import { createFollowUpAfterProcess } from '@/components/follow-up-documents/followUpDocuments.js';
 import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
@@ -131,6 +131,14 @@ function PurchaseInvoiceBulkAction(props) {
         rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__c20e53" />
+      {/* ETP-5692 — bulk Descontabilizar (unpost), gated to Completed + posted rows; leaves them Completed */}
+      <BulkDocumentAction
+        {...props}
+        actionMode="neoAction"
+        buildActions={buildInvoiceUnpostActions}
+        rowFilter={invoiceUnpostRowFilter}
+        labelKey="unpost"
+        data-testid="BulkDocumentActionUnpost__c20e53" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -200,8 +208,13 @@ export default function PurchaseInvoiceWindow(props) {
   // window.draftMode.keepSaveWhenCompletedFields. This override is what actually reaches
   // DetailView: the generated HeaderPage sets draftMode from the contract but expands
   // {...props} AFTER it, so this value wins and the contract's never applies here.
-  // draft-mode-allowlist-sync.test.js fails if the two drift apart.
-  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
+  // The 'passes the decisions.json completed-document allowlists through the draftMode override'
+  // test in __tests__/index.vitest.jsx fails if the two drift apart.
+  // ETP-5692 — project/costcenter join the list so a Completed invoice that was unposted
+  // can save corrected header dimensions; their decisions.json readOnlyLogic override
+  // (@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')) keeps them locked while the invoice
+  // is posted (matching core C_INVOICE_TRG) or in any processed status other than CO.
+  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate', 'project', 'costcenter'], editableLineFieldsWhenCompleted: ['project', 'costcenter'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
 
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.

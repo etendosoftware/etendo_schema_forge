@@ -369,6 +369,29 @@ Three matching mechanisms coexist — know all three before adding a new backend
      || ui('actionFailed'));
    ```
 
+   A **CRUD write** (header save, inline line PATCH, secondary-tab row such as an invoice's
+   exchange rates) carries the same fields inside its `{ error: { message, messageKeys,
+   messageParams } }` body. Read it with `parseBackendError(res)` — message and identity in one
+   pass — or translate it directly with `translateBackendErrorResponse(res, ui)`, which is what
+   `DetailView`'s `extractErrorMessage` does; `useEntity`'s `extractErrorMessage` forwards the body's
+   identity the same way. `parseBackendErrorMessage(res)` + `translateBackendError(msg, ui)` drops
+   the identity, so do not use that pair on a path that can receive a keyed refusal (ETP-5692).
+   A failed `runPreUnpost` carries `messageKeys`/`messageParams` too; pass
+   `preUnpostErrorIdentity(pre)` as the options.
+
+   **A key need not be an AD_MESSAGE.** Since ETP-5692 the invoice post/unpost refusals of
+   `com.etendoerp.go` (`CompletedInvoiceWriteFence`, `InvoicePostingGate`,
+   `InvoiceExchangeRateHandler`, `DocumentPostingService`) answer in plain English plus an
+   `ETGO_*` identity string with **no** AD_MESSAGE record behind it, so `BACKEND_ERROR_KEY_MAP` is
+   the only place they become Spanish: `ETGO_InvoiceFieldsLockedPosted`,
+   `ETGO_InvoiceExchangeRateLockedPosted`, `ETGO_InvoiceUnpostNotPosted`,
+   `ETGO_InvoiceUnpostNotCompleted`, `ETGO_PostingDocumentNotProcessed`,
+   `ETGO_CompletedInvoiceFieldsLocked`, `ETGO_InvoiceFieldsLockedStatus`,
+   `ETGO_InvoiceFieldsLockedSiiSent` (plus core `PostedDocument`). Their copy is deliberately
+   generic: the fence's `messageParams.fields` are API property names and `docStatus` a raw code,
+   neither fit to show. They surface only on a stale screen (the SPA's own gates prevent them
+   otherwise), so the copy tells the user to refresh.
+
    **Degradation is the point, not a shim.** `com.etendoerp.go` and this repo deploy separately, so
    a frontend running against a backend that predates the field is the normal steady state for a
    while. No keys → `translateBackendError` skips this mechanism entirely and behaves exactly as it
