@@ -430,10 +430,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
 
       {invoiceResult?.invoice?.id && createPortal(
         <ConfirmResultModal
-          title={ui('soInvoiceCreated')}
-          docs={[{ type: 'facturaVenta', num: invoiceResult.invoice.documentNo, amount: invoiceResult.invoice.amount, documentStatus: invoiceResult.invoice.documentStatus, route: `/sales-invoice/${invoiceResult.invoice.id}` }]}
-          primary={ui('soViewInvoice')}
-          currency={data?.['currency$_identifier'] || ''}
+          docs={[{ type: 'facturaVenta', num: invoiceResult.invoice.documentNo, documentStatus: invoiceResult.invoice.documentStatus, route: `/sales-invoice/${invoiceResult.invoice.id}` }]}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
           onClose={() => {
             setInvoiceResult(null);

@@ -157,12 +157,10 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   const confirmedPanel = confirmedDocs && hasConfirmedDoc
     ? createPortal(
         <ConfirmResultModal
-          title={confirmedTitle || ui('poConfirmedTitle')}
           docs={[
-            confirmedDocs?.receipt?.id && { type: 'entrada', num: confirmedDocs.receipt.documentNo, amount: confirmedDocs.receipt.amount, route: `/goods-receipt/${confirmedDocs.receipt.id}` },
-            confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
+            confirmedDocs?.receipt?.id && { type: 'entrada', num: confirmedDocs.receipt.documentNo, route: `/goods-receipt/${confirmedDocs.receipt.id}` },
+            confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
           ].filter(Boolean)}
-          currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
           onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); emitSurveyTrigger(); onRefresh?.(); }}
           data-testid="ConfirmResultModal__8b5323" />,

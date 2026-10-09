@@ -197,9 +197,7 @@ export function useOrderWindow({
 
   // ETP-5295 — gated on `manageRow && !confirmedDocs`, mirroring `confirmPortal` above: `manageRow`
   // is deliberately NOT cleared by `onCreated` (only by `resetConfirmedState`, on the result
-  // popup's own close), because `confirmResultPortal` below reads its `currency` off
-  // `confirmRow || manageRow` — clearing it immediately would blank the popup's currency for
-  // the manage-docs-created case the instant the docs arrive.
+  // popup's own close), so the whole flow is torn down exactly once, when the popup closes.
   const manageLauncher = manageRow && !confirmedDocs ? (
     <ManageDocsLauncher
       orderId={manageRow.id}
@@ -236,16 +234,16 @@ export function useOrderWindow({
     }
   }, [confirmedDocs, hasConfirmedDoc, confirmedTitle, confirmedTitleKey, ui, resetConfirmedState]);
 
+  // ETP-5674 — the result popup computes its own title and banner from `docs`, so neither
+  // `confirmedTitle` nor `confirmedTitleKey` reach it any more; both still drive the toast above
+  // for the no-document case. Each entry carries its real `documentStatus` so the badge follows it
+  // (the primary doc is normally a draft, so it keeps the default Borrador badge).
   const confirmResultPortal = confirmedDocs && hasConfirmedDoc ? createPortal(
     <ConfirmResultModal
-      title={confirmedTitle || ui(confirmedTitleKey)}
       docs={[
-        confirmedDocs?.[primaryDoc.key]?.id && { type: primaryDoc.type, num: confirmedDocs[primaryDoc.key].documentNo, amount: confirmedDocs[primaryDoc.key].amount, route: `/${primaryDoc.route}/${confirmedDocs[primaryDoc.key].id}` },
-        // ETP-5381: documentStatus on the invoice entry only — the primary doc (shipment or
-        // receipt) is still created as a draft, so it must keep the default Borrador badge.
-        confirmedDocs?.[invoiceDoc.key]?.id && { type: invoiceDoc.type, num: confirmedDocs[invoiceDoc.key].documentNo, amount: confirmedDocs[invoiceDoc.key].amount, documentStatus: confirmedDocs[invoiceDoc.key].documentStatus, route: `/${invoiceDoc.route}/${confirmedDocs[invoiceDoc.key].id}` },
+        confirmedDocs?.[primaryDoc.key]?.id && { type: primaryDoc.type, num: confirmedDocs[primaryDoc.key].documentNo, documentStatus: confirmedDocs[primaryDoc.key].documentStatus, route: `/${primaryDoc.route}/${confirmedDocs[primaryDoc.key].id}` },
+        confirmedDocs?.[invoiceDoc.key]?.id && { type: invoiceDoc.type, num: confirmedDocs[invoiceDoc.key].documentNo, documentStatus: confirmedDocs[invoiceDoc.key].documentStatus, route: `/${invoiceDoc.route}/${confirmedDocs[invoiceDoc.key].id}` },
       ].filter(Boolean)}
-      currency={(confirmRow || manageRow)?.['currency$_identifier'] || ''}
       navigate={navigate}
       onClose={resetConfirmedState}
       data-testid="ConfirmResultModal__4b313b" />,

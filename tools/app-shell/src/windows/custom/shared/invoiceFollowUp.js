@@ -41,7 +41,6 @@ export const SALES_INVOICE_FOLLOW_UP = {
       badgeTone: 'info',
       icon: Truck,
       resultDocType: 'salida',
-      resultTitleKey: 'shipmentCreated',
     },
   },
 };
@@ -64,7 +63,6 @@ export const PURCHASE_INVOICE_FOLLOW_UP = {
       badgeTone: 'info',
       icon: PackageCheck,
       resultDocType: 'entrada',
-      resultTitleKey: 'receiptCreated',
     },
   },
 };

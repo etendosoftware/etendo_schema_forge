@@ -24,8 +24,7 @@ export default function ConfirmWithCreditButton({ data, recordId, token, apiBase
         isDocumentReadOnly={isDocumentReadOnly}
         entitySegment="returnMaterialReceipt"
         invoiceRoute="/sales-invoice/"
-        invoiceType="facturaVenta"
-        invoiceCreatedTitleKey="rmrInvoiceCreatedTitle"
+        invoiceType="facturaRectificativa"
         specName="return-material-receipt"
         entityName="returnMaterialReceipt"
         confirmDrLabel={ui('processReceipt')}

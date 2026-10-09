@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useLocaleSwitch, useUI } from '@/i18n';
-import ActionChoiceModal, { isOwnEscape, useDialogFocusTrap } from '@/components/contract-ui/ActionChoiceModal.jsx';
+import ActionChoiceModal from '@/components/contract-ui/ActionChoiceModal.jsx';
 import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal.jsx';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import RequiredMark from '@/components/ui/required-mark.jsx';
@@ -62,8 +62,8 @@ import { followUpInputLabels, readConfiguredFollowUpEntries, readFollowUpInputVa
  *                                    («Recomendado»), 'info' blue («Borrador»)
  * @property {string} [titleKey]      modal title when this is the only follow-up offered
  * @property {string} [buttonLabelKey] topbar button label when this is the only follow-up
- * @property {string} resultDocType   ConfirmResultModal doc type ('salida', 'entrada', 'facturaVenta', 'facturaCompra')
- * @property {string} [resultTitleKey] result modal title
+ * @property {string} resultDocType   ConfirmResultModal doc type ('salida', 'entrada', 'facturaVenta',
+ *                                    'facturaCompra', ...) — the result modal derives its title from it
  *
  * @typedef {object} FollowUpSummaryConfig
  * @property {string} documentLabelKey               REQUIRED — label of the source document column
@@ -303,30 +303,12 @@ export function buildSummary({ record, summary = {}, single, ui, locale }) {
 }
 
 function FollowUpResult({ session, options, onClose }) {
-  const ui = useUI();
   const navigate = useNavigate();
-  const wrapperRef = useRef(null);
-  const first = session.created[0];
-  const cfg = options[first?.key] ?? {};
 
-  // ConfirmResultModal has no keyboard handling of its own (and other windows rely on it
-  // unchanged), so the result phase adds it here, with the same rules as the choice phase
-  // (ActionChoiceModal): Tab is trapped in the dialog, Esc closes only when it is this
-  // dialog's own (not one a layer on top already handled), and focus starts on the link to
-  // the created document so Enter opens it.
-  useDialogFocusTrap(wrapperRef);
-  // On close, focus goes back to whoever opened the flow (the topbar button, or whatever
-  // was focused when the post-Confirm prompt opened it) — the choice phase already handed
-  // focus back to it when it unmounted, so it is the active element at this point.
-  useEffect(() => {
-    const opener = typeof document !== 'undefined' ? document.activeElement : null;
-    const wrapper = wrapperRef.current;
-    (wrapper?.querySelector('[role="button"]') ?? wrapper)?.focus?.();
-    return () => {
-      if (opener && opener !== document.body && opener.isConnected) opener.focus?.();
-    };
-  }, []);
-
+  // ETP-5674 — ConfirmResultModal now owns the whole dialog behaviour (role="dialog", Tab
+  // trapped inside, Esc closes only when it is its own, focus on the primary action on open and
+  // back to the opener on close) and derives its title from the created documents, so the
+  // result phase only maps what was created.
   const docs = session.created.map((doc) => ({
     type: options[doc.key]?.resultDocType,
     num: doc.documentNo,
@@ -335,21 +317,10 @@ function FollowUpResult({ session, options, onClose }) {
   }));
 
   return (
-    <div
-      ref={wrapperRef}
-      role="dialog"
-      aria-modal="true"
-      tabIndex={-1}
-      style={{ outline: 'none' }}
-      aria-label={ui(cfg.resultTitleKey || 'followUpDocumentCreated')}
-      onKeyDown={(e) => { if (isOwnEscape(e, wrapperRef.current)) { e.stopPropagation(); onClose(); } }}
-    >
-      <ConfirmResultModal
-        title={ui(cfg.resultTitleKey || 'followUpDocumentCreated')}
-        docs={docs}
-        navigate={navigate}
-        onClose={onClose}
-        data-testid="ConfirmResultModal__ccd4ed" />
-    </div>
+    <ConfirmResultModal
+      docs={docs}
+      navigate={navigate}
+      onClose={onClose}
+      data-testid="ConfirmResultModal__ccd4ed" />
   );
 }

@@ -338,14 +338,12 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
 
       {invoiceResult?.invoice?.id && createPortal(
         <ConfirmResultModal
-          title={ui('poInvoiceCreated')}
           docs={[{
             type: 'facturaCompra',
             num: invoiceResult.invoice.documentNo,
             documentStatus: invoiceResult.invoice.documentStatus,
             route: `/purchase-invoice/${invoiceResult.invoice.id}`,
           }]}
-          primary={ui('poViewInvoice')}
           navigate={(route) => navigate(route)}
           onClose={() => {
             setInvoiceResult(null);
