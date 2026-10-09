@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ArrowUp, ArrowDown, LineChart } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BPChartSVGContent } from './BPChartSVGContent';
+import ContactsPeriodButton from './ContactsPeriodButton';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { formatCurrency } from '@/lib/formatCurrency';
@@ -99,11 +100,6 @@ function KpiBlock({ kpi, period, currencyCode, ui }) {
 
 // ─── Chart modal ────────────────────────────────────────────────────────────
 
-const PERIOD_TOGGLE = [
-  { value: '3M', labelKey: 'bpLast3Months' },
-  { value: '6M', labelKey: 'bpLast6Months' },
-];
-
 function ChartLegend({ ui }) {
   return (
     <div className="flex items-center gap-5">
@@ -119,10 +115,15 @@ function ChartLegend({ ui }) {
   );
 }
 
+/**
+ * "Ventas y compras" dialog (Figma node "Dialog", 720 wide, radius md). ETP-5600: the dialog no
+ * longer has its own 3/6-month toggle — the period is chosen only with the summary's period
+ * selector and the chart follows that same `period` from ContactsFinanceContext. Order is
+ * title, legend, chart. `bg-popover` (the overlay surface token: white in light theme) replaces
+ * the core DialogContent default `bg-background`, which is the grey page colour.
+ */
 function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
   const { locale } = useLocaleSwitch();
-  const [chartPeriod, setChartPeriod] = useState(period);
-  useEffect(() => { setChartPeriod(period); }, [period, open]);
 
   const labels = trend?.labels ?? [];
   const revenue = trend?.revenue ?? [];
@@ -136,41 +137,26 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
     const s = fmt.format(d);
     return s.charAt(0).toUpperCase() + s.slice(1).replace('.', '');
   });
-  const n = PERIOD_MONTHS[chartPeriod] ?? 3;
+  const n = PERIOD_MONTHS[period] ?? 3;
   const sl = (arr) => arr.slice(-n);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange} data-testid="Dialog__22ed51">
-      <DialogContent className="max-w-2xl w-full" data-testid="DialogContent__22ed51">
+      <DialogContent
+        className="max-w-[720px] w-full bg-popover text-popover-foreground sm:rounded-md"
+        data-testid="DialogContent__22ed51">
         <DialogHeader data-testid="DialogHeader__22ed51">
           <DialogTitle data-testid="DialogTitle__22ed51">
-            <div className="flex items-center justify-between gap-4 pr-8">
-              <span>{ui('bpSalesPurchases')}</span>
-              <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-                {PERIOD_TOGGLE.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setChartPeriod(opt.value)}
-                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                      chartPeriod === opt.value
-                        ? 'bg-card text-status-info-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {ui(opt.labelKey)}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <span className="block pr-8">{ui('bpSalesPurchases')}</span>
           </DialogTitle>
         </DialogHeader>
+        <ChartLegend ui={ui} data-testid="ChartLegend__22ed51" />
         <BPChartSVGContent
           labels={sl(localizedLabels)}
           revenue={sl(revenue)}
           expenses={sl(expenses)}
-          CW={580}
-          CH={280}
+          CW={672}
+          CH={400}
           PX={48}
           PY={16}
           PB={28}
@@ -178,7 +164,6 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
           chartId="contacts-summary-chart"
           orgCurrency={currencyCode ?? 'USD'}
           data-testid="BPChartSVGContent__22ed51" />
-        <ChartLegend ui={ui} data-testid="ChartLegend__22ed51" />
       </DialogContent>
     </Dialog>
   );
@@ -188,9 +173,10 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
 
 /**
  * Horizontal financial summary rendered in the DetailView `headerContent` slot,
- * above the General form. Replaces the former right-side sidebar: three KPIs
- * (Net Balance / Income / Expenses) with trend badges, plus a "View chart"
- * button that opens the trend chart in a dialog.
+ * above the General form (and at the top of ContactsFinancialPanel). Replaces the
+ * former right-side sidebar: three KPIs (Net Balance / Income / Expenses) with
+ * trend badges, the period selector (ContactsPeriodButton, ETP-5600 — formerly in
+ * the tabs bar) and a "View chart" button that opens the trend chart in a dialog.
  */
 export default function ContactsSummaryWidget({ data, optionalProvider = false }) {
   const ui = useUI();
@@ -211,7 +197,9 @@ export default function ContactsSummaryWidget({ data, optionalProvider = false }
   const kpis = buildKpis(stats, trend, period);
 
   return (
-    <div className="px-2 pt-2">
+    // ETP-5600 spacing: no top padding (the tabs bar above already has 8px below it) and
+    // pb-3 so, with the form card's own 8px padding, the summary sits 20px above the inputs.
+    <div className="px-2 pb-3">
       <div className="flex flex-row items-center justify-between gap-5 border border-[hsl(var(--border-subtle))] rounded-lg px-3 py-2 min-h-14">
         {loading ? (
           <>
@@ -230,14 +218,17 @@ export default function ContactsSummaryWidget({ data, optionalProvider = false }
               data-testid="KpiBlock__22ed51" />
           ))
         )}
-        <button
-          type="button"
-          onClick={() => setChartOpen(true)}
-          className="shrink-0 flex items-center gap-1 px-2 py-1 h-8 bg-[hsl(var(--muted))] rounded-lg text-sm font-medium text-[hsl(var(--foreground))] hover:brightness-95 transition-all"
-        >
-          <LineChart className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="LineChart__22ed51" />
-          {ui('bpViewChart')}
-        </button>
+        <div className="shrink-0 flex items-center gap-2">
+          <ContactsPeriodButton data-testid="ContactsPeriodButton__22ed51" />
+          <button
+            type="button"
+            onClick={() => setChartOpen(true)}
+            className="shrink-0 flex items-center gap-1 px-2 py-1 h-8 bg-[hsl(var(--muted))] rounded-lg text-sm font-medium text-[hsl(var(--foreground))] hover:brightness-95 transition-all"
+          >
+            <LineChart className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="LineChart__22ed51" />
+            {ui('bpViewChart')}
+          </button>
+        </div>
       </div>
       <ChartDialog
         open={chartOpen}

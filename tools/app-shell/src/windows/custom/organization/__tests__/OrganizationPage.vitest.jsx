@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx
 // Mocks must come before imports (Vitest hoisting)
 
 import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
@@ -317,18 +318,23 @@ describe('OrganizationPage', () => {
 
     // Clean state: plain p-4, no extra bottom padding — a permanent gap here was
     // explicitly rejected earlier (leaves empty space when there's nothing to save).
-    expect(scrollContainer().className).not.toMatch(/pb-\[77px\]/);
+    expect(scrollContainer().className).not.toMatch(/pb-\[73px\]/);
 
     fireEvent.click(screen.getByTestId('BusinessTypeCards__option-FL'));
     await screen.findByTestId('OrganizationPage__unsaved-banner');
 
-    // Dirty state: 77px = the normal 16px (p-4) + the banner's own measured height
-    // (61px = h-9 button + py-3*2 + border-t), enough for the last field to clear it.
-    expect(scrollContainer().className).toMatch(/pb-\[77px\]/);
+    // Dirty state: 73px = the normal 16px (p-4) + the banner's own measured height
+    // (57px = h-10 button + p-2*2 + border-t), enough for the last field to clear it.
+    expect(scrollContainer().className).toMatch(/pb-\[73px\]/);
+
+    // Banner geometry the padding above is derived from.
+    expect(screen.getByTestId('OrganizationPage__unsaved-banner').className).toMatch(/\bp-2\b/);
+    expect(screen.getByTestId('OrganizationPage__discard').className).toMatch(/\bh-10\b/);
+    expect(screen.getByTestId('OrganizationPage__save').className).toMatch(/\bh-10\b/);
 
     fireEvent.click(screen.getByTestId('OrganizationPage__discard'));
     await waitFor(() => expect(screen.queryByTestId('OrganizationPage__unsaved-banner')).not.toBeInTheDocument());
-    expect(scrollContainer().className).not.toMatch(/pb-\[77px\]/);
+    expect(scrollContainer().className).not.toMatch(/pb-\[73px\]/);
   });
 
   it('Save PATCHes organization + information (including etgoEmail/Phone/Web) and shows a success toast', async () => {

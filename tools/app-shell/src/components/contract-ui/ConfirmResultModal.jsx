@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { ArrowRight, ChevronRight, X } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { POPUP_MODAL_STYLES } from './ActionChoiceModal.jsx';
 
 // ── Type config ───────────────────────────────────────────────────────────────
 
@@ -81,7 +83,17 @@ function DocCard({ doc, currency, ui, navigate, onClose, onNavigate }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export function ConfirmResultModal({ title, docs = [], primary, navigate, currency = '', onClose, onNavigate }) {
+/**
+ * Result notice after a document action: title, the created document(s) as links, Close and
+ * (with one document) a primary «Ver …» button.
+ *
+ * `variant` (ETP-5576): 'default' is the original notice every order / confirm flow uses
+ * (centered success check, grey footer); 'popup' renders the same content in the Figma
+ * "PopUps" shell of ActionChoiceModal (close icon, left title, card-style document link,
+ * outlined Close + dark pill primary) so a result that follows an ActionChoiceModal in the same
+ * flow — the follow-up document popup — keeps its look. Test ids are identical in both.
+ */
+export function ConfirmResultModal({ title, docs = [], primary, navigate, currency = '', onClose, onNavigate, variant = 'default' }) {
   const ui = useUI();
 
   // Single-doc action label: use the explicit `primary` override if given,
@@ -94,6 +106,23 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
   let subtitle = null;
   if (docs.length === 1) subtitle = ui('confirmResultModal.subtitleOne');
   else if (docs.length > 1) subtitle = ui('confirmResultModal.subtitleMany', { count: docs.length });
+
+  if (variant === 'popup') {
+    return (
+      <PopupResult
+        title={title}
+        subtitle={subtitle}
+        docs={docs}
+        singleDoc={singleDoc}
+        primaryLabel={primaryLabel}
+        currency={currency}
+        ui={ui}
+        navigate={navigate}
+        onClose={onClose}
+        onNavigate={onNavigate}
+        data-testid="PopupResult__a46cc0" />
+    );
+  }
 
   return (
     // zIndex 50 = the app's modal tier. It was 9999, which put this notice above
@@ -176,6 +205,135 @@ export function ConfirmResultModal({ title, docs = [], primary, navigate, curren
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Popup variant (ETP-5576) ──────────────────────────────────────────────────
+
+const POPUP = POPUP_MODAL_STYLES;
+
+const popupDialogStyle = { ...POPUP.dialog, width: 480 };
+const popupSubtitleStyle = { ...POPUP.description, margin: 0 };
+const popupDocListStyle = { display: 'flex', flexDirection: 'column', gap: 8 };
+const popupPrimaryBtnStyle = { ...POPUP.primaryBtn, padding: '8px 12px 8px 20px' };
+const popupChevronStyle = { flexShrink: 0, color: 'hsl(var(--icon-secondary))' };
+
+function PopupResult({ title, subtitle, docs, singleDoc, primaryLabel, currency, ui, navigate, onClose, onNavigate }) {
+  const openSingle = () => { (onNavigate ?? onClose)(); navigate(singleDoc.route); };
+  return (
+    // Backdrop closes, as in ActionChoiceModal: the document already exists, closing only
+    // dismisses the notice.
+    <div data-testid="confirm-result-modal" data-variant="popup" style={POPUP.overlay} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={popupDialogStyle}>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={ui('close')}
+          className={POPUP.focusRingClassName}
+          style={POPUP.closeBtn}
+        >
+          <X size={20} data-testid="X__a46cc0" />
+        </button>
+
+        <div style={POPUP.header}>
+          <h2 style={POPUP.title}>{title}</h2>
+          {subtitle && <p style={popupSubtitleStyle}>{subtitle}</p>}
+        </div>
+
+        <div style={POPUP.body}>
+          <div style={POPUP.section}>
+            {docs.length > 0 && (
+              <div style={popupDocListStyle}>
+                {docs.map((doc) => (
+                  <PopupDocCard
+                    key={doc.type + '-' + doc.num}
+                    doc={doc}
+                    currency={currency}
+                    ui={ui}
+                    navigate={navigate}
+                    onClose={onClose}
+                    onNavigate={onNavigate}
+                    data-testid="PopupDocCard__a46cc0" />
+                ))}
+              </div>
+            )}
+
+            <div style={POPUP.footer}>
+              <button
+                type="button"
+                onClick={onClose}
+                // Same id as the default variant (walkthrough + tests target it).
+                data-testid="action-confirm-result-close"
+                className={POPUP.focusRingClassName}
+                style={POPUP.cancelBtn}
+              >
+                {ui('soClose')}
+              </button>
+              {singleDoc && primaryLabel && (
+                <button
+                  type="button"
+                  onClick={openSingle}
+                  className={POPUP.focusRingClassName}
+                  style={popupPrimaryBtnStyle}
+                >
+                  {primaryLabel}
+                  <ArrowRight size={20} data-testid="ArrowRight__a46cc0" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The created document as a link card: ActionChoiceModal's static card (icon box left,
+ * number + status badge, description) made activatable — role="button", Enter / Space / click
+ * open it. Status badge: green when Completed, otherwise the same blue «Borrador» badge the
+ * follow-up option card showed before the document was created.
+ */
+function PopupDocCard({ doc, currency, ui, navigate, onClose, onNavigate }) {
+  const [hovered, setHovered] = useState(false);
+  const cfg = TYPE_CONFIG[doc.type] || TYPE_CONFIG.facturaCompra;
+  const { Icon } = cfg;
+  const confirmed = doc.documentStatus === 'CO';
+  const badgeStyle = confirmed ? POPUP.badgeTones.success : POPUP.badgeTones.info;
+  const handleActivate = () => { (onNavigate ?? onClose)(); navigate(doc.route); };
+  const cardStyle = {
+    ...POPUP.card,
+    cursor: 'pointer',
+    background: hovered ? 'hsl(var(--muted))' : POPUP.card.background,
+    transition: 'background .15s',
+  };
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleActivate}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleActivate(); } }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={POPUP.focusRingClassName}
+      style={cardStyle}
+    >
+      <span style={POPUP.iconBox} aria-hidden="true">
+        <Icon color="currentColor" data-testid="Icon__a46cc0" />
+      </span>
+      <span style={POPUP.cardText}>
+        <span style={POPUP.labelRow}>
+          <span style={POPUP.label}>{doc.num}</span>
+          <span style={badgeStyle}>{doc.status || ui(confirmed ? 'statusCompleted' : 'statusDraft')}</span>
+        </span>
+        <span style={POPUP.description}>
+          {ui(cfg.labelKey)}
+          {doc.amount != null && ` · ${fmtAmount(doc.amount, currency)}`}
+        </span>
+      </span>
+      <ChevronRight size={20} style={popupChevronStyle} aria-hidden="true" data-testid="ChevronRight__a46cc0" />
     </div>
   );
 }

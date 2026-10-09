@@ -7,6 +7,7 @@ import { formatCalendarDate } from '@/lib/dateOnly';
 import GenericPreviewModal from '../shared/GenericPreviewModal.jsx';
 import { InfoRow, PercentBar, MovementSummaryCard } from '../shared/preview-cards/SummaryCard.jsx';
 import { STATUS_BADGE, STATUS_KEYS } from '@/components/related-documents/constants.jsx';
+import { PURCHASE_RELATED_DOCS } from '@/components/related-documents';
 import RelatedDocumentsCard from '../shared/preview-cards/RelatedDocumentsCard.jsx';
 
 function ReceiptStatsPanel({ receipt, partnerName, movementDate, token, apiBaseUrl, ui, onOrderClick }) {
@@ -15,12 +16,6 @@ function ReceiptStatsPanel({ receipt, partnerName, movementDate, token, apiBaseU
   const statusLabel = ui(STATUS_KEYS[docStatus]) || receipt['documentStatus$_identifier'] || docStatus || '—';
   const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-muted text-muted-foreground border-border-subtle';
   const purchaseOrderNo = receipt['salesOrder$_identifier'] || null;
-
-  const specs = [
-    { key: 'linkedOrders', type: 'order', fetch: async () => receipt?.linkedOrders ?? [] },
-    { key: 'linkedInvoices', type: 'invoice', fetch: async () => receipt?.linkedInvoices ?? [] },
-    { key: 'linkedReturns', type: 'return-to-vendor', fetch: async () => receipt?.linkedReturns ?? [] },
-  ];
 
   const rows = [
     { label: ui('shipmentPreviewDocNo'), value: receipt.documentNo || '—' },
@@ -59,7 +54,9 @@ function ReceiptStatsPanel({ receipt, partnerName, movementDate, token, apiBaseU
         documentId={receipt.id}
         token={token}
         apiBaseUrl={apiBaseUrl}
-        specs={specs}
+        // ETP-5539 — same definition as the form; the card loads the detail record,
+        // where the backend injects linkedOrders/linkedInvoices/linkedReturns.
+        definition={PURCHASE_RELATED_DOCS['goods-receipt']}
         data-testid="RelatedDocumentsCard__ba7c74" />
     </div>
   );

@@ -122,8 +122,8 @@ vi.mock('../PurchaseInvoiceHeaderTable.jsx', () => ({
 }));
 
 vi.mock('../../shared/InvoicePreview.jsx', () => ({
-  default: ({ invoice, specName, windowName, onInvoiceUpdated }) => (
-    <div data-testid="invoice-preview" data-invoice-id={invoice.id} data-spec-name={specName} data-window-name={windowName}>
+  default: ({ invoice, specName, windowName, onInvoiceUpdated, relatedDocs }) => (
+    <div data-testid="invoice-preview" data-invoice-id={invoice.id} data-spec-name={specName} data-window-name={windowName} data-related-spec={relatedDocs?.spec}>
       <button type="button" onClick={onInvoiceUpdated}>invoice updated</button>
     </div>
   ),
@@ -208,6 +208,13 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
     expect(rowDeleteConfig).toMatchObject({ apiBaseUrl: '/api', entity: 'header', token: 'tkn' });
   });
 
+  // ETP-5539 — the preview shows the same related documents as the form section.
+  it('passes the purchase-invoice related-documents definition to the invoice preview', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    expect(screen.getByTestId('invoice-preview')).toHaveAttribute('data-related-spec', 'purchase-invoice');
+  });
+
   it('renders HeaderPage (detail view) when a recordId is present', () => {
     render(<PurchaseInvoiceWindow windowName="purchase-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
 
@@ -221,6 +228,8 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
       refetchAfterSave: true,
     });
     expect(lastHeaderPageProps.draftMode).toMatchObject({ enabled: true, processValue: 'CO' });
+    // ETP-5513 — fixed 320 px side panel (was 360), so the header keeps 3 columns at 1280x720.
+    expect(lastHeaderPageProps.sidePanelStyle).toEqual({ width: 320 });
     expect(lastHeaderPageProps.summary.map((s) => s.key)).toEqual([
       'summedLineAmount', 'grandTotalAmount', 'totalPaid', 'outstandingAmount',
     ]);

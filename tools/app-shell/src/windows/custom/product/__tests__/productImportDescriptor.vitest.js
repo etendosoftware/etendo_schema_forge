@@ -1,6 +1,10 @@
+// @covers tools/app-shell/src/windows/custom/product/productImportDescriptor.js
+// @covers tools/app-shell/src/windows/custom/product/productFkResolvers.js
 import { describe, it, vi, afterEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { buildOperations } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
+import { resetImportRun } from '@etendosoftware/app-shell-core/lib/import/importRunState.js';
+import '../productFkResolvers.js'; // registers the 'product-uom' resolver the send path looks up
 import '../productImportDescriptor.js'; // side-effecting import: registers the 'product' descriptor on load
 
 // The descriptor caches each resolved price-list version in a module-level Map keyed by
@@ -640,5 +644,78 @@ describe('product import descriptor — cost (ETP-5350)', () => {
       () => buildOperations({ ...baseRow, cost: '-5' }, productConfig('tok-cost-neg-i18n', { translate })),
       /El coste no puede ser negativo\./,
     );
+  });
+});
+
+/**
+ * ETP-5676 — the send phase re-resolved the unit of measure per row (2-3 simsearch GETs each, one
+ * per language), ignoring what the preview had already resolved, and kept its per-token caches
+ * alive across files.
+ */
+describe('product import descriptor — FK reuse and run reset (ETP-5676)', () => {
+  const simSearchCalls = (fetchMock) => fetchMock.mock.calls.filter(([url]) => String(url).includes('/simsearch'));
+
+  function stubUomFetch() {
+    const fetchMock = vi.fn(async (url) => {
+      const u = String(url);
+      if (u.includes('/simsearch')) {
+        return { ok: true, json: async () => ({ item_0: { data: [{ id: 'UOM-KG', name: 'Kilo', similarity_percent: 100 }] } }) };
+      }
+      if (u.includes('/product/defaults')) return { ok: true, json: async () => ({ defaults: { uOM: 'UOM-DEFAULT' } }) };
+      if (u.includes('/product-category/')) {
+        return { ok: true, json: async () => ({ response: { data: [{ id: 'CAT-HERR', searchKey: 'HERRAMIENTAS', name: 'Herramientas' }] } }) };
+      }
+      return { ok: true, json: async () => ({ items: SALES_ITEMS }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('asks the backend for no unit of measure the preview already resolved', async () => {
+    const fetchMock = stubUomFetch();
+    const fkResolutions = new Map([['uOM', new Map([['Kilo', { status: 'auto-resolved', id: 'UOM-PREVIEW', name: 'Kilo' }]])]]);
+    const results = await Promise.all(Array.from({ length: 5 }, () => buildOperations(
+      { ...baseRow, uOM: 'Kilo' },
+      productConfig('tok-5676-prev', { fkResolutions }),
+    )));
+    assert.deepEqual(results.map(([p]) => p.body.uOM), Array(5).fill('UOM-PREVIEW'));
+    assert.equal(simSearchCalls(fetchMock).length, 0);
+  });
+
+  it('resolves an unpreviewed unit once for all concurrent rows, not once per row', async () => {
+    const fetchMock = stubUomFetch();
+    const results = await Promise.all(Array.from({ length: 8 }, () => buildOperations(
+      { ...baseRow, uOM: 'Kilo' },
+      productConfig('tok-5676-memo'),
+    )));
+    assert.deepEqual(results.map(([p]) => p.body.uOM), Array(8).fill('UOM-KG'));
+    // One request per language of the match (en_US + es_ES + the session's), never × rows.
+    assert.ok(simSearchCalls(fetchMock).length <= 3, `got ${simSearchCalls(fetchMock).length}`);
+  });
+
+  it('reads the category catalogue once per run and again after a new file resets the run', async () => {
+    const fetchMock = stubUomFetch();
+    const categoryReads = () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/product-category/')).length;
+    const run = () => buildOperations({ ...baseRow, category: 'HERRAMIENTAS' }, productConfig('tok-5676-reset'));
+    await run();
+    await run();
+    assert.equal(categoryReads(), 1);
+    resetImportRun();
+    await run();
+    assert.equal(categoryReads(), 2);
+  });
+
+  it('refetches the org defaults and the price list version after a run reset', async () => {
+    const fetchMock = stubUomFetch();
+    const count = (part) => fetchMock.mock.calls.filter(([url]) => String(url).includes(part)).length;
+    const run = () => buildOperations({ ...baseRow, salesPrice: '10' }, productConfig('tok-5676-defaults'));
+    await run();
+    await run();
+    assert.equal(count('/product/defaults'), 1);
+    assert.equal(count('/price/selectors/'), 1);
+    resetImportRun();
+    await run();
+    assert.equal(count('/product/defaults'), 2);
+    assert.equal(count('/price/selectors/'), 2);
   });
 });

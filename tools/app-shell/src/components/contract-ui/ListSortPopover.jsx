@@ -50,7 +50,7 @@ export function ListSortPopover({
   onClear,
   isDefaultSort = true,
   SortIconComponent,
-  iconButtonHover = 'hover:text-foreground',
+  iconButtonHover = 'hover:bg-[hsl(var(--muted))]',
   labelOverrides,
 }) {
   const ui = useUI();
@@ -85,13 +85,13 @@ export function ListSortPopover({
         title={ui('sortBy')}
         onClick={() => setOpen((v) => !v)}
         className={[
-          'h-9 w-9 flex items-center justify-center rounded-lg border transition-colors',
+          'h-10 w-10 flex items-center justify-center rounded-lg border transition-colors',
           isDefaultSort
-            ? `border-border text-muted-foreground ${iconButtonHover}`
+            ? `border-border text-[#828FA3] ${iconButtonHover}`
             : 'border-primary/40 bg-primary/10 text-primary',
         ].join(' ')}
       >
-        <SortEl className="h-4 w-4" data-testid="SortEl__ls0p" />
+        <SortEl className="h-5 w-5" data-testid="SortEl__ls0p" />
       </button>
       {open && sortable.length > 0 && (
         <div

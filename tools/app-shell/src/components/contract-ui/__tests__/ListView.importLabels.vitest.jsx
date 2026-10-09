@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/useWindowImportDialog.js
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
@@ -51,6 +52,14 @@ vi.mock('@/hooks/useWindowFilterPresets', () => ({
 }));
 
 const captured = vi.hoisted(() => ({}));
+const trackMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/observability.js', () => ({ track: trackMock }));
+// ETP-5676: the global `import-batch-size` flag; every other flag stays off.
+const flagValue = vi.hoisted(() => ({ batchSize: 0 }));
+vi.mock('@/lib/flags/useFeatureFlag.js', () => ({
+  useFeatureFlag: () => false,
+  useNumberFlag: () => flagValue.batchSize,
+}));
 vi.mock('@etendosoftware/app-shell-core/components/import/ImportDialog.jsx', () => ({
   ImportDialog: (props) => {
     captured.props = props;
@@ -101,7 +110,9 @@ describe('ListView — import labels + translator forwarded to ImportDialog', ()
     // ETP-4997: the hint carries a {formats} placeholder that ImportDropzone fills from the
     // window's own `formats` declaration, so it can no longer name formats the input rejects.
     expect(labels.dropzone.dropHint).toBe('importDropHintFormats');
+    expect(labels.reading).toBe('importReadingFile');
     expect(labels.progress.title).toBe('importProgressTitle');
+    expect(labels.progress.counter).toBe('importProgressCounter');
     expect(labels.mapping.notImported).toBe('importNotImported');
     // Reused generic keys — not import-prefixed, per the "reuse before adding" rule.
     expect(labels.mapping.save).toBe('save');
@@ -122,3 +133,54 @@ describe('ListView — import labels + translator forwarded to ImportDialog', ()
     expect(labels.confirm.willSkip(2)).toBe('importWillSkip(2)');
   });
 });
+
+// ETP-5676 — core only receives the resolved number; the flag is read here.
+describe('ListView — import batch size handed to ImportDialog', () => {
+  const open = (limit) => {
+    render(<ListView {...defaultProps} import={{ ...defaultProps.import, limit }} />);
+    fireEvent.click(screen.getByTestId('ListView__importButton'));
+    return captured.props;
+  };
+
+  it('uses the window\'s limit.batchSize while the flag is 0 or unset', () => {
+    flagValue.batchSize = 0;
+    expect(open({ batchSize: 10 }).batchSize).toBe(10);
+  });
+
+  it('defaults to 1 when neither the window nor the flag sets it', () => {
+    flagValue.batchSize = 0;
+    expect(open(undefined).batchSize).toBe(1);
+  });
+
+  it('lets a valid flag value override the window', () => {
+    flagValue.batchSize = 4;
+    expect(open({ batchSize: 10 }).batchSize).toBe(4);
+    flagValue.batchSize = 0;
+  });
+});
+
+// ETP-5676 — core's run summary becomes one `import_completed` event, quantities only.
+describe('ListView — onImportFinished emits import_completed', () => {
+  it('sends the declared properties and nothing else', () => {
+    flagValue.batchSize = 0;
+    const { onImportFinished } = (() => {
+      render(<ListView {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('ListView__importButton'));
+      return captured.props;
+    })();
+    trackMock.mockClear();
+    onImportFinished({
+      outcome: 'cancelled', entity: 'contacts', rowsTotal: 5, rowsCreated: 0, rowsFailed: 0,
+      rowsDuplicate: 0, rowsUnknown: 0, durationMs: 120, readMs: 20, validateMs: 100, sendMs: 0,
+      batchSize: 1, concurrency: 4, columnsInFile: 3, columnsAutoMapped: 3, columnsManuallyMapped: 0,
+      fkAutoResolved: 0, fkCreated: 0,
+      rows: [{ name: 'Secret SL' }], email: 'x@y.com',
+    });
+    expect(trackMock).toHaveBeenCalledTimes(1);
+    const [name, properties] = trackMock.mock.calls[0];
+    expect(name).toBe('import_completed');
+    expect(properties).toMatchObject({ outcome: 'cancelled', entity: 'contacts', rowsTotal: 5 });
+    expect(JSON.stringify(properties)).not.toMatch(/Secret|x@y\.com/);
+  });
+});
+

@@ -1,11 +1,13 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/incidentSeverity.js
 // Vitest component tests for FmListPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { registerApiSession, resetApiSessionForTests } from '@/auth/api.js';
+import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -95,7 +97,6 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: ({ title, message, cta }) =>
     React.createElement(
@@ -207,16 +208,20 @@ describe('FmListPage — rendering', () => {
     expect(document.body).toBeTruthy();
   });
 
-  it('renders the title key', () => {
+  it('renders no list title in the page content — the title lives in the TopBar (ETP-5584)', () => {
     render(<FmListPage declarations={[]} {...defaultProps} />);
-    expect(document.body.textContent).toContain('fm.list.title');
+    expect(document.body.textContent).not.toContain('fm.list.title');
+    expect(document.body.textContent).not.toContain('fm.breadcrumb.section');
   });
 
-  it('shows declaration count badge', () => {
-    // The count badge reflects raw `decls.length`, unaffected by activeModels.
+  it('publishes the declaration count as the TopBar record count (ETP-5584)', () => {
+    // The count reflects raw `decls.length`, unaffected by activeModels. Since ETP-5584 it is
+    // the TopBar badge (useSetPageMeta.recordCount), not an in-content badge.
     const decls = [makeDecl(), makeDecl()];
-    render(<FmListPage declarations={decls} {...defaultProps} />);
-    expect(document.body.textContent).toContain('2');
+    let meta = null;
+    function Probe() { meta = usePageMeta(); return null; }
+    render(<PageMetaProvider><FmListPage declarations={decls} {...defaultProps} /><Probe /></PageMetaProvider>);
+    expect(meta.recordCount).toBe(2);
   });
 
   it('renders the table when declarations exist', async () => {
@@ -775,6 +780,19 @@ describe('FmListPage — active-models filtering (regression)', () => {
 // column) and never for a legacy row with no submissionMethod at all.
 
 describe('FmListPage — submissionMethod sub-label (ETP-4755)', () => {
+  // ETP-5584 — the Estado cell is the invoice lists' own chip (core StatusTag), toned like them.
+  it('renders the status as the invoice lists\' StatusTag, green for submitted and grey for draft', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decls = [
+      makeDecl({ id: 'st-1', status: 'submitted' }),
+      makeDecl({ id: 'st-2', status: 'draft', period: '2T' }),
+    ];
+    const { container } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+    const tags = Array.from(container.querySelectorAll('tbody .status-tag'));
+    expect(tags.map(t => t.className).sort()).toEqual(['status-tag status-tag--neutral', 'status-tag status-tag--success']);
+  });
+
   it('renders the sub-label for a submitted_ack row with submissionMethod present', async () => {
     globalThis.fetch = mockCatalogFetch();
     const decl = makeDecl({ id: 'sm-1', status: 'submitted_ack', submissionMethod: 'manual_ack' });

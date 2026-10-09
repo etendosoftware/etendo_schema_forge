@@ -70,9 +70,10 @@ export const OCR_DOC_TYPES = [
         // are `businessPartner` HEADER fields are actually seeded: `name`, `taxID`,
         // `etgoEmail`, `etgoPhone` (see `buildOcrContactSeed` in
         // CreateContactModalAdapter.jsx). `address`, `postalCode`, `city` and `country`
-        // belong to the `locationAddress` CHILD tab and are NOT seeded today — adding a
-        // key here does nothing unless it is a header field. Debt:
-        // `ocr-contact-address-prefill`.
+        // belong to the `locationAddress` CHILD tab: they are forwarded separately as
+        // `initialChildData` (`buildOcrContactAddressSeed`, ETP-5654) and prefill the
+        // tab's first "Add address" modal. Adding a key here does nothing unless one of
+        // those two builders reads it.
         createPrefilledFrom: {
           name: 'vendor_name',
           taxID: 'tax_id',

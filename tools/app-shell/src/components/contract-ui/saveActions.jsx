@@ -11,7 +11,8 @@
  * Behaviour-preserving move — the only functional change is the `saveGate` prop,
  * which every primary button now honours.
  */
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { notifySaveGateAttempt } from './saveGateAttempts.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Check, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
@@ -211,7 +212,13 @@ const SECONDARY_SAVE_CLS = 'bg-card border-[hsl(var(--border-control))] text-[hs
  */
 function GateTooltip({ title, children }) {
   if (!title) return children;
-  return <span title={title} className="inline-flex">{children}</span>;
+  // ETP-5513 — a blocked button is disabled, so the user can never click it; hovering,
+  // focusing or pressing it is the "show me what is missing" gesture. Report it so a
+  // required field hidden behind "Show more details" is revealed (saveGateAttempts.js).
+  // The wrapper (not the disabled button) listens: disabled controls swallow events.
+  const missing = React.isValidElement(children) ? children.props['data-missing-required'] : undefined;
+  const report = missing ? () => notifySaveGateAttempt(missing) : undefined;
+  return <span title={title} className="inline-flex" onPointerEnter={report} onPointerDown={report} onFocusCapture={report}>{children}</span>;
 }
 
 /**
@@ -477,7 +484,7 @@ function renderNewRecordSaveActions({
 function renderExistingRecordSaveAction({
   hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
   ui, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, isDocumentReadOnly, blockSaveForBalance, saveGate = {},
-  saveBusy = false,
+  saveBusy = false, primarySave = false,
 }) {
   // ETP-5278 — `saveBusy`: the window reports a save-related operation still in flight outside
   // `hook` (e.g. the Users role assignment run by `onAfterExistingSave`, or promote/demote).
@@ -485,13 +492,20 @@ function renderExistingRecordSaveAction({
   // overlap the still-running follow-up write. `deferSaveToast`: see runAfterSaveHookWithFinalToast.
   const busy = hook.isSaving || saveBusy;
   const deferSaveToast = !isNew && !!onAfterExistingSave;
+  // ETP-5600 — an existing record's Save defaults to the secondary/outline look. A window whose
+  // Save stays THE primary action of the detail view (no competing primary button) opts in via
+  // `primarySave` to keep the default (primary) Button variant — the mirror of
+  // `hasExternalPrimaryAction` on the new-record path. Named for the intent, not the window.
+  const saveLook = primarySave
+    ? { className: saveBtnCls, iconColor: undefined }
+    : { variant: 'outline', className: `${saveBtnCls} ${SECONDARY_SAVE_CLS}`, iconColor: 'hsl(var(--muted-foreground))' };
   return (
-    <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} variant="outline" size="default" className={`${saveBtnCls} ${SECONDARY_SAVE_CLS}`} data-testid="action-save" disabled={isDocumentReadOnly || busy || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
+    <GateTooltip data-testid="GateTooltip__3b2291" title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} {...(saveLook.variant ? { variant: saveLook.variant } : {})} size="default" className={saveLook.className} data-testid="action-save" disabled={isDocumentReadOnly || busy || !isDirty || blockSaveForBalance || saveGate.blocked} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : saveGate.title} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave({ silent: deferSaveToast });
       await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui, deferSaveToast });
     }}>
-      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="hsl(var(--muted-foreground))" data-testid="Save__fa3275" />}
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color={saveLook.iconColor} data-testid="Save__fa3275" />}
       {ui('save')}
     </Button></GateTooltip>
   );

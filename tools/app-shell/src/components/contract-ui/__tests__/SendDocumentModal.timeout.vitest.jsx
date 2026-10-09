@@ -29,9 +29,18 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('lucide-react', () => ({
+  Download: () => null,
   Mail: () => null,
+  Maximize: () => null,
+  X: () => null,
+  Plus: () => null,
   Search: () => null,
   Loader2: () => null,
+}));
+
+// A PDF blob is previewed through the react-pdf viewer (ETP-5598); pdfjs cannot run in jsdom.
+vi.mock('@/windows/custom/shared/PdfViewer.jsx', () => ({
+  default: ({ url }) => <div data-testid="pdf-viewer" data-url={url} />,
 }));
 
 vi.mock('@/auth/useApiFetch.js', async (importOriginal) => {

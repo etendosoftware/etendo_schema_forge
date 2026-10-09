@@ -145,9 +145,9 @@ export function DetailMoreActionsMenu({
       <button
         data-testid="action-more"
         onClick={() => setShowMoreMenu(v => !v)}
-        className={`${sqBtnSize} flex items-center justify-center rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors`}
+        className={`${sqBtnSize} flex items-center justify-center rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors`}
       >
-        <MoreVertical className="h-[15px] w-[15px]" data-testid="MoreVertical__fa3275" />
+        <MoreVertical className="h-5 w-5" data-testid="MoreVertical__fa3275" />
       </button>
       {customMenuContent && (() => {
         const ProbeContent = customMenuContent;
