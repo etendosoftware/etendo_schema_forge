@@ -72,16 +72,21 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// The parent-account field is the app's default selector (AccountSelect → CreatableSearchSelect,
-// ETP-5681): options read "<code> - <name>" and the search box IS the combobox input.
+// The parent-account field is AccountSelect (ETP-5681): a button that opens the shared
+// SearchPopup; options read "<code> - <name>". The Dialog mock above renders the popup inline,
+// inside the field's root.
 const parentRoot = () => screen.getByTestId('new-account-modal-parent');
+const parentPopup = () => screen.getByTestId('new-account-modal-parent-popup');
 
-/** Opens the parent-account selector: clicks the chip when a parent is set, else the search box.
- * Resolves to the search input. */
+/** Opens the parent-account popup by clicking the field. Resolves to the popup's search input. */
 async function openParent(user) {
-  const chip = within(parentRoot()).queryByTestId('field-new-account-modal-parent-chip');
-  await user.click(chip ?? within(parentRoot()).getByRole('combobox'));
-  return within(parentRoot()).findByRole('combobox');
+  await user.click(within(parentRoot()).getByTestId('field-new-account-modal-parent'));
+  return screen.findByTestId('new-account-modal-parent-popup-input');
+}
+
+/** Picks a parent from the open popup by its "<code> - <name>" label. */
+async function pickParent(user, label) {
+  await user.click(await within(parentPopup()).findByText(label));
 }
 
 describe('NewAccountModal', () => {
@@ -103,9 +108,9 @@ describe('NewAccountModal', () => {
     render(<NewAccountModal {...baseProps()} />);
     await openParent(user);
 
-    // Options are portaled, already sorted by code ('4000' then '5000').
-    const list = await screen.findByTestId('options-new-account-modal-parent');
-    expect(within(list).getAllByRole('option').map((o) => o.textContent)).toEqual(['4000 - Sales', '5000 - Purchases']);
+    // Options are already sorted by code ('4000' then '5000').
+    await within(parentPopup()).findByText('4000 - Sales');
+    expect(within(parentPopup()).getAllByRole('option').map((o) => o.textContent)).toEqual(['4000 - Sales', '5000 - Purchases']);
   });
 
   it('auto-selects the current record as parent when it is itself a 4-digit summary account', () => {
@@ -124,12 +129,12 @@ describe('NewAccountModal', () => {
 
   it('falls back to no parent selection when nothing matches', () => {
     render(<NewAccountModal {...baseProps({ currentRecord: { id: 'x', searchKey: '9999', summaryLevel: 'N' } })} />);
-    expect(within(parentRoot()).getByPlaceholderText('selectAccount')).toBeInTheDocument();
+    expect(within(parentRoot()).getByTestId('field-new-account-modal-parent')).toHaveTextContent('selectAccount');
   });
 
   it('falls back to no parent selection when currentRecord is null', () => {
     render(<NewAccountModal {...baseProps({ currentRecord: null })} />);
-    expect(within(parentRoot()).getByPlaceholderText('selectAccount')).toBeInTheDocument();
+    expect(within(parentRoot()).getByTestId('field-new-account-modal-parent')).toHaveTextContent('selectAccount');
   });
 
   it('builds virtual parent groups from allAccounts when no explicit 4-digit summary row exists', async () => {
@@ -171,8 +176,8 @@ describe('NewAccountModal', () => {
     render(<NewAccountModal {...baseProps({ allAccounts: [] })} />);
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     await openParent(user);
-    // An empty catalog: there is no option list to show.
-    expect(screen.queryByTestId('options-new-account-modal-parent')).not.toBeInTheDocument();
+    // An empty catalog: the popup has no option to show.
+    expect(await screen.findByTestId('new-account-modal-parent-popup-empty')).toBeInTheDocument();
   });
 
   it('falls back to an empty list when the account fetch throws', async () => {
@@ -181,8 +186,8 @@ describe('NewAccountModal', () => {
     render(<NewAccountModal {...baseProps({ allAccounts: [] })} />);
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     await openParent(user);
-    // An empty catalog: there is no option list to show.
-    expect(screen.queryByTestId('options-new-account-modal-parent')).not.toBeInTheDocument();
+    // An empty catalog: the popup has no option to show.
+    expect(await screen.findByTestId('new-account-modal-parent-popup-empty')).toBeInTheDocument();
   });
 
   it('retries the account fetch on the next open after a failed attempt', async () => {
@@ -208,7 +213,7 @@ describe('NewAccountModal', () => {
     const user = userEvent.setup();
     render(<NewAccountModal {...baseProps()} />);
     await openParent(user);
-    await user.click(await screen.findByText('5000 - Purchases'));
+    await pickParent(user, '5000 - Purchases');
     expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('5000');
   });
 
@@ -241,7 +246,7 @@ describe('NewAccountModal', () => {
     expect(within(screen.getByTestId('new-account-modal-parent')).getByText('required')).toBeInTheDocument();
 
     await openParent(user);
-    await user.click(await screen.findByText('5000 - Purchases'));
+    await pickParent(user, '5000 - Purchases');
 
     expect(within(parentRoot()).getByText('5000 - Purchases')).toBeInTheDocument();
     expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('5000');
@@ -406,7 +411,7 @@ describe('NewAccountModal', () => {
 
     // Manually switch the parent selector to a DIFFERENT parent ('6000' / Payroll).
     await openParent(user);
-    await user.click(await screen.findByText('6000 - Payroll'));
+    await pickParent(user, '6000 - Payroll');
 
     // Account Type must re-derive to 'R' for the new parent — today it stays stuck at 'L'.
     expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('R');
@@ -443,7 +448,7 @@ describe('NewAccountModal', () => {
     fireEvent.change(screen.getByTestId('new-account-modal-account-type'), { target: { value: 'A' } });
     // ...then switches the parent to one whose derived default would be 'R'.
     await openParent(user);
-    await user.click(await screen.findByText('6000 - Payroll'));
+    await pickParent(user, '6000 - Payroll');
 
     expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('6000');
     expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('A');
@@ -466,17 +471,18 @@ describe('NewAccountModal', () => {
     // Fresh session: the type is derived again, and a parent change re-derives it.
     expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('L');
     await openParent(user);
-    await user.click(await screen.findByText('6000 - Payroll'));
+    await pickParent(user, '6000 - Payroll');
     expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('R');
   });
 
-  it('keeps the parent option list clickable inside the dialog (portaled with pointer-events auto)', async () => {
+  it('opens the parent picker as its own dialog nested in the modal', async () => {
     const user = userEvent.setup();
     render(<NewAccountModal {...baseProps()} />);
     await openParent(user);
-    await screen.findByText('5000 - Purchases');
-    // Radix Dialog sets pointer-events:none on the body; the portaled list must opt back in.
-    expect(screen.getByTestId('options-new-account-modal-parent').style.pointerEvents).toBe('auto');
+    await within(parentPopup()).findByText('5000 - Purchases');
+    // A nested Dialog (not a portaled list) — Radix keeps it interactive above the modal.
+    const popupDialog = parentPopup().closest('[data-testid="dialog"]');
+    expect(popupDialog).not.toBe(screen.getByTestId('new-account-modal').closest('[data-testid="dialog"]'));
   });
 
   it('uses the wider dialog so long parent names are not cut off', () => {
@@ -536,7 +542,7 @@ describe('NewAccountModal', () => {
       };
       render(<NewAccountModal {...baseProps({ allAccounts: structuralAccounts, currentRecord })} />);
 
-      expect(within(parentRoot()).getByPlaceholderText('selectAccount')).toBeInTheDocument();
+      expect(within(parentRoot()).getByTestId('field-new-account-modal-parent')).toHaveTextContent('selectAccount');
       expect(screen.getByTestId('account-code-prefix')).toBeEmptyDOMElement();
     });
 
@@ -652,7 +658,7 @@ describe('NewAccountModal', () => {
 
       // No 4-digit summary named exactly '430A' exists among parentOptions either,
       // so the prefix4 lookup also comes up empty — no default selection at all.
-      expect(within(parentRoot()).getByPlaceholderText('selectAccount')).toBeInTheDocument();
+      expect(within(parentRoot()).getByTestId('field-new-account-modal-parent')).toHaveTextContent('selectAccount');
     });
 
     it('legacy fallback: a bare numeric 4-digit summary record still self-selects as parent', () => {

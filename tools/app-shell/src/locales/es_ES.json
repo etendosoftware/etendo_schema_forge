@@ -18133,6 +18133,7 @@
     "suggestions": "Sugerencias",
     "askSomething": "Pregunta algo...",
     "noResults": "Sin resultados",
+    "searchPopupError": "No se pudieron cargar los resultados",
     "noResultsFor": "Sin resultados para",
     "noResultsFound": "No se encontraron resultados.",
     "oauthAuthorizeConnection": "Autorizar conexión",

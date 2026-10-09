@@ -543,7 +543,10 @@ function renderLineCell({
  * `EntityForm.jsx` but rendered compactly inside a row cell — clicking the button opens
  * the same `ProductSearchDrawer` modal the side-panel form used.
  */
-function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
+function LookupTrigger({ field, label, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
+  // `label` is the locale-resolved column label (resolveColumnLabel); `field.label` is the raw
+  // English AD name and must never reach the user (ETP-5681: the popup title read "Account").
+  const resolvedLabel = label || field.label || '';
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const Drawer = resolveLookupDrawer(field.lookupDrawer);
@@ -569,7 +572,7 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
           data-testid={"Search__" + field.id} />
         {displayLabel
           ? <span className={`${labelClassName} text-foreground`}>{displayLabel}</span>
-          : <span className={`${labelClassName} text-muted-foreground`}>{field.label || ui('search')}</span>}
+          : <span className={`${labelClassName} text-muted-foreground`}>{resolvedLabel || ui('search')}</span>}
       </button>
       <Drawer
         open={open}
@@ -587,7 +590,7 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
         token={token}
-        title={field.lookupTitle || field.label || ''}
+        title={field.lookupTitle || resolvedLabel}
         data-testid={"ProductSearchDrawer__" + field.id} />
     </>
   );
@@ -841,6 +844,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
       return (
         <LookupTrigger
           field={col}
+          label={resolveColumnLabel(col, locale, t)}
           displayLabel={displayLabel}
           selectorUrl={selectorUrl}
           selectorContext={selectorContext}

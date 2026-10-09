@@ -1,8 +1,8 @@
 {
-  "version": "0.32.0",
+  "version": "0.33.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-10-09T13:02:52.682Z",
-  "checksum": "862264b486f40ef4",
+  "updatedAt": "2026-10-09T14:31:01.112Z",
+  "checksum": "12b76df7edf28391",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
@@ -659,6 +659,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "columnWidth": 220,
             "validation": {
               "maxLength": 32

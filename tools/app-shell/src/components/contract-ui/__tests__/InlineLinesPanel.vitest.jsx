@@ -32,7 +32,9 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({
 }));
 
 vi.mock('@/lib/resolveColumnLabel.js', () => ({
-  resolveColumnLabel: (col) => col.label || col.key,
+  // Raw label by default; a column may carry `testResolvedLabel` to stand in for a locale
+  // translation (ETP-5681 lookup-title test).
+  resolveColumnLabel: (col) => col.testResolvedLabel || col.label || col.key,
 }));
 
 vi.mock('@/lib/linesColumnWidth.js', () => ({
@@ -81,6 +83,10 @@ vi.mock('../SelectorInput.jsx', () => ({
 }));
 vi.mock('../ProductSearchDrawer.jsx', () => ({
   default: () => null,
+}));
+// ETP-5681 — the `account` lookup drawer, exposing its title while open.
+vi.mock('../AccountLookupPopup.jsx', () => ({
+  default: (props) => (props.open ? <div data-testid="account-lookup-popup-title">{props.title}</div> : null),
 }));
 vi.mock('./quickActionsStyle.js', () => ({
   QUICK_ACTIONS_PILL_CLASS: 'pill',
@@ -1005,6 +1011,45 @@ describe('InlineLinesPanel', () => {
     const lookupBtn = within(row).getByTestId('field-product');
     expect(lookupBtn).toBeInTheDocument();
     expect(lookupBtn.tagName).toBe('BUTTON');
+  });
+
+  // ETP-5681 — the lookup popup's title and the empty trigger use the locale-resolved column
+  // label, never the raw English AD label (the G/L journal Account popup read "Account" in Spanish).
+  it('titles the lookup drawer with the locale-resolved column label', async () => {
+    const columns = [
+      {
+        key: 'accountingCombination',
+        label: 'Account',
+        testResolvedLabel: 'Cuenta contable',
+        type: 'selector',
+        column: 'C_ValidCombination_ID',
+        lookup: true,
+        lookupDrawer: 'account',
+      },
+    ];
+    const rows = [{ id: 'AC1', accountingCombination: '' }];
+    render(
+      <InlineLinesPanel
+        ref={React.createRef()}
+        columns={columns}
+        data={rows}
+        entity="lines"
+        token="test"
+        apiBaseUrl="/api"
+        selectorContext={{}}
+        onSelectionChange={vi.fn()}
+        onUpdateRow={vi.fn().mockResolvedValue()}
+        onDeleteRow={vi.fn().mockResolvedValue()}
+      />,
+    );
+    const row = screen.getByTestId('line-row-AC1');
+    await act(async () => { await userEvent.hover(row); });
+    const editBtn = within(within(row).getByTestId('line-actions')).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    const trigger = within(row).getByTestId('field-accountingCombination');
+    expect(trigger).toHaveTextContent('Cuenta contable');
+    await act(async () => { await userEvent.click(trigger); });
+    expect(screen.getByTestId('account-lookup-popup-title')).toHaveTextContent('Cuenta contable');
   });
 
   it('renders percent column with percentage sign', () => {

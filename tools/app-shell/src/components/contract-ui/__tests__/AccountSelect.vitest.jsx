@@ -16,11 +16,10 @@ const OPTIONS = [
   { id: 'acc-long', code: '55300000', name: 'Socios por desembolsos no exigidos, capital pendiente de inscripción' },
 ];
 
-/** Opens the selector the way a user does: focusing its search input. */
-function openSelector(testId) {
-  const input = within(screen.getByTestId(testId)).getByRole('combobox');
-  fireEvent.focus(input);
-  return input;
+/** Opens the account popup the way a user does — clicking the field — and returns its search box. */
+async function openSelector(testId) {
+  fireEvent.click(screen.getByTestId(`field-${testId}`));
+  return screen.findByTestId(`${testId}-popup-input`);
 }
 
 describe('accountOptionLabel', () => {
@@ -32,8 +31,9 @@ describe('accountOptionLabel', () => {
   });
 });
 
-// ETP-5681 — account pickers use the app's DEFAULT selector instead of the old
-// AccountBadgeSelect popover, which was as wide as its field and cut long names off.
+// ETP-5681 — account pickers open the shared SearchPopup (the report filters' "Desde la cuenta"
+// popup) instead of the old AccountBadgeSelect popover, which was as wide as its field and cut
+// long names off.
 describe('AccountSelect', () => {
   it('shows the selected account as "code - name"', () => {
     render(<AccountSelect value="acc-5723" options={OPTIONS} data-testid="acct-select" />);
@@ -43,8 +43,7 @@ describe('AccountSelect', () => {
 
   it('shows the placeholder when nothing is selected', () => {
     render(<AccountSelect value={null} options={OPTIONS} data-testid="acct-select" />);
-    expect(within(screen.getByTestId('acct-select')).getByRole('combobox'))
-      .toHaveAttribute('placeholder', 'selectAccount');
+    expect(screen.getByTestId('field-acct-select')).toHaveTextContent('selectAccount');
   });
 
   it('renders the label with a required marker', () => {
@@ -59,19 +58,21 @@ describe('AccountSelect', () => {
     expect(within(screen.getByTestId('acct-select')).getByText('requiredField')).toBeInTheDocument();
   });
 
-  it('lists every option with its FULL name (no truncation class)', async () => {
-    render(<AccountSelect options={OPTIONS} data-testid="acct-select" />);
-    openSelector('acct-select');
-    const longOption = await screen.findByText(
+  it('opens a popup titled with the field label that lists every option with its FULL name', async () => {
+    render(<AccountSelect label="Cuenta" options={OPTIONS} data-testid="acct-select" />);
+    await openSelector('acct-select');
+    const popup = screen.getByTestId('acct-select-popup');
+    expect(within(popup).getByText('Cuenta')).toBeInTheDocument();
+    const longOption = await within(popup).findByText(
       '55300000 - Socios por desembolsos no exigidos, capital pendiente de inscripción',
     );
     expect(longOption.className).not.toMatch(/\btruncate\b/);
-    expect(longOption.className).toMatch(/whitespace-nowrap/);
+    expect(within(popup).getAllByRole('option')).toHaveLength(OPTIONS.length);
   });
 
   it('searches by account code', async () => {
     render(<AccountSelect options={OPTIONS} data-testid="acct-select" />);
-    const input = openSelector('acct-select');
+    const input = await openSelector('acct-select');
     fireEvent.change(input, { target: { value: '626' } });
     expect(await screen.findByText('626 - Servicios bancarios')).toBeInTheDocument();
     expect(screen.queryByText('572 - Bancos c/c')).not.toBeInTheDocument();
@@ -79,18 +80,37 @@ describe('AccountSelect', () => {
 
   it('searches by account name', async () => {
     render(<AccountSelect options={OPTIONS} data-testid="acct-select" />);
-    const input = openSelector('acct-select');
+    const input = await openSelector('acct-select');
     fireEvent.change(input, { target: { value: 'puente' } });
     expect(await screen.findByText('5723 - Bancos, cuenta puente')).toBeInTheDocument();
     expect(screen.queryByText('626 - Servicios bancarios')).not.toBeInTheDocument();
   });
 
-  it('calls onChange with the selected id', async () => {
+  it('calls onChange with the selected id and closes the popup', async () => {
     const onChange = vi.fn();
     render(<AccountSelect options={OPTIONS} onChange={onChange} data-testid="acct-select" />);
-    openSelector('acct-select');
-    fireEvent.mouseDown(await screen.findByText('626 - Servicios bancarios'));
-    await waitFor(() => expect(onChange).toHaveBeenCalledWith('acc-626'));
+    await openSelector('acct-select');
+    fireEvent.click(await screen.findByTestId('acct-select-popup-option-acc-626'));
+    expect(onChange).toHaveBeenCalledWith('acc-626');
+    await waitFor(() => expect(screen.queryByTestId('acct-select-popup')).toBeNull());
+  });
+
+  it('selects the highlighted option with the keyboard', async () => {
+    const onChange = vi.fn();
+    render(<AccountSelect options={OPTIONS} onChange={onChange} data-testid="acct-select" />);
+    const input = await openSelector('acct-select');
+    await screen.findByTestId('acct-select-popup-option-acc-572');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledWith('acc-5723');
+  });
+
+  it('shows noResults when the search matches no account', async () => {
+    render(<AccountSelect options={OPTIONS} data-testid="acct-select" />);
+    const input = await openSelector('acct-select');
+    fireEvent.change(input, { target: { value: 'zzz-no-match' } });
+    expect(await screen.findByTestId('acct-select-popup-empty')).toHaveTextContent('noResults');
   });
 
   it('an optional field can be cleared (onChange(null)); a required one cannot', () => {
@@ -98,19 +118,18 @@ describe('AccountSelect', () => {
     const { unmount } = render(
       <AccountSelect value="acc-572" options={OPTIONS} onChange={onChange} data-testid="acct-select" />,
     );
-    fireEvent.mouseDown(within(screen.getByTestId('acct-select')).getByRole('button', { name: 'clear' }));
+    fireEvent.click(screen.getByTestId('field-acct-select-clear'));
     expect(onChange).toHaveBeenCalledWith(null);
     unmount();
 
     render(<AccountSelect value="acc-572" required options={OPTIONS} data-testid="acct-select" />);
-    expect(within(screen.getByTestId('acct-select')).queryByRole('button', { name: 'clear' })).toBeNull();
+    expect(screen.queryByTestId('field-acct-select-clear')).toBeNull();
   });
 
   it('readOnly renders a static value with no interactive selector', () => {
     render(<AccountSelect value="acc-572" options={OPTIONS} readOnly data-testid="acct-select" />);
     const root = screen.getByTestId('acct-select');
     expect(within(root).getByText('572 - Bancos c/c')).toHaveAttribute('title', '572 - Bancos c/c');
-    expect(within(root).queryByRole('combobox')).toBeNull();
     expect(within(root).queryByRole('button')).toBeNull();
   });
 });

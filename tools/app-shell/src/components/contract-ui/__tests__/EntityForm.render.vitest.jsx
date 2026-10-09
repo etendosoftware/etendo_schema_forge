@@ -23,6 +23,11 @@ vi.mock('@/i18n', () => ({
 vi.mock('../ProductSearchDrawer.jsx', () => ({
   default: () => null,
 }));
+// ETP-5681 — the `account` lookup drawer; rendered as a marker while open so a test can tell
+// which registry drawer a lookup field opened.
+vi.mock('../AccountLookupPopup.jsx', () => ({
+  default: (props) => (props.open ? <div data-testid="account-lookup-popup-open">{props.title}</div> : null),
+}));
 vi.mock('../ImageField.jsx', () => ({
   ImageField: (props) => <div data-testid={`image-field-${props.fieldKey ?? 'default'}`} />,
 }));
@@ -865,6 +870,35 @@ describe('EntityForm — extended render coverage', () => {
     const btn = screen.getByTestId('field-product');
     expect(btn).toBeInTheDocument();
     expect(btn.tagName).toBe('BUTTON');
+  });
+
+  // ETP-5681 — the form's lookup field opens the drawer its `lookupDrawer` names (shared registry),
+  // not always the product drawer: the G/L journal line Account opens the account popup.
+  it('opens the registry drawer named by lookupDrawer when the lookup button is clicked', async () => {
+    const user = userEvent.setup();
+    const fields = [
+      {
+        key: 'accountingCombination',
+        label: 'Account',
+        type: 'search',
+        column: 'C_ValidCombination_ID',
+        lookup: true,
+        lookupDrawer: 'account',
+      },
+    ];
+    render(
+      <EntityForm
+        fields={fields}
+        data={{}}
+        onChange={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        entity="lines"
+      />,
+    );
+    expect(screen.queryByTestId('account-lookup-popup-open')).toBeNull();
+    await user.click(screen.getByTestId('field-accountingCombination'));
+    expect(screen.getByTestId('account-lookup-popup-open')).toBeInTheDocument();
   });
 
   // --- PartnerAddressPicker field ---

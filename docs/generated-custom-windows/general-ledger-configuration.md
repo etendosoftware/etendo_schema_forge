@@ -174,14 +174,15 @@ Recommended next automated additions once backend/save work starts:
 Account names were cut off in **Valores por defecto** ("Socios por desembols...",
 "Partidas pendi..."): every account field used `AccountBadgeSelect`, a hand-built popover exactly
 as wide as its ~330 px grid cell that truncated each option. Both account tabs now use
-`AccountSelect` (`tools/app-shell/src/components/contract-ui/AccountSelect.jsx`), a thin adapter
-over the app's **default selector** (`CreatableSearchSelect`, `staticOptions` mode):
+`AccountSelect` (`tools/app-shell/src/components/contract-ui/AccountSelect.jsx`): the field is a
+button showing the selected account, and clicking it opens the shared centered **search popup**
+(`SearchPopup.jsx`, the same one the report filters use for "Desde la cuenta"):
 
 - options read `"<code> - <name>"` (`accountOptionLabel`), the same string the generic
   ValidCombination selector returns, so an account reads identically here and in every generated
   accounting tab; search matches code or name;
-- the dropdown grows to the longest option (capped to the viewport) instead of truncating;
-- required fields cannot be cleared; optional ones clear to `null`.
+- the popup is wide and long names wrap instead of being cut off;
+- required fields cannot be cleared; optional ones show an ✕ that clears to `null`.
 
 The catalog (`catalogs.accounts` of `GET /general-ledger-configuration/General`) now lists
 **posting accounts only**: `GeneralLedgerConfigurationHandler` builds it through
@@ -189,5 +190,5 @@ The catalog (`catalogs.accounts` of `GET /general-ledger-configuration/General`)
 account is a summary (heading) account or inactive — a default account must be one that can be
 posted to. Local check: 662 → 661 accounts (the `640` heading gone, `64000000` kept).
 
-Manual check: open **Valores por defecto**, open any account field → full names visible, typing a
-code (`572`) or a word (`puente`) filters; no summary heading (e.g. `640`) is offered.
+Manual check: open **Valores por defecto**, click any account field → a centered popup with full
+names; typing a code (`572`) or a word (`puente`) filters; no summary heading (e.g. `640`) is offered.

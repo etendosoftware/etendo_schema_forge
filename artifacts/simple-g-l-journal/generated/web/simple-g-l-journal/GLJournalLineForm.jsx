@@ -2,7 +2,7 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:gLJournalLine
 const fields = [
-  { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', section: 'principal', reference: 'ValidCombination', inputMode: 'selector', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') || (record['multigeneralLedger'] === true || record['multigeneralLedger'] === 'Y') },
+  { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', lookup: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') || (record['multigeneralLedger'] === true || record['multigeneralLedger'] === 'Y') },
   { key: 'foreignCurrencyDebit', column: 'AmtSourceDr', type: 'number', labels: {"en_US":"Debit","es_ES":"Débito"}, label: 'Debit', required: true, section: 'principal', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'foreignCurrencyCredit', column: 'AmtSourceCr', type: 'number', labels: {"en_US":"Credit","es_ES":"Crédito"}, label: 'Credit', required: true, section: 'principal', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'openItems', column: 'Open_Items', type: 'checkbox', label: 'Open Items', required: true, section: 'principal' },

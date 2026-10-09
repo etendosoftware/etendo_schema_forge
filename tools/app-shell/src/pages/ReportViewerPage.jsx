@@ -10,6 +10,7 @@ import GalleryGrid from '@/components/ui/gallery-grid';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import ProductSearchDrawer from '@/components/contract-ui/ProductSearchDrawer.jsx';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
+import { SearchPopup, SEARCH_POPUP_PAGE_SIZE } from '@/components/contract-ui/SearchPopup.jsx';
 import { ViewToggle } from '@/components/contract-ui/ListView.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -185,118 +186,34 @@ function ReportCard({ report, onRun }) {
   );
 }
 
-// Single-select popup modal — used for fields with inputStyle: 'popup-single'.
-const SELECTOR_PAGE_SIZE = 30;
-
+// Single-select popup modal — used for fields with inputStyle: 'popup-single'. The modal itself
+// is the shared SearchPopup (ETP-5681 lifted it out of this page so the account pickers reuse it).
 function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams = {} }) {
-  const ui = useUI();
-  const [query, setQuery] = useState('');
-  const [options, setOptions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [offset, setOffset] = useState(0);
-  const [focusIdx, setFocusIdx] = useState(-1);
-  const inputRef = useRef(null);
-  const listRef = useRef(null);
-  const sentinelRef = useRef(null);
   const apiFetch = useApiFetch(ETENDO_BASE);
 
-  useEffect(() => {
-    if (open) { setQuery(''); setOptions([]); setOffset(0); setHasMore(false); setFocusIdx(-1); setTimeout(() => inputRef.current?.focus(), 50); }
-  }, [open]);
-
-  const fetchPage = useCallback((q, off, append) => {
+  const loadPage = useCallback((q, off, signal) => {
     const extra = Object.entries(extraParams).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-    const params = `q=${encodeURIComponent(q)}&limit=${SELECTOR_PAGE_SIZE}&offset=${off}${extra ? '&' + extra : ''}`;
-    return apiFetch(`/sws/report-selectors/${selector}?${params}`)
-      .then(r => r.json())
-      .then(data => {
-        const items = Array.isArray(data) ? data : (data?.items ?? []);
-        const more = Array.isArray(data) ? false : (data?.hasMore ?? false);
-        if (append) {
-          setOptions(prev => [...prev, ...items]);
-        } else {
-          setOptions(items);
-        }
-        setHasMore(more);
-        setOffset(off + items.length);
-        setFocusIdx(-1);
-      });
+    const params = `q=${encodeURIComponent(q)}&limit=${SEARCH_POPUP_PAGE_SIZE}&offset=${off}${extra ? '&' + extra : ''}`;
+    return apiFetch(`/sws/report-selectors/${selector}?${params}`, { signal })
+      .then(r => {
+        if (!r.ok) throw new Error(`Report selector request failed: ${r.status}`);
+        return r.json();
+      })
+      .then(data => ({
+        items: Array.isArray(data) ? data : (data?.items ?? []),
+        hasMore: Array.isArray(data) ? false : (data?.hasMore ?? false),
+      }));
   }, [selector, extraParams, apiFetch]);
 
-  useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    setOptions([]);
-    setOffset(0);
-    setHasMore(false);
-    const t = setTimeout(() => {
-      fetchPage(query, 0, false).catch(() => setOptions([])).finally(() => setLoading(false));
-    }, query ? 300 : 0);
-    return () => clearTimeout(t);
-  }, [query, selector, open, extraParams]);
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
-        setLoadingMore(true);
-        fetchPage(query, offset, true).catch(() => {}).finally(() => setLoadingMore(false));
-      }
-    }, { threshold: 0.1 });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMore, loadingMore, loading, offset, query, fetchPage]);
-
-  const handleKey = (e) => {
-    if (e.key === 'Escape') { onClose(); return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setFocusIdx(i => Math.min(i + 1, options.length - 1)); }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setFocusIdx(i => Math.max(i - 1, 0)); }
-    if (e.key === 'Enter' && focusIdx >= 0 && options[focusIdx]) { onSelect(options[focusIdx]); onClose(); }
-  };
-
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30" onMouseDown={onClose}>
-      <div className="bg-card rounded-xl shadow-2xl w-[42rem] max-w-[90vw] max-h-[480px] flex flex-col" onMouseDown={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
-          <span className="text-sm font-semibold">{title}</span>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" data-testid="X__3c998a" /></button>
-        </div>
-        <div className="px-4 py-2 border-b border-border/20">
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={handleKey}
-            placeholder={`${ui('Search')}...`}
-            className="w-full h-8 px-2 text-sm border border-border rounded-md bg-card focus:outline-none focus:ring-1 focus:ring-primary/30"
-          />
-        </div>
-        <div ref={listRef} className="flex-1 overflow-auto py-1">
-          {loading && <div className="flex justify-center py-6 text-muted-foreground text-xs">{ui('loading')}</div>}
-          {!loading && options.length === 0 && (
-            <div className="text-center py-6 text-muted-foreground text-xs">{ui('noResults')}</div>
-          )}
-          {options.map((o, idx) => (
-            <button
-              key={o.id}
-              onClick={() => { onSelect(o); onClose(); }}
-              className={['w-full text-left px-4 py-2 text-sm', idx === focusIdx ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50'].join(' ')}
-            >
-              <TruncatedText text={o.name} data-testid="TruncatedText__SelectorPopup" />
-            </button>
-          ))}
-          <div ref={sentinelRef} className="py-1 flex justify-center">
-            {loadingMore && <span className="text-xs text-muted-foreground">{ui('loadingMore')}</span>}
-          </div>
-        </div>
-      </div>
-    </div>
+    <SearchPopup
+      open={open}
+      onClose={onClose}
+      onSelect={(o) => { onSelect(o); onClose(); }}
+      loadPage={loadPage}
+      title={title}
+      data-testid="report-selector-popup"
+    />
   );
 }
 

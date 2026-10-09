@@ -52,7 +52,7 @@ const requiredHeaderFields = ['description', 'accountingDate', 'period', 'curren
 // @sf-generated-start addLineFields:gLJournalLine
 const addLineFields = {
   entry: [
-    { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
     { key: 'foreignCurrencyDebit', column: 'AmtSourceDr', type: 'number', required: true, label: 'Debit', labels: {"en_US":"Debit","es_ES":"Débito"}, clearsField: 'foreignCurrencyCredit' },
     { key: 'foreignCurrencyCredit', column: 'AmtSourceCr', type: 'number', required: true, label: 'Credit', labels: {"en_US":"Credit","es_ES":"Crédito"}, clearsField: 'foreignCurrencyDebit' },
     { key: 'openItems', column: 'Open_Items', type: 'checkbox', required: true, label: 'Open Items' },
