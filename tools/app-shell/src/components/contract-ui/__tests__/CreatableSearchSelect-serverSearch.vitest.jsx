@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/CreatableSearchSelect.jsx
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
@@ -26,6 +27,10 @@ vi.mock('@/lib/buildUrlWithParams.js', () => ({
   },
 }));
 
+import { AuthProvider, createMemoryAuthStorage } from '@etendosoftware/app-shell-core/auth';
+import { DataProvider, createQueryCache } from '@etendosoftware/app-shell-core/data';
+import { appFetchCalls } from '@/test/appFetchCalls.js';
+import { SELECTOR_REVALIDATE_AFTER_MS } from '@/lib/selectorRevalidation.js';
 import { CreatableSearchSelect } from '../CreatableSearchSelect.jsx';
 
 function mockFetchOnce(items) {
@@ -240,5 +245,140 @@ describe('CreatableSearchSelect — serverSearch mode (ETP-4600 Phase 2a)', () =
     // No additional network call — filtering happens locally against the already-fetched list.
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('option-partner-1')).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5681 — header Cost Center / Project selectors showed nothing on open until the user
+// typed. The first page goes through the shared query cache (ETP-4564, 5 min catalog window);
+// an EMPTY page hides the dropdown entirely, so a cached empty or failed first page was replayed
+// on every open. These cases mount the component under a real DataProvider + cache, the way the
+// app does, and reopen it in a second mount sharing that cache.
+// ---------------------------------------------------------------------------
+describe('CreatableSearchSelect — serverSearch first page and the shared cache (ETP-5681)', () => {
+  const field = { key: 'costCenter', required: false };
+  const URL = '/api/gLJournal/selectors/C_Costcenter_ID';
+  const session = { token: 'tok', selectedOrg: { id: 'o1' } };
+
+  function renderWithCache(cache) {
+    return render(
+      <AuthProvider storage={createMemoryAuthStorage(session)} initialSession={session} restoreSession={null}>
+        <DataProvider cache={cache}>
+          <CreatableSearchSelect
+            {...baseProps} selectorUrl={URL} field={field} value="" displayValue="" onChange={vi.fn()}
+          />
+        </DataProvider>
+      </AuthProvider>,
+    );
+  }
+
+  /** Answers the selector endpoint with the queued responses in order; everything else
+   * (AuthProvider's background refresh) gets a harmless reply and is filtered out of the
+   * assertions by `appFetchCalls`. */
+  function queueResponses(...responses) {
+    const queue = [...responses];
+    global.fetch = vi.fn(async (url) => {
+      if (!String(url).startsWith(URL)) return { ok: true, json: async () => ({}) };
+      const next = queue.length > 1 ? queue.shift() : queue[0];
+      return next;
+    });
+  }
+  const page = (...labels) => ({ ok: true, json: async () => ({ items: labels.map((label, i) => ({ id: String(i + 1), label })) }) });
+
+  async function openSelector() {
+    const input = screen.getByTestId('field-costCenter');
+    await act(async () => { input.focus(); });
+    return input;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('does not trust a cached EMPTY first page: reopening refetches and lists the options', async () => {
+    queueResponses(page(), page('Centro A', 'Centro B'));
+    const cache = createQueryCache();
+
+    const first = renderWithCache(cache);
+    await openSelector();
+    await waitFor(() => expect(appFetchCalls()).toHaveLength(1));
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    first.unmount();
+
+    renderWithCache(cache);
+    await openSelector();
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(2));
+    expect(appFetchCalls()).toHaveLength(2);
+  });
+
+  it('does not cache a failed first page: the next open hits the server again', async () => {
+    queueResponses({ ok: false, status: 500, json: async () => ({}) }, page('Centro A'));
+    const cache = createQueryCache();
+
+    const first = renderWithCache(cache);
+    await openSelector();
+    await waitFor(() => expect(appFetchCalls()).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByText('loading')).not.toBeInTheDocument());
+    first.unmount();
+
+    renderWithCache(cache);
+    await openSelector();
+    await waitFor(() => expect(screen.getByText('Centro A')).toBeInTheDocument());
+    expect(appFetchCalls()).toHaveLength(2);
+  });
+
+  it('reuses a fresh non-empty cached page without a request (keeps the ETP-4564 saving)', async () => {
+    queueResponses(page('Centro A'));
+    const cache = createQueryCache();
+
+    const first = renderWithCache(cache);
+    await openSelector();
+    await waitFor(() => expect(screen.getByText('Centro A')).toBeInTheDocument());
+    first.unmount();
+
+    renderWithCache(cache);
+    await openSelector();
+    expect(screen.getByText('Centro A')).toBeInTheDocument();
+    await act(async () => {});
+    expect(appFetchCalls()).toHaveLength(1);
+  });
+
+  it('shows an old cached page at once and replaces it with the revalidated one', async () => {
+    queueResponses(page('Centro A', 'Centro inactivo'), page('Centro A'));
+    const cache = createQueryCache();
+    const t0 = Date.now();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(t0);
+
+    const first = renderWithCache(cache);
+    await openSelector();
+    await waitFor(() => expect(screen.getByText('Centro inactivo')).toBeInTheDocument());
+    first.unmount();
+
+    now.mockReturnValue(t0 + SELECTOR_REVALIDATE_AFTER_MS + 1);
+    renderWithCache(cache);
+    await openSelector();
+    // The stale page is on screen immediately (no loading placeholder)...
+    expect(screen.queryByText('loading')).not.toBeInTheDocument();
+    // ...and the revalidated page (the deactivated record gone) replaces it.
+    await waitFor(() => expect(screen.queryByText('Centro inactivo')).not.toBeInTheDocument());
+    expect(screen.getByText('Centro A')).toBeInTheDocument();
+    expect(appFetchCalls()).toHaveLength(2);
+  });
+
+  it('a click on the already-focused input after Esc reopens the dropdown with its options', async () => {
+    queueResponses(page('Centro A'));
+    const cache = createQueryCache();
+
+    renderWithCache(cache);
+    const input = await openSelector();
+    await waitFor(() => expect(screen.getByText('Centro A')).toBeInTheDocument());
+
+    fireEvent.keyDown(input, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByText('Centro A')).not.toBeInTheDocument());
+    expect(document.activeElement).toBe(input);
+
+    // Focus does not fire again on an already-focused input — the mousedown must open it.
+    fireEvent.mouseDown(input);
+    await waitFor(() => expect(screen.getByText('Centro A')).toBeInTheDocument());
   });
 });

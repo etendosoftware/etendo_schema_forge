@@ -9,7 +9,7 @@ Maintain a minimal Service Project master — a simplified view of the AD window
 - Create a service project with Search Key (required), Name (required), Description (optional), and Active (checkbox, defaults to `true`).
 - Open an existing service project and update those same fields.
 - Delete a service project through the standard generated entity flow.
-- Deactivate a service project via the Active checkbox, shown as a Yes/No badge in the list.
+- Deactivate a service project via the Active checkbox, shown as a Yes/No badge in the list. Inactive projects disappear from document Project selectors; since ETP-5681 a save here (and in the `project` window, same `C_Project` table) marks every cached selector page stale, so the change shows on the next selector open in the same session (changes made elsewhere within 30 s, `selectorRevalidation.js`).
 
 ## Interaction model
 - Route: `/service-project` for the list and `/service-project/:recordId` for the detail form.

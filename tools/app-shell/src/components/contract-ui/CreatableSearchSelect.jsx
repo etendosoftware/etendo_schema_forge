@@ -7,6 +7,7 @@ import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
+import { needsSelectorRevalidation } from '@/lib/selectorRevalidation.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
@@ -161,12 +162,19 @@ function buildServerSearchParams({ selectorContext, parentKey, parentValue, filt
 function fetchServerOptions({ apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey, query, offset = 0, limit = SERVER_SEARCH_PAGE }) {
   const params = buildServerSearchParams({ selectorContext, parentKey, parentValue, filterKey, query, offset, limit });
   return apiFetch(buildUrlWithParams(selectorUrl, params), { baseUrl: '' })
-    .then(res => (res.ok ? res.json() : null))
+    .then(res => {
+      // ETP-5681: a failed request must REJECT, not resolve as an empty page — the shared cache
+      // stores any resolved value, so a resolved `[]` was replayed on every open for the whole
+      // catalog freshness window and the selector looked empty until the user typed.
+      if (!res.ok) throw new Error(`Selector request failed: ${res.status}`);
+      return res.json();
+    })
     .then(data => {
       const items = (data?.items ?? []).map(i => ({ id: i.id, name: i.label || i.name || i.id, ...i }));
       return { items, hasMore: items.length >= limit };
     });
 }
+
 
 /** Pinned "create X" / "use typed value" action rendered at the top of the dropdown panel. */
 function CreateAction({ field, createLabel, onCreateRequest, onCreate, query }) {
@@ -528,8 +536,13 @@ export function CreatableSearchSelect({
     // of overwriting/appending onto the newer search's state (serverOptions/offsetRef/hasMoreRef).
     if (offset === 0) searchGenerationRef.current += 1;
     const requestGeneration = searchGenerationRef.current;
-    fetchInFlightRef.current = true;
-    if (offset === 0) setLoading(true); else setLoadingMore(true);
+    const applyPage = ({ items, hasMore: more }) => {
+      if (searchGenerationRef.current !== requestGeneration) return;
+      setServerOptions(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
+      offsetRef.current = offset + items.length;
+      hasMoreRef.current = more;
+      setHasMore(more);
+    };
     const fetchPage = () => fetchServerOptions({
       apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey,
       query: searchQuery, offset, limit: SERVER_SEARCH_PAGE,
@@ -538,34 +551,53 @@ export function CreatableSearchSelect({
     // (same context + query) reuses it instead of refetching. Falls back to a direct fetch
     // when no DataProvider is mounted (prior behavior). Load-more pages (offset>0) always
     // fetch directly — only the initial page is the reuse-on-reopen case ETP-4564 targets.
-    const run = (offset === 0 && dataCache?.cache && cacheScope)
+    //
+    // ETP-5681: stale-while-revalidate on top of that. A cached NON-EMPTY page is shown at once
+    // (no loading placeholder); it is refetched in the background when it is older than
+    // `SELECTOR_REVALIDATE_AFTER_MS` (lib/selectorRevalidation.js) or was invalidated (e.g. a
+    // cost center deactivated in its own window). A cached EMPTY page is never trusted: an empty
+    // first page hides the dropdown entirely (see showDropdown), so replaying one made the
+    // selector look broken until the user typed.
+    const useCache = offset === 0 && dataCache?.cache && cacheScope;
+    const cacheKey = useCache ? createQueryKey({
+      ...cacheScope, apiBase: selectorUrl, entity: 'selector',
+      filters: { ...(selectorContext ?? {}), ...(filterKey && parentValue ? { [filterKey]: parentValue } : {}) },
+      recordId: `q:${searchQuery ?? ''}`,
+    }) : null;
+    const cached = useCache ? dataCache.cache.getEntry(cacheKey) : null;
+    const cachedPageUsable = !!cached && !cached.stale && (cached.data?.items?.length ?? 0) > 0;
+    if (cachedPageUsable) {
+      applyPage(cached.data);
+      if (!needsSelectorRevalidation(cached)) return;
+    }
+    fetchInFlightRef.current = true;
+    // A background revalidation keeps the cached options on screen instead of blanking them
+    // behind the "loading" placeholder.
+    const showLoading = !cachedPageUsable;
+    if (offset === 0) { if (showLoading) setLoading(true); } else setLoadingMore(true);
+    const run = useCache
       ? dataCache.cache.fetchQuery({
-        key: createQueryKey({
-          ...cacheScope, apiBase: selectorUrl, entity: 'selector',
-          filters: { ...(selectorContext ?? {}), ...(filterKey && parentValue ? { [filterKey]: parentValue } : {}) },
-          recordId: `q:${searchQuery ?? ''}`,
-        }),
+        key: cacheKey,
         fetcher: fetchPage,
         staleTime: dataCache.catalogStaleTime,
+        // Reaching this point with an entry means it is empty, stale or past the revalidation
+        // age — all three must hit the server, not the cache.
+        force: !!cached,
       })
       : fetchPage();
     run
-      .then(({ items, hasMore: more }) => {
-        if (searchGenerationRef.current !== requestGeneration) return;
-        setServerOptions(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
-        offsetRef.current = offset + items.length;
-        hasMoreRef.current = more;
-        setHasMore(more);
-      })
+      .then(applyPage)
       .catch(() => {
         if (searchGenerationRef.current !== requestGeneration) return;
+        // A failed background revalidation keeps the cached page (and its pagination) on screen.
+        if (cachedPageUsable) return;
         if (offset === 0) setServerOptions([]);
         hasMoreRef.current = false;
         setHasMore(false);
       })
       .finally(() => {
         fetchInFlightRef.current = false;
-        if (offset === 0) setLoading(false); else setLoadingMore(false);
+        if (offset === 0) { if (showLoading) setLoading(false); } else setLoadingMore(false);
       });
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -637,11 +669,50 @@ export function CreatableSearchSelect({
     onChange(opt.id, opt.name, opt);
   };
 
+  // Opens the dropdown and (re)loads its first page. Shared by every open gesture — focus,
+  // click on an already-focused input, chevron, ArrowUp/Down — so none of them can open an
+  // empty panel (ETP-5681). The `open` guard keeps a gesture on an already-open dropdown from
+  // restarting its search (same guard as InlineSearchCombo, ETP-5005).
+  const openAndLoad = () => {
+    // Coming back within the blur grace period: cancel the pending close, or the dropdown this
+    // gesture keeps open would snap shut 200 ms later.
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+    if (open) return;
+    setOpen(true);
+    if (serverSearch) {
+      // Reload the first page on every OPEN — guarantees an unfiltered, up-to-date list every
+      // time the user opens the selector (ETP-4600), however they got here. The shared cache
+      // decides whether that is a network round trip (see triggerServerSearch). This replaced a
+      // blur-time (close path) invalidation that raced saves — see resetSearchState above.
+      offsetRef.current = 0;
+      hasMoreRef.current = true;
+      setHasMore(true);
+      triggerServerSearch(query, 0);
+      return;
+    }
+    // Lazy-load: if options for the current parent are not yet fetched, trigger fetch
+    const lazyKey = `${parentValue ?? ''}:${refreshKey}`;
+    if (loadedForRef.current !== lazyKey) {
+      setRefreshKey(k => k); // identity update — effect re-evaluates its cache check
+    }
+  };
+
   const handleClear = () => {
     isEditingRef.current = false;
     setEditingIntent(false);
     setQuery('');
     setOpen(true);
+    // The focus below lands while `open` is already true, so openAndLoad's guard skips it —
+    // load the unfiltered first page here instead (ETP-5681).
+    if (serverSearch) {
+      offsetRef.current = 0;
+      hasMoreRef.current = true;
+      setHasMore(true);
+      triggerServerSearch('', 0);
+    }
     onChange('', '');
     // The chip <button> unmounts and the <input> mounts once hasSelection flips to
     // false — without moving focus onto it, clicking away never fires onBlur, so the
@@ -680,7 +751,7 @@ export function CreatableSearchSelect({
   const handleInputKeyDown = (e) => {
     if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
       e.preventDefault();
-      setOpen(true);
+      openAndLoad();
       return;
     }
     switch (e.key) {
@@ -920,29 +991,13 @@ export function CreatableSearchSelect({
               }, 300);
             }
           }}
-          onFocus={() => {
-            setOpen(true);
-            if (serverSearch) {
-              // Always invalidate the cached page and fetch a fresh one on OPEN —
-              // guarantees an unfiltered, up-to-date list every time the user opens the
-              // selector (ETP-4600), regardless of how they got here (chip click, chevron
-              // toggle, or a plain focus/tab). This replaced a blur-time (close path)
-              // invalidation that used to fire ~200ms after the user left the field via a
-              // setTimeout — see the resetSearchState comment above for why that raced
-              // saves. One fetch per real focus event: not a loop, since focus only fires
-              // once per open gesture.
-              setServerOptions(null);
-              offsetRef.current = 0;
-              hasMoreRef.current = true;
-              setHasMore(true);
-              triggerServerSearch(query, 0);
-              return;
-            }
-            // Lazy-load: if options for the current parent are not yet fetched, trigger fetch
-            const cacheKey = `${parentValue ?? ''}:${refreshKey}`;
-            if (loadedForRef.current !== cacheKey) {
-              setRefreshKey(k => k); // identity update — effect re-evaluates its cache check
-            }
+          onFocus={openAndLoad}
+          // ETP-5681: focus only fires when the input does NOT already have it. After Esc (or
+          // within the blur grace period) the input keeps focus with the dropdown closed, so a
+          // click on it used to open nothing until the user typed. Mirrors InlineSearchCombo's
+          // open-from-any-gesture behaviour (ETP-5005).
+          onMouseDown={() => {
+            if (typeof document !== 'undefined' && document.activeElement === inputRef.current) openAndLoad();
           }}
           onKeyDown={handleInputKeyDown}
           onBlur={() => {
@@ -969,8 +1024,10 @@ export function CreatableSearchSelect({
             if (showChip) { handleChipClick(); return; }
             if (open) {
               setOpen(false);
+            } else if (typeof document !== 'undefined' && document.activeElement === inputRef.current) {
+              // Already focused: focus() is a no-op and fires no onFocus (ETP-5681).
+              openAndLoad();
             } else {
-              setOpen(true);
               inputRef.current?.focus();
             }
           }}
