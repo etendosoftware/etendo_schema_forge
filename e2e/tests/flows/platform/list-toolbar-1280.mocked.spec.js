@@ -515,14 +515,17 @@ test.describe('List toolbar — the subset tabs move only when they do not fit (
   }
 });
 
-// Observed live at 1280×720 with the rail expanded (es_ES): Contacts and
-// Purchase Invoice keep the subset tabs on the first line; Sales Invoice, the
-// busiest main row (status + date + Filtros; sort, refresh, print, Nueva
-// factura), sends them to a line of their own.
+// Observed live at 1280×720 with the rail expanded (es_ES): Contacts keeps the
+// subset tabs on the first line; Purchase Invoice and Sales Invoice (status +
+// date + Filtros; sort, refresh, Nueva factura — Sales Invoice also print) send
+// them to a line of their own. Purchase Invoice was inline before ETP-5601's
+// Figma toolbar (40px controls, text-sm status/date triggers): the same row is
+// now wider than 1280px allows, and moving the tabs is the fit check doing its
+// job. It is still inline at 1920×1080 (see the resize test above).
 test.describe('List toolbar — subset tab placement at 1280×720 (ETP-5509)', () => {
   const EXPECTED_PLACEMENT = [
     { slug: 'contacts', placement: 'inline' },
-    { slug: 'purchase-invoice', placement: 'inline' },
+    { slug: 'purchase-invoice', placement: 'wrapped' },
     { slug: 'sales-invoice', placement: 'wrapped' },
   ];
 
