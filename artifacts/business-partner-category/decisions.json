@@ -53,96 +53,138 @@
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "customerReceivablesNo": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,
           "seq": 1
         },
         "customerPrepayment": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,
           "seq": 2
         },
         "vendorLiability": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,
           "seq": 3
         },
         "vendorPrepayment": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,
           "seq": 4
         },
         "writeoff": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,
           "seq": 5
         },
         "writeoffRevAcct": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 6
         },
         "nonInvoicedReceipts": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 7
         },
         "nonInvoicedReceivables": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 8
         },
         "nonInvoicedRevenues": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 9
         },
         "paymentDiscountExpense": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 10
         },
         "paymentDiscountRevenue": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 11
         },
         "doubtfulDebtAccount": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 12
         },
         "badDebtExpenseAccount": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 13
         },
         "badDebtRevenueAccount": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 14
         },
         "allowanceForDoubtfulDebtAccount": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 15
         },
         "unearnedRevenue": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 16
         },
         "unrealizedGainsAcct": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 17
         },
         "unrealizedLossesAcct": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 18
         },
         "realizedGainAcct": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 19
         },
         "realizedLossAcct": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 20
         },
         "vendorServiceLiability": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "seq": 21
         },

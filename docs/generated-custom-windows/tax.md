@@ -221,3 +221,14 @@ QA rejected the `editable` classification: the ticket was mis-specified, and pro
 - `entities.tax.fields.taxCategory.visibility` is back to `"readOnly"`; `grid`, `form`, `section`, `seq` and the `labelOverrides` entry are unchanged, so the field is still shown in both the grid and the form.
 - Regenerated via `make regen ONLY=tax SKIP_EXTRACT=1 PUSH_TO_NEO=1`. `TaxForm.jsx`'s `taxCategory` entry carries `readOnly: true` again, and `taxCategory` is back in the `summary` array of `TaxPage.jsx` (the `summaryFields` default is every `readOnly` field). `contract.json` reports `visibility: "readOnly"` for the field; NEO spec `tax` pushed (76 fields updated, 0 errors) — run `./gradlew export.database` to persist it.
 - `sf-validate-pipeline --scope=tax`: OK, 0 violations.
+
+## Account selectors — ETP-5681
+
+Every account field of the **Accounting** tab (the tax due/credit account fields) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+

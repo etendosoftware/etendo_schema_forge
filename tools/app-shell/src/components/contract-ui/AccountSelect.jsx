@@ -34,8 +34,12 @@ export function accountOptionLabel(option) {
  * @param {import('react').ReactNode} [props.labelHint] — optional node rendered right after the
  *   label (and required marker), e.g. an info-icon + tooltip.
  * @param {string|null} [props.value] — selected option id
+ * @param {string} [props.displayValue] — label shown when `value` is not in `options` (e.g. a
+ *   stored account the catalog no longer offers).
  * @param {Array<{id:string,code?:string,name:string}>} props.options
- * @param {(id:string|null)=>void} [props.onChange]
+ * @param {(id:string|null, label?:string)=>void} [props.onChange] — the picked id and its label.
+ * @param {string} [props.popupTitle] — popup title when the field label is rendered outside
+ *   (defaults to `label`, then the placeholder).
  * @param {boolean} [props.readOnly]
  * @param {string|null} [props.error]
  * @param {string} [props.placeholder]
@@ -47,11 +51,13 @@ export function AccountSelect({
   required = false,
   labelHint = null,
   value = null,
+  displayValue = '',
   options = [],
   onChange,
   readOnly = false,
   error = null,
   placeholder,
+  popupTitle,
   'data-testid': dataTestId,
 }) {
   const ui = useUI();
@@ -62,8 +68,8 @@ export function AccountSelect({
   );
   const loadPage = useMemo(() => staticPageLoader(selectOptions), [selectOptions]);
   const selectedLabel = useMemo(
-    () => selectOptions.find((o) => o.id === value)?.name ?? '',
-    [selectOptions, value],
+    () => selectOptions.find((o) => o.id === value)?.name ?? (value ? displayValue : ''),
+    [selectOptions, value, displayValue],
   );
   const fieldKey = dataTestId ?? label ?? 'account';
   const placeholderText = placeholder ?? ui('selectAccount');
@@ -130,9 +136,9 @@ export function AccountSelect({
       <SearchPopup
         open={open}
         onClose={() => setOpen(false)}
-        onSelect={(item) => { onChange?.(item.id); setOpen(false); }}
+        onSelect={(item) => { onChange?.(item.id, item.name); setOpen(false); }}
         loadPage={loadPage}
-        title={label || placeholderText}
+        title={popupTitle || label || placeholderText}
         data-testid={`${fieldKey}-popup`}
       />
     </div>

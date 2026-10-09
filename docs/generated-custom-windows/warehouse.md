@@ -363,3 +363,14 @@ Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=wareh
 13. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file, download it, and delete it. When multiple files exist, confirm **Download all (ZIP)** and **Delete all** (with confirmation dialog) appear.
 14. Open the **Accounting** tab and confirm the Warehouse Differences selector is editable and required. Confirm no delete (trash) affordance is available on the accounting row.
 15. (ETP-5509) At 1280×720 with the navigation rail expanded, confirm the list toolbar is a **single row** — this window has no tab group, so no empty second row is rendered — and that a gray separator line runs under it, above the grid (provisional: it is drawn in addition to the existing line under the column headers, pending product confirmation). Layout reference: `docs/list-filters.md` → "Toolbar layout".
+
+## Account selectors — ETP-5681
+
+Every account field of the **Accounting** tab (`warehouseDifferences`) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+

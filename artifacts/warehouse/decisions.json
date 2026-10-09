@@ -106,6 +106,7 @@
         "accountingSchema": { "visibility": "system", "derivation": "fromConfig" },
         "warehouse": { "visibility": "system", "derivation": "fromParent" },
         "warehouseDifferences": {
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "form": true,

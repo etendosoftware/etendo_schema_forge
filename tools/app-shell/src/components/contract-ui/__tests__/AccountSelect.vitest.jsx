@@ -91,7 +91,7 @@ describe('AccountSelect', () => {
     render(<AccountSelect options={OPTIONS} onChange={onChange} data-testid="acct-select" />);
     await openSelector('acct-select');
     fireEvent.click(await screen.findByTestId('acct-select-popup-option-acc-626'));
-    expect(onChange).toHaveBeenCalledWith('acc-626');
+    expect(onChange).toHaveBeenCalledWith('acc-626', '626 - Servicios bancarios');
     await waitFor(() => expect(screen.queryByTestId('acct-select-popup')).toBeNull());
   });
 
@@ -103,7 +103,7 @@ describe('AccountSelect', () => {
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(onChange).toHaveBeenCalledWith('acc-5723');
+    expect(onChange).toHaveBeenCalledWith('acc-5723', '5723 - Bancos, cuenta puente');
   });
 
   it('shows noResults when the search matches no account', async () => {
@@ -124,6 +124,17 @@ describe('AccountSelect', () => {
 
     render(<AccountSelect value="acc-572" required options={OPTIONS} data-testid="acct-select" />);
     expect(screen.queryByTestId('field-acct-select-clear')).toBeNull();
+  });
+
+  it('falls back to displayValue when the selected id is not in the catalog', () => {
+    render(<AccountSelect value="acc-gone" displayValue="640 - Gastos de personal" options={OPTIONS} data-testid="acct-select" />);
+    expect(screen.getByTestId('field-acct-select')).toHaveTextContent('640 - Gastos de personal');
+  });
+
+  it('titles the popup with popupTitle when the label is rendered outside', async () => {
+    render(<AccountSelect popupTitle="Cuenta de depósito" options={OPTIONS} data-testid="acct-select" />);
+    await openSelector('acct-select');
+    expect(within(screen.getByTestId('acct-select-popup')).getByText('Cuenta de depósito')).toBeInTheDocument();
   });
 
   it('readOnly renders a static value with no interactive selector', () => {

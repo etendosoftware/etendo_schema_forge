@@ -93,3 +93,14 @@ Window onboarded from scratch as part of feature/ETP-4402 (branch `feat/contact-
 **`entities.accounting.hideDelete: true`** added — the pre-existing `window.maxDetailLines: 1` already caps the Accounting tab at one record; this pass adds the matching entity-level delete guard (`apiPrediction.crud.accounting.delete: false`). Regenerated via `make regen ONLY=business-partner-category`; `sf-validate-pipeline --scope=business-partner-category` reports 0 violations. Regression test: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js`.
 
 **Auto-creation gap (requirement 3, DB-verified):** of the 33 most-recently-created `C_BP_Group` records, only 29 (88%) have a corresponding `C_BP_Group_Acct` row — a partial gap, not a total failure like `financial-account`/`warehouse` (see the coordinator report on ETP-4565). Flagged for follow-up investigation in `com.etendoerp.go`, not fixed in this pass.
+
+## Account selectors — ETP-5681
+
+Every account field of the **Accounting** tab (all 21 customer/vendor account fields) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+

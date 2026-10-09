@@ -1,8 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.22.0",
   "generatedAt": "2026-04-29T18:11:26.703Z",
   "updatedAt": "2026-09-09T12:12:00.359Z",
-  "contractChecksum": "3c0cf867d06718d4",
+  "contractChecksum": "6ebc6e14c3f533e3",
   "apiPrediction": {
     "specName": "product-category",
     "baseUrl": "/sws/neo/product-category",
