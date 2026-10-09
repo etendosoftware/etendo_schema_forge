@@ -303,10 +303,9 @@
         "accountingCombination": {
           "visibility": "editable",
           "grid": true,
-          "lookup": true,
           "label": "Account",
           "columnWidth": 220,
-          "reason": "Accounting combination (C_ValidCombination_ID) selector — the line's Account column. ETP-5210: explicit columnWidth (280px) so it renders wider than Description's 224px type default — neither field set a width before, and the foreignKey selector's 192px default rendered narrower than description's string default. ETP-5611: narrowed to 220px so Debit/Credit plus the hover-actions slot fit without horizontal scroll."
+          "reason": "Accounting combination (C_ValidCombination_ID) selector — the line's Account column. ETP-5210: explicit columnWidth (280px) so it renders wider than Description's 224px type default — neither field set a width before, and the foreignKey selector's 192px default rendered narrower than description's string default. ETP-5611: narrowed to 220px so Debit/Credit plus the hover-actions slot fit without horizontal scroll. ETP-5681: no `lookup` — the column uses the default inline selector (InlineSearchCombo), whose dropdown grows to the full \"code - name\" of the account; the product-oriented lookup drawer it used before cut long account names off."
         },
         "description": {
           "visibility": "discarded",

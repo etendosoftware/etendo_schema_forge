@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 /**
  * Integration test for InlineLinesPanel — renders the component in jsdom
  * with minimal mocks. No server, no DB, no browser needed.
@@ -121,8 +122,7 @@ function renderPanel(props = {}) {
 
 // Radix Select needs a few pointer-capture DOM APIs jsdom does not implement —
 // only exercised by the "resolves enum option labels through ui()" test below,
-// which opens a real Select dropdown (see AccountBadgeSelect.vitest.jsx for the
-// same pattern).
+// which opens a real Select dropdown.
 beforeAll(() => {
   Element.prototype.hasPointerCapture = vi.fn(() => false);
   Element.prototype.setPointerCapture = vi.fn();

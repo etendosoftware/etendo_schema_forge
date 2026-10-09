@@ -1,10 +1,11 @@
 import { useUI, useLocale } from '@/i18n';
-import { AccountBadgeSelect } from '@/components/contract-ui';
+import { AccountSelect } from '@/components/contract-ui';
 import SectionShell from './SectionShell.jsx';
 import { ACCOUNT_OPTIONS, DEFAULTS_GROUPS, resolveFieldLabel } from './mockCatalogs.js';
 
 /**
- * Valores por defecto tab — labeled groups of AccountBadgeSelect controls,
+ * Valores por defecto tab — labeled groups of AccountSelect controls (the app's default
+ * selector, ETP-5681),
  * driven by `DEFAULTS_GROUPS`, which is DERIVED from `contract.json` (see
  * `buildDefaultsGroups` in `mockCatalogs.js`) rather than hand-typed. A field
  * with no curated `glc.acct.<key>` translation falls back to its raw AD
@@ -27,7 +28,7 @@ export default function DefaultsTab({ defaults, accountOptions = ACCOUNT_OPTIONS
         >
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {group.fields.map((f) => (
-              <AccountBadgeSelect
+              <AccountSelect
                 key={f.key}
                 label={resolveFieldLabel(dictionary, f.key, f.fallbackLabel)}
                 required={f.required}

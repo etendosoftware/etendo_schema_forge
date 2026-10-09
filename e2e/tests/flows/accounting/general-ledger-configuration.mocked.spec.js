@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/windows/custom/general-ledger-configuration/GeneralLedgerConfigPage.jsx
+// @covers tools/app-shell/src/windows/custom/general-ledger-configuration/DefaultsTab.jsx
+// @covers tools/app-shell/src/components/contract-ui/AccountSelect.jsx
 import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
@@ -127,6 +130,47 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
       dimensions: [],
       selectedOrgId: SEED_ORG.id,
     });
+  });
+
+  // ETP-5681 — account fields use the app's default selector (AccountSelect → CreatableSearchSelect):
+  // options read "<code> - <name>" in full (the old popover cut long names off at the field's
+  // width), search matches the code, and the pick reaches the aggregate POST.
+  test('an account field shows full "code - name" options, searches by code and POSTs the pick', async ({ page }) => {
+    await page.getByTestId('glc-tab-1').click();
+    const field = page.locator('[data-testid^="glc-acct-"]').first();
+    const testId = await field.getAttribute('data-testid');
+    const key = testId.replace('glc-acct-', '');
+
+    // Open it: the chip when a value is already set, the search box otherwise.
+    const chip = field.getByTestId(`field-${testId}-chip`);
+    const current = (await chip.isVisible()) ? (await chip.textContent()).trim() : '';
+    if (current) await chip.click();
+    const search = field.getByRole('combobox');
+    await search.click();
+
+    const list = page.getByTestId(`options-${testId}`);
+    await expect(list).toBeVisible();
+    const options = list.getByRole('option');
+    const labels = (await options.allTextContents()).map((t) => t.trim());
+    expect(labels.length).toBeGreaterThan(1);
+    for (const label of labels) expect(label).toMatch(/^\S+ - \S/);
+
+    // The panel grows to its content: no option is clipped.
+    const clipped = await options.evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).length);
+    expect(clipped).toBe(0);
+
+    // Pick an account other than the current one, found by typing its code.
+    const target = labels.find((l) => l !== current);
+    const code = target.split(' - ')[0];
+    await search.fill(code);
+    const option = list.getByRole('option', { name: target, exact: true });
+    await expect(option).toBeVisible();
+    const optionId = (await option.getAttribute('data-testid')).replace(`option-${testId}-`, '');
+    await option.click();
+    await expect(field.getByTestId(`field-${testId}-chip`)).toHaveText(target);
+
+    await page.getByTestId('glc-save').click();
+    await expect.poll(() => post.last?.defaults?.[key]).toBe(optionId);
   });
 
   test('dimensions: toggling an optional row marks dirty and POSTs the dimension change', async ({ page }) => {
