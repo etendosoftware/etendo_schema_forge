@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmBoxes303.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -216,6 +218,16 @@ async function goToResultadoFinal(page) {
 // we check visibility of the IBAN field (unique to datos_bancarios) and use
 // .last() when checking section visibility to skip the identificacion section.
 
+/**
+ * Picks a "Tipo de declaración" value. Since ETP-5584 the field is the app's Radix Select (a
+ * button trigger + a portalled listbox), not a native <select>, so `selectOption` no longer
+ * applies: open the trigger, then click the option carrying `data-option-value`.
+ */
+async function pickTipoDeclaracion(page, value) {
+  await page.locator('.fm-aeat-ident-inline-field__select--compact').first().click();
+  await page.locator(`[role="option"][data-option-value="${value}"]`).click();
+}
+
 test.describe('FM 303 — datos_bancarios section visibility', () => {
   test.beforeEach(async ({ page }) => {
     await goToDeclaration(page, { year: 2026, period: 'T1' });
@@ -223,8 +235,7 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
   });
 
   test('datos_bancarios is hidden for Ingreso (I) — EDID065 fix, I no longer allows/requires IBAN', async ({ page }) => {
-    const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
-    await select.selectOption('I');
+    await pickTipoDeclaracion(page, 'I');
     // AEAT rejects Modelo 303 submissions with error EDID065 if IBAN is present for a tipo
     // other than U/D/X — the datos_bancarios section (and its IBAN field) must not render for I.
     await expect(
@@ -236,8 +247,7 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
   });
 
   test('datos_bancarios appears with Domiciliación title when tipo_declaracion is U', async ({ page }) => {
-    const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
-    await select.selectOption('U');
+    await pickTipoDeclaracion(page, 'U');
     await expect(
       page.locator('.fm-aeat-section').filter({ hasText: /domiciliaci/i }).last()
     ).toBeVisible();
@@ -251,12 +261,11 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
   });
 
   test('section disappears when switching to Sin Resultado (N)', async ({ page }) => {
-    const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
-    await select.selectOption('D');
+    await pickTipoDeclaracion(page, 'D');
     await expect(
       page.locator('.fm-aeat-section').filter({ hasText: /devoluci/i }).last()
     ).toBeVisible();
-    await select.selectOption('N');
+    await pickTipoDeclaracion(page, 'N');
     // N is not in the datos_bancarios visible set — IBAN field disappears
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /IBAN/i })
@@ -310,7 +319,7 @@ test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
       page.locator('.fm-aeat-ident-cb').filter({ hasText: /baja|domiciliaci/i })
     ).toBeVisible();
     await expect(
-      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /motivo/i }).locator('select')
+      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /motivo/i }).getByTestId('FmBoxes303__identSelect')
     ).toBeVisible();
   });
 });

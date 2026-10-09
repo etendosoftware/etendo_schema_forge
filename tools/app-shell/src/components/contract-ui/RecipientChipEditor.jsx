@@ -86,11 +86,11 @@ export default function RecipientChipEditor({
   return (
     <div>
       {label && (
-        <label style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 4 }}>
+        <label style={{ fontSize: 14, lineHeight: '24px', fontWeight: 500, color: 'hsl(var(--sf-gray-900))', display: 'block', marginBottom: 8 }}>
           {label}
         </label>
       )}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, padding: '4px 8px', border: invalid ? '0.5px solid hsl(var(--destructive))' : '0.5px solid hsl(var(--text-disabled))', borderRadius: 6, background: disabled ? 'hsl(var(--muted))' : 'hsl(var(--card))', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, minHeight: 40, padding: '3px 10px', border: invalid ? '1px solid hsl(var(--destructive))' : '1px solid hsl(var(--sf-border-input))', borderRadius: 8, background: disabled ? 'hsl(var(--muted))' : 'hsl(var(--sf-surface-overlay))', boxShadow: 'var(--sf-shadow-xs)', boxSizing: 'border-box' }}>
         {recipients.map(email => (
           <span
             key={email}
@@ -112,6 +112,7 @@ export default function RecipientChipEditor({
         ))}
         <input
           type="text"
+          className="sf-send-field"
           data-testid={`${testIdPrefix}-input`}
           value={draft}
           disabled={disabled}
@@ -119,7 +120,7 @@ export default function RecipientChipEditor({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onBlur={() => commitDraft(draft)}
-          style={{ flex: 1, minWidth: 120, fontSize: 13, padding: '4px 2px', border: 'none', outline: 'none', color: 'hsl(var(--foreground))', background: 'transparent' }}
+          style={{ flex: 1, minWidth: 120, fontSize: 14, lineHeight: '24px', fontWeight: 400, padding: '2px 2px', border: 'none', outline: 'none', color: 'hsl(var(--sf-gray-900))', background: 'transparent' }}
         />
       </div>
       {invalid && (

@@ -105,6 +105,11 @@ const LINE_CSV_COLUMNS = [
  * the Sonar limit (javascript:S3776) — its three visibility conditions were a quarter of the score.
  * Markup, conditions and test ids are unchanged; the inline handlers became props.
  */
+// ETP-5601 — record-toolbar secondary button (Figma): 40px, 8px radius, text-sm/leading-6 in
+// #121217; icons are 20px in #828FA3. The label's own `px-1` plus `gap-1` gives the 8px
+// icon↔label gap and Figma's 4px label padding.
+const ACCOUNT_ACTION_BTN_CLS = 'inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[#121217] hover:bg-[hsl(var(--muted))]';
+
 function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit, onAutoMatch, onExport, windowReadOnly }) {
   return (
           <div className="flex items-center gap-2">
@@ -124,9 +129,9 @@ function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit,
             type="button"
             data-testid="financial-account-edit"
             onClick={onEdit}
-            className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+            className={ACCOUNT_ACTION_BTN_CLS}
           >
-            <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__f7dbb3" />
+            <Pencil className="h-5 w-5 text-[#828FA3]" data-testid="Pencil__f7dbb3" />
             <span className="px-1">{ui('financeAccountsMenuEdit')}</span>
           </button>
         )}
@@ -137,9 +142,9 @@ function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit,
             type="button"
             data-testid="financial-account-automatch"
             onClick={onAutoMatch}
-            className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+            className={ACCOUNT_ACTION_BTN_CLS}
           >
-            <Sparkles className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Sparkles__f7dbb3" />
+            <Sparkles className="h-5 w-5 text-[#828FA3]" data-testid="Sparkles__f7dbb3" />
             <span className="px-1">{ui('financeReconcileActionAutomatch')}</span>
           </button>
         ) : null}
@@ -152,9 +157,9 @@ function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit,
             type="button"
             data-testid="financial-account-export"
             onClick={onExport}
-            className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+            className={ACCOUNT_ACTION_BTN_CLS}
           >
-            <Upload className="h-6 w-6 text-[hsl(var(--text-disabled))]" data-testid="Upload__f7dbb3" />
+            <Upload className="h-5 w-5 text-[#828FA3]" data-testid="Upload__f7dbb3" />
             <span className="px-1">{ui('financeAccountDetailExport')}</span>
           </button>
         ) : null}

@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/FiscalMonitorPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/FiscalMonitorPage.jsx
 // Vitest render tests for FiscalMonitorPage
 
 const stableApiFetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) }));
@@ -13,7 +15,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
-vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
+vi.mock('@/components/related-documents/helpers.js', async (importOriginal) => ({ ...(await importOriginal()), neoBase: (u) => u }));
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: vi.fn() }));
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
@@ -174,6 +176,27 @@ describe('FiscalMonitorPage invoice preview edit', () => {
       ok: true,
       json: async () => ({ response: { data: [] } }),
     }));
+  });
+
+  // ETP-5539 — when the id only resolves as a purchase invoice (the sales lookup is not ok),
+  // the preview must get the purchase-invoice definition, not null.
+  it('gives a purchase invoice preview the purchase-invoice related-documents definition', async () => {
+    stableApiFetch.mockImplementation((url) => Promise.resolve(
+      String(url).startsWith('/sales-invoice/')
+        ? { ok: false, json: async () => ({}) }
+        : { ok: true, json: async () => ({ response: { data: [{ id: 'inv-1' }] } }) },
+    ));
+    render(<FiscalMonitorPage {...baseProps} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('sii-section')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      screen.getByTestId('sii-open-invoice').click();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('invoice-preview')).toHaveAttribute('data-related-spec', 'purchase-invoice');
+    });
   });
 
   it('navigates to the invoice detail and unmounts the modal on edit', async () => {

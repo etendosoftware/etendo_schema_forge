@@ -1,7 +1,7 @@
 ---
 description: "analyst -- ATLAS — OKR Architect. You are ATLAS, the OKR Architect for Etendo GO."
 mode: subagent
-color: "gray"
+color: "#808080"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/okr-architect.md - Regenerate: make sync-agents

@@ -31,7 +31,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 - Visibility: visible from the Finance menu as **Assets**.
 - Implementation type: generated window route with custom detail surfaces layered into the generated page (`AssetsConfigPanel`, `AssetsAmortizationPanel`, `AssetsSidebar`).
 - Window shape: master-child. The master entity is `assets`; the child surfaces are `amortizationLine` and `assetAcct`.
-- Detail layout: the detail page uses a sidebar layout, exposes an **Overview** tab plus a **Depreciation Setup** tab, and hides print, more-menu, more-details chrome.
+- Detail layout: the detail page uses a sidebar layout (right sidebar fixed at 320 px via `window.sidebarClassName` → `w-[320px]`, ETP-5513; it was `w-[30%]`), exposes an **Overview** tab plus a **Depreciation Setup** tab, and hides print, more-menu, more-details chrome.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - List toolbar: shows an **"All statuses ▾"** dropdown to filter by `fullyDepreciated` (Fully deprecated / Still in progress) and a funnel icon for the Conditional Filter. The `fullyDepreciated` column is hidden from visual display (`hiddenColumns`) but present in the columns array to power the status dropdown.
 - List columns include a **Depreciate** (`IsDepreciated`) Sí/No badge column (green/gray pill, same pattern as Payment Term's "Default" column) between "Purchase Date" and "Depreciation Start Date", filterable via the Conditional Filter's boolean value picker (ETP-4549).
@@ -77,7 +77,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 4c. With **Depreciate** enabled, scroll to the **Financiero** (Financial Info) section and confirm a **Contacto** (Business Partner) selector appears there, as the last field, after "Previously Depreciated Amount" — unlike Producto (4a), Contacto is NOT unconditionally visible: it appears and disappears together with the rest of the Financiero group as **Depreciate** is toggled on/off, per its raw AD `DisplayLogic: @IsDepreciated@='Y'` (ETP-4914). Unlike the Dimensiones contables group in 4b, Contacto is never hidden by the client's GL/accounting-dimension configuration — it is config-independent (matrix value: Siempre). Open the selector and confirm it returns Business Partner options; select a value, save and reopen the asset — the value persists.
 5. Save an asset with depreciation enabled and confirm the **Create Amortization** action is available.
 6. Trigger **Create Amortization** against a live backend and confirm the amortization plan tab refreshes and shows ordered schedule rows. Confirm that line status badges read "Pendiente" (not "Planificado") and "Confirmado" (not "Procesado").
-7. Review the right sidebar and confirm it shows four cards in order: Valor actual → Pendiente de Amortizar → Amortización planificada → Amortizado %. Confirm "Pendiente de Amortizar" equals Valor a Amortizar minus the accumulated amortized amount (not the "Valor residual" form field, which is independently editable and can be 0 mid-schedule). Confirm that "Progreso de depreciación" is absent. Confirm that the sidebar ends above the tabs row — tabs (Plan de amortización, Adjuntos) span the full width below the form area.
+7. Review the right sidebar and confirm it is 320 px wide (rail expanded or collapsed) and shows four cards in order: Valor actual → Pendiente de Amortizar → Amortización planificada → Amortizado %. Confirm "Pendiente de Amortizar" equals Valor a Amortizar minus the accumulated amortized amount (not the "Valor residual" form field, which is independently editable and can be 0 mid-schedule). Confirm that "Progreso de depreciación" is absent. Confirm that the sidebar ends above the tabs row — tabs (Plan de amortización, Adjuntos) span the full width below the form area.
 7a. In the Amortization Plan tab, click the **Período** link on any row and confirm it navigates to `/amortization/{id}`, opening the corresponding amortization document. Clicking elsewhere on the row does not navigate.
 8. Open the **Asset Amortization** child surface and confirm line ordering follows sequence number, with processed rows becoming non-editable.
 9. Open the **Accounting** child surface and confirm the record exposes selectors for general ledger, accumulated depreciation, and depreciation accounts.
@@ -149,11 +149,13 @@ The effect only re-runs when `isNewRecord` or `d.currency` changes, not when `on
 
 Changes landed in `feature/ETP-4103`. Covers visual polish, full-form restructure, sidebar updates, and list-view adjustments specific to the Assets window.
 
+> ETP-5601: the record (form view) toolbar is now standardized on every window (56px, 40px controls). The `toolbarBorderBottom`, `toolbarButtonSize` and `toolbarPaddingX` keys listed below no longer have any effect; see `docs/list-filters.md` (Visual parity).
+
 ### Visual polish
 
-- `toolbarBorderBottom: true` in `decisions.json` — adds a horizontal divider line below the toolbar buttons row.
+- `toolbarBorderBottom: true` in `decisions.json` — added a horizontal divider line below the toolbar buttons row. No effect since ETP-5601 (the record toolbar is standardized; the divider is part of the standard toolbar).
 - `sidebarClassName: "w-[30%] shrink-0 overflow-y-auto border-l border-[#E8EAEF] p-2"` in `decisions.json` — sidebar is now proportional (30% of detail width) with a left-border divider and 8 px internal padding. Previously fixed at `w-96`.
-- `toolbarButtonSize: "default"` in `decisions.json` — toolbar buttons (including the kebab menu) are now `h-10 w-10`, matching the Contacts window. Previously `sm` (`h-9`).
+- `toolbarButtonSize: "default"` in `decisions.json` — toolbar buttons (including the kebab menu) are now `h-10 w-10`, matching the Contacts window. Previously `sm` (`h-9`). No effect since ETP-5601 (all record-toolbar buttons are standardized at 40px).
 - `listbarPaddingX: "px-2"` and `tablePaddingX: "px-2"` in `decisions.json` — list-view toolbar and table horizontal padding reduced from 24 px to 8 px.
 - `tools/app-shell/src/windows/custom/assets/AssetsSidebar.jsx` — outer `rounded-2xl border bg-white shadow-sm` card wrapper removed; the sidebar `border-l` divider from `sidebarClassName` makes the wrapper border redundant.
 - `whiteFormBackground: true` in `decisions.json` — forces white background on form inputs and textareas, overriding the `bg-[#F5F7F9]` default on inputs and `bg-background` on textareas. Disabled textareas use `opacity-50` instead of `bg-muted/50` for visual consistency.

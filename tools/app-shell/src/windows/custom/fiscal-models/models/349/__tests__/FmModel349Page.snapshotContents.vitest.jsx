@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, waitFor, fireEvent, screen } from '@testing-library/react';
@@ -19,7 +20,6 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div', { className: 'test-kpi349', 'data-kpi-label': label },
     React.createElement('span', { className: 'test-kpi349-value' }, value),

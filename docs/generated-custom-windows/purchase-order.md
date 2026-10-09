@@ -566,3 +566,18 @@ does not trigger any of this):
 - **"Gestionar recepción y factura"** (`PurchaseOrderActions`, topbarRight) renders nothing under `windowReadOnly`, same fix as the sales-order twin (fetch skipped, `open-*-modal` handlers no-op).
 
 - Preview panel delivery label (ETP-5549): the `OrderPreview` delivery percent row for purchase orders is labelled "Received:" / "Recibido:" (`previewCardReceivedPercent`, passed to `SummaryCard` via `deliveryLabel`); sales orders keep "Delivered:" / "Entregado:".
+
+## Related documents — form and list preview share one definition — ETP-5539
+
+The form's Related Documents tab (`artifacts/purchase-order/custom/RelatedDocuments.jsx`, now a thin
+wrapper over `RelatedDocumentsSection`) and the list preview's `RelatedDocumentsCard`
+(`OrderPreview.jsx`, which previously rendered no card for purchase orders) both render
+`PURCHASE_RELATED_DOCS['purchase-order']`, so they list the same documents:
+
+- **Goods receipts** — `goods-receipt` headers whose `salesOrder` equals this order.
+- **Purchase invoices** — from the order's `listInvoices` header action, which also finds invoices linked only through their lines.
+- **Payments are not related documents** (functional decision, same as ETP-5527): the form no longer lists payment chips.
+
+The `purchase-order:document-created` event is the definition's `refreshEvent`. The dead copy
+`tools/app-shell/src/windows/custom/purchase-order/RelatedDocuments.jsx` (and its test) was removed;
+the pipeline imports the artifact's `custom/RelatedDocuments.jsx`. See `docs/ui-customization.md` §7.a.

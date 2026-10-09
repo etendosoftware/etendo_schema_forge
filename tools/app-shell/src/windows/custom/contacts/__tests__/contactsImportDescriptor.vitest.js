@@ -1,7 +1,12 @@
-import { describe, it, vi } from 'vitest';
+// @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
+// @covers tools/app-shell/src/windows/custom/contacts/contactsFkResolvers.js
+import { describe, it, vi, afterEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { buildOperations } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { runImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
+import { runImport, SEND_STATUS } from '@etendosoftware/app-shell-core/lib/import/importEngine.js';
+import { resetImportRun } from '@etendosoftware/app-shell-core/lib/import/importRunState.js';
+import '../contactsFkResolvers.js'; // registers the 'contacts-country' resolver the send path looks up
 import '../contactsImportDescriptor.js';
 
 const baseRow = {
@@ -363,19 +368,9 @@ describe('contacts import descriptor', () => {
     });
   });
 
-  it('strips a bare http:// scheme from etgoWeb too', async () => {
-    const ops = await buildOperations({
-      name: 'Acme Iberia', etgoWeb: 'http://acme.example',
-    }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
-    assert.equal(ops[0].body.etgoWeb, 'acme.example');
-  });
-
-  it('leaves an already-bare etgoWeb value untouched', async () => {
-    const ops = await buildOperations({
-      name: 'Acme Iberia', etgoWeb: 'acme.example',
-    }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
-    assert.equal(ops[0].body.etgoWeb, 'acme.example');
-  });
+  // The scheme variants (http://, any case, already bare) are stripUrlScheme's own behavior,
+  // shared with the list's website cell since contactsWebUrl.js: they are covered once, in
+  // ContactsTable.vitest.jsx. The case above proves the import applies it.
 
   it('builds a location operation when an imported contact includes address data', async () => {
     const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-ES', name: 'Spain' });
@@ -567,5 +562,109 @@ describe('contacts import descriptor', () => {
         /Category service unavailable/,
       );
     });
+  });
+});
+
+// ETP-5676 — same redundant per-row resolution as the product unit of measure, for the country.
+describe('contacts import descriptor — FK reuse and run reset (ETP-5676)', () => {
+  const calls = (fetchMock, part) => fetchMock.mock.calls.filter(([url]) => String(url).includes(part));
+
+  function stubFetch() {
+    const fetchMock = vi.fn(async (url) => {
+      const u = String(url);
+      if (u.includes('/simsearch')) {
+        return { ok: true, json: async () => ({ item_0: { data: [{ id: 'C-AR', name: 'Argentina', similarity_percent: 100 }] } }) };
+      }
+      return { ok: true, json: async () => ({ response: { data: [{ id: 'BPG-CLIENTS', searchKey: 'CLIENTS', name: 'Clientes' }] } }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('asks the backend for no country the preview already resolved', async () => {
+    const fetchMock = stubFetch();
+    const fkResolutions = new Map([['country', new Map([['Argentina', { status: 'auto-resolved', id: 'C-PREVIEW', name: 'Argentina' }]])]]);
+    const results = await Promise.all(Array.from({ length: 5 }, () => buildOperations(
+      baseRow, { spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-prev', fkResolutions },
+    )));
+    assert.deepEqual(results.map((ops) => ops[1].body.country), Array(5).fill('C-PREVIEW'));
+    assert.equal(calls(fetchMock, '/simsearch').length, 0);
+  });
+
+  it('resolves an unpreviewed country once for all concurrent rows', async () => {
+    const fetchMock = stubFetch();
+    await Promise.all(Array.from({ length: 8 }, () => buildOperations(
+      baseRow, { spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-memo' },
+    )));
+    assert.ok(calls(fetchMock, '/simsearch').length <= 3);
+  });
+
+  it('reads the contact category catalogue once per run and again after a run reset', async () => {
+    const fetchMock = stubFetch();
+    const run = () => buildOperations(
+      { name: 'Acme', category: 'CLIENTS' }, { spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-cat' },
+    );
+    await run();
+    await run();
+    assert.equal(calls(fetchMock, '/business-partner-category/').length, 1);
+    resetImportRun();
+    await run();
+    assert.equal(calls(fetchMock, '/business-partner-category/').length, 2);
+  });
+});
+
+// ETP-5676 — contacts rows have a variable number of ops (bp, optional location, optional
+// contact), all linked by `parentRef: 'bp'`. In a chunk those ids must stay unique and keep
+// pointing at their OWN row's bp.
+describe('contacts import descriptor — rows in a multi-row batch (ETP-5676)', () => {
+  const countryResolution = { status: 'auto-resolved', id: 'C-AR', name: 'Argentina' };
+
+  /** Mimics BatchService's own checks: unique op ids, `parentRef` naming an EARLIER op. */
+  function batchServiceLike() {
+    const requests = [];
+    const postBatch = async (ops) => {
+      requests.push(ops);
+      const seen = new Set();
+      for (const op of ops) {
+        if (seen.has(op.id)) return { committed: false, atomic: true, persisted: [], error: { message: `duplicate id ${op.id}` } };
+        if (op.parentRef && !seen.has(op.parentRef)) {
+          return { committed: false, atomic: true, persisted: [], error: { message: `bad parentRef ${op.parentRef}` } };
+        }
+        seen.add(op.id);
+      }
+      return { committed: true, operations: ops.map((op) => ({ id: op.id, ok: true, recordId: `REC-${op.id}` })) };
+    };
+    return { postBatch, requests };
+  }
+
+  it('keeps every row\'s ops linked to its own bp when rows have 1, 2 or 3 ops', async () => {
+    const { postBatch, requests } = batchServiceLike();
+    const createCategoryFn = vi.fn(async ({ searchKey, name }) => ({ id: 'BPG-NEW', searchKey, name }));
+    const rows = [
+      { name: 'Solo Name', category: 'Retail' },
+      { ...baseRow, name: 'With Address', category: 'Retail' },
+      { name: 'Person', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'l@x.com', category: 'Retail' },
+      { ...baseRow, name: 'Full', category: 'Retail' },
+    ];
+    const config = {
+      spec: 'contacts', descriptorName: 'contacts', token: 'tok-5676-chunk', existingCategories: [],
+      createCategoryFn, resolveCountryFn: async () => countryResolution,
+    };
+    const { results } = await runImport(rows, {
+      buildRowOperations: (row) => buildOperations(row, config),
+      postBatch, concurrency: 1, batchSize: 10,
+    });
+    assert.equal(requests.length, 1);
+    assert.ok(results.every((r) => r.status === SEND_STATUS.OK), JSON.stringify(results.map((r) => r.error?.message)));
+    // each row's recordId is the one of ITS OWN bp op, in row order
+    assert.deepEqual(results.map((r) => r.recordId), rows.map((_, i) => `REC-r${i}.bp`));
+    for (const op of requests[0].filter((o) => o.parentRef)) {
+      assert.match(op.parentRef, /^r\d+\.bp$/);
+      assert.equal(op.id.split('.')[0], op.parentRef.split('.')[0], 'a child op must point at its own row\'s bp');
+    }
+    // the four rows share one new category: created once, outside the request
+    assert.equal(createCategoryFn.mock.calls.length, 1);
   });
 });

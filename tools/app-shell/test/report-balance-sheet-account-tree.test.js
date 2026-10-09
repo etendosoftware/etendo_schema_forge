@@ -1,9 +1,17 @@
+// @covers artifacts/balance-sheet/report-contract.json
+// @covers artifacts/profit-loss/report-contract.json
+// @covers artifacts/balance-sheet/template.hbs
+// @covers artifacts/balance-sheet/template-excel.hbs
+// @covers artifacts/balance-sheet/template-csv.hbs
+// @covers artifacts/profit-loss/template-excel.hbs
+// @covers artifacts/profit-loss/template-csv.hbs
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { buildContractLabels } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
 import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
 
 // ETP-4899 — balance-sheet ("Balance de Situación") is the SAME indented
@@ -434,11 +442,13 @@ describe('balance-sheet SQL — operandsQuery (formula edges)', () => {
 
 // ── Part 3: template rendering (real Handlebars, real .hbs from disk) ───────
 
-// Labels as they actually resolve in meta.labels (buildContractLabels() in
-// report-api.js keys contract.columns by `field`).
+// meta.labels exactly as both render paths build it: buildContractLabels() over
+// the REAL contract (columns by `field`, parameters by `name`, plus the
+// `contract.labels` block holding the export headers and the ElementLevel /
+// Total names of the Type column, ETP-5663).
 const LABELS = {
-  en_US: { element: 'Element', amount: 'Amount', amount_ref: 'Reference Amount' },
-  es_ES: { element: 'Elemento', amount: 'Importe', amount_ref: 'Importe de Referencia' },
+  en_US: buildContractLabels(CONTRACT, 'en_US'),
+  es_ES: buildContractLabels(CONTRACT, 'es_ES'),
 };
 
 const META_BASE = {
@@ -465,9 +475,9 @@ const ROWS = [
   { node_id: 'n1', value: 'A.B', name: 'ACTIVO CORRIENTE', element: 'A.B - ACTIVO CORRIENTE', elementlevel: 'E', amount: -157271.85, amount_ref: -100000, indent: 0, indentClass: 'ind-0', isHeading: true, group: ACTIVO, isGroupStart: true },
   { node_id: 'n2', value: 'A.B.I', name: 'Existencias, netas de "rappels"', element: 'A.B.I - Existencias, netas de "rappels"', elementlevel: 'E', amount: 23496.47, amount_ref: 12000, indent: 1, indentClass: 'ind-1', isHeading: true, group: ACTIVO, isGroupStart: false },
   { node_id: 'n3', value: '350', name: 'Productos terminados', element: '350 - Productos terminados', elementlevel: 'C', amount: 23496.47, amount_ref: 12000, indent: 2, indentClass: 'ind-2', isHeading: false, group: ACTIVO, isGroupStart: false },
-  { node_id: 'n4', value: 'A.TOTAL', name: 'TOTAL ACTIVO', element: 'A.TOTAL - TOTAL ACTIVO', elementlevel: 'E', amount: -157271.85, amount_ref: -100000, indent: 0, indentClass: 'ind-0', isHeading: true, group: ACTIVO, isGroupStart: false },
+  { node_id: 'n4', value: 'A.TOTAL', name: 'TOTAL ACTIVO', element: 'A.TOTAL - TOTAL ACTIVO', elementlevel: 'E', isFormula: true, amount: -157271.85, amount_ref: -100000, indent: 0, indentClass: 'ind-0', isHeading: true, group: ACTIVO, isGroupStart: false },
   { node_id: 'n5', value: '129', name: 'Resultados del ejercicio', element: '129 - Resultados del ejercicio', elementlevel: 'C', amount: 36967.9, amount_ref: 8000, indent: 3, indentClass: 'ind-3', isHeading: false, group: PASIVO, isGroupStart: true },
-  { node_id: 'n6', value: 'P.TOTAL', name: 'TOTAL PATRIMONIO NETO Y PASIVO', element: 'P.TOTAL - TOTAL PATRIMONIO NETO Y PASIVO', elementlevel: 'E', amount: -150152.93, amount_ref: -90000, indent: 0, indentClass: 'ind-0', isHeading: true, group: PASIVO, isGroupStart: false },
+  { node_id: 'n6', value: 'P.TOTAL', name: 'TOTAL PATRIMONIO NETO Y PASIVO', element: 'P.TOTAL - TOTAL PATRIMONIO NETO Y PASIVO', elementlevel: 'E', isFormula: true, amount: -150152.93, amount_ref: -90000, indent: 0, indentClass: 'ind-0', isHeading: true, group: PASIVO, isGroupStart: false },
 ];
 
 function renderHtml({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
@@ -607,13 +617,13 @@ function renderExcel({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
 }
 
 describe('balance-sheet template-excel.hbs', () => {
-  it('flattens the tree into Group / Level / Code / Name / Amount, in that order', () => {
+  it('flattens the tree into Group / Depth / Type / Code / Name / Amount, in that order', () => {
     const html = renderExcel({ compareTo: false });
     assert.doesNotMatch(html, /Missing helper/);
     const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
     assert.deepEqual(
       [...header.matchAll(/<th>([^<]*)<\/th>/g)].map((m) => m[1]),
-      ['Group', 'Level', 'Code', 'Name', 'Amount']
+      ['Group', 'Depth', 'Type', 'Code', 'Name', 'Amount']
     );
     // No indentation classes leak into the calculation-friendly grid, and the
     // group is a real column rather than a spanning band row.
@@ -635,7 +645,7 @@ describe('balance-sheet template-excel.hbs', () => {
     const row = html.slice(html.lastIndexOf('<tr>', rowIdx), html.indexOf('</tr>', rowIdx));
     assert.deepEqual(
       [...row.matchAll(/<td(?: data-cell-type="number")?>([^<]*)<\/td>/g)].map((m) => m[1]),
-      [PASIVO, '3', '129', 'Resultados del ejercicio', '36967.9']
+      [PASIVO, '3', 'Account', '129', 'Resultados del ejercicio', '36967.9']
     );
   });
 
@@ -656,10 +666,13 @@ describe('balance-sheet template-excel.hbs', () => {
     assert.doesNotMatch(off, /<td data-cell-type="number">12000<\/td>/);
   });
 
-  it('amount headers are translated [es_ES]', () => {
+  it('every header is translated [es_ES]', () => {
     const html = renderExcel({ compareTo: true, locale: 'es_ES' });
-    assert.match(html, /<th>Importe<\/th>/);
-    assert.match(html, /<th>Importe de Referencia<\/th>/);
+    const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
+    assert.deepEqual(
+      [...header.matchAll(/<th>([^<]*)<\/th>/g)].map((m) => m[1]),
+      ['Grupo', 'Profundidad', 'Tipo', 'Código', 'Nombre', 'Importe', 'Importe de Referencia']
+    );
   });
 });
 
@@ -703,13 +716,13 @@ describe('balance-sheet template-csv.hbs', () => {
     assert.doesNotMatch(csv, /</, 'the CSV export must contain no markup at all');
     const lines = csv.trim().split('\n');
     assert.equal(lines.length, ROWS.length + 1);
-    assert.equal(lines[0], 'Group,Level,Code,Element,Amount');
+    assert.equal(lines[0], 'Group,Depth,Type,Code,Name,Amount');
   });
 
-  it('writes the group, the tree depth as the Level column and the raw dot-decimal amount', () => {
+  it('writes the group, the tree depth, the account type and the raw dot-decimal amount', () => {
     const lines = renderCsv({ compareTo: false }).trim().split('\n');
-    assert.equal(lines[1], `${ACTIVO},0,A.B,ACTIVO CORRIENTE,-157271.85`);
-    assert.equal(lines[5], `${PASIVO},3,129,Resultados del ejercicio,36967.9`);
+    assert.equal(lines[1], `${ACTIVO},0,Heading,A.B,ACTIVO CORRIENTE,-157271.85`);
+    assert.equal(lines[5], `${PASIVO},3,Account,129,Resultados del ejercicio,36967.9`);
     assert.doesNotMatch(lines.join('\n'), /-157\.271,85/, 'amounts must never go through formatCurrency in the CSV export');
   });
 
@@ -736,16 +749,179 @@ describe('balance-sheet template-csv.hbs', () => {
 
   it('appends the reference-amount column only when compareTo === "true"', () => {
     const on = renderCsv({ compareTo: true }).trim().split('\n');
-    assert.equal(on[0], 'Group,Level,Code,Element,Amount,Reference Amount');
-    assert.equal(on[1], `${ACTIVO},0,A.B,ACTIVO CORRIENTE,-157271.85,-100000`);
+    assert.equal(on[0], 'Group,Depth,Type,Code,Name,Amount,Reference Amount');
+    assert.equal(on[1], `${ACTIVO},0,Heading,A.B,ACTIVO CORRIENTE,-157271.85,-100000`);
 
     const off = renderCsv({ compareTo: false }).trim().split('\n');
-    assert.equal(off[0], 'Group,Level,Code,Element,Amount');
-    assert.equal(off[1], `${ACTIVO},0,A.B,ACTIVO CORRIENTE,-157271.85`);
+    assert.equal(off[0], 'Group,Depth,Type,Code,Name,Amount');
+    assert.equal(off[1], `${ACTIVO},0,Heading,A.B,ACTIVO CORRIENTE,-157271.85`);
   });
 
   it('header row uses translated labels [es_ES]', () => {
     const csv = renderCsv({ compareTo: true, locale: 'es_ES' });
-    assert.equal(csv.trim().split('\n')[0], 'Group,Level,Code,Elemento,Importe,Importe de Referencia');
+    assert.equal(csv.trim().split('\n')[0], 'Grupo,Profundidad,Tipo,Código,Nombre,Importe,Importe de Referencia');
   });
 });
+
+// ── ETP-5662: ShowValueCond columns feed the tree fold ─────────────────────
+
+describe('balance-sheet / profit-loss contracts select the ShowValueCond columns (ETP-5662)', () => {
+  it('both node queries select ev.showvaluecond and ev.issummary', () => {
+    for (const sql of [SQL, PL_CONTRACT.sql.query]) {
+      assert.match(sql, /ev\.showvaluecond, ev\.issummary FROM tree t/);
+    }
+  });
+
+  it('balance-sheet GROUP BY carries both columns (aggregated query)', () => {
+    assert.match(SQL, /GROUP BY [^]*ev\.accountsign, ev\.showvaluecond, ev\.issummary ORDER BY/);
+  });
+});
+
+// ── Type column (ETP-5663) — Balance Sheet AND Profit & Loss ────────────────
+//
+// "Depth" is the tree indent, which varies by branch (a subaccount can sit at
+// depth 4, 5 or 6), so it cannot tell account types apart. The Type column
+// prints the account's ElementLevel name, or "Total" for a formula HEADING
+// (`isFormula` from the core fold, at level E). A formula at another level is
+// a mirror account like (5510) = -1 x 5510, not a total: it keeps its type. Both reports share the export templates'
+// shape, so every assertion runs against each. The renderers below register
+// the canonical helpers alone (no report-specific extras), proving the Type
+// cell needs nothing beyond built-ins and the canonical set.
+
+const TYPE_REPORTS = [
+  { report: 'balance-sheet', dir: ARTIFACT_DIR, contract: CONTRACT },
+  { report: 'profit-loss', dir: PL_DIR, contract: PL_CONTRACT },
+];
+
+const TYPE_ROWS = [
+  { value: 'A', name: 'Heading row', elementlevel: 'E', amount: 1, amount_ref: 0, indent: 0, group: ACTIVO },
+  { value: '57', name: 'Account row', elementlevel: 'C', amount: 2, amount_ref: 0, indent: 1, group: ACTIVO },
+  { value: '572', name: 'Breakdown row', elementlevel: 'D', amount: 3, amount_ref: 0, indent: 2, group: ACTIVO },
+  { value: '57200000', name: 'Subaccount row', elementlevel: 'S', amount: 4, amount_ref: 0, indent: 5, group: ACTIVO },
+  { value: 'A.TOTAL', name: 'Formula row', elementlevel: 'E', isFormula: true, amount: 5, amount_ref: 0, indent: 0, group: ACTIVO },
+  { value: 'P.TOTAL', name: 'Formula row, pre-isFormula core', elementlevel: 'E', amount: 6, amount_ref: 0, indent: 0, group: PASIVO },
+  { value: '(5510)', name: 'Mirror account formula', elementlevel: 'D', isFormula: true, amount: 8, amount_ref: 0, indent: 4, group: PASIVO },
+  { value: 'X', name: 'Unknown level', elementlevel: undefined, amount: 7, amount_ref: 0, indent: 0, group: PASIVO },
+];
+
+function typeMeta(contract, locale, compareTo = false, labelOverrides = {}) {
+  return {
+    ...META_BASE,
+    labels: { ...buildContractLabels(contract, locale), ...labelOverrides },
+    params: { compareTo: String(compareTo) },
+  };
+}
+
+function renderExportExcel(dir, meta, rows = TYPE_ROWS) {
+  const hb = Handlebars.create();
+  registerReportHelpers(hb);
+  return hb.compile(readFileSync(resolve(dir, 'template-excel.hbs'), 'utf8'))({ css: '', meta, rows });
+}
+
+function renderExportCsv(dir, meta, rows = TYPE_ROWS) {
+  const built = buildJsreportHelpersString();
+  const helperNames = [...built.matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1]);
+  // eslint-disable-next-line no-new-func
+  const helpers = new Function(`${built}\nreturn { ${helperNames.join(', ')} };`)();
+  const hb = Handlebars.create();
+  for (const [name, fn] of Object.entries(helpers)) hb.registerHelper(name, fn);
+  return hb.compile(readFileSync(resolve(dir, 'template-csv.hbs'), 'utf8'))({ meta, rows });
+}
+
+function excelHeader(html) {
+  const head = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
+  return [...head.matchAll(/<th>([^<]*)<\/th>/g)].map((m) => m[1]);
+}
+
+function excelColumn(html, index) {
+  const body = html.slice(html.indexOf('<tbody>'), html.indexOf('</tbody>'));
+  return [...body.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(
+    (m) => [...m[1].matchAll(/<td[^>]*>([^<]*)<\/td>/g)][index][1]
+  );
+}
+
+/** RFC 4180 field split for one CSV line (quoted fields may hold commas). */
+function csvFields(line) {
+  const fields = [];
+  let cur = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else cur += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') { fields.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  fields.push(cur);
+  return fields;
+}
+
+for (const { report, dir, contract } of TYPE_REPORTS) {
+  describe(`${report} exports — Type column (ETP-5663)`, () => {
+    it('the contract declares every export header and type name in en_US and es_ES', () => {
+      for (const key of ['hdrGroup', 'hdrDepth', 'hdrType', 'hdrCode', 'hdrName', 'E', 'C', 'D', 'S', 'T']) {
+        assert.ok(contract.labels?.[key]?.en_US, `${key} must have an en_US label`);
+        assert.ok(contract.labels?.[key]?.es_ES, `${key} must have an es_ES label`);
+      }
+    });
+
+    it('the type-name keys collide with no column field or parameter name', () => {
+      const taken = new Set([
+        ...(contract.columns || []).map((c) => c.field),
+        ...(contract.parameters || []).map((p) => p.name),
+      ]);
+      const clashes = Object.keys(contract.labels).filter((k) => taken.has(k));
+      assert.deepEqual(clashes, []);
+    });
+
+    for (const [locale, expected] of [
+      ['en_US', ['Heading', 'Account', 'Breakdown', 'Subaccount', 'Total', 'Heading', 'Breakdown', '']],
+      ['es_ES', ['Epígrafe', 'Cuenta', 'Desglose', 'Subcuenta', 'Total', 'Epígrafe', 'Desglose', '']],
+    ]) {
+      it(`Excel: names the ElementLevel, "Total" on a formula heading only, Heading without isFormula [${locale}]`, () => {
+        const html = renderExportExcel(dir, typeMeta(contract, locale));
+        assert.doesNotMatch(html, /Missing helper/);
+        assert.deepEqual(excelColumn(html, 2), expected);
+      });
+
+      it(`CSV: same Type values as the Excel export [${locale}]`, () => {
+        const lines = renderExportCsv(dir, typeMeta(contract, locale)).trim().split('\n').slice(1);
+        assert.deepEqual(lines.map((l) => csvFields(l)[2]), expected);
+      });
+    }
+
+    for (const locale of ['en_US', 'es_ES']) {
+      for (const compareTo of [false, true]) {
+        it(`CSV and Excel headers are identical, every one translated [${locale}, compareTo=${compareTo}]`, () => {
+          const meta = typeMeta(contract, locale, compareTo);
+          const excel = excelHeader(renderExportExcel(dir, meta));
+          const csv = csvFields(renderExportCsv(dir, meta).split('\n')[0]);
+          assert.deepEqual(csv, excel);
+          const l = meta.labels;
+          assert.deepEqual(excel, [
+            l.hdrGroup, l.hdrDepth, l.hdrType, l.hdrCode, l.hdrName, l.amount,
+            ...(compareTo ? [l.amount_ref] : []),
+          ]);
+        });
+
+        it(`every CSV data line has as many fields as the header [${locale}, compareTo=${compareTo}]`, () => {
+          const rows = [...TYPE_ROWS, { ...TYPE_ROWS[1], name: 'Comma, and "quotes"', group: 'A, B' }];
+          const lines = renderExportCsv(dir, typeMeta(contract, locale, compareTo), rows).trim().split('\n');
+          const width = csvFields(lines[0]).length;
+          for (const line of lines) assert.equal(csvFields(line).length, width, line);
+        });
+      }
+    }
+
+    it('CSV neutralizes formula triggers in the Type cell and in the headers', () => {
+      const meta = typeMeta(contract, 'en_US', false, { T: '=1+1', C: '+cmd', hdrType: '@SUM(A1)' });
+      const lines = renderExportCsv(dir, meta).trim().split('\n');
+      assert.equal(csvFields(lines[0])[2], "'@SUM(A1)");
+      assert.equal(csvFields(lines[2])[2], "'+cmd");
+      assert.equal(csvFields(lines[5])[2], "'=1+1");
+    });
+  });
+}

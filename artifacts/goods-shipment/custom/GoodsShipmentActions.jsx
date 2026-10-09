@@ -353,19 +353,12 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           type="button"
           onClick={() => setShowInvoiceConfirm(true)}
           disabled={creatingInvoice}
-          className="inline-flex items-center gap-1.5 text-[13px] font-medium transition-colors"
-          // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
-          // not a button-background token — which rendered a saturated blue instead of
-          // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
-          // The `1px solid var(--status-info-border)` ring was a leftover from that same
-          // badge styling — the real `Confirmar` button (DraftModeConfirmButton) has no
-          // border at all, just the dark fill.
-          style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', opacity: creatingInvoice ? 0.6 : 1, cursor: creatingInvoice ? 'not-allowed' : 'pointer' }}
-          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
-          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
+          // ETP-5601 — record-toolbar primary button (Figma): 40px, 8px radius, text-sm/leading-6,
+          // #121217 fill with white text, 20px icon. (Earlier fix, not ETP-5260: this used to read
+          // the `--status-info-fg` badge token and rendered a saturated blue — same as ETP-4781.)
+          className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg bg-[#121217] text-white text-sm leading-6 font-medium hover:bg-[#121217]/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
             <polyline points="14 2 14 8 20 8" />
             <line x1="16" y1="13" x2="8" y2="13" />
@@ -379,10 +372,11 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         <button
           type="button"
           onClick={() => setWizardOpen(true)}
-          className="inline-flex items-center gap-1.5 text-[13px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
-          style={{ padding: '4px 12px', borderRadius: '6px', borderWidth: '1px' }}
+          // ETP-5601 — record-toolbar secondary button: 40px, 8px radius, text-sm/leading-6 in
+          // #121217, 20px icon in #828FA3.
+          className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg border border-border bg-card text-[#121217] text-sm leading-6 font-medium hover:bg-muted/30 transition-colors"
         >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg className="w-5 h-5 text-[#828FA3]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-5" />
             <path d="M12 15l-3 3 3 3" />
             <path d="M9 18h8" />

@@ -70,6 +70,7 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
       {/* FmListPage stays mounted at all times so useFiscalAutoCompute keeps polling */}
       <div style={inDetail ? { display: 'none' } : { height: '100%' }}>
         <FmListPage
+          active={!inDetail}
           onSelect={handleSelect}
           token={token}
           apiBaseUrl={apiBaseUrl}

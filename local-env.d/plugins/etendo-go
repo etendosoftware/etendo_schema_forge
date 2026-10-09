@@ -1,0 +1,212 @@
+#!/usr/bin/env bash
+# local-env plugin: Etendo GO for an Etendo checkout that contains this schema_forge.
+#
+# local-env (repo etendo-localenv) knows Etendo Classic only; it runs every
+# executable under <repo>/local-env.d/plugins as `<plugin> <hook>` with the
+# environment in LOCALENV_* variables (contract: etendo-localenv docs/design.md
+# §6.7). This one gives each local-env environment its own Etendo GO SPA:
+#   manifest         `seed GOClient v1` (part of the DB fingerprint)
+#   db-seed          the gradle invocations that load the GO sample client
+#   worktree-create  reserves SPA_PORT / BFF_PORT for the new environment
+#   up               `make dev-local-core` in the background, pointed at its Tomcat
+#   status           SPA URL, running or stopped
+#   stop|off|worktree-rm  stops that environment's SPA + BFF
+# manifest and db-seed print nothing without modules/com.etendoerp.go.
+# Env: ETENDO_GO_SPA=0 skips starting the SPA (same as `local-env up --skip-plugin=etendo-go`).
+# Docs: docs/local-env-plugin.md
+set -euo pipefail
+
+hook="${1:-}"
+# The ENVIRONMENT's repos, not the ones this file was loaded from: with LOCALENV_PLUGINS
+# the plugin may come from another checkout, and an environment's schema_forge may be a
+# symlink to an adopted worktree, where ../ resolves physically to that worktree's
+# siblings. Falls back to this file's own checkout when the environment has none.
+SF="$ETENDO_ROOT/schema_forge"
+[[ -d "$SF" ]] || SF="$(cd "$(dirname "$0")/../.." && pwd)"
+CORE="$ETENDO_ROOT/schema_forge_core"
+[[ -d "$CORE" ]] || CORE="$SF/../schema_forge_core"
+GO_MODULE="$ETENDO_ROOT/modules/com.etendoerp.go"
+STATE="${LOCALENV_PLUGIN_STATE:?run by local-env only}"
+PIDF="$STATE/spa.pid"
+LOGF="$STATE/spa.log"
+# the main checkout keeps the canonical ports; worktree-create reserves others
+SPA_PORT="${SPA_PORT:-3100}"
+BFF_PORT="${BFF_PORT:-3400}"
+
+port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+spa_pid() { local p; p="$(cat "$PIDF" 2>/dev/null || true)"; [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null && echo "$p"; }
+
+# spa_listen_port PGID: the port the SPA really listens on, empty while nothing does yet.
+# The reserved SPA_PORT is only a request: a branch whose Makefile predates SPA_PORT
+# serves on its own default (ETP-5602 reserved 3101 and served 3100). The recorded pid
+# leads its own session (setsid), so its process group holds the BFF and vite: vite is
+# the SPA; failing that, any listener that is not the BFF's port.
+spa_listen_port() {
+  local pid="" port vite="" other="" line
+  while IFS= read -r line; do
+    case "$line" in
+      p*) pid="${line#p}" ;;
+      n*) port="${line##*:}"
+          if [[ -z "$vite" ]] && ps -o command= -p "$pid" 2>/dev/null | grep -q vite; then vite="$port"; fi
+          [[ -z "$other" && "$port" != "$BFF_PORT" ]] && other="$port" ;;
+    esac
+  done < <(lsof -nP -a -g "$1" -iTCP -sTCP:LISTEN -Fpn 2>/dev/null)
+  echo "${vite:-$other}"
+}
+
+# makefile_ignores_spa_port: this environment's schema_forge cannot be told the SPA port
+makefile_ignores_spa_port() { ! grep -q 'SPA_PORT' "$SF/Makefile" 2>/dev/null; }
+
+# first port >= START that nothing listens on and no other environment reserved;
+# the main checkout's pair is never handed out
+free_port() {   # free_port START KEY TAKEN...
+  local p=$1 key=$2 taken; shift 2
+  taken="$(cat "$LOCALENV_WORKTREES"/*/build/local-env/env 2>/dev/null | sed -n "s/^export $key=//p")"
+  while port_busy "$p" || grep -qx "$p" <<< "$taken" || [[ " $* " == *" $p "* ]]; do p=$((p + 1)); done
+  echo "$p"
+}
+
+# com.etendoerp.go's CorsUtils trusts localhost:3000/3100/4173/5173 plus ETGO_ALLOWED_ORIGINS
+# (comma-separated, additive): a SPA on any other port gets "Origin not allowed" (403) on
+# login. The origins go into the environment's env file, which local-env sources and
+# exports before exec'ing tomcat-fast, so Tomcat's JVM inherits them. Merged with the value
+# already there (the file's line, else the inherited one): never clobbered.
+# add_origins PORT: exit 0 when it changed the env file, 1 when nothing was missing.
+add_origins() {
+  local port=$1 f="$LOCALENV_STATE/env" cur o add="" merged tmp
+  [[ "$port" == 3100 ]] && return 1
+  if grep -q '^export ETGO_ALLOWED_ORIGINS=' "$f" 2>/dev/null; then
+    cur="$(sed -n 's/^export ETGO_ALLOWED_ORIGINS=//p' "$f" | tail -1)"
+  else cur="${ETGO_ALLOWED_ORIGINS:-}"; fi
+  for o in "http://localhost:$port" "http://127.0.0.1:$port"; do
+    [[ ",$cur," == *",$o,"* ]] || add="${add:+$add,}$o"
+  done
+  [[ -n "$add" ]] || return 1
+  merged="${cur:+$cur,}$add"
+  tmp="$(mktemp)"
+  { grep -v '^export ETGO_ALLOWED_ORIGINS=' "$f" 2>/dev/null || true; echo "export ETGO_ALLOWED_ORIGINS=$merged"; } > "$tmp"
+  cat "$tmp" > "$f"; rm -f "$tmp"
+}
+
+# needs_install DIR STAMP: node_modules missing, or the lockfile changed since the last
+# install. local-env clones a repo's node_modules into a new worktree from the source
+# checkout, so they can lag the branch's own lockfile: the same check covers that.
+needs_install() {
+  local dir=$1 ref=$2
+  [[ -d "$dir/node_modules" ]] || return 0
+  # never installed by this plugin: npm's own record of the last install is the reference
+  [[ -f "$ref" ]] || ref="$dir/node_modules/.package-lock.json"
+  [[ -f "$ref" ]] || return 0
+  [[ "$dir/package-lock.json" -nt "$ref" ]]
+}
+
+stop_spa() {   # the process group of this environment's SPA + BFF only
+  local p i=0
+  p="$(spa_pid)" || { rm -f "$PIDF"; return 0; }
+  kill -TERM -- "-$p" 2>/dev/null || true
+  while kill -0 "$p" 2>/dev/null && (( i < 50 )); do sleep 0.2; i=$((i + 1)); done
+  kill -KILL -- "-$p" 2>/dev/null || true
+  rm -f "$PIDF"
+  echo ">> Etendo GO SPA stopped (:$SPA_PORT, BFF :$BFF_PORT)"
+}
+
+case "$hook" in
+  manifest)
+    [[ -d "$GO_MODULE" ]] && echo "seed GOClient v1"
+    ;;
+  db-seed)
+    if [[ -d "$GO_MODULE" ]]; then
+      echo "import.sample.data -Pclient=GOClient"
+      echo "prepareOnboardingSampledata --info"
+    fi
+    ;;
+  worktree-create)
+    grep -q '^export SPA_PORT=' "$LOCALENV_STATE/env" 2>/dev/null && exit 0
+    spa="$(free_port 3101 SPA_PORT 3100 3400)"
+    bff="$(free_port 3401 BFF_PORT 3100 3400 "$spa")"
+    printf 'export SPA_PORT=%s\nexport BFF_PORT=%s\n' "$spa" "$bff" >> "$LOCALENV_STATE/env"
+    add_origins "$spa" || true
+    echo ">> Etendo GO SPA of this environment: :$spa (AI BFF :$bff), allowed as an origin by its Tomcat"
+    ;;
+  up)
+    if [[ "${ETENDO_GO_SPA:-1}" == 0 ]]; then echo ">> ETENDO_GO_SPA=0: Etendo GO SPA not started"; exit 0; fi
+    if [[ ! -d "$GO_MODULE" ]]; then echo ">> modules/com.etendoerp.go not in this checkout: Etendo GO SPA not started"; exit 0; fi
+    if [[ ! -d "$CORE/packages/app-shell-core/src" ]]; then
+      echo "WARNING: $CORE not found: Etendo GO SPA not started (make dev-local-core needs it)" >&2
+      exit 0
+    fi
+    # environments created before the origins were reserved. local-env sourced the env file
+    # before this hook, but tomcat-fast sources it again when it starts, so a Tomcat about
+    # to start (LOCALENV_TOMCAT=1) gets the line; one already running does not
+    if add_origins "$SPA_PORT"; then
+      if [[ "${LOCALENV_TOMCAT:-0}" == 1 ]]; then
+        echo ">> Added ETGO_ALLOWED_ORIGINS for :$SPA_PORT to $LOCALENV_STATE/env (the Tomcat starting now picks it up)"
+      else
+        echo "WARNING: added ETGO_ALLOWED_ORIGINS for :$SPA_PORT to $LOCALENV_STATE/env; a Tomcat of this environment that is already running does not have it: restart it once, or login from the SPA answers 'Origin not allowed'" >&2
+      fi
+    fi
+    if p="$(spa_pid)"; then
+      port="$(spa_listen_port "$p")"
+      echo ">> Etendo GO SPA already running: http://localhost:${port:-$SPA_PORT}$([[ -n "$port" && "$port" != "$SPA_PORT" ]] && echo " (not the reserved :$SPA_PORT)") (pid $p, log $LOGF)"
+      exit 0
+    fi
+    install=0 core_install=0
+    needs_install "$SF" "$STATE/install.stamp" && install=1
+    needs_install "$CORE" "$STATE/core-install.stamp" && core_install=1
+    # a symlinked repo is a worktree adopted from someone else: never install into it
+    for r in schema_forge:$install schema_forge_core:$core_install; do
+      if [[ "${r#*:}" == 1 && -L "$ETENDO_ROOT/${r%%:*}" ]]; then
+        echo "WARNING: $ETENDO_ROOT/${r%%:*} is an adopted worktree whose node_modules are missing or stale: Etendo GO SPA not started (install there yourself)" >&2
+        exit 0
+      fi
+    done
+    # a branch whose Makefile predates SPA_PORT/BFF_PORT runs on 3100/3400 whatever was
+    # reserved, and its dev-local-core first kills whatever listens there: possibly the
+    # main checkout's SPA and BFF. Start it only while both ports are free
+    if makefile_ignores_spa_port && [[ "$SPA_PORT" != 3100 || "$BFF_PORT" != 3400 ]]; then
+      if port_busy 3100 || port_busy 3400; then
+        echo "WARNING: this branch's schema_forge/Makefile does not take SPA_PORT/BFF_PORT, so its SPA would take :3100/:3400, which are in use (its dev-local-core would kill them): Etendo GO SPA not started" >&2
+        exit 0
+      fi
+      echo "WARNING: this branch's schema_forge/Makefile does not take SPA_PORT: the SPA will listen on :3100, not the reserved :$SPA_PORT (local-env status shows the real port; its Tomcat only allows the reserved origin)" >&2
+    fi
+    # own session (= own process group): Ctrl-C on Tomcat or closing the terminal does
+    # not kill it, and stop_spa can signal the whole make/npm/node tree at once
+    : > "$LOGF"
+    # SCHEMA_FORGE_CORE: vite would otherwise resolve ../schema_forge_core from its own
+    # physical path, which for an adopted worktree is not this environment's core
+    SF="$SF" STAMP="$STATE/install.stamp" INSTALL=$install ETENDO_URL="$LOCALENV_URL" \
+      SCHEMA_FORGE_CORE="$CORE" CORE_STAMP="$STATE/core-install.stamp" CORE_INSTALL=$core_install \
+      SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT" \
+      perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' bash -c '
+        # npm install, not `make install`: that target also sets core.hooksPath, git config
+        # the core repo shares with every worktree of it
+        if [[ $CORE_INSTALL == 1 ]]; then (cd "$SCHEMA_FORGE_CORE" && npm install) && touch "$CORE_STAMP" || exit 1; fi
+        cd "$SF"
+        if [[ $INSTALL == 1 ]]; then make install && touch "$STAMP" || exit 1; fi
+        # command-line variables: they beat the same names in schema_forge/.env, which the
+        # Makefile includes (and exports) and would otherwise prefer over the environment.
+        # The AI BFF does not read ETENDO_URL: without ETENDO_MCP_URL it calls :8080, the
+        # main checkout, with this user credentials; the usage URL derives from it unless
+        # ETENDO_USAGE_URL is set, so both are pinned to this environment Tomcat
+        exec make dev-local-core ETENDO_URL="$ETENDO_URL" SPA_PORT="$SPA_PORT" BFF_PORT="$BFF_PORT" \
+          SCHEMA_FORGE_CORE="$SCHEMA_FORGE_CORE" \
+          ETENDO_MCP_URL="$ETENDO_URL/sws/mcp" ETENDO_USAGE_URL="$ETENDO_URL/sws/neo/usage"' \
+      >> "$LOGF" 2>&1 < /dev/null &
+    echo $! > "$PIDF"
+    echo ">> Etendo GO SPA starting: http://localhost:$SPA_PORT -> $LOCALENV_URL$([[ $core_install == 1 ]] && echo ', after npm install in schema_forge_core')$([[ $install == 1 ]] && echo ', after make install') (log: $LOGF)"
+    ;;
+  status)
+    # the URL first: local-env takes the first one in the value as the SPA's (progress.json)
+    if ! p="$(spa_pid)"; then printf 'SPA\thttp://localhost:%s (stopped)\n' "$SPA_PORT"
+    elif port="$(spa_listen_port "$p")"; [[ -z "$port" ]]; then
+      printf 'SPA\thttp://localhost:%s (starting%s)\n' "$SPA_PORT" "$(makefile_ignores_spa_port && echo "; this branch's Makefile ignores SPA_PORT, the real port shows once it listens")"
+    elif [[ "$port" != "$SPA_PORT" ]]; then
+      printf 'SPA\thttp://localhost:%s (running; not the reserved :%s%s)\n' "$port" "$SPA_PORT" "$(makefile_ignores_spa_port && echo ": this branch's Makefile ignores SPA_PORT")"
+    else printf 'SPA\thttp://localhost:%s (running)\n' "$port"; fi
+    ;;
+  stop|off|worktree-rm)
+    stop_spa
+    ;;
+esac
+exit 0

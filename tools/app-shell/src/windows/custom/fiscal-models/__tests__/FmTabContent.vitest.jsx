@@ -6,6 +6,7 @@ import React from 'react';
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 vi.mock('lucide-react', () => ({
+  ReceiptText: () => null,
   TriangleAlert: (p) => <span data-testid="icon-warn" {...p} />,
   OctagonAlert: (p) => <span data-testid="icon-block" {...p} />,
   CircleCheck: (p) => <span data-testid="icon-check" {...p} />,

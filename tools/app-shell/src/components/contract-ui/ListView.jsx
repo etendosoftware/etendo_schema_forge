@@ -24,6 +24,7 @@ import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
 import { useWindowImportDialog } from './useWindowImportDialog.js';
+import { useListToolbarTabsFit } from './useListToolbarTabsFit.js';
 import { buildAdvancedFilterCriteria, extractQueryParamConditions } from '@/lib/gridQuery';
 import {
   readListState,
@@ -40,6 +41,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
+
+// Keyboard focus ring for the split "New" group segments: the design-system focus
+// token, offset from the dark button so it stays visible (focus-visible only).
+const SPLIT_NEW_FOCUS_RING = 'relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
 /**
  * Normalizes a selected grid row into what `printDocuments()` needs to exclude Draft
@@ -148,6 +153,7 @@ function ListFilterBarSection(props) {
           onDeletePreset={props.windowName ? props.deletePreset : null}
           labelOverrides={props.labelOverrides}
           hideStatusFilter={props.hideStatusFilter}
+          flowInParent
           data-testid="ListFilterBar__620cbc" />
       )}
     </>
@@ -235,10 +241,10 @@ function RefreshButton({ RefreshIconComponent, iconButtonHover, onRefresh, label
   return (
     <button
       onClick={onRefresh}
-      className={`h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground ${iconButtonHover} transition-colors`}
+      className={`h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] ${iconButtonHover} transition-colors`}
       title={label || 'Refresh'}
     >
-      <RefreshEl className="h-4 w-4" data-testid="RefreshEl__620cbc" />
+      <RefreshEl className="h-5 w-5" data-testid="RefreshEl__620cbc" />
     </button>
   );
 }
@@ -281,51 +287,67 @@ export function ViewToggle({ galleryRenderer, onSelectList, onSelectGallery, vie
 }
 
 /**
- * The list's tab group: the `subsetFilters` segmented control (Todos / Factura / …) and the
- * list/gallery `ViewToggle` — the two segmented switches that pick WHAT the list shows, as opposed
- * to the quick filters and actions around them. Returns the controls only, never a row wrapper, so
- * the caller decides where they sit: ETP-5509 gives them a toolbar row of their own (see
- * `hasListToolbarTabs` and the idle bar in ListView).
+ * The list's tab group: the `subsetFilters` segmented control (Todos / Factura / …), which picks
+ * WHAT universe the list shows, as opposed to the quick filters and actions around it. ETP-5509
+ * opens the toolbar's main row with it while everything fits and moves it alone to a second line
+ * when it does not (see `useListToolbarTabsFit` and the idle bar in ListView). The list/gallery
+ * `ViewToggle` is NOT part of it: it keeps its pre-ETP-5509 place after "Filtros".
  */
-function ListToolbarTabs({
-  subsetFilters, activeSubsetIndex, onSelectSubset, ui,
-  galleryRenderer, viewMode, onSelectList, onSelectGallery,
-}) {
+function ListToolbarTabs({ subsetFilters, activeSubsetIndex, onSelectSubset, ui }) {
   return (
-    <>
-      {subsetFilters?.length > 0 && (
-        <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
-          {subsetFilters.map((sf, i) => (
-            <button
-              key={sf.key || sf.label}
-              onClick={() => onSelectSubset(i)}
-              data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
-              className={[
-                'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
-                activeSubsetIndex === i
-                  ? 'bg-card shadow-sm'
-                  : 'bg-[hsl(var(--muted))] hover:brightness-95',
-              ].join(' ')}
-            >
-              {ui(sf.label)}
-            </button>
-          ))}
-        </div>
-      )}
-      <ViewToggle
-        galleryRenderer={galleryRenderer}
-        onSelectList={onSelectList}
-        viewMode={viewMode}
-        onSelectGallery={onSelectGallery}
-        data-testid="ViewToggle__620cbc" />
-    </>
+    <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
+      {subsetFilters.map((sf, i) => (
+        <button
+          key={sf.key || sf.label}
+          onClick={() => onSelectSubset(i)}
+          data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
+          className={[
+            'h-8 px-3 text-sm font-medium text-[hsl(var(--foreground))] rounded-lg transition-all whitespace-nowrap',
+            activeSubsetIndex === i
+              ? 'bg-card shadow-sm'
+              : 'bg-[hsl(var(--muted))] hover:brightness-95',
+          ].join(' ')}
+        >
+          {ui(sf.label)}
+        </button>
+      ))}
+    </div>
   );
 }
 
-// Whether the window has a tab group at all. Gates the toolbar's second row so a window without
-// one (e.g. Warehouse) keeps a single-row toolbar instead of an empty padded band.
-function hasListToolbarTabs(subsetFilters, galleryRenderer) {
-  return subsetFilters?.length > 0 || Boolean(galleryRenderer);
+// Whether the window has a tab group at all. A window without one (e.g. Warehouse, or Product,
+// whose only switch is the view toggle) never measures and is always a single row.
+function hasListToolbarTabs(subsetFilters) {
+  return subsetFilters?.length > 0;
+}
+
+// Value of the main row's `data-tabs-placement`: absent without subset tabs, otherwise where
+// `useListToolbarTabsFit` placed them.
+function listToolbarTabsPlacement(hasTabs, tabsInline) {
+  if (!hasTabs) return undefined;
+  return tabsInline ? 'inline' : 'wrapped';
+}
+
+/**
+ * The main row's subset-tabs cell (ETP-5509): ONE element that `useListToolbarTabsFit`
+ * measures through `tabsRef` and moves by CSS alone — opening the row while inline, alone on
+ * a line below (`order-last basis-full`) while wrapped — so it is never remounted and a
+ * focused tab keeps its focus when it moves.
+ */
+function ListToolbarTabsCell({ tabsRef, tabsInline, subsetFilters, activeSubsetIndex, onSelectSubset, ui }) {
+  return (
+    <div
+      ref={tabsRef}
+      className={tabsInline ? 'flex shrink-0 items-center' : 'order-last flex basis-full items-center'}
+      data-testid="list-toolbar-tabs">
+      <ListToolbarTabs
+        subsetFilters={subsetFilters}
+        activeSubsetIndex={activeSubsetIndex}
+        onSelectSubset={onSelectSubset}
+        ui={ui}
+        data-testid="ListToolbarTabs__620cbc" />
+    </div>
+  );
 }
 
 function iconSizeClass(selectionBarSize) {
@@ -352,8 +374,68 @@ function isDefaultSortActive(hook, defaultColumn, defaultDirection) {
   return hook.sortColumn === defaultColumn && hook.sortDirection === defaultDirection;
 }
 
+/**
+ * Whether anything the USER chose narrows the rows the server returns: a column filter
+ * (search box included), the advanced filter, or a subset/quick filter that carries a
+ * server-side `filter`. Client-side `rowFilter` subsets do NOT count — they never touch
+ * `hook.items`, which always holds the unnarrowed rows. `baseFilter` is the window's own
+ * permanent scope, not a user choice, so it does not count either.
+ */
+function hasUserNarrowing({ columnFilters, advancedFilterPart, subsetFilters, activeSubsetIndex, quickFilters, activeFilterIndices }) {
+  if (Object.keys(columnFilters ?? {}).length > 0) return true;
+  if (advancedFilterPart) return true;
+  if (subsetFilters && activeSubsetIndex != null && subsetFilters[activeSubsetIndex]?.filter) return true;
+  return [...activeFilterIndices].some((i) => Boolean(quickFilters?.[i]?.filter));
+}
+
+/**
+ * The context a Table gets (as `emptyListContext`) when the window has NO records at all —
+ * the fetch succeeded (`meta` is only set on a successful response), it returned nothing,
+ * and nothing the user chose narrowed it. `null` otherwise, so a Table can render a
+ * full-area "start here" state instead of an empty grid without re-deriving any of this.
+ * It carries the window's own create and import entry points, so the state can offer
+ * them without duplicating how they work. Window-agnostic: the Table decides what to show.
+ */
+function buildEmptyListContext({ hook, narrowed, onCreate, onImport, importConfig }) {
+  if (hook.loading || hook.items.length > 0 || hook.meta == null || narrowed) return null;
+  return {
+    onCreate,
+    onImport,
+    importFormats: importConfig?.enabled ? importConfig.formats : undefined,
+  };
+}
+
 // Extracted so the guard/try-finally doesn't add to ListView's own cognitive
 // complexity (S3776) — same rationale as the other top-level helpers above.
+// The New/import wiring below is computed through these helpers so their branches stay
+// out of ListView's own cognitive complexity (S3776) — same rationale as above.
+function canCreateRecords(hideCreate, windowReadOnly) {
+  return !hideCreate && !windowReadOnly;
+}
+
+function offersImportInNewMenu(canCreate, visibleNewActions) {
+  return canCreate && visibleNewActions.some((action) => action.opensImportDialog);
+}
+
+function emptyListEntryPoints({ canCreate, handleNew, importEnabled, openImportDialog }) {
+  return {
+    onCreate: canCreate ? handleNew : undefined,
+    onImport: importEnabled ? openImportDialog : undefined,
+  };
+}
+
+// Split group: each segment carries its own corners, so the wrapper must not clip —
+// overflow-hidden would cut the offset keyboard focus ring.
+function newButtonGroupClass(isSplitNew) {
+  const clip = isSplitNew ? '' : ' overflow-hidden';
+  return `inline-flex items-stretch rounded-lg shadow-sm${clip}`;
+}
+
+function newButtonClass(isSplitNew) {
+  const focusRing = isSplitNew ? ` ${SPLIT_NEW_FOCUS_RING}` : '';
+  return `group h-10 rounded-none rounded-l-lg gap-2 pl-2 pr-3 text-sm leading-6 font-medium bg-[#121217] text-white hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors [&_svg]:size-5${focusRing}`;
+}
+
 async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }) {
   if (isPrinting) return;
   setIsPrinting(true);
@@ -441,10 +523,10 @@ export function ListView({
   newLabel = null,
   newActions = [],
   listbarPaddingX = 'px-2',
-  listbarPaddingY = 'py-3',
+  listbarPaddingY = 'py-2',
   SortIconComponent = null,
   RefreshIconComponent = null,
-  iconButtonHover = 'hover:text-foreground',
+  iconButtonHover = 'hover:bg-[hsl(var(--muted))]',
   tablePaddingX = 'px-2',
   tablePaddingBottom = 'pb-6',
   labelOverrides,
@@ -547,6 +629,17 @@ export function ListView({
   const [tableColumns, setTableColumns] = useState(initialColumns ?? []);
 
   const [showImportDialog, setShowImportDialog] = useState(false);
+  // A file handed in by the caller of `openImportDialog` (e.g. dropped on an empty-list
+  // state), forwarded to ImportDialog as `initialFile` so the dialog starts already loaded.
+  const [importInitialFile, setImportInitialFile] = useState(null);
+  const openImportDialog = useCallback((file) => {
+    setImportInitialFile(file instanceof File ? file : null);
+    setShowImportDialog(true);
+  }, []);
+  const handleImportOpenChange = useCallback((open) => {
+    setShowImportDialog(open);
+    if (!open) setImportInitialFile(null);
+  }, []);
   const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
 
@@ -1081,6 +1174,35 @@ export function ListView({
   // list bar dropped entirely — the individual hide* flags leave an empty padded strip
   // behind, since sort/refresh have no flag of their own.
   const listBarHidden = listViewOptions?.hideListBar ?? hideListBar;
+  // ETP-5509 — the tab group shares the main row while it fits and wraps to a row of its own
+  // only when it does not; the decision is measured, never a breakpoint.
+  const hasTabs = hasListToolbarTabs(subsetFilters);
+  const toolbarFit = useListToolbarTabsFit(hasTabs && !listBarHidden);
+  const toolbarTabsPlacement = listToolbarTabsPlacement(hasTabs, toolbarFit.tabsInline);
+
+  // The New action, shared by the toolbar button and the empty-list context below.
+  const canCreate = canCreateRecords(hideCreate, windowReadOnly);
+  const handleNew = useCallback(
+    () => (onNew ? onNew() : navigate(`/${windowName}/new`)),
+    [onNew, navigate, windowName],
+  );
+
+  // A `newActions` item may declare `opensImportDialog: true` instead of an `onClick`: it then
+  // opens this window's own import dialog (`window.import`). It is dropped when the window has
+  // no enabled import. When the split menu offers the import, the standalone import icon is
+  // redundant and is not rendered; it stays whenever the menu is unavailable (read-only
+  // window, `hideCreate`), so the import is never left unreachable.
+  const importEnabled = Boolean(importConfig?.enabled);
+  const visibleNewActions = newActions.filter((action) => !action.opensImportDialog || importEnabled);
+  const isSplitNew = visibleNewActions.length > 0;
+  const importInNewMenu = offersImportInNewMenu(canCreate, visibleNewActions);
+
+  const emptyListContext = buildEmptyListContext({
+    hook,
+    narrowed: hasUserNarrowing({ columnFilters, advancedFilterPart, subsetFilters, activeSubsetIndex, quickFilters, activeFilterIndices }),
+    ...emptyListEntryPoints({ canCreate, handleNew, importEnabled, openImportDialog }),
+    importConfig,
+  });
 
   // Everything the Table needs, in one object, because ListTableRegion renders it from
   // either of two wrappers and these used to be written out once per branch. `meta` is
@@ -1144,6 +1266,7 @@ export function ListView({
     deselectRowIds,
     rowQuickActions: effectiveRowQuickActions,
     hiddenColumns,
+    emptyListContext,
   };
 
   return (
@@ -1260,26 +1383,48 @@ export function ListView({
               </div>
             </SelectionToolbar>
           )}
-          {/* ETP-5509 — the idle bar is a column of up to two rows, closed by the gray line that
-              delimits toolbar from body:
-                row 1 — quick filters + "Filtros" on the left, main actions on the right;
-                row 2 — the tab group (`ListToolbarTabs`), only when the window has one.
-              The tabs used to open row 1, where at the minimum supported viewport (1280x720
-              with the navigation rail expanded) they competed for width with the filters and
-              the actions. They sit on their own row at EVERY width — a product decision, not a
-              breakpoint: to make it conditional later, render `<ListToolbarTabs>` at the start
-              of row 1's left cluster above the breakpoint and gate row 2 on the opposite
-              condition; nothing else in this block depends on where the tabs are.
-              The separator lives here rather than in each headerTable so every window that
-              keeps the native bar gets it by construction (Payments In, whose table sits next
-              to a sidebar, had none). A window that replaces the bar (`hideListBar`) draws its
-              own toolbar and its own line (financial-account). */}
+          {/* ETP-5509 — the idle bar is ONE row:
+                [subset tabs][quick filters, slot, filters, "Filtros", view toggle] … [actions]
+              — the pre-ETP-5509 order. The subset tabs (`ListToolbarTabs`) open the row while
+              everything fits; when it does not they alone move to a line of their own below
+              (`order-last basis-full`), and the quick filters, the view toggle and the main
+              actions stay on the first line. The decision is a measurement
+              (`useListToolbarTabsFit`: natural widths against the row's width, with
+              hysteresis), not a breakpoint, so there is never an empty second line, and a
+              window without subset tabs is always one row. The tabs are ONE element moved by
+              CSS, never remounted, so a focused tab keeps its focus when it moves.
+              Gap: the row's `gap-x-2` plus the actions' `ml-2` keep at least 16px between the
+              filters and the actions at every width. When space runs out the filters yield:
+              the tabs move first, then the filter controls wrap onto extra lines inside their
+              cluster (the actions never shrink). Only when the widest single filter control and
+              the actions cannot share a line (around 1000px of viewport with the rail
+              expanded, depending on the window) do the actions drop to a line below the
+              filters — they may leave the first line, but never touch or overlap them.
+              ETP-5601 — per Figma the bar is 56px: 8px padding on every side around 40px
+              controls, and no bottom border (the 1px line it used to draw made it 57px). */}
           {!listBarHidden && (
             <div
-              className={`flex flex-col gap-2 border-b border-[hsl(var(--border-subtle))] ${listbarPaddingX} ${listbarPaddingY}`}
+              className={`flex flex-col gap-2 ${listbarPaddingX} ${listbarPaddingY}`}
               data-testid="list-toolbar">
-              <div className="flex items-center justify-between" data-testid="list-toolbar-main-row">
-                <div className="flex items-center gap-2">
+              <div
+                ref={toolbarFit.rowRef}
+                className="flex flex-wrap items-center gap-2"
+                data-tabs-placement={toolbarTabsPlacement}
+                data-testid="list-toolbar-main-row">
+                {hasTabs && (
+                  <ListToolbarTabsCell
+                    tabsRef={toolbarFit.tabsRef}
+                    tabsInline={toolbarFit.tabsInline}
+                    subsetFilters={subsetFilters}
+                    activeSubsetIndex={activeSubsetIndex}
+                    onSelectSubset={selectSubset}
+                    ui={ui}
+                    data-testid="ListToolbarTabsCell__620cbc" />
+                )}
+                <div
+                  ref={toolbarFit.leftRef}
+                  className="flex flex-1 flex-wrap items-center gap-2"
+                  data-testid="list-toolbar-filters">
                   {quickFilters && (
                     <div role="group" aria-label="Filters" className="flex items-center gap-1">
                       {quickFilters.map((qf, i) => (
@@ -1288,10 +1433,10 @@ export function ListView({
                           onClick={() => toggleQuickFilter(i)}
                           data-testid={`quick-filter-${qf.key || qf.label?.toLowerCase()}`}
                           className={[
-                            'h-9 px-3 text-xs rounded-lg border bg-card transition-colors',
+                            'h-10 px-3 text-sm leading-6 font-medium text-[#121217] rounded-lg border bg-card transition-colors',
                             activeFilterIndices.has(i)
-                              ? 'border-primary text-primary bg-primary/5 font-medium'
-                              : 'border-border text-muted-foreground hover:text-foreground',
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border',
                           ].join(' ')}
                         >
                           {ui(qf.label)}
@@ -1335,8 +1480,17 @@ export function ListView({
                     deletePreset={deletePreset}
                     labelOverrides={labelOverrides}
                     data-testid="ListFilterBarSection__620cbc" />
+                  <ViewToggle
+                    galleryRenderer={galleryRenderer}
+                    onSelectList={() => handleViewMode('list')}
+                    viewMode={viewMode}
+                    onSelectGallery={() => handleViewMode('gallery')}
+                    data-testid="ViewToggle__620cbc" />
                 </div>
-                <div className="flex items-center gap-2">
+                <div
+                  ref={toolbarFit.actionsRef}
+                  className="ml-2 flex shrink-0 items-center gap-2"
+                  data-testid="list-toolbar-actions">
                   {!(listViewOptions?.hideLink ?? hideLink) && (
                     <button
                       type="button"
@@ -1344,8 +1498,8 @@ export function ListView({
                       title={ui('copyLink')}
                       aria-label={ui('copyLink')}
                       data-testid="list-share-link"
-                      className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
-                      <Link2 className="h-4 w-4" data-testid="Link2__620cbc" />
+                      className="h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors">
+                      <Link2 className="h-5 w-5" data-testid="Link2__620cbc" />
                     </button>
                   )}
                   <ListSortPopover
@@ -1372,17 +1526,17 @@ export function ListView({
                       the file: import pulls records into Etendo (Download), export pushes them
                       out (Upload). The import button used to carry the outward arrow, which read
                       as an export. */}
-                  {importConfig?.enabled && (
+                  {importEnabled && !importInNewMenu && (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
-                      onClick={() => setShowImportDialog(true)}
+                      className="gap-1.5 text-[#828FA3] font-normal h-10 px-3 rounded-lg bg-card [&_svg]:size-5 hover:bg-[hsl(var(--muted))] hover:text-[#828FA3]"
+                      onClick={() => openImportDialog()}
                       aria-label={ui('import')}
                       title={ui('import')}
                       data-testid="ListView__importButton"
                     >
-                      <Download className="h-3.5 w-3.5" data-testid="Download__ListViewImport" />
+                      <Download className="h-5 w-5" data-testid="Download__ListViewImport" />
                     </Button>
                   )}
                   {importConfig?.enabled && (
@@ -1397,40 +1551,45 @@ export function ListView({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+                      className="text-[#828FA3] font-normal h-10 w-10 p-0 rounded-lg bg-card [&_svg]:size-5 hover:bg-[hsl(var(--muted))] hover:text-[#828FA3]"
                       onClick={() => setShowReport(true)}
+                      aria-label={ui('print')}
+                      title={ui('print')}
                       data-testid="Button__620cbc">
-                      <Printer className="h-3.5 w-3.5" data-testid="Printer__620cbc" />
-                      {ui('print')}
+                      <Printer className="h-5 w-5" data-testid="Printer__620cbc" />
                     </Button>
                   )}
                   {/* Split "New" button */}
-                  {!hideCreate && !windowReadOnly && (
-                    <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
+                  {canCreate && (
+                    <div className={newButtonGroupClass(isSplitNew)}>
                       <Button
-                        className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+                        className={newButtonClass(isSplitNew)}
                         data-testid="action-new"
-                        onClick={() => onNew ? onNew() : navigate(`/${windowName}/new`)}
+                        onClick={handleNew}
                       >
-                        <Plus className="h-4 w-4" data-testid="Plus__620cbc" />
+                        <Plus
+                          className="h-5 w-5 text-white/90 group-hover:text-[hsl(var(--accent-highlight-foreground))]"
+                          data-testid="Plus__620cbc" />
                         {newLabel ?? tMenu(entityLabel, { field: 'newLabel' }) ?? ui('newRecord')}
                       </Button>
-                      {newActions.length > 0 && (
+                      {isSplitNew && (
                         <>
                           <div className="w-px bg-primary-foreground/20" />
                           <DropdownMenu data-testid="DropdownMenu__620cbc">
                             <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
                               <Button
-                                className="rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+                                className={`h-10 rounded-none rounded-r-lg px-2 bg-[#121217] text-white hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors ${SPLIT_NEW_FOCUS_RING}`}
+                                aria-label={ui('moreOptions')}
+                                title={ui('moreOptions')}
                                 data-testid="action-new-more">
                                 <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__620cbc" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" data-testid="DropdownMenuContent__620cbc">
-                              {newActions.map((action) => (
+                              {visibleNewActions.map((action) => (
                                 <DropdownMenuItem
                                   key={action.key}
-                                  onClick={action.onClick}
+                                  onClick={action.opensImportDialog ? () => openImportDialog() : action.onClick}
                                   data-testid={`action-new-${action.key}`}
                                 >
                                   {action.label}
@@ -1444,26 +1603,14 @@ export function ListView({
                   )}
                 </div>
               </div>
-              {hasListToolbarTabs(subsetFilters, galleryRenderer) && (
-                <div className="flex items-center gap-2" data-testid="list-toolbar-tabs-row">
-                  <ListToolbarTabs
-                    subsetFilters={subsetFilters}
-                    activeSubsetIndex={activeSubsetIndex}
-                    onSelectSubset={selectSubset}
-                    ui={ui}
-                    galleryRenderer={galleryRenderer}
-                    viewMode={viewMode}
-                    onSelectList={() => handleViewMode('list')}
-                    onSelectGallery={() => handleViewMode('gallery')}
-                    data-testid="ListToolbarTabs__620cbc" />
-                </div>
-              )}
             </div>
           )}
 
-          {/* KPI / header content */}
+          {/* KPI / header content. empty:hidden collapses the padded wrapper when the slot
+              renders nothing — a function slot always yields a truthy element, so the guard
+              above cannot catch a component that returns null (contacts' record summary). */}
           {headerContent && (
-            <div className="px-6 pt-4">
+            <div className="px-6 pt-4 empty:hidden">
               {typeof headerContent === 'function'
                 ? headerContent({ api, token, apiBaseUrl, items: hook.items, loading: hook.loading, meta: hook.meta })
                 : headerContent}
@@ -1532,8 +1679,9 @@ export function ListView({
         {importConfig?.enabled && showImportDialog && (
           <ImportDialog
             open={showImportDialog}
-            onOpenChange={setShowImportDialog}
+            onOpenChange={handleImportOpenChange}
             config={importConfig}
+            initialFile={importInitialFile ?? undefined}
             {...importDialogProps}
             onImported={({ failedCount }) => {
               // Refresh unconditionally — some rows may have committed even when others
@@ -1544,7 +1692,7 @@ export function ListView({
               // where a batch that failed outright showed nothing on screen at all, even
               // after ImportDialog/sendRow were fixed to surface the real message.
               hook.refresh();
-              if (failedCount === 0) setShowImportDialog(false);
+              if (failedCount === 0) handleImportOpenChange(false);
             }}
             data-testid="ImportDialog__620cbc" />
         )}

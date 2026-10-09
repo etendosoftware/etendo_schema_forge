@@ -67,8 +67,8 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
           if (badge.kind === 'credit-applied') {
             return (
               <span
-                className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-                style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}
+                className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
+                style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}
               >
                 {ui('cpCreditFullyApplied')}
               </span>
@@ -78,8 +78,8 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
           // TruncatedText (tooltip only opens when it genuinely truncates).
           return (
             <span
-              className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-info-bg)', color: 'var(--status-info-fg)', cursor: 'pointer' }}
+              className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
+              style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', color: 'var(--status-info-fg)', cursor: 'pointer' }}
               data-testid="payment-status-badge"
               onClick={handleBadgeClick}
             >
@@ -95,8 +95,8 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
         if (isFullyPaid) {
           return (
             <span
-              className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-              style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)', cursor: 'pointer' }}
+              className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
+              style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)', cursor: 'pointer' }}
               data-testid="payment-status-badge"
             onClick={handleBadgeClick}
             >
@@ -109,8 +109,8 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
         }
         return (
           <span
-            className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-            style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', cursor: 'pointer' }}
+            className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
+            style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', cursor: 'pointer' }}
             data-testid="payment-status-badge"
             onClick={handleBadgeClick}
           >

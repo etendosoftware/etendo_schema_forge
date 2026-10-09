@@ -2,7 +2,6 @@ import { useMemo, useEffect } from 'react';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import AssetCategoryTable from './AssetCategoryTable';
 import AssetCategoryForm from './AssetCategoryForm';
 import AccountingTable from './AccountingTable';
@@ -165,8 +164,6 @@ export default function AssetCategoryPage({ windowName, recordId, ...props }) {
       api={api}
       hidePrint
       hideLink
-      SortIconComponent={SortIcon}
-      RefreshIconComponent={RefreshIcon}
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />
