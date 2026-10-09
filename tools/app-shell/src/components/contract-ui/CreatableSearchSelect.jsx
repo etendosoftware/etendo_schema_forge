@@ -175,6 +175,34 @@ function fetchServerOptions({ apiFetch, selectorUrl, selectorContext, parentKey,
     });
 }
 
+/**
+ * serverSearch mode: the shared-cache entry for a FIRST page (offset 0), when a DataProvider cache
+ * is mounted. Load-more pages never use the cache. `cachedPageUsable` is a fresh, NON-EMPTY page —
+ * an empty first page hides the dropdown, so it is never trusted (ETP-5681).
+ */
+function lookupCachedFirstPage({ dataCache, cacheScope, selectorUrl, selectorContext, filterKey, parentValue, searchQuery, offset }) {
+  const useCache = Boolean(offset === 0 && dataCache?.cache && cacheScope);
+  if (!useCache) return { useCache, cacheKey: null, cached: null, cachedPageUsable: false };
+  const cacheKey = createQueryKey({
+    ...cacheScope, apiBase: selectorUrl, entity: 'selector',
+    filters: { ...(selectorContext ?? {}), ...(filterKey && parentValue ? { [filterKey]: parentValue } : {}) },
+    recordId: `q:${searchQuery ?? ''}`,
+  });
+  const cached = dataCache.cache.getEntry(cacheKey);
+  const cachedPageUsable = !!cached && !cached.stale && (cached.data?.items?.length ?? 0) > 0;
+  return { useCache, cacheKey, cached, cachedPageUsable };
+}
+
+/**
+ * Toggles the loading flag for a page request: the first page drives `loading` (only when the
+ * placeholder is shown — a background revalidation keeps the cached options visible), a load-more
+ * page drives `loadingMore`.
+ */
+function setPageLoading({ offset, showLoading, setLoading, setLoadingMore }, isLoading) {
+  if (offset > 0) setLoadingMore(isLoading);
+  else if (showLoading) setLoading(isLoading);
+}
+
 
 /** Pinned "create X" / "use typed value" action rendered at the top of the dropdown panel. */
 function CreateAction({ field, createLabel, onCreateRequest, onCreate, query }) {
@@ -558,14 +586,9 @@ export function CreatableSearchSelect({
     // cost center deactivated in its own window). A cached EMPTY page is never trusted: an empty
     // first page hides the dropdown entirely (see showDropdown), so replaying one made the
     // selector look broken until the user typed.
-    const useCache = offset === 0 && dataCache?.cache && cacheScope;
-    const cacheKey = useCache ? createQueryKey({
-      ...cacheScope, apiBase: selectorUrl, entity: 'selector',
-      filters: { ...(selectorContext ?? {}), ...(filterKey && parentValue ? { [filterKey]: parentValue } : {}) },
-      recordId: `q:${searchQuery ?? ''}`,
-    }) : null;
-    const cached = useCache ? dataCache.cache.getEntry(cacheKey) : null;
-    const cachedPageUsable = !!cached && !cached.stale && (cached.data?.items?.length ?? 0) > 0;
+    const { useCache, cacheKey, cached, cachedPageUsable } = lookupCachedFirstPage({
+      dataCache, cacheScope, selectorUrl, selectorContext, filterKey, parentValue, searchQuery, offset,
+    });
     if (cachedPageUsable) {
       applyPage(cached.data);
       if (!needsSelectorRevalidation(cached)) return;
@@ -574,7 +597,7 @@ export function CreatableSearchSelect({
     // A background revalidation keeps the cached options on screen instead of blanking them
     // behind the "loading" placeholder.
     const showLoading = !cachedPageUsable;
-    if (offset === 0) { if (showLoading) setLoading(true); } else setLoadingMore(true);
+    setPageLoading({ offset, showLoading, setLoading, setLoadingMore }, true);
     const run = useCache
       ? dataCache.cache.fetchQuery({
         key: cacheKey,
@@ -597,7 +620,7 @@ export function CreatableSearchSelect({
       })
       .finally(() => {
         fetchInFlightRef.current = false;
-        if (offset === 0) { if (showLoading) setLoading(false); } else setLoadingMore(false);
+        setPageLoading({ offset, showLoading, setLoading, setLoadingMore }, false);
       });
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
