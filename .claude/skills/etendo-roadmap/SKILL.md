@@ -179,7 +179,7 @@ authenticated; the Datadog MCP is the fallback for reads only. Check before the 
 command -v pup && pup auth status        # status lists the scopes; writing a case needs cases_write
 ```
 
-- **pup missing** → tell the user to install it (`brew install pup`) and run
+- **pup missing** → tell the user to install it (`brew install datadog-labs/pack/pup`) and run
   `! pup auth login --site datadoghq.eu` (interactive, so the user runs it).
 - **The org is EU.** pup defaults to `datadoghq.com`, so prefix every call with
   `DD_SITE=datadoghq.eu`; `--site` is accepted only by `pup auth login`.
