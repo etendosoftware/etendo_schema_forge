@@ -1,5 +1,7 @@
+// @covers artifacts/goods-shipment/custom/ReturnWizard.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
+import { t } from '../../helpers/i18n.js';
 
 /**
  * Goods Shipment — Return Wizard (mocked) — ETP-4031
@@ -191,11 +193,11 @@ test.describe('Goods Shipment — Return Wizard step 2 quality (no credit note, 
     // 6. Click "Crear Devolución"
     await createReturnBtn.click();
 
-    // 7. Dialog opens with the correct Spanish title
+    // 7. Dialog opens with the translated title (createReturnFromShipment)
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible({ timeout: 8_000 });
     await expect(
-      dialog.getByRole('heading', { name: 'Crear Devolución desde Envío' })
+      dialog.getByRole('heading', { name: t('createReturnFromShipment') })
     ).toBeVisible({ timeout: 5_000 });
 
     // 8. Step indicator is visible (StepIndicator renders dots + text like "1 de 2")
