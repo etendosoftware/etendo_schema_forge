@@ -10,6 +10,7 @@
 // Sources merged: `@covers` tags, import statements that resolve to the file
 // (Java: imports + same-package references), and `readFileSync` path literals.
 import { execFileSync } from 'node:child_process';
+import { sanitizedGitEnv } from './lib/git-env.js';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, posix, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -48,6 +49,7 @@ function gitLsFiles(root, patterns) {
       env: envWithoutGitContext(),
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
+      env: sanitizedGitEnv(),
     });
     return out.split('\n').filter(Boolean);
   } catch {

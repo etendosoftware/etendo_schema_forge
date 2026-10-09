@@ -628,6 +628,22 @@ Each entry in `actions` accepts:
 
 The two can coexist in the same window. In the query, the subset is applied first and the quick filters refine it. On screen both share the toolbar row, subsets first (ETP-5509); when the row does not fit, the subsets (segmented control) alone wrap to a second row below the quick filters — see [`list-filters.md` → "Toolbar layout (ETP-5509)"](list-filters.md#toolbar-layout-etp-5509).
 
+### Import Limits (`window.import.limit`) — ETP-5676
+
+Read by the generic import dialog (`ImportDialog`) from the generated contract; the generator passes the object through unchanged.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `maxRows` | number | `5000` | Rows beyond this are refused when the file is loaded. |
+| `concurrency` | number | `4` | Parallel `/batch` requests. |
+| `batchSize` | number | `1` | Rows per `POST /sws/neo/batch`. `1` is the original one-request-per-row behaviour. Capped at `50` by the engine. Opt in per window: only where the descriptor's operations are safe to share one transaction. Product and Contacts use `10`; Contacts is a measured opt-in (see `contacts.md`) and can be set back to `1`. |
+
+**Operational override — global flag `import-batch-size`.** A numeric feature flag overrides `batchSize` for EVERY window at once (no per-window or per-entity variants; `concurrency` is not affected). Unset, `0`, negative, non-finite or non-numeric means "no override": the window's `limit.batchSize` applies, and `1` if it declares none. A valid number is rounded down and then clamped to 1..50 by the engine. Use it to turn batching down to `1` (or try another size) without a deploy; set it through `VITE_FEATURE_FLAGS` (`{"import-batch-size":5}`) or ConfigCat. The decisions.json value stays the permanent per-window setting.
+
+**Telemetry — `import_completed`.** Every import run ends with one `import_completed` event (Datadog and Mixpanel through `lib/observability`), built from the summary the dialog hands to `onImportFinished`; core never talks to telemetry, `useWindowImportDialog` emits. Properties are quantities, settings and the entity name only — never a row, header or cell: `outcome` (`completed` | `cancelled` | `failed`), `entity`, `rowsTotal`, `rowsCreated`, `rowsFailed`, `rowsDuplicate`, `rowsUnknown`, `durationMs`, `readMs`, `validateMs`, `sendMs`, `batchSize`, `concurrency`, `columnsInFile`, `columnsAutoMapped`, `columnsManuallyMapped`, `fkAutoResolved`, `fkCreated`. `durationMs` is processing time (read + validate + send), not the time the user spends reviewing. `completed` means a send finished (row failures are in `rowsFailed`); `failed` is an unreadable file or a send that blew up; `cancelled` is a loaded file abandoned before sending. A resend of fixed rows from the result step is a new run and reports its own rows. New properties must be added to the event in `events.js` AND to the allowlist/ranges in `payload.js`.
+
+With `batchSize > 1` the engine namespaces each row's op ids (`r<row>.<id>`, including `parentRef` and `$ref:` references) so they stay unique per request. A chunk is resent row by row only after a rollback the server vouches for (`committed:false`, `atomic:true`, empty `persisted`), so each row gets its own outcome; any other outcome — no response, a non-BatchService body, `atomic:false`, a missing or non-empty `persisted` — reports all its rows UNKNOWN and never resends (no idempotency key — resending could duplicate).
+
 ### Custom Components (`window.customComponents`)
 
 Override generated components with custom implementations from `artifacts/{window}/custom/`. The generator emits the correct imports and DetailView props automatically.
@@ -936,6 +952,14 @@ Field keys use **camelCase from raw schema** (e.g., `"businessPartner"`, `"order
 | `readOnly` | false | true | false |
 | `system` | false | false | false |
 | `discarded` | false | false | false |
+
+### Form default (`defaultExpr`) — ETP-5676
+
+`defaultExpr` declares the value a new record's form starts with (served by `GET .../defaults`). Use it for an **editable** column whose AD default is empty but whose form should still start from a value — the literal `"0"` is the usual case. Example: `contacts` → `entities.businessPartner.fields.creditLimit` declares `"defaultExpr": "0"`, so the Credit Limit field opens at `0` instead of blank.
+
+- Stored in `ETGO_SF_FIELD.defaultvalue` by `push-to-neo` (`make regen PUSH_TO_NEO=1`), where it overrides the AD_Column default when non-empty.
+- Plain literals (e.g. `0`) pass through unchanged; `@token@` and `@SQL=` expressions are resolved as usual.
+- The value reaches `/defaults` as a **string** (`"0"`), not a JSON number. Numeric defaults from `defaultExpr` are not coerced on this path. Consumers that need a number must coerce it.
 
 ### Derivation (`derivation`) — ETP-5245
 

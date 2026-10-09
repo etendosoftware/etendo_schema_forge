@@ -1438,3 +1438,25 @@ Financiero, at 1280×720: the five billing controls of each side have the same w
 Bloquear reads `[switch] Bloquear` level with the Condiciones de pago input; the two switches of
 "Valores por defecto SII" are on one row, each label beside its switch with "SII" / "TicketBAI"
 in muted text under it, and clicking a label toggles its switch.
+
+## ETP-5676 — Import: `country` and the category catalogue are resolved once per run
+
+Same change as `product.md` → *ETP-5676*. The `contacts-country` resolver now answers from the
+preview's `country` resolutions (no request per row) and memoises unpreviewed values per run; the
+business-partner category catalogue cache is reset when a new file is loaded.
+
+Contacts' import also sends 10 rows per `/batch` request (`window.import.limit.batchSize: 10`, the same
+engine path as Product — see `product.md` → *ETP-5676*). It differs from Product in one way worth
+knowing: a Business Partner insert takes the `AD_Sequence` row lock (`SELECT … FOR UPDATE`) and holds
+it until its transaction commits, so with chunks the lock is held for a whole chunk (about 10 rows ×
+3 ops) and the concurrent chunks queue behind it instead of running in parallel. The gain is the
+removed per-request overhead, not parallel inserts. It is a measured opt-in: set `batchSize` back to
+`1` in `decisions.json` (and `make regen ONLY=contacts`) to return to one request per row.
+
+Failure behaviour in a chunk. A row rejected by validation (an unknown country, a missing parent) rolls
+the chunk back cleanly and its rows are resent one by one, each with its own outcome. If the location
+handler raises an exception instead (for example a value too long for a C_Location column),
+`ContactsLocationAddressHandler` rolls the session back itself and BatchService reports the earlier ops
+of the chunk as `persisted`; the engine then cannot prove a clean rollback, so ALL rows of that chunk
+are shown as failed/unknown and are not resent automatically (nothing is duplicated; re-check and
+retry the rows once the data is fixed).

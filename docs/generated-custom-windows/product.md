@@ -1489,3 +1489,50 @@ or collapsed, instead of `w-[30%]`.
 **Verify:** at 1280x720 with the rail expanded, open a product → `Price`, in both `Venta` and
 `Compra`: the switch sits above the section, Name, Unit price and List price are fully visible
 (prices not truncated), the columns line up under their labels, and the tab has no horizontal scroll.
+
+## ETP-5676 — The import stops re-resolving foreign keys per row
+
+The preview resolves each FK column once (one batched `simSearch` per column), but the send phase
+resolved the unit of measure AGAIN for every row — 2-3 GETs each, one per language — and ignored
+what the preview had found. Now:
+
+- `ImportDialog` passes its `fkResolutions` (popover picks included, stored by id) into the
+  descriptor config. `resolveUom` hands them to the registered `product-uom` resolver, whose
+  `registerFkResolver` wrapper answers a previewed value with no request.
+- A value the preview did not resolve is memoised per run: concurrent rows share one in-flight
+  promise, keyed by resolver + normalised value + token; a rejected promise is evicted so a retry
+  is a real retry.
+- The category creation cache key is normalised, so "Bebidas" and "BEBIDAS" create one category.
+- The descriptor's per-token caches (categories, product defaults, price list versions) register a
+  reset with `importRunState`, run when a new file is loaded, so a second file in the same tab no
+  longer reads the first file's snapshot.
+
+Behaviour is otherwise identical: same ops per row, same concurrency, same `/batch` contract.
+
+The same ticket adds a processed-records counter to the import's sending step (generic, every
+window with an import): "1,234 / 2,000 processed" next to the percentage, grouped per the session
+locale (`importProgressCounter`, en_US / es_ES / es_AR). It restarts from zero on every send,
+including the resend of fixed rows from the result step, and its updates are throttled (~150 ms)
+so a 2,000-row file does not re-render the dialog per row.
+
+Product's import now sends 10 rows per `/batch` request (`window.import.limit.batchSize: 10`; the
+default for other windows stays 1). Each row's op ids are prefixed (`r<row>.product`,
+`r<row>.salesPrice`, ...) and the whole chunk is one transaction. If a chunk is rejected, its rows
+are resent one by one, so a single bad row no longer hides which of its neighbours were fine. If a
+chunk gets no definite response (network error), its rows are shown as failed/unknown and are not
+resent automatically, because the batch may have committed. Progress is still counted in rows.
+
+Known limitation (import caches): "Close anyway" during a send does not stop it — `handleSend` keeps
+running while the dialog is unmounted. If the user reopens the import and picks a NEW file while
+that old send is still in flight, loading the file starts a new run and clears the per-run caches
+(`resetImportRun`) under the old workers. A remaining old row may then try to create a product
+category that already exists and fail with a unique-key conflict: that row is reported FAILED, nothing
+is lost and nothing is duplicated. Wait for the running import to finish before loading another file.
+
+Generic import dialog: after a file is attached, the dropzone is replaced by a "Reading file…"
+spinner (`importReadingFile`) until the preview is ready, so nothing can be attached on top of the
+file being read; it is also removed when the file is refused and the error step appears.
+
+Every import run reports one `import_completed` telemetry event (counts, timings, batch size and
+concurrency used, mapped columns, foreign keys resolved/created; never row content). See
+`decisions-reference.md` → *Import Limits* → Telemetry.

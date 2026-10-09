@@ -8,7 +8,8 @@ import { classifyCandidates } from '@etendosoftware/app-shell-core/lib/import/re
 registerFkResolver('contacts-country', async (value, { token, simSearchFn = simSearchEveryLanguage }) => {
   const [result] = await simSearchFn({ token, entityName: 'Country', items: [value], qtyResults: 5 });
   return classifyCandidates(result?.candidates ?? []);
-});
+// ETP-5676: `target` lets the registered wrapper answer from the preview's `country` resolutions.
+}, { target: 'country' });
 
 /*
  * There is deliberately NO region resolver here (ETP-4997).

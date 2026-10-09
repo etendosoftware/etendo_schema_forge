@@ -1,5 +1,6 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
+import { registerImportRunReset } from '@etendosoftware/app-shell-core/lib/import/importRunState.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
 import { fetchNeoList } from '@etendosoftware/app-shell-core/lib/import/fetchNeoList.js';
@@ -45,6 +46,10 @@ const HAS_ADDRESS = (row) => Boolean(
   row.address || row.city || row.postal || row.country || String(row.region ?? '').trim(),
 );
 const businessPartnerCategoriesCache = new Map();
+
+// ETP-5676: keyed by token, so a second file in the same tab would be answered from the first
+// file's snapshot. A new file starts a new run (see `importRunState`).
+registerImportRunReset(() => businessPartnerCategoriesCache.clear());
 
 function detectEtendoBase() {
   if (typeof window !== 'undefined' && window.location) {
@@ -317,7 +322,7 @@ async function resolveCategoryId(row, config) {
 async function resolveLocation(row, config) {
   if (!HAS_ADDRESS(row)) return null;
   const resolveCountry = config.resolveCountryFn || getFkResolver('contacts-country');
-  const countryResult = await resolveCountry(row.country, { token: config.token });
+  const countryResult = await resolveCountry(row.country, { token: config.token, fkResolutions: config.fkResolutions });
   if (countryResult.status !== 'auto-resolved') {
     const message = typeof config.translate === 'function'
       ? config.translate('importErrorCountryUnresolved', { country: row.country })

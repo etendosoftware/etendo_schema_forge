@@ -760,6 +760,52 @@
           }
         ]
       }
+    },
+    {
+      "id": "import-batch-size",
+      "description": "Global NUMERIC operational override of how many rows the generic import sends per POST /sws/neo/batch. 0 or unset means no override: each window's window.import.limit.batchSize applies (default 1). A valid number (rounded down, clamped to 1..50 by the engine) wins over every window. One flag, no per-window variants; concurrency is not affected.",
+      "owner": "valenvivaldi",
+      "jira": "ETP-5676",
+      "created": "2026-10-08",
+      "flag": {
+        "key": "import-batch-size",
+        "defaultValue": 0,
+        "ttl": "2027-03-31",
+        "ttlNote": "Operational lever while multi-row import batching is being measured on real tenants. Retire it (delete the flag, keep window.import.limit.batchSize) once the per-window values are settled.",
+        "symbols": [
+          "import-batch-size",
+          "IMPORT_BATCH_SIZE",
+          "useNumberFlag",
+          "resolveImportBatchSize",
+          "importBatchSize"
+        ]
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/lib/importBatchSize.js"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Owned code only. flag-keys.js, lib/flags/index.js, useFeatureFlag.js (useNumberFlag), bootstrap.js and useWindowImportDialog.js are shared toggle points.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/importBatchSize.vitest.js",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/flags/__tests__/useFeatureFlag.vitest.jsx",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ListView.importLabels.vitest.jsx",
+            "expected": true
+          }
+        ]
+      }
     }
   ]
 }

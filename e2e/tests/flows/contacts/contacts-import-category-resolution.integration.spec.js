@@ -138,7 +138,17 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     const categoryResponse = await categoryResponsePromise;
     expect(categoryResponse.status()).toBeLessThan(300);
 
-    await expect.poll(() => batchBodies.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(5);
+    // ETP-5676: rows travel in chunks of up to `batchSize` (10 for Contacts), so the five rows
+    // are normally ONE /batch request. Assert on the rows, not on the request count: every row
+    // must appear in SOME batch (poll, since the send is async), and a rollback may resend rows
+    // one by one, so the request count is bounded by 1 + rows (one batch, then one per row).
+    const allBatchOperations = () => batchBodies.flatMap((body) => body.operations ?? []);
+    await expect.poll(
+      () => rows.every((row) => allBatchOperations().some((operation) => operation.body?.name === row.name)),
+      { timeout: 30_000 },
+    ).toBe(true);
+    expect(batchBodies.length).toBeGreaterThanOrEqual(1);
+    expect(batchBodies.length).toBeLessThanOrEqual(rows.length + 1);
     expect(categoryCreateBodies.filter((body) => body.name === newCategoryName)).toHaveLength(1);
     for (const row of rows) {
       const batch = batchBodies.find((body) => body.operations?.some((operation) => operation.body?.name === row.name));
@@ -148,7 +158,13 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       expect(batch.operations.some((operation) => operation.entity === 'contact' && operation.parentRef === bpOperation.id)).toBe(true);
     }
     const firstBatch = batchBodies.find((body) => body.operations?.some((operation) => operation.body?.name === rows[0].name));
-    const firstLocation = firstBatch.operations.find((operation) => operation.entity === 'locationAddress');
+    const firstBpOperation = firstBatch.operations.find((operation) => operation.body?.name === rows[0].name);
+    // Batch ops are prefixed per row (`r<i>.`), so the location is tied to ITS row by parentRef,
+    // not by being the first locationAddress in a batch that may hold several rows.
+    const firstLocation = firstBatch.operations.find(
+      (operation) => operation.entity === 'locationAddress' && operation.parentRef === firstBpOperation.id,
+    );
+    expect(firstLocation, 'expected the first row to carry its own location').toBeTruthy();
     expect(firstLocation.body.addressLine1).toBe('Calle Mayor 1');
     expect(firstLocation.body.cityName).toBe('Madrid');
     expect(firstLocation.body.postalCode).toBe('28013');

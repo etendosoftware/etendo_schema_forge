@@ -568,14 +568,26 @@ check_go_module_push_sync() {
 # developer machines legitimately deploy under different context names (e.g. /etendogoclean).
 # E2E_BACKEND_URL always wins when set; falls back to the historical /etendo default when the
 # properties file is missing or has no context.url (CI, a fresh checkout, etc).
+# local-env (isolated worktree environments): the env's Tomcat lives on its own port, recorded as
+# `export PORT=NNNN` in <env root>/build/local-env/env, while context.url keeps the copied :8080.
+# When that file exists its PORT replaces the port of the URL (host and context path are kept).
+# Priority: E2E_BACKEND_URL > local-env PORT > context.url > http://localhost:8080/etendo.
 resolve_backend_url() {
-  local etendo_root props_file url
+  local etendo_root props_file env_file url port
   etendo_root="$(git rev-parse --show-toplevel 2>/dev/null)/.."
   props_file="$etendo_root/config/Openbravo.properties"
+  env_file="$etendo_root/build/local-env/env"
   if [ -f "$props_file" ]; then
     url="$(grep -E '^context\.url=' "$props_file" | tail -1 | sed 's/^context\.url=//; s/\\:/:/g')"
   fi
-  echo "${url:-http://localhost:8080/etendo}"
+  url="${url:-http://localhost:8080/etendo}"
+  if [ -f "$env_file" ]; then
+    port="$(grep -E '^export PORT=[0-9]+[[:space:]]*$' "$env_file" | tail -1 | sed -E 's/^export PORT=([0-9]+).*/\1/')"
+    if [ -n "$port" ]; then
+      url="$(printf '%s' "$url" | sed -E "s#^(https?://[^/:]+)(:[0-9]+)?#\1:$port#")"
+    fi
+  fi
+  echo "$url"
 }
 
 run_playwright() {
