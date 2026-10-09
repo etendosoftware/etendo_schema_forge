@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/lib/observability/events.js
+// @covers tools/app-shell/src/lib/observability/payload.js
 import {
   OBSERVABILITY_CHANNELS,
   OBSERVABILITY_EVENT_LIST,
@@ -123,3 +125,41 @@ describe('observability event catalog', () => {
     });
   });
 });
+
+// ETP-5676 — one event per import run, quantities only.
+describe('import_completed event', () => {
+  const summary = {
+    outcome: 'completed', entity: 'product', rowsTotal: 2000, rowsCreated: 1990, rowsFailed: 6,
+    rowsDuplicate: 3, rowsUnknown: 1, durationMs: 90000, readMs: 800, validateMs: 4200, sendMs: 85000,
+    batchSize: 10, concurrency: 4, columnsInFile: 9, columnsAutoMapped: 8, columnsManuallyMapped: 1,
+    fkAutoResolved: 12, fkCreated: 3,
+  };
+
+  it('is registered under its snake_case name', () => {
+    expect(OBSERVABILITY_EVENTS.IMPORT_COMPLETED.name).toBe('import_completed');
+  });
+
+  it('keeps every declared quantity, setting and the entity name', () => {
+    const { name, properties } = buildObservabilityEvent(OBSERVABILITY_EVENTS.IMPORT_COMPLETED, summary);
+    expect(name).toBe('import_completed');
+    expect(properties).toEqual(summary);
+  });
+
+  it('drops anything that is not a declared property, so row content cannot ride along', () => {
+    const { properties } = buildObservabilityEvent(OBSERVABILITY_EVENTS.IMPORT_COMPLETED, {
+      ...summary,
+      name: 'Acme', rows: [{ name: 'Acme' }], headers: ['Email'], email: 'a@x.com', recordId: 'ABC', error: 'bad',
+    });
+    expect(Object.keys(properties).sort()).toEqual(Object.keys(summary).sort());
+    expect(JSON.stringify(properties)).not.toMatch(/Acme|a@x\.com|ABC|Email/);
+  });
+
+  it('drops out-of-range or non-numeric quantities instead of sending them', () => {
+    const { properties } = buildObservabilityEvent(OBSERVABILITY_EVENTS.IMPORT_COMPLETED, {
+      ...summary, rowsTotal: -1, sendMs: 'slow', readMs: Number.NaN, durationMs: 86400001,
+    });
+    for (const key of ['rowsTotal', 'sendMs', 'readMs', 'durationMs']) expect(properties).not.toHaveProperty(key);
+    expect(properties.rowsCreated).toBe(1990);
+  });
+});
+

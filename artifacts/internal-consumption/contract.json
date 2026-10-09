@@ -1,8 +1,8 @@
 {
   "version": "0.20.0",
   "generatedAt": "2026-06-26T00:48:58.290Z",
-  "updatedAt": "2026-10-07T11:18:34.251Z",
-  "checksum": "1d0e957ab2eb7058",
+  "updatedAt": "2026-10-08T10:31:05.954Z",
+  "checksum": "068fee4292091293",
   "frontendContract": {
     "window": {
       "id": "800076",
@@ -12,7 +12,6 @@
       "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "hideLink": true,
-      "customListIcons": true,
       "breadcrumb": "Inventory / Internal Consumption",
       "customComponents": {
         "moreMenuContent": "InternalConsumptionActions",
@@ -394,7 +393,6 @@
       "hideDeleteWhenComplete": true,
       "hidePrint": true,
       "hideLink": true,
-      "customListIcons": true,
       "breadcrumb": "Inventory / Internal Consumption",
       "customComponents": {
         "moreMenuContent": "InternalConsumptionActions",

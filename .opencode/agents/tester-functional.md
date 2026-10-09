@@ -1,7 +1,7 @@
 ---
 description: "qa -- Tester (functional). Writes and extends the tests of etendo_schema_forge — Node test runner, Vitest and Playwright E2E — reuse-first, extending existing files before creating new ones. JUnit in com.etendoerp.go belongs to tester-go."
 mode: subagent
-color: "green"
+color: "#22C55E"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/tester-functional.md - Regenerate: make sync-agents

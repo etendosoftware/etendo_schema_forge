@@ -190,7 +190,18 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     expect(categoryResponse.status()).toBeLessThan(300);
     expect(batchResponse.status()).toBeLessThan(300);
 
-    await expect.poll(() => batchBodies.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(6);
+    // ETP-5676: rows travel in chunks of up to `batchSize` (10 for Products), so the six rows
+    // are normally ONE /batch request. Assert on the rows, not on the request count: every row
+    // must appear in SOME batch (poll, since the send is async), and a rollback may resend rows
+    // one by one, so the request count is bounded by 1 + rows (one batch, then one per row).
+    const allBatchOperations = () => batchBodies.flatMap((body) => body.operations ?? []);
+    const importedCodes = [...productRows.map((row) => row.code), optionalRow.code];
+    await expect.poll(
+      () => importedCodes.every((code) => allBatchOperations().some((operation) => operation.body?.searchKey === code)),
+      { timeout: 30_000 },
+    ).toBe(true);
+    expect(batchBodies.length).toBeGreaterThanOrEqual(1);
+    expect(batchBodies.length).toBeLessThanOrEqual(importedCodes.length + 1);
     expect(categoryCreateBodies.filter((body) => body.name === newCategoryName)).toHaveLength(1);
     for (const row of productRows) {
       const batch = batchBodies.find((body) => body.operations?.some((operation) => operation.body?.searchKey === row.code));
@@ -202,13 +213,19 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     }
     const optionalBatch = batchBodies.find((body) => body.operations?.some((operation) => operation.body?.searchKey === optionalRow.code));
     expect(optionalBatch, 'expected the row with optional fields omitted to import').toBeTruthy();
-    expect(optionalBatch.operations).toHaveLength(1);
-    expect(optionalBatch.operations[0].body).not.toHaveProperty('productCategory');
+    // The batch may hold other rows, so count only this row's own operations: its product op,
+    // plus anything parented to it (none — no price/category without the optional fields).
+    const optionalProduct = optionalBatch.operations.find((operation) => operation.body?.searchKey === optionalRow.code);
+    const optionalRowOperations = optionalBatch.operations.filter(
+      (operation) => operation.id === optionalProduct.id || operation.parentRef === optionalProduct.id,
+    );
+    expect(optionalRowOperations).toHaveLength(1);
+    expect(optionalProduct.body).not.toHaveProperty('productCategory');
     // Declared blank columns are preserved as empty strings in the product
     // body; absent price/category values intentionally produce no dependent
     // category or price operation.
-    expect(optionalBatch.operations[0].body.description).toBe('');
-    expect(optionalBatch.operations[0].body.uOM).toBe(defaultUomId);
+    expect(optionalProduct.body.description).toBe('');
+    expect(optionalProduct.body.uOM).toBe(defaultUomId);
 
     await expect(page.getByTestId('ListView__importButton')).toBeVisible({ timeout: 30_000 });
     // Etendo generates the persisted row ID; the grid testid therefore cannot

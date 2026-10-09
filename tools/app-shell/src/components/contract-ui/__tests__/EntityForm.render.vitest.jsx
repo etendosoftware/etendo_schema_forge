@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/EntityForm.jsx
 /**
  * Extended render tests for EntityForm — covers field types and branches
  * not exercised by the existing EntityForm.vitest.jsx suite.
@@ -1427,6 +1428,27 @@ describe('EntityForm — extended render coverage', () => {
       const textarea = screen.getByTestId('field-notes');
       expect(textarea.tagName).toBe('TEXTAREA');
       expect(textarea).toHaveAttribute('rows', '4');
+    });
+
+    // ETP-5513 — a one-row textarea reads as a plain input; never render fewer than 2.
+    it('renders at least 2 rows when the field is configured with rows: 1', () => {
+      const fields = [
+        { key: 'notes', label: 'Notes', type: 'textarea', column: 'Notes', rows: 1 },
+      ];
+      render(
+        <EntityForm fields={fields} data={{ notes: '' }} onChange={vi.fn()} />,
+      );
+      expect(screen.getByTestId('field-notes')).toHaveAttribute('rows', '2');
+    });
+
+    it('keeps an explicit rows value of 2 or more unchanged', () => {
+      const fields = [
+        { key: 'notes', label: 'Notes', type: 'textarea', column: 'Notes', rows: 2 },
+      ];
+      render(
+        <EntityForm fields={fields} data={{ notes: '' }} onChange={vi.fn()} />,
+      );
+      expect(screen.getByTestId('field-notes')).toHaveAttribute('rows', '2');
     });
   });
 

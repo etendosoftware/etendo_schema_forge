@@ -1,5 +1,5 @@
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
-import { buildSearchUrl, deriveSelectorUrl, readSearchRows } from '../ocrQuery.js';
+import { buildSearchUrl, deriveSelectorUrl, deriveSpecBase, readSearchRows } from '../ocrQuery.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 /**
@@ -54,6 +54,63 @@ export async function checkBpHasLocation({ token, apiBaseUrl, bpId }) {
   const { locationId, known } = await lookupBpLocation({ token, apiBaseUrl, bpId });
   if (locationId) return 'present';
   return known ? 'missing' : 'unknown';
+}
+
+const DUPLICATE_LOOKUP_LIMIT = 10;
+
+function docStatusCode(value) {
+  if (value && typeof value === 'object') return value.id ?? value.value ?? null;
+  return value ?? null;
+}
+
+/**
+ * Existing purchase invoices of `bpId` carrying the same supplier document number
+ * ("Nº documento", sent as `orderReference` by the descriptor), so the review modal can warn
+ * before a second invoice is created from the same PDF (ETP-5654). Warn-only: the caller never
+ * blocks on the answer.
+ *
+ * Narrowed server-side with the same SmartClient `criteria` the list windows send (no HQL, so
+ * the production WAF lets it through): partner `equals`, document number `iEquals`
+ * (case-insensitive exact), status `notEqual` 'VO' (voided invoices do not count; drafts and
+ * completed ones do). The rows are re-checked here — trimmed, case-insensitive, non-voided —
+ * so a backend that ignores an operator still cannot produce a false warning (a row that does
+ * not carry `orderReference` at all is trusted to the server-side filter).
+ *
+ * @returns {Promise<{status: 'none'|'duplicate'|'unknown', invoices: Array<{id: string, documentNo: string|null}>}>}
+ */
+export async function findDuplicatePurchaseInvoices({ token, apiBaseUrl, bpId, documentNo }) {
+  const wanted = String(documentNo ?? '').trim();
+  if (!apiBaseUrl || !bpId || !wanted) return { status: 'unknown', invoices: [] };
+  const criteria = [
+    { fieldName: 'businessPartner', operator: 'equals', value: bpId },
+    { fieldName: 'orderReference', operator: 'iEquals', value: wanted },
+    { fieldName: 'documentStatus', operator: 'notEqual', value: 'VO' },
+  ];
+  const qs = new URLSearchParams({
+    _startRow: '0',
+    _endRow: String(DUPLICATE_LOOKUP_LIMIT - 1),
+    criteria: JSON.stringify(criteria),
+  });
+  const url = `${deriveSpecBase(apiBaseUrl, 'purchase-invoice')}/header?${qs.toString()}`;
+  try {
+    const res = await apiFetch(url, { baseUrl: '', token });
+    if (!res.ok) {
+      console.warn('[OCR][findDuplicatePurchaseInvoices] non-OK', res.status, url);
+      return { status: 'unknown', invoices: [] };
+    }
+    const json = await res.json().catch(() => null);
+    if (!json) return { status: 'unknown', invoices: [] };
+    const needle = wanted.toLowerCase();
+    const invoices = readSearchRows(json)
+      .filter((row) => row?.id
+        && (row.orderReference === undefined || String(row.orderReference ?? '').trim().toLowerCase() === needle)
+        && docStatusCode(row.documentStatus) !== 'VO')
+      .map((row) => ({ id: row.id, documentNo: row.documentNo ?? null }));
+    return { status: invoices.length ? 'duplicate' : 'none', invoices };
+  } catch (e) {
+    console.warn('[OCR][findDuplicatePurchaseInvoices] fetch failed', e);
+    return { status: 'unknown', invoices: [] };
+  }
 }
 
 async function lookupBpLocation({ token, apiBaseUrl, bpId }) {
@@ -127,6 +184,8 @@ export async function findBp({ token, apiBaseUrl, name }) {
   return exact.length === 1 ? exact[0].id : null;
 }
 
+const PRODUCT_SIM_QTY_RESULTS = 3;
+
 /**
  * Run simSearch on the line descriptions. Returns an empty array when there
  * is nothing to look up so the caller can index by line idx safely.
@@ -139,8 +198,33 @@ async function runProductSimSearch({ token, lines }) {
     entityName: 'Product',
     items: productHints,
     minSimPercent: 30,
-    qtyResults: 1,
+    // More than one so an ambiguous exact-name match (two products with the same name)
+    // is detectable; the best candidate is still the first one.
+    qtyResults: PRODUCT_SIM_QTY_RESULTS,
   });
+}
+
+/**
+ * Decide what to do with the simSearch result of one line description.
+ *  - exactly one candidate whose name equals the description (trim + case-insensitive)
+ *    → `{ id }`: safe to auto-assign;
+ *  - otherwise, when there is any candidate (>= minSimPercent) → `{ suggestion }` with the
+ *    best one: the user must confirm it in the popup, it is never assigned silently
+ *    (a partial name such as "Mantenimiento Web" vs "Servicio de desarrollo y mantenimiento
+ *    web" is a different product);
+ *  - no candidates → `{}`.
+ * Exported for testing.
+ */
+export function classifyProductMatch(description, match) {
+  const candidates = (Array.isArray(match?.candidates) && match.candidates.length > 0
+    ? match.candidates
+    : [match]).filter((c) => c?.id);
+  if (candidates.length === 0) return {};
+  const wanted = normalizeName(description);
+  const exact = wanted ? candidates.filter((c) => normalizeName(c.name) === wanted) : [];
+  if (exact.length === 1) return { id: exact[0].id };
+  const best = candidates[0];
+  return { suggestion: { id: best.id, name: String(best.name ?? best.id) } };
 }
 
 /**
@@ -282,14 +366,16 @@ async function resolveProductsForLines({ lines, productMatches, askUserForProduc
   const productByIdx = {};
   const needsUserPick = [];
   lines.forEach((line, idx) => {
-    const id = productMatches[idx]?.id;
+    const description = String(line?.description ?? `line ${idx + 1}`).trim();
+    const { id, suggestion } = classifyProductMatch(line?.description, productMatches[idx]);
     if (id) {
       productByIdx[idx] = id;
       return;
     }
     needsUserPick.push({
       idx,
-      description: String(line?.description ?? `line ${idx + 1}`).trim(),
+      description,
+      suggestion: suggestion ?? null,
       quantity: nonBlank(line?.quantity) ? Number(line.quantity) : null,
       unitPrice: nonBlank(line?.unit_price) ? Number(line.unit_price) : null,
     });

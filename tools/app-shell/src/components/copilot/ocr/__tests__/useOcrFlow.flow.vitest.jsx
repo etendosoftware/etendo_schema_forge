@@ -182,7 +182,7 @@ describe('useOcrFlow — full flow', () => {
     H.toastWarning.mockReset();
     H.apiFetch.mockReset().mockResolvedValue({
       ok: true,
-      json: async () => ({ organization: { taxId: 'B12345678' } }),
+      json: async () => ({ organization: { taxId: 'B12345674' } }),
     });
     H.runBatch.mockReset().mockResolvedValue({ committed: true, operations: [] });
     H.buildBatch.mockReset().mockResolvedValue({ ops: [{ id: 'inv' }], unmatched: [] });
@@ -321,8 +321,10 @@ describe('useOcrFlow — full flow', () => {
       await fireOcr({ receiver: { tax_id_raw: 'A99999999' }, issuer: { tax_id_raw: 'C11111111' } });
 
       await waitFor(() => expect(readResult()?.committed).toBe(false));
+      expect(readResult().error).toContain('ocrReceiverTaxIdMismatch');
       expect(readResult().error).toContain('A99999999');
-      expect(readResult().error).toContain('B12345678');
+      // ETP-5654 — the organization's own tax id is no longer shown in the message.
+      expect(readResult().error).not.toContain('B12345674');
       expect(H.toastError).toHaveBeenCalledWith(readResult().error);
       expect(screen.queryByTestId('review-modal')).toBeNull();
       expect(H.buildBatch).not.toHaveBeenCalled();
@@ -332,7 +334,7 @@ describe('useOcrFlow — full flow', () => {
 
     it('continues to the review when the ids match despite the country prefix', async () => {
       renderFlow();
-      await fireOcr({ receiver: { tax_id_raw: 'ES B-12345678' } });
+      await fireOcr({ receiver: { tax_id_raw: 'ES B-12345674' } });
 
       await screen.findByTestId('review-modal');
       expect(H.toastError).not.toHaveBeenCalled();
@@ -389,7 +391,7 @@ describe('useOcrFlow — full flow', () => {
 
     it('reads the session through apiFetch with baseUrl empty', async () => {
       renderFlow();
-      await fireOcr({ receiver: { tax_id_raw: 'B12345678' } });
+      await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
 
       await screen.findByTestId('review-modal');
       expect(H.apiFetch).toHaveBeenCalledWith(expect.stringMatching(/\/session$/), { baseUrl: '' });

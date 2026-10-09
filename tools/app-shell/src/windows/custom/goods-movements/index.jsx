@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import GeneratedApp from '@generated/goods-movements/generated/web/goods-movements/index.jsx';
-import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import BulkDocumentAction, { buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
@@ -58,8 +57,6 @@ export default function GoodsMovementsWindow(props) {
   return (
     <GeneratedApp
       {...props}
-      SortIconComponent={SortIcon}
-      RefreshIconComponent={RefreshIcon}
       bulkActions={GoodsMovementsBulkAction}
       rowQuickActions={rowQuickActions}
       refreshTrigger={refreshKey}

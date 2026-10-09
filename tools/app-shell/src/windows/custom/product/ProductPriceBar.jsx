@@ -12,6 +12,7 @@ import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
+import { useElementWidth } from '@/hooks/useElementWidth.js';
 function getSalesFlagFromOption(option) {
   if (!option || typeof option !== 'object') return null;
   for (const [key, value] of Object.entries(option)) {
@@ -174,8 +175,28 @@ function FieldLabel({ children }) {
   );
 }
 
+// ETP-5513 — ONE column geometry for every row of a price section: the title header,
+// the column labels, the add-tariff row and each saved row all use this grid, with
+// the same fixed track definitions and the same container width, so a column starts
+// at the same x in every row by construction. The 4th track is the row-action slot
+// (delete / cancel-add); rows without an action simply leave it empty — it must stay
+// reserved, or rows with and without the button size their columns differently.
+// The tracks do not depend on content (minmax of two lengths), so a long tariff name
+// cannot push the price columns. Prices never go below PRICE_MIN (a stepper that still
+// shows "12.345,67" next to its prefix and +/- buttons); the Name column gives way first.
+const PRICE_ROW_GRID = 'grid grid-cols-[minmax(120px,300px)_minmax(192px,201px)_minmax(192px,201px)_2rem] gap-x-5';
+
+// Width (px) of the whole price panel under which the Sales/Purchase switch moves
+// ABOVE the section instead of beside it: beside it, the switch (~80 px) plus its
+// 56 px gap leave the grid less than its 596 px minimum (120 + 192 + 192 + 32 + 3x20).
+// Hit at 1280x720 with the rail expanded and the 320 px sidebar.
+const PRICE_STACK_BELOW_PX = 780;
+
 export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api, onCountChange }) {
   const ui = useUI();
+  const [panelRef, panelWidth] = useElementWidth();
+  // 0 = not measured yet (jsdom, first commit): keep the side-by-side layout.
+  const stacked = panelWidth > 0 && panelWidth < PRICE_STACK_BELOW_PX;
   const apiFetch = useApiFetch(apiBaseUrl);
   const recordId = data?.id;
 
@@ -486,9 +507,9 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   return (
     // Tight top padding: the custom-tab panel wrapper already adds p-2, so anything more
     // here reads as a gap between the "Price" tab strip and the section title.
-    <div className="flex flex-row items-start gap-14 px-3 pt-1 pb-3">
+    <div ref={panelRef} className={`flex ${stacked ? 'flex-col gap-3' : 'flex-row items-start gap-14'} px-3 pt-1 pb-3`}>
       {/* Left column — Sales / Purchase toggle */}
-      <div className="flex flex-col gap-2 shrink-0">
+      <div className={`flex ${stacked ? 'flex-row' : 'flex-col'} gap-2 shrink-0`}>
         {[
           { key: 'sales', label: ui('priceTabSales'), testId: 'price-tab-sales' },
           { key: 'purchase', label: ui('priceTabPurchase'), testId: 'price-tab-purchase' },
@@ -512,24 +533,23 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
       {/* Right column — active section */}
       <div className="flex-1 min-w-0 flex flex-col gap-3">
         {/* Section header — the add action lives HERE, so it stays in place no matter how
-            many tariffs the product has (the tab itself scrolls). The header mirrors the
-            column grid of the rows below (300 / 201 / 201 with gap-5) and the action is
-            right-aligned in the last slot, so its right edge lands on the right edge of
-            every "List price" stepper underneath — a real shared edge, instead of floating
-            at the START of that column, which aligns with nothing. (The per-row delete
-            button sits further right, but it is a hover affordance, not a column.)
-            The title box is min-w so a longer translation grows it — the action just
-            shifts right instead of overlapping. */}
-        <div className="flex flex-row items-center gap-5 h-8" data-testid="price-section-header">
-          <div className="min-w-[300px] shrink-0 flex items-center gap-2">
-            <h3 className="text-lg font-semibold text-[hsl(var(--foreground))]">{sectionTitle}</h3>
+            many tariffs the product has (the tab itself scrolls). It is laid out on the same
+            PRICE_ROW_GRID as the rows below and the action is right-aligned in the List price
+            track, so its right edge lands on the right edge of every "List price" stepper
+            underneath — a real shared edge. (The per-row delete button sits in the 4th,
+            row-action track, a hover affordance, not a column.) The title does not truncate:
+            it may overflow into the empty Unit price cell (whitespace-nowrap), so a long
+            translation stays readable. */}
+        <div className={`${PRICE_ROW_GRID} items-center h-8`} data-testid="price-section-header">
+          <div className="min-w-0 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-[hsl(var(--foreground))] whitespace-nowrap">{sectionTitle}</h3>
             <span className="inline-flex items-center px-2 h-6 text-xs text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] border border-[hsl(var(--border-control))] rounded-lg">
               {sectionRows.length}
             </span>
           </div>
           {/* Spacer over the "Unit price" column */}
-          <div className="w-[201px] shrink-0" aria-hidden="true" />
-          <div className="w-[201px] shrink-0 flex justify-end">
+          <div className="min-w-0" aria-hidden="true" />
+          <div className="min-w-0 flex justify-end">
             {!adding && (
               // Same control as "Add line" in the order/invoice lines panels (shared
               // AddLineButton). It hardcodes data-testid="action-add-line", which is not
@@ -552,10 +572,10 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
 
         {/* Column headers — rendered once, not repeated per row */}
         {(sectionRows.length > 0 || adding) && (
-          <div className="flex flex-row gap-5">
-            <div className="w-[300px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColName')}</FieldLabel></div>
-            <div className="w-[201px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColUnitPrice')}</FieldLabel></div>
-            <div className="w-[201px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColListPrice')}</FieldLabel></div>
+          <div className={PRICE_ROW_GRID}>
+            <div className="min-w-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColName')}</FieldLabel></div>
+            <div className="min-w-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColUnitPrice')}</FieldLabel></div>
+            <div className="min-w-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColListPrice')}</FieldLabel></div>
           </div>
         )}
 
@@ -564,14 +584,14 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
             "+ Add new tariff" action, so it is always next to the control that opened it
             (the tab has no inner scroller: the detail content column scrolls instead). */}
         {adding && (
-          <div ref={addRowRef} className="flex flex-row items-end gap-5" data-testid="price-add-tariff-row">
+          <div ref={addRowRef} className={`${PRICE_ROW_GRID} items-end`} data-testid="price-add-tariff-row">
             {/* Name selector — white at rest, whole box greys uniformly on hover (Figma).
                 The color lives on the root box so the input + chevron (transparent) match it,
                 instead of only the input greying (the product-window rule targets input:hover). */}
             {/* No `preferDown`: the panel is position:fixed, so when the row happens to sit
                 near the viewport bottom a forced-down panel is drawn off-screen and no
                 scrolling can reveal it. Auto-flip opens upward only when there is no room. */}
-            <div className="w-[300px] shrink-0 rounded-lg [&>div]:!bg-card [&>div:hover]:!bg-[hsl(var(--muted))]">
+            <div className="min-w-0 rounded-lg [&>div]:!bg-card [&>div:hover]:!bg-[hsl(var(--muted))]">
               <CreatableSearchSelect
                 key={selectOptions.map(o => o.id).join(',')}
                 field={{ key: 'priceListVersion', id: 'priceListVersion', required: false }}
@@ -585,7 +605,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                 data-testid="CreatableSearchSelect__d76b90" />
             </div>
             {/* Unit price */}
-            <div className="w-[201px] shrink-0">
+            <div className="min-w-0">
               <PriceStepper
                 value={draftUnitPrice}
                 prefix={currencySymbol}
@@ -594,7 +614,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                 data-testid="PriceStepper__d76b90" />
             </div>
             {/* List price */}
-            <div className="w-[201px] shrink-0">
+            <div className="min-w-0">
               <PriceStepper
                 value={draftListPrice}
                 prefix={currencySymbol}
@@ -636,9 +656,9 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
 
           return (
             <div key={row.id} className="flex flex-col gap-1 group/row">
-              <div className="flex flex-row items-end gap-5">
+              <div className={`${PRICE_ROW_GRID} items-end`}>
                 {/* Name */}
-                <div className="w-[300px] shrink-0">
+                <div className="min-w-0">
                   <input
                     type="text"
                     readOnly
@@ -647,7 +667,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                   />
                 </div>
                 {/* Unit price */}
-                <div className="w-[201px] shrink-0">
+                <div className="min-w-0">
                   <PriceStepper
                     value={row.standardPrice}
                     prefix={currencySymbol}
@@ -656,7 +676,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                     data-testid="PriceStepper__d76b90" />
                 </div>
                 {/* List price */}
-                <div className="w-[201px] shrink-0">
+                <div className="min-w-0">
                   <PriceStepper
                     value={row.listPrice}
                     prefix={currencySymbol}
