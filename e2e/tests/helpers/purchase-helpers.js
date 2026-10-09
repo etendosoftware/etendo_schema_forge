@@ -758,14 +758,27 @@ export async function reselectComboOption(page, fieldKey) {
  * A form with no toggle (every field fits in the initial rows) is a no-op.
  */
 export async function expandHeaderFields(page) {
+  const toggles = page.getByTestId('form-show-more-toggle');
   const collapsed = page.locator(
     '[data-testid="form-show-more-toggle"][aria-expanded="false"]:not([aria-disabled="true"])',
   );
-  // Each click flips its toggle to aria-expanded="true", dropping it from `collapsed`.
   // Bounded so a toggle that never reacts fails the assertion below instead of looping.
-  for (let attempt = 0; attempt < 5 && await collapsed.count() > 0; attempt += 1) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    // Pin ONE toggle by position. `collapsed.first()` would be re-resolved after the
+    // click — once this toggle opens it no longer matches `collapsed`, so waiting on it
+    // would silently wait on a different toggle (or none).
     // eslint-disable-next-line no-await-in-loop -- one toggle at a time, re-read after each click
-    await collapsed.first().click();
+    const index = await toggles.evaluateAll((els) => els.findIndex(
+      (el) => el.getAttribute('aria-expanded') === 'false' && el.getAttribute('aria-disabled') !== 'true',
+    ));
+    if (index < 0) break;
+    const toggle = toggles.nth(index);
+    // eslint-disable-next-line no-await-in-loop -- see above
+    await toggle.click();
+    // Wait for THIS toggle to report itself open instead of assuming React flushed the
+    // click synchronously; only then re-read which toggles are still collapsed.
+    // eslint-disable-next-line no-await-in-loop -- see above
+    await expect(toggle).not.toHaveAttribute('aria-expanded', 'false');
   }
   await expect(collapsed, 'Header "Mostrar más datos" block should be expanded').toHaveCount(0);
 }
@@ -785,13 +798,28 @@ export function derivedFieldLocator(page, fieldKey) {
 }
 
 /**
+ * Bound for `hasHeaderField`'s settle wait: how long to wait for EITHER the field or the
+ * "Mostrar más datos" toggle to be attached before deciding the field is absent. Only
+ * reached on a form that has neither (no collapsible block and no such field).
+ */
+const HEADER_PRESENCE_SETTLE_MS = 5_000;
+
+/**
  * Lazily make a header field rendered: if it is already in the DOM, nothing is
  * touched; otherwise the header's collapsed "Mostrar más datos" block is opened
  * (`expandHeaderFields`, which never closes an open block). Resolves to whether
  * the field is rendered afterwards — `false` means this form has no such field.
+ *
+ * Call it once the detail form is ready (after `waitForDetailReady`). As a guard
+ * against a form that is still rendering, it first waits (bounded by
+ * `HEADER_PRESENCE_SETTLE_MS`) until either the field or the show-more toggle is
+ * attached, so an instant "not there yet" is not mistaken for "not on this form".
  */
 export async function hasHeaderField(page, fieldKey) {
   const field = derivedFieldLocator(page, fieldKey);
+  await field.or(page.getByTestId('form-show-more-toggle')).first()
+    .waitFor({ state: 'attached', timeout: HEADER_PRESENCE_SETTLE_MS })
+    .catch(() => {}); // neither showed up: decided by the counts below
   if (await field.count() > 0) return true;
   await expandHeaderFields(page);
   return await field.count() > 0;
@@ -802,6 +830,8 @@ export async function hasHeaderField(page, fieldKey) {
  * "Mostrar más datos" block only when the field is not already rendered (see
  * `hasHeaderField`). Fails with a message that tells "not on this form" apart
  * from a selector typo or a slow render.
+ *
+ * Call it once the detail form is ready (after `waitForDetailReady`).
  */
 export async function revealHeaderField(page, fieldKey, { timeout = 30_000 } = {}) {
   await hasHeaderField(page, fieldKey);
