@@ -247,7 +247,16 @@ function toPlainNumberString(n) {
   if (!/e/i.test(s)) return s;
   // >= 1e21 is always an integer in IEEE-754; smaller exponent forms are tiny fractions.
   if (Math.abs(n) >= 1e21) return BigInt(Math.trunc(n)).toString();
-  return n.toFixed(20).replace(/0+$/, '').replace(/\.$/, '');
+  return trimTrailingFractionZeros(n.toFixed(20));
+}
+
+/** Drops trailing '0's of the fraction and a then-trailing '.' — a plain scan, no regex. */
+function trimTrailingFractionZeros(s) {
+  if (!s.includes('.')) return s;
+  let end = s.length;
+  while (end > 0 && s[end - 1] === '0') end -= 1;
+  if (end > 0 && s[end - 1] === '.') end -= 1;
+  return s.slice(0, end);
 }
 
 function groupIntegerDigits(digits, separator) {

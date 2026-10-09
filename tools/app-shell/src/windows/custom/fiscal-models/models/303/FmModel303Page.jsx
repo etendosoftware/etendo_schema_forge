@@ -1461,7 +1461,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
             { label: ui('fm.breadcrumb.section'), onClick: handleCancel },
             `${t('fm.config.m303.title') ?? 'Modelo 303'} - ${periodLabel}`,
           ]}
-        />
+          data-testid="FmBreadcrumb__4f6c0d" />
       </div>
       {/* ── Action bar ───────────────────────────────────────────── */}
       <div style={{

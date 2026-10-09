@@ -576,7 +576,11 @@ function InvoicesTabContent({ decl, liveInvoices, t, originFilter, onClearOrigin
           // generic "Tipo" column is hidden here.
           keyColumn={{
             label: t('fm.m349.col.key') ?? 'Clave',
-            render: r => (r.key ? <KeyCell k={r.key} t={t} badgeTestId="KeyBadge__sourceRow" /> : '—'),
+            render: r => (r.key ? <KeyCell
+              k={r.key}
+              t={t}
+              badgeTestId="KeyBadge__sourceRow"
+              data-testid="KeyCell__346dd5" /> : '—'),
           }}
           hiddenColumns={['type']}
           data-testid="SourcesTab__346dd5" />
@@ -1446,7 +1450,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
             { label: ui('fm.breadcrumb.section'), onClick: onBack },
             `${t('fm.config.m349.title') ?? 'Modelo 349'} - ${periodLabel}`,
           ]}
-        />
+          data-testid="FmBreadcrumb__346dd5" />
       </div>
       {/* ── Action bar ───────────────────────────────────────────── */}
       <div style={{
@@ -1748,7 +1752,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                             </span>
                           </td>
                           <td>
-                            <KeyCell k={op.key} t={t} badgeTestId="KeyBadge__346dd5" />
+                            <KeyCell
+                              k={op.key}
+                              t={t}
+                              badgeTestId="KeyBadge__346dd5"
+                              data-testid="KeyCell__346dd5" />
                           </td>
                           <td
                             style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
