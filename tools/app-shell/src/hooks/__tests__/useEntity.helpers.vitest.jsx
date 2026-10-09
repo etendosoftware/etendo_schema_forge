@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useEntity.js
 /**
  * Tests for exported pure helpers from useEntity.js.
  * The hook itself (useEntity) needs full React + auth context — tested indirectly.
@@ -262,6 +263,24 @@ describe('useEntity helpers', () => {
       const msg = await extractErrorMessage(mockResponse(data), ui);
       expect(msg).toContain('"test"');
       expect(msg).toContain("'quotes'");
+    });
+
+    // ETP-5692 — the invoice write fence answers in English plus a `messageKeys` identity (no
+    // AD_MESSAGE); the header save toast must translate it by that key, not show the prose.
+    it('translates an identity-bearing 422 by its messageKeys (invoice write fence)', async () => {
+      const data = {
+        error: {
+          status: 422,
+          code: 'posted_invoice_fields_locked',
+          message: 'This invoice is posted, so accountingDate cannot be changed. Unpost it first to correct its accounting.',
+          fields: ['accountingDate'],
+          messageKeys: ['ETGO_InvoiceFieldsLockedPosted'],
+          messageParams: { fields: ['accountingDate'] },
+        },
+      };
+      const fenceUi = (key) => (key === 'backendError.invoicePostedFieldsLocked' ? 'FACTURA_CONTABILIZADA' : key);
+      const msg = await extractErrorMessage(mockResponse(data, 422), fenceUi);
+      expect(msg).toBe('FACTURA_CONTABILIZADA');
     });
 
     // --- translate with ui function that returns key (missing translation) ---
@@ -2019,6 +2038,26 @@ describe('useEntity helpers', () => {
       const apiFetch = vi.fn(async () => readOnlyFieldRes('someUnrelatedField'));
       const res = await saveWithReadOnlyFieldRetry(apiFetch, '/url', 'PATCH', { a: 1 });
       expect(res.ok).toBe(false);
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    // ETP-5692 — the invoice write fence refuses with an `error` OBJECT (code
+    // posted_invoice_fields_locked, fields […]), never the `read_only_field` string: a retry
+    // without the named field would turn the refusal into a silent partial save.
+    it('does not retry the invoice write-fence 422, even though it names fields in the payload', async () => {
+      const apiFetch = vi.fn(async () => otherErrorRes(422, {
+        error: {
+          status: 422,
+          code: 'posted_invoice_fields_locked',
+          message: 'This invoice is posted, so accountingDate cannot be changed.',
+          fields: ['accountingDate'],
+          messageKeys: ['ETGO_InvoiceFieldsLockedPosted'],
+          messageParams: { fields: ['accountingDate'] },
+        },
+      }));
+      const res = await saveWithReadOnlyFieldRetry(apiFetch, '/url', 'PATCH', { accountingDate: '2026-10-01', description: 'x' });
+      expect(res.ok).toBe(false);
+      expect(res.status).toBe(422);
       expect(apiFetch).toHaveBeenCalledTimes(1);
     });
 

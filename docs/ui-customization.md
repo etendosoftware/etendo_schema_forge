@@ -37,6 +37,17 @@ the generated value at all. The fix has to be made by hand at the override site 
 option to `getInvoiceDraftMode` and passing it from the one window that needs it), not by touching
 `decisions.json` again.
 
+**ETP-5692 — the two invoice windows now carry two such lists in both places:**
+`keepSaveWhenCompletedFields` and `editableLineFieldsWhenCompleted` are declared in
+`artifacts/{sales,purchase}-invoice/decisions.json → window.draftMode` (so the contract and the
+generated `HeaderPage` are right) AND passed by hand to `getInvoiceDraftMode` in each `index.jsx`
+(which is what actually reaches `DetailView`). Change both: the sync is guarded by the
+`passes the decisions.json completed-document allowlists through the draftMode override` test in
+`tools/app-shell/src/windows/custom/{sales,purchase}-invoice/__tests__/index.vitest.jsx`, which
+fails if the `index.jsx` override drifts from `decisions.json`. Reading the lists from one source was considered
+and not done: it would mean importing the window's whole `decisions.json`/`contract.json` into the
+SPA bundle, or changing how the generated `HeaderPage` merges `draftMode`.
+
 **When adding/changing a `decisions.json → window.*` key, grep for a hand-rolled prop with the same
 name** (`grep -rn "draftMode={" tools/app-shell/src/windows/custom/`, or the equivalent for the prop
 you're changing) before assuming a `make regen` alone is enough. This is the same "custom files are
@@ -1029,8 +1040,9 @@ modal, the action dropdown, the per-row `Promise.allSettled` loop and the
 ok/failed toast. The button text comes from the `labelKey` prop. The nine
 document-action mounts all pass `labelKey="process"` ("Procesar" / "Process");
 the accounting mounts pass `labelKey="post"` ("Contabilizar", four windows) and,
-since ETP-5302, `labelKey="unpost"` ("Descontabilizar", `goods-receipt` and
-`goods-shipment` — see the pair below). `"bulkCompletion"` ("Procesado masivo")
+since ETP-5302, `labelKey="unpost"` ("Descontabilizar" — first `goods-receipt`
+and `goods-shipment`, since ETP-5692 also `sales-invoice` and `purchase-invoice`
+with their own CO-gated pair; see the pair below). `"bulkCompletion"` ("Procesado masivo")
 is only the prop default, which no window currently relies on.
 Inside the dropdown, `CO` is labeled **Confirmar** /
 **Confirm** (`labelKey: 'confirm'`) and `RE` **Reactivar** / **Reactivate**.
@@ -1143,11 +1155,21 @@ detail kebab's *Descontabilizar* already used, so no backend or i18n work was
 needed.
 
 **Why a separate pair rather than teaching `buildPostActions` to also emit
-`unpost`:** `sales-invoice` and `purchase-invoice` mount the post pair too, and
-they must **not** offer a standalone unpost. On an invoice, reversing the
-accounting is a step *inside* Reactivate (`preUnpost`), never a user-facing
-action of its own. Only `goods-receipt` and `goods-shipment`, whose detail kebab
-already exposes *Descontabilizar*, mount the unpost pair.
+`unpost`:** a window opts into the standalone unpost explicitly, and only a
+window whose detail kebab also declares a standalone *Descontabilizar*
+(`menuActions` entry with `action: "unpost"`) should mount the unpost pair — a
+window must not grow the action in the bulk bar only. ETP-5302 shipped with
+`sales-invoice` and `purchase-invoice` deliberately excluded (invoice unposting
+lived only *inside* Reactivate, via `preUnpost`); **ETP-5692 reversed that**:
+both invoice windows now declare the `unpost` menu action, offer it in the row
+kebab (`buildInvoiceRowQuickActions`) and mount a bulk unpost button, so an
+invoice can be unposted and stay Completed. Reactivate keeps its own `preUnpost`
+step. The invoice button uses its own pair, `buildInvoiceUnpostActions` /
+`invoiceUnpostRowFilter` in `windows/custom/shared/useInvoiceWindow.js`, which
+also requires status `CO` (a non-Completed row is rejected with
+`bulkRowNotCompleted` and counted as skipped — like every row filter, the reason is
+not shown: the result toast only carries counters, ETP-5316); the posted-only pair
+above is unchanged for the albarán windows.
 
 **Why its own button rather than a second option inside "Contabilizar":** the
 dropdown lives under a button whose label is the action — a window offering both
@@ -1562,6 +1584,8 @@ Clicking either the chevron or the hover action toggles the same expand state �
 }
 ```
 `dimensionFields` entries are ordinary column-shaped objects (`key`/`column`/`type`/`label`) — `InlineLinesPanel` reuses the same `commitField` path every other inline edit uses to persist a dimension-field change, so no special save wiring is needed. Drop the column entirely (don't include it in `columns`) when every candidate would be hidden — the generator's `generateTableComponent` follows this same `dimensionFields.length > 0 ? [...] : []` pattern.
+
+**ETP-5692 — editable on a completed document, per field (`draftMode.editableLineFieldsWhenCompleted`):** while the document is locked by completion the whole sub-row is read-only, exactly as before — unless `DetailView` passes `InlineLinesPanel` the optional prop `isFieldEditableWhenReadOnly(row, fieldKey) => boolean`, built from that `draftMode` list by `lib/completedLineEdits.js` (fail-closed; each field still obeys its own `readOnlyLogic` evaluated on `{ ...header, ...line }`). `InlineLinesPanel` then (a) lets `commitField` through for exactly those fields and (b) hands `DimensionGrid` the optional per-field predicate `isFieldReadOnly(field) => boolean`, which takes precedence over the grid-wide `readOnly` when present. The save goes through `DetailView`'s `buildCompletedLineFieldUpdateHandler` (`inlineLineUpdateHandlers.js`): a one-field PATCH, since `buildInlineRowUpdateHandler` returns `undefined` on a locked document. Both props are absent for every other caller, which therefore renders and behaves exactly as before. See `docs/decisions-reference.md` → `draftMode`.
 
 **Fully additive/opt-in:** a table that never declares a `dimensionsPanel` column renders byte-for-byte the same as before this feature shipped — no leading chevron column, no expand state, no "Edit dimensions" hover action. Verified against the full existing `InlineLinesPanel` test suite.
 

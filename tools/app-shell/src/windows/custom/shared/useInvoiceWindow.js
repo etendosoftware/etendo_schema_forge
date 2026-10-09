@@ -1,14 +1,14 @@
 import { useCallback } from 'react';
-import { toast } from 'sonner';
-// ETP-5209 follow-up — relative import, not the `@/` alias: this module is loaded
+// ETP-5209 follow-up — relative imports, not the `@/` alias: this module is loaded
 // directly by plain `node --test` via useInvoiceWindow.test.js's real `import`
-// (Vite's alias resolution is unavailable there), and backendErrors.js is a
+// (Vite's alias resolution is unavailable there), and preUnpost.js is a
 // dependency-free leaf module, so the relative path costs nothing.
-import { translateBackendError } from '../../../lib/backendErrors.js';
+import { isPosted as isRowPosted } from '../../../lib/preUnpost.js';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
+import { buildMenuActionExecutedHandler } from './buildDocumentRowQuickActions.js';
 
 export function getInvoiceDraftMode(ui, options = {}) {
-  const { showVerifactuProcessingModal = false, keepSaveWhenCompletedFields = [], afterProcess } = options;
+  const { showVerifactuProcessingModal = false, keepSaveWhenCompletedFields = [], editableLineFieldsWhenCompleted = [], afterProcess } = options;
   return {
     enabled: true,
     processField: 'documentAction',
@@ -33,6 +33,11 @@ export function getInvoiceDraftMode(ui, options = {}) {
     // — stay byte-identical to before.
     ...(Array.isArray(keepSaveWhenCompletedFields) && keepSaveWhenCompletedFields.length > 0
       ? { keepSaveWhenCompletedFields }
+      : {}),
+    // ETP-5692 — line fields that stay editable/savable on a completed invoice (the line
+    // accounting dimensions, editable again once unposted). Omitted when empty, like above.
+    ...(Array.isArray(editableLineFieldsWhenCompleted) && editableLineFieldsWhenCompleted.length > 0
+      ? { editableLineFieldsWhenCompleted }
       : {}),
     // ETP-5576: optional post-Confirm hook (saveActions.jsx → runAfterProcess). The invoice
     // windows pass createFollowUpAfterProcess(...) so a Confirm that leaves a shipment /
@@ -76,12 +81,20 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
     // ETP-5378 — Reactivate joins it, so the row kebab finally matches the
     // form-view kebab the same decisions.json array already describes:
     //   completed + not posted  → Reactivate AND Post
-    //   completed + posted      → Reactivate only (Post would be a no-op; the
-    //                             reactivation unposts first via preUnpost)
+    //   completed + posted      → Reactivate AND Unpost (ETP-5692; the
+    //                             reactivation still unposts first via preUnpost)
     //   draft                   → Confirm only (ETP-5378, see the note inside)
-    // Order matches decisions.json → window.menuActions (reactivate first).
+    // Order matches decisions.json → window.menuActions (reactivate, post, unpost).
+    //
+    // ETP-5692 — Unpost is a standalone action again, reversing the ETP-5302 decision:
+    // it removes the accounting and leaves the invoice Completed, so accounting-only data
+    // (exchange rates, header dimensions) can be corrected and re-posted without
+    // reactivating. Offered only on a Completed AND posted invoice (`isPosted` from
+    // preUnpost.js: only 'Y'/true count) — the same gate as the form-view kebab
+    // (`visibleWhenStatus: "CO"` + `visibleWhenFieldTrue: "posted"`) and the bulk button's
+    // invoiceUnpostRowFilter.
     menuActions: ({ row }) => {
-      const isPosted = row?.posted === 'Y' || row?.posted === true;
+      const isPosted = isRowPosted(row);
       const isProcessed = row?.processed === 'Y' || row?.processed === true;
       const isCompleted = row?.documentStatus === 'CO';
       const isDraft = row?.documentStatus === 'DR';
@@ -113,25 +126,48 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
         ...(!isPosted && isProcessed
           ? [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]
           : []),
+        ...(isCompleted && isPosted
+          ? [{
+            key: 'unpost',
+            labelKey: 'unpost',
+            neoAction: 'unpost',
+            successKey: 'documentUnposted',
+            destructive: true,
+          }]
+          : []),
       ];
     },
     // ETP-5209 follow-up — RowQuickActions deliberately never shows a toast itself
-    // ("toast/snackbar is the host's responsibility"); this was the missing host-side
-    // half for the row-kebab Post action, mirroring DetailMoreActionsMenu's
-    // runNeoMenuAction for the exact same neoAction shape.
-    onMenuActionExecuted: (action, result) => {
-      // ETP-5378 — `reactivate` is a documentAction, not a neoAction; gating on neoAction
-      // alone silently swallowed its toast and skipped the list refresh.
-      if (!action.neoAction && !action.documentAction) return;
-      if (result?.success === false) {
-        toast.error(translateBackendError(result?.message, ui) || ui?.('actionFailed'));
-      } else {
-        toast.success((action.successKey ? ui?.(action.successKey) : action.successMessage) || ui?.('actionCompleted'));
-      }
-      onRefresh?.();
-    },
+    // ("toast/snackbar is the host's responsibility"); this is the host-side half for
+    // the row-kebab actions, mirroring DetailMoreActionsMenu's runNeoMenuAction.
+    // ETP-5692 — the shared albarán handler instead of a hand-copied one: it is identical
+    // except that it forwards `messageKeys`/`messageParams` to translateBackendError, so a
+    // row-kebab Unpost rejected for a closed period (`PeriodClosedForUnPosting`) renders in
+    // the UI locale, as it already did from the form-view kebab and the bulk bar.
+    onMenuActionExecuted: buildMenuActionExecutedHandler(ui, onRefresh),
   };
 }
+
+// ETP-5692 — the invoice flavour of BulkDocumentAction's buildUnpostActions/unpostRowFilter
+// pair, for the bulk "Descontabilizar" button of sales-invoice and purchase-invoice. An invoice
+// is unposted standalone only when it is Completed AND posted (the same gate as the row kebab
+// above and the form-view kebab), so a posted invoice in any other status (e.g. voided) is
+// skipped too. Kept here, not as a change to the shared pair, so goods-receipt / goods-shipment
+// and the other albarán windows keep their posted-only behaviour. Hand-written rather than
+// composed from unpostRowFilter because BulkDocumentAction.jsx cannot be loaded by plain
+// `node --test` (see the relative-import note at the top of this file).
+const invoiceStatusOf = (row) => row?.documentStatus || row?.docStatus;
+const isInvoiceUnpostable = (row) => invoiceStatusOf(row) === 'CO' && isRowPosted(row);
+
+export const buildInvoiceUnpostActions = (rows) =>
+  (rows.some(isInvoiceUnpostable) ? [{ value: 'unpost', labelKey: 'unpost' }] : []);
+
+export const invoiceUnpostRowFilter = (row, action, ui) => {
+  if (action !== 'unpost') return true;
+  if (!isRowPosted(row)) return ui('bulkRowNotPosted');
+  if (invoiceStatusOf(row) !== 'CO') return ui('bulkRowNotCompleted');
+  return true;
+};
 
 export function useClearSavedRecord(setSavedRecord, location, navigate) {
   return useCallback(() => {

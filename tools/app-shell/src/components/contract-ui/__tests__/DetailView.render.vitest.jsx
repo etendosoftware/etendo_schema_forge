@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/lib/completedLineEdits.js
 /**
  * Integration render test for DetailView.
  * Mounts the full component with minimal props to cover the main render paths,
@@ -252,7 +253,11 @@ const MockTable = ({ data }) => (
 );
 
 function renderDetailView(props = {}) {
-  return render(
+  return render(detailViewElement(props));
+}
+
+function detailViewElement(props = {}) {
+  return (
     <MemoryRouter>
       <DetailView
         entity="header"
@@ -275,7 +280,7 @@ function renderDetailView(props = {}) {
         breadcrumb="Sales / Orders"
         {...props}
       />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 }
 
@@ -1122,6 +1127,139 @@ describe('DetailView render integration', () => {
       mockHook.editing = { id: '123', documentNo: 'SO-001', documentStatus: 'CO', processed: true };
       const { container } = renderDetailView({ lockWhenProcessed: true });
       expect(container).toBeTruthy();
+    });
+  });
+
+  // draftMode.editableLineFieldsWhenCompleted — on a Completed document whose lines are locked by
+  // completion, DetailView builds the per-field gate from the CURRENT header on every render and
+  // hands it to the line grid (InlineLinesPanel → DimensionsPanel), together with the one-field
+  // PATCH handler. The header moving between posted 'Y' and 'N' (Unpost, then Post again) must
+  // flip the line dimensions without a reload; every other line column and every add / edit /
+  // delete line action stays off on the processed document.
+  describe('completed-document line fields (draftMode.editableLineFieldsWhenCompleted)', () => {
+    const tableProps = { current: null };
+    const ProbeTable = (props) => {
+      tableProps.current = props;
+      return <div data-testid="lines-probe" />;
+    };
+    const isProcessed = (r) => r.processed === true || r.processed === 'Y';
+    // Same logic the invoices declare for the dimensions in decisions.json:
+    // @Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO').
+    const postedOrProcessedNonCO = (r) => r.posted === 'Y' || r.posted === true || (isProcessed(r) && r.documentStatus !== 'CO');
+    const LinesFormStub = () => null;
+    LinesFormStub.fields = [
+      { key: 'product', readOnlyLogic: isProcessed },
+      { key: 'invoicedQuantity', readOnlyLogic: isProcessed },
+      { key: 'project', readOnlyLogic: postedOrProcessedNonCO },
+      { key: 'costcenter', readOnlyLogic: postedOrProcessedNonCO },
+    ];
+    const DRAFT_MODE = {
+      enabled: true, processField: 'documentAction', processValue: 'CO', label: 'Confirm',
+      keepSaveWhenCompletedFields: ['accountingDate', 'project', 'costcenter'],
+      editableLineFieldsWhenCompleted: ['project', 'costcenter'],
+    };
+    // c_invoiceline carries `processed` but no posted / documentStatus: those come from the header.
+    const LINE = { id: 'L1', product: 'P1', invoicedQuantity: 1, project: 'PRJ1', costcenter: 'CC1', processed: true };
+    const header = (documentStatus, posted) => ({
+      id: '123', documentNo: 'INV-001', documentStatus, posted, processed: documentStatus !== 'DR',
+    });
+    const setHeader = (h) => { mockHook.selected = h; mockHook.editing = h; };
+    const linesProps = (extra = {}) => ({
+      DetailTable: ProbeTable, DetailForm: LinesFormStub, linesLayout: 'inlineEditable',
+      draftMode: DRAFT_MODE, lockWhenProcessed: true, ...extra,
+    });
+    const canEdit = (key) => tableProps.current.isFieldEditableWhenReadOnly?.(LINE, key) === true;
+
+    let savedChildren;
+    beforeEach(() => {
+      tableProps.current = null;
+      savedChildren = mockHook.children;
+      mockHook.children = [LINE];
+    });
+    afterEach(() => {
+      mockHook.children = savedChildren;
+      setHeader({ id: '123', documentNo: 'SO-001', documentStatus: 'DR', processed: false });
+    });
+
+    it('on a Completed, unposted document only the listed dimensions are editable, through a PATCH handler', () => {
+      setHeader(header('CO', 'N'));
+      renderDetailView(linesProps());
+      expect(tableProps.current.isDocumentReadOnly).toBe(true);
+      expect(canEdit('project')).toBe(true);
+      expect(canEdit('costcenter')).toBe(true);
+      expect(canEdit('product')).toBe(false);
+      expect(canEdit('invoicedQuantity')).toBe(false);
+      expect(typeof tableProps.current.onUpdateRow).toBe('function');
+    });
+
+    it('offers no add / delete line action on the processed document', () => {
+      setHeader(header('CO', 'N'));
+      renderDetailView(linesProps());
+      expect(tableProps.current.onDeleteRow).toBeUndefined();
+      expect(screen.queryByTestId('action-add-line')).toBeNull();
+    });
+
+    it('header unposted after render (posted Y → N): the dimensions become editable without a reload', () => {
+      setHeader(header('CO', 'Y'));
+      const { rerender } = renderDetailView(linesProps());
+      expect(canEdit('project')).toBe(false);
+      expect(canEdit('costcenter')).toBe(false);
+      const fetchesBefore = mockHook.fetchById.mock.calls.length;
+
+      setHeader(header('CO', 'N'));
+      rerender(detailViewElement(linesProps()));
+
+      expect(canEdit('project')).toBe(true);
+      expect(canEdit('costcenter')).toBe(true);
+      expect(canEdit('product')).toBe(false);
+      expect(tableProps.current.isDocumentReadOnly).toBe(true);
+      expect(mockHook.fetchById.mock.calls.length).toBe(fetchesBefore);
+    });
+
+    it('header posted again (posted N → Y): the dimensions go back to read-only', () => {
+      setHeader(header('CO', 'N'));
+      const { rerender } = renderDetailView(linesProps());
+      expect(canEdit('project')).toBe(true);
+
+      setHeader(header('CO', 'Y'));
+      rerender(detailViewElement(linesProps()));
+
+      expect(canEdit('project')).toBe(false);
+      expect(canEdit('costcenter')).toBe(false);
+    });
+
+    it('a voided (VO) header keeps the dimensions read-only even when unposted', () => {
+      setHeader(header('VO', 'N'));
+      renderDetailView(linesProps());
+      expect(tableProps.current.isDocumentReadOnly).toBe(true);
+      expect(canEdit('project')).toBe(false);
+      expect(canEdit('costcenter')).toBe(false);
+    });
+
+    it('without the allowlist, a Completed document hands the grid no gate and no write handler', () => {
+      setHeader(header('CO', 'N'));
+      renderDetailView(linesProps({ draftMode: { ...DRAFT_MODE, editableLineFieldsWhenCompleted: undefined } }));
+      expect(tableProps.current.isDocumentReadOnly).toBe(true);
+      expect(tableProps.current.isFieldEditableWhenReadOnly).toBeUndefined();
+      expect(tableProps.current.onUpdateRow).toBeUndefined();
+    });
+
+    it('a window-wide read-only role gets no gate even on a Completed, unposted document', () => {
+      setHeader(header('CO', 'N'));
+      renderDetailView(linesProps({ api: { window: { readOnly: true } } }));
+      expect(tableProps.current.isFieldEditableWhenReadOnly).toBeUndefined();
+      expect(tableProps.current.onUpdateRow).toBeUndefined();
+    });
+
+    it('a draft document gets no gate: the lines are fully editable through the draft handler', () => {
+      setHeader(header('DR', 'N'));
+      renderDetailView(linesProps());
+      expect(tableProps.current.isDocumentReadOnly).toBe(false);
+      expect(tableProps.current.isFieldEditableWhenReadOnly).toBeUndefined();
+      expect(typeof tableProps.current.onUpdateRow).toBe('function');
+      expect(typeof tableProps.current.onDeleteRow).toBe('function');
+      // Sanity for the processed-document case above: the add-line action does render here.
+      expect(screen.getByTestId('action-add-line')).toBeInTheDocument();
     });
   });
 

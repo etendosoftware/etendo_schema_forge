@@ -1,7 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "contractChecksum": "8bb0681ba2b2550c",
+  "updatedAt": "2026-10-09T12:19:29.348Z",
+  "contractChecksum": "5aa62cceb7f9fd31",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1501,10 +1502,10 @@
             "defaultValue": "N"
           },
           "project": {
-            "readOnlyLogic": "@Posted@='Y'"
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')"
           },
           "costcenter": {
-            "readOnlyLogic": "@Posted@='Y'"
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')"
           },
           "prepaymentAmount": {
             "readOnly": true,
@@ -1659,10 +1660,10 @@
             "readOnlyLogic": "@Processed@='Y'"
           },
           "project": {
-            "readOnlyLogic": "@Posted@='Y'"
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')"
           },
           "costcenter": {
-            "readOnlyLogic": "@Posted@='Y'"
+            "readOnlyLogic": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')"
           },
           "asset": {
             "readOnlyLogic": "@Posted@='Y'"
@@ -2257,5 +2258,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "8b368980766be121"
+  "checksum": "ee305e33cec0b86c"
 }

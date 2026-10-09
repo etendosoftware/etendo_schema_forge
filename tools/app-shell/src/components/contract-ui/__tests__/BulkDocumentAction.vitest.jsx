@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
@@ -1290,10 +1291,49 @@ describe('BulkDocumentAction — preUnpostActions unposts before a bulk reactiva
     const { ok, failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
     expect(ok).toBe(0);
     expect(failed).toEqual([{ documentNo: 'FV-001', message: translated }]);
-    expect(mockTranslateBackendError).toHaveBeenCalledWith(raw, expect.any(Function));
+    expect(mockTranslateBackendError).toHaveBeenCalledWith(raw, expect.any(Function), expect.any(Object));
     expect(mockDocExecute).not.toHaveBeenCalled();
 
     // HYGIENE: consume this run's own reload timer, keyed on the test-local mock.
+    await waitFor(() => {
+      expect(clearSelection).toHaveBeenCalled();
+      expect(reloadSpy).toHaveBeenCalled();
+    }, { timeout: 3000 });
+  });
+
+  // ETP-5692 — a stale list can still show the invoice as posted after it was unposted
+  // elsewhere; the unpost refusal is English plus a messageKeys identity, which must reach
+  // translateBackendError or the row reports the English prose.
+  it('translates a refused pre-unpost by its messageKeys identity', async () => {
+    const raw = 'This invoice is not posted, so it has no accounting entries to remove.';
+    mockNeoExecute.mockResolvedValue({
+      success: false, message: raw, messageKeys: ['ETGO_InvoiceUnpostNotPosted'],
+    });
+    mockTranslateBackendError.mockImplementation((msg, _ui, opts) => (
+      opts?.messageKeys?.includes('ETGO_InvoiceUnpostNotPosted') ? 'FACTURA_NO_CONTABILIZADA' : msg));
+    const clearSelection = vi.fn();
+    render(
+      <BulkDocumentAction
+        selectedRows={[POSTED_COMPLETED]}
+        clearSelection={clearSelection}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="sales-invoice"
+        labelKey="process"
+        preUnpostActions={['RE']}
+      />,
+    );
+    fireEvent.click(screen.getByText('process'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    const { failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    expect(failed).toEqual([{ documentNo: 'FV-001', message: 'FACTURA_NO_CONTABILIZADA' }]);
+    expect(mockTranslateBackendError).toHaveBeenCalledWith(raw, expect.any(Function), {
+      messageKeys: ['ETGO_InvoiceUnpostNotPosted'], messageParams: undefined,
+    });
+    expect(mockDocExecute).not.toHaveBeenCalled();
+
     await waitFor(() => {
       expect(clearSelection).toHaveBeenCalled();
       expect(reloadSpy).toHaveBeenCalled();

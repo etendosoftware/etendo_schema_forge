@@ -184,6 +184,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
 import SalesInvoiceWindow from '../index.jsx';
 import { consumeFollowUpPrompt } from '@/components/follow-up-documents/followUpDocuments.js';
+import { expectInvoiceBulkUnpostWiring } from '../../shared/__tests__/testUtils/invoiceBulkUnpostAssertions.js';
+import salesInvoiceDecisions from '@generated/sales-invoice/decisions.json';
 
 describe('SalesInvoiceWindow — render smoke tests', () => {
   beforeEach(() => {
@@ -246,6 +248,17 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
     expect(lastHeaderPageProps.draftMode).toMatchObject({ enabled: true, processValue: 'CO' });
     // No Verifactu profile configured for the org -> no processing modal.
     expect(lastHeaderPageProps.draftMode.processingModal).toBeNull();
+  });
+
+  // index.jsx hand-builds draftMode (shadowing the generated one), so both completed-document
+  // allowlists are declared twice — here and in decisions.json — and must not drift apart.
+  it('passes the decisions.json completed-document allowlists through the draftMode override', () => {
+    render(<SalesInvoiceWindow windowName="sales-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    const declared = salesInvoiceDecisions.window.draftMode;
+    expect(lastHeaderPageProps.draftMode.keepSaveWhenCompletedFields).toEqual(declared.keepSaveWhenCompletedFields);
+    expect(lastHeaderPageProps.draftMode.editableLineFieldsWhenCompleted).toEqual(declared.editableLineFieldsWhenCompleted);
+    expect(lastHeaderPageProps.draftMode.keepSaveWhenCompletedFields).toEqual(expect.arrayContaining(['project', 'costcenter']));
+    expect(lastHeaderPageProps.draftMode.editableLineFieldsWhenCompleted).toEqual(['project', 'costcenter']);
   });
 
   // Confirm → draftMode.afterProcess: this window stays on the invoice (and queues the
@@ -469,11 +482,12 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
       expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
     });
 
-    it('does not offer the post menu action for an already-posted row', () => {
+    // ETP-5692 — an already-posted Completed row offers Unpost instead of Post.
+    it('offers unpost instead of post for an already-posted row', () => {
       render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
 
-      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
-      expect(actions).toEqual([]);
+      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { documentStatus: 'CO', processed: 'Y', posted: 'Y' } });
+      expect(actions.map((a) => a.key)).toEqual(['reactivate', 'unpost']);
     });
 
     it('bumps refreshKey when a neoAction menu action (post) completes', () => {
@@ -546,14 +560,14 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
       expect(callFor('post').preUnpostActions).toBeUndefined();
     });
 
-    // PRODUCT RULE: on an invoice the accounting reversal is a step INSIDE
-    // Reactivar, never a standalone bulk action of its own (unlike goods-receipt /
-    // goods-shipment, which do mount a "Descontabilizar" button).
-    it('mounts NO standalone bulk unpost button', () => {
+    // ETP-5692 — reverses the ETP-5302 product rule: an invoice now mounts a standalone
+    // bulk "Descontabilizar" button that removes the accounting and leaves the invoice
+    // Completed, wired to the invoice pair (Completed + posted) rather than the albaranes'
+    // posted-only one. Reactivar keeps its own pre-unpost.
+    it('mounts a standalone bulk unpost button wired to the invoice unpost pair', () => {
       render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
 
-      expect(screen.queryByTestId('bulk-document-action-unpost')).not.toBeInTheDocument();
-      expect(bulkDocumentActionCalls.map((p) => p.labelKey)).not.toContain('unpost');
+      expectInvoiceBulkUnpostWiring(callFor);
     });
   });
 });

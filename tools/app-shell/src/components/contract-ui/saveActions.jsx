@@ -68,13 +68,23 @@ export function buildSaveGate({
  * No-op (never blocks) unless the caller passes `isDraftModeCompleted: true` AND a
  * non-empty `keepSaveWhenCompletedFields` — so every window without the feature, and
  * every non-completed document, is completely unaffected.
+ *
+ * ETP-5692 — a `<key>$_identifier` dirty key is the display-label companion a selector
+ * writes next to the FK value, so it is judged as its base field: allowed iff `<key>` is
+ * allowed, and when blocked it is reported once, under the base key (never twice, never as
+ * `<key>$_identifier`). Picking a Project on a completed invoice dirties both `project` and
+ * `project$_identifier`; without this the companion alone blocked the allowed edit.
  */
+const IDENTIFIER_SUFFIX = '$_identifier';
+const toBaseFieldKey = (key) => (key.endsWith(IDENTIFIER_SUFFIX) ? key.slice(0, -IDENTIFIER_SUFFIX.length) : key);
+
 function buildCompletedFieldsGate({ draftMode, isDraftModeCompleted, dirtyFieldKeys, gateFields, labelFor, ui }) {
   const allowedWhenCompleted = draftMode?.keepSaveWhenCompletedFields;
   const gateActive = isDraftModeCompleted && Array.isArray(allowedWhenCompleted) && allowedWhenCompleted.length > 0;
   const notBlocked = { blocked: false, title: undefined, missingAttr: undefined };
   if (!gateActive) return notBlocked;
-  const disallowedDirty = (dirtyFieldKeys || []).filter(key => !allowedWhenCompleted.includes(key));
+  const dirtyBaseKeys = [...new Set((dirtyFieldKeys || []).map(toBaseFieldKey))];
+  const disallowedDirty = dirtyBaseKeys.filter(key => !allowedWhenCompleted.includes(key));
   if (disallowedDirty.length === 0) return notBlocked;
   const names = disallowedDirty.map((key) => {
     const descriptor = (gateFields || []).find(f => f?.key === key);
