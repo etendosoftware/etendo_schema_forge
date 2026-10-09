@@ -114,7 +114,7 @@ Use this window to register and complete outbound customer shipments. The functi
 - **ETP-4717 — editable subject/message and status-gated Send:** `tools/app-shell/src/components/contract-ui/__tests__/SendDocumentModal.vitest.jsx` and `documentEmailSend.vitest.js` cover the editable `Asunto`/`Mensaje` fields and the opt-in `messageEdits` command field (present only when the operator actually changes subject or message; omitted — byte-identical legacy payload — otherwise). `e2e/tests/flows/document-send-recipients.mocked.spec.js` adds browser-level coverage that a typed message reaches the backend as `messageEdits.message`. `artifacts/goods-shipment/custom/__tests__/GoodsShipmentActions.test.js` adds a regression lock-in for the already-correct `isCompleted && <SendDocumentButton>` gating (this window needed no logic fix, unlike the other 4). `artifacts/__tests__/etp-4717-send-email-visibility.test.js` asserts `contract.json → frontendContract.window.rowQuickActions.actions.email.visibleWhen === "@DocumentStatus@='CO'"` so the grid row quick-action agrees with the Form-view topbar gate.
 - The generated `GoodsShipmentPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_InOut` AD table.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
-- **ETP-4032 — Shared ConfirmResultModal**: `GoodsShipmentActions.jsx` now imports `ConfirmResultModal` from `@/components/contract-ui` instead of the former `@generated/sales-order/custom/OrderCreateInvoice` re-export. The modal's props API uses `cards` (array of document links) instead of the previous `docs` object — behavior is unchanged for the user.
+- **ETP-4032 — Shared ConfirmResultModal**: `GoodsShipmentActions.jsx` now imports `ConfirmResultModal` from `@/components/contract-ui` instead of the former `@generated/sales-order/custom/OrderCreateInvoice` re-export. The modal's props API uses `cards` (array of document links) instead of the previous `docs` object — behavior is unchanged for the user. *Superseded by ETP-5674* — the current API is `docs[]`, see the last section.
 - **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/goods-shipment/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`. **Since ETP-5260**, the detail-topbar Copy link button no longer lives in `GoodsShipmentActions.jsx` (`topbarRight`) — it moved to `GoodsShipmentSecondaryActions.jsx` (`topbarSecondary`), left of Save/Confirm, alongside Clone and Send.
 - **ETP-4028 — Currency field**: `modules/com.etendoerp.go/src-db/database/model/modifiedTables/M_INOUT.xml` adds `EM_ETGO_CURRENCY_ID` (mandatory, Search reference to `C_Currency`). `NeoCommercialDocumentFactory.java` sets `.setEtgoCurrency(...)` on every `ShipmentInOut` creation path (from a sales order, from another shipment, from an invoice). `artifacts/goods-shipment/decisions.json` declares `etgoCurrency` (editable, `defaultExpr: "@C_Currency_ID@"`, locked on `Processed='Y'`) plus `window.labelOverrides` for the field label.
 - **ETP-4028 — Currency-filtered imports**: `artifacts/goods-shipment/custom/ImportFromSalesOrderModal.jsx` and `ImportFromSalesInvoiceModal.jsx` fetch the shipment header for `etgoCurrency` and filter candidate documents by matching currency, passing `noCurrencyMatchMessageKey` to the shared `ImportLinesModal`.
@@ -392,6 +392,23 @@ changed is that the form tab and the list preview's `RelatedDocumentsCard` (`Goo
 now both render `SALES_RELATED_DOCS['goods-shipment']`; the preview's hand-written detail-fetching
 specs are gone — the card loads the detail record itself. Each preview row is one line; a long status
 tag is truncated with the full text on hover. See `docs/ui-customization.md` §7.a for the shared definition (`SALES_RELATED_DOCS`), the `useRelatedDocuments` hook and the `RelatedDocumentsCard` `definition`/`record` props.
+
+## Generated-documents popup — ETP-5674
+
+Every invoice this window creates is announced by the shared `ConfirmResultModal` with a single
+`facturaVenta` doc — `{ type: 'facturaVenta', num, documentStatus, route: '/sales-invoice/{id}' }`:
+the detail **Confirmar** with the invoice toggle ON and the post-completion «Crear Factura»
+(`GoodsShipmentActions.jsx`), the list bulk invoice (`BulkInvoiceFromShipment.jsx`) and the row
+**Confirmar** (`useRowConfirmAction`, `invoiceDocType: 'facturaVenta'`). The window no longer
+passes a title (no `soInvoiceCreated` title; `invoiceResultTitleKey` was removed), a `primary` label, a
+`currency` or an amount; the popup shows «Factura creada», «Se ha generado un documento», one card
+«Factura de venta · Completada · Nº …» and «Cerrar» + «Ver factura». `onClose` still refreshes the
+header via `onRefresh` (ETP-4779). Contract, type table and `data-testid`s: `docs/ui-customization.md` §21.
+
+**Manual verification.** Confirm a draft shipment with the invoice toggle ON and verify the popup
+above (no amount, «Completada» badge); press Esc and verify it closes and the header refreshes.
+
+**Automated evidence.** `e2e/tests/flows/sales/goods-shipment-confirm-and-invoice.mocked.spec.js`.
 
 ## List toolbar: gap between filters and actions — ETP-5509
 

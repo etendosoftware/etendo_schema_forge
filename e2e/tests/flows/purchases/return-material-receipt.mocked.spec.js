@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/return-material-receipt/ConfirmWithCreditButton.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 import { buildRectifiableInvoicesPayload } from '../../helpers/rectifiable-invoices-mock.js';
@@ -462,15 +464,14 @@ test.describe('return-material-receipt — DR form actions', () => {
     // After documentAction + createReturnInvoice, a ConfirmResultModal should appear
     // with the invoice document number FC/00100 (from our mock)
     // Wait for the result card or at minimum the modal to disappear and something to update
-    // The ConfirmResultModal shows rmrInvoiceCreatedTitle or the invoice card
     const resultModal = page.getByTestId('confirm-result-modal');
     await expect(resultModal).toBeVisible({ timeout: 8_000 });
     await expect(resultModal).toContainText('FC/00100');
 
-    // ETP-4737: the rectificativa invoice is created with a negative total (return
-    // flow) — the result card must render the negative amount as returned by the
-    // backend (fmtAmount uses Number.toLocaleString, which keeps the minus sign).
-    await expect(page.getByText(/-150,00/)).toBeVisible();
+    // ETP-5674: a sales-return invoice is announced as a factura rectificativa, and the
+    // result popup shows no amount at all (it used to render the negative total here).
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa creada|Rectificative invoice created/);
+    await expect(resultModal).not.toContainText('150,00');
 
     // ETP-5381: the createReturnInvoice POST must carry the user's choice. Without
     // originInvoices the backend falls back to the auto-detected chain and, with none
@@ -572,9 +573,10 @@ test.describe('return-material-receipt — CO form actions (no existing invoice)
     await expect(resultModal).toBeVisible({ timeout: 8_000 });
     await expect(resultModal).toContainText('FC/00100');
 
-    // ETP-4737: same negative-total contract applies from the CO (already confirmed)
-    // detail flow — useConfirmWithCredit.handleCreateReturnInvoice reads grandTotalAmount.
-    await expect(page.getByText(/-150,00/)).toBeVisible();
+    // ETP-5674: same contract from the CO (already confirmed) detail flow —
+    // useConfirmWithCredit.handleCreateReturnInvoice types it as a factura rectificativa.
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura rectificativa creada|Rectificative invoice created/);
+    await expect(resultModal).not.toContainText('150,00');
 
     // ETP-5381: the preselected suggestion must reach the backend as originInvoices —
     // CreateInvoiceConfirmModal.onConfirm(priceListId, originInvoices) →

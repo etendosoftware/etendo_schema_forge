@@ -113,8 +113,7 @@ export default function ReturnToVendorShipmentWindow({ windowName, recordId, api
           specName: 'return-to-vendor-shipment',
           entityName: 'returnToVendorShipment',
           confirmedTitleKey: 'documentConfirmed',
-          invoiceResultTitleKey: 'returnToVendor.invoiceCreatedTitle',
-          invoiceDocType: 'facturaCompra',
+          invoiceDocType: 'facturaRectificativaCompra',
           invoiceRoute: '/purchase-invoice',
         }}
         {...rest}

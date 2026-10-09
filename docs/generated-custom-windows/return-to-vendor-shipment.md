@@ -454,6 +454,24 @@ Backend: the email send contract and every attachment write answer 403 for this 
 (`com.etendoerp.go` — `DefaultDocumentSendEmailContract.authorize`, `NeoAttachmentAuthorizer`).
 Print and Download PDF are deliberately NOT restricted (they only expose readable data).
 
+## Generated-documents popup — ETP-5674
+
+The purchase rectificative invoice this window creates — detail **Confirmar** on a Borrador
+shipment, post-completion «Crear Factura Rectificativa» (`ConfirmWithCreditButtonBase.jsx` via
+`useConfirmWithCredit`, `invoiceType="facturaRectificativaCompra"`) and the grid row **Confirmar**
+(`ReturnWindowShell` → `useRowConfirmAction`, `invoiceDocType: 'facturaRectificativaCompra'`) — is
+announced by the shared `ConfirmResultModal` as a `facturaRectificativaCompra` doc (it used to be
+typed `facturaCompra`, titled by `returnToVendor.invoiceCreatedTitle`, now removed). The popup reads
+«Factura rectificativa de compra creada», one card «Factura rectificativa de compra · Completada ·
+Nº …» (no amount), «Cerrar» + «Ver factura» → `/purchase-invoice/{id}`. Contract, type table and `data-testid`s: `docs/ui-customization.md` §21.
+
+**Manual verification.** On a completed shipment with no invoice, run «Crear Factura Rectificativa»
+and verify the title, the «Completada» badge and that «Ver factura» opens the new purchase invoice.
+
+**Automated evidence.** `tools/app-shell/src/windows/custom/return-to-vendor-shipment/__tests__/ConfirmWithCreditButton.spec.jsx`,
+`tools/app-shell/src/windows/custom/return-to-vendor-shipment/__tests__/index.test.js`,
+`e2e/tests/flows/purchases/return-to-vendor-shipment.mocked.spec.js`.
+
 ## Related documents — form and list preview share one definition — ETP-5539
 
 The form's Related Documents tab (`artifacts/return-to-vendor-shipment/custom/RelatedDocuments.jsx`,

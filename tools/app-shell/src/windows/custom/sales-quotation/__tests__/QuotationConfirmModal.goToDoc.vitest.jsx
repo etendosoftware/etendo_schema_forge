@@ -1,3 +1,4 @@
+// @covers artifacts/sales-quotation/custom/QuotationConfirmModal.jsx
 // ETP-5378 — regression for handleGoToDoc's basePath computation, imported via the
 // @generated alias like the window wrapper does (artifacts/sales-quotation/custom/
 // isn't inside vitest's src/** include, so this lives here instead — no behavioral
@@ -25,7 +26,7 @@ const ORDER_ROW = {
   id: 'order-1', documentNo: '1000005', documentStatus: 'DR', grandTotalAmount: 15.14,
 };
 
-async function confirmAndReachSuccess({ pathname }) {
+async function confirmAndReachSuccess({ pathname, orderRows = [ORDER_ROW] }) {
   Object.defineProperty(window, 'location', {
     value: { pathname, href: '' },
     writable: true,
@@ -34,7 +35,7 @@ async function confirmAndReachSuccess({ pathname }) {
 
   vi.stubGlobal('fetch', vi.fn((url) => {
     if (url.includes('/action/Convertquotation')) return jsonResponse({ response: { data: {} } });
-    if (url.includes('/sales-order/header')) return jsonResponse({ response: { data: [ORDER_ROW] } });
+    if (url.includes('/sales-order/header')) return jsonResponse({ response: { data: orderRows } });
     return jsonResponse({});
   }));
 
@@ -49,12 +50,26 @@ async function confirmAndReachSuccess({ pathname }) {
 
   // Default selection is already "order" (Recomendado) — just confirm.
   await act(async () => { fireEvent.click(screen.getByTestId('action-confirm-modal')); });
-  await screen.findByText('sqOrderCreated');
+  // ETP-5674 — the «Crear pedido» branch now ends in the shared ConfirmResultModal.
+  return screen.findByTestId('confirm-result-card-0');
 }
 
 describe('QuotationConfirmModal — handleGoToDoc basePath (ETP-5378)', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('announces the order as a pedidoVenta with its real (draft) status', async () => {
+    const card = await confirmAndReachSuccess({ pathname: '/sales-quotation/q-1' });
+    expect(card).toHaveAttribute('data-doc-type', 'pedidoVenta');
+    expect(card).toHaveAttribute('data-doc-status', 'DR');
+  });
+
+  it('shows an order it could not read back, but offers no way to open it', async () => {
+    const card = await confirmAndReachSuccess({ pathname: '/sales-quotation/q-1', orderRows: [] });
+    expect(card).toHaveAttribute('data-doc-type', 'pedidoVenta');
+    expect(card.tagName).not.toBe('BUTTON');
+    expect(screen.queryByTestId('action-confirm-result-view')).toBeNull();
   });
 
   it('builds /sales-order/{id} when opened from the FORM path (/sales-quotation/{recordId})', async () => {

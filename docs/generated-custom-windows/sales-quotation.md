@@ -75,10 +75,11 @@ invoice through `InvoiceCompletionService`, so it reaches the user in `CO`
 but no longer leaves a draft behind. See "Invoice is created and confirmed in
 one step — ETP-5381" below.
 
-The success state of `QuotationConfirmModal` displays the invoice doc number
-followed by the formatted grand total and the quotation's currency identifier
-(e.g. `Factura #10000083 · 48.40 EUR`). The order branch already rendered the
-currency; the invoice branch was previously dropping the suffix.
+After the invoice is created, `QuotationConfirmModal` shows the shared
+`ConfirmResultModal` with one `facturaVenta` card («Factura de venta · Completada ·
+Nº 10000083»). No amount or currency is shown since ETP-5674 (the former compact
+success view printed `Factura #10000083 · 48.40 EUR`) — see "Generated-documents
+popup — ETP-5674" below.
 
 After the invoice is **completed** (ETP-5381 moved this write to after the
 completion, not merely after the insert), the source quotation's DocStatus is
@@ -291,8 +292,8 @@ The backend action response body is
 (`QuotationConfirmModal.jsx`) does not read either field from this response.
 Instead it fires a follow-up
 `GET {baseNeoUrl}/sales-order/header?criteria=[{fieldName:'quotation',operator:'equals',value:quotationId}]`
-to resolve the created order and display its document number and total in the
-success state. The modal still issues its best-effort
+to resolve the created order and show its document number (and real
+`documentStatus`) in the result popup. The modal still issues its best-effort
 `POST DocAction { docAction: 'RE' }` (ETP-3570) only when the fetched order is
 `documentStatus === 'CO'`. Now that the backend returns it in Draft, that guard
 is false and the call does not fire. It only acts as a fallback if the backend
@@ -477,11 +478,11 @@ on: `ETGO_CI` is only written once a confirmed invoice exists.
 `artifacts/sales-invoice/contract.json:26-34`), which is now the only route back
 to `DR`. Editing before confirming is no longer an option on this path.
 
-**Frontend.** `QuotationConfirmModal.jsx` no longer hardcodes `status: 'Draft'` on
-the result card — it reads the real `documentStatus` from the response
-(`status: doc?.documentStatus === 'CO' ? 'Completed' : (doc?.documentStatus ?? 'Draft')`),
-so the badge renders "Completado" / "Completed" in success green instead of a
-false "Borrador". `backendErrors.js` maps the new 409 literal to
+**Frontend.** `QuotationConfirmModal.jsx` no longer hardcodes a draft status on
+the result card — it passes the real `documentStatus` from the response
+(`documentStatus: doc?.documentStatus ?? 'DR'`) to `ConfirmResultModal`, so the
+badge renders "Completada" / "Completed" in success green instead of a
+false "Borrador" (gendered label since ETP-5674). `backendErrors.js` maps the new 409 literal to
 `backendError.quotationAlreadyInvoiced` ("Ya se ha generado una factura para este
 presupuesto." / "An invoice has already been generated for this quotation.").
 
@@ -496,7 +497,7 @@ reworded in this ticket; the invoice they describe is now confirmed on creation.
 
 1. On a quotation in `UE`, confirm with "Facturar directamente" and verify the
    generated invoice opens in **Confirmado**, not Borrador, and that the result
-   card's badge reads "Completado" in success green.
+   card's badge reads "Completada" in success green.
 2. Verify the quotation moved to `ETGO_CI` and that the invoice's document number
    is the one shown in the result card.
 3. Trigger the same action again on that quotation and verify it is rejected with
@@ -557,3 +558,35 @@ same documents:
 
 The preview loads the detail record itself. Each preview row is one line: number and amount are never
 cut; a long status tag is truncated with the full text on hover. See `docs/ui-customization.md` §7.a for the shared definition (`SALES_RELATED_DOCS`), the `useRelatedDocuments` hook and the `RelatedDocumentsCard` `definition`/`record` props.
+
+## Generated-documents popup — ETP-5674
+
+The compact success view `QuotationConfirmModal` used to draw (green check, «Pedido creado» /
+«Factura creada», doc number · total, «Ver pedido» / «Ver factura») is gone. Both branches of the
+confirm modal now end in the shared `ConfirmResultModal`, the same popup the rest of Sales and
+Purchases uses:
+
+| Branch | `docs[0].type` | Title | Card | Buttons |
+|---|---|---|---|---|
+| «Crear pedido» | `pedidoVenta` | «Pedido creado» | «Pedido de venta · Borrador · Nº …» (the order is returned in `DR`) | «Cerrar» + «Ver pedido» |
+| «Facturar directamente» | `facturaVenta` | «Factura creada» | «Factura de venta · Completada · Nº …» (ETP-5381) | «Cerrar» + «Ver factura» |
+
+- The route is `/sales-order/{id}` or `/sales-invoice/{id}`; `goToRoute` prefixes the app base path
+  (ETP-5378 regex, list and form origins alike) and does a full `window.location.href` navigation,
+  so `onNavigate` is a no-op. «Cerrar», the X and Esc run `handleCloseAfterCreate` (refresh via
+  `onRefresh`, ETP-4779).
+- When the created order cannot be read back (no id), the card is still shown with `num: '?'` but
+  is not clickable and no «Ver pedido» is offered — only «Cerrar».
+- No amount or currency is shown; the `sqOrderCreated` key was removed.
+
+Contract, type table and `data-testid`s: `docs/ui-customization.md` §21.
+
+**Manual verification.** On a `UE` quotation, run «Crear pedido» and verify «Pedido creado» with a
+«Borrador» card and «Ver pedido» opening `/sales-order/{id}` — from both the form and the list row
+kebab. Repeat on another quotation with «Facturar directamente» and verify «Factura creada» with a
+«Completada» card.
+
+**Automated evidence.** `tools/app-shell/src/windows/custom/sales-quotation/__tests__/QuotationConfirmModal.goToDoc.vitest.jsx`,
+`tools/app-shell/src/windows/custom/sales-quotation/__tests__/QuotationActionModals.etp5398.vitest.jsx`,
+`e2e/tests/flows/sales/sales-quotation-happy-path.integration.spec.js`,
+`e2e/tests/flows/sales/sales-quotation-full-flow.integration.spec.js`.

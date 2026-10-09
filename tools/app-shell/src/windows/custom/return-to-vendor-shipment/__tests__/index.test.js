@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/return-to-vendor-shipment/index.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -233,9 +234,9 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
       assert.match(src, /confirmAction=\{\{[\s\S]{0,400}entityName: 'returnToVendorShipment'[\s\S]{0,400}\}\}/);
     });
 
-    it("wires the invoice-result title, doc type and route for the popup's \"create invoice\" branch", () => {
-      assert.match(src, /invoiceResultTitleKey: 'returnToVendor.invoiceCreatedTitle'/);
-      assert.match(src, /invoiceDocType: 'facturaCompra'/);
+    // The result popup derives its title from the doc type, so the type is the whole contract.
+    it("wires the invoice doc type and route for the popup's \"create invoice\" branch", () => {
+      assert.match(src, /invoiceDocType: 'facturaRectificativaCompra'/);
       assert.match(src, /invoiceRoute: '\/purchase-invoice'/);
     });
   });

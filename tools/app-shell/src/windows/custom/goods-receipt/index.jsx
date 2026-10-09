@@ -145,7 +145,6 @@ export default function GoodsReceiptWindow(props) {
     token,
     ConfirmModal: ConfirmGoodsReceiptModal,
     confirmedTitleKey: 'goodsReceipt.confirmModal.confirmedTitle',
-    invoiceResultTitleKey: 'goodsReceipt.confirmModal.confirmedTitle',
     invoiceDocType: 'facturaCompra',
     invoiceRoute: '/purchase-invoice',
     onRefresh: () => setRefreshKey(k => k + 1),

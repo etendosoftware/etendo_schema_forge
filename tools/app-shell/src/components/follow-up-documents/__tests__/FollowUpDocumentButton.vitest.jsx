@@ -14,11 +14,15 @@ const mockApiFetchBase = vi.hoisted(() => vi.fn());
 const mockNavigate = vi.hoisted(() => vi.fn());
 const mockTrackDocumentCreated = vi.hoisted(() => vi.fn());
 
-// Stable translator: `{ count }` is echoed so the description interpolation is observable.
+// Stable translator: `{ count }` and `{ number }` are echoed so the interpolations are observable.
 // The input-required labels are translated (an echoed key would hit the generic fallback).
 const mockUi = vi.hoisted(() => {
   const catalog = { followUpInputWarehouseId: 'Warehouse', followUpInputWarehouseIdHelp: 'Pick the warehouse' };
-  return (key, params) => (params?.count != null ? `${key}:${params.count}` : (catalog[key] ?? key));
+  return (key, params) => {
+    if (params?.count != null) return `${key}:${params.count}`;
+    if (params?.number != null) return `${key}:${params.number}`;
+    return catalog[key] ?? key;
+  };
 });
 
 vi.mock('@/i18n', () => ({
@@ -70,7 +74,6 @@ const OPTIONS = {
     badgeKey: 'draft',
     badgeTone: 'info',
     resultDocType: 'salida',
-    resultTitleKey: 'shipmentCreated',
   },
   invoice: {
     labelKey: 'createInvoiceLabel',
@@ -271,8 +274,10 @@ describe('FollowUpDocumentButton — creating the document', () => {
 
       expect(await screen.findByTestId('confirm-result-modal')).toBeInTheDocument();
       expect(screen.queryByTestId(MODAL)).toBeNull();
-      expect(screen.getByText('shipmentCreated')).toBeInTheDocument();
-      expect(screen.getByText('ALB-0001')).toBeInTheDocument();
+      // The option's resultDocType ('salida') drives the popup title and the card.
+      expect(screen.getByTestId('confirm-result-title')).toHaveTextContent('confirmResultModal.title.albaran');
+      expect(screen.getByTestId('confirm-result-card-0')).toHaveAttribute('data-doc-type', 'salida');
+      expect(screen.getByTestId('confirm-result-card-0')).toHaveTextContent('confirmResultModal.docNumber:ALB-0001');
       expect(onRefresh).toHaveBeenCalledTimes(1);
       expect(mockTrackDocumentCreated).toHaveBeenCalledWith('goods-shipment');
       expect(created).toHaveBeenCalledTimes(1);
@@ -325,7 +330,8 @@ describe('FollowUpDocumentButton — creating the document', () => {
     });
     await openFromButton(user);
     await user.click(screen.getByTestId(PRIMARY));
-    expect(await screen.findByText('REC-0001')).toBeInTheDocument();
+    // ETP-5674: the card renders the number through `confirmResultModal.docNumber` («Nº …»).
+    expect(await screen.findByTestId('confirm-result-card-0')).toHaveTextContent('confirmResultModal.docNumber:REC-0001');
     await user.click(screen.getByText('poViewReceipt'));
     expect(mockNavigate).toHaveBeenCalledWith('/goods-receipt/rc-1');
   });

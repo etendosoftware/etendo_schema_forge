@@ -38,8 +38,8 @@ import { buildHeaders } from '@/auth/api.js';
  * @param {string}   params.token           bearer token
  * @param {Function} params.ConfirmModal    the window's own confirm modal component
  * @param {string}   params.confirmedTitleKey    i18n key for the "confirmed, no invoice" toast
- * @param {string}   params.invoiceResultTitleKey i18n key for the result popup's title
- * @param {string}   params.invoiceDocType  ConfirmResultModal doc type, e.g. "facturaVenta"
+ * @param {string}   params.invoiceDocType  ConfirmResultModal doc type, e.g. "facturaVenta" or
+ *   "facturaRectificativa" — the result popup derives its title, card label and buttons from it
  * @param {string}   params.invoiceRoute    route prefix of the created invoice
  * @param {boolean}  [params.skipPopupWhenFullyInvoiced=true] confirm directly, without ever
  *   opening `ConfirmModal`, on an already-fully-invoiced document
@@ -53,7 +53,6 @@ export function useRowConfirmAction({
   token,
   ConfirmModal,
   confirmedTitleKey,
-  invoiceResultTitleKey,
   invoiceDocType,
   invoiceRoute,
   skipPopupWhenFullyInvoiced = true,
@@ -138,12 +137,9 @@ export function useRowConfirmAction({
           onConfirmed={({ invoice } = {}) => {
             setConfirmRecord(null);
             // A confirm that created no invoice has nothing worth a result popup —
-            // same rule the form applies (ETP-5063). The currency is carried along
-            // rather than read off `confirmRecord`, which this same handler just
-            // cleared — the form can read it off its still-mounted record, this
-            // cannot.
+            // same rule the form applies (ETP-5063).
             if (invoice?.id) {
-              setInvoiceResult({ invoice, currency: confirmRecord?.['currency$_identifier'] || '' });
+              setInvoiceResult({ invoice });
             } else {
               finishWithoutInvoice();
             }
@@ -154,11 +150,9 @@ export function useRowConfirmAction({
       )}
       {invoiceResult?.invoice?.id && createPortal(
         <ConfirmResultModal
-          title={ui(invoiceResultTitleKey)}
           docs={[{
             type: invoiceDocType,
             num: invoiceResult.invoice.documentNo,
-            amount: invoiceResult.invoice.amount ?? null,
             // ETP-5378 QA follow-up — ConfirmResultModal badges the document "Borrador" unless
             // it reads `documentStatus === 'CO'` (ETP-5381 made that badge follow the real
             // status). `runConfirm` in ConfirmInOutModal already returns it, and the backend
@@ -170,8 +164,6 @@ export function useRowConfirmAction({
             documentStatus: invoiceResult.invoice.documentStatus ?? null,
             route: `${invoiceRoute}/${invoiceResult.invoice.id}`,
           }]}
-          primary={ui('soViewInvoice')}
-          currency={invoiceResult.currency || ''}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
           onClose={() => {
             setInvoiceResult(null);
