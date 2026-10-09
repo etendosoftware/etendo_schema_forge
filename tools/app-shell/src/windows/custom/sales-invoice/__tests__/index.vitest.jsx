@@ -184,7 +184,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
 import SalesInvoiceWindow from '../index.jsx';
 import { consumeFollowUpPrompt } from '@/components/follow-up-documents/followUpDocuments.js';
-import { buildInvoiceUnpostActions, invoiceUnpostRowFilter } from '../../shared/useInvoiceWindow.js';
+import { expectInvoiceBulkUnpostWiring } from '../../shared/__tests__/testUtils/invoiceBulkUnpostAssertions.js';
 import salesInvoiceDecisions from '@generated/sales-invoice/decisions.json';
 
 describe('SalesInvoiceWindow — render smoke tests', () => {
@@ -567,12 +567,7 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
     it('mounts a standalone bulk unpost button wired to the invoice unpost pair', () => {
       render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
 
-      expect(screen.getByTestId('bulk-document-action-unpost')).toBeInTheDocument();
-      const unpost = callFor('unpost');
-      expect(unpost.actionMode).toBe('neoAction');
-      expect(unpost.buildActions).toBe(buildInvoiceUnpostActions);
-      expect(unpost.rowFilter).toBe(invoiceUnpostRowFilter);
-      expect(unpost.preUnpostActions).toBeUndefined();
+      expectInvoiceBulkUnpostWiring(callFor);
     });
   });
 });
