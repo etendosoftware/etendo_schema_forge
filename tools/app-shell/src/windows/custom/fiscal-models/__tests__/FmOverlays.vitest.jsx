@@ -38,6 +38,8 @@ vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
 import { PresentModal, FileGenModal, NewDeclModal } from '../FmOverlays.jsx';
+import { toast } from 'sonner';
+import { RECEIPT_ATTACHMENT_CONFIG } from '../fiscalModelsUtils.js';
 
 // ── PresentModal ──────────────────────────────────────────────────────────────
 
@@ -173,7 +175,10 @@ describe('PresentModal — two-column layout', () => {
 
   it('renders the "Registrar presentación" left column with both manual paths, regardless of showAeatPath', () => {
     render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('fm.present.register_section.title');
+    // ETP-5584 P14 — single column (349): the popup title already says "Registrar
+    // presentación", so the column heading is not repeated; its description stays.
+    expect(document.body.textContent).not.toContain('fm.present.register_section.title');
+    expect(screen.queryByTestId('PresentModal__columnHeading')).not.toBeInTheDocument();
     expect(document.body.textContent).toContain('fm.present.register_section.desc');
     expect(document.body.textContent).toContain('fm.present.path.acuse');
     expect(document.body.textContent).toContain('fm.present.path.sin_acuse');
@@ -223,11 +228,28 @@ describe('PresentModal — two-column layout', () => {
   });
 
   it('renders a vertical divider between columns only when the AEAT column is present', () => {
-    const { container: withAeat } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
-    expect(withAeat.querySelector('[aria-hidden="true"]')).toBeTruthy();
+    // Queried by test id, not by `[aria-hidden]`: the reserved acuse slot (ETP-5584) is
+    // aria-hidden too, so an aria-hidden query would no longer single out the divider.
+    const { unmount } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(screen.getByTestId('PresentModal__columnDivider')).toBeInTheDocument();
+    unmount();
 
-    const { container: withoutAeat } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
-    expect(withoutAeat.querySelector('[aria-hidden="true"]')).toBeNull();
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('PresentModal__columnDivider')).not.toBeInTheDocument();
+  });
+
+  it('uses the two-column width variant only when the AEAT column is shown', () => {
+    const { unmount } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(screen.getByTestId('PresentModal__dialog')).toHaveClass('fm-config-modal', 'fm-present-modal', 'fm-present-modal--two-col');
+    unmount();
+
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    const dialog = screen.getByTestId('PresentModal__dialog');
+    expect(dialog).toHaveClass('fm-present-modal');
+    expect(dialog).not.toHaveClass('fm-present-modal--two-col');
+    // The width now comes from the stylesheet, not from an inline max-width that could
+    // drift from it.
+    expect(dialog.style.maxWidth).toBe('');
   });
 
   it('shows the dynamic "Modelo X · period year" subtitle when decl carries model/year/period', () => {
@@ -248,6 +270,109 @@ describe('PresentModal — two-column layout', () => {
   it('falls back to the generic subtitle when decl is entirely missing', () => {
     render(<PresentModal onConfirm={vi.fn()} onClose={vi.fn()} />);
     expect(document.body.textContent).toContain('fm.present.subtitle');
+  });
+});
+
+// ── PresentModal — title per variant (ETP-5584 P14) ─────────────────────────
+// 349 has no telematic submission in the backend (no `submit` entity in
+// Fiscal349BoxesHandler), so without `showAeatPath` the popup only registers a
+// presentation and must not be titled "Registrar/Presentar".
+describe('PresentModal — title matches what the popup can do (ETP-5584 P14)', () => {
+  const decl = { id: 'decl-1', model: '349', year: 2026, period: 'T4' };
+
+  it('is titled "Registrar presentación" (register-only key) without the AEAT path', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByTestId('PresentModal__title')).toHaveTextContent('fm.present.title_register_only');
+  });
+
+  it('keeps the "Registrar/Presentar" title and both column headings with the AEAT path (303)', () => {
+    render(<PresentModal decl={{ ...decl, model: '303' }} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(screen.getByTestId('PresentModal__title').textContent).toBe('fm.present.title');
+    expect(screen.getAllByTestId('PresentModal__columnHeading')).toHaveLength(2);
+  });
+});
+
+// ── PresentModal — justificante formats (ETP-5584 P13) ─────────────────────
+// The upload label, the input's `accept` and the picked-file check all derive from
+// RECEIPT_ATTACHMENT_CONFIG — the same constant the "Justificante" tab gets.
+describe('PresentModal — justificante formats come from RECEIPT_ATTACHMENT_CONFIG (ETP-5584 P13)', () => {
+  const decl = { id: 'decl-1', model: '349', year: 2026, period: 'T4' };
+  const pickAcuse = () => fireEvent.click(document.querySelectorAll('[style*="cursor: pointer"]')[0]);
+
+  it('derives the upload label and the accept attribute from the shared constant', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    pickAcuse();
+    expect(RECEIPT_ATTACHMENT_CONFIG.allowedMimeTypes).toEqual(['application/pdf']);
+    expect(screen.getByTestId('PresentModal__acuseInput')).toHaveAttribute('accept', 'application/pdf,.pdf');
+    // Label key gets the formats as a {types} param (no hardcoded "PDF/XML" any more).
+    expect(screen.getByTestId('PresentModal__acuseUpload').textContent).toContain('fm.present.upload_acuse');
+    expect(screen.getByTestId('PresentModal__acuseUpload').textContent).not.toMatch(/XML/);
+  });
+
+  it('rejects a file outside the constant (XML) and keeps Confirm disabled', () => {
+    const onConfirm = vi.fn();
+    render(<PresentModal decl={decl} onConfirm={onConfirm} onClose={vi.fn()} />);
+    pickAcuse();
+    const xml = new File(['<r/>'], 'acuse.xml', { type: 'application/xml' });
+    fireEvent.change(screen.getByTestId('PresentModal__acuseInput'), { target: { files: [xml] } });
+    expect(toast.error).toHaveBeenCalledWith('attachmentsInvalidType');
+    expect(screen.queryByText('acuse.xml')).not.toBeInTheDocument();
+    const confirm = screen.getByText('fm.action.confirm_presentation').closest('button');
+    expect(confirm).toBeDisabled();
+  });
+
+  it('accepts a PDF whose browser MIME type is empty, through the extension fallback', () => {
+    const onConfirm = vi.fn();
+    render(<PresentModal decl={decl} onConfirm={onConfirm} onClose={vi.fn()} />);
+    pickAcuse();
+    const pdf = new File(['%PDF'], 'acuse.pdf', { type: '' });
+    fireEvent.change(screen.getByTestId('PresentModal__acuseInput'), { target: { files: [pdf] } });
+    fireEvent.click(screen.getByText('fm.action.confirm_presentation').closest('button'));
+    expect(onConfirm).toHaveBeenCalledWith({ status: 'submitted_ack', acuseFile: pdf });
+  });
+});
+
+// ── PresentModal — stable size (ETP-5584 P6) ────────────────────────────────
+// Picking "Con acuse de recibo" reveals the upload row inside its card. The modal
+// must not change height: while the row is hidden, an empty slot of the same
+// CSS-defined height (`.fm-present-acuse-slot` vs `.fm-present-acuse-upload`, both
+// derived from `--fm-acuse-upload-h`) is rendered instead. jsdom has no layout, so
+// these tests pin the swap itself; the pixel equality is checked in a real browser.
+describe('PresentModal — stable size when an option is picked (ETP-5584)', () => {
+  const decl = { id: 'decl-1', model: '303', year: 2026, period: 'T1' };
+  const cards = () => document.querySelectorAll('[style*="cursor: pointer"]');
+
+  it.each([
+    ['303 (two columns)', true],
+    ['349 (single column)', false],
+  ])('%s: reserves the upload slot until "Con acuse de recibo" is picked, then swaps it for the upload row', (_label, showAeatPath) => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath={showAeatPath} />);
+    expect(screen.getByTestId('PresentModal__acuseSlot')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.queryByTestId('PresentModal__acuseUpload')).not.toBeInTheDocument();
+
+    fireEvent.click(cards()[0]); // submitted_ack
+    expect(screen.getByTestId('PresentModal__acuseUpload')).toBeInTheDocument();
+    expect(screen.queryByTestId('PresentModal__acuseSlot')).not.toBeInTheDocument();
+
+    fireEvent.click(cards()[1]); // submitted — the slot comes back
+    expect(screen.getByTestId('PresentModal__acuseSlot')).toBeInTheDocument();
+    expect(screen.queryByTestId('PresentModal__acuseUpload')).not.toBeInTheDocument();
+  });
+
+  it('keeps the slot (only one) while the AEAT path is selected', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    fireEvent.click(cards()[2]); // aeat_telematic
+    expect(screen.getAllByTestId('PresentModal__acuseSlot')).toHaveLength(1);
+  });
+
+  it('the upload button shows the picked file name (full name kept in its title for ellipsized names)', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(cards()[0]);
+    const file = new File(['x'], 'un-justificante-con-un-nombre-muy-largo.pdf', { type: 'application/pdf' });
+    fireEvent.change(document.querySelector('input[type="file"]'), { target: { files: [file] } });
+    const btn = screen.getByText(file.name);
+    expect(btn).toHaveClass('fm-present-acuse-upload__btn');
+    expect(btn).toHaveAttribute('title', file.name);
   });
 });
 

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 // ETP-4404 — FmModel349Page "Rectificaciones" tab: KPI, tab badge, table and
 // compute-path refresh. Mocking conventions follow FmModel349Page.render.vitest.jsx
 // (the Tabs mock here additionally surfaces each tab badge for assertions).
@@ -32,7 +33,6 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div',
     { className: 'test-kpi349', 'data-kpi-label': label },
@@ -179,14 +179,17 @@ describe('FmModel349Page — rectifications from _precomputed', () => {
 // ── (b) empty state ──────────────────────────────────────────────────────────
 
 describe('FmModel349Page — rectifications empty state', () => {
-  it('KPI shows 0, tab has no badge and the tab shows the empty-state text', () => {
+  // ETP-5584 (P12) — every list tab shows its count, 0 included; (P11) the empty state is the
+  // window's one empty state: icon + title + the existing "no rectifications" text.
+  it('KPI shows 0, tab counter shows 0 and the tab shows the empty-state text', () => {
     render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
     expect(rectifKpiValue()).toBe('0');
-    expect(rectifTab()).toHaveAttribute('data-badge', '');
+    expect(rectifTab()).toHaveAttribute('data-badge', '0');
 
     fireEvent.click(rectifTab());
     expect(screen.getByText('fm.m349.rectif.empty')).toBeInTheDocument();
+    expect(screen.getByTestId('fm349-rectif-empty')).toHaveTextContent('fm.m349.rectif.empty_title');
     expect(document.querySelector('tbody tr')).toBeNull();
   });
 });

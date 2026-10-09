@@ -1,3 +1,6 @@
+/**
+ * @covers tools/app-shell/src/components/copilot/ocr/buildOcrSchema.js
+ */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildOcrSchema } from '../buildOcrSchema.js';
@@ -109,5 +112,39 @@ describe('buildOcrSchema — purchase-invoice doc type', () => {
     const lineItem = schema.properties.line_items.items;
     assert.equal(lineItem.additionalProperties, false);
     assert.equal(lineItem.required.length, Object.keys(lineItem.properties).length);
+  });
+
+  it('emits a nested nullable object field with a strict shape and a nullable enum', () => {
+    const schema = buildOcrSchema({
+      extraHeaderFields: [{
+        name: 'receiver',
+        kind: 'object',
+        description: 'party',
+        properties: [
+          { name: 'tax_id_raw', kind: 'text', description: 'raw' },
+          { name: 'tax_id_type', kind: 'text', enum: ['vat', 'unknown'] },
+        ],
+      }],
+    });
+    const receiver = schema.properties.receiver;
+    assert.deepEqual(receiver.type, ['object', 'null']);
+    assert.equal(receiver.description, 'party');
+    assert.equal(receiver.additionalProperties, false);
+    assert.deepEqual(receiver.required, ['tax_id_raw', 'tax_id_type']);
+    assert.deepEqual(receiver.properties.tax_id_type.enum, ['vat', 'unknown', null]);
+    assert.deepEqual(schema.required, ['receiver']);
+  });
+
+  it('the purchase-invoice doc type requests issuer and receiver, keeping vendor_name and tax_id', () => {
+    const doc = OCR_DOC_TYPES.find(t => t.id === 'purchase-invoice');
+    const schema = buildOcrSchema(doc);
+    for (const party of ['issuer', 'receiver']) {
+      assert.deepEqual(schema.properties[party].required, ['name', 'tax_id_raw', 'tax_id_label', 'tax_id_type']);
+      assert.ok(schema.required.includes(party));
+    }
+    // Removing this wiring would silently disable the receiver tax id check.
+    assert.equal(doc.validateExtraction, 'receiverTaxId');
+    assert.ok(schema.properties.vendor_name);
+    assert.ok(schema.properties.tax_id);
   });
 });

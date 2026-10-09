@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 // Regression tests for FmModel349Page
 // Bug 1: NaN when operator.base is a string ("2323.00" instead of a number)
 // Bug 2: liveOperators not updated when decl._precomputed changes via polling
@@ -34,7 +35,6 @@ vi.mock('../use349Pdf.js', () => ({
 // FmCommon.jsx lives at fiscal-models/ (3 levels up)
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   // KpiWidget must render the value prop so count/total KPI tests can read it.
   KpiWidget: ({ value, valueColor }) => (
     React.createElement('span', { className: 'test-kpi-value', style: { color: valueColor } }, value)

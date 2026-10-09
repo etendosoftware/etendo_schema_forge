@@ -90,7 +90,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `hideMoreMenu` | boolean | `false` | — | Hides the triple-dot "more" menu in the detail view action bar. |
 | `hideStatusFilter` | boolean | `false` | — | Hides the status-filter dropdown ("All statuses") in the list toolbar, even when a `status`-typed column exists. The rest of the filter bar (date filter, Filters) is unaffected. |
 | `hideRecordCount` | boolean | `false` | — | Omits the small record-count badge next to the list title (`TopBar.jsx`'s `recordCount` badge, plumbed through `AppLayout.jsx`). `ListView.jsx` passes `recordCount: hideRecordCount ? undefined : hook.items.length` to `useSetPageMeta` — `undefined` is `TopBar.jsx`'s existing "don't render the badge" signal. Use this when the count would be misleading, e.g. a tree-view `headerTable` whose rows are not ListView's paginated page (`chart-of-accounts`). Added ETP-5101. |
-| `customListIcons` | boolean | `false` | — | Swaps the list toolbar sort/refresh icons for the shared `SortIcon` / `RefreshIcon` set (`@/components/ui/custom-icons`), matching Contacts/Warehouse. Emits `SortIconComponent` / `RefreshIconComponent` on `ListView`. |
+| `customListIcons` | boolean | `false` | — | Emits `SortIconComponent` / `RefreshIconComponent` on `ListView`, swapping the toolbar sort/refresh icons for the shared `SortIcon` / `RefreshIcon` set (`@/components/ui/custom-icons`). **Not the approved style** (ETP-5601): the approved toolbar icons are the `ListView` defaults (lucide `ArrowUpDown` / `RefreshCw`, as in `sales-order`). No window uses this option; leave it unset. |
 | `contentBg` | string | `"bg-white"` | Any Tailwind bg class | Background color of the main content card in the detail view (e.g., `"bg-slate-50"` for a light gray tone). |
 | `formCardPadding` | string | `null` | Any Tailwind padding class | Override the Tailwind padding class applied to the form card div in the detail view. When `null`, `DetailView` falls back to `p-6`. Use `"px-2 pb-2"` for tighter (8px horizontal) padding, for example on windows with dense form layouts. |
 | `hideDelete` | boolean | `false` | — | Disables the CRUD delete capability at the contract/API level — emits `apiPrediction.crud.<entity>.delete: false` in `contract.json` for the window's entities, and — since ETP-4745 (`schema_forge_core`'s shared `resolveContractEntityMethods()`) — is also written through to `ETGO_SF_ENTITY.ISDELETE = 'N'` on push, so NEO Headless genuinely rejects `DELETE` (`405`) rather than only hiding it in the UI. **Before ETP-4745**, this flag only reached `contract.json`/the UI-derived affordance; a direct API `DELETE` call against an entity with `hideDelete: true` still succeeded — a wiring gap, not intentional. It does not remove the detail-view **toolbar** Delete button by itself (see `hideDeleteButton` below for that). It DOES, however, remove the row-level delete icon from every list/lines rendering path — both plain `DataTable` tabs (via the `{onDeleteRow && (...)}` gate) and `linesLayout: "inlineEditable"` tabs (via `InlineLinesPanel`'s `canDelete` gate, ETP-4565) — because both derive `onDeleteRow` as `undefined` once `crud.<entity>.delete` is `false`, and both components render the trash button conditionally on that handler being present. Used for master-data windows whose records are provisioned/retired outside the app (e.g. `tax`, `tax-category`, `open-close-period-control`). **Windows declared before ETP-4745 shipped need a re-push** (`make regen ONLY=<window> PUSH_TO_NEO=1` + `./gradlew export.database`) to actually close the gap in their own `ETGO_SF_ENTITY` row — see `docs/feedback.md` for the current list. |
@@ -338,8 +338,8 @@ Renders one or more additional status pills next to the standard document-status
 | Property | Type | Purpose |
 |----------|------|---------|
 | `field` | string | Header field to read (`data[field]`). Etendo `'Y'`/`'N'`-aware: truthy when `true`, `'Y'`, or `'true'`. A field on the AD **posting-status** domain (`Posted`) is resolved by `lib/postedStatus.js` first — see *Posting-status fields* below. |
-| `trueKey` | string | i18n key (resolved through `useUI()`) shown when the field is truthy. Renders with `tone: "success"`. |
-| `falseKey` | string | i18n key shown when the field is falsy. Renders with `tone: "warning"`. Omit for a **one-sided pill** that only appears in the truthy state — `DetailView` guards against rendering the generator's literal `'undefined'` fallback and hides the pill instead when the current value's key is missing. |
+| `trueKey` | string | i18n key (resolved through `useUI()`) shown when the field is truthy. Renders with `tone: "success"` (on a `Posted` field the tone comes from `lib/postedStatus.js` — same result). |
+| `falseKey` | string | i18n key shown when the field is falsy. Renders with `tone: "warning"` (on a `Posted` field the tone comes from `lib/postedStatus.js` — same result). Omit for a **one-sided pill** that only appears in the truthy state — `DetailView` guards against rendering the generator's literal `'undefined'` fallback and hides the pill instead when the current value's key is missing. |
 | `visibleWhenCapability` | string | Optional. Same capability gate as the field-level property of the same name (see `visibleWhenCapability` under Grid cell flags below) — the pill is omitted entirely (not just disabled) when the named capability resolves `false` for the current role. |
 | `_note` | string | Optional free-text comment, ignored at runtime. Useful for documenting *why* the pill exists inline in `decisions.json`. |
 
@@ -353,10 +353,19 @@ that maps those codes to a label and a tone, and **both** the detail pill and th
 badge resolve through it, so they can never disagree on the same raw value again — before
 it existed, each renderer had its own hardcoded `'Y'`/`'N'` allowlist and the same record
 showed a bare `—` in the list while the pill claimed "Not posted". `trueKey`/`falseKey`
-still drive `Y`/`N` exactly as documented above; the registry only covers the other codes,
-which is what keeps already-shipped windows unchanged.
+still drive the `Y`/`N` **labels** exactly as documented above.
 
-**Real example — `posted` on `purchase-invoice`/`sales-invoice` (ETP-4520) and `return-to-vendor-shipment`/`return-material-receipt` (ETP-4707, 3rd window on the pattern):** shown above. Pair with the field-level `badge`/`badgeLabels`/`badgeVariants` properties (see Grid cell flags below) to show the same true/false state as both a grid-column pill and a form-header pill, driven by one `posted` field.
+**The registry is also the only colour source for posting statuses (ETP-5647).** Every code,
+`Y`/`N` included, maps to one status tone there — `Y` success, `N` warning (yellow: pending,
+not an error), every failed posting (`p` "Periodo cerrado" included) destructive, the
+switched-off codes neutral — read through `postedStatusTone()` by the grid column, the detail
+pill, the Not Posted Documents page and the financial-account reconciliations and movements.
+A window does **not** pick posting colours: `badgeVariants` on a `Posted` column is ignored,
+and a guard test (`lib/__tests__/postedStatus.gridDetailParity.test.js`) fails if one is
+declared. Before this, 13 windows copy-pasted `badgeVariants: { false: 'orange' }`, so "Sin
+contabilizar" read as an orange error in the list and as a yellow pending pill in the detail.
+
+**Real example — `posted` on `purchase-invoice`/`sales-invoice` (ETP-4520) and `return-to-vendor-shipment`/`return-material-receipt` (ETP-4707, 3rd window on the pattern):** shown above. Pair with the field-level `badge`/`badgeLabels` properties (see Grid cell flags below) to show the same state as both a grid-column pill and a form-header pill, driven by one `posted` field — both coloured by `lib/postedStatus.js`.
 
 ### Attachments (`window.attachments`)
 
@@ -617,7 +626,23 @@ Each entry in `actions` accepts:
 | Mutually exclusive | ✅ | ❌ |
 | Combinable | ❌ | ✅ |
 
-The two can coexist in the same window. In the query, the subset is applied first and the quick filters refine it. On screen the order is the reverse (ETP-5509): the quick filters (toggle pills) sit on the first toolbar row, and the subsets (segmented control) sit on a second row below it — see [`list-filters.md` → "Toolbar layout (ETP-5509)"](list-filters.md#toolbar-layout-etp-5509).
+The two can coexist in the same window. In the query, the subset is applied first and the quick filters refine it. On screen both share the toolbar row, subsets first (ETP-5509); when the row does not fit, the subsets (segmented control) alone wrap to a second row below the quick filters — see [`list-filters.md` → "Toolbar layout (ETP-5509)"](list-filters.md#toolbar-layout-etp-5509).
+
+### Import Limits (`window.import.limit`) — ETP-5676
+
+Read by the generic import dialog (`ImportDialog`) from the generated contract; the generator passes the object through unchanged.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `maxRows` | number | `5000` | Rows beyond this are refused when the file is loaded. |
+| `concurrency` | number | `4` | Parallel `/batch` requests. |
+| `batchSize` | number | `1` | Rows per `POST /sws/neo/batch`. `1` is the original one-request-per-row behaviour. Capped at `50` by the engine. Opt in per window: only where the descriptor's operations are safe to share one transaction. Product and Contacts use `10`; Contacts is a measured opt-in (see `contacts.md`) and can be set back to `1`. |
+
+**Operational override — global flag `import-batch-size`.** A numeric feature flag overrides `batchSize` for EVERY window at once (no per-window or per-entity variants; `concurrency` is not affected). Unset, `0`, negative, non-finite or non-numeric means "no override": the window's `limit.batchSize` applies, and `1` if it declares none. A valid number is rounded down and then clamped to 1..50 by the engine. Use it to turn batching down to `1` (or try another size) without a deploy; set it through `VITE_FEATURE_FLAGS` (`{"import-batch-size":5}`) or ConfigCat. The decisions.json value stays the permanent per-window setting.
+
+**Telemetry — `import_completed`.** Every import run ends with one `import_completed` event (Datadog and Mixpanel through `lib/observability`), built from the summary the dialog hands to `onImportFinished`; core never talks to telemetry, `useWindowImportDialog` emits. Properties are quantities, settings and the entity name only — never a row, header or cell: `outcome` (`completed` | `cancelled` | `failed`), `entity`, `rowsTotal`, `rowsCreated`, `rowsFailed`, `rowsDuplicate`, `rowsUnknown`, `durationMs`, `readMs`, `validateMs`, `sendMs`, `batchSize`, `concurrency`, `columnsInFile`, `columnsAutoMapped`, `columnsManuallyMapped`, `fkAutoResolved`, `fkCreated`. `durationMs` is processing time (read + validate + send), not the time the user spends reviewing. `completed` means a send finished (row failures are in `rowsFailed`); `failed` is an unreadable file or a send that blew up; `cancelled` is a loaded file abandoned before sending. A resend of fixed rows from the result step is a new run and reports its own rows. New properties must be added to the event in `events.js` AND to the allowlist/ranges in `payload.js`.
+
+With `batchSize > 1` the engine namespaces each row's op ids (`r<row>.<id>`, including `parentRef` and `$ref:` references) so they stay unique per request. A chunk is resent row by row only after a rollback the server vouches for (`committed:false`, `atomic:true`, empty `persisted`), so each row gets its own outcome; any other outcome — no response, a non-BatchService body, `atomic:false`, a missing or non-empty `persisted` — reports all its rows UNKNOWN and never resends (no idempotency key — resending could duplicate).
 
 ### Custom Components (`window.customComponents`)
 
@@ -691,6 +716,8 @@ Additional actions shown in the dropdown of the split "New" button in the list v
 | `component` | string | Optional. Name of a custom component in `tools/app-shell/src/windows/custom/{window}/`. When set, the generator imports it, creates a `show{Key}Modal` state, and passes `onClick: () => setShow{Key}Modal(true)`. If omitted, generates an empty `onClick` placeholder. |
 
 The component receives: `token`, `apiBaseUrl`, `windowName`, `onClose`. The `token` prop remains for legacy compatibility while existing generated custom components are migrated. New or migrated components that need authenticated API calls should use `useApiFetch(apiBaseUrl)` instead of constructing raw auth headers.
+
+To put the window's own import (`window.import`) in this menu, a window wrapper passes a `newActions` item with `opensImportDialog: true` straight to the page. The generator does not emit that key. `ListView` drops the item when the import is disabled and hides the standalone import icon while the menu offers it. See `docs/ui-customization.md` → *`ListView` / `DetailView` wrapper props*.
 
 ### Process Overrides (`window.processOverrides`)
 
@@ -912,6 +939,8 @@ Field keys use **camelCase from raw schema** (e.g., `"businessPartner"`, `"order
 | `searchable` | boolean | `false` | `true`/`false` | Enable as filter parameter in list API. |
 | `section` | string | `null` | `"principal"`, `"other"`, custom | Group fields into form sections. |
 | `inline` | boolean | `false` | `true`/`false` | When `true`, keeps the field in the normal form grid flow even if the generator would otherwise pull it out. Currently relevant for image-type fields: an image field with `inline: true` renders inside the form grid using `row-span-2`, spanning two rows for visual balance instead of being extracted to a separate slot. |
+| `span` | number | `1` | `1`–`4` | Form grid columns the field occupies (`col-span-N`). In a horizontal header grid narrower than the span (the grid measures its own width: 2, 3 or 4 columns, ETP-5513) the span is clamped to the column count, so it never creates extra columns. |
+| `rows` | number | `4` (plus a 96 px min-height) | integer ≥ 2 | Visible height, in text rows, of a `textarea` field. **Minimum 2 (ETP-5513):** `EntityForm` renders `max(rows, 2)`, so a value of `1` still renders 2 rows — a one-line textarea reads as a plain input and hides that the field takes multi-line text. Windows still declaring `rows: 1` (business-partner-category, asset-group, cost-center, product-category, warehouse, service-project) render at 2 rows. |
 | `skipDefault` | boolean | `false` | `true`/`false` | **HandleDefaults opt-out (per field).** When `true`, the line add-row never applies a backend-resolved default to this field (it stays empty / keeps its literal seed) even when the entity's `handlesDefaults` is on. Emitted to the contract / add-row literal only when `true`. |
 | `clearsField` | string | `null` | Sibling field key | **Mutual exclusion.** Names a sibling field that is cleared (set to `0`/empty) whenever this field gets a non-zero value — e.g. a journal line where entering a Debit clears the Credit, and vice versa. The two fields form a "one-of" group: in the inline add-row's required-field check, an empty member is **not** flagged as missing while its partner carries a value (so a debit-only line submits). A required boolean/checkbox is likewise never treated as missing (unchecked is valid). |
 
@@ -923,6 +952,14 @@ Field keys use **camelCase from raw schema** (e.g., `"businessPartner"`, `"order
 | `readOnly` | false | true | false |
 | `system` | false | false | false |
 | `discarded` | false | false | false |
+
+### Form default (`defaultExpr`) — ETP-5676
+
+`defaultExpr` declares the value a new record's form starts with (served by `GET .../defaults`). Use it for an **editable** column whose AD default is empty but whose form should still start from a value — the literal `"0"` is the usual case. Example: `contacts` → `entities.businessPartner.fields.creditLimit` declares `"defaultExpr": "0"`, so the Credit Limit field opens at `0` instead of blank.
+
+- Stored in `ETGO_SF_FIELD.defaultvalue` by `push-to-neo` (`make regen PUSH_TO_NEO=1`), where it overrides the AD_Column default when non-empty.
+- Plain literals (e.g. `0`) pass through unchanged; `@token@` and `@SQL=` expressions are resolved as usual.
+- The value reaches `/defaults` as a **string** (`"0"`), not a JSON number. Numeric defaults from `defaultExpr` are not coerced on this path. Consumers that need a number must coerce it.
 
 ### Derivation (`derivation`) — ETP-5245
 
@@ -1065,7 +1102,7 @@ For a **boolean** grid column, these three field-level properties render the cel
 |----------|------|---------|---------|
 | `badge` | boolean | `false` | Renders the boolean column as a `Tag` pill instead of plain Yes/No text. Requires the field to resolve as a boolean at runtime (`type: "boolean"`, or an Etendo `'Y'`/`'N'`-serialized value). |
 | `badgeLabels` | object | `null` | `{ "true": <label>, "false": <label> }`. Each `<label>` is either a plain string or a per-locale object `{ en_US, es_ES }`. Resolved at render time by `createBadgeLabelResolver` (`tools/app-shell/src/components/contract-ui/DataTable.cellRenderers.jsx`) against the active locale, falling back to `en_US` and then to the generic `statusComplete`/`statusInProcess` i18n keys when the object (or that side of it) is absent. |
-| `badgeVariants` | object | `{ "true": "green", "false": "neutral" }` | `{ "true": <Tag variant>, "false": <Tag variant> }`. Any variant accepted by the shared `Tag` component (e.g. `"green"`, `"orange"`, `"blue"`, `"purple"`, `"red"`). |
+| `badgeVariants` | object | `{ "true": "green", "false": "neutral" }` | `{ "true": <Tag variant>, "false": <Tag variant> }`. Any variant accepted by the shared `Tag` component (e.g. `"green"`, `"orange"`, `"blue"`, `"purple"`, `"red"`). **Ignored on a `Posted` column** — posting colours come only from `lib/postedStatus.js` (see *Posting-status fields* above), and declaring it there fails a guard test. |
 
 **Filtering:** `resolveFilterMode()` (`tools/app-shell/src/lib/gridQuery.js`) auto-detects `type: "boolean"` + `badgeLabels` present and switches the column's Advanced Filter (funnel icon) to `booleanLabel` mode, offering the two `badgeLabels` strings themselves (not raw `true`/`false`) as the selectable filter values — no extra `decisions.json` flag needed beyond what is already set for the badge.
 
@@ -1083,12 +1120,30 @@ For a **boolean** grid column, these three field-level properties render the cel
   "badgeLabels": {
     "true":  { "en_US": "Posted",     "es_ES": "Contabilizado" },
     "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
-  },
-  "badgeVariants": { "true": "green", "false": "orange" }
+  }
 }
 ```
 
-Renders a green "Contabilizado" pill or an orange "Sin contabilizar" pill in the grid, and both strings become the two selectable options in that column's Advanced Filter. Pair with `window.statusPills` (see the Window Properties section above) to also surface the same true/false state as a pill on the detail-view form header, driven by the same field.
+Renders a green "Contabilizado" pill or a yellow "Sin contabilizar" pill in the grid — and a
+red pill naming the reason for a failed posting (`p` "Periodo cerrado", `i`, `E`…) — and both
+`badgeLabels` strings become the two selectable options in that column's Advanced Filter. No
+`badgeVariants`: a `Posted` column takes its colours from `lib/postedStatus.js` (ETP-5647).
+Pair with `window.statusPills` (see the Window Properties section above) to also surface the
+same state as a pill on the detail-view form header, driven by the same field.
+
+**Example — `badgeVariants` on a non-posting boolean (`salesPriceList` on `price-list`):**
+
+```json
+"salesPriceList": {
+  "grid": true,
+  "badge": true,
+  "badgeLabels": {
+    "true":  { "es_ES": "Venta",  "en_US": "Sales" },
+    "false": { "es_ES": "Compra", "en_US": "Purchase" }
+  },
+  "badgeVariants": { "true": "blue", "false": "purple" }
+}
+```
 
 #### Composite list column (`multiField`)
 

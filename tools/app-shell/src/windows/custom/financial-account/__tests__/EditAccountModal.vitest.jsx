@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/EditAccountModal.jsx
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -345,6 +346,19 @@ describe('EditAccountModal', () => {
   });
 
   describe('connected account', () => {
+    it('shows the "last sync" line inside the connection panel when connected', async () => {
+      fetchStatus.mockResolvedValue({ ...BASE_STATUS, lastSyncDate: '2020-01-01T10:00:00Z' });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      const line = await screen.findByTestId('bank-connection-last-sync');
+      expect(line).toHaveTextContent('financeAccountsLastSyncAgo');
+    });
+
+    it('shows "never synced" in the panel when the connection has no lastSyncDate', async () => {
+      fetchStatus.mockResolvedValue({ ...BASE_STATUS, lastSyncDate: null });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      expect(await screen.findByTestId('bank-connection-last-sync')).toHaveTextContent('financeAccountsNeverSynced');
+    });
+
     it('renders the bank connection panel (sync, editable IBAN, read-only Currency) and no Connect button', async () => {
       renderModal({ account: CONNECTED_ACCOUNT });
       await waitFor(() => expect(fetchStatus).toHaveBeenCalledWith('acc-9'));

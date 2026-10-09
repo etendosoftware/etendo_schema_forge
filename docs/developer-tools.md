@@ -2,6 +2,10 @@
 
 CLI tools used by the team to streamline development workflows.
 
+## Pre-push E2E backend URL
+
+The integration E2E suite resolves its backend as `E2E_BACKEND_URL`, then the `PORT` in `<env root>/build/local-env/env` (a local-env worktree, keeping the host and context path of `context.url`), then `context.url` from `config/Openbravo.properties`, then `http://localhost:8080/etendo`. `E2E_PASSWORD` keeps its `12345` default; the specs use onboarding credentials or `E2E_USER`/`E2E_PASSWORD`, not the `admin` login.
+
 ## Optional Kubernetes Pre-push Runner
 
 The normal pre-push hook runs locally. Set `PREPUSH_EXECUTION=cloud` in the

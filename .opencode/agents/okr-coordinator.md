@@ -1,7 +1,7 @@
 ---
 description: "coordinator -- ORION — OKR Coordinator. You are ORION, the OKR Coordinator for Etendo GO."
 mode: subagent
-color: "blue"
+color: "#3B82F6"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/okr-coordinator.md - Regenerate: make sync-agents

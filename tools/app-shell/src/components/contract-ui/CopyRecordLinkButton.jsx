@@ -18,8 +18,8 @@ export default function CopyRecordLinkButton({ recordId, windowName }) {
             onClick={onCopyLink}
             aria-label={ui('copyLink')}
             data-testid="CopyRecordLinkButton"
-            className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors">
-            <Link2 className="h-[15px] w-[15px]" data-testid="CopyRecordLinkButton__icon" />
+            className="h-10 w-10 flex items-center justify-center rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors">
+            <Link2 className="h-5 w-5" data-testid="CopyRecordLinkButton__icon" />
           </button>
         </TooltipTrigger>
         <TooltipContent data-testid="TooltipContent__CopyRecordLinkButton">{ui('copyLink')}</TooltipContent>

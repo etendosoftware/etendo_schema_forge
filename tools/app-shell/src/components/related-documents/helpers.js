@@ -78,3 +78,22 @@ export function patchById(specName, entityName, id, payload, token, apiBaseUrl, 
     .then(r => (r.ok ? r.json() : r.text().then(msg => Promise.reject(new Error(msg || `Request failed (${r.status})`)))))
     .then(j => j?.response?.data?.[0] || null);
 }
+
+/**
+ * Invoices manually linked through "Import from Source Invoice" (ETP-4737/ETP-4919),
+ * as a source `fetch` for the given invoice spec. `originInvoices` is an array of
+ * {id, documentNo}; the legacy singular `originInvoice` (bare id) is kept as a
+ * fallback for an older response shape.
+ */
+export function fetchOriginInvoicesOf(specName) {
+  return async function fetchOriginInvoices({ record, token, apiBaseUrl }) {
+    const ids = Array.isArray(record?.originInvoices)
+      ? record.originInvoices.map(o => o?.id).filter(Boolean)
+      : [record?.originInvoice].filter(Boolean);
+    if (ids.length === 0) return [];
+    const invoices = await Promise.all(
+      ids.map(invId => fetchById(specName, 'header', invId, token, apiBaseUrl))
+    );
+    return invoices.filter(Boolean);
+  };
+}

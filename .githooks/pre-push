@@ -132,8 +132,8 @@ HANDOFF_FILE="$REPO_DIR/sonar-reports/sonar-handoff-prompt.md"
 rm -f "$HANDOFF_FILE"
 
 # Remembers which numbered step (0-4) failed last time, so the next push can
-# quick-check just that step before committing to a full re-run. Written
-# right before every failing exit; cleared on a clean full pass.
+# report it. Written right before every failing exit; cleared when that step
+# passes again or on a clean full pass.
 LAST_FAILED_FILE="$REPO_DIR/tmp/pre-push/last-failed-step"
 
 # Fail fast: Check for uncommitted or untracked changes
@@ -293,7 +293,7 @@ record_summary_row() {
 # developer sees what to fix, then remove it — otherwise a LATER, unrelated
 # step's failure in this same run would show this stale handoff instead of
 # its own detail.
-# $4 (optional): step key to remember for the next run's quick re-check.
+# $4 (optional): step key to remember as the last failed step (LAST_FAILED_FILE).
 report_failure() {
   local step_name="$1" exit_status="$2" abs_log="$3" step_key="${4:-}"
   if [ -n "$step_key" ]; then
@@ -568,14 +568,26 @@ check_go_module_push_sync() {
 # developer machines legitimately deploy under different context names (e.g. /etendogoclean).
 # E2E_BACKEND_URL always wins when set; falls back to the historical /etendo default when the
 # properties file is missing or has no context.url (CI, a fresh checkout, etc).
+# local-env (isolated worktree environments): the env's Tomcat lives on its own port, recorded as
+# `export PORT=NNNN` in <env root>/build/local-env/env, while context.url keeps the copied :8080.
+# When that file exists its PORT replaces the port of the URL (host and context path are kept).
+# Priority: E2E_BACKEND_URL > local-env PORT > context.url > http://localhost:8080/etendo.
 resolve_backend_url() {
-  local etendo_root props_file url
+  local etendo_root props_file env_file url port
   etendo_root="$(git rev-parse --show-toplevel 2>/dev/null)/.."
   props_file="$etendo_root/config/Openbravo.properties"
+  env_file="$etendo_root/build/local-env/env"
   if [ -f "$props_file" ]; then
     url="$(grep -E '^context\.url=' "$props_file" | tail -1 | sed 's/^context\.url=//; s/\\:/:/g')"
   fi
-  echo "${url:-http://localhost:8080/etendo}"
+  url="${url:-http://localhost:8080/etendo}"
+  if [ -f "$env_file" ]; then
+    port="$(grep -E '^export PORT=[0-9]+[[:space:]]*$' "$env_file" | tail -1 | sed -E 's/^export PORT=([0-9]+).*/\1/')"
+    if [ -n "$port" ]; then
+      url="$(printf '%s' "$url" | sed -E "s#^(https?://[^/:]+)(:[0-9]+)?#\1:$port#")"
+    fi
+  fi
+  echo "$url"
 }
 
 run_playwright() {
@@ -839,8 +851,8 @@ run_step_2() {
 #
 # (a) genuinely needs the sibling repo's committed XML as the "prev" side of
 # the diff, so ONLY that half is conditionally skipped when it's absent.
-# Both halves share step key "3" for the quick re-check: whichever fails, the
-# next push re-runs this whole function (regen + drift) before anything else.
+# Both halves share step key "3" in the last-failed marker: whichever fails, the
+# next push reports step 3, and the marker clears once both halves pass.
 run_step_3() {
   if [ "$RUN_S3" != "1" ]; then
     echo "==> [3/5] Regenerating all windows from cache (UI / contract drift check)... SKIPPED ⏭️  (no artifacts/ or cli/ changes)"
@@ -926,44 +938,31 @@ run_step_4() {
 }
 
 # ----------------------------------------------------------------------------
-# Quick re-check: if the previous push attempt failed on a specific numbered
-# step, run just that step first — fast feedback on the known issue before
-# spending time on the ones that already passed. Either way (fixed or still
-# broken), fall through to the full 0-4 sequence below: a fix for one step
-# must not skip verifying the others still hold, and a still-broken step is
-# simply recorded here (see the consolidated summary at the end) rather than
-# stopping the run.
+# Previous failure: if the last push attempt failed on a numbered step, say so
+# and run the full 0-4 sequence below as usual. That step runs once, in its
+# place; run_step clears the marker as soon as it passes.
+#
+# There is no separate quick re-check of that step any more. It ran the failed
+# step first and then the full pipeline ran it again: step 2 twice, 208s + 227s
+# of a 445s push (ETP-4682), and ~580s twice on a later push (ETP-5671).
+# ETP-4682 dropped it only with the step cache on; it is dropped in every case.
+#
+# Skipping the step in the full run instead would be wrong: a re-check runs
+# BEFORE steps 0..N-1, so an `npm ci` or a regen afterwards can invalidate its
+# result. The full pipeline stays the only verdict.
 # ----------------------------------------------------------------------------
 LAST_FAILED_STEP=""
 [ -f "$LAST_FAILED_FILE" ] && LAST_FAILED_STEP="$(cat "$LAST_FAILED_FILE" 2>/dev/null || echo "")"
 
-# The quick re-check exists to reach the previously-failed step without paying for
-# the earlier ones again. The step cache does that better AND correctly: with it on,
-# the earlier steps are hits and the full pipeline reaches the failed step almost
-# immediately, so the re-check only duplicates work.
-#
-# Measured: it ran step 2 twice, 208s + 227s of a 445s push.
-#
-# Skipping the step in the FULL run instead would be wrong — the re-check runs
-# BEFORE steps 0..N-1, so an `npm ci` or a regen afterwards can invalidate its
-# result. Dropping the re-check keeps the full pipeline authoritative.
-if step_cache_enabled && [ -n "$LAST_FAILED_STEP" ]; then
-  echo "==> Previous push failed at step $LAST_FAILED_STEP — step cache is on, going straight to the full pipeline."
-  LAST_FAILED_STEP=""
-fi
-
-if [ -n "$LAST_FAILED_STEP" ]; then
-  case "$LAST_FAILED_STEP" in
-    0|1|2|3|4)
-      echo "==> Previous push failed at step $LAST_FAILED_STEP — quick re-check before the full run..."
-      "run_step_${LAST_FAILED_STEP}"
-      echo "==> Quick re-check done — running the full pipeline (re-confirms this step and checks everything else)."
-      ;;
-    *)
-      rm -f "$LAST_FAILED_FILE"
-      ;;
-  esac
-fi
+case "$LAST_FAILED_STEP" in
+  0|1|2|3|4)
+    echo "==> Previous push failed at step $LAST_FAILED_STEP — running the full pipeline (that step runs once, in order)."
+    ;;
+  *)
+    LAST_FAILED_STEP=""
+    rm -f "$LAST_FAILED_FILE"
+    ;;
+esac
 
 if [ "${PRE_PUSH_PLAYWRIGHT_ONLY:-0}" = "1" ]; then
   echo "==> Resuming at Playwright stage (--from=playwright): stages 0-4 skipped by request."

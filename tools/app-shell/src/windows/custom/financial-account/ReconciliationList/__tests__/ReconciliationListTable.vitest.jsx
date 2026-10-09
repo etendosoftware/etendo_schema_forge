@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/ReconciliationList/ReconciliationListTable.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // The translator echoes the key, so assertions read on key strings.
@@ -23,6 +24,7 @@ import { useClientSort } from '@/hooks/useClientSort';
 import {
   ReconciliationListTable,
   buildReconciliationSortAccessors,
+  reconciliationPostedLabel,
 } from '../ReconciliationListTable.jsx';
 
 /**
@@ -137,5 +139,53 @@ describe('ReconciliationListTable — column sorting', () => {
     fireEvent.click(screen.getByTestId('column-header-sort-documentNo'));
     expect(screen.getByTestId('column-header-sort-documentNo').textContent).toContain('▲');
     expect(screen.getByTestId('column-header-sort-posted').textContent).not.toContain('▲');
+  });
+});
+
+/**
+ * The accounting-status pill takes its colour from the shared posting-status registry
+ * (ETP-5647): "not posted" is the yellow warning everywhere, and every failed posting — period
+ * closed included — is red. It used to be grey for N and yellow for every failure.
+ */
+describe('ReconciliationListTable — posting status pill', () => {
+  it('colours each code from the shared registry', () => {
+    const codes = ['Y', 'N', 'E', 'p', 'D'];
+    render(
+      <ReconciliationListTable
+        reconciliations={codes.map((posted, i) => ({ ...ROWS[0], id: `p${i}`, posted }))}
+        loading={false}
+      />,
+    );
+    // The echoing translator leaves the window keys untranslated, so the labels are the
+    // shared fallbacks; the document-status pills share the mock, hence `toContain`.
+    const labels = (tone) => screen.queryAllByTestId(`status-${tone}`).map((el) => el.dataset.label);
+    expect(labels('success')).toContain('postedStatus');
+    expect(labels('warning')).toContain('notPostedStatus');
+    expect(labels('destructive')).toEqual(expect.arrayContaining(['postedStatusError', 'postedStatusPeriodClosed']));
+    expect(labels('neutral')).toContain('postedStatusDocumentDisabled');
+  });
+});
+
+describe('reconciliationPostedLabel', () => {
+  const dictionary = {
+    financeAccountReconciliationsPosted_N: 'Pendiente',
+    postedStatus: 'Contabilizado',
+    postedStatusInvalidAccount: 'Cuenta no válida',
+  };
+  // Like the real useUI(): a missing key is echoed back verbatim.
+  const ui = (key) => dictionary[key] ?? key;
+
+  it("prefers the window's own wording when the key is translated", () => {
+    expect(reconciliationPostedLabel('N', ui)).toBe('Pendiente');
+  });
+
+  it('falls back to the shared posting label instead of printing a raw key', () => {
+    expect(reconciliationPostedLabel('i', ui)).toBe('Cuenta no válida');
+    expect(reconciliationPostedLabel('Y', ui)).toBe('Contabilizado');
+  });
+
+  it('shows a dash for an empty value', () => {
+    expect(reconciliationPostedLabel('', ui)).toBe('—');
+    expect(reconciliationPostedLabel(undefined, ui)).toBe('—');
   });
 });

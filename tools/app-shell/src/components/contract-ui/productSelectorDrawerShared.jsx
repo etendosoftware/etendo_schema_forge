@@ -165,9 +165,14 @@ export function useProductImages({ open, selectorUrl, token }) {
  *                                             scrolls activeItemRef into view whenever it changes.
  *
  * Returns:
- *   { query, setQuery, results, setResults, loading, loadingMore, hasMore, totalCount,
+ *   { query, setQuery, results, setResults, loading, loadingMore, hasMore, totalCount, error,
  *     inputRef, listRef, activeItemRef, fetchTimer, abortRef, rawOffsetRef,
  *     doFetch, handleScroll }
+ *
+ * `error` is the failure of the last fetch (an Error, or null). A failed request — a non-2xx
+ * answer such as a gateway 504, a network failure or the apiFetch timeout — must NOT render as
+ * "no results": that told the user the product does not exist when the search never finished
+ * (ETP-5312). A fresh fetch clears it; an aborted fetch never sets it.
  *
  * Side-effects managed here:
  *   - open-reset effect  (resets state + fires initial fetch when `open` flips true; calls onOpen)
@@ -193,6 +198,7 @@ export function useProductSelectorFetch({
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const [error, setError] = useState(null);
 
   const inputRef = useRef(null);
   const listRef = useRef(null);
@@ -224,6 +230,7 @@ export function useProductSelectorFetch({
       if (abortRef.current) abortRef.current.abort();
       rawOffsetRef.current = 0;
     }
+    setError(null);
     if (!selectorUrl) { setResults([]); setLoading(false); return; }
     if (append) setLoadingMore(true);
     else setLoading(true);
@@ -238,7 +245,10 @@ export function useProductSelectorFetch({
         baseUrl: '',
         signal: controller.signal,
       })
-        .then(r => r.ok ? r.json() : null)
+        .then(r => {
+          if (!r.ok) throw new Error(`Product selector request failed: ${r.status}`);
+          return r.json();
+        })
         .then(data => {
           const raw = data?.items || [];
           rawOffsetRef.current = offset + raw.length;
@@ -266,6 +276,7 @@ export function useProductSelectorFetch({
         .catch(err => {
           if (err.name !== 'AbortError') {
             if (!append) setResults([]);
+            setError(err);
             setLoading(false);
             setLoadingMore(false);
           }
@@ -282,6 +293,7 @@ export function useProductSelectorFetch({
     setLoadingMore(false);
     setHasMore(false);
     setTotalCount(0);
+    setError(null);
     setTimeout(() => inputRef.current?.focus(), 50);
     doFetch('', 0);
     onOpenRef.current?.();
@@ -319,7 +331,7 @@ export function useProductSelectorFetch({
   return {
     query, setQuery,
     results, setResults,
-    loading, loadingMore, hasMore, totalCount,
+    loading, loadingMore, hasMore, totalCount, error,
     inputRef, listRef, activeItemRef,
     fetchTimer, abortRef, rawOffsetRef,
     doFetch, handleScroll,

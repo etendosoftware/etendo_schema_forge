@@ -144,7 +144,7 @@
       "spec": "contacts",
       "entity": "businessPartner",
       "formats": ["csv", "txt", "xlsx"],
-      "limit": { "maxRows": 5000, "concurrency": 4 },
+      "limit": { "maxRows": 5000, "concurrency": 4, "batchSize": 10 },
       "dedupe": { "scope": "database", "key": ["taxID"] },
       "descriptor": "contacts",
       "fields": [
@@ -382,7 +382,8 @@
           "form": true,
           "label": "Credit Limit",
           "grid": false,
-          "section": "other"
+          "section": "other",
+          "defaultExpr": "0"
         },
         "creditUsed": {
           "visibility": "readOnly",

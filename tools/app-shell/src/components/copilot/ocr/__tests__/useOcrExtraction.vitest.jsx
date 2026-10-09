@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/copilot/ocr/useOcrExtraction.js
 /**
  * Tests for useOcrExtraction hook — exercises upload + extract flow with mocked copilotApi.
  */
@@ -9,7 +10,7 @@ vi.mock('../../copilotApi.js', () => ({
 }));
 
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useOcrExtraction } from '../useOcrExtraction.js';
+import { useOcrExtraction, OCR_NO_DATA_ERROR } from '../useOcrExtraction.js';
 import { uploadFile, executeTool, extractAnswerText } from '../../copilotApi.js';
 
 const defaultParams = {
@@ -194,6 +195,47 @@ describe('useOcrExtraction', () => {
 
     expect(error.message).toContain('unparseable');
     expect(result.current.status).toBe('error');
+    // The raw English message must not reach the UI: a sentinel is exposed instead.
+    expect(result.current.error).toBe(OCR_NO_DATA_ERROR);
+  });
+
+  it('rejects with the no-data sentinel when hasData reports an empty payload', async () => {
+    uploadFile.mockResolvedValue({ file: '/tmp/ok.pdf' });
+    executeTool.mockResolvedValue({ answer: '{"vendor_name":null,"line_items":[]}' });
+    extractAnswerText.mockReturnValue('{"vendor_name":null,"line_items":[]}');
+    const hasData = vi.fn(() => false);
+
+    const { result } = renderHook(() => useOcrExtraction({ ...defaultParams, hasData }));
+
+    let error;
+    await act(async () => {
+      try {
+        await result.current.extract(new File(['pdf'], 'blank.pdf'));
+      } catch (e) {
+        error = e;
+      }
+    });
+
+    expect(error).toBeDefined();
+    expect(hasData).toHaveBeenCalledWith({ vendor_name: null, line_items: [] });
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toBe(OCR_NO_DATA_ERROR);
+  });
+
+  it('resolves normally when hasData reports usable data', async () => {
+    uploadFile.mockResolvedValue({ file: '/tmp/ok.pdf' });
+    executeTool.mockResolvedValue({ answer: '{"vendor_name":"ACME"}' });
+    extractAnswerText.mockReturnValue('{"vendor_name":"ACME"}');
+
+    const { result } = renderHook(() => useOcrExtraction({ ...defaultParams, hasData: () => true }));
+
+    let parsed;
+    await act(async () => {
+      parsed = await result.current.extract(new File(['pdf'], 'ok.pdf'));
+    });
+
+    expect(parsed).toEqual({ vendor_name: 'ACME' });
+    expect(result.current.status).toBe('done');
   });
 
   it('passes structuredOutputSchema to tool params when provided', async () => {

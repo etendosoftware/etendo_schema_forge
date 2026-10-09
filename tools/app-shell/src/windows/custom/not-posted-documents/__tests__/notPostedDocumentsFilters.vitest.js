@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/not-posted-documents/notPostedDocumentsFilters.js
 // ETP-5591 — the Not Posted Documents filter state: defaults, URL form, backend query.
 import {
   STATUS_DEFS,
@@ -17,9 +18,13 @@ import {
 const params = (query) => new URLSearchParams(query);
 
 describe('status definitions', () => {
-  it('lists the statuses in the design order, yellow → orange → red, with Coste no calculado', () => {
-    expect(STATUS_DEFS.map((d) => [d.token, d.variant])).toEqual([
-      ['N', 'yellow'], ['p', 'orange'], ['i', 'red'], ['NC', 'red'], ['E', 'red'],
+  it('lists the statuses in the design order, pending then failures, with Coste no calculado', () => {
+    expect(STATUS_DEFS.map((d) => d.token)).toEqual(['N', 'p', 'i', 'NC', 'E']);
+  });
+
+  it('takes each tone from the shared posting registry: N yellow warning, every failure red (ETP-5647)', () => {
+    expect(STATUS_DEFS.map((d) => [d.token, d.tone])).toEqual([
+      ['N', 'warning'], ['p', 'destructive'], ['i', 'destructive'], ['NC', 'destructive'], ['E', 'destructive'],
     ]);
   });
 

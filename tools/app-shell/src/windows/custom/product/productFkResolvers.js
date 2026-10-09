@@ -23,4 +23,5 @@ import { classifyCandidates } from '@etendosoftware/app-shell-core/lib/import/re
 registerFkResolver('product-uom', async (value, { token, simSearchFn = simSearchEveryLanguage }) => {
   const [result] = await simSearchFn({ token, entityName: 'UOM', items: [value], qtyResults: 5 });
   return classifyCandidates(result?.candidates ?? []);
-});
+// ETP-5676: `target` lets the registered wrapper answer from the preview's `uOM` resolutions.
+}, { target: 'uOM' });

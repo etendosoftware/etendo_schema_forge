@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/OcrSidePanel.jsx
 // --- Mocks (before imports) ---
 
 vi.mock('@/i18n', () => ({
@@ -26,7 +27,12 @@ vi.mock('../useMainAttachment.js', () => ({
 // The panel passes each icon an auto-generated `data-testid` (see
 // scripts/apply-add-data-testid.sh), so our own must come AFTER the spread —
 // otherwise the component's value wins and these handles are unreachable.
-vi.mock('lucide-react', () => ({
+// ETP-5518 — the stored file now renders through the shared UploadedFileViewer
+// (its "Más" menu, the lightbox and ConfirmDeleteDialog), which need icons this
+// panel never imports (MoreVertical, X, Upload, Trash2, ZoomIn...). Every other
+// icon stays real; only the four this suite asserts on are replaced.
+vi.mock('lucide-react', async (importOriginal) => ({
+  ...(await importOriginal()),
   FileText: (props) => <span {...props} data-testid="icon-file" />,
   Loader2: (props) => <span {...props} data-testid="icon-loader" />,
   Paperclip: (props) => <span {...props} data-testid="icon-clip" />,
@@ -38,13 +44,21 @@ vi.mock('@/components/copilot/ocr/OcrInlineUploader.jsx', () => ({
   default: () => <div data-testid="ocr-uploader" />,
 }));
 
+// The stub still renders `toolbarExtra` — that is where UploadedFileViewer mounts
+// the "Más" menu of a PDF, so the write-gate tests below can reach it.
+// `usePdfZoom` is what the lightbox header drives; a static state is enough here.
 vi.mock('../PdfViewer.jsx', () => ({
-  default: () => <div data-testid="pdf-viewer" />,
+  default: ({ toolbarExtra }) => <div data-testid="pdf-viewer">{toolbarExtra}</div>,
+  usePdfZoom: () => ({
+    scale: 1, fitMode: 'page', canZoomIn: true, canZoomOut: true,
+    zoomIn: () => {}, zoomOut: () => {}, fitToPage: () => {}, toggleFitMode: () => {},
+  }),
 }));
 
 // --- Import under test ---
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import OcrSidePanel, { ReadOnlyOcrSidePanel } from '../OcrSidePanel.jsx';
 
 // --- Helpers ---
@@ -171,11 +185,12 @@ describe('OcrSidePanel — the document slot', () => {
     await waitFor(() => expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument());
   });
 
-  it('renders an image slot file as an image, not through the PDF viewer', () => {
+  it('renders an image slot file as an image, not through the PDF viewer', async () => {
     hookState = withFile({ attachmentId: 'att-2', fileName: 'scan.png', mimeType: 'image/png', objectUrl: 'blob:img' });
     render(<OcrSidePanel {...defaultProps} />);
 
-    const img = screen.getByAltText('scan.png');
+    // ETP-5518 — the image is now drawn by the lazily loaded UploadedFileViewer.
+    const img = await screen.findByAltText('scan.png');
     expect(img).toBeInTheDocument();
     expect(img.getAttribute('src')).toBe('blob:img');
     expect(screen.queryByTestId('pdf-viewer')).toBeNull();
@@ -308,5 +323,132 @@ describe('ReadOnlyOcrSidePanel (ETP-5205)', () => {
     fireEvent.drop(container.firstChild, { dataTransfer: { files: [pdfFile()] } });
 
     expect(storeFile).not.toHaveBeenCalled();
+  });
+});
+
+// --- ETP-5518: file actions on the saved invoice's sidebar ---
+
+/**
+ * The stored file renders through UploadedFileViewer. Replace / Delete are writes, so the
+ * panel hands them over only under the same gate as attaching (`canAttach`); the menu and
+ * the confirmation themselves are covered in UploadedFileViewer.vitest.jsx.
+ */
+describe('OcrSidePanel — file actions (ETP-5518)', () => {
+  const PDF_SLOT = { attachmentId: 'att-1', fileName: 'supplier.pdf', mimeType: 'application/pdf', objectUrl: 'blob:x' };
+  const IMAGE_SLOT = { attachmentId: 'att-2', fileName: 'scan.png', mimeType: 'image/png', objectUrl: 'blob:img' };
+
+  async function openDeleteConfirmation(user) {
+    await user.click(await screen.findByTestId('file-viewer-more'));
+    await user.click(await screen.findByTestId('file-viewer-delete'));
+    return screen.findByTestId('confirm-delete-dialog');
+  }
+
+  it('offers the "Más" menu on a saved record the user can attach to', async () => {
+    hookState = withFile(PDF_SLOT);
+    const user = userEvent.setup();
+    render(<OcrSidePanel {...defaultProps} />);
+
+    await user.click(await screen.findByTestId('file-viewer-more'));
+
+    const menu = await screen.findByTestId('file-viewer-menu');
+    expect(within(menu).getByTestId('file-viewer-replace')).toBeInTheDocument();
+    expect(within(menu).getByTestId('file-viewer-delete')).toBeInTheDocument();
+  });
+
+  it('Replace opens the same hidden file input as the attach button', async () => {
+    hookState = withFile(PDF_SLOT);
+    const user = userEvent.setup();
+    const { container } = render(<OcrSidePanel {...defaultProps} />);
+    const clickSpy = vi.spyOn(fileInput(container), 'click');
+
+    await user.click(await screen.findByTestId('file-viewer-more'));
+    await user.click(await screen.findByTestId('file-viewer-replace'));
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('Delete calls useMainAttachment.deleteFile only after confirmation', async () => {
+    const deleteFile = vi.fn(() => Promise.resolve());
+    hookState = { ...withFile(PDF_SLOT), deleteFile };
+    const user = userEvent.setup();
+    render(<OcrSidePanel {...defaultProps} />);
+
+    const dialog = await openDeleteConfirmation(user);
+    expect(deleteFile).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByTestId('confirm-delete-confirm'));
+
+    expect(deleteFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed delete does not leak an unhandled rejection and keeps the file shown', async () => {
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      // A plain function, not vi.fn: a vi.fn attaches its own handlers to the promise it
+      // returns (to record settled results), which would mark the rejection as handled.
+      let deleteCalls = 0;
+      const deleteFile = () => { deleteCalls += 1; return Promise.reject(new Error('delete failed')); };
+      hookState = { ...withFile(PDF_SLOT), deleteFile };
+      const user = userEvent.setup();
+      render(<OcrSidePanel {...defaultProps} />);
+
+      const dialog = await openDeleteConfirmation(user);
+      await user.click(within(dialog).getByTestId('confirm-delete-confirm'));
+      await new Promise((resolve) => { setTimeout(resolve, 20); });
+
+      expect(deleteCalls).toBe(1);
+      expect(unhandled).not.toHaveBeenCalled();
+      expect(screen.getByText('supplier.pdf')).toBeInTheDocument();
+      expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+
+  it('while a write is in flight Replace and Delete are disabled', async () => {
+    const deleteFile = vi.fn();
+    hookState = { ...withFile(PDF_SLOT), isBusy: true, deleteFile };
+    const user = userEvent.setup();
+    render(<OcrSidePanel {...defaultProps} />);
+
+    await user.click(await screen.findByTestId('file-viewer-more'));
+    const del = await screen.findByTestId('file-viewer-delete');
+    expect(screen.getByTestId('file-viewer-replace')).toHaveAttribute('aria-disabled', 'true');
+    expect(del).toHaveAttribute('aria-disabled', 'true');
+    await user.click(del);
+
+    expect(screen.queryByTestId('confirm-delete-dialog')).not.toBeInTheDocument();
+    expect(deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('offers no "Más" menu when the record is not identifiable (no canAttach)', async () => {
+    hookState = withFile(IMAGE_SLOT);
+    render(<OcrSidePanel {...defaultProps} recordId={null} />);
+
+    // The image is the viewer's own trigger, so its presence proves the viewer mounted.
+    expect(await screen.findByAltText('scan.png')).toBeInTheDocument();
+    expect(screen.queryByTestId('file-viewer-more')).not.toBeInTheDocument();
+  });
+
+  it('Solo-Lectura: no "Más" menu, but the lightbox still opens without Replace / Delete', async () => {
+    hookState = withFile(IMAGE_SLOT);
+    const user = userEvent.setup();
+    render(<ReadOnlyOcrSidePanel {...defaultProps} />);
+
+    await user.click(await screen.findByTestId('file-viewer-expand'));
+    const lightbox = await screen.findByTestId('file-lightbox');
+
+    expect(screen.queryByTestId('file-viewer-more')).not.toBeInTheDocument();
+    expect(within(lightbox).getByTestId('file-lightbox-zoom-in')).toBeInTheDocument();
+    expect(within(lightbox).queryByTestId('file-lightbox-replace')).not.toBeInTheDocument();
+    expect(within(lightbox).queryByTestId('file-lightbox-delete')).not.toBeInTheDocument();
+  });
+
+  it('Solo-Lectura with a PDF: the viewer mounts with no "Más" menu', async () => {
+    hookState = withFile(PDF_SLOT);
+    render(<ReadOnlyOcrSidePanel {...defaultProps} />);
+
+    expect(await screen.findByTestId('pdf-viewer')).toBeInTheDocument();
+    expect(screen.queryByTestId('file-viewer-more')).not.toBeInTheDocument();
   });
 });

@@ -1,7 +1,7 @@
 ---
 description: "Resolves bug tickets reported by an EXTERNAL agentic validation bot against the Etendo GO MCP server (Java servlet in com.etendoerp.go/src/com/etendoerp/go/mcp/). Ingests a pasted markdown/code report OR a Jira ID; creates the Jira task if missing; resolves the fix following /etendo-workflow-manager. CORE BEHAVIOR — on every ticket it records which information was MISSING or would have sped up locating the bug, accumulating a feedback report for the external bot team so their tickets get more descriptive over time."
 mode: subagent
-color: "pink"
+color: "#EC4899"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/mcp-ticket-resolver.md - Regenerate: make sync-agents

@@ -312,15 +312,15 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden" data-testid="OrganizationPage__root">
-      {/* pb-[77px] only while the unsaved-changes banner is visible (isDirty): the banner
+      {/* pb-[73px] only while the unsaved-changes banner is visible (isDirty): the banner
           is `absolute bottom-0` over this same scroll container, so at native max-scroll
-          the last ~61px of content (the banner's own measured height in the browser —
-          h-9 button + py-3*2 + border-t = 36 + 24 + 1) sits behind it, clipping "Sitio web"
-          (the last field). 77px = the normal p-4 bottom padding (16px) + that 61px, so the
+          the last ~57px of content (the banner's own height — h-10 button + p-2*2 +
+          border-t = 40 + 16 + 1, ETP-5601) sits behind it, clipping "Sitio web"
+          (the last field). 73px = the normal p-4 bottom padding (16px) + that 57px, so the
           scrollable area gains exactly enough room to clear the banner. Conditional on
           isDirty on purpose — Ivan explicitly rejected a permanent bottom-padding fix
           earlier (leaves an empty gap when there's nothing to save). */}
-      <div className={'flex-1 overflow-y-auto p-4' + (isDirty ? ' pb-[77px]' : '')}>
+      <div className={'flex-1 overflow-y-auto p-4' + (isDirty ? ' pb-[73px]' : '')}>
         {/* Reference design caps the whole form at 1020px (see decoded HTML template,
             ETP-4749 review round) — without this cap, the 2-col field grids below
             stretch edge-to-edge on wide screens and every input looks oversized. */}
@@ -595,7 +595,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
       </div>
       {isDirty && (
         <div
-          className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-4 border-t border-border bg-card px-6 py-3 shadow-lg"
+          className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-4 border-t border-border bg-card p-2 shadow-lg"
           data-testid="OrganizationPage__unsaved-banner">
           <div className="flex items-center gap-2.5 min-w-0">
             {/* Yellow dot — same --eg-yellow token (schema_forge_core/packages/app-shell-core/
@@ -607,10 +607,11 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             <span className="text-xs text-muted-foreground truncate">{ui('orgUnsavedDesc')}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button variant="outline" onClick={handleDiscard} disabled={saving} data-testid="OrganizationPage__discard">
+            {/* ETP-5601 — toolbar buttons (Figma): 40px, 8px radius, text-sm/leading-6. */}
+            <Button variant="outline" onClick={handleDiscard} disabled={saving} className="h-10 px-3 rounded-lg bg-card text-sm leading-6 font-medium text-[#121217]" data-testid="OrganizationPage__discard">
               {ui('discard')}
             </Button>
-            <Button onClick={handleSave} disabled={saving} data-testid="OrganizationPage__save">
+            <Button onClick={handleSave} disabled={saving} className="h-10 px-3 rounded-lg bg-[#121217] text-white text-sm leading-6 font-medium hover:bg-[#121217]/90" data-testid="OrganizationPage__save">
               {saving ? ui('saving') : ui('saveChanges')}
             </Button>
           </div>

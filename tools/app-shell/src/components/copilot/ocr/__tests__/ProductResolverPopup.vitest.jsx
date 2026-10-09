@@ -1,8 +1,9 @@
+// @covers tools/app-shell/src/components/copilot/ocr/ProductResolverPopup.jsx
 /**
  * Integration render test for ProductResolverPopup.
  * Renders the real component with mocked dependencies.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -95,6 +96,77 @@ describe('ProductResolverPopup', () => {
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
     expect(screen.getByText('ocrProductExtracted')).toBeInTheDocument();
     expect(screen.getByText('ocrProductPick')).toBeInTheDocument();
+  });
+
+  describe('preselected suggestion', () => {
+    const suggested = [
+      { idx: 0, description: 'Servicio de desarrollo y mantenimiento web', suggestion: { id: 'p-mw', name: 'Mantenimiento Web' } },
+    ];
+    const plain = { idx: 1, description: 'Widget A' };
+
+    it('shows the suggested product preselected in the selector', () => {
+      render(<ProductResolverPopup {...defaultProps} unmatched={suggested} />);
+      expect(screen.getByText('Mantenimiento Web')).toBeInTheDocument();
+    });
+
+    it('returns the suggested id when Continue is clicked without changes', async () => {
+      const user = userEvent.setup();
+      render(<ProductResolverPopup {...defaultProps} unmatched={suggested} />);
+      await user.click(screen.getByText('continue'));
+      expect(defaultProps.onSubmit).toHaveBeenCalledWith({ 0: 'p-mw' });
+    });
+
+    it('shows the skip button on a preselected row and not on an empty row', () => {
+      render(<ProductResolverPopup {...defaultProps} unmatched={[...suggested, plain]} />);
+      expect(screen.getByTestId('ocr-product-skip-0')).toHaveTextContent('ocrProductSkip');
+      expect(screen.queryByTestId('ocr-product-skip-1')).not.toBeInTheDocument();
+    });
+
+    it('skips the line with the skip button: Continue returns null, placeholder shows, button hides', async () => {
+      const user = userEvent.setup();
+      render(<ProductResolverPopup {...defaultProps} unmatched={suggested} />);
+      await user.click(screen.getByTestId('ocr-product-skip-0'));
+      expect(screen.queryByText('Mantenimiento Web')).not.toBeInTheDocument();
+      expect(screen.getByText('ocrProductSkip')).toBeInTheDocument();
+      expect(screen.queryByTestId('ocr-product-skip-0')).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('ocrProductSearchPlaceholder')).not.toBeInTheDocument();
+      await user.click(screen.getByText('continue'));
+      expect(defaultProps.onSubmit).toHaveBeenCalledWith({ 0: null });
+    });
+
+    it('shows the skip button again after picking a product', async () => {
+      const user = userEvent.setup();
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ items: [{ id: 'p-other', label: 'Other Product' }] }),
+      });
+      render(<ProductResolverPopup {...defaultProps} unmatched={suggested} />);
+      await user.click(screen.getByTestId('ocr-product-skip-0'));
+      await user.click(screen.getByText('ocrProductSkip', { selector: 'span' }));
+      await user.click(await screen.findByText('Other Product'));
+      expect(screen.getByTestId('ocr-product-skip-0')).toBeInTheDocument();
+      await user.click(screen.getByText('continue'));
+      expect(defaultProps.onSubmit).toHaveBeenCalledWith({ 0: 'p-other' });
+    });
+
+    it('renders a non-dismissible warning banner when a row is preselected', () => {
+      render(<ProductResolverPopup {...defaultProps} unmatched={suggested} />);
+      const banner = screen.getByTestId('ocr-product-autoMatched-warning');
+      expect(banner).toHaveTextContent('ocrProductAutoMatchedWarning');
+      expect(screen.queryByTestId('info-banner-dismiss')).not.toBeInTheDocument();
+    });
+
+    it('renders no banner when no row has a suggestion', () => {
+      render(<ProductResolverPopup {...defaultProps} unmatched={[plain]} />);
+      expect(screen.queryByTestId('ocr-product-autoMatched-warning')).not.toBeInTheDocument();
+    });
+
+    it('shows the hint only when at least one row has no suggestion', () => {
+      const { rerender } = render(<ProductResolverPopup {...defaultProps} unmatched={suggested} />);
+      expect(screen.queryByText('ocrProductResolverHint')).not.toBeInTheDocument();
+      rerender(<ProductResolverPopup {...defaultProps} unmatched={[...suggested, plain]} />);
+      expect(screen.getByText('ocrProductResolverHint')).toBeInTheDocument();
+    });
   });
 
   it('calls onSubmit with null for unselected rows', async () => {
@@ -401,6 +473,78 @@ describe('ProductResolverPopup', () => {
     expect(JSON.parse(postCall[1].body)).not.toHaveProperty('id');
   });
 
+  // ETP-5585 — UoM / tax category are prefilled from /product/defaults, like the product window.
+  it('prefills UoM and tax category from product defaults and posts their ids', async () => {
+    const user = userEvent.setup();
+    const unmatched = [{ idx: 0, description: 'Widget A' }];
+    globalThis.fetch.mockImplementation((url, options = {}) => {
+      const href = String(url);
+      if (href.endsWith('/product/defaults')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ defaults: {
+            id: 'default-id', uOM: 'uom-def', 'uOM$_identifier': 'Unidad',
+            taxCategory: 'tax-def', 'taxCategory$_identifier': 'IVA Normal',
+          } }),
+        });
+      }
+      if (href.endsWith('/product') && options.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify({ response: { data: [{ id: 'prod-new', name: 'Widget A' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    });
+
+    render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
+    await user.click(screen.getByText('ocrProductSkip'));
+    await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
+    await user.click(screen.getByText('createProduct'));
+
+    expect(await screen.findByText('Unidad')).toBeInTheDocument();
+    expect(screen.getByText('IVA Normal')).toBeInTheDocument();
+
+    await user.click(screen.getByText('ocrProductCreate'));
+    await waitFor(() => expect(screen.queryByText('ocrProductCreateTitle')).not.toBeInTheDocument());
+    const postCall = globalThis.fetch.mock.calls.find(([url, options]) => String(url).endsWith('/product') && options?.method === 'POST');
+    expect(JSON.parse(postCall[1].body)).toMatchObject({ uOM: 'uom-def', taxCategory: 'tax-def' });
+  });
+
+  it('does not overwrite a UoM picked before the defaults response arrives', async () => {
+    const user = userEvent.setup();
+    const unmatched = [{ idx: 0, description: 'Widget A' }];
+    let resolveDefaults;
+    globalThis.fetch.mockImplementation((url) => {
+      const href = String(url);
+      if (href.endsWith('/product/defaults')) {
+        return new Promise((resolve) => { resolveDefaults = () => resolve({
+          ok: true,
+          json: async () => ({ defaults: { uOM: 'uom-def', 'uOM$_identifier': 'Unidad', taxCategory: 'tax-def', 'taxCategory$_identifier': 'IVA Normal' } }),
+        }); });
+      }
+      if (href.includes('/selectors/C_UOM_ID')) {
+        return Promise.resolve({ ok: true, json: async () => ({ items: [{ id: 'uom-1', name: 'Kilo' }] }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    });
+
+    render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
+    await user.click(screen.getByText('ocrProductSkip'));
+    await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
+    await user.click(screen.getByText('createProduct'));
+    await screen.findByText('ocrProductCreateTitle');
+
+    await user.click(screen.getAllByText('ocrProductCreateSelect')[0]);
+    await waitFor(() => expect(screen.getByText('Kilo')).toBeInTheDocument());
+    await user.click(screen.getByText('Kilo'));
+
+    await act(async () => { resolveDefaults(); });
+    await waitFor(() => expect(screen.getByText('IVA Normal')).toBeInTheDocument());
+    expect(screen.getByText('Kilo')).toBeInTheDocument();
+    expect(screen.queryByText('Unidad')).toBeNull();
+  });
+
   // ETP-5289 Bug 6 — as an `absolute` child the list was clipped by the popup's scrolling body.
   it('renders the product dropdown outside the popup body so it can overlap it', async () => {
     const user = userEvent.setup();
@@ -421,5 +565,36 @@ describe('ProductResolverPopup', () => {
     const continueBtn = screen.getByText('continue').closest('button');
     expect(continueBtn.className).toContain('bg-primary');
     expect(continueBtn.className).not.toContain('bg-status-info');
+  });
+
+  describe('create-product form', () => {
+    async function openCreateForm(user) {
+      render(<ProductResolverPopup {...defaultProps} unmatched={[{ idx: 0, description: 'Widget A' }]} />);
+      await user.click(screen.getByText('ocrProductSkip'));
+      await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
+      await user.click(screen.getByText('createProduct'));
+      await screen.findByText('ocrProductCreateTitle');
+    }
+
+    it('marks name, search key, UoM and tax category labels as required', async () => {
+      const user = userEvent.setup();
+      await openCreateForm(user);
+      for (const key of ['ocrProductCreateName', 'ocrProductCreateSearchKey', 'ocrProductCreateUom', 'ocrProductCreateTaxCategory']) {
+        const label = screen.getByText(key, { selector: 'label' });
+        expect(label.querySelector('[aria-hidden], span')).not.toBeNull();
+        expect(label.textContent).toContain('*');
+      }
+    });
+
+    it.each([
+      [0, 'ocrProductCreateUomSearchPlaceholder'],
+      [1, 'ocrProductCreateTaxSearchPlaceholder'],
+    ])('picker %i shows its own search placeholder', async (index, placeholder) => {
+      const user = userEvent.setup();
+      await openCreateForm(user);
+      await user.click(screen.getAllByText('ocrProductCreateSelect')[index].closest('button'));
+      expect(await screen.findByPlaceholderText(placeholder)).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('ocrProductSearchPlaceholder')).not.toBeInTheDocument();
+    });
   });
 });

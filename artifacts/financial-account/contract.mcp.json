@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.3.0",
   "generatedAt": "2026-09-29T12:00:08.872Z",
-  "updatedAt": "2026-10-05T15:43:43.601Z",
-  "contractChecksum": "356eb1eb0994fe54",
+  "updatedAt": "2026-10-06T16:50:18.652Z",
+  "contractChecksum": "117a1093353a7507",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -1215,6 +1215,9 @@
           },
           "eTGOPendingCount": {
             "readOnly": true
+          },
+          "pSD2LastSyncDate": {
+            "readOnly": true
           }
         }
       },
@@ -1603,5 +1606,5 @@
     ],
     "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type, country). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead. To reconcile bank statement lines, never press the account's Core buttons: use the `bank-reconciliation` spec through etendo_action (entity `bank-reconciliation`, id = the financial account id). etendo_schema(spec:\"bank-reconciliation\", entity:\"bank-reconciliation\", view:\"actions\") lists its actions (pendingLines, candidates, autoMatch, reconcileGroup, reconcileDifference, applySuggestions, undoReconciliation, removeOperation, reactivateSelected) and their parameters. Never create or edit bank statements by writing the importedBankStatements / bankStatementLines entities (a statement written there is never processed and skips the UI's checks): create, import, edit, process, reactivate and delete them through the `bank-statements` spec with etendo_action (entity `bank-statements`). etendo_schema(spec:\"bank-statements\", entity:\"bank-statements\", view:\"actions\") lists its actions (listStatements, statementLines, previewStatement, createStatement, importStatement, updateStatement, processStatement, reactivateStatement, deleteStatement), their parameters and what id means for each (the financial account id for listStatements/previewStatement/createStatement/importStatement, the statement id for the others). A statement's lines can only be reconciled once it is processed."
   },
-  "checksum": "7b1599fb90b8a171"
+  "checksum": "697af63e67a4b643"
 }

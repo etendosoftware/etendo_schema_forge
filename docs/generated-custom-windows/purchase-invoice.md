@@ -170,7 +170,7 @@ The result half was the later fix: the confirmation copy shipped purchase-aware 
 
 - Related payment records are downstream dependencies, not free-form links. The custom related-documents component resolves payment-out documents through payment-plan and payment-detail relationships, then links users to `/payment-out/:id`.
 - The preview modal has General, Messages, and History tabs, but only the General tab is backed by invoice/payment data in current evidence. Messages and History are present as empty states.
-- The preview modal includes a document upload/drop area for purchase invoices backed by persistent file storage: uploaded files are sent to `POST /sws/neo/preview-file` and stored in `ETGO_PREVIEW_FILE` keyed by `(clientId, specName, recordId)`. On each subsequent open a `GET /sws/neo/preview-file` restores the cached file; if one exists the drop zone is replaced by a PDF/image viewer with a delete button. The delete button sends `DELETE /sws/neo/preview-file` and restores the drop zone.
+- The preview modal includes a document upload/drop area for purchase invoices backed by the record's marked "main" `Attachment` (`useMainAttachment`, ETP-4315 — the `ETGO_PREVIEW_FILE` store it originally used is retired). When a file is stored the drop zone is replaced by a PDF/image viewer with a Download link (top-left) and, since ETP-5518, the "Más" (⋯) menu on the viewer's mini toolbar with **Reemplazar archivo** / **Eliminar archivo** (delete asks for confirmation) plus a lightbox on click — see "File sidebar actions and lightbox — ETP-5518" below. The former bare trash button (delete without confirmation) is gone. Deleting restores the drop zone.
 - Save button dirty-state tracking: the "Save Draft" button is disabled whenever there are no pending unsaved changes (`isDirty = false`). Four independent sources make `isDirty` true: (1) any header field value differs from the last-saved record; (2) an add-row form is open on the primary lines tab; (3) an add-row form is open on a secondary child tab; (4) a sidebar line edit is open. The "Confirm" button is never blocked by dirty state — completing an invoice is always allowed regardless of whether header changes are pending. New records always have Save active because backend defaults populate the form immediately on open. After a successful save, the detail view refetches the saved header once so backend-populated fiscal defaults and callout results are reflected immediately, then the button disables automatically. Reverting a changed field back to its original value also disables the button. When a line is added, `refreshHeaderTotals` updates server-computed totals in `editing` without overwriting fields the user explicitly changed, so pending header edits survive line operations.
 - **Save available on a completed invoice (ETP-4839, `decisions.json → window.draftMode.keepSaveWhenCompletedFields: ["orderReference"]`)**: on most draftMode windows, completing the document (`isDraftModeCompleted`) hides the whole Save/Confirm pair. Purchase Invoice opts into `keepSaveWhenCompletedFields`, which keeps ONLY the plain "Save" button (`action-save-draft`) visible on a completed invoice — the "Confirm" button (`action-save`) is NEVER re-exposed for a completed document (this is a unified rule across every window using this mechanism, not just purchase-invoice). Save itself is only ENABLED while every dirty header field is in the array — today just `orderReference`; if the user also has any other header field dirty (hypothetically; `readOnlyLogic` should prevent this on every other principal field in practice), Save is disabled entirely with an explanatory tooltip, never a silent partial save. This exists specifically so `orderReference` ("N° documento" / `POReference`) — which already carries its own correct `readOnlyLogic` keeping it editable while `aeatsiiIssent` is not yet `true` (see "Read-only enforcement" below and `e2e/tests/flows/purchase-invoice-readonly-processed.mocked.spec.js`) — can actually be persisted once the invoice is completed. Re-exposing "Confirm" instead was rejected: its handler always resends `documentAction: "CO"`, and `InvoiceCalloutHelper.isInvoiceCompleteAction()` on the backend is not idempotent against an already-completed purchase invoice (a repeat Complete duplicates discount lines). Plain Save never touches that code path, so it is safe. This is implemented generically in `tools/app-shell/src/components/contract-ui/saveActions.jsx` (`renderDraftModeSaveActions`'s `onlySaveButton` prop, plus `buildSaveGate`/`buildCompletedFieldsGate` for the per-field enable/disable + tooltip) and `DetailView.jsx` (which now also exposes `hook.dirtyHeaderFieldKeys` from `useEntity.js`, not just the `isDirtyHeader` boolean) — any other window can opt in the same way. `purchase-invoice` deliberately does NOT declare `completedStatuses`: that would have re-exposed both buttons in more states, reintroducing the same backend risk on "Confirm".
   **Gotcha (must-read for this window):** `purchase-invoice/index.jsx` renders `<HeaderPage draftMode={draftModeOverride}>` where `draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference'] })` — a hand-built object from the shared `windows/custom/shared/useInvoiceWindow.js` helper — NOT the generated `draftMode` prop the pipeline produces from `decisions.json`. The `decisions.json`/`contract.json`/generated-`HeaderPage.jsx` value is correct but effectively dead for this window; the real behavior comes from `getInvoiceDraftMode`'s `keepSaveWhenCompletedFields` option. `sales-invoice/index.jsx` calls the same helper WITHOUT that option, so it is unaffected. See `docs/ui-customization.md` → "Gotcha — a hand-rolled index.jsx prop can silently shadow decisions.json" for the general pattern.
@@ -192,7 +192,8 @@ generated document differ) — see `docs/ui-customization.md` §20.
   invoice; otherwise the previous behaviour stays (navigate to the list with the preview).
 - **Modal** (single follow-up → direct confirmation, no radio): title «¿Gestionar recepción?»
   (`titleKey: 'followUpManageReceiptTitle'`; the topbar button keeps «Gestionar recepción» through its own
-  `buttonLabelKey: 'poManageReceipt'`), summary (Factura / Fecha / Contacto / Líneas / Total — «Líneas» is the pending line
+  `buttonLabelKey: 'poManageReceipt'`), summary (Factura / Fecha / Contacto / Líneas / Total — «Factura» is the internal document number
+  `documentNo`, e.g. «FC1000000», never the supplier reference `orderReference`; «Líneas» is the pending line
   count), the question «¿Qué vas a hacer con esta factura?» (`questionKey:
   'followUpInvoiceQuestion'`), ONE static option card (icon, «Crear albarán de compra» + blue «Borrador» badge
   — `badgeTone: 'info'` —, «Se generará en borrador con las N líneas pendientes de recepción.»,
@@ -201,7 +202,7 @@ generated document differ) — see `docs/ui-customization.md` §20.
   backdrop reject: the invoice stays Completed and nothing is created — there is no «Ahora no»
   card. «Crear recepción» POSTs
   `purchase-invoice/header/{id}/action/createGoodsReceipt`, which creates a **Draft** goods receipt (Albarán de Compra) with only
-  the pending lines; the result view links to it (`/goods-receipt/{id}`). Backend error codes
+  the pending lines; the result view («Albarán creado», same PopUps style as the popup — `ConfirmResultModal` `variant="popup"`) links to it (`/goods-receipt/{id}`). Backend error codes
   (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
 - **Warehouse asked when the backend cannot decide it.** The goods receipt needs a target warehouse. When
   the backend cannot determine it on its own, `createGoodsReceipt` answers `409 FOLLOW_UP_WAREHOUSE_REQUIRED`
@@ -218,6 +219,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
   while something is pending (never for a read-only window). After a creation the record is
   re-read (the button disappears; a partial movement later offers only what is still missing)
   and `purchase-invoice:document-created` refreshes `RelatedDocuments.jsx` (event listener).
+  Completing (or editing / deleting) that goods receipt later marks the invoice's cached record stale
+  (`goods-receipt → purchase-invoice` in `lib/crossSpecCacheInvalidation.js`), so coming back to the
+  invoice shows the new receipt status and linked receipts without a manual reload.
 - Config: `PURCHASE_INVOICE_FOLLOW_UP` in `tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js`.
 
 ## Gap assessment
@@ -487,7 +491,7 @@ Purchase invoices carry the same currency/exchange-rate editing model already sh
 
 ### Header currency field and `CurrencyRatePicker`
 
-- `header.currency` in `artifacts/purchase-invoice/decisions.json` is `visibility: "editable"`, `form: true`, `section: "principal"`, `readOnlyLogic: "@Processed@='Y'"` — editable while the invoice is draft, locked once completed. The field was already `editable` before ETP-4029, but hidden (`section: "other"`, `form: false`); ETP-4029 moved it into the visible principal section.
+- `header.currency` in `artifacts/purchase-invoice/decisions.json` is `visibility: "editable"`, `form: true`, `section: "principal"`, `readOnlyLogic: "@Processed@='Y'"` — editable while the invoice is draft, locked once completed (this completion lock covers the header currency/rate picker only; since ETP-5657 the **Exchange Rates** secondary tab stays editable on a completed-but-unposted invoice — see the ETP-4030 section below). The field was already `editable` before ETP-4029, but hidden (`section: "other"`, `form: false`); ETP-4029 moved it into the visible principal section.
 - A new hidden field, `eTGOCurrencyRate` (`visibility: "editable"`, `form: false`, `grid: false`), stores the per-invoice exchange-rate override (`C_INVOICE.EM_ETGO_Currency_Rate`, `NUMERIC(20,12)`, nullable — the same column, shared with sales-invoice, since both live on `C_INVOICE`). It is writable by NEO but not rendered as its own form field; `CurrencyRatePicker` reads/writes it as part of the currency selection.
 - `tools/app-shell/src/components/contract-ui/EntityForm.jsx` renders the `CurrencyRatePicker` component (searchable currency selector with an inline rate editor, shared with sales-order/purchase-order/sales-quotation/sales-invoice) instead of the plain `SelectorInput` whenever the field's column is `C_Currency_ID`, the entity is `header`, and the current URL matches `/(sales-order|purchase-order|sales-quotation|sales-invoice|purchase-invoice)(\/|$)/`. Selecting a currency calls the `currencyOptions` header action to list currencies reachable from the org currency (with their rates) and PATCHes `currency`, `currency$_identifier`, and `eTGOCurrencyRate` together.
 - Unlike sales-invoice, `artifacts/purchase-invoice/decisions.json`'s `entities.lines` has no currency field declared at all (no `cCurrencyId` entry) — `C_InvoiceLine` has no `C_Currency_ID` column on either invoice direction, so there is nothing to expose or sync at the line level.
@@ -541,9 +545,10 @@ When a purchase invoice is issued in a currency other than the organization's ba
 - Declared in `artifacts/purchase-invoice/decisions.json → window.secondaryTabs.exchangeRates` (`label: "Exchange rates"`, `tabOrder: 50`) and resolved as the `exchangeRates` child entity (`javaQualifier: "invoiceExchangeRateHandler"`). The tab maps to the document conversion-rate records (`C_Conversion_Rate_Doc`) tied to the invoice header. ETP-4836: the label was previously `"Exchange Rates"` (capital R) — a casing typo that didn't match the locale dictionaries' `tabs["Exchange rates"]` entry (lowercase r, the tab's real AD_Tab name), so it always rendered untranslated regardless of locale. Every other window's `secondaryTabs.<key>.label` (`contacts`, `warehouse`, etc.) follows the same convention — an explicit label string that must match a dictionary key exactly — so the fix here is the same one-line casing correction, no generator change needed.
 - `foreignAmount`'s label is overridden per-window via `window.labelOverrides.{es_ES,en_US}.Foreign_Amount` (ETP-4836: the shared `Foreign_Amount` AD_Element label is also used by Payment Out's Exchange Rates tab, so the fix is scoped here rather than edited in the global dictionary) and the field is declared `noTrailing: true` (ETP-4836: it's the only `amount`-type column in this grid, so the generic "last amount column hides under row-hover action icons" heuristic in `InlineLinesPanel.jsx` was swallowing its editable input entirely — `noTrailing` opts it out).
 - **Visible columns:** Currency (derived from the document, `form: false`), To Currency, Rate, and Foreign Amount. The inline add-row exposes `addLineFields: ["toCurrency", "rate", "foreignAmount"]` — Currency is filled from the parent rather than typed.
+- **`rate` is declared `"type": "number"` in decisions.json — ETP-5657:** same override, for the same reason (AD reference `800019` is not mapped by the core extractor yet), as on the sales invoice — see [Sales Invoice — Exchange Rates secondary tab](sales-invoice.md#exchange-rates-secondary-tab).
 - **`requireSavedRecord: true`** — the tab is only usable once the invoice header has been saved (a document rate needs a persisted invoice to attach to).
-- **Tab-level `readOnlyLogic: "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"` — ETP-4837:** this is the ONLY place that actually locks the tab at runtime. It is compiled by `resolveSecondaryTabDefs()`/`convertLogicToJs()` against the **header entity's own column map** and evaluated by `evalTabReadOnly(tab, props.hook.selected)` in `DetailView.jsx` — i.e. against the **invoice header record**, not the exchange-rate row. This is what suppresses the row's edit/delete affordances entirely (`InlineLinesPanel`/`DataTable` receive `isDocumentReadOnly={tabReadOnly}`) once the invoice is Completed (`Processed='Y'`) or Posted (`Posted='Y'`), matching the backend guard in `ConversionRateDocLockObserver` (module `com.smf.currency.conversionrate`), which already rejects the save with `SMFCR_CannotModifyRateNonDraft` for any non-Draft document status.
-  - **Gotcha (root cause of a shipped regression):** a *field-level* `readOnlyLogic` set on `entities.exchangeRates.fields.rate` in decisions.json is a no-op for this purpose — per-field `readOnlyLogic` on a secondary-tab field is evaluated against the **line's own record** (the `C_Conversion_Rate_Document` row), which carries no `Processed`/`Posted`/`HASREVERSEDINVOICE*` columns of its own, so the condition always resolves to `false` and the field stays editable. The first ETP-4837 pass added the condition there by mistake; it looked correct (the pipeline validator and contract inspection passed) but never took effect against the live app because it was reachable only via the unused `ExchangeRatesForm.jsx` sidebar (`inlineEditable` layout never renders it). The fix moved the `Processed` condition into the **tab-level** `readOnlyLogic` above instead. Do not reintroduce a field-level override on `rate`/`foreignAmount` for header-derived flags — extend the tab-level expression.
+- **Tab-level `readOnlyLogic: "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'"` — ETP-4837, relaxed by ETP-5657:** the same tab rule, evaluated the same way against the invoice header, as on the sales invoice; on a purchase invoice the reversal flag that applies is `HASREVERSEDINVOICEPO`.
+  - **ETP-5657 — completed-but-unposted invoices are editable**, with the identical edit / add / delete / posted-or-reversed rules, the header-rate sync and the field-level `readOnlyLogic` gotcha documented in [Sales Invoice — Exchange Rates secondary tab](sales-invoice.md#exchange-rates-secondary-tab). Nothing differs for purchases.
 
 ### Server-side rate ⇄ foreign-amount recompute
 
@@ -576,7 +581,8 @@ The block surfaces the message `SMFCR_NoRateOnComplete` followed by the currency
 3. Edit the row's Foreign Amount. Save and confirm Rate is recomputed = foreign amount ÷ grand total, live.
 4. Complete the invoice with **no** rate present and no general rate for the pair: confirm completion is blocked with `SMFCR_NoRateOnComplete <FROM> → <TO>`.
 5. Add the document rate (or a matching `conversion-rates` record) and confirm completion now succeeds.
-6. On a completed invoice, confirm the Exchange Rates tab is read-only.
+6. On the completed (not yet posted) invoice, confirm the Exchange Rates tab is still editable and a rate change saves (ETP-5657).
+7. Post the invoice and confirm the tab is read-only (no edit/delete affordances); unpost it and confirm the tab is editable again. On a reversed invoice the tab stays read-only.
 
 ### Automated evidence
 
@@ -1652,6 +1658,46 @@ final fix passes the literal `true` to `hidePrintWhen` instead, which
 `evaluateFieldCondition(true, data) → true` treats as an unconditional match, gating **only**
 the detail view; the list keeps its pre-ticket, untouched, always-visible print button. See
 `docs/decisions-reference.md` ("Print Visibility") for the generic `hidePrintWhen` mechanism.
+## OCR reader — empty extraction is rejected (ETP-5654)
+
+A blank or corrupt PDF used to open the "Datos detectados en la factura" modal completely empty:
+the OCR tool answers with valid JSON whose every field is null, which parsed as a success.
+`useOcrExtraction` now takes a `hasData` predicate; `OcrInlineUploader` passes
+`hasExtractedData(docType, payload)` (`ocr/hasExtractedData.js`). Data exists when any header
+field read from `docType.headerFields[].extractFrom` is non-blank, or `line_items` is non-empty.
+When there is none — or the response is unparseable — `extract` rejects, the review event is
+**not** dispatched (the modal does not open) and the uploader shows the translated
+`ocrNoDataExtracted` message. The check is driven by the docType config, so any future OCR
+document type gets it for free.
+
+Tests: `ocr/__tests__/hasExtractedData.test.js`, `useOcrExtraction.vitest.jsx`,
+`OcrInlineUploader.vitest.jsx`.
+
+## OCR reader — product matching never assigns a partial match silently
+
+Line products are looked up with `simSearch` (Product, `minSimPercent: 30`, `qtyResults: 3`).
+`classifyProductMatch` (`ocr/ingest/purchaseInvoiceDescriptor.js`) decides per line:
+
+- **Exactly one candidate whose name equals the line description** (trim, case-insensitive) →
+  assigned automatically.
+- **Any other candidate** (partial similarity, or two products with the same exact name) → the
+  line goes to the "Asociar productos" popup with the best candidate **preselected** in the
+  product selector. The user can change it, search, create a product, or skip the line with the
+  small "Skip line" button below the selector (`ocr-product-skip-{idx}`, shown only while a product
+  is selected);
+  Continue returns the preselected id unless changed. A **non-dismissible warning banner**
+  (`ocrProductAutoMatchedWarning`) is shown at the top of the popup whenever any row was
+  preselected, and the generic "couldn't auto-match" hint is shown only when at least one row has
+  no suggestion.
+- **No candidates** → popup without a suggestion, as before.
+
+Example: product "Mantenimiento Web" exists, the invoice line reads "Servicio de desarrollo y
+mantenimiento web" → the popup preselects it under the warning banner; nothing reaches the
+invoice without passing through that review step.
+
+Tests: `ocr/ingest/__tests__/purchaseInvoiceDescriptor.vitest.jsx`,
+`ocr/__tests__/ProductResolverPopup.vitest.jsx`.
+
 ## OCR reader — create-contact pre-fill — ETP-4855 (superseded by ETP-5332)
 
 When the OCR reader cannot match the invoice's supplier to an existing business partner, the
@@ -1681,16 +1727,33 @@ Four links, each of which has to carry the data:
 new header field to the popup is still one entry in `createPrefilledFrom` plus a line in
 `buildOcrContactSeed`; a genuinely new extraction field is one `extraHeaderFields` entry.
 
+### Contact category follows the document (ETP-5654)
+
+A contact created from a purchase invoice starts in the **Proveedor** category (a sale document
+starts in **Cliente**). Without this the form fell back to the group flagged `isdefault`, which is
+"Cliente". The mapping lives in `CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE` (`lookupCreateTargets.js`),
+keyed by `C_BP_Group.Value`, because onboarding gives every client `Cliente`, `Proveedor` and
+`Acreedor`; ids are never hardcoded since they differ per client.
+
+`useContactCategorySeed` resolves the id through the contacts spec's own
+`businessPartnerCategory` selector **before** the popup mounts (the embedded window reads its
+seed once, on mount) and adds `businessPartnerCategory` plus its `$_identifier` label to
+`initialData`. The selector only searches the group's Name, so the query is the key text and the
+row whose label equals it exactly is taken; a renamed or missing group, a failed request or the 4s
+timeout leave the field untouched and the default applies. Both entry points share it: this OCR
+adapter and the manual Contacto selector (`useCreateContactModal`).
+
 ### Why `address`, `postalCode`, `city` and `country` are no longer seeded
 
 The window-mode popup runs the Contacts window's **own** `useEntity`, whose `initialData` option
 (the `§19b` seeding mechanism) only reaches the **header** record (`businessPartner` fields).
 `address`/`postalCode`/`city`/`country` belong to the `locationAddress` **child tab**, created
-through a different code path (`LocationEditorModal.jsx`) that `initialData` does not touch.
-Seeding a child tab's first row is a different mechanism from `useEntity.handleNew` and was not
-built as part of ETP-5332 — so a match extracted by OCR is simply not pre-filled today, and the
-user types the address by hand as they would for a manually opened "+ Crear contacto". This is
-tracked as debt `ocr-contact-address-prefill` in `flags-registry.json`.
+through `LocationEditorModal.jsx`. Since ETP-5654 they are forwarded as `initialChildData`
+(`buildOcrContactAddressSeed`): as soon as the header is saved for the first time the "Dirección" modal opens
+automatically (and "Añadir dirección" still opens it while the tab has no rows), with address line 1, postal code and city filled and the country resolved from its printed
+name (falling back to España when the invoice has none or it cannot be matched). Region is never
+prefilled and nothing is saved until the user presses Guardar. A second address, or editing one,
+opens without the seed. The former debt `ocr-contact-address-prefill` is closed.
 
 The country-label-to-option-id resolution this section used to describe (`matchOptionByLabel`
 against the country selector, with an `EntityCreationModal` `patchValues` prop merging in the
@@ -1705,8 +1768,9 @@ Before ETP-5332, `CreateContactModal` created the BP up front (`BP → address �
 → billing PATCH`) and posted the address whenever `address || city || country` was set, so a
 pre-filled address block meant the new BP got a location immediately — which is what
 `resolvePartnerAddress` in `ingest/purchaseInvoiceDescriptor.js` looks up for the invoice
-header's `partnerAddress` (NOT NULL on `C_Invoice`). Since the address is no longer seeded (see
-above), a BP created from the OCR popup today has no location until someone adds one.
+header's `partnerAddress` (NOT NULL on `C_Invoice`). The popup no longer creates the address
+itself (ETP-5654 only prefills the "Añadir dirección" modal), so a BP created from the OCR popup
+has no location until someone adds one.
 
 **That is not a dead end, and the mandatory address the old modal enforced was redundant against
 the affordance that already existed.** `partnerAddress` is a `C_BPartner_Location_ID` column, and
@@ -1715,8 +1779,8 @@ renders a **"+ Añadir dirección"** row in the dropdown and opens `LocationEdit
 set to the partner just selected. So a contact that arrives on the invoice without a location gets
 one created inline, on the document, against the right parent. The Contacts window itself has
 always permitted a partner with no location; only the deleted popup forced one, and it forced it
-on one of the two paths. What remains is the typing, which is what
-`ocr-contact-address-prefill` covers.
+on one of the two paths. What remains is pressing "Añadir dirección" and reviewing the prefilled
+modal (ETP-5654).
 
 ### Automated evidence
 
@@ -1727,6 +1791,64 @@ on one of the two paths. What remains is the typing, which is what
   it is exercised indirectly through whatever OCR/create-contact E2E coverage exists.
 - `src/lib/__tests__/matchOptionLabel.test.js` — still valid, but now exercises
   `src/lib/defaultCountry.js`'s consumption of `matchOptionByLabel`, not this popup.
+
+## OCR reader — create-product step defaults — ETP-5585
+
+When an invoice line from the OCR reader matches no product, the resolver popup offers
+"Create product" (`ProductCreateForm` in `ProductResolverPopup.jsx`). The form asks for name,
+search key, unit of measure and tax category, then POSTs to `/sws/neo/product/product`.
+
+Unit of measure and tax category are **prefilled** from `GET <productSpecUrl>/product/defaults`
+(`ProductDefaultsHandler`, ETP-4670) — the same defaults the product window uses (typically
+"Unidad" and "IVA Normal"). The form reads `uOM`/`uOM$_identifier` and
+`taxCategory`/`taxCategory$_identifier` from the response; no ids or names are hardcoded. The
+prefill never overwrites a value the user already picked (it only fills an empty selector), and if
+the defaults call fails the selectors stay empty and the existing required-field validation applies.
+
+Tests: `src/components/copilot/ocr/__tests__/ProductResolverPopup.vitest.jsx`.
+
+## OCR reader — receiver tax id validation — ETP-5585
+
+The OCR reader refuses to load an invoice that is addressed to a different tax id than the active
+organization's. The check runs in `useOcrFlow.jsx`, right after the extraction and **before** any
+modal, vendor lookup or batch; it is wired per document type through
+`ocrDocTypes.js → validateExtraction: 'receiverTaxId'`.
+
+**Extracted.** Two nested objects are requested next to the existing `vendor_name` / `tax_id`
+(unchanged): `issuer` and `receiver`, each `{ name, tax_id_raw, tax_id_label, tax_id_type }`, all
+nullable. `tax_id_type` (`vat | national_tax_id | company_registration | personal_id | unknown`) is
+**informational only** — the comparison runs whatever it says. `buildOcrSchema.js` supports the
+nested shape through a `kind: 'object'` field with `properties`.
+
+**Organization id.** `GET /sws/neo/session` → `organization.taxId` (`AD_OrgInfo.TaxID`), read
+lazily through `apiFetch` only when a receiver id was extracted. A blank or `?` value reads as "no tax id".
+A failed call (network, 401, 5xx) is a different case: it is not "no tax id configured", so it
+shows its own non-blocking warning (`ocrReceiverTaxIdUnverified`) and the load continues.
+
+**Normalization** (`receiverTaxIdCheck.js`): uppercase, keep `[A-Z0-9]`; a leading 2-letter prefix is
+stripped only if it is a known VAT prefix (AT BE BG CY CZ DE DK EE EL ES FI FR HR HU IE IT LT LU LV
+MT NL PL PT RO SE SI SK XI GB; `GR` = `EL`), so an NIE (`X1234567L`) or CIF is never cut. Ids match
+when the full strings or the prefix-stripped bodies are equal. No check-digit validation; leading
+zeros are kept.
+
+| Status | Condition | Result |
+|---|---|---|
+| `match` | ids equal after normalization | continue |
+| `mismatch` | receiver id present and different | **blocked**: error toast with both ids, flow stops |
+| `absent` | no receiver id | continue silently |
+| `same-as-issuer` | receiver id equals the issuer id (`issuer.tax_id_raw` or `tax_id`) | continue (OCR confusion) |
+| `no-org-tax-id` | organization has no tax id | continue + warning toast |
+| (session call failed) | the org tax id could not be read | continue + "could not verify" warning toast |
+
+Out of scope: a legal-entity child organization without its own `AD_OrgInfo.TaxID` is treated as
+`no-org-tax-id` (no inheritance from the parent).
+
+Messages use `toast` from sonner directly (`ocrReceiverTaxIdMismatch`, `ocrOrgTaxIdMissing`,
+`ocrReceiverTaxIdUnverified`), not `useBulkActionToast().showResult`, which reads `failed[0].message`
+while this flow passes `{ reason }` (pre-existing, not changed here).
+
+Tests: `src/components/copilot/ocr/__tests__/receiverTaxIdCheck.test.js`,
+`useOcrFlow.flow.vitest.jsx`, `buildOcrSchema.test.js`.
 
 ## OCR reader — lookups without `_neoWhere` (production WAF)
 
@@ -2192,18 +2314,136 @@ Full contract, refusal shapes and the declared REST ↔ MCP divergences:
 
 - Preview panel progress row (ETP-5549): the `InvoicePreview` General tab shows a "Received: [PercentBar] N%" row under Status (label key `previewCardReceivedPercent`), fed by the invoice's `eTGODeliveryStatus` (`em_etgo_delivery_status`, the same field as the grid column and header badge). It renders whenever the value is non-null, regardless of document status. `PercentBar` renders the shared `ProgressCircle` (circle first, label beside it; grey track at 0%, black arc at 1-99%, green at 100% or more, label always black; above 100% the arc is clamped but the label shows the real value), so the preview matches the grid column (ETP-5545).
 
-## List toolbar: tab group on its own row — ETP-5509
+## List toolbar: tab group wraps only when it does not fit — ETP-5509
 
-The list toolbar is laid out by the shared `ListView` in up to two rows: quick filters, "Filtros"
-and the main actions (sort, refresh, "New …") on the first, and the **Todos / Facturas / Facturas rectificativas** subset tabs on a second row
-below it, followed by a gray separator line between toolbar and body. Before ETP-5509 the tab
-group opened the first row and, at 1280×720 with the navigation rail expanded, competed for width
-with the filters and the actions. The tabs are on the second row at every width, and they behave
-as before: choosing another entry filters the grid and highlights the selection.
+The list toolbar is laid out by the shared `ListView` as **one row**: the **Todos / Facturas / Facturas rectificativas** subset
+tabs, the status and date filters and "Filtros" on the left and the main actions (sort, refresh, "New …") on the right, followed by a gray
+separator line between toolbar and body. The tabs move — alone, the same element, so a focused tab keeps focus — to a line of their own
+below only when
+the whole row does not fit at the current width (a measurement, not a breakpoint), so no grid row
+is lost when there is room. The filters and the actions always keep at least 16px between them.
+At 1280×720 with the rail expanded it fits in one row (measured in es_ES), with little slack — a longer applied filter label can push the tabs to the second row. The tabs behave the same in either row: choosing another entry filters the grid and
+highlights the selection.
 
-Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
-(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+ETP-5509 review: the first iteration put the tabs on the second row at every width, which cost a
+visible grid row even where everything fit; UX asked for a single row that wraps only when needed.
 
-Manual verification: at 1280×720 with the rail expanded, open `/purchase-invoice` and confirm the status and date
-filters and "Filtros" sit on the first row with sort, refresh and "New invoice" on the right,
-untruncated; the three tabs sit on the second row; switching tab still filters the grid.
+Nothing changed in this window's own files or in `decisions.json` — the layout, the fit check
+(`useListToolbarTabsFit`), the test ids (`list-toolbar-tabs`, `data-tabs-placement`) and the
+reasoning live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: with the rail expanded, open `/purchase-invoice` at 1920×1080 and confirm one toolbar
+row (tabs, filters, "Filtros", then the actions on the right, untruncated). Narrow the window
+until it no longer fits and confirm only the tabs drop to a second row, with no gap collapse
+between "Filtros" and the actions; widen it again and confirm they come back. Switching tab
+filters the grid from either row.
+
+## File sidebar actions and lightbox — ETP-5518
+
+Once the supplier's document was uploaded it could be replaced but not deleted from the file
+sidebar, and it could not be viewed at a larger size. Both surfaces that show the uploaded file
+now behave the same way:
+
+| Surface | Component | Replace / Delete wired to |
+|---|---|---|
+| Form, new invoice (OCR upload, file not yet saved) | `OcrInlineUploader` | the local file: open the picker / clear it (same as the existing X) |
+| Form, saved invoice (file sidebar) | `OcrSidePanel` → `DocumentView` | `useMainAttachment.storeFile` / `deleteFile` |
+| List preview (`InvoicePreview` → `GenericPreviewModal`, drop-zone mode) | `StoredFileWithActions`, opted in with `attachmentConfig.fileActions: true` | `useMainAttachment.storeFile` / `deleteFile` |
+
+All three render the shared `UploadedFileViewer` (`tools/app-shell/src/windows/custom/shared/`):
+
+- **"Más" (⋯) button** — appended to the floating mini toolbar (Zoom in / Encajar / Zoom out /
+  Más; images show only Más). It opens a menu with **Reemplazar archivo** (opens the caller's
+  file picker; the new file replaces the old one, `uploadAndMark` drops the previous marked
+  attachment in the same transaction) and **Eliminar archivo** (destructive style).
+- **Delete confirmation** — Eliminar archivo, from the menu or from the lightbox, opens
+  `ConfirmDeleteDialog`; cancelling keeps the file, confirming deletes it and the empty upload
+  area comes back.
+- **Lightbox** (`FileLightbox`) — clicking the preview opens a full-viewport Radix dialog
+  (`role="dialog"`, `aria-modal`, labelled by the file name, focus moved in on open and back to
+  the preview on close). Header: file name + page count ("1 Página"), then Zoom in, Encajar,
+  Zoom out, Reemplazar archivo, Eliminar archivo, Cerrar. Encajar fits the whole page into the
+  lightbox. X or ESC closes it; ESC closes only the topmost layer (a delete confirmation opened
+  from the lightbox closes first) and is not propagated to the form or list preview underneath.
+  The lightbox is a viewer, not a drop target: a file dragged onto it is ignored — it does not
+  replace the document (the file sidebar's own drop area sits underneath it in the React tree)
+  and the browser does not navigate to the file.
+- **Button order** follows Figma and the existing mini toolbar (Zoom in, Encajar, Zoom out), not
+  the ticket's textual order.
+
+**Write gates.** Replace and Delete are offered exactly where uploading is possible today:
+`DocumentView` offers them only when `canAttach` (record saved, doc type resolved, not the
+Solo-Lectura tier); the list preview only when `attachmentConfig.readOnly` is false. Under the
+Solo-Lectura tier (ETP-5205) the "Más" button and the lightbox's Replace/Delete are not rendered;
+viewing, the lightbox and zoom stay. No document-status gate was added — uploading was never
+limited to drafts on either surface. While a write is in flight — an upload or a delete —
+Replace and Delete are disabled, in the menu and in the lightbox, on both surfaces:
+`useMainAttachment` reports `isBusy` for every write it runs (a pending counter, so one
+operation finishing cannot clear it under another). In the file sidebar the attach button also
+shows its spinner during a delete, and a drop is ignored until the delete returns. If a newer
+file was stored while a DELETE was in flight, the DELETE only removes the attachment it
+targeted; the newer file stays on screen.
+
+**Scope.** `fileActions` is opt-in on `GenericPreviewModal` and only purchase-invoice sets it;
+goods-receipt and return-material-receipt (the other drop-zone windows) keep the plain viewer
+with its download/delete buttons. `OcrSidePanel` / `OcrInlineUploader` are mounted only by
+purchase-invoice (the only OCR doc type). `PdfViewer`'s new props (`zoom`, `hideToolbar`,
+`toolbarExtra`, `onExpand`, `onNumPages`) are optional, so every other PDF preview is unchanged.
+
+## Duplicate invoice warning in the OCR review modal — ETP-5654
+
+Uploading the same invoice PDF twice used to create a second purchase invoice with the same
+vendor and the same supplier document number ("Nº documento", sent as `orderReference`) with no
+warning. The review modal ("Datos detectados en la factura") now looks for it.
+
+- **When.** Once the vendor row has a resolved vendor and the document-number row is enabled
+  with a non-blank value, `findDuplicatePurchaseInvoices` (in `purchaseInvoiceDescriptor.js`)
+  lists `GET <spec>/purchase-invoice/header?criteria=[...]` with `businessPartner equals <vendor>`,
+  `orderReference iEquals <trimmed number>` and `documentStatus notEqual VO`. The three filters
+  run server-side; the rows are re-checked client-side (trim, case-insensitive, not voided).
+  Changing the vendor or the number re-runs the lookup; a stale answer is discarded.
+- **What counts.** Same vendor and same number, case and surrounding spaces ignored. Draft and
+  completed invoices count; voided ones (`VO`) do not.
+- **What the user sees.** A warning banner (`InfoBanner`, warning tone) under the document-number
+  row: "Ya existe una factura de este proveedor con el Nº documento X (1000123)." The internal
+  document number is a link that opens the existing invoice in a new tab, so the OCR flow is not
+  lost. With several matches the first is shown.
+- **Warn only.** Continue stays enabled. A failed lookup (network, non-OK, unreadable answer)
+  shows nothing and does not block.
+
+## Related documents — form and list preview share one definition — ETP-5539
+
+The form's Related Documents tab (`tools/app-shell/src/windows/custom/purchase-invoice/RelatedDocuments.jsx`,
+now a thin wrapper over `RelatedDocumentsSection`) and the list preview (`InvoicePreview`, which
+receives `relatedDocs={PURCHASE_RELATED_DOCS['purchase-invoice']}` from `purchase-invoice/index.jsx`)
+render the same definition. The preview no longer links to sales documents (`/sales-order`,
+`/goods-shipment`). Sources:
+
+- **Origin purchase order** — read from the header's `salesOrder` FK.
+- **Receipts** — the detail record's `linkedReceipts`; a receipt with `isReturn === true` is shown as a return-to-vendor chip. This already covers the return shipments of a rectificative invoice, so the former per-line fetch chain (`fetchLinkedReturnDeliveries`) and the receipt criteria fallback are gone.
+- **Origin invoices** — `originInvoices` (legacy `originInvoice` as fallback), the invoices imported through "Import from Source Invoice".
+- **Payments are not related documents**; the preview keeps its own PAYMENTS section.
+
+The `purchase-invoice:document-created` event is the `refreshEvent`. See `docs/ui-customization.md` §7.a.
+
+## Header layout at 1280x720 — ETP-5513
+
+- The OCR side panel is a fixed 320 px (`sidePanelStyle={{ width: 320 }}` in
+  `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx`; it was 360 px).
+- The header form follows the shared responsive rules of `EntityForm` (see
+  `docs/ui-design-guidelines.md` → *Form View at 1280x720*): next to the side panel it uses
+  3 columns (about 208 px each with the rail expanded, 269 px collapsed) instead of 4, and only
+  its first 2 rows are shown — required fields first — behind a **Mostrar más datos** /
+  **Mostrar menos datos** toggle.
+
+**Verify:** at 1280x720, open a new purchase invoice with the rail expanded and collapsed:
+3 columns, labels on one line, 6 fields + *Mostrar más datos*; clicking it reveals the rest and
+changes to *Mostrar menos datos*.
+
+**Required fields in the collapsed block (ETP-5513 QA).** *Condiciones de pago*, *Moneda* and
+*Tarifa* are required but sit in the collapsed block. When the vendor does not default them,
+Guardar/Confirmar are disabled and their tooltip names those fields. Hovering, focusing or
+pressing the disabled button opens the block (and keeps it open until the user collapses it), so
+the missing fields are on screen. The block does not open on load, so a new invoice still shows
+2 rows. **Verify:** at 1280x720 on a new invoice leave those fields empty, hover *Guardar* and
+check the block opens with them visible and *Mostrar menos datos* shown.

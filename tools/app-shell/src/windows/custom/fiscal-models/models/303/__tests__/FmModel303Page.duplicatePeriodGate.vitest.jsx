@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // Vitest tests for FmModel303Page's ETP-5187 duplicate-period gate:
 // `requiresRectificativa` warns and blocks "Marcar como Presentado" when this
 // declaration is a 2nd/Nth one for the same (model, year, period) — signaled
@@ -10,6 +11,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useUI: () => (key) => key,
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
@@ -31,7 +33,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -64,6 +65,8 @@ vi.mock('@/components/attachments', () => ({
   useAttachments: () => ({ upload: vi.fn() }),
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
+  Check: () => null,
   Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
   CircleCheck: () => null, Calculator: () => null, Loader2: () => null,
   TrendingUp: () => null, TrendingDown: () => null, ClipboardCheck: () => null,

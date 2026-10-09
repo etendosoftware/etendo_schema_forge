@@ -8,10 +8,8 @@ import { ContactsProvider } from './ContactsContext';
 import { ContactsFinanceProvider } from './ContactsFinanceContext';
 import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import ContactsBusinessPartnerForm from './ContactsBusinessPartnerForm';
-import ContactsPeriodButton from './ContactsPeriodButton';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
 import { useUI } from '@/i18n';
-import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import { Trash2 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -55,10 +53,10 @@ export default function ContactsWindow(props) {
   const ui = useUI();
   /*
    * ETP-5332 — this window is also mounted inside the "Nuevo contacto" create popup
-   * (`RecordCreateModal` → `EmbeddedWindowRoute`). Two of the props below are analytics chrome
-   * that only make sense for a contact that already exists and has history: the period picker
-   * (`tabsBarAfter`) and the balance/income/expense summary (`headerContent`). On a record being
-   * created seconds ago they are guaranteed-empty noise, and inside a dialog they are noise that
+   * (`RecordCreateModal` → `EmbeddedWindowRoute`). The balance/income/expense summary
+   * (`headerContent`, which also hosts the period picker since ETP-5600) is analytics chrome
+   * that only makes sense for a contact that already exists and has history. On a record being
+   * created seconds ago it is guaranteed-empty noise, and inside a dialog it is noise that
    * costs scarce vertical space — ~45px plus the widget, several times what shrinking the field
    * controls could ever recover.
    *
@@ -150,15 +148,18 @@ export default function ContactsWindow(props) {
            // generated defaults ever change.
            listViewOptions={{ hidePrint: true, hideCounter: true, hideLink: true, hideBulkDelete: true }}
            enableSecondaryRowDelete={true}
-           tabsBarAfter={chromeless ? undefined : ContactsPeriodButton}
            headerContent={chromeless ? undefined : renderContactsHeaderSummary}
+           // ETP-5600: Save stays the primary (filled) button on existing contacts too.
+           primarySave={true}
            noHeaderBorder={true}
            toolbarBorderBottom={true}
            toolbarPaddingX="px-2"
            newLabel={ui('newContact')}
+           // ETP-5600 (Figma) — "Importar contactos" lives in the New split menu and opens the
+           // window's own import dialog (`window.import`); ListView then drops the standalone
+           // import icon, since the menu already offers it.
+           newActions={[{ key: 'import', label: ui('importContacts'), opensImportDialog: true }]}
            listbarPaddingX="px-2"
-           SortIconComponent={SortIcon}
-           RefreshIconComponent={RefreshIcon}
            iconButtonHover="hover:bg-[hsl(var(--muted))]"
            tablePaddingX="px-2"
            selectionBarSize="default"

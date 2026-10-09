@@ -495,8 +495,10 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
     return () => obs.disconnect();
   }, []);
 
+  // ETP-5601 — ListView's list toolbar no longer draws a bottom border (Figma: 56px, no line),
+  // but these windows keep the toolbar/body separator, so the body draws it as its top edge.
   return (
-    <div ref={rootRef} style={{ display: 'flex', minHeight: '100%', overflow: 'hidden' }}>
+    <div ref={rootRef} style={{ display: 'flex', minHeight: '100%', overflow: 'hidden', borderTop: '1px solid hsl(var(--border-subtle))' }}>
       <PaymentSidebar dir={dir} data={data} ui={ui} data-testid="PaymentSidebar__743b1b" />
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
         <DataTable

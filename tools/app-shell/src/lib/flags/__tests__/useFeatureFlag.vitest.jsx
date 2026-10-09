@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/lib/flags/useFeatureFlag.js
+// @covers tools/app-shell/src/lib/flags/bootstrap.js
+// @covers tools/app-shell/src/lib/flags/flag-keys.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 /**
@@ -25,7 +28,7 @@ vi.mock('@/lib/observability.js', () => ({
 }));
 
 import { OpenFeature } from '@openfeature/web-sdk';
-import { useFeatureFlag } from '../useFeatureFlag.js';
+import { useFeatureFlag, useNumberFlag } from '../useFeatureFlag.js';
 import {
   initFeatureFlags,
   setFeatureFlagContext,
@@ -39,6 +42,7 @@ import {
 import {
   PROOF_OF_CONCEPT_MENU,
   WEBMCP_AGENT_CHAT,
+  IMPORT_BATCH_SIZE,
   FLAG_DEFAULTS,
   defaultForFlag,
 } from '../flag-keys.js';
@@ -253,9 +257,9 @@ describe('parseFlagConfig', () => {
     expect(parseFlagConfig('', silentLogger)).toEqual({});
   });
 
-  it('keeps only boolean entries', () => {
+  it('keeps only boolean and finite-number entries (ETP-5676: numeric flags)', () => {
     const raw = JSON.stringify({ 'a-flag': true, 'b-flag': false, 'c-flag': 'yes', 'd-flag': 1 });
-    expect(parseFlagConfig(raw, silentLogger)).toEqual({ 'a-flag': true, 'b-flag': false });
+    expect(parseFlagConfig(raw, silentLogger)).toEqual({ 'a-flag': true, 'b-flag': false, 'd-flag': 1 });
   });
 
   it('rejects a JSON array or null payload', () => {
@@ -329,3 +333,48 @@ describe('evaluation context', () => {
     expect(logger.warn).toHaveBeenCalled();
   });
 });
+
+// ETP-5676 — a numeric flag (`import-batch-size`) alongside the boolean ones.
+describe('numeric flags', () => {
+  it('declares import-batch-size with a numeric default of 0 that defaultForFlag does not turn into false', () => {
+    expect(FLAG_DEFAULTS[IMPORT_BATCH_SIZE]).toBe(0);
+    expect(defaultForFlag(IMPORT_BATCH_SIZE)).toBe(0);
+  });
+
+  it('parseFlagConfig keeps finite numbers next to booleans and still drops everything else', () => {
+    const raw = JSON.stringify({
+      [IMPORT_BATCH_SIZE]: 7, [PROOF_OF_CONCEPT_MENU]: true, text: 'x', nothing: null, list: [1],
+    });
+    expect(parseFlagConfig(raw, silentLogger)).toEqual({ [IMPORT_BATCH_SIZE]: 7, [PROOF_OF_CONCEPT_MENU]: true });
+  });
+
+  it('buildInMemoryConfiguration emits a numeric variant and leaves booleans on/off', () => {
+    const config = buildInMemoryConfiguration({ [IMPORT_BATCH_SIZE]: 12, [PROOF_OF_CONCEPT_MENU]: true });
+    expect(config[IMPORT_BATCH_SIZE].variants[config[IMPORT_BATCH_SIZE].defaultVariant]).toBe(12);
+    expect(config[PROOF_OF_CONCEPT_MENU].defaultVariant).toBe('on');
+    expect(buildInMemoryConfiguration()[IMPORT_BATCH_SIZE].variants.value).toBe(0);
+  });
+
+  it('useNumberFlag answers the declared default with no provider', () => {
+    const { result } = renderHook(() => useNumberFlag(IMPORT_BATCH_SIZE));
+    expect(result.current).toBe(0);
+  });
+
+  it('useNumberFlag reads the number once the provider is seeded, and re-renders a mounted component', async () => {
+    const { result } = renderHook(() => useNumberFlag(IMPORT_BATCH_SIZE));
+    await act(async () => {
+      await initFeatureFlags({ env: { VITE_FEATURE_FLAGS: JSON.stringify({ [IMPORT_BATCH_SIZE]: 7 }) }, logger: silentLogger });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current).toBe(7), { timeout: 1000 });
+  });
+
+  it('useNumberFlag keeps the default when the control plane names no override', async () => {
+    await act(async () => {
+      await initFeatureFlags({ env: {}, logger: silentLogger });
+    });
+    const { result } = renderHook(() => useNumberFlag(IMPORT_BATCH_SIZE));
+    expect(result.current).toBe(0);
+  });
+});
+

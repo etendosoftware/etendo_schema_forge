@@ -127,8 +127,8 @@ export function buildEvaluationContext({ username, clientId, accountId, accountE
 }
 
 /**
- * Parses `VITE_FEATURE_FLAGS` — a JSON map of flag key to boolean, e.g.
- * `{"proof-of-concept-menu":true}`. Returns an empty map when unset or malformed, so
+ * Parses `VITE_FEATURE_FLAGS` — a JSON map of flag key to boolean or finite
+ * number, e.g. `{"proof-of-concept-menu":true,"import-batch-size":10}`. Returns an empty map when unset or malformed, so
  * a bad value degrades to the declared defaults instead of breaking startup.
  */
 export function parseFlagConfig(raw, logger = console) {
@@ -137,7 +137,7 @@ export function parseFlagConfig(raw, logger = console) {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     return Object.fromEntries(
-      Object.entries(parsed).filter(([, value]) => typeof value === 'boolean')
+      Object.entries(parsed).filter(([, value]) => typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)))
     );
   } catch {
     logger.warn('[flags] VITE_FEATURE_FLAGS is not valid JSON — falling back to defaults');
@@ -154,11 +154,14 @@ export function buildInMemoryConfiguration(overrides = {}) {
   return Object.fromEntries(
     Object.entries({ ...FLAG_DEFAULTS, ...overrides }).map(([key, value]) => [
       key,
-      {
-        variants: { on: true, off: false },
-        defaultVariant: value ? 'on' : 'off',
-        disabled: false,
-      },
+      typeof value === 'number'
+        // A numeric flag carries its number as its one variant.
+        ? { variants: { value }, defaultVariant: 'value', disabled: false }
+        : {
+          variants: { on: true, off: false },
+          defaultVariant: value ? 'on' : 'off',
+          disabled: false,
+        },
     ])
   );
 }

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @covers tools/app-shell/src/windows/custom/not-posted-documents/NotPostedDocumentsPage.jsx
 // ETP-5591 — Not Posted Documents rebuilt on the shared list building blocks: quick filters in the
 // URL (auto-applied), DataTable with status badges and hover actions, floating selection toolbar.
 import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
@@ -267,6 +268,13 @@ describe('NotPostedDocumentsPage — rows', () => {
     expect(screen.getByTestId('npd-status-doc-3')).toHaveTextContent('postedStatusPeriodClosed');
     expect(screen.getByTestId('npd-status-doc-5')).toHaveTextContent('postedStatusCostNotCalculated');
     expect(screen.queryByTestId('npd-status-doc-4')).not.toBeInTheDocument();
+  });
+
+  it('colours the status badge from the shared posting registry: Periodo cerrado is red (ETP-5647)', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-3'));
+    expect(screen.getByTestId('npd-status-doc-3').querySelector('.status-tag--destructive')).not.toBeNull();
+    expect(screen.getByTestId('npd-status-doc-1').querySelector('.status-tag--destructive')).not.toBeNull();
   });
 
   it('sends the bearer token and the UI locale', async () => {

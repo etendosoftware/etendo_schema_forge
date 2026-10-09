@@ -108,7 +108,7 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 ## Manual verification
 
 1. Open `/purchase-order` and confirm the list shows exactly Order Date (no red dot), Document No., Business Partner, Document Status, Total Gross Amount, Invoice Status, and Reception Status in that order, and that legacy columns such as transaction document, warehouse, price list, and priority are no longer present.
-2. Open `/purchase-order?filter=pendingReception` and confirm fully received orders are excluded while orders with remaining reception progress stay visible (ETP-5487; the query param navigated to from the dashboard's pending-tasks widget, see `docs/widget-endpoints.md`).
+2. Open `/purchase-order?filter=pendingReception` and confirm fully received orders are excluded while orders with remaining reception progress stay visible, and that the advanced filter shows both conditions populated (Document Status = Completed, Reception Status < 100) and the row count equals the dashboard card (ETP-5487/ETP-5632: the condition uses the `eTGODelivStatusPurchase` grid column; a non-grid field is silently dropped; the query param navigated to from the dashboard's pending-tasks widget, see `docs/widget-endpoints.md`).
 3. Verify the header now exposes `Warehouse` as a visible field in the second row of the header form (between Scheduled Delivery Date and Payment Method). The grid column remains hidden. Confirm it is editable on a draft order.
 4. Open a draft order at `/purchase-order/:recordId` and confirm the detail page allows line editing and exposes the draft top-bar actions for confirmation, deletion, and cloning — the Send/"Enviar" action must **not** be shown yet. Open a line for edit and confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured purchase taxes (filtered by `IsSOTrx=N` and validity against the order date), not a free-text search that returns "Sin resultados". Confirm the order and verify Send/"Enviar" now appears in the detail topbar and as a row quick action in the list.
 5. Confirm a draft order and verify the confirmation flow offers downstream procurement follow-up rather than only a status change. Confirm with **both** `Create receipt` and `Create invoice` left unchecked and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `confirmedTitle || poConfirmedTitle` ("Pedido de compra confirmado" / "Purchase order confirmed") and the page refreshes (ETP-5063). Confirm the result modal still appears, listing the created document(s), when at least one of the two checkboxes is selected.
@@ -566,3 +566,18 @@ does not trigger any of this):
 - **"Gestionar recepción y factura"** (`PurchaseOrderActions`, topbarRight) renders nothing under `windowReadOnly`, same fix as the sales-order twin (fetch skipped, `open-*-modal` handlers no-op).
 
 - Preview panel delivery label (ETP-5549): the `OrderPreview` delivery percent row for purchase orders is labelled "Received:" / "Recibido:" (`previewCardReceivedPercent`, passed to `SummaryCard` via `deliveryLabel`); sales orders keep "Delivered:" / "Entregado:".
+
+## Related documents — form and list preview share one definition — ETP-5539
+
+The form's Related Documents tab (`artifacts/purchase-order/custom/RelatedDocuments.jsx`, now a thin
+wrapper over `RelatedDocumentsSection`) and the list preview's `RelatedDocumentsCard`
+(`OrderPreview.jsx`, which previously rendered no card for purchase orders) both render
+`PURCHASE_RELATED_DOCS['purchase-order']`, so they list the same documents:
+
+- **Goods receipts** — `goods-receipt` headers whose `salesOrder` equals this order.
+- **Purchase invoices** — from the order's `listInvoices` header action, which also finds invoices linked only through their lines.
+- **Payments are not related documents** (functional decision, same as ETP-5527): the form no longer lists payment chips.
+
+The `purchase-order:document-created` event is the definition's `refreshEvent`. The dead copy
+`tools/app-shell/src/windows/custom/purchase-order/RelatedDocuments.jsx` (and its test) was removed;
+the pipeline imports the artifact's `custom/RelatedDocuments.jsx`. See `docs/ui-customization.md` §7.a.

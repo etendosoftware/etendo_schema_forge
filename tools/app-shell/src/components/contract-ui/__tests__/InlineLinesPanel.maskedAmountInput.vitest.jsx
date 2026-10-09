@@ -205,3 +205,57 @@ describe('InlineLinesPanel EditCell — clearZeroOnFocus wiring (ETP-5611)', () 
     expect(onUpdateRow).not.toHaveBeenCalledWith(expect.anything(), 'unitPrice', expect.anything(), expect.anything());
   });
 });
+
+// ETP-5657 — the invoices' Exchange rates `rate` is a `type: 'number'` column now (it was a
+// 10-char string, which froze a stored 0.68027210884). As a number it gets the masked numeric
+// input: no maxLength, the full precision shown with the locale decimal comma, comma typing.
+describe('InlineLinesPanel — a type "number" rate column (ETP-5657)', () => {
+  const RATE_COLUMNS = [
+    { key: 'currency', label: 'Currency', type: 'string' },
+    { key: 'rate', label: 'Rate', type: 'number' },
+    { key: 'foreignAmount', label: 'Foreign Amount', type: 'amount' },
+  ];
+  const RATE_ROWS = [{ id: 'R1', currency: 'USD', rate: 0.68027210884, foreignAmount: 40.91 }];
+
+  it('shows the full stored precision with the locale decimal separator in display mode', () => {
+    renderPanel({ columns: RATE_COLUMNS, data: RATE_ROWS });
+    expect(screen.getByTestId('line-row-R1')).toHaveTextContent('0,68027210884');
+  });
+
+  it('edits through the numeric input, with no maxlength, starting from the full value', async () => {
+    renderPanel({ columns: RATE_COLUMNS, data: RATE_ROWS });
+    const row = await openEditOnRow('R1');
+    const rateInput = within(row).getByTestId('field-rate');
+    expect(rateInput).not.toHaveAttribute('maxlength');
+    expect(rateInput).toHaveAttribute('inputmode', 'decimal');
+    expect(rateInput).toHaveValue('0,68027210884');
+  });
+
+  it('accepts a comma-typed rate and commits it as a clean dot-decimal', async () => {
+    const user = userEvent.setup();
+    const { onUpdateRow } = renderPanel({ columns: RATE_COLUMNS, data: RATE_ROWS });
+    const row = await openEditOnRow('R1');
+    const rateInput = within(row).getByTestId('field-rate');
+
+    await user.clear(rateInput);
+    await user.type(rateInput, '0,681252');
+    expect(rateInput).toHaveValue('0,681252');
+    await user.tab();
+
+    expect(onUpdateRow).toHaveBeenCalledWith(
+      RATE_ROWS[0], 'rate', '0.681252', expect.objectContaining({}));
+  });
+
+  it('accepts more digits than the old 10-char limit', async () => {
+    const user = userEvent.setup();
+    const { onUpdateRow } = renderPanel({ columns: RATE_COLUMNS, data: RATE_ROWS });
+    const row = await openEditOnRow('R1');
+    const rateInput = within(row).getByTestId('field-rate');
+
+    await user.clear(rateInput);
+    await user.type(rateInput, '0,6802721088');
+    await user.tab();
+    expect(onUpdateRow).toHaveBeenCalledWith(
+      RATE_ROWS[0], 'rate', '0.6802721088', expect.objectContaining({}));
+  });
+});
