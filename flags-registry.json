@@ -806,6 +806,44 @@
           }
         ]
       }
+    },
+    {
+      "id": "mcp-dual-era",
+      "description": "Dual-era MCP server: /sws/mcp answers both the 2026-07-28 stateless (modern) era and the legacy session era, chosen per request. The modern-era code is PERMANENT; the flag is a backend-only, environment-level kill switch whose true value rolls the server back to legacy-only. Inverted on purpose: false or unset means dual-era ON.",
+      "owner": "valenvivaldi",
+      "jira": "ETP-5640",
+      "created": "2026-10-09",
+      "flag": {
+        "key": "mcp-modern-era-disabled",
+        "defaultValue": false,
+        "ttl": "2027-01-31",
+        "ttlNote": "Agreed date, confirmed by the owner on 2026-10-09. Retirement condition: the modern era is stable in production. Retiring it ships the modern path unconditionally: delete the flag check in McpRequestEra.modernEnabled() and the GoFeatureFlags constant, keep every modern-era class.",
+        "symbols": [
+          "mcp-modern-era-disabled",
+          "FLAG_MCP_MODERN_ERA_DISABLED",
+          "ETGO_FLAG_MCP_MODERN_ERA_DISABLED",
+          "etendo.go.flags.mcp-modern-era-disabled"
+        ],
+        "$symbolsComment": "Backend-only flag: no frontend symbol exists because nothing in the browser evaluates it, and it must never be declared in flag-keys.js (same rule as bp-portal-link). The property and env-var spellings are listed because a grep for the bare key misses Openbravo.properties and the ECS task definition. Evaluated with an empty context, so a ConfigCat rule for it must be environment-level only: one origin (/sws/mcp) serves every tenant and clients cache the era per origin, so a per-account answer would hand one cached decision to clients the flag treats differently."
+      },
+      "paths": {
+        "frontend": [],
+        "backend": []
+      },
+      "$pathsComment": "No owned code: the modern-era implementation is permanent and is NOT deleted when the flag retires, so nothing exists only because the flag exists. src/com/etendoerp/go/mcp/ is a touch point, not owned -- the toggle point is McpRequestEra.modernEnabled(). GoFeatureFlags (constant FLAG_MCP_MODERN_ERA_DISABLED) is shared framework code. Design: com.etendoerp.go docs/plans/2026-10-09-etp-5640-mcp-dual-era-design.md -- section '8.5 The kill-switch flag'.",
+      "$deferredItemsComment": "kill-switch-flip-requires-restart-without-configcat was CLOSED on 2026-10-09: the design said the rollback needs no restart, which holds only where etendo.go.configcat.sdkKey resolves. com.etendoerp.go docs/plans/2026-10-09-etp-5640-mcp-dual-era-design.md section '9. Decisions on the open questions' now states that without an SDK key the flag is read by PropertiesFeatureProvider (Openbravo.properties or ETGO_FLAG_MCP_MODERN_ERA_DISABLED) and flipping it needs a restart. The behaviour is unchanged; the item tracked the wrong claim, not a defect, so it no longer charges a point.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/mcp/McpServletTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/mcp/McpRequestEraTest.java"
+          }
+        ]
+      }
     }
   ]
 }

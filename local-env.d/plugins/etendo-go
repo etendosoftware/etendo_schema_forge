@@ -7,7 +7,8 @@
 # §6.7). This one gives each local-env environment its own Etendo GO SPA:
 #   manifest         `seed GOClient v1` (part of the DB fingerprint)
 #   db-seed          the gradle invocations that load the GO sample client
-#   worktree-create  reserves SPA_PORT / BFF_PORT for the new environment
+#   worktree-create  reserves SPA_PORT / BFF_PORT for the new environment, allows that SPA
+#                    origin and points the MCP / OAuth public URLs at it
 #   up               `make dev-local-core` in the background, pointed at its Tomcat
 #   status           SPA URL, running or stopped
 #   stop|off|worktree-rm  stops that environment's SPA + BFF
@@ -88,6 +89,48 @@ add_origins() {
   cat "$tmp" > "$f"; rm -f "$tmp"
 }
 
+# The MCP OAuth flow of a SPA on another port: its vite well-known metadata advertises
+# resource http://localhost:<port>/mcp and issuer http://localhost:<port>, while the backend
+# validates the token audience against etgo.mcp.public.url and the client needs the issuer to
+# equal etgo.oauth2.public.url. A worktree's properties are copied from the main checkout and
+# still say :3100, so the login fails. Rewritten in the environment's gradle.properties,
+# config/Openbravo.properties, WebContent/WEB-INF (which a build deploys) and the deployed
+# WEB-INF copy, keeping each line's escaping
+# (http\://localhost\:<port> in the Openbravo.properties files). Only a localhost value with
+# another port is rewritten: a custom public URL is kept, and an absent property is not added
+# (PublicUrlResolver then derives the URL from the request, which is not this SPA's to decide).
+# align_public_urls PORT: exit 0 when it changed a file (listed in ALIGNED), 1 otherwise.
+ALIGNED=""
+align_public_urls() {
+  local port=$1 f tmp
+  ALIGNED=""
+  [[ "$port" == 3100 ]] && return 1
+  for f in "$ETENDO_ROOT/gradle.properties" "$ETENDO_ROOT/config/Openbravo.properties" \
+           "$ETENDO_ROOT/WebContent/WEB-INF/Openbravo.properties" \
+           "$LOCALENV_STATE"/catalina/webapps/*/WEB-INF/Openbravo.properties; do
+    [[ -f "$f" ]] || continue
+    tmp="$(mktemp)"
+    awk -v port="$port" '
+      match($0, /^[ \t]*etgo\.(mcp|oauth2)\.public\.url[ \t]*=[ \t]*/) {
+        head = substr($0, 1, RLENGTH); val = substr($0, RLENGTH + 1)
+        cr = (val ~ /\r$/) ? "\r" : ""
+        sub(/[ \t\r]+$/, "", val)
+        if (val ~ /^http(\\)?:\/\/localhost(\\)?:[0-9]+(\/[^ \t]*)?$/) {
+          cur = val; sub(/^http(\\)?:\/\/localhost(\\)?:/, "", cur); sub(/\/.*/, "", cur)
+          if (cur != port) {
+            print head ((val ~ /\\:/) ? "http\\://localhost\\:" : "http://localhost:") port \
+              (head ~ /etgo\.mcp\./ ? "/mcp" : "") cr
+            next
+          }
+        }
+      }
+      { print }' "$f" > "$tmp"
+    if cmp -s "$tmp" "$f"; then rm -f "$tmp"
+    else cat "$tmp" > "$f"; rm -f "$tmp"; ALIGNED="${ALIGNED:+$ALIGNED, }$f"; fi
+  done
+  [[ -n "$ALIGNED" ]]
+}
+
 # needs_install DIR STAMP: node_modules missing, or the lockfile changed since the last
 # install. local-env clones a repo's node_modules into a new worktree from the source
 # checkout, so they can lag the branch's own lockfile: the same check covers that.
@@ -127,6 +170,9 @@ case "$hook" in
     printf 'export SPA_PORT=%s\nexport BFF_PORT=%s\n' "$spa" "$bff" >> "$LOCALENV_STATE/env"
     add_origins "$spa" || true
     echo ">> Etendo GO SPA of this environment: :$spa (AI BFF :$bff), allowed as an origin by its Tomcat"
+    if align_public_urls "$spa"; then
+      echo ">> Pointed etgo.mcp.public.url / etgo.oauth2.public.url at :$spa in $ALIGNED"
+    fi
     ;;
   up)
     if [[ "${ETENDO_GO_SPA:-1}" == 0 ]]; then echo ">> ETENDO_GO_SPA=0: Etendo GO SPA not started"; exit 0; fi
@@ -143,6 +189,14 @@ case "$hook" in
         echo ">> Added ETGO_ALLOWED_ORIGINS for :$SPA_PORT to $LOCALENV_STATE/env (the Tomcat starting now picks it up)"
       else
         echo "WARNING: added ETGO_ALLOWED_ORIGINS for :$SPA_PORT to $LOCALENV_STATE/env; a Tomcat of this environment that is already running does not have it: restart it once, or login from the SPA answers 'Origin not allowed'" >&2
+      fi
+    fi
+    # same for the public URLs: properties are read at context init
+    if align_public_urls "$SPA_PORT"; then
+      if [[ "${LOCALENV_TOMCAT:-0}" == 1 ]]; then
+        echo ">> Pointed etgo.mcp.public.url / etgo.oauth2.public.url at :$SPA_PORT in $ALIGNED (the Tomcat starting now picks them up)"
+      else
+        echo "WARNING: pointed etgo.mcp.public.url / etgo.oauth2.public.url at :$SPA_PORT in $ALIGNED; a Tomcat of this environment that is already running still has the old values: restart it once, or an MCP client's OAuth login against this SPA fails (token audience / issuer mismatch)" >&2
       fi
     fi
     if p="$(spa_pid)"; then
