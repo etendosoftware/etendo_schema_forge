@@ -237,7 +237,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
   backdrop reject: the invoice stays Completed and nothing is created — there is no «Ahora no»
   card. «Crear albarán» POSTs
   `sales-invoice/header/{id}/action/createShipment`, which creates a **Draft** sales shipment (Albarán de Venta) with only
-  the pending lines; the result view links to it (`/goods-shipment/{id}`). Backend error codes
+  the pending lines; the shared `ConfirmResultModal` then announces it (`resultDocType: 'salida'`:
+  «Albarán creado», card «Albarán de venta · Borrador · Nº …», «Cerrar» + «Ver albarán» →
+  `/goods-shipment/{id}`; see `docs/ui-customization.md` §21). Backend error codes
   (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
 - **Warehouse asked when the backend cannot decide it.** The shipment needs a target warehouse. When
   the backend cannot determine it on its own, `createShipment` answers `409 FOLLOW_UP_WAREHOUSE_REQUIRED`

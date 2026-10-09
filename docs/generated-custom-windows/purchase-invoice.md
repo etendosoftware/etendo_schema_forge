@@ -201,7 +201,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
   backdrop reject: the invoice stays Completed and nothing is created — there is no «Ahora no»
   card. «Crear recepción» POSTs
   `purchase-invoice/header/{id}/action/createGoodsReceipt`, which creates a **Draft** goods receipt (Albarán de Compra) with only
-  the pending lines; the result view links to it (`/goods-receipt/{id}`). Backend error codes
+  the pending lines; the shared `ConfirmResultModal` then announces it (`resultDocType: 'entrada'`:
+  «Albarán creado», card «Albarán de compra · Borrador · Nº …», «Cerrar» + «Ver albarán» →
+  `/goods-receipt/{id}`; see `docs/ui-customization.md` §21). Backend error codes
   (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
 - **Warehouse asked when the backend cannot decide it.** The goods receipt needs a target warehouse. When
   the backend cannot determine it on its own, `createGoodsReceipt` answers `409 FOLLOW_UP_WAREHOUSE_REQUIRED`

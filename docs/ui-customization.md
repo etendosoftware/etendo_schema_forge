@@ -2488,7 +2488,7 @@ with the chosen value — see **Input-required round-trip** below.
 |---|---|
 | `followUpDocuments.js` | Pure helpers: `readFollowUpEntries`, `buildFollowUpActionUrl`, error-code → i18n key map (`FOLLOW_UP_ERROR_KEYS`, fallback `followUpErrorGeneric`), the input-required helpers (`readFollowUpInputRequest`, `followUpInputLabels`, `mergeFollowUpInputValues`), the prompt hand-off (`requestFollowUpPrompt` / `consumeFollowUpPrompt`) and `createFollowUpAfterProcess(spec, options)` |
 | `useFollowUpDocuments` | State machine `closed → choice → (loading) → result`; POSTs through `useApiFetch`; keeps a backend-requested input (`session.inputRequest`, `session.inputs`, `setInputValue`); on success dispatches `<spec>:document-created` and calls `onCreated` |
-| `FollowUpDocumentModal` | Choice phase on `ActionChoiceModal` — layout decided only by how many configured follow-ups are available: ONE → single-option confirmation (summary, the window's question, ONE static option card — title + badge + description with the pending count, no radio — and a label-only primary button named after the action, focused so Enter creates); TWO+ → one Figma choice card per follow-up. No "not now" card: Cancel / X / Esc / backdrop reject. Result phase on `ConfirmResultModal` (link to the created document); errors inline |
+| `FollowUpDocumentModal` | Choice phase on `ActionChoiceModal` — layout decided only by how many configured follow-ups are available: ONE → single-option confirmation (summary, the window's question, ONE static option card — title + badge + description with the pending count, no radio — and a label-only primary button named after the action, focused so Enter creates); TWO+ → one Figma choice card per follow-up. No "not now" card: Cancel / X / Esc / backdrop reject. Result phase on `ConfirmResultModal` (see §21 — the component owns the dialog, its title and its keyboard handling; this modal only maps the created documents to `docs`); errors inline |
 | `FollowUpDocumentButton` | `topbarRight` entry point: renders only while a configured follow-up is available (never for a read-only window); always mounts the modal, so the post-Confirm prompt also opens it |
 
 **Per-window config** — a map keyed by the backend follow-up key (see
@@ -2507,8 +2507,9 @@ options: {
     icon,                          // lucide component
     titleKey, buttonLabelKey,      // used when this is the only follow-up offered; separate keys: the
                                    // modal title asks («¿Gestionar envío?»), the button does not («Gestionar envío»)
-    resultDocType,                 // ConfirmResultModal type: 'salida' | 'entrada' | 'facturaVenta' | 'facturaCompra'
-    resultTitleKey,
+    resultDocType,                 // ConfirmResultModal doc type (see §21 for the full list) — drives the
+                                   // result popup's title, card label, badge gender and «Ver …» button.
+                                   // Today: 'salida' (sales-invoice) | 'entrada' (purchase-invoice)
   },
 },
 summary: { documentLabelKey /* required */, documentNoField, dateLabelKey, dateField, contactField, totalField, currencyField,
@@ -2541,7 +2542,8 @@ group (Arrow/Home/End) where Enter selects the focused card AND continues, every
 visible `:focus-visible` outline, and the layout stacks below 640px. With a single option the
 radio group is replaced by the direct confirmation and focus starts on the primary button (the
 static card is not a Tab stop). The result
-phase has the same Tab trap and Esc rule and focuses the link to the created document.
+phase is `ConfirmResultModal`, which has the same Tab trap and Esc rule of its own and focuses its
+primary button («Ver albarán» for one created document) — see §21.
 
 **Input-required round-trip.** When the backend cannot decide a value the follow-up document
 needs (today: the target warehouse of the shipment / receipt), it answers the action POST with an
@@ -2605,6 +2607,92 @@ carries the option's `actionLabel` and no arrow icon (the spinner still shows wh
 Options take an optional `badgeTone` (`'success'` default, `'info'`), mapped to the
 `--status-success-*` / `--status-info-*` tokens. sales-quotation always passes two options, no
 `badgeTone`, and is unaffected (green «Recomendado», arrow on the primary).
+
+### 21. Generated-documents popup — `ConfirmResultModal` (ETP-5674)
+
+`tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx` is THE result popup every flow
+shows after it created one or more documents, on both Sales and Purchases: confirming an order with
+shipment / receipt / invoice, invoicing a shipment or a receipt (single and bulk), the rectificative
+invoice of a return, a purchase return created from a receipt, a quotation turned into an order or
+an invoice, and the follow-up documents of §20. Do not build a window-local result view — pass
+`docs` to this component.
+
+**Props.** Callers only describe *what* was created; all the copy is derived inside the component,
+so two flows that create the same document can never word it differently.
+
+```jsx
+<ConfirmResultModal
+  docs={[
+    { type: 'salida',       num: 'ALB-0001', documentStatus: 'DR', route: '/goods-shipment/<id>' },
+    { type: 'facturaVenta', num: 'FAC-0042', documentStatus: 'CO', route: '/sales-invoice/<id>' },
+  ]}
+  navigate={navigate}            // (route) => void — opens a document
+  onClose={resetConfirmedState}  // «Cerrar», the X icon and Esc
+  onNavigate={() => { navigatedRef.current = true; }}  // optional; runs INSTEAD of onClose
+/>                                                      // right before navigating (default: onClose)
+```
+
+| `docs[i]` key | Meaning |
+|---|---|
+| `type` | A `TYPE_CONFIG` key (table below). An unknown type falls back to `facturaCompra`. |
+| `num` | Document number, rendered as «Nº &lt;num&gt;» (`confirmResultModal.docNumber`). |
+| `documentStatus` | Optional. `'CO'` → green «Completado/Completada» badge (gendered by type); anything else, including missing → neutral «Borrador». Always pass the real status from the action response — invoices are confirmed on creation while a shipment in the same popup can still be a draft. |
+| `route` | Optional. Without it the card is shown but is not clickable, and no «Ver …» button is offered. |
+
+There is **no** `title`, `primary`, `currency` or per-doc `amount`/`status` prop: the popup shows
+no amount, and its title, banner and buttons are computed:
+
+| `docs.length` | Title | Banner | Footer |
+|---|---|---|---|
+| 1 | per-type title (e.g. «Albarán creado», «Factura creada») | «Se ha generado un documento» / «Ábrelo para consultarlo.» | with a `route`: «Cerrar» (secondary) + «Ver …» (primary, opens it); without: «Cerrar» only |
+| 2+ | «Documentos creados» (`confirmResultModal.title.many`) | «Se han generado N documentos» / «Abre cualquiera de ellos para consultarlo.» | «Cerrar» only (primary); the cards navigate |
+| 0 | `followUpDocumentCreated` fallback | none | «Cerrar» only |
+
+**Document types** (`TYPE_CONFIG`; i18n keys under `confirmResultModal.*` in `en_US` / `es_ES` /
+`es_AR`):
+
+| `type` | Card label (es_ES) | Title when alone (es_ES) | «Ver …» key | Badge gender | Used by |
+|---|---|---|---|---|---|
+| `salida` | Albarán de venta | Albarán creado | `soViewShipment` | masculine | sales-order confirm, sales-invoice follow-up |
+| `entrada` | Albarán de compra | Albarán creado | `poViewReceipt` | masculine | purchase-order confirm, purchase-invoice follow-up |
+| `facturaVenta` | Factura de venta | Factura creada | `soViewInvoice` | feminine | sales-order confirm, goods-shipment invoicing (single / bulk / row Confirmar), sales-quotation «Facturar directamente» |
+| `facturaCompra` | Factura de compra | Factura creada | `poViewInvoice` | feminine | purchase-order confirm, goods-receipt invoicing (single / bulk / row Confirmar) |
+| `facturaRectificativa` | Factura rectificativa | Factura rectificativa creada | `soViewInvoice` | feminine | return-material-receipt |
+| `facturaRectificativaCompra` | Factura rectificativa de compra | Factura rectificativa de compra creada | `poViewInvoice` | feminine | return-to-vendor-shipment |
+| `devolucionCompra` | Devolución de compra | Devolución de compra creada | `confirmResultModal.view.devolucion` | feminine | goods-receipt «Crear devolución» (opens `/return-to-vendor-shipment/{id}`) |
+| `pedidoVenta` | Pedido de venta | Pedido creado | `sqViewOrder` | masculine | sales-quotation «Crear pedido» |
+
+Adding a document type = one `TYPE_CONFIG` row (label key, title key, view key, lucide icon,
+gender) plus its `confirmResultModal.docType.*` / `confirmResultModal.title.*` keys in all three
+locales. Shared hooks pass the type through instead of a title: `invoiceDocType` in
+`useRowConfirmAction` / `ReturnWindowShell`'s `confirmAction`, `invoiceType` in
+`ConfirmWithCreditButtonBase` / `useConfirmWithCredit`, `primaryDoc.type` / `invoiceDoc.type` in
+`useOrderWindow`, `resultDocType` in the follow-up config (§20). `confirmedTitleKey` survives in
+`useOrderWindow` / `useRowConfirmAction` only for the success **toast** shown when a confirm
+created no document — it never reaches the popup.
+
+**Dialog behaviour** (owned by the component — callers must not wrap it in their own dialog or
+focus trap): the panel is `role="dialog" aria-modal="true"` labelled by its title; focus moves to
+the primary button on open (so Enter runs it) and returns to the opener on unmount; Tab is trapped
+inside (`useDialogFocusTrap`, shared with `ActionChoiceModal`); Esc closes only when it is this
+dialog's own (`isOwnEscape`); a navigable card is a native `<button>` (Enter / Space open it).
+Overlay `zIndex: 50` (the app's modal tier — see `docs/walkthrough-flows.md`).
+
+**Stable selectors** (E2E and walkthroughs):
+
+| `data-testid` | Element |
+|---|---|
+| `confirm-result-modal` | overlay |
+| `confirm-result-dialog` | the `role="dialog"` panel |
+| `confirm-result-title` | title |
+| `confirm-result-banner` | green banner (`role="status"`), absent with 0 docs |
+| `confirm-result-card-<i>` | card `i`, with `data-doc-type` (the `type`) and `data-doc-status` (`CO` or `DR`) |
+| `action-confirm-result-view` | «Ver …» (only with exactly one navigable doc) |
+| `action-confirm-result-close` | «Cerrar» — present in **both** footer variants; target of the `create-sales-order` walkthrough's last step (`confirmed-ack`), do not rename |
+| `action-confirm-result-dismiss` | the X icon |
+
+Pure helpers `getConfirmResultTypeConfig(type)` and `getConfirmResultCopy(docs, ui)` are exported for
+reuse and tests. Unit coverage: `tools/app-shell/src/components/contract-ui/__tests__/ConfirmResultModal.vitest.jsx`.
 
 ## Decision tree: which option to use?
 
