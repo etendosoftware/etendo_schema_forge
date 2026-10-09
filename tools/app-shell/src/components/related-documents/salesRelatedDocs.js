@@ -26,18 +26,21 @@
  * injected by the backend handlers on the detail GET only. `apiBaseUrl` is the
  * spec-scoped base (`.../sws/neo/<spec>`); cross-spec calls go through neoBase().
  *
- * Purchase documents are deliberately NOT here (separate ticket ETP-5539).
+ * Purchase documents live in purchaseRelatedDocs.js (ETP-5539), same shape.
  * Payments (cobros) are deliberately NOT related documents either: a sales order or
  * invoice never lists its payments as chips (functional decision, ETP-5527).
  */
 import { getArSubtype } from '@generated/sales-invoice/custom/invoiceSubtype.js';
+import { fetchByCriteria, fetchById } from './helpers.js';
 import {
-  fetchByCriteria,
-  fetchById,
-  fetchListInvoices,
-} from './helpers.js';
-
-const asArray = (value) => (Array.isArray(value) ? value : []);
+  criteriaSource,
+  listInvoicesSource,
+  selectSource,
+  originInvoicesSource,
+  originInvoicesDepsKey,
+  movementDefinition,
+  returnDefinition,
+} from './relatedSources.js';
 
 /**
  * The source quotation of a sales order, read from the real quotation record so the
@@ -81,26 +84,6 @@ async function fetchRectifiedInvoices({ id, record, token, apiBaseUrl }) {
   return invoices.filter(inv => inv.id !== id);
 }
 
-/**
- * Invoices manually linked through "Import from Source Invoice" (ETP-4737/ETP-4919):
- * `originInvoices` is an array of {id, documentNo}; the legacy singular `originInvoice`
- * (bare id) is kept as a fallback for an older response shape.
- */
-async function fetchOriginInvoices({ record, token, apiBaseUrl }) {
-  const ids = Array.isArray(record?.originInvoices)
-    ? record.originInvoices.map(o => o?.id).filter(Boolean)
-    : [record?.originInvoice].filter(Boolean);
-  if (ids.length === 0) return [];
-  const invoices = await Promise.all(
-    ids.map(invId => fetchById('sales-invoice', 'header', invId, token, apiBaseUrl))
-  );
-  return invoices.filter(Boolean);
-}
-
-function idsOf(list) {
-  return asArray(list).map(item => (item && typeof item === 'object' ? item.id : item)).join(',');
-}
-
 export const SALES_RELATED_DOCS = {
   'sales-quotation': {
     spec: 'sales-quotation',
@@ -108,18 +91,8 @@ export const SALES_RELATED_DOCS = {
     // ETP-4779 — QuotationConfirmModal dispatches it after converting the quotation.
     refreshEvent: 'sales-quotation:document-created',
     sources: [
-      {
-        key: 'orders',
-        type: 'sales-order',
-        fetch: ({ id, token, apiBaseUrl }) =>
-          fetchByCriteria('sales-order', 'header', 'quotation', id, token, apiBaseUrl),
-      },
-      {
-        key: 'invoices',
-        type: 'sales-invoice',
-        fetch: ({ id, token, apiBaseUrl }) =>
-          fetchListInvoices('sales-quotation', 'quotation', id, token, apiBaseUrl),
-      },
+      criteriaSource('orders', 'sales-order', 'sales-order', 'header', 'quotation'),
+      listInvoicesSource('invoices', 'sales-invoice', 'sales-quotation', 'quotation'),
     ],
   },
 
@@ -131,18 +104,8 @@ export const SALES_RELATED_DOCS = {
     depsKey: record => String(record?.quotation ?? ''),
     sources: [
       { key: 'quotation', type: 'sales-quotation', fetch: fetchSourceQuotation },
-      {
-        key: 'shipments',
-        type: 'shipment',
-        fetch: ({ id, token, apiBaseUrl }) =>
-          fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', id, token, apiBaseUrl),
-      },
-      {
-        key: 'invoices',
-        type: 'sales-invoice',
-        fetch: ({ id, token, apiBaseUrl }) =>
-          fetchListInvoices('sales-order', 'header', id, token, apiBaseUrl),
-      },
+      criteriaSource('shipments', 'shipment', 'goods-shipment', 'goodsShipment', 'salesOrder'),
+      listInvoicesSource('invoices', 'sales-invoice', 'sales-order', 'header'),
     ],
   },
 
@@ -155,8 +118,7 @@ export const SALES_RELATED_DOCS = {
     depsKey: record => [
       record?.salesOrder ?? '',
       getArSubtype(record),
-      idsOf(record?.originInvoices),
-      record?.originInvoice ?? '',
+      originInvoicesDepsKey(record),
     ].join('|'),
     sources: [
       {
@@ -164,14 +126,10 @@ export const SALES_RELATED_DOCS = {
         type: doc => (doc._isQuotation ? 'sales-quotation' : 'sales-order'),
         fetch: fetchInvoiceOrigin,
       },
-      {
-        // Resolved server-side (SalesInvoiceHeaderHandler#enrichLinkedShipments) from each
-        // invoice line's own M_InOutLine_ID: normal deliveries AND customer returns, told
-        // apart by `isReturn` (ETP-4534). Never derived from `salesOrder`.
-        key: 'shipments',
-        type: doc => (doc.isReturn === true ? 'return-material-receipt' : 'shipment'),
-        select: record => asArray(record?.linkedShipments),
-      },
+      // Resolved server-side (SalesInvoiceHeaderHandler#enrichLinkedShipments) from each
+      // invoice line's own M_InOutLine_ID: normal deliveries AND customer returns, told
+      // apart by `isReturn` (ETP-4534). Never derived from `salesOrder`.
+      selectSource('shipments', doc => (doc.isReturn === true ? 'return-material-receipt' : 'shipment'), 'linkedShipments'),
       { key: 'rectified', type: 'sales-invoice', fetch: fetchRectifiedInvoices },
       {
         // Injected only when this invoice traces back through a return to the original
@@ -180,30 +138,28 @@ export const SALES_RELATED_DOCS = {
         type: 'sales-invoice',
         select: record => (record?.sourceInvoice ? [record.sourceInvoice] : []),
       },
-      { key: 'originInvoices', type: 'sales-invoice', fetch: fetchOriginInvoices },
+      originInvoicesSource('sales-invoice'),
     ],
   },
 
-  'goods-shipment': {
+  // Injected by GoodsShipmentHeaderHandler on the detail GET.
+  'goods-shipment': movementDefinition({
     spec: 'goods-shipment',
     entity: 'goodsShipment',
-    // Injected by GoodsShipmentHeaderHandler on the detail GET.
-    sources: [
-      { key: 'orders', type: 'sales-order', select: record => asArray(record?.linkedOrders) },
-      { key: 'invoices', type: 'sales-invoice', select: record => asArray(record?.linkedInvoices) },
-      { key: 'returns', type: 'return-material-receipt', select: record => asArray(record?.returnReceipts) },
-    ],
-  },
+    orderType: 'sales-order',
+    invoiceType: 'sales-invoice',
+    returnType: 'return-material-receipt',
+    returnsField: 'returnReceipts',
+  }),
 
-  'return-material-receipt': {
+  // Injected by ReturnMaterialReceiptHeaderHandler (list and detail GET).
+  'return-material-receipt': returnDefinition({
     spec: 'return-material-receipt',
     entity: 'returnMaterialReceipt',
-    // Injected by ReturnMaterialReceiptHeaderHandler (list and detail GET).
-    sources: [
-      { key: 'sourceShipments', type: 'shipment', select: record => asArray(record?.sourceShipments) },
-      { key: 'returnInvoices', type: 'sales-invoice', select: record => asArray(record?.returnInvoices) },
-    ],
-  },
+    sourceField: 'sourceShipments',
+    sourceType: 'shipment',
+    invoiceType: 'sales-invoice',
+  }),
 };
 
 /** The related-documents definition of a sales spec, or null for any other spec. */

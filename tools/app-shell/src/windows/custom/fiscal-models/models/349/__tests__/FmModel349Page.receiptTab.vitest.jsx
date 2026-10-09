@@ -1,5 +1,4 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
-//
 // Vitest tests for the "Justificante" tab (AttachmentsTab bound to
 // ETGO_Fiscal_Decl) and the handlePresent acuse-de-recibo upload wiring in
 // FmModel349Page.jsx — ported from the equivalent Modelo 303 feature (see
@@ -20,14 +19,16 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
-vi.mock('../../../fiscalModelsUtils.js', () => ({
+// RECEIPT_ATTACHMENT_CONFIG is the REAL constant (ETP-5584 P13): the page passes it to the
+// Justificante tab and PresentModal derives its upload label/accept/type check from it.
+vi.mock('../../../fiscalModelsUtils.js', async () => ({
+  RECEIPT_ATTACHMENT_CONFIG: (await vi.importActual('../../../fiscalModelsUtils.js')).RECEIPT_ATTACHMENT_CONFIG,
   formatAmount: (n) => (n == null ? '—' : String(n)),
   compute349Operators: vi.fn().mockResolvedValue(null),
   generate349File: vi.fn().mockResolvedValue(false),
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
     'div',
@@ -45,6 +46,8 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
+  Check: () => null,
   ArrowLeft: () => null, Save: () => null,
   Download: () => null, CircleCheck: () => null, Search: () => null, Loader2: () => null,
   Globe: () => null, MoreVertical: () => null, ChevronDown: () => null, Users: () => null,

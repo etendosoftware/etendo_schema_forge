@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+// @covers tools/app-shell/src/components/contract-ui/saveGateAttempts.js
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ETP-5278 — the existing-record toolbar Save of a window with `onAfterExistingSave` defers its
 // "saved" toast until that follow-up write has finished (single, truthful toast), and stays
@@ -18,6 +19,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import { showSaveSuccessToast } from '@/hooks/useEntity';
 import { renderSaveActions, handlePostSaveNavigation } from '../saveActions.jsx';
+import { subscribeSaveGateAttempts, notifySaveGateAttempt } from '../saveGateAttempts.js';
 
 const ui = (key) => key;
 
@@ -144,5 +146,45 @@ describe('existing-record Save — saveBusy (ETP-5278)', () => {
 
     expect(screen.getByTestId('action-save')).not.toBeDisabled();
     expect(screen.queryByTestId('Loader2__fa3275')).not.toBeInTheDocument();
+  });
+});
+
+
+// ETP-5513 — a blocked Save/Confirm is disabled, so it can never be clicked; hovering,
+// focusing or pressing it reports the fields it is blocked on, so the header form can
+// reveal a required field hidden behind "Show more details".
+describe('blocked Save reports the attempt (ETP-5513)', () => {
+  const blocked = { blocked: true, title: 'saveMissingRequired', missingAttr: 'paymentTerms,currency,priceList' };
+  let seen;
+  let unsubscribe;
+  beforeEach(() => {
+    seen = [];
+    unsubscribe = subscribeSaveGateAttempts((keys) => seen.push(keys));
+  });
+  afterEach(() => unsubscribe());
+
+  it.each([
+    ['hover', (el) => fireEvent.pointerEnter(el)],
+    ['press', (el) => fireEvent.pointerDown(el)],
+    ['focus', (el) => fireEvent.focus(el)],
+  ])('%s on the blocked button reports its missing fields', (_name, act) => {
+    render(<>{renderSaveActions(existingRecordParams({ saveGate: blocked }))}</>);
+    const button = screen.getByTestId('action-save');
+    expect(button).toBeDisabled();
+    act(button.parentElement);
+    expect(seen).toEqual([['paymentTerms', 'currency', 'priceList']]);
+  });
+
+  it('reports nothing when the gate is not blocking', () => {
+    render(<>{renderSaveActions(existingRecordParams())}</>);
+    fireEvent.pointerEnter(screen.getByTestId('action-save'));
+    expect(seen).toEqual([]);
+  });
+
+  it('notifySaveGateAttempt ignores empty input and trims keys', () => {
+    notifySaveGateAttempt('');
+    notifySaveGateAttempt(undefined);
+    notifySaveGateAttempt(' a , b ,');
+    expect(seen).toEqual([['a', 'b']]);
   });
 });

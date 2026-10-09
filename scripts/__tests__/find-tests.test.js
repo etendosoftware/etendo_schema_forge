@@ -1,11 +1,13 @@
 // @covers scripts/find-tests.js
+// @covers scripts/lib/git-env.js
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isolatedGitEnv } from './isolatedGitEnv.js';
 import {
   findFunctionalTests,
   findJavaTests,
@@ -21,12 +23,6 @@ import {
   resolveSpecifier,
   resolveTarget,
 } from '../find-tests.js';
-import { gitEnv, scrubGitEnv } from './git-env.js';
-
-// Running from inside a git hook, an inherited GIT_DIR would point every git
-// call below — including the `git ls-files` that find-tests.js runs in-process
-// during resolveTarget() — at the real repository. See git-env.js.
-scrubGitEnv();
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'find-tests.js');
 
@@ -39,7 +35,7 @@ function writeTree(root, files) {
 }
 
 function gitInit(root) {
-  const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'ignore', env: gitEnv() });
+  const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'ignore', env: isolatedGitEnv() });
   git('init', '-q');
   git('add', '-A');
   git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'init', '--no-gpg-sign');
@@ -506,8 +502,7 @@ describe('main', () => {
         'src/lib/__tests__/foo.test.js': "// @covers src/lib/foo.js\nimport { foo } from '../foo.js';\n",
       });
       gitInit(sf);
-      // The script runs `git ls-files`, so the child needs the scrubbed env too.
-      env = gitEnv({ SF_ROOT: sf, GO_ROOT: join(tmp, 'go') });
+      env = isolatedGitEnv({ SF_ROOT: sf, GO_ROOT: join(tmp, 'go') });
     });
 
     after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -546,5 +541,68 @@ describe('main', () => {
       assert.equal(res.status, 0, res.stderr);
       assert.match(res.stdout, /find-tests: src\/lib\/foo\.js \(functional\)/);
     });
+  });
+});
+
+describe('git environment isolation (pre-push hook)', () => {
+  const GIT_KEYS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE'];
+  const plainGit = (cwd, ...args) =>
+    execFileSync('git', args, { cwd, encoding: 'utf8', env: isolatedGitEnv() }).trim();
+  let tmp;
+  let decoy;
+  let decoyHead;
+
+  // Points GIT_* at `repo` the way a hook environment does, runs fn, then restores the outer env.
+  const withGitEnvOf = (repo, fn) => {
+    const saved = Object.fromEntries(GIT_KEYS.map((key) => [key, process.env[key]]));
+    process.env.GIT_DIR = join(repo, '.git');
+    process.env.GIT_WORK_TREE = repo;
+    process.env.GIT_INDEX_FILE = join(repo, '.git', 'index');
+    try {
+      return fn();
+    } finally {
+      for (const key of GIT_KEYS) {
+        if (saved[key] === undefined) delete process.env[key];
+        else process.env[key] = saved[key];
+      }
+    }
+  };
+
+  before(() => {
+    tmp = realpathSync(mkdtempSync(join(tmpdir(), 'find-tests-gitenv-')));
+    decoy = join(tmp, 'decoy');
+    writeTree(decoy, { 'README.md': '# decoy\n' });
+    plainGit(decoy, 'init', '-q');
+    plainGit(decoy, 'add', '-A');
+    plainGit(decoy, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'decoy', '--no-gpg-sign');
+    decoyHead = plainGit(decoy, 'rev-parse', 'HEAD');
+  });
+
+  after(() => rmSync(tmp, { recursive: true, force: true }));
+
+  it('gitInit builds the fixture repo in its own dir even when GIT_DIR points at another repo', () => {
+    const fixture = join(tmp, 'fixture-a');
+    writeTree(fixture, { 'src/a.js': 'export const a = 1;\n' });
+    withGitEnvOf(decoy, () => gitInit(fixture));
+    assert.ok(existsSync(join(fixture, '.git')), 'fixture has its own .git');
+    assert.equal(plainGit(fixture, 'rev-list', '--count', 'HEAD'), '1');
+    assert.equal(plainGit(decoy, 'rev-parse', 'HEAD'), decoyHead, 'decoy repo HEAD is unchanged');
+  });
+
+  it('find-tests resolves hits in its own root even when GIT_DIR points at another repo', () => {
+    const fixture = join(tmp, 'fixture-b');
+    writeTree(fixture, {
+      'src/lib/foo.js': 'export const foo = 1;\n',
+      'src/lib/__tests__/foo.test.js': "// @covers src/lib/foo.js\nimport { foo } from '../foo.js';\n",
+    });
+    gitInit(fixture);
+    const res = withGitEnvOf(decoy, () => spawnSync(process.execPath, [SCRIPT, 'src/lib/foo.js', '--json'], {
+      cwd: fixture,
+      encoding: 'utf8',
+      env: { ...process.env, SF_ROOT: fixture, GO_ROOT: join(tmp, 'go') },
+    }));
+    assert.equal(res.status, 0, res.stderr);
+    assert.deepEqual(JSON.parse(res.stdout)[0].hits.map((hit) => hit.file), ['src/lib/__tests__/foo.test.js']);
+    assert.equal(plainGit(decoy, 'rev-parse', 'HEAD'), decoyHead, 'decoy repo HEAD is unchanged');
   });
 });

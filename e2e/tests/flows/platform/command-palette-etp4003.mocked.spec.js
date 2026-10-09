@@ -110,19 +110,21 @@ test.describe('CommandPalette window search and picker (1280x720)', () => {
     }));
   });
 
-  test('"Configura" ranks the Configuración section first and Enter opens its first window', async ({ page }) => {
+  test('"Configura" ranks Configuración Fiscal first and Enter opens it', async ({ page }) => {
     const input = await openPalette(page, '/dashboard');
     await input.fill('Configura');
     const firstGroup = page.getByTestId('CommandGroup__73263e').first();
-    // The section whose label matches ranks first, ahead of windows that match only by
-    // their own label ("Configuración Fiscal") or by their source label ("Esquema contable",
-    // i.e. General Ledger Configuration). Before the tiered ranking, menu order let the
-    // accounting section come first and Enter opened /general-ledger-configuration.
+    // A window whose own name matches ranks first, then the rest of the section whose name
+    // matches (Organización, Secuencias de documentos, …), then windows that match only by
+    // their source label ("Esquema contable", i.e. General Ledger Configuration). Before the
+    // tiered ranking, menu order let the accounting section come first and Enter opened
+    // /general-ledger-configuration; with sections first, it opened Organización.
     await expect(firstGroup.locator('h3')).toHaveText(/^Configuración$/, { timeout: 5_000 });
-    await expect(firstGroup.locator('[data-global-search-item="true"]').first()).toHaveText(/Organización/);
+    const items = page.locator('[data-global-search-item="true"]');
+    await expect(items.first()).toHaveText(/Configuración Fiscal/);
+    await expect(items.nth(1)).toHaveText(/Organización/);
     await input.press('Enter');
-    // Organización is the first window of Configuración in the mocked session's menu.
-    await expect(page).toHaveURL(/\/organization(?:$|[?#])/, { timeout: 8_000 });
+    await expect(page).toHaveURL(/\/fiscal-config(?:$|[?#])/, { timeout: 8_000 });
     await expect(page).not.toHaveURL(/general-ledger-configuration/);
   });
 

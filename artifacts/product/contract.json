@@ -1,8 +1,8 @@
 {
   "version": "0.13.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-09-23T13:43:00.032Z",
-  "checksum": "f80b4a3ee84113cf",
+  "updatedAt": "2026-10-08T17:12:34.248Z",
+  "checksum": "8d494516a7bfee01",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -81,7 +81,7 @@
       "toolbarBorderBottom": true,
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
-      "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
+      "sidebarClassName": "w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
       "primaryTabsVariant": "pill",
@@ -113,7 +113,8 @@
         ],
         "limit": {
           "maxRows": 5000,
-          "concurrency": 4
+          "concurrency": 4,
+          "batchSize": 10
         },
         "dedupe": {
           "scope": "database",
@@ -2574,7 +2575,7 @@
       "toolbarBorderBottom": true,
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
-      "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
+      "sidebarClassName": "w-[320px] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-border-subtle",
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
       "primaryTabsVariant": "pill",
@@ -2606,7 +2607,8 @@
         ],
         "limit": {
           "maxRows": 5000,
-          "concurrency": 4
+          "concurrency": 4,
+          "batchSize": 10
         },
         "dedupe": {
           "scope": "database",

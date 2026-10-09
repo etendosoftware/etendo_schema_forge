@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // Vitest tests for FmListPage.jsx's ETP-5272 `handleNewDecl` error handling.
 // Before this fix, a failed POST /fiscal303/declarations (a 409 when a draft
 // already exists for the period, or any other backend failure) was silently
@@ -68,7 +69,6 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: ({ title, message }) =>
     React.createElement('div', { className: 'fm-empty-state' }, title || message || 'empty'),

@@ -947,6 +947,11 @@ window-scoped task — would touch every AD-generated window). `fiscal-models`' 
 (`useSupportChat().actions.open()` + `setTab('ayuda')`) instead of replicating the dead
 `onPageHelp` prop. Sales/Purchase Invoice and every other window still show the same dead item today.
 
+**Update (ETP-5584):** `fiscal-models` now publishes a real `onPageHelp` through `useSetPageMeta`
+(`FmListPage.jsx`, `FmDetailChrome.jsx`), opening the same support-chat "Ayuda" tab, and its in-page
+`MoreOptionsMenu` was deleted. That is the pattern to copy for the app-wide fix. The generic
+`TopBar` no-op default, and with it the dead item on every other window, is still open.
+
 **Lesson:** before wiring a new window's kebab menu to "the same items window X already has," verify
 each item is actually functional in window X, not just visually present — a prop can render a
 correctly-styled, correctly-labelled menu entry while being permanently disconnected from any

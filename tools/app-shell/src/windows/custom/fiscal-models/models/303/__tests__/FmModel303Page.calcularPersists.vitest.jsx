@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // ETP-5338 — "Calcular" is an explicit user click too, so it ALSO flushes any pending
 // identChecks/manualOverrides edit, via the exact same `persistEditableFields` helper "Guardar"
 // uses, alongside its existing recompute (`handleCompute`). See `handleComputeClick`'s own
@@ -18,7 +19,7 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { toast } from 'sonner';
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
@@ -43,7 +44,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: () => null,
@@ -88,6 +88,8 @@ vi.mock('../AeatSubmitFlow.jsx', () => ({
   isMissingDefaultIaeActivity: () => false,
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null,
   OctagonAlert: () => null, TriangleAlert: () => null, CircleCheck: () => null,
   ArrowLeftRight: () => null, Calculator: () => null, Loader2: () => null,

@@ -410,27 +410,28 @@ Adds a "Related Documents" tab/section to the detail view. Requires a hand-writt
 
 **Real examples:** `goods-shipment`, `payment-in`, `sales-invoice`.
 
-#### 7.a Sales documents: one definition for the form and the list preview (ETP-5527)
+#### 7.a Sales and purchase documents: one definition for the form and the list preview (ETP-5527, ETP-5539)
 
-For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`, `goods-shipment`, `return-material-receipt`) the form's "Related documents" section and the list preview's `RelatedDocumentsCard` render **the same definition**, so they always list the same documents with the same chips, statuses and navigation. Do not add a related-document source to only one of the two views — add it to the definition.
+For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`, `goods-shipment`, `return-material-receipt`) and the four purchase documents (`purchase-order`, `purchase-invoice`, `goods-receipt`, `return-to-vendor-shipment`, ETP-5539, defined in `purchaseRelatedDocs.js` as `PURCHASE_RELATED_DOCS` / `getPurchaseRelatedDocs(spec)`, same shape) the form's "Related documents" section and the list preview's `RelatedDocumentsCard` render **the same definition**, so they always list the same documents with the same chips, statuses and navigation. Do not add a related-document source to only one of the two views — add it to the definition.
 
 | Piece | Location (`tools/app-shell/src/components/related-documents/`) | Role |
 |---|---|---|
 | `SALES_RELATED_DOCS`, `getSalesRelatedDocs(spec)` | `salesRelatedDocs.js` | One entry per sales spec: `spec`, `entity` (header entity), optional `refreshEvent`, optional `depsKey(record)`, and `sources[]`. Each source has a `key`, a `type` (a `DOCUMENT_CHIP_TYPES` key, or `(doc) => key`) and either `select(record)` (synchronous, read from the record) or `fetch({ id, record, token, apiBaseUrl })` (async). `getSalesRelatedDocs` returns `null` for any non-sales spec. |
 | `useRelatedDocuments({ definition, id, record, token, apiBaseUrl, refreshSignal })` | `useRelatedDocuments.js` | Resolves a definition into `{ items: [{ type, doc }], loading, refresh }`, deduplicating by chip type + id. `record === undefined` → the hook loads the **detail** record itself (preview mode); `record === null` → waits for it (form still loading). Listens to `refreshEvent`; refetches async sources when `depsKey` or `refreshSignal` changes. |
-| `RelatedDocumentsSection` | `RelatedDocumentsSection.jsx` | Form renderer (`RelatedDocumentsShell` + `DocChip`). Each window's `artifacts/<spec>/custom/RelatedDocuments.jsx` is now a thin wrapper passing `SALES_RELATED_DOCS['<spec>']`. The refresh button is shown only when the definition has at least one `fetch` source. |
-| `fetchListInvoices` | `helpers.js` | Invoices through the `listInvoices` header action (also finds invoices linked only through their lines). |
+| `RelatedDocumentsSection` | `RelatedDocumentsSection.jsx` | Form renderer (`RelatedDocumentsShell` + `DocChip`). Each window's `RelatedDocuments.jsx` is now a thin wrapper passing `SALES_RELATED_DOCS['<spec>']` / `PURCHASE_RELATED_DOCS['<spec>']`. The refresh button is shown only when the definition has at least one `fetch` source. |
+| `fetchListInvoices` | `helpers.js` | Invoices through the `listInvoices` header action (also finds invoices linked only through their lines); available on sales and purchase orders. |
+| `fetchOriginInvoicesOf(spec)` | `helpers.js` | Source `fetch` for the invoices linked through "Import from Source Invoice" (`originInvoices`), shared by sales-invoice and purchase-invoice. |
 
-Payments (cobros) are deliberately **not** related documents: no sales order or invoice lists its payments as chips (functional decision, ETP-5527). Do not add a payments source to a definition.
+Payments (cobros) are deliberately **not** related documents: no sales or purchase order/invoice lists its payments as chips (functional decision, ETP-5527 / ETP-5539). Do not add a payments source to a definition.
 
 The definition always reads the **detail** record: `linkedShipments`, `sourceInvoice`, `originInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
 
 `RelatedDocumentsCard` (`tools/app-shell/src/windows/custom/shared/preview-cards/`) gained two optional props:
 
-- `definition` — a `SALES_RELATED_DOCS` entry. When set it **replaces** `specs`/`fetchExtra`, and the refresh button follows the same rule as the form section.
-- `record` — with `definition` only: the detail record when the caller already has it. Omit it and the card loads the detail record itself. (`return-material-receipt` passes the row, because its handler injects `sourceShipments`/`returnInvoices` on the list GET too.)
+- `definition` — a `SALES_RELATED_DOCS` / `PURCHASE_RELATED_DOCS` entry. When set it **replaces** `specs`/`fetchExtra`, and the refresh button follows the same rule as the form section.
+- `record` — with `definition` only: the detail record when the caller already has it. Omit it and the card loads the detail record itself. (`return-material-receipt` passes the row, because its handler injects `sourceShipments`/`returnInvoices` on the list GET too; `return-to-vendor-shipment` and `goods-receipt` omit it so the detail is loaded.)
 
-Without `definition` the card keeps the legacy `specs`/`fetchExtra` behavior; purchase documents still use it (their migration is ETP-5539). `InvoicePreview` likewise accepts an optional `relatedDocs` definition — the sales-invoice list and the fiscal monitor pass it for sales invoices; without it (purchase invoices) the legacy order/shipment specs are used.
+Without `definition` the card keeps the legacy `specs`/`fetchExtra` behavior, kept for back-compat (`ReturnDocStatsPanel` still accepts `specs`; the migrated sales and purchase windows pass `definition`). `InvoicePreview` takes the `relatedDocs` definition (sales-invoice list, fiscal monitor, purchase-invoice list); without it the card is not rendered. `ReturnDocStatsPanel` takes `relatedDefinition` plus `relatedLoadsDetail` (skip the row, load the detail).
 
 Each preview row (`DocRow`) is a single line: the document title and amount are never truncated; when space runs out the status tag shrinks with an ellipsis and shows the full status on hover.
 
@@ -2462,10 +2463,41 @@ stops `shouldSkipPayloadField` from dropping a seeded legacy-looking numeric FK 
 Seed keys are verified `businessPartner` field names — `name`, `customer`, `vendor` — built by the
 exported `buildContactSeed(query, { documentType })`.
 
-**Known gap.** `initialData` seeds the **header record only**. The Copilot OCR flow also extracts
-`address` / `postalCode` / `city` / `country`, which belong to the `locationAddress` **child tab**, so
-those are no longer pre-filled and the user types them. Seeding a child tab's new row is a different
-mechanism from `useEntity.handleNew`. Debt: `ocr-contact-address-prefill`.
+The contact **category** (`businessPartnerCategory`) is seeded separately because its id is per client
+and needs an async lookup: `useContactCategorySeed` (backed by `resolveContactCategorySeed`) maps
+purchase to the `Proveedor` group and sale to `Cliente` by search key
+(`CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE`), and the popup is mounted only once it settles. A missing
+group or a failed lookup leaves the form's own default. A seeded key beats `/defaults` because
+`useEntity.handleNew` registers every seeded key as user-changed.
+
+**`initialChildData` — seeding a child tab's add modal (ETP-5654).** `initialData` seeds the
+**header record only**. A child tab that opens its own `customAddModal` (Contacts' `locationAddress`)
+is seeded through a sibling prop, `initialChildData`, keyed by the secondary tab's `key`:
+
+```js
+initialChildData = { locationAddress: { address, postalCode, city, countryName } }
+```
+
+It travels `CreateContactModalAdapter` → `RecordCreateModal` → `WindowApp` → the generated page's
+existing `{...props}` spread → `DetailView`, which hands `initialChildData[st.key]` to the modal as
+`initialValues`. The decision lives in `resolveCustomAddModalSeed` (`detailViewHelpers.jsx`): the seed
+is passed **only** when the modal opens in create mode (no `rowId`) **and** the tab has no rows yet
+(`secondaryHooks[idx].children`), so a second address or an edit never gets the one-off OCR data.
+`LocationEditorModal` applies the text keys without marking the form dirty, resolves `countryName`
+against the country selector (`matchOptionByLabel`) and falls back to Spain when it is empty or
+unresolved. Region is never seeded. Optional everywhere: with no `initialChildData` nothing changes.
+
+**Auto-open after the first save.** The modal does not wait for the user to find "Añadir dirección":
+the FIRST save of the new record opens it, prefilled, for review (nothing is saved until the user
+presses Guardar). Every save handler navigates `/new` → `/:id` with `state.justSaved`, and
+`DetailView`'s existing one-shot `justSaved` cleanup now builds the next router state through
+`buildPostCreateState` (`detailViewHelpers.jsx`): when `initialChildData` has a seed for a secondary
+tab with a `customAddModal`, it adds the same `openSecondaryTab` + `openAddSecondaryLine` state that
+`runSecondaryAddLineFlow` uses, and the existing open-modal effect switches to the tab and opens the
+modal in create mode. Once-only: `justSaved` exists only on the navigation that follows a create, and
+the open-modal effect clears the state, so a cancelled modal, later saves and re-renders never reopen
+it; the manual button keeps working and prefilling while the tab has no rows. Without
+`initialChildData`, the cleanup produces exactly the previous state.
 
 **Person vs company captions.** A company carries `name`; a PERSON is stored as
 `etgoFirstname`/`etgoLastname` and may have an empty `name`, so callers resolve the selector caption
@@ -2495,7 +2527,7 @@ with the chosen value — see **Input-required round-trip** below.
 |---|---|
 | `followUpDocuments.js` | Pure helpers: `readFollowUpEntries`, `buildFollowUpActionUrl`, error-code → i18n key map (`FOLLOW_UP_ERROR_KEYS`, fallback `followUpErrorGeneric`), the input-required helpers (`readFollowUpInputRequest`, `followUpInputLabels`, `mergeFollowUpInputValues`), the prompt hand-off (`requestFollowUpPrompt` / `consumeFollowUpPrompt`) and `createFollowUpAfterProcess(spec, options)` |
 | `useFollowUpDocuments` | State machine `closed → choice → (loading) → result`; POSTs through `useApiFetch`; keeps a backend-requested input (`session.inputRequest`, `session.inputs`, `setInputValue`); on success dispatches `<spec>:document-created` and calls `onCreated` |
-| `FollowUpDocumentModal` | Choice phase on `ActionChoiceModal` — layout decided only by how many configured follow-ups are available: ONE → single-option confirmation (summary, the window's question, ONE static option card — title + badge + description with the pending count, no radio — and a label-only primary button named after the action, focused so Enter creates); TWO+ → one Figma choice card per follow-up. No "not now" card: Cancel / X / Esc / backdrop reject. Result phase on `ConfirmResultModal` (link to the created document); errors inline |
+| `FollowUpDocumentModal` | Choice phase on `ActionChoiceModal` — layout decided only by how many configured follow-ups are available: ONE → single-option confirmation (summary, the window's question, ONE static option card — title + badge + description with the pending count, no radio — and a label-only primary button named after the action, focused so Enter creates); TWO+ → one Figma choice card per follow-up. No "not now" card: Cancel / X / Esc / backdrop reject. Result phase on `ConfirmResultModal` with `variant="popup"` (link to the created document, in the same Figma "PopUps" shell as the choice phase: close icon, left-aligned title, card-style link, outlined «Cerrar» + dark pill «Ver …»; the default variant other windows use is unchanged); errors inline |
 | `FollowUpDocumentButton` | `topbarRight` entry point: renders only while a configured follow-up is available (never for a read-only window); always mounts the modal, so the post-Confirm prompt also opens it |
 
 **Per-window config** — a map keyed by the backend follow-up key (see
@@ -2518,7 +2550,10 @@ options: {
     resultTitleKey,
   },
 },
-summary: { documentLabelKey /* required */, documentNoField, dateLabelKey, dateField, contactField, totalField, currencyField,
+summary: { documentLabelKey /* required */,
+           documentNoField /* default 'documentNo' — the INTERNAL number; never a partner reference
+                              such as purchase-invoice `orderReference` (the supplier's own number) */,
+           dateLabelKey, dateField, contactField, totalField, currencyField,
            linesLabelKey /* pending-lines column, single follow-up only; default 'lines' («Líneas») */ },
 ```
 
@@ -2539,7 +2574,12 @@ document instead of being sent to the list (the fresh record is primed into the 
 
 **After creation** the button calls the slot's `onRefresh` (record re-read: the annotation empties
 and the button disappears) and the `<spec>:document-created` event refreshes related documents
-(`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`, purchase-invoice `RelatedDocuments.jsx`).
+(`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`, `PURCHASE_RELATED_DOCS['purchase-invoice'].refreshEvent`).
+Later writes to the created document (completing the shipment / receipt after following the link)
+happen in another window; they mark the source invoice's cached record stale through the
+cross-spec map in `lib/crossSpecCacheInvalidation.js` (`goods-shipment → sales-invoice`,
+`goods-receipt → purchase-invoice`), so going back to the invoice refetches it. A new follow-up
+pair (e.g. order → shipment) must add its own row there — see `docs/request-policy.md`.
 
 **Keyboard.** `ActionChoiceModal` (shared, also used by sales-quotation) traps Tab (focus parks on
 the dialog while every control is disabled), Esc cancels (never while a request is in flight, and
@@ -2711,9 +2751,14 @@ declared by hand rather than derived from grid fields.
 **What it does:** lets a custom `headerTable` component expose a second component as a static
 property — `MyHeaderTable.ToolbarQuickFilter = SomeComponent` — that `ListView.jsx` renders inline
 in its OWN toolbar row, immediately left of the "Filtros" (advanced filter) trigger, alongside
-"Ordenar por"/"Actualizar"/quick filters — that is row 1 of the toolbar; since ETP-5509 the
-subset-filter tab group sits on a second row below it (`docs/list-filters.md` → "Toolbar
-layout"). Same convention `DetailView.jsx` already
+"Ordenar por"/"Actualizar"/quick filters — that is the toolbar's main row; since ETP-5509 the
+subset-filter tabs share that row while it fits and move to a line of their own only when it
+does not, and the slot stays in the filters cluster either way (`docs/list-filters.md` →
+"Toolbar layout"). The fit check counts the slot at its natural (max-content) width, so a slot
+root that grows (`flex-1`, `w-full`) or wraps its own content (`flex flex-wrap`, as
+`ChartOfAccountsToolbarSlot.jsx` does) is measured correctly; a slot does not need to size itself
+for the measurement. What it must not do is take width it does not need on one line (e.g. a
+`min-w-[600px]`), since that width is what the tabs are measured against. Same convention `DetailView.jsx` already
 uses for `formFooter.inlineInHeaderCard` (§3) — a companion flag/property attached to a slot
 component so the generic shell can special-case how it renders.
 
@@ -2831,6 +2876,96 @@ column, only as the "Rol" entry in the advanced-filter field list.
 **Cross-references:** `docs/generated-custom-windows/user.md` → "Users list role filter" for the
 full worked example combining all three mechanisms; `com.etendoerp.go`'s `docs/neo-headless.md`
 §5.3 for the backend half (`UserRoleAssignmentHandler#applyRoleFilter`).
+
+---
+
+## `ListView` / `DetailView` wrapper props (ETP-5600, not `decisions.json` options)
+
+Generic props a hand-written window wrapper (`tools/app-shell/src/windows/custom/{window}/index.jsx`)
+passes to the generated page, which forwards them to `ListView` / `DetailView`. The generator does
+not emit any of them; a window opts in from its own wrapper. Reference consumer: the Contacts window
+(`docs/generated-custom-windows/contacts.md`).
+
+### `newActions[].opensImportDialog` — import from the split "New" menu
+
+An item of the `newActions` prop may declare `opensImportDialog: true` instead of an `onClick`.
+`ListView` then wires it to the window's own import dialog (`window.import`), so the window does not
+reimplement how the import opens.
+
+```jsx
+newActions={[{ key: 'import', label: ui('importContacts'), opensImportDialog: true }]}
+```
+
+Rules, all in `ListView.jsx`:
+
+- The item is **dropped** when the window has no enabled import (`importConfig.enabled` false), so the
+  menu never shows an action that does nothing.
+- When the split menu offers the import, the **standalone import icon** in the toolbar
+  (`ListView__importButton`) is **not rendered**, because the menu already offers it.
+- The standalone icon **stays** whenever the menu is unavailable (read-only window, `hideCreate`), so
+  the import is never left unreachable.
+
+The generator's own `window.newActions` (`docs/decisions-reference.md` → *New Actions*) still emits only
+`key`/`label`/`onClick`; `opensImportDialog` is set from the wrapper.
+
+### `emptyListContext` — whole-window empty state for a custom list Table
+
+`ListView` passes every list Table (generated or a `customComponents.headerTable`) an
+`emptyListContext` prop. It is **non-null only when the window has no records at all**:
+
+| Condition | `emptyListContext` |
+|---|---|
+| Still loading (`hook.loading`) | `null` |
+| Fetch failed (`hook.meta` is only set on a successful response) | `null` |
+| The response has rows | `null` |
+| A column filter, the search box, the advanced filter, a quick filter with a server-side `filter`, or a subset filter with a server-side `filter` is active | `null` |
+| A **client-side** `rowFilter` subset is active (e.g. Contacts' Personas/Empresas) | not counted: `hook.items` always holds the unnarrowed rows, so a subset that hides every row keeps the normal grid |
+| None of the above: successful fetch, zero rows | `{ onCreate, onImport, importFormats }` |
+
+The window's permanent `baseFilter` is not a user choice and does not count as narrowing.
+
+The object carries the window's own entry points, so the Table renders a "start here" state without
+re-deriving them:
+
+| Key | Value |
+|---|---|
+| `onCreate` | The list's New action (`onNew` or navigation to `/{window}/new`). `undefined` when the window is read-only or `hideCreate`. |
+| `onImport(file?)` | Opens the window's import dialog. Pass a `File` (e.g. one dropped on the empty state) and it is forwarded to the core `ImportDialog` as `initialFile`, which processes it as if picked in its own dropzone and shows a processing indicator (`labels.processing`) meanwhile. `undefined` when the window has no enabled import. |
+| `importFormats` | `importConfig.formats` when the import is enabled, else `undefined`. |
+
+A Table that does not use the prop ignores it and keeps rendering its grid. Usage:
+
+```jsx
+export default function MyTable({ emptyListContext = null, ...rest }) {
+  if (emptyListContext) return <MyEmptyState context={emptyListContext} />;
+  return <DataTable {...rest} />;
+}
+```
+
+Render each entry point only when it is defined. The reference implementation,
+`windows/custom/contacts/ContactsEmptyState.jsx`, also uses two optional app hooks: `useCopilotOptional()`
+(`components/CopilotContext.jsx`, returns `null` instead of throwing without a `CopilotProvider`) to show
+an "Ask Copilot" button that calls `copilot.open`, and `useLaunchWalkthrough(source)`
+(`lib/walkthrough/useLaunchWalkthrough.js`, see `docs/walkthrough-flows.md` §9) to start a guided tutorial.
+
+### `primarySave` — keep Save as the primary button on existing records
+
+On an existing record, `DetailView` renders Save with the secondary (outline) look by default
+(`saveActions.jsx` → `renderExistingRecordSaveAction`). A window whose Save remains the only primary
+action of the detail view passes `primarySave={true}` to keep the default filled `Button` variant.
+Default `false`; it does not change the new-record path, where `hasExternalPrimaryAction` is the
+equivalent switch in the other direction.
+
+### Bottom tab-strip icons — `components/contract-ui/tabIcons.js`
+
+The icon before each secondary-tab label in the detail view's bottom tab strip is resolved by
+`resolveTabIcon(tabKey)` (used by `TabStripButton.jsx`) from the `TAB_ICONS` map, keyed by tab key
+(`secondaryTabs` key, or `custom:<key>` for `customTabs`). Unknown keys fall back to `List`. To give a
+tab an icon, add its key to `TAB_ICONS`. The map is keyed by tab, not by window, so every window
+with a tab of that key gets the same icon. Current entries include `custom:attachments`, `custom:sif`,
+`custom:pricing`, `products`, and the business-partner tabs `contact`, `bankAccount`, `locationAddress`,
+`customerAccounting`, `vendorAccounting`. The map lives outside `DetailView.jsx` because that file is
+under the no-growth guardrail (`.claude/hooks/check-detailview-growth.mjs`).
 
 ---
 

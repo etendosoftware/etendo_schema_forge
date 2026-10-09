@@ -47,9 +47,9 @@ const VALIDATORS = {
       return null;
     }
     const orgTaxId = org.taxId;
-    const { status, receiverTaxId, orgTaxId: orgShown } = checkReceiverTaxId(payload, orgTaxId);
+    const { status, receiverTaxId } = checkReceiverTaxId(payload, orgTaxId);
     if (status === 'mismatch') {
-      return { error: ui('ocrReceiverTaxIdMismatch', { receiver: receiverTaxId, org: orgShown }) };
+      return { error: ui('ocrReceiverTaxIdMismatch', { receiver: receiverTaxId }) };
     }
     if (status === 'no-org-tax-id') toast.warning(ui('ocrOrgTaxIdMissing'));
     return null;

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/PaymentHeaderTableBase.jsx
 // --- Hoisted spies/state shared between mock factories and test bodies ---
 
 const dataTableSpy = vi.hoisted(() => ({ current: null }));
@@ -143,6 +144,13 @@ describe('PaymentHeaderTableBase — sidebar', () => {
   // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
   // so a test that expects an Authorization header has to declare the scheme first.
   beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'tok-1' }));
+
+  it('draws a 1px top border on the root container (separator below the list toolbar)', () => {
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
+    const root = screen.getByTestId('PaymentSidebar__panel').closest('div[style*="border-top"]');
+    expect(root).not.toBeNull();
+    expect(root.style.borderTop).toBe('1px solid hsl(var(--border-subtle))');
+  });
 
   it('shows the loading skeleton and placeholder widgets when data is null', () => {
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={null} onDataMutated={vi.fn()} />);

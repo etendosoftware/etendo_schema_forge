@@ -1,4 +1,5 @@
 // @covers scripts/check-test-hygiene.js
+// @covers scripts/lib/git-env.js
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -19,11 +20,7 @@ import {
   parseCoversWithLines,
   parseNameStatus,
 } from '../check-test-hygiene.js';
-import { gitEnv, scrubGitEnv } from './git-env.js';
-
-// Running from inside a git hook, an inherited GIT_DIR would point every git
-// call below at the real repository instead of the temp fixture. See git-env.js.
-scrubGitEnv();
+import { isolatedGitEnv } from './isolatedGitEnv.js';
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'check-test-hygiene.js');
 
@@ -353,7 +350,7 @@ describe('main', () => {
     let dirty;
     let clean;
 
-    const git = (...args) => execFileSync('git', args, { cwd: tmp, encoding: 'utf8', env: gitEnv() }).trim();
+    const git = (...args) => execFileSync('git', args, { cwd: tmp, encoding: 'utf8', env: isolatedGitEnv() }).trim();
     const write = (rel, content) => {
       mkdirSync(dirname(join(tmp, rel)), { recursive: true });
       writeFileSync(join(tmp, rel), content);
@@ -378,8 +375,7 @@ describe('main', () => {
     after(() => rmSync(tmp, { recursive: true, force: true }));
 
     const run = (args, extraEnv = {}) => {
-      // The script shells out to git itself, so the child needs the scrubbed env too.
-      const env = gitEnv({ SF_ROOT: tmp });
+      const env = isolatedGitEnv({ SF_ROOT: tmp });
       delete env.TEST_HYGIENE_MODE;
       Object.assign(env, extraEnv);
       return spawnSync(process.execPath, [SCRIPT, ...args], { cwd: tmp, env, encoding: 'utf8' });
@@ -423,7 +419,7 @@ describe('main', () => {
       mkdirSync(dir, { recursive: true });
       const link = join(dir, 'check-test-hygiene.js');
       symlinkSync(SCRIPT, link);
-      const env = gitEnv({ SF_ROOT: tmp });
+      const env = isolatedGitEnv({ SF_ROOT: tmp });
       delete env.TEST_HYGIENE_MODE;
       const res = spawnSync(process.execPath, [link, '--base', base, '--head', dirty], { cwd: tmp, env, encoding: 'utf8' });
       assert.equal(res.status, 0, res.stderr);
