@@ -177,6 +177,9 @@ The essentials, so a dispatch can be checked at a glance:
   `etendosoftware/etendo-ai`; Classic → the module's own repo; unsure → ask the coordinator.
 - Every such issue lands on Roadmap project #12 with **Product** set, verified by reading it back.
 - An accepted issue gets its Jira task(s), cross-linked both ways.
+- Optional Datadog → Roadmap → Jira flow (skill, "From a Datadog finding"): Clerk files the bug in
+  `etendo-ai` and creates the Jira task linking it; the coordinator or user supplies the Datadog
+  evidence.
 - Title, body and labels come from the coordinator; existing items are changed only with explicit
   user authorization. Report a failed call as pending, never as done.
 </github_issues_roadmap>

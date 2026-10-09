@@ -94,6 +94,10 @@ If the fix is unknown or too complex to determine, write a detailed analysis of 
 
 ## Step 5: Create the GitHub issue
 
+A tooling bug no customer would ever see (internal-only: pipeline internals, dev tooling, agent
+config) gets a Jira task only, no GitHub issue — the `etendo-roadmap` skill's public/internal
+criterion. Everything else continues here.
+
 Schema Forge is part of the Etendo product, so its bugs are filed in `etendosoftware/etendo-ai`,
 not in a code repo — the `etendo-roadmap` skill owns that routing rule and the duplicate search
 to run first. Name the code repo (`etendo_schema_forge` / `schema_forge_core`) under

@@ -4,11 +4,12 @@ description: >
   File, triage and audit public GitHub issues on the Etendo Roadmap (etendosoftware org project
   #12): pick the target repo (Etendo product issues go to etendosoftware/etendo-ai, Classic ones
   to their own repo), search for duplicates, create the issue, add it to the project and set
-  Product / Team / Status, cross-link Jira, or produce the read-only Roadmap hygiene report. Use
-  before running `gh issue create` for an idea, bug or feature, and whenever a Roadmap item needs
-  a field read or written. Triggers on: "roadmap", "Etendo Roadmap", "crear issue", "issue de
-  GitHub", "GitHub issue", "etendo-ai", "Product field", "triage", "higiene del roadmap",
-  "roadmap hygiene".
+  Product / Team / Status, cross-link Jira, turn a Datadog finding into a Roadmap bug plus Jira
+  task, or produce the read-only Roadmap hygiene report. Use before running `gh issue create` for
+  an idea, bug or feature, and whenever a Roadmap item needs a field read or written. Triggers
+  on: "roadmap", "Etendo Roadmap", "crear issue", "issue de GitHub", "GitHub issue", "etendo-ai",
+  "Product field", "triage", "higiene del roadmap", "roadmap hygiene", "datadog", "lo vi en
+  datadog", "alerta", "monitor", "error en producción".
 ---
 
 # Etendo Roadmap
@@ -30,7 +31,10 @@ lives in Jira alone. Unsure whether something is public → ask the coordinator 
   the GitHub issue URL in each Jira task description, and the Jira key(s) on the GitHub issue as a
   comment (`Tracked in ETP-1234, ETP-1235`). The implementing PR references the issue by its full
   form when the issue lives in another repo (`Fixes etendosoftware/etendo-ai#N`), or `Fixes #N`
-  when it is in the same repo as the PR.
+  when it is in the same repo as the PR. Our PRs target `develop`, not the default branch, so a
+  cross-repo `Fixes etendosoftware/etendo-ai#N` does **not** auto-close the issue: once the fix is
+  merged, the issue is closed (or its Status set to `Done`) by hand, and only with the user's
+  authorization.
 - **An idea may stay on GitHub** with no Jira task until it is accepted.
 - **Jira → GitHub is optional.** A Jira task needs no GitHub issue.
 
@@ -91,7 +95,30 @@ Done when the Product value has been **read back** (query below) and matches, an
 the issue URL, the item ID and every field set. A call that failed is reported as pending, never as
 done.
 
-## 5. Project and field IDs
+## 5. From a Datadog finding (Etendo GO, optional)
+
+A documented path, not a mandatory one: something surfaces in Datadog (an error, a log pattern, a
+monitor alert, an incident, an APM trace, a RUM error) and becomes a Roadmap bug with a Jira task.
+
+1. **Gather the evidence.** Use the Datadog MCP tools (`mcp__plugin_datadog_mcp__*` —
+   `search_datadog_logs`, `get_datadog_trace`, `search_datadog_spans`, `search_datadog_monitors`,
+   `get_datadog_incident`, `search_datadog_rum_events`) and the `datadog:*` skills; follow the
+   Datadog MCP's own instructions for loading its skill guides first. Read service and env names
+   from the finding itself; never assume them. Done when you hold: a link to the trace, log
+   query or monitor; the service and env; first and last time seen; and the frequency (count over
+   a stated window).
+2. **File the bug.** Run the duplicate search (step 3) with the error signature, then create it in
+   `etendosoftware/etendo-ai` with label `bug` and add it to the Roadmap with Product = `Etendo`,
+   Status `Todo` and the Team when known (step 4). The body carries the evidence under a
+   `## Datadog evidence` heading, with every item gathered above, so the bug stands on its own
+   without Datadog access. Strip customer data (emails, tax IDs, tokens) from pasted log lines.
+3. **Create the Jira task** inside the current epic. Its description links the GitHub issue URL;
+   then comment the Jira key on the issue (`Tracked in ETP-1234`). Done when both links exist.
+
+Roles: Clerk creates the issue and the Jira task; the coordinator or the user supplies the Datadog
+evidence (or asks for it to be gathered as above).
+
+## 6. Project and field IDs
 
 Etendo Roadmap = `etendosoftware` org project **#12**,
 https://github.com/orgs/etendosoftware/projects/12, node ID `PVT_kwDOBlBfO84BPs5X`.
@@ -133,7 +160,7 @@ The mutation's input shape was confirmed by schema introspection
 (`__type(name:"ProjectV2FieldValue")`), not by mutating a real item, so the read-back in step 4 is
 what proves a write.
 
-## 6. Auth
+## 7. Auth
 
 `gh` needs scope `read:project` to read the project and `project` to write it. On a
 `missing required scopes` error, stop and tell the user to run
@@ -141,7 +168,7 @@ what proves a write.
 missing scope also breaks `gh pr edit`; the REST API (`gh api -X PATCH repos/<o>/<r>/pulls/<N>`)
 needs no project scope.
 
-## 7. Roadmap hygiene (read-only report)
+## 8. Roadmap hygiene (read-only report)
 
 When asked to review the Roadmap, pull every item plus Product (which item-list omits):
 
