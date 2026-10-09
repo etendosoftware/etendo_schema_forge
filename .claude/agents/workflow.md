@@ -175,11 +175,14 @@ The essentials, so a dispatch can be checked at a glance:
 - Only **public** ideas, bugs and features get a GitHub issue; internal work stays Jira-only.
 - The repo is a rule: Etendo product (schema_forge, schema_forge_core, com.etendoerp.go) →
   `etendosoftware/etendo-ai`; Classic → the module's own repo; unsure → ask the coordinator.
-- Every such issue lands on Roadmap project #12 with **Product** set, verified by reading it back.
-- An accepted issue gets its Jira task(s), cross-linked both ways.
-- Optional Datadog → Roadmap → Jira flow (skill, "From a Datadog finding"): Clerk files the bug in
-  `etendo-ai` and creates the Jira task linking it; the coordinator or user supplies the Datadog
-  evidence.
+- Pre-flight: `gh auth status` lists the `project` scope before `gh issue create`; otherwise stop.
+- Every such issue lands on Roadmap project #12 with **Product** set; title, labels, Product, Team
+  and Status are read back.
+- An accepted issue gets its Jira task(s), cross-linked both ways: key + full Jira URL on the issue,
+  issue URL appended to the Jira description via REST v2 (never `jira issue edit`).
+- Optional Datadog flow (skill, "From a Datadog finding"), three entry points: Datadog → issue →
+  Jira; Jira first (the task exists, create no second one); Datadog → Jira only — the user decides
+  whether an issue is published. The coordinator or user supplies the Datadog evidence.
 - Title, body and labels come from the coordinator; existing items are changed only with explicit
   user authorization. Report a failed call as pending, never as done.
 </github_issues_roadmap>

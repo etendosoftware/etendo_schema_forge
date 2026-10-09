@@ -108,7 +108,8 @@ file and dispatch Clerk with the route, the title, the body file, the labels and
 
 - **Public route.** Clerk follows the `etendo-roadmap` skill end to end: duplicate search, create
   in `etendosoftware/etendo-ai` with label `bug` and assignee `valenvivaldi`, add to the Etendo
-  Roadmap with **Product = Etendo** (plus Team/Status when known), read Product back.
+  Roadmap with **Product = Etendo** (plus Team/Status when known), read title, labels and the
+  fields back.
 - **Internal-only route.** Clerk creates a Jira task inside the current epic with the same title
   and body. The skill ends here.
 
