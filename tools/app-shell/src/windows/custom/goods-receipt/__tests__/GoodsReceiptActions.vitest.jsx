@@ -1,3 +1,4 @@
+// @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
 // Mocks must come before imports (Vitest hoisting)
 
 const { mockExecute } = vi.hoisted(() => ({ mockExecute: vi.fn() }));
@@ -74,16 +75,22 @@ vi.mock('@/components/contract-ui/SendDocumentModal', () => ({
   ),
 }));
 
+// `docs` type/route exposed: it is all this window decides for the popup, which derives its
+// title, label and buttons from the type.
 vi.mock('@/components/contract-ui', () => ({
-  ConfirmResultModal: ({ onClose }) => (
-    <div data-testid="confirm-result-modal">
+  ConfirmResultModal: ({ docs, onClose }) => (
+    <div data-testid="confirm-result-modal" data-doc-type={docs?.[0]?.type} data-route={docs?.[0]?.route}>
       <button data-testid="result-modal-close" onClick={onClose}>Close</button>
     </div>
   ),
 }));
 
 vi.mock('@generated/goods-receipt/custom/PurchaseReturnWizard', () => ({
-  default: () => <div data-testid="purchase-return-wizard" />,
+  default: ({ open, onSuccess }) => (
+    <div data-testid="purchase-return-wizard">
+      {open && <button type="button" data-testid="wizard-success" onClick={() => onSuccess({ id: 'rtv-1', documentNo: 'DEV-1' })} />}
+    </div>
+  ),
 }));
 
 import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react';
@@ -201,6 +208,18 @@ describe('GoodsReceiptActions', () => {
     it('does NOT render when invoiceStatus is above 100', () => {
       renderActions({ data: { ...defaultProps.data, invoiceStatus: 110 } });
       expect(screen.queryByText('createInvoiceBtn')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('purchase return result', () => {
+    it('announces the return created by the wizard as a devolucionCompra linking to its window', () => {
+      renderActions();
+      fireEvent.click(screen.getByText('createReturn'));
+      fireEvent.click(screen.getByTestId('wizard-success'));
+
+      const result = screen.getByTestId('confirm-result-modal');
+      expect(result).toHaveAttribute('data-doc-type', 'devolucionCompra');
+      expect(result).toHaveAttribute('data-route', '/return-to-vendor-shipment/rtv-1');
     });
   });
 

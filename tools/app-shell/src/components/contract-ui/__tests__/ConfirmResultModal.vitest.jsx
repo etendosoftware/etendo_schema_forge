@@ -1,290 +1,226 @@
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+//
+// The shared "documents generated" popup. Callers only hand it `docs` ({ type, num,
+// documentStatus?, route? }); title, banner, card label, status badge and footer buttons are
+// all derived here, so this is the one place that renders them — caller tests only assert
+// which docs they pass.
+
+// Echo the key, plus the interpolated values, so both the chosen key and what was
+// interpolated into it are observable.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key, vars) => {
-    if (vars) return key.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? `{${k}}`);
-    return key;
-  },
+  useUI: () => (key, vars) => (vars ? `${key}:${Object.values(vars).join(',')}` : key),
 }));
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConfirmResultModal } from '../ConfirmResultModal.jsx';
 import { inlineFontFamiliesUpToBody } from './fontInheritance.js';
 
-const DOCS = [
-  { type: 'entrada',      num: 'GR-001', amount: 100,  route: '/goods-receipt/1' },
-  { type: 'facturaCompra', num: 'PI-002', amount: 200,  route: '/purchase-invoice/2' },
-];
+const RECEIPT = { type: 'entrada', num: 'GR-001', documentStatus: 'DR', route: '/goods-receipt/1' };
+const INVOICE = { type: 'facturaCompra', num: 'PI-002', documentStatus: 'CO', route: '/purchase-invoice/2' };
 
 function renderModal(overrides = {}) {
-  const defaults = {
-    title: 'Operation complete',
-    docs: DOCS,
-    navigate: vi.fn(),
-    currency: 'EUR',
-    onClose: vi.fn(),
-  };
-  return render(<ConfirmResultModal {...defaults} {...overrides} />);
+  const props = { docs: [RECEIPT, INVOICE], navigate: vi.fn(), onClose: vi.fn(), ...overrides };
+  const view = render(<ConfirmResultModal {...props} />);
+  return { ...view, props };
 }
+
+const title = () => screen.getByTestId('confirm-result-title');
+const card = (i) => screen.getByTestId(`confirm-result-card-${i}`);
 
 describe('ConfirmResultModal', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('renders the title', async () => {
-    renderModal();
-    await waitFor(() => expect(screen.getByText('Operation complete')).toBeInTheDocument());
-  });
+  describe('copy derived from the documents', () => {
+    // One row per document type: the title, the card label, the "Ver …" button and the
+    // grammatical gender of the "completed" badge all follow the type. An unknown type
+    // falls back to the purchase-invoice copy instead of crashing.
+    it.each([
+      ['salida', 'title.albaran', 'soViewShipment', 'completedMasculine'],
+      ['entrada', 'title.albaran', 'poViewReceipt', 'completedMasculine'],
+      ['facturaVenta', 'title.factura', 'soViewInvoice', 'completedFeminine'],
+      ['facturaCompra', 'title.factura', 'poViewInvoice', 'completedFeminine'],
+      ['facturaRectificativa', 'title.facturaRectificativa', 'soViewInvoice', 'completedFeminine'],
+      ['facturaRectificativaCompra', 'title.facturaRectificativaCompra', 'poViewInvoice', 'completedFeminine'],
+      ['pedidoVenta', 'title.pedido', 'sqViewOrder', 'completedMasculine'],
+      ['devolucionCompra', 'title.devolucionCompra', 'confirmResultModal.view.devolucion', 'completedFeminine'],
+      ['unknownType', 'title.factura', 'poViewInvoice', 'completedFeminine', 'facturaCompra'],
+    ])('a completed %s gets its own title, label, view button and gendered badge', (type, titleKey, viewKey, statusKey, labelType = type) => {
+      renderModal({ docs: [{ type, num: 'X-1', documentStatus: 'CO', route: '/x/1' }] });
 
-  it('renders the type label for each doc', () => {
-    renderModal();
-    expect(screen.getByText('confirmResultModal.docType.entrada')).toBeInTheDocument();
-    expect(screen.getByText('confirmResultModal.docType.facturaCompra')).toBeInTheDocument();
-  });
-
-  it('renders doc numbers', () => {
-    renderModal();
-    expect(screen.getByText('GR-001')).toBeInTheDocument();
-    expect(screen.getByText('PI-002')).toBeInTheDocument();
-  });
-
-  it('shows plural subtitle for multiple docs', () => {
-    renderModal();
-    expect(screen.getByText('confirmResultModal.subtitleMany')).toBeInTheDocument();
-  });
-
-  it('shows singular subtitle for a single doc', () => {
-    renderModal({ docs: [DOCS[0]] });
-    expect(screen.getByText('confirmResultModal.subtitleOne')).toBeInTheDocument();
-  });
-
-  it('shows no subtitle when docs is empty', () => {
-    renderModal({ docs: [] });
-    expect(screen.queryByText('confirmResultModal.subtitleOne')).not.toBeInTheDocument();
-    expect(screen.queryByText('confirmResultModal.subtitleMany')).not.toBeInTheDocument();
-  });
-
-  it('navigates and closes when a doc card is clicked', () => {
-    const navigate = vi.fn();
-    const onClose  = vi.fn();
-    renderModal({ navigate, onClose });
-    fireEvent.click(screen.getByText('GR-001'));
-    expect(onClose).toHaveBeenCalled();
-    expect(navigate).toHaveBeenCalledWith('/goods-receipt/1');
-  });
-
-  it('closes when the close button is clicked (without reloading)', () => {
-    const onClose = vi.fn();
-    renderModal({ onClose });
-    fireEvent.click(screen.getByText('soClose'));
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('shows primary button for a single doc when primary is provided', () => {
-    const navigate = vi.fn();
-    const onClose  = vi.fn();
-    renderModal({ docs: [DOCS[0]], primary: 'View receipt', navigate, onClose });
-    const btn = screen.getByText('View receipt');
-    expect(btn).toBeInTheDocument();
-    fireEvent.click(btn);
-    expect(onClose).toHaveBeenCalled();
-    expect(navigate).toHaveBeenCalledWith('/goods-receipt/1');
-  });
-
-  it('does not show primary button for multiple docs', () => {
-    renderModal({ primary: 'View' });
-    expect(screen.queryByText('View')).not.toBeInTheDocument();
-  });
-
-  it('derives the primary button label from the single doc type when primary is not provided', () => {
-    const navigate = vi.fn();
-    const onClose  = vi.fn();
-    // DOCS[0] is an 'entrada' (goods receipt) → label derived from its type, not a hardcoded invoice label.
-    renderModal({ docs: [DOCS[0]], navigate, onClose });
-    const btn = screen.getByText('poViewReceipt');
-    expect(btn).toBeInTheDocument();
-    fireEvent.click(btn);
-    expect(onClose).toHaveBeenCalled();
-    expect(navigate).toHaveBeenCalledWith('/goods-receipt/1');
-  });
-
-  it('does not show primary button when there is no single doc', () => {
-    renderModal({ docs: [] });
-    expect(screen.queryByRole('button', { name: /view/i })).not.toBeInTheDocument();
-  });
-
-  it('activates doc card with Enter key', () => {
-    const navigate = vi.fn();
-    const onClose  = vi.fn();
-    renderModal({ navigate, onClose });
-    fireEvent.keyDown(screen.getByText('GR-001').closest('[role="button"]'), { key: 'Enter' });
-    expect(onClose).toHaveBeenCalled();
-    expect(navigate).toHaveBeenCalledWith('/goods-receipt/1');
-  });
-
-  it('activates doc card with Space key', () => {
-    const navigate = vi.fn();
-    const onClose  = vi.fn();
-    renderModal({ navigate, onClose });
-    fireEvent.keyDown(screen.getByText('GR-001').closest('[role="button"]'), { key: ' ' });
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('ignores other keys on doc card', () => {
-    const navigate = vi.fn();
-    renderModal({ navigate });
-    fireEvent.keyDown(screen.getByText('GR-001').closest('[role="button"]'), { key: 'Tab' });
-    expect(navigate).not.toHaveBeenCalled();
-  });
-
-  it('triggers hover state on mouse enter/leave', () => {
-    renderModal({ docs: [DOCS[0]] });
-    const card = screen.getByText('GR-001').closest('[role="button"]');
-    fireEvent.mouseEnter(card);
-    fireEvent.mouseLeave(card);
-  });
-
-  it('triggers focus/blur handlers on doc card', () => {
-    renderModal({ docs: [DOCS[0]] });
-    const card = screen.getByText('GR-001').closest('[role="button"]');
-    fireEvent.focus(card);
-    fireEvent.blur(card);
-  });
-
-  it('shows doc.status badge when provided', () => {
-    renderModal({ docs: [{ type: 'entrada', num: 'GR-X', status: 'Completado', route: '/r' }] });
-    expect(screen.getByText('Completado')).toBeInTheDocument();
-  });
-
-  it('falls back to statusDraft when doc.status is not provided', () => {
-    renderModal({ docs: [{ type: 'entrada', num: 'GR-Y', route: '/r' }] });
-    expect(screen.getByText('statusDraft')).toBeInTheDocument();
-  });
-
-  it('formats the doc amount grouped with the real currency symbol, never the raw ISO code', () => {
-    renderModal({ docs: [{ type: 'entrada', num: 'GR-Z', amount: 1234.5, route: '/r' }], currency: 'EUR' });
-    expect(screen.getByText(/1\.234,50\s€/)).toBeInTheDocument();
-    expect(screen.queryByText(/EUR/)).toBeNull();
-  });
-
-  it('renders amount span when amount is provided', () => {
-    renderModal({ docs: [{ type: 'entrada', num: 'GR-Z', amount: 1234.5, route: '/r' }], currency: '' });
-    const card = screen.getByText('GR-Z').closest('[role="button"]');
-    expect(card.querySelector('span[style*="color"]')).toBeTruthy();
-  });
-
-  // ── ETP-4312: single-source arrow on the derived primary button ──────────────
-  describe('single arrow invariant (ETP-4312)', () => {
-    const ARROW_PATH = 'M5 12h14M12 5l7 7-7 7';
-
-    it('primary button has exactly one arrow SVG and no "→" glyph in its text', () => {
-      // 'entrada' → derived label 'poViewReceipt' (mock returns the key verbatim).
-      renderModal({ docs: [{ type: 'entrada', num: 'GR-1', route: '/r' }] });
-      const btn = screen.getByText('poViewReceipt').closest('button');
-      const svgs = btn.querySelectorAll('svg');
-      expect(svgs).toHaveLength(1);
-      const paths = svgs[0].querySelectorAll('path');
-      expect(paths).toHaveLength(1);
-      expect(paths[0].getAttribute('d')).toBe(ARROW_PATH);
-      // The arrow comes from the SVG only — the label text must not include "→".
-      expect(btn.textContent).not.toContain('→');
+      expect(title()).toHaveTextContent(`confirmResultModal.${titleKey}`);
+      expect(card(0)).toHaveTextContent(`confirmResultModal.docType.${labelType}`);
+      expect(card(0)).toHaveTextContent(`confirmResultModal.status.${statusKey}`);
+      expect(screen.getByTestId('action-confirm-result-view')).toHaveTextContent(viewKey);
     });
 
-    // Each doc type derives its own view label. Mock i18n returns the key verbatim.
-    const TYPE_TO_KEY = [
-      ['facturaCompra', 'poViewInvoice'],
-      ['facturaVenta', 'soViewInvoice'],
-      ['salida', 'soViewShipment'],
-      ['entrada', 'poViewReceipt'],
-    ];
+    it('one document: singular banner and hint, the number, Cerrar plus a primary Ver button', () => {
+      renderModal({ docs: [RECEIPT] });
 
-    for (const [type, expectedKey] of TYPE_TO_KEY) {
-      it(`derives primary label '${expectedKey}' for doc type '${type}'`, () => {
-        renderModal({ docs: [{ type, num: 'X-1', route: '/r' }] });
-        expect(screen.getByText(expectedKey)).toBeInTheDocument();
+      expect(screen.getByTestId('confirm-result-banner')).toHaveTextContent('confirmResultModal.bannerOne');
+      expect(screen.getByTestId('confirm-result-banner')).toHaveTextContent('confirmResultModal.bannerOneHint');
+      expect(card(0)).toHaveTextContent('confirmResultModal.docNumber:GR-001');
+      expect(screen.getByTestId('action-confirm-result-close')).toHaveTextContent('soClose');
+      expect(screen.getByTestId('action-confirm-result-view')).toBeInTheDocument();
+    });
+
+    it('several documents: plural title, banner with the count, one card each and only Cerrar', () => {
+      renderModal();
+
+      expect(title()).toHaveTextContent('confirmResultModal.title.many');
+      expect(screen.getByTestId('confirm-result-banner')).toHaveTextContent('confirmResultModal.bannerMany:2');
+      expect(screen.getByTestId('confirm-result-banner')).toHaveTextContent('confirmResultModal.bannerManyHint');
+      expect(card(0)).toHaveAttribute('data-doc-type', 'entrada');
+      expect(card(1)).toHaveAttribute('data-doc-type', 'facturaCompra');
+      // The walkthrough's `confirmed-ack` step targets this id — it must exist in both variants.
+      expect(screen.getByTestId('action-confirm-result-close')).toHaveTextContent('soClose');
+      expect(screen.queryByTestId('action-confirm-result-view')).toBeNull();
+    });
+
+    it('no documents: fallback title, no banner, no card, only Cerrar', () => {
+      renderModal({ docs: [] });
+
+      expect(title()).toHaveTextContent('followUpDocumentCreated');
+      expect(screen.queryByTestId('confirm-result-banner')).toBeNull();
+      expect(screen.queryByTestId('confirm-result-card-0')).toBeNull();
+      expect(screen.getByTestId('action-confirm-result-close')).toBeInTheDocument();
+      expect(screen.queryByTestId('action-confirm-result-view')).toBeNull();
+    });
+
+    it('badges a document Borrador unless its real status is CO, and never shows an amount', () => {
+      renderModal({
+        docs: [
+          { ...RECEIPT, documentStatus: undefined, amount: 1234.5 },
+          { ...INVOICE, amount: 999.99 },
+        ],
       });
-    }
 
-    it('explicit primary prop overrides the derived label', () => {
-      // 'salida' would derive 'soViewShipment'; the explicit primary must win.
-      renderModal({ docs: [{ type: 'salida', num: 'SH-1', route: '/r' }], primary: 'X' });
-      expect(screen.getByText('X')).toBeInTheDocument();
-      expect(screen.queryByText('soViewShipment')).not.toBeInTheDocument();
-    });
-
-    it('renders no primary button for an unknown doc type and does not crash', () => {
-      renderModal({ docs: [{ type: 'zzz', num: 'UNK-1', route: '/r' }] });
-      // Unknown type → no viewKey → no derived primary label, but the card still renders.
-      expect(screen.getByText('UNK-1')).toBeInTheDocument();
-      expect(screen.queryByText('poViewReceipt')).not.toBeInTheDocument();
-      expect(screen.queryByText('soViewInvoice')).not.toBeInTheDocument();
-      // Only the close button is present in the footer (no primary button).
-      expect(screen.getByText('soClose')).toBeInTheDocument();
+      expect(card(0)).toHaveAttribute('data-doc-status', 'DR');
+      expect(card(0)).toHaveTextContent('confirmResultModal.status.draft');
+      expect(card(1)).toHaveAttribute('data-doc-status', 'CO');
+      expect(card(1)).toHaveTextContent('confirmResultModal.status.completedFeminine');
+      const text = screen.getByTestId('confirm-result-dialog').textContent;
+      expect(text).not.toMatch(/1[.,]?234|999/);
     });
   });
 
-  // ── ETP-5108: one typeface across the whole modal ───────────────────────────
-  // The shell used to declare `fontFamily: 'system-ui, -apple-system, sans-serif'`,
-  // which took the modal off the design system's Inter — the header, the card and
-  // the buttons alike. It read as mixed typography because the document number's
-  // digit widths are where a non-Inter sans shows itself most.
-  describe('typography inheritance (ETP-5108)', () => {
-    const MODAL_TITLE = 'Order confirmed';
-    const DOC_NUMBER = '1000147';
-    const SALIDA_LABEL = 'confirmResultModal.docType.salida';
-    const SHIPMENT_DOC = { type: 'salida', num: DOC_NUMBER, amount: 350, route: '/goods-shipment/1' };
+  describe('navigation', () => {
+    it.each([
+      ['click', (user) => user.click(card(1))],
+      ['Enter', async (user) => { card(1).focus(); await user.keyboard('{Enter}'); }],
+      ['Space', async (user) => { card(1).focus(); await user.keyboard(' '); }],
+    ])('a card opens its document on %s: closes first, then navigates to its route', async (_, activate) => {
+      const user = userEvent.setup();
+      const { props } = renderModal();
+      await activate(user);
 
-    /** Renders the ticket's own case: the "Order confirmed" modal with a shipment card. */
-    function renderShipmentResult() {
-      return renderModal({ title: MODAL_TITLE, docs: [SHIPMENT_DOC] });
-    }
-
-    it('neither the overlay nor the modal shell declares a font-family', () => {
-      renderShipmentResult();
-      const overlay = screen.getByTestId('confirm-result-modal');
-      expect(overlay.style.fontFamily).toBe('');
-      // The shell is the overlay's only element child; JSX comments emit no nodes.
-      expect(overlay.firstElementChild.style.fontFamily).toBe('');
+      expect(props.onClose).toHaveBeenCalledTimes(1);
+      expect(props.navigate).toHaveBeenCalledWith('/purchase-invoice/2');
+      expect(props.onClose.mock.invocationCallOrder[0]).toBeLessThan(props.navigate.mock.invocationCallOrder[0]);
     });
 
-    it('the document type label inherits the design system typeface', () => {
-      renderShipmentResult();
-      expect(inlineFontFamiliesUpToBody(screen.getByText(SALIDA_LABEL))).toEqual([]);
+    it('the Ver button calls onNavigate instead of onClose when given, then navigates', async () => {
+      const user = userEvent.setup();
+      const onNavigate = vi.fn();
+      const { props } = renderModal({ docs: [INVOICE], onNavigate });
+      await user.click(screen.getByTestId('action-confirm-result-view'));
+
+      expect(onNavigate).toHaveBeenCalledTimes(1);
+      expect(props.onClose).not.toHaveBeenCalled();
+      expect(props.navigate).toHaveBeenCalledWith('/purchase-invoice/2');
     });
 
-    it('the document number inherits the design system typeface', () => {
-      renderShipmentResult();
-      expect(inlineFontFamiliesUpToBody(screen.getByText(DOC_NUMBER))).toEqual([]);
+    it('a document without a route is shown but cannot be opened, and gets no Ver button', async () => {
+      const user = userEvent.setup();
+      const { props } = renderModal({ docs: [{ type: 'pedidoVenta', num: '?' }] });
+
+      expect(card(0).tagName).not.toBe('BUTTON');
+      await user.click(card(0));
+      expect(props.navigate).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('action-confirm-result-view')).toBeNull();
+      expect(screen.getByTestId('action-confirm-result-close')).toBeInTheDocument();
     });
 
-    it('card and header resolve to the same typeface (CP-1, CP-2)', () => {
-      renderShipmentResult();
-      const title = inlineFontFamiliesUpToBody(screen.getByText(MODAL_TITLE));
-      const label = inlineFontFamiliesUpToBody(screen.getByText(SALIDA_LABEL));
-      const number = inlineFontFamiliesUpToBody(screen.getByText(DOC_NUMBER));
-      expect(label).toEqual(title);
-      expect(number).toEqual(title);
+    it.each([
+      ['Cerrar', 'action-confirm-result-close'],
+      ['the X icon', 'action-confirm-result-dismiss'],
+    ])('%s closes without navigating', async (_, testId) => {
+      const user = userEvent.setup();
+      const { props } = renderModal({ docs: [INVOICE] });
+      await user.click(screen.getByTestId(testId));
+
+      expect(props.onClose).toHaveBeenCalledTimes(1);
+      expect(props.navigate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('keyboard and focus', () => {
+    it('is a labelled modal dialog that focuses the primary action, so Enter opens the single document', async () => {
+      const user = userEvent.setup();
+      const { props } = renderModal({ docs: [INVOICE] });
+
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveAttribute('aria-modal', 'true');
+      expect(dialog).toHaveAccessibleName('confirmResultModal.title.factura');
+      expect(screen.getByTestId('action-confirm-result-view')).toHaveFocus();
+      await user.keyboard('{Enter}');
+      expect(props.navigate).toHaveBeenCalledWith('/purchase-invoice/2');
     });
 
-    it('the footer buttons inherit it too', () => {
-      renderShipmentResult();
-      expect(inlineFontFamiliesUpToBody(screen.getByText('soClose'))).toEqual([]);
-      expect(inlineFontFamiliesUpToBody(screen.getByText('soViewShipment'))).toEqual([]);
+    it('with several documents the primary action is Cerrar', () => {
+      renderModal();
+      expect(screen.getByTestId('action-confirm-result-close')).toHaveFocus();
     });
 
-    it('keeps the label typography the fix must not touch', () => {
-      renderShipmentResult();
-      const { style } = screen.getByText(SALIDA_LABEL);
-      expect(style.textTransform).toBe('uppercase');
-      // jsdom normalises the source's `.06em` to a leading-zero form.
-      expect(style.letterSpacing).toBe('0.06em');
-      expect(style.fontSize).toBe('10px');
-      expect(style.fontWeight).toBe('600');
+    it('Esc closes the dialog', async () => {
+      const user = userEvent.setup();
+      const { props } = renderModal({ docs: [INVOICE] });
+      await user.keyboard('{Escape}');
+      expect(props.onClose).toHaveBeenCalledTimes(1);
+      expect(props.navigate).not.toHaveBeenCalled();
     });
 
-    it('keeps the document number typography the fix must not touch', () => {
-      renderShipmentResult();
-      const { style } = screen.getByText(DOC_NUMBER);
-      expect(style.fontSize).toBe('13px');
-      expect(style.fontWeight).toBe('600');
+    it('an Esc already handled by a layer on top does not close it', () => {
+      const { props } = renderModal({ docs: [INVOICE] });
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      event.preventDefault();
+      fireEvent(screen.getByTestId('action-confirm-result-view'), event);
+      expect(props.onClose).not.toHaveBeenCalled();
     });
+
+    it('Tab cycles inside the dialog, wrapping from the last control to the first and back', async () => {
+      const user = userEvent.setup();
+      renderModal({ docs: [INVOICE] });
+      // Tab order: X icon, card, Cerrar, Ver. Focus starts on Ver (the last).
+      await user.tab();
+      expect(screen.getByTestId('action-confirm-result-dismiss')).toHaveFocus();
+      await user.tab({ shift: true });
+      expect(screen.getByTestId('action-confirm-result-view')).toHaveFocus();
+    });
+
+    it('gives the focus back to the element that opened it when it closes', () => {
+      const opener = document.createElement('button');
+      document.body.appendChild(opener);
+      opener.focus();
+      try {
+        const { unmount } = renderModal({ docs: [INVOICE] });
+        expect(opener).not.toHaveFocus();
+        unmount();
+        expect(opener).toHaveFocus();
+      } finally {
+        opener.remove();
+      }
+    });
+  });
+
+  // ETP-5108: the design system declares its typeface once, on <body>; nothing in the popup
+  // may override it.
+  it('inherits the design-system typeface everywhere (no inline font-family up to body)', () => {
+    renderModal({ docs: [INVOICE] });
+    const overlay = screen.getByTestId('confirm-result-modal');
+    expect(inlineFontFamiliesUpToBody(overlay)).toEqual([]);
+    const overriding = [...overlay.querySelectorAll('*')].filter((el) => el.style?.fontFamily);
+    expect(overriding).toEqual([]);
   });
 });

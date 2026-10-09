@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/ReturnWindowShell.jsx
 vi.mock('react-dom', async () => {
   const actual = await vi.importActual('react-dom');
   return {
@@ -316,8 +317,7 @@ describe('ReturnWindowShell', () => {
       specName: 'return-material-receipt',
       entityName: 'returnMaterialReceipt',
       confirmedTitleKey: 'documentConfirmed',
-      invoiceResultTitleKey: 'rmrInvoiceCreatedTitle',
-      invoiceDocType: 'facturaVenta',
+      invoiceDocType: 'facturaRectificativa',
       invoiceRoute: '/sales-invoice',
     };
 

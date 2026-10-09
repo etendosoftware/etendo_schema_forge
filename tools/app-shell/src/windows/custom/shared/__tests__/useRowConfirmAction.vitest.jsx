@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/useRowConfirmAction.jsx
 // ETP-5378 — "Confirmar" in the row-hover kebab of the two albarán windows.
 //
 // The case worth pinning is the refetch: both confirm modals read `linkedOrders` and
@@ -52,15 +53,10 @@ vi.mock('@/hooks/useDocumentAction', () => ({
 // but mean different things about who dropped the value.
 let resultDocs;
 vi.mock('@/components/contract-ui', () => ({
-  ConfirmResultModal: ({ title, docs, currency }) => {
+  ConfirmResultModal: ({ docs }) => {
     resultDocs = docs;
     return (
-      <div
-        data-testid="result-modal"
-        data-title={title}
-        data-currency={currency}
-        data-route={docs?.[0]?.route}
-        data-num={docs?.[0]?.num} />
+      <div data-testid="result-modal" />
     );
   },
 }));
@@ -100,7 +96,6 @@ function Host(overrides = {}) {
     token: 'tkn',
     ConfirmModal: FakeConfirmModal,
     confirmedTitleKey: 'goodsShipment.confirmModal.confirmedTitle',
-    invoiceResultTitleKey: 'soInvoiceCreated',
     invoiceDocType: 'facturaVenta',
     invoiceRoute: '/sales-invoice',
     onRefresh,
@@ -221,27 +216,29 @@ describe('useRowConfirmAction', () => {
   });
 
   describe('after confirming', () => {
-    it('shows the result popup when an invoice was created, carrying the currency', async () => {
-      render(<Host />);
+    it.each([
+      ['a sales return', 'facturaRectificativa', '/sales-invoice'],
+      ['a return to vendor', 'facturaRectificativaCompra', '/purchase-invoice'],
+    ])('shows the result popup for the created invoice, typed as the caller says (%s)', async (_, invoiceDocType, invoiceRoute) => {
+      render(<Host invoiceDocType={invoiceDocType} invoiceRoute={invoiceRoute} />);
       await clickConfirm();
       await act(async () => {
         modalProps.onConfirmed({ invoice: { id: 'inv-7', documentNo: 'F-7', amount: 15.14 } });
       });
 
-      const result = screen.getByTestId('result-modal');
-      expect(result).toHaveAttribute('data-route', '/sales-invoice/inv-7');
-      expect(result).toHaveAttribute('data-num', 'F-7');
-      // Read off the confirmed record, which this same handler clears — a plain
-      // `confirmRecord?.currency$_identifier` in the popup would render empty.
-      expect(result).toHaveAttribute('data-currency', 'EUR');
+      expect(screen.getByTestId('result-modal')).toBeInTheDocument();
+      // The popup derives title/label/buttons from `type` and shows no amount, so the doc
+      // carries exactly the type, number, status and route.
+      expect(resultDocs).toEqual([{ type: invoiceDocType, num: 'F-7', documentStatus: null, route: `${invoiceRoute}/inv-7` }]);
       expect(screen.queryByTestId('confirm-modal')).not.toBeInTheDocument();
     });
 
     /**
      * ETP-5378 QA follow-up — the result modal's status badge.
      *
-     * `ConfirmResultModal` badges each doc with `const confirmed = doc.documentStatus === 'CO'`
-     * and falls back to the warning "Borrador" (`statusDraft`) badge for anything else — it
+     * `ConfirmResultModal` badges each doc with `const completed = doc.documentStatus === 'CO'`
+     * and falls back to the neutral "Borrador" (`confirmResultModal.status.draft`) badge for
+     * anything else — it
      * cannot be a blanket "always completed", because a shipment sitting in the same result
      * modal genuinely IS still a draft. This row path built its `docs` array WITHOUT
      * `documentStatus`, so `undefined === 'CO'` was false and a rectificative invoice the
@@ -280,25 +277,6 @@ describe('useRowConfirmAction', () => {
         expect(resultDocs[0].documentStatus).toBeNull();
         expect(resultDocs[0].documentStatus).not.toBeUndefined();
         expect(Object.keys(resultDocs[0])).toContain('documentStatus');
-      });
-
-      it('never badges a just-confirmed rectificative invoice as a draft', async () => {
-        // The intent, asserted against ConfirmResultModal's REAL contract (`=== 'CO'`) rather
-        // than a snapshot of the docs array: these invoices are created and confirmed in one
-        // step (ETP-5381 — ReturnShipmentUtils#finalizeReturnInvoice completes the invoice
-        // before returning it), so "Borrador" was never a state this path could legitimately
-        // announce. If the field is ever dropped again, this is the assertion that says why
-        // it matters, not just that a key went missing.
-        render(<Host />);
-        await clickConfirm();
-        await act(async () => {
-          modalProps.onConfirmed({
-            invoice: { id: 'inv-7', documentNo: 'F-7', amount: 15.14, documentStatus: 'CO' },
-          });
-        });
-
-        const wouldBadgeAsConfirmed = resultDocs[0].documentStatus === 'CO';
-        expect(wouldBadgeAsConfirmed).toBe(true);
       });
     });
 

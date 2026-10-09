@@ -1,3 +1,5 @@
+// @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -312,8 +314,8 @@ test.describe('Sales Order — Happy path (integration)', () => {
     });
 
     await test.step('Open the generated invoice from the result modal', async () => {
-      const successMsg = page.getByText(/pedido confirmado|order confirmed/i);
-      await expect(successMsg).toBeVisible({ timeout: 30_000 });
+      // ETP-5674: the result popup titles itself from the generated documents.
+      await expect(page.getByTestId('confirm-result-title')).toBeVisible({ timeout: 30_000 });
       await slow(page);
 
       // ETP-5381: an invoice generated from another document is created AND
@@ -336,7 +338,7 @@ test.describe('Sales Order — Happy path (integration)', () => {
       // "Borrador" — the invoice half of the result is Completed.
       await expect(invoiceCard,
         '[ETP-5381] The generated sales invoice should be badged Completed in the result modal',
-      ).toContainText(/completado|completed/i, { timeout: 5_000 });
+      ).toContainText(/completada|completed/i, { timeout: 5_000 });
 
       await invoiceCard.click();
       await slow(page);

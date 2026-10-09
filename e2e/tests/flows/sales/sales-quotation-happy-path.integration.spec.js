@@ -1,3 +1,5 @@
+// @covers artifacts/sales-quotation/custom/QuotationConfirmModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -294,7 +296,8 @@ test.describe('Sales Quotation — Happy path (integration)', () => {
     });
 
     await test.step('Handle success result', async () => {
-      const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
+      // ConfirmResultModal's footer Cerrar (its X icon shares the accessible name).
+      const closeBtn = page.getByTestId('action-confirm-result-close');
       await expect(closeBtn).toBeVisible({ timeout: 30_000 });
       await slow(page);
       await closeBtn.click();
