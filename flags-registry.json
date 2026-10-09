@@ -831,17 +831,7 @@
         "backend": []
       },
       "$pathsComment": "No owned code: the modern-era implementation is permanent and is NOT deleted when the flag retires, so nothing exists only because the flag exists. src/com/etendoerp/go/mcp/ is a touch point, not owned -- the toggle point is McpRequestEra.modernEnabled(). GoFeatureFlags (constant FLAG_MCP_MODERN_ERA_DISABLED) is shared framework code. Design: com.etendoerp.go docs/plans/2026-10-09-etp-5640-mcp-dual-era-design.md -- section '8.5 The kill-switch flag'.",
-      "deferredItems": [
-        {
-          "id": "kill-switch-flip-requires-restart-without-configcat",
-          "kind": "cosmetic",
-          "note": "The design records the rollback as 'without a restart', which holds only where etendo.go.configcat.sdkKey resolves. Without an SDK key the flag is read by PropertiesFeatureProvider from Openbravo.properties or the ETGO_FLAG_MCP_MODERN_ERA_DISABLED env var, so flipping it is a deploy/restart. AND THEREFORE: an incident runbook that relies on the kill switch must first confirm the environment has ConfigCat configured; otherwise the rollback lever costs a restart. Not a defect: documented behaviour of the properties provider.",
-          "refs": [
-            "com.etendoerp.go docs/plans/2026-10-09-etp-5640-mcp-dual-era-design.md -- section '9. Decisions on the open questions', item 1",
-            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md -- section 'Per-account targeting'"
-          ]
-        }
-      ],
+      "$deferredItemsComment": "kill-switch-flip-requires-restart-without-configcat was CLOSED on 2026-10-09: the design said the rollback needs no restart, which holds only where etendo.go.configcat.sdkKey resolves. com.etendoerp.go docs/plans/2026-10-09-etp-5640-mcp-dual-era-design.md section '9. Decisions on the open questions' now states that without an SDK key the flag is read by PropertiesFeatureProvider (Openbravo.properties or ETGO_FLAG_MCP_MODERN_ERA_DISABLED) and flipping it needs a restart. The behaviour is unchanged; the item tracked the wrong claim, not a defect, so it no longer charges a point.",
       "testSpecs": {
         "unit": [
           {
