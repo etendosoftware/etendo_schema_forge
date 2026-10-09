@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmDetailChrome.jsx
 // Real-locale breadcrumb regression coverage (ETP-4945).
 //
 // FmModel349Page.jsx used to render
@@ -9,9 +11,12 @@
 // the rendered title-bar text directly. Mirrors the sibling
 // FmModel349Page.vitest.jsx's mocking shape but with `useUI` backed by the
 // real locale dictionary instead of its identity mock.
-import { vi, describe, it, expect } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import { PageMetaProvider } from '@/components/layout/PageMetaContext';
+import { breadcrumbToText, normalizeBreadcrumb } from '@/components/layout/TopBar/breadcrumb.js';
+import { lastMeta, MetaProbe, renderWithMeta, describeTopBarKebab } from '../../../__tests__/testUtils/topBarMetaTestUtils.jsx';
 import { loadLocaleDictionary, makeRealUI } from '../../../../shared/__tests__/testUtils/realLocaleUI.js';
 
 const esES = loadLocaleDictionary('es_ES');
@@ -26,6 +31,10 @@ vi.mock('@/i18n', () => ({
   useUI: () => activeUi,
   useLocaleSwitch: () => ({ locale: activeLocale }),
 }));
+
+// ETP-5584 — the TopBar kebab's two contexts (favourites, support chat), shared stand-in.
+vi.mock('@/components/layout/FavoritesContext', () => import('../../../__tests__/testUtils/topBarMetaTestUtils.jsx'));
+vi.mock('@/components/support/SupportChatContext.jsx', () => import('../../../__tests__/testUtils/topBarMetaTestUtils.jsx'));
 
 vi.mock('../../../fiscalModelsUtils.js', () => ({
   formatAmount: (n) => String(n),
@@ -44,7 +53,6 @@ vi.mock('../use349Pdf.js', () => ({
 
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: () => null,
   Tabs: () => null,
   Banner: () => null,
@@ -106,14 +114,20 @@ const defaultProps = {
   apiBaseUrl: '/api/fiscal-models',
 };
 
+
 describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-4945)', () => {
-  it('resolves the es_ES breadcrumb to "Finanzas / Modelos Fiscales / Modelo 349 - 2026 T1", not the stale "Tesorería / Declaraciones"', () => {
+  it('resolves the es_ES breadcrumb to "Finanzas / Modelos Fiscales / Modelo 349 - 2026/T1", not the stale "Tesorería / Declaraciones"', () => {
     activeUi = realUiEs;
     activeLocale = 'es_ES';
-    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const { container } = renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Finanzas / Modelos Fiscales / Modelo 349 - 2026 T1');
-    expect(container.textContent).not.toContain('Tesorería');
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Finanzas / Modelos Fiscales / Modelo 349 - 2026/T1');
+    expect(lastMeta.title).toBe('Modelo 349 - 2026/T1');
+    expect(lastMeta.titleExtra.props.className).toBe('fm-model-badge fm-model-badge--349');
+    expect(typeof lastMeta.onAddToFavorites).toBe('function');
+    expect(typeof lastMeta.onPageHelp).toBe('function');
+    // ETP-5584 — no in-page title row any more: nothing duplicated with the TopBar.
+    expect(container.textContent).not.toContain('Modelo 349 - 2026/T1');
   });
 
   // ETP-5338 — the "Modelo 349" segment itself used to be a hardcoded Spanish
@@ -121,13 +135,13 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
   // the root/section segments. Now resolved via the shared 'fm.config.m349.title'
   // key (already used by the catalog config section header), which translates
   // "Modelo" to "Form" — the term AEAT-form-aware English UI copy uses.
-  it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Form 349 - 2026 T1", not the stale "Modelo"', () => {
+  it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Form 349 - 2026/T1", not the stale "Modelo"', () => {
     activeUi = realUiEn;
     activeLocale = 'en_US';
-    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Finance / Fiscal Models / Form 349 - 2026 T1');
-    expect(container.textContent).not.toContain('Modelo 349');
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Finance / Fiscal Models / Form 349 - 2026/T1');
+    expect(lastMeta.title).toBe('Form 349 - 2026/T1');
   });
 
   // ETP-5338 — a MONTHLY declaration's periodLabel used to derive its month name
@@ -140,31 +154,35 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
   it('formats a monthly period\'s month name in Spanish under es_ES ("octubre")', () => {
     activeUi = realUiEs;
     activeLocale = 'es_ES';
-    const { container } = render(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
+    renderWithMeta(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Modelo 349 - 2026 / octubre');
+    expect(lastMeta.title).toBe('Modelo 349 - 2026/octubre');
   });
 
   it('formats a monthly period\'s month name in English under en_US ("October"), not the stale "octubre"', () => {
     activeUi = realUiEn;
     activeLocale = 'en_US';
-    const { container } = render(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
+    renderWithMeta(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Form 349 - 2026 / October');
-    expect(container.textContent).not.toContain('octubre');
+    expect(lastMeta.title).toBe('Form 349 - 2026/October');
   });
 
   // ETP-5597 — like the parent crumb of a generated window's detail, the "Modelos Fiscales" level
-  // goes back to the declarations list; "Finanzas" and the current page stay plain text.
+  // of the TopBar breadcrumb is a link back to the declarations list: the published item carries an
+  // `onClick` (the TopBar renders it as a button); "Finanzas" and the current page stay plain text.
   it('the "Modelos Fiscales" crumb is a link back to the list (onBack); the others are not', () => {
     activeUi = realUiEs;
     const onBack = vi.fn();
-    const { getByTestId } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} onBack={onBack} />);
-    const crumb = getByTestId('fm-breadcrumb');
-    const links = crumb.querySelectorAll('button');
-    expect(links).toHaveLength(1);
-    expect(links[0].textContent).toBe('Modelos Fiscales');
-    fireEvent.click(links[0]);
+    renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} onBack={onBack} />);
+    const items = normalizeBreadcrumb(lastMeta.breadcrumb);
+    expect(items.filter(item => item.onClick).map(item => item.label)).toEqual(['Modelos Fiscales']);
+    act(() => { items[1].onClick(); });
     expect(onBack).toHaveBeenCalledTimes(1);
   });
+});
+
+// ETP-5584 (review W1) — the TopBar kebab is wired to the real favourites and help mechanisms.
+describeTopBarKebab('FmModel349Page', {
+  beforeEachRender: () => { activeUi = realUiEs; },
+  renderPage: () => renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />),
 });

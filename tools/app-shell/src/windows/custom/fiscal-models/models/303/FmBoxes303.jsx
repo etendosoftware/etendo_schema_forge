@@ -3,6 +3,7 @@ import { useUI } from '@/i18n';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
 import { getLayout303, matchesVisibility, isFieldRequired, resolveFieldLabelKey, isOptionDisabled, getInvalidSelectedOption, resolveOptionDisabledReasonKey } from './fm303Layouts.js';
 import { formatAmount, formatPercent, exceedsTypedIntegerDigits, exceedsTypedDecimalDigits } from '../../fiscalModelsUtils.js';
@@ -23,6 +24,9 @@ const SECTION_ICON = {
 function formatCell(val, colType) {
   return colType === 'percent' ? formatPercent(val) : formatAmount(val);
 }
+
+// Radix Select item value standing for "no value" (Radix forbids '' as an item value).
+const EMPTY_OPTION = '__empty__';
 
 const COMPACT_SECTIONS = new Set(['iva_devengado', 'iva_deducible', 'resultado', 'info_adicional', 'resultado_final']);
 const TITLED_SECTIONS  = new Set(['iva_devengado', 'iva_deducible']);
@@ -196,6 +200,15 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     );
   };
 
+  // ETP-5584 — the app's Select (Radix, `@/components/ui/select`) instead of the browser's
+  // native <select>, so these dropdowns look like every other form field of the app. Same
+  // contract as the app's own optional selects (SelectorInput / EntityForm):
+  // - always CONTROLLED: an unset field is `''` (never `undefined` — a controlled->uncontrolled
+  //   flip swallows the first pick), rendered as the "Seleccionar..." placeholder;
+  // - an OPTIONAL field also offers the placeholder as a real item, so it can be cleared back to
+  //   '' like the native select's "Seleccionar..." option allowed. Radix forbids '' as an item
+  //   value, hence the `EMPTY_OPTION` sentinel, mapped back to '' on change.
+  //
   // ETP-5597 pt.1 — an option whose `disabledWhen` currently matches is rendered `disabled` (not
   // selectable). If it is ALREADY the selected value (e.g. box 71 turned positive after choosing
   // "Compensación"), it stays selected — FmModel303Page blocks generation/presentation instead of
@@ -205,36 +218,55 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   const renderIdentSelectField = (f, compact = false) => {
     // A value fixed by `autoValueWhen` (tipo "Resultado cero" while 69 > 0 and 71 < 0) is never
     // invalid and gets no message at all — the page selects it silently (ETP-5597 QA round 4).
+    const required = isFieldRequired(f, identification);
+    const placeholder = t('fm.ident.decl.placeholder');
     const invalidOption = getInvalidSelectedOption(f, identification);
     const errorId = invalidOption ? `fm-aeat-ident-${f.id}-error` : undefined;
     return (
       <div key={f.id} className={`fm-aeat-ident-inline-field${invalidOption ? ' fm-aeat-ident-inline-field--invalid' : ''}`}>
         <span className="fm-aeat-ident-inline-field__label">
-          {t(resolveFieldLabelKey(f, identification))}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+          {t(resolveFieldLabelKey(f, identification))}{required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
         </span>
-        <select
-          className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}${invalidOption ? ' fm-aeat-ident-inline-field__select--invalid' : ''}`}
+        <Select
           value={identification?.[f.id] ?? ''}
-          onChange={e => onIdentChange?.(f.id, e.target.value)}
+          onValueChange={value => onIdentChange?.(f.id, value === EMPTY_OPTION ? '' : value)}
           disabled={readOnly}
-          aria-invalid={invalidOption ? true : undefined}
-          aria-describedby={errorId}
+          data-testid="FmBoxes303__identSelectRoot"
         >
-          <option value="">{t('fm.ident.decl.placeholder')}</option>
-          {f.options?.map(opt => {
-            const optDisabled = isOptionDisabled(opt, identification);
-            return (
-              <option
-                key={opt.value}
-                value={opt.value}
-                disabled={optDisabled}
-                title={optDisabled ? t(resolveOptionDisabledReasonKey(opt, identification)) : undefined}
-              >
-                {t(opt.labelKey)}
-              </option>
-            );
-          })}
-        </select>
+          <SelectTrigger
+            className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}${invalidOption ? ' fm-aeat-ident-inline-field__select--invalid' : ''}`}
+            aria-label={t(resolveFieldLabelKey(f, identification))}
+            aria-invalid={invalidOption ? true : undefined}
+            aria-describedby={errorId}
+            data-field-id={f.id}
+            data-testid="FmBoxes303__identSelect"
+          >
+            <SelectValue placeholder={placeholder} data-testid="SelectValue__49d327" />
+          </SelectTrigger>
+          <SelectContent data-testid="SelectContent__49d327">
+            {!required && (
+              <SelectItem value={EMPTY_OPTION} data-option-value="" data-testid="SelectItem__empty49d327">{placeholder}</SelectItem>
+            )}
+            {f.options?.map(opt => {
+              const optDisabled = isOptionDisabled(opt, identification);
+              return (
+                <SelectItem
+                  key={opt.value}
+                  value={opt.value}
+                  disabled={optDisabled}
+                  // The core SelectItem sets `data-[disabled]:pointer-events-none`, which hides the
+                  // reason `title` below; Radix still refuses to select a disabled item.
+                  className="data-[disabled]:pointer-events-auto data-[disabled]:cursor-not-allowed"
+                  title={optDisabled ? t(resolveOptionDisabledReasonKey(opt, identification)) : undefined}
+                  data-option-value={opt.value}
+                  data-testid="SelectItem__49d327"
+                >
+                  {t(opt.labelKey)}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
         {invalidOption && (
           <span
             id={errorId}

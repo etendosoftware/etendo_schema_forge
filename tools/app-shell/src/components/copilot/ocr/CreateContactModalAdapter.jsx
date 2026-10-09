@@ -3,6 +3,7 @@ import RecordCreateModal from '../../contract-ui/RecordCreateModal.jsx';
 import {
   LOOKUP_CREATE_TARGETS, buildContactSeed, resolveContactName,
 } from '../../contract-ui/lookupCreateTargets.js';
+import { useContactCategorySeed } from '../../contract-ui/useContactCategorySeed.js';
 import { deriveContactsApiBase } from './contactApi.js';
 
 /* eslint-disable react/prop-types */
@@ -28,11 +29,26 @@ export default function CreateContactModalAdapter({ item, apiBaseUrl, token, onC
 
   const prefilled = item?.payload?.prefilled || {};
   const initialQuery = prefilled.name || '';
+  const documentType = item?.payload?.documentType || null;
+  // Resolved before the popup mounts: the embedded window reads its seed once, on mount.
+  const { ready, categorySeed } = useContactCategorySeed({
+    contactsApiBaseUrl: bpApiBaseUrl, documentType, active: true,
+  });
   const initialData = useMemo(
-    () => buildOcrContactSeed(prefilled, item?.payload?.documentType || null),
+    () => ({ ...buildOcrContactSeed(prefilled, documentType), ...categorySeed }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(prefilled), item?.payload?.documentType],
+    [JSON.stringify(prefilled), documentType, categorySeed],
   );
+
+  // The address belongs to the `locationAddress` child tab: it reaches the Contacts window as a
+  // seed that only the tab's "Add address" modal consumes (ETP-5654).
+  const initialChildData = useMemo(() => {
+    const addressSeed = buildOcrContactAddressSeed(prefilled);
+    return addressSeed ? { locationAddress: addressSeed } : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(prefilled)]);
+
+  if (!ready) return null;
 
   return (
     <RecordCreateModal
@@ -40,6 +56,7 @@ export default function CreateContactModalAdapter({ item, apiBaseUrl, token, onC
       target={target}
       initialQuery={initialQuery}
       initialData={initialData}
+      initialChildData={initialChildData}
       token={token}
       onCancel={onCancel}
       onCreated={record => onSubmit({ created: { ...record, name: resolveContactName(record) } })}
@@ -50,11 +67,9 @@ export default function CreateContactModalAdapter({ item, apiBaseUrl, token, onC
 /**
  * Maps the OCR extraction onto `businessPartner` header fields.
  *
- * Only the four header keys are seeded. `address`, `postalCode`, `city` and `country` — also
- * produced by `createPrefilledFrom` in `ocrDocTypes.js` — belong to the `locationAddress`
- * CHILD tab, not to the header record `initialData` seeds, so the user still types those.
- * Registered as debt (`ocr-contact-address-prefill`): closing it means seeding a child tab's
- * new row, a different mechanism from `useEntity.handleNew`.
+ * Only the four header keys are seeded here. `address`, `postalCode`, `city` and `country` —
+ * also produced by `createPrefilledFrom` in `ocrDocTypes.js` — belong to the `locationAddress`
+ * CHILD tab, so they travel separately as `initialChildData` (see `buildOcrContactAddressSeed`).
  */
 export function buildOcrContactSeed(prefilled, documentType) {
   const p = prefilled || {};
@@ -64,4 +79,22 @@ export function buildOcrContactSeed(prefilled, documentType) {
     ...(p.etgoEmail && { etgoEmail: p.etgoEmail }),
     ...(p.etgoPhone && { etgoPhone: p.etgoPhone }),
   };
+}
+
+/**
+ * Maps the OCR address onto the seed of the Contacts window's `locationAddress` tab
+ * (ETP-5654): `address`, `postalCode`, `city` and `country` -> `countryName`, trimmed.
+ * Returns `null` when all four are empty, so no seed is passed at all. Region is never
+ * seeded — it is the user's choice.
+ */
+export function buildOcrContactAddressSeed(prefilled) {
+  const p = prefilled || {};
+  const trimmed = value => String(value ?? '').trim();
+  const seed = {
+    address: trimmed(p.address),
+    postalCode: trimmed(p.postalCode),
+    city: trimmed(p.city),
+    countryName: trimmed(p.country),
+  };
+  return Object.values(seed).some(Boolean) ? seed : null;
 }

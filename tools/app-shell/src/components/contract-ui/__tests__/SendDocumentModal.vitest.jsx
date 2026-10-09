@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/SendDocumentModal.jsx
+
 // Mock dependencies BEFORE any import
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
@@ -20,13 +22,27 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('lucide-react', () => ({
-  Mail: () => null,
-  Search: () => null,
-  Loader2: () => null,
+// Icons render as bare <svg>s carrying their data-testid, so their position inside a button
+// can be asserted without pulling in the real icon set.
+vi.mock('lucide-react', () => {
+  const icon = (name) => (props) => <svg data-testid={props['data-testid']} data-icon={name} />;
+  return Object.fromEntries(
+    ['Download', 'Mail', 'Maximize', 'Plus', 'Search', 'Loader2', 'X'].map((name) => [name, icon(name)]),
+  );
+});
+
+// A PDF blob is previewed through the react-pdf viewer (ETP-5598); pdfjs cannot run in jsdom.
+// The stub records the layout props the modal hands to the shared viewer: the padding as
+// JSON, and the fit icon rendered so its identity (data-icon) can be read back.
+vi.mock('@/windows/custom/shared/PdfViewer.jsx', () => ({
+  default: ({ url, contentPadding, fitIcon: FitIcon }) => (
+    <div data-testid="pdf-viewer" data-url={url} data-content-padding={JSON.stringify(contentPadding)}>
+      {FitIcon && <FitIcon data-testid="pdf-viewer-fit-icon" />}
+    </div>
+  ),
 }));
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import SendDocumentModal, { SendDocumentButton } from '../SendDocumentModal.jsx';
@@ -1102,7 +1118,7 @@ describe('SendDocumentModal — onSent success callback (ETP-5069)', () => {
     const onClose = vi.fn();
 
     render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} onClose={onClose} />);
-    await user.click(screen.getByRole('button', { name: '×' }));
+    await user.click(screen.getByRole('button', { name: 'close' }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onSent).not.toHaveBeenCalled();
@@ -1122,5 +1138,160 @@ describe('SendDocumentModal — onSent success callback (ETP-5069)', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(toast.success).toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+// A window outside documentPdfRegistry, so the modal never builds its own PDF and the
+// no-blob path deterministically falls back to the HTML render in the iframe.
+const NO_CLIENT_PDF = { windowName: 'payment-in', pdfBlobUrl: null, pdfBlobLoading: false };
+
+describe('SendDocumentModal — preview pane: PDF viewer vs HTML iframe', () => {
+  it('renders the PDF blob through PdfViewer and no HTML iframe', async () => {
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+
+    const viewer = await screen.findByTestId('pdf-viewer');
+    expect(viewer).toHaveAttribute('data-url', 'blob:test');
+    expect(within(screen.getByTestId('send-modal-preview')).getByTestId('pdf-viewer')).toBe(viewer);
+    expect(document.querySelector('iframe[title="Document preview"]')).toBeNull();
+  });
+
+  it('hands PdfViewer the Send pop-up padding and the Maximize fit icon', async () => {
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+
+    const viewer = await screen.findByTestId('pdf-viewer');
+    expect(JSON.parse(viewer.getAttribute('data-content-padding'))).toEqual({ top: 24, right: 28, bottom: 0, left: 28 });
+    expect(within(viewer).getByTestId('pdf-viewer-fit-icon')).toHaveAttribute('data-icon', 'Maximize');
+  });
+
+  it('renders the HTML render in the iframe and no PdfViewer when there is no blob', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: async () => '<p>x</p>' });
+    render(<SendDocumentModal {...BASE} {...NO_CLIENT_PDF} bpEmail="user@domain.com" />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/reports/print-payment-in/render',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+    expect(document.querySelector('iframe[title="Document preview"]')).toBeInTheDocument();
+    expect(screen.queryByTestId('pdf-viewer')).not.toBeInTheDocument();
+  });
+});
+
+describe('SendDocumentModal — footer layout', () => {
+  it('places Download PDF in the footer, immediately before Send, and not in the preview pane', () => {
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+
+    const download = screen.getByTestId('send-modal-download');
+    expect(download.nextElementSibling).toBe(getSendButton());
+    expect(within(screen.getByTestId('send-modal-preview')).queryByTestId('send-modal-download')).toBeNull();
+    // Cancel stays alone on the left of the footer.
+    const footer = download.parentElement.parentElement;
+    expect(footer.firstElementChild).toHaveTextContent('cancel');
+  });
+
+  it('without the email panel there is no Send and Download sits next to Close', () => {
+    render(<SendDocumentModal {...BASE} allowEmail={false} />);
+
+    const download = screen.getByTestId('send-modal-download');
+    expect(screen.queryByRole('button', { name: /sendModalSend/i })).not.toBeInTheDocument();
+    expect(download.nextElementSibling).toHaveTextContent('close');
+    expect(within(screen.getByTestId('send-modal-preview')).queryByTestId('send-modal-download')).toBeNull();
+  });
+
+  it('downloads exactly the blob URL the preview is showing', async () => {
+    const user = userEvent.setup();
+    const downloaded = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function captureDownload() {
+      downloaded.push({ href: this.getAttribute('href'), download: this.download });
+    });
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" pdfBlobUrl="blob:same-file" />);
+
+    const previewUrl = (await screen.findByTestId('pdf-viewer')).getAttribute('data-url');
+    await user.click(screen.getByTestId('send-modal-download'));
+
+    expect(downloaded).toEqual([{ href: previewUrl, download: 'sales-invoice-INV-001.pdf' }]);
+    expect(previewUrl).toBe('blob:same-file');
+  });
+
+  it('shows the Mail icon before the Send label', () => {
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+    const send = getSendButton();
+    expect(send.firstElementChild).toHaveAttribute('data-icon', 'Mail');
+    expect(send.lastChild.textContent).toBe('sendModalSend');
+  });
+
+  // Styles are read from the raw attribute: jsdom's CSSOM drops `hsl(var(...))` values.
+  it('renders a disabled Send with the disabled tokens instead of fading it with opacity', () => {
+    render(<SendDocumentModal {...BASE} bpEmail="" />);
+    const send = getSendButton();
+    expect(send).toBeDisabled();
+    expect(send.style.opacity).toBe('');
+    expect(send.getAttribute('style')).toContain('background: hsl(var(--sf-primary-gray-disabled))');
+    expect(send.getAttribute('style')).toContain('color: hsl(var(--sf-on-primary-gray-disabled))');
+    expect(send.firstElementChild).toHaveAttribute('data-icon', 'Mail');
+  });
+
+  it('renders an enabled Send as the primary pill, also without opacity', () => {
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+    const send = getSendButton();
+    expect(send).not.toBeDisabled();
+    expect(send.style.opacity).toBe('');
+    expect(send.getAttribute('style')).toContain('background: hsl(var(--foreground))');
+    expect(send.getAttribute('style')).not.toContain('--sf-primary-gray-disabled');
+  });
+
+  it('renders Cancel as text only: transparent, no border', () => {
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+    const cancel = screen.getByRole('button', { name: 'cancel' });
+    expect(cancel.style.background).toBe('transparent');
+    expect(cancel.style.borderStyle).toBe('none');
+  });
+
+  it('shows the Plus icon and an underlined label inside the Add CC button', () => {
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+    const addCc = screen.getByTestId('send-modal-add-cc');
+    expect(addCc.firstElementChild).toHaveAttribute('data-icon', 'Plus');
+    expect(within(addCc).getByText('sendModalAddCc').style.textDecoration).toBe('underline');
+  });
+});
+
+describe('SendDocumentModal — header', () => {
+  it('renders the title with no Mail icon in the header', () => {
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+    const title = screen.getByText(/^sendModalTitle/);
+    expect(title).toHaveTextContent('sendModalTitle:{"documentType":"Invoice","documentNo":"INV-001"}');
+    expect(within(title.parentElement).queryByTestId('Mail__afec0a')).toBeNull();
+    // The only Mail icon left in the modal is the one inside Send.
+    const mailIcons = document.querySelectorAll('[data-icon="Mail"]');
+    expect(mailIcons).toHaveLength(1);
+    expect(getSendButton()).toContainElement(mailIcons[0]);
+  });
+
+  it('exposes the header close button by its translated name and closes the modal', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onClose={onClose} />);
+    const close = screen.getByRole('button', { name: 'close' });
+    // Figma "Close": the lucide X icon, not a text glyph.
+    expect(close.querySelector('[data-icon="X"]')).not.toBeNull();
+    await user.click(close);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Kept last: it re-imports the modal, so its lazy PdfViewer starts unresolved.
+describe('SendDocumentModal — lazy PdfViewer loading state', () => {
+  it('shows the shared preview spinner while PdfViewer is loading, then the viewer', async () => {
+    vi.resetModules();
+    const { default: FreshModal } = await import('../SendDocumentModal.jsx');
+    render(<FreshModal {...BASE} bpEmail="user@domain.com" />);
+
+    const pane = screen.getByTestId('send-modal-preview');
+    expect(within(pane).getByText('sendModalLoadingPreview')).toBeInTheDocument();
+    expect(within(pane).queryByTestId('pdf-viewer')).not.toBeInTheDocument();
+
+    expect(await within(pane).findByTestId('pdf-viewer')).toHaveAttribute('data-url', 'blob:test');
+    expect(within(pane).queryByText('sendModalLoadingPreview')).not.toBeInTheDocument();
   });
 });

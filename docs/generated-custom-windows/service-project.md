@@ -16,7 +16,7 @@ Maintain a minimal Service Project master — a simplified view of the AD window
 - Visibility: visible from the Finance menu as **Service Project** (window id `800001`).
 - Implementation type: generated window route loaded from the app-shell window registry — no custom components.
 - Window shape: single-entity window for `serviceProject` (table `C_Project`, tab id `800002`), no child/detail tabs (`projectLine`, `supplier`, `proposal`, `proposalLine`, `followup` are all excluded from the artifact).
-- UI adjustments applied in `decisions.json`: `noHeaderBorder: true`, `hidePrint: true`, `hideLink: true`, and a `description` field rendered as a single-row (`rows: 1`) textarea spanning 2 columns.
+- UI adjustments applied in `decisions.json`: `noHeaderBorder: true`, `hidePrint: true`, `hideLink: true`, and a `description` textarea declared `rows: 1` spanning 2 columns (rendered at the 2-row textarea minimum since ETP-5513).
 - Label override: the AD `Isactive` label is overridden to "Activo" for both `es_ES` and `es_AR` locales.
 
 ## Reactive behavior and dependencies

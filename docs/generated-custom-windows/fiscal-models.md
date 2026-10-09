@@ -22,7 +22,7 @@ debug contracts.
 - Count the declarations whose AEAT deadline falls within the next 7 days in the **"Por vencer"** KPI card (click-to-filter). There is **no** upcoming-deadlines panel/widget: `computeUpcomingDeadlines` still exists in `fiscalModelsUtils.js` but is only exercised by unit tests, never rendered (corrected in ETP-5597 — see "'Por vencer' KPI" below).
 - Filter declarations by model type (303, 349) and status.
 - Navigate into a per-model detail page when a declaration row is clicked, passing precomputed box data so the detail page renders immediately without a duplicate fetch.
-- In detail pages, guide the user through the submission lifecycle via a numbered stepper.
+- In detail pages, guide the user through the submission lifecycle via the action bar (status chip + Registrar/Presentar).
 - Generate and download the submission file (`.txt`) for Modelo 303.
 - Show blocking and warning incident counts inline; a blocking count prevents file generation.
 
@@ -30,8 +30,9 @@ debug contracts.
 
 - Route: `/fiscal-models` (list, `FmListPage`); model detail pages render inline within the same route (no separate URL) via `FmModel303Page`/`FmModel349Page`.
 - Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
-- Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`).
-- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`).
+- Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`), shown as the TopBar subtitle (ETP-5584).
+- Page title — list page: **"Modelos Fiscales"** / "Fiscal Models", the window's menu name, resolved from the same `ui('fm.breadcrumb.section')` key as the breadcrumb's last segment so the title and the breadcrumb can never disagree (ETP-5584 — it used to read "Declaraciones", `fm.list.title`, while the menu and the breadcrumb said "Modelos Fiscales"). It is published to the app TopBar via `useSetPageMeta` — see "List page header (app TopBar) and declarations toolbar" below.
+- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`). Since ETP-5584 it is the TopBar subtitle, published by `useFmDetailPageMeta`, not in-page text. **Title format (P9, ETP-5584):** both models build the title with one helper, `buildDeclTitle` in `FmDetailChrome.jsx`, so the format is `<model title> - <year>/<period>`. A quarter reads "Modelo 349 - 2026/T4" (349 used to read "2026 T4"). A monthly period shows its month name in the UI locale: "Modelo 303 - 2024/octubre" or "Form 303 - 2024/October". 303 used to show "10M", and 349 used "2026 / octubre". The locale is passed explicitly (`useLocaleSwitch`), never left to the runtime default.
 
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
@@ -103,8 +104,8 @@ the snapshot existed (legacy) have none and keep an earlier, weaker once-per-bro
 (see "Legacy fallback" below); by product decision there is no data-fix for them.
 
 **Trigger.** The same `SUBMITTED_STATUSES` set gates every layer, duplicated deliberately per
-language/file rather than shared (same tradeoff as `statusLabelKey` above — see "Duplicated,
-deliberately, in 4 places"): `{'submitted', 'submitted_ext', 'submitted_ack'}`. `submitted_ext` is
+language/file rather than shared (the same tradeoff `statusLabelKey` had before ETP-5584 made it
+one export of `FmDetailChrome.jsx`): `{'submitted', 'submitted_ext', 'submitted_ack'}`. `submitted_ext` is
 included even though it can no longer be newly selected from `PresentModal` — a legacy declaration
 that already carries it is just as frozen as one presented through either currently-selectable path.
 
@@ -293,8 +294,8 @@ that already carries it is just as frozen as one presented through either curren
     change is frozen on its persisted snapshot instead and cannot drift.
   - Every action that could mutate or regenerate a submitted declaration is wrapped in
     `{!isSubmitted && (...)}` in the action bar: **Guardar**, **Calcular**, **"Generar fichero
-    303"/"Generar fichero 349"**, and **"Registrar/Presentar"**. Once a declaration is submitted,
-    the action bar reduces to just **Cancelar** and the status pill. `handleGenerate` on both pages
+    303"/"Generar fichero 349"**, and **"Registrar/Presentar"** (349: "Registrar presentación"). Once a declaration is submitted,
+    the action bar reduces to just **Cancelar** and the status chip (`FmStatusChip`). `handleGenerate` on both pages
     also re-checks `isSubmitted` at its own top (belt-and-braces, same double-check pattern already
     used for `missingRequiredFields`) and toasts `fm.validation.already_submitted` if reached
     anyway — the real defense-in-depth for a direct/malformed call is server-side (see below).
@@ -405,7 +406,7 @@ Modelo 349:
 them — the only component that could ever set them (`StatusPillMenu`/`StatusMenu` in
 `FmCommon.jsx`) was never wired into any real page and has been deleted.
 
-Status transitions are driven by the detail page action buttons. Clicking **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10, see the "Action bar" and "AEAT electronic submission" sections below) opens `PresentModal`, which offers **3 paths on Modelo 303** (`submitted_ack`, `submitted`, and the opt-in `aeat_telematic` sentinel card) and **2 on Modelo 349** (`submitted_ack`, `submitted` — 349 never passes `showAeatPath`). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
+Status transitions are driven by the detail page action buttons. Clicking **"Registrar/Presentar"** (on 349 "Registrar presentación" since ETP-5584 P14; renamed from "Marcar como 'Presentado'" — ETP-5229 item #10, see the "Action bar" and "AEAT electronic submission" sections below) opens `PresentModal`, which offers **3 paths on Modelo 303** (`submitted_ack`, `submitted`, and the opt-in `aeat_telematic` sentinel card) and **2 on Modelo 349** (`submitted_ack`, `submitted` — 349 never passes `showAeatPath`). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
 
 ### `submissionMethod` — telling apart the 3 paths that lead to "Presentado" (ETP-4755)
 
@@ -431,9 +432,9 @@ call `handlePresent` already made; an explicit `"submissionMethod": null` in tha
 
 **Surfaced in the UI** as a small sub-label next to the "Presentado" badge — only when
 `submissionMethod` is present and only for `submitted`/`submitted_ack` (never `submitted_ext`,
-which predates this column and carries no method): the list row's status cell (`StatusText` in
-`FmListPage.jsx`) and the detail page's "Estado: …" pill (`FmModel303Page.jsx` /
-`FmModel349Page.jsx`). A legacy declaration with no `submissionMethod` shows the bare status badge,
+which predates this column and carries no method): the list row's status cell and the detail action bar's status
+chip — both the shared `FmStatusChip` (`FmDetailChrome.jsx`; under the chip in the list, on the
+same line in the detail). A legacy declaration with no `submissionMethod` shows the bare status badge,
 unchanged — no placeholder or error text.
 
 ### Status badge text — `submitted_ack` reads as "Presentado", not "Presentado con acuse" (`statusLabelKey`, ETP-4755)
@@ -450,13 +451,33 @@ badge text is identical for `submitted` and `submitted_ack`; only the `submissio
 (when present) still tells them apart. The now-orphaned `fm.status.submitted_ack` locale key was
 removed from `en_US.json`, `es_ES.json`, and `es_AR.json`.
 
-**Duplicated, deliberately, in 4 places** — `FmListPage.jsx`, `FmCommon.jsx`, `FmModel303Page.jsx`,
-`FmModel349Page.jsx` — rather than exported once from `fiscalModelsUtils.js`. Adding it there would
-be the natural fix, but ~13 existing tests mock `fiscalModelsUtils.js` without expecting a new named
-export, and changing that surface just to dedupe 4 one-line functions was judged not worth the test
-churn. **Known maintainability tradeoff, logged as a follow-up, not fixed now:** a future 5th status
-value needs the same one-line edit applied in all 4 files, with nothing enforcing that they stay in
-sync.
+**Chip size = the invoice windows' chip (ETP-5584).** `FmStatusChip` has two variants:
+- **`list`**, the default, used in the "Estado" column. It renders core `StatusTag`, the very
+  component the generated invoice lists render (`DataTable.cellRenderers.jsx`): 12/16 text,
+  `4px 8px` padding and a pill radius. The `submissionMethod` sub-label sits under it.
+- **`detail`**, used in the 303/349 action bars. It copies the metrics of `DocumentStatusPill`,
+  the chip the generic DetailView shows next to Cancelar: 14/20 text, `4px 8px` padding, an 8px
+  radius, a `0 4px` label inset, and the tone's 16px `Check` icon for success only. The
+  sub-label sits to its right, on the same line.
+
+**Colours.** Both variants use the shared `TONE_STYLES` tokens (`status-tag-tokens.js`). A
+fiscal status maps onto an invoice tone through `fiscalStatusTone()`: `ready` and every
+submitted-family status are `success` (green), and everything else is `neutral` (grey).
+
+**Why the `detail` variant does not render `DocumentStatusPill` itself.** That component
+resolves its label with `useLocale()` from `@/i18n`. About 48 fiscal-models page tests mock
+`@/i18n` with only `useUI`, so reusing it would break all of them. Only its box metrics are
+restated, as `DETAIL_PILL_STYLE`. Keep it in step with `DocumentStatusPill`'s `PILL_STYLE`.
+
+**One implementation (ETP-5584).** `statusLabelKey` and the chip live once, in
+`FmDetailChrome.jsx` (`statusLabelKey`, `FmStatusChip`), rendered by the list's "Estado" column
+and both detail action bars. The four former copies (`FmListPage.jsx`'s `StatusText`, the
+`FmModel303Page.jsx` / `FmModel349Page.jsx` "Estado: …" pills, and `FmCommon.jsx`'s unused
+`StatusPill`) are deleted. A future status value is one edit in `FmDetailChrome.jsx`. Every status label, `submitted_ext` included, goes
+through its `fm.status.*` key: `fm.status.submitted_ext` reads "Presentado · otra plataforma" /
+"Submitted · other platform". Until ETP-5584 the chip hardcoded the Spanish "Presentado en otra
+plataforma" for that one status (a leftover from ETP-4170, not a deliberate exception), so it
+never translated.
 
 ## "Resultado" label — shared `deriveResultKind` (ETP-5187)
 
@@ -499,7 +520,9 @@ a zero amount) to "No result" — "Zero result" now correctly belongs to the new
 
 ### Stepper
 
-Three steps (0-based index):
+Not rendered: neither detail page mounts `Stepper`/`NumberedStepper` (`FmCommon.jsx` still exports
+both). The status is shown by the `FmStatusChip` in the action bar. The step mapping, kept for
+reference:
 
 | Step | Index | Status |
 |------|-------|--------|
@@ -509,35 +532,49 @@ Three steps (0-based index):
 
 ### Header breadcrumb (ETP-5597)
 
-The 303 and 349 detail pages draw their own header below the TopBar (they do not publish page
-meta), so their breadcrumb line — *Finanzas / Modelos Fiscales / Modelo 303 - 2026/T4* — is rendered
-by `FmBreadcrumb` (`FmBreadcrumb.jsx`). It takes the same item model as the TopBar breadcrumb
-(`normalizeBreadcrumb` in `components/layout/TopBar/breadcrumb.js`: a string or
-`{ label, href?, onClick? }` per level), so it behaves like the parent crumb of a generated
-window's detail (e.g. *Facturas de compra* back to its list): the **Modelos Fiscales** level is a
-link (`.fm-breadcrumb__link`, underline on hover) that returns to the declarations list. Its
+The 303 and 349 detail pages publish their breadcrumb to the app TopBar through
+`useFmDetailPageMeta` (ETP-5584, see "Detail page header, action bar…" below). It is published as
+the TopBar's structured item list (`components/layout/TopBar/breadcrumb.js`):
+`[ui('finance'), { label: ui('fm.breadcrumb.section'), onClick }, declTitle]`. Like the parent
+crumb of a generated window's detail (e.g. *Facturas de compra* back to its list), the TopBar
+renders the **Modelos Fiscales** level as a link that returns to the declarations list. Its
 `onClick` is the page's own back path — 303's `handleCancel` (discards unsaved edits exactly like
 **Cancelar**), 349's `onBack` — because these detail pages are a view state of `FiscalModelsPage`,
-not a route. *Finanzas* and the current page stay plain text; the visible text is unchanged. The
-list page keeps its plain *Finanzas / Modelos Fiscales* line (it is already the list).
+not a route. *Finanzas* and the current page stay plain text, and the visible text is unchanged
+("Finanzas / Modelos Fiscales / Modelo 303 - 2026/T4"). The list page keeps its plain
+*Finanzas / Modelos Fiscales* subtitle (it is already the list). (Before ETP-5584 moved the header
+into the TopBar, ETP-5597 had shipped an in-page `FmBreadcrumb` renderer for this; it was removed
+when the header moved.)
 
 ### Tabs
 
 | Tab | Content |
 |-----|---------|
-| Boxes | `FmBoxes303` — grid of fiscal box values |
-| Sources | Invoice rows that feed the boxes, filterable by incidents |
-| Files | Generated `.txt` file download |
-| Incidents | Blocking and warning validation messages |
-| Justificante (ETP-4456) | Generic `AttachmentsTab` bound to the `ETGO_Fiscal_Decl` record — see below |
+| Casillas (`boxes`) | `FmBoxes303` — grid of fiscal box values |
+| Facturas (`sources`) | Invoice rows that feed the boxes, filterable by incidents |
+| Incidencias (`incidents`) | Blocking and warning validation messages |
+| Justificante (`receipt`, ETP-4456) | Generic `AttachmentsTab` bound to the `ETGO_Fiscal_Decl` record — see below |
+
+There is no Files tab: the `.txt` file is produced by the "Generar fichero 303" action-bar button. Tab counters and empty states follow the shared rule in "Modelo 349 detail page › Tabs".
 
 A former 6th tab, **Historial** (`HistoryTab`), was removed together with this page's kebab menu (ETP-4755, see "List page toolbar" below) — the shared `HistoryTab` component was deleted from `FmTabContent.jsx` entirely, so it is gone for Modelo 349 too, not just 303.
 
 ### Action bar
 
-Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+**Current layout (ETP-5584) — supersedes the button ORDER described in the rest of this section.**
+**Left:** Cancelar and the status chip. **Right**, in this order: Calcular, Generar fichero 303,
+Guardar, and the primary **Registrar/Presentar**, right-most. Guardar sits right before the
+primary action, which is `saveActions.jsx`'s Save-before-Confirm order. The whole right group is
+hidden once submitted, so only Cancelar and the chip remain. All buttons
+render through `FmDetailButton` (`FmDetailChrome.jsx`). It wraps the app's `Button` at the
+`DetailCancelButton` size: `h-10 px-3 rounded-lg`, with a border-control outline, or the filled
+variant for the primary. The status chip is the list's own chip (`FmStatusChip`): the bare status,
+with no "Estado:" prefix. See "Detail page header, action bar and 1280×720 layout (ETP-5584)" below.
+The handlers, gates and data-safety behaviour described in the rest of this section are unchanged.
 
-**Guardar's position (ETP-5338 pt.6).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
+Left to right (pre-ETP-5584 order): **Cancelar** (`onBack`) and a status pill (since ETP-5584 the `FmStatusChip`), then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page has no in-page kebab: favourites and page help are in the app TopBar kebab (see "'More options' kebab — favorites and help").
+
+**Guardar's position (ETP-5338 pt.6; superseded by the ETP-5584 order above, where Guardar sits right before the primary action).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
 
 **"Guardar" replaces the earlier go-back button (ETP-5338 pivot).** The button in this slot started life as a go-back affordance (`ArrowLeft` icon, `handleGoBack`) that flushed pending edits and then navigated back to the list, same as "Cancelar" but data-safe. Product later decided the correct affordance here is a genuine **Save** — matching the rest of Etendo Go's Save-button convention (icon swap to a spinning `Loader2` while saving, disabled while saving, `toast.success`/`toast.error` feedback; see `saveActions.jsx`'s shared Save/Confirm buttons) — that persists the current data and **stays on the same declaration view**, rather than one more way to navigate away. `handleSave` is hidden entirely once the declaration is submitted (`!isSubmitted`, same gate as "Calcular"/"Registrar-Presentar") since there is nothing left to save on a filed declaration.
 
@@ -614,13 +651,13 @@ Fix, in `FmModel303Page.jsx`'s `handlePresent` (now `async`): it `await`s `persi
 
 **"Autoliquidación Rectificativa" LOOKS unchecked on an already-submitted declaration, even though the persisted value is `true` (ETP-5338, second, unrelated bug — pure rendering, not data).** Follow-up report after the pt.4 fix above: on a submitted declaration whose `manualData.identification.rectificativa` really is `true` (confirmed — the adjacent "Nº de justificante" text field on the same identification section showed its correct saved value), the checkbox itself still rendered visually unchecked in read-only mode. This is NOT a recurrence of pt.4 and NOT a hydration bug — `identChecks` is seeded correctly from `decl.manualData?.identification` on mount (`FmModel303Page.jsx` line ~220), `identification={{ ...orgIdent, ...identChecks }}` is passed straight through to `FmBoxes303`, and the native `<input type="checkbox">` really did have `checked={true}`/`aria-checked="true"` the whole time — verified with a source-level trace, not just the report. The bug was generic to the shared `Checkbox` component (`@etendosoftware/app-shell-core/components/ui/checkbox.jsx`, consumed here via `tools/app-shell/src/components/ui/checkbox.jsx`), not specific to this window or this field: the checked+disabled visual state used the identical `bg-muted` box class as unchecked+disabled, and the checkmark's `stroke` was hardcoded to `"white"` — invisible against the near-white `--muted` token (96% lightness in the light theme). Every other read-only checkbox in this window (`sin_actividad`, `baja_domiciliacion`, `redeme`, `concurso`, …) shared the exact same risk since they all rendered through the same component.
 
-A component-level fix for this exists in `schema_forge_core` (`packages/app-shell-core/src/components/ui/checkbox.jsx`, commit `a8b8384a0`: checkmark stroke changed to `currentColor` plus a `border-text-disabled` accent on the checked+disabled box class). **That fix is not what fiscal-models ships on.** Publishing it would require bumping `@etendosoftware/app-shell-core` in this repo (see `docs/repo-topology.md`), affects every OTHER consumer of the shared `Checkbox` too, and — critically — would have left fiscal-models with two coexisting checkbox implementations: the (now-fixed) shared `Checkbox` here, and the already-correct hand-rolled checkbox the Sales Invoice SIF tab (`SifTab.jsx`) used all along, which never had this bug because it dims the whole control via `disabled:opacity-50` instead of swapping the box/checkmark colors. The product decision was instead to **consolidate fiscal-models on the SIF tab's implementation**: it was extracted into `tools/app-shell/src/windows/custom/shared/CheckboxField.jsx` (a `<button role="checkbox">`, exported for reuse — `SifTab.jsx` now imports it too, replacing its former inline copy) and every checkbox in both Modelo 303 and Modelo 349 (`FmOverlays.jsx`, `FmListPage.jsx`, `FmModel349Page.jsx`, `FmBoxes303.jsx`, `AeatSubmitFlow.jsx`) was switched from `@/components/ui/checkbox`'s `Checkbox` (or, for `AeatSubmitFlow`'s `testMode` toggle, a raw `<input type="checkbox">`) to `CheckboxField`. Fiscal-models now has exactly one checkbox implementation, and it does not depend on a cross-repo publish to stay correct. The `schema_forge_core` fix (`a8b8384a0`) remains valid for other consumers of the shared `Checkbox`; whether to pursue publishing it is a separate, still-open decision. Two small pre-existing spots were deliberately left alone as out of scope: `FmOverlays.jsx`'s `CfgSection303` (dead code, never rendered) and the "keys" checkboxes in `CfgSection349` (uncontrolled `defaultChecked` placeholders with no `onChange`/state at all) — converting either to `CheckboxField` would mean inventing controlled state that doesn't exist today, which is a behavior change, not the pure visual swap this fix is scoped to.
+A component-level fix for this exists in `schema_forge_core` (`packages/app-shell-core/src/components/ui/checkbox.jsx`, commit `a8b8384a0`: checkmark stroke changed to `currentColor` plus a `border-text-disabled` accent on the checked+disabled box class). **That fix is not what fiscal-models ships on.** Publishing it would require bumping `@etendosoftware/app-shell-core` in this repo (see `docs/repo-topology.md`), affects every OTHER consumer of the shared `Checkbox` too, and — critically — would have left fiscal-models with two coexisting checkbox implementations: the (now-fixed) shared `Checkbox` here, and the already-correct hand-rolled checkbox the Sales Invoice SIF tab (`SifTab.jsx`) used all along, which never had this bug because it dims the whole control via `disabled:opacity-50` instead of swapping the box/checkmark colors. The product decision was instead to **consolidate fiscal-models on the SIF tab's implementation**: it was extracted into `tools/app-shell/src/windows/custom/shared/CheckboxField.jsx` (a `<button role="checkbox">`, exported for reuse — `SifTab.jsx` now imports it too, replacing its former inline copy) and every checkbox in both Modelo 303 and Modelo 349 (`FmOverlays.jsx`, `FmListPage.jsx`, `FmModel349Page.jsx`, `FmBoxes303.jsx`, `AeatSubmitFlow.jsx`) was switched from `@/components/ui/checkbox`'s `Checkbox` (or, for `AeatSubmitFlow`'s `testMode` toggle, a raw `<input type="checkbox">`) to `CheckboxField`. Fiscal-models now has exactly one checkbox implementation, and it does not depend on a cross-repo publish to stay correct. The `schema_forge_core` fix (`a8b8384a0`) remains valid for other consumers of the shared `Checkbox`; whether to pursue publishing it is a separate, still-open decision. Two small pre-existing spots were deliberately left alone as out of scope: `FmOverlays.jsx`'s `CfgSection303` (dead code, never rendered — since deleted, ETP-5584) and the "keys" checkboxes in `CfgSection349` (uncontrolled `defaultChecked` placeholders with no `onChange`/state at all) — converting either to `CheckboxField` would mean inventing controlled state that doesn't exist today, which is a behavior change, not the pure visual swap this fix is scoped to.
 
 This also closes a narrower, related gap: `handlePresent` calling `persistEditableFields()` can now race an already-in-flight Calcular/Guardar flush queued behind an earlier one (e.g. Guardar's PUT still open when the user immediately clicks Calcular, then immediately Registrar/Presentar). Both concurrent callers proceed independently — neither is deduped — and `useRecordWriteQueue`'s own single-flight `persist()` (`tools/app-shell/src/hooks/useRecordWriteQueue.js`) correctly serializes them: the second caller's write is coalesced into `queuedRef` and replayed once the first settles, rather than overlapping on the wire. In this specific interleaving that can mean one extra, content-identical PUT (the queued replay) beyond the minimum — harmless (same content, single-flight, no data loss) but a known follow-on effect, not eliminated here; see `FmModel303Page.explicitSaveSingleFlight.vitest.jsx`'s "flushes a queued save before filing the declaration, instead of dropping it" test, which drains every PUT this path can produce rather than asserting an exact count.
 
 **Regression test note:** `FmModel303Page.explicitSaveSingleFlight.vitest.jsx` used to have a test named "drops a queued save when the declaration is submitted while a PUT is open", asserting the OPPOSITE of the fix above — that a save queued behind an in-flight Guardar was dropped once the declaration got filed. That was the same bug from a different angle and has been replaced with "flushes a queued save before filing the declaration, instead of dropping it", which asserts the corrected behavior: the queued edit is flushed (not dropped), and the status transition — and the `onStatusChange` callback — wait for that flush to actually settle. The file's top-of-file "four properties" comment and property (3) were updated to match: (3) now covers only the session-ending case (`token`/`apiBaseUrl` going falsy mid-flight), which is unaffected by this fix and still legitimately drops the queued edit (there is nothing left to flush it to).
 
-**349's final toolbar: Cancelar (left) + Guardar, a deliberate no-op (ETP-5338 pt.5).** `FmModel349Page.jsx` originally got a go-back icon button (`ArrowLeft`, `handleGoBack`, `data-testid="FmModel349Page__goBack"`) next to Cancelar for visual/UX consistency across Modelo detail pages (ETP-5338 pt.1) — functionally identical to "Cancelar", since both just called `onBack` directly. Once the requirement widened to "every fiscal-models declaration gets a Guardar button" (not just 303, which already had an autosave to piggyback on), 349 was re-investigated with that wider bar in mind: a fresh grep of every `useState`/write path in the file confirms it has zero locally-edited, persistable declaration data — `keyFilter`/`searchQuery`/`selected`/`activeTab`/`viesBannerDismissed` are ephemeral view state, `liveOperators`/`liveInvoices`/`liveRectifications`/`liveRectifSummary` are read-only server-computed snapshots, and VIES validation (`handleValidateVies`) already persists its result server-side the instant it runs — there is no staged, unsaved state anywhere on this page. Rather than skip Guardar here (which would break the "every model" requirement) or fake a network call that flushes nothing, 349's `handleSave` is a deliberate **no-op confirmation**: it shows `toast.success(...)` immediately, with no PUT and no loading state, in the right-aligned toolbar position (leftmost of the primary-action group, before "Calcular"). Once Guardar existed, the old go-back button became pure duplication of "Cancelar" — both did the same `onBack` call, sitting side by side — so it was removed entirely: 349's toolbar now has exactly Cancelar on the left and Guardar (plus Calcular/Registrar-Presentar) on the right, no go-back affordance. This is intentionally honest rather than a misleading "unsaved work exists" affordance — clicking Guardar always "succeeds" because there is genuinely nothing that could fail. If 349 ever grows real locally-edited declaration fields, `handleSave` is the handler to wire an actual flush into. **Superseded:** ETP-5456 gave 349 a real persisted field (`sustitutiva`) and turned `handleSave` into a real `persistManualData` PUT; ETP-5597 added the persisted `formerStatement` and extracted the write path into `persistIdentChecks()`, which "Generar fichero 349" and "Registrar/Presentar" also call to flush unsaved edits first — see "349 'Tipo: Normal | Sustitutiva'" below.
+**349's toolbar: Cancelar (left) + Guardar (ETP-5338 pt.5). History only:** since ETP-5456, 349's `handleSave` does a real `persistManualData` PUT for the "Sustitutiva" flag (see "349 sustitutivas"), and since ETP-5584 the button order is the shared one in "Modelo 349 detail page › Action bar". `FmModel349Page.jsx` originally got a go-back icon button (`ArrowLeft`, `handleGoBack`, `data-testid="FmModel349Page__goBack"`) next to Cancelar for visual/UX consistency across Modelo detail pages (ETP-5338 pt.1) — functionally identical to "Cancelar", since both just called `onBack` directly. Once the requirement widened to "every fiscal-models declaration gets a Guardar button" (not just 303, which already had an autosave to piggyback on), 349 was re-investigated with that wider bar in mind: a fresh grep of every `useState`/write path in the file confirms it has zero locally-edited, persistable declaration data — `keyFilter`/`searchQuery`/`selected`/`activeTab`/`viesBannerDismissed` are ephemeral view state, `liveOperators`/`liveInvoices`/`liveRectifications`/`liveRectifSummary` are read-only server-computed snapshots, and VIES validation (`handleValidateVies`) already persists its result server-side the instant it runs — there is no staged, unsaved state anywhere on this page. Rather than skip Guardar here (which would break the "every model" requirement) or fake a network call that flushes nothing, 349's `handleSave` is a deliberate **no-op confirmation**: it shows `toast.success(...)` immediately, with no PUT and no loading state, in the right-aligned toolbar position (leftmost of the primary-action group, before "Calcular"). Once Guardar existed, the old go-back button became pure duplication of "Cancelar" — both did the same `onBack` call, sitting side by side — so it was removed entirely: 349's toolbar now has exactly Cancelar on the left and Guardar (plus Calcular/Registrar-Presentar) on the right, no go-back affordance. This is intentionally honest rather than a misleading "unsaved work exists" affordance — clicking Guardar always "succeeds" because there is genuinely nothing that could fail. If 349 ever grows real locally-edited declaration fields, `handleSave` is the handler to wire an actual flush into. ETP-5597 then added the persisted `formerStatement` and extracted the write path into `persistIdentChecks()`, which "Generar fichero 349" and "Registrar/Presentar" also call to flush unsaved edits first — see "349 'Tipo: Normal | Sustitutiva'" below.
 
 ### Sources tab — "Régimen" column removed (ETP-5187)
 
@@ -936,6 +973,36 @@ value. Flagged as a follow-up, not fixed here.
 ### Identification section (`tipo_declaracion` + bank data)
 
 The top of the Boxes tab shows the declaration type selector and, conditionally, the bank data section (`datos_bancarios`).
+
+**App Select, not the browser's `<select>` (ETP-5584).** Every `type: 'select'` identification
+field is rendered by `renderIdentSelectField` in `FmBoxes303.jsx`. That covers `tipo_declaracion`,
+`motivo_rectificacion` and the bank SEPA mark. All of them use the app's Radix `Select`
+(`@/components/ui/select`). The trigger keeps the `fm-aeat-ident-inline-field__select(--compact)`
+classes, which only size it now: border, height, padding and focus ring come from `SelectTrigger`.
+It also carries `data-testid="FmBoxes303__identSelect"` and `data-field-id`. Each option carries
+`data-option-value`. The Select is always **controlled**: an unset field is passed as `''`, never
+`undefined`, and shows `fm.ident.decl.placeholder` ("Seleccionar…") as the trigger placeholder. This
+is the same contract as the app's own optional selects (`SelectorInput`, `EntityForm`):
+- **Optional fields** also get a "Seleccionar…" item, so a value can be cleared again. Radix forbids
+  `''` as an item value, so the item uses the `__empty__` sentinel (`EMPTY_OPTION`), which
+  `onValueChange` maps back to `''`.
+- **Required fields** (`isFieldRequired`) get no clear item.
+- **Options not allowed right now** (ETP-5597 `disabledWhen`, e.g. tipo C/D/V/X while casilla 71 is
+  positive) are rendered as `disabled` items with their reason as `title`
+  (`resolveOptionDisabledReasonKey`: the rule that currently applies). The item
+  overrides the core `SelectItem`'s `data-[disabled]:pointer-events-none` with
+  `data-[disabled]:pointer-events-auto` so that title can show on hover; Radix still refuses to
+  select it. A value that
+  is already selected stays selected; the trigger gets `--invalid` / `aria-invalid` and the reason
+  shows under it (`fm-aeat-ident-<id>-error`) — except a value fixed by `autoValueWhen` (the
+  zero-only rule), which is set silently and never reported (see "Tipo de declaración vs. casillas
+  69/71" below).
+
+Tests drive it in two ways:
+- **Vitest:** mock the module with `__tests__/testUtils/nativeSelectMock.jsx`, which renders a
+  native `<select>`, so `fireEvent.change` still works.
+- **Playwright:** open the trigger and click `[role="option"][data-option-value="X"]`. See
+  `pickTipoDeclaracion` in `fiscal-models-303-identification.mocked.spec.js`.
 
 **`tipo_declaracion` options:** `C` (Compensación), `D` (Devolución), `I` (Ingreso), `U` (Domiciliación), `N` (Resultado cero), `V` (Devolución cta. corriente), `X` (Devolución transferencia extranjero). Since ETP-5597, the result boxes restrict which types can be chosen: `C`/`D`/`V`/`X` are disabled while casilla 71 is positive, and only `N` is allowed while casilla 69 is positive and casilla 71 negative — see "Tipo de declaración vs. casillas 69/71" below.
 
@@ -2162,11 +2229,76 @@ a boundary-legal value round-trips exactly), and two updated cases in `FmBoxes30
 ("percent cell input attributes" describe block) covering the new amount-cell decimal hard-stop
 and its digit-by-digit vs. one-shot-paste distinction.
 
+### Detail page header, action bar and 1280×720 layout (ETP-5584)
+
+Applies to both detail pages (303 and 349). The shared pieces live in `FmDetailChrome.jsx`:
+`useFmDetailPageMeta`, `FmDetailHeader`, `FmDetailActionBar`, `FmDetailButton` and `FmStatusChip`.
+
+**The declaration title is in the app TopBar**, at the same place as the list's "Modelos
+Fiscales" title. There is no in-page title row. `useFmDetailPageMeta` publishes it through the
+same `useSetPageMeta` the list uses:
+
+| TopBar slot | Value |
+|---|---|
+| `title` | "Modelo 303 - 2026/T1", "Modelo 349 - 2026/T4" — `buildDeclTitle(modelTitle, decl, bcpLocale)`, the one format every model uses: `<model title> - <year>/<period>` via `formatDeclPeriod` (a monthly period shows its month name in the UI locale, e.g. "2024/octubre") |
+| `breadcrumb` (subtitle) | "Finanzas / Modelos Fiscales / Modelo 303 - 2026/T1" — published as items; "Modelos Fiscales" is a link back to the list (see "Header breadcrumb (ETP-5597)") |
+| `titleExtra` (next to the title) | the model badge: the same `.fm-model-badge fm-model-badge--303` / `--349` element the list's model column renders |
+| kebab (⋮) | `onAddToFavorites` + `isFavorite` (favourite `fiscal-models`) and `onPageHelp` (support chat "Ayuda" tab) — the same two items the old in-page kebab had (that component, `MoreOptionsMenu`, is deleted) |
+
+The badge uses `titleExtra` because it is the TopBar's only adornment slot for arbitrary content.
+`financial-account` uses the same slot for its sync status. `recordCount` was not used: it is a
+count, not a label. The badge renders after the title, not before it as the old in-page row did.
+
+**Hand-over between list and detail.** The list stays mounted (hidden) while a detail page is
+open. It publishes its meta from a `ListPageMeta` child that renders only while `active`, so the
+list never touches the TopBar while hidden.
+- **Opening a declaration:** `ListPageMeta` unmounts and withdraws the list meta once, then the
+  detail publishes its own.
+- **Cancelar:** the detail unmounts and withdraws its meta, then `ListPageMeta` mounts again and
+  re-publishes the list meta.
+- **Opening another declaration:** the title updates through `useSetPageMeta`'s `title` dependency.
+
+Before this, the hidden list published `{}`. Because `useSetPageMeta`'s cleanup resets the TopBar
+on every dependency change, a list poll that changed `decls.length` would have wiped the detail's
+title.
+
+`FmDetailChrome.jsx` is a separate module, not part of `FmCommon.jsx`, on purpose. About 45 page
+tests mock `FmCommon.jsx` with an explicit export list, and any new `FmCommon` export would have to
+be added to every one of those mocks before the pages render at all.
+
+- **The action bar never scrolls away.** The page root is `.fm-page.fm-page--detail`, a
+  non-scrolling flex column. It holds two children:
+  - `FmDetailHeader` (`.fm-detail-header`): the action bar, the first row of the page. It sits
+    outside the scroll and is always visible. The title is in the app TopBar.
+  - `.fm-page--freeflow.fm-detail-scroll`: the one scrolling element. It holds the banners, the
+    KPIs, the tabs and the tab content.
+
+  The KPI cards scroll away, and the tabs bar sticks right under the header. Before this change,
+  `.fm-page` itself scrolled, so the title and buttons were lost as soon as the user scrolled.
+  Because `.fm-detail-scroll` starts under the header, the existing sticky offsets keep working
+  unchanged: `.fm-tabs-sticky` `top: 0`, 303's section nav `top: 49`, and 349's filter row `49` and
+  totals `97px`. A future sticky element must be measured against `.fm-detail-scroll`.
+- **1280×720.** With the title in the TopBar, the action bar is the only fixed row, about 60px tall.
+  Once the KPIs scroll away, the 303 Liquidación section gets about 540px for its rows, against one
+  visible row before ETP-5584. Compact casilla
+  cells (Liquidación, Información adicional, Resultado) take their width from
+  `--fm-aeat-cell-w`: 180px by default, and 150px at viewport widths of 1440px or less. That leaves
+  the row labels room on a 1280px screen with the app sidebar open, so they no longer wrap onto 3
+  lines. Row labels in compact sections keep `min-width: 200px`. The group bracket is positioned
+  from the same variable: `right: calc(3 * var(--fm-aeat-cell-w) + 28px)`.
+- **KPI gutter (303).** The KPI row uses the same 20px side gutter as the header, so the cards line
+  up with the Cancelar and Registrar/Presentar edges. 349's KPI row got the same gutter in P10:
+  see "Modelo 349 detail page › KPIs".
+- **"Información adicional" heading.** The heading row (`.fm-aeat-subheading`, the "Exclusivamente
+  para aquellos sujetos pasivos…" sentence) now uses the column-header label typography
+  (600 14/20), down from 700 18/28.
+
 ### Sticky sections while scrolling (ETP-5456, layout follow-up)
 
-The 303 and 349 detail pages both use "free-flow" scrolling — `.fm-page--freeflow` makes
-`.fm-page` itself (`overflow-y: auto`) the one real scrolling ancestor for the whole detail
-view, instead of each tab/panel scrolling independently. On both models, the tabs bar
+The 303 and 349 detail pages both use "free-flow" scrolling — `.fm-page--freeflow` makes one
+element (`overflow-y: auto`) the one real scrolling ancestor for the whole detail view (since
+ETP-5584 that element is `.fm-detail-scroll`, under the fixed action bar; before, it was
+`.fm-page` itself — read "`.fm-page`" below as "the scrolling element"), instead of each tab/panel scrolling independently. On both models, the tabs bar
 (`.fm-tabs-sticky`, `position: sticky; top: 0`, from the shared `Tabs` component in
 `FmCommon.jsx`) already stuck to the top of that scroll; the identification/liquidación
 navigation and the summary panels next to the tables did not, and would scroll away with the
@@ -2224,8 +2356,8 @@ stretches to match the table) — not a repeat of the padding/margin hack, which
 with `position: sticky` on a flex item.
 
 **If a future change reintroduces this bug class** (a sticky region that "isn't sticking"),
-check, in order: (1) every ancestor between it and `.fm-page` for `overflow` other than
-`.fm-page` itself, plus `transform`/`filter`/`contain` — any of those creates a new containing
+check, in order: (1) every ancestor between it and `.fm-detail-scroll` for `overflow` other than
+`.fm-detail-scroll` itself, plus `transform`/`filter`/`contain` — any of those creates a new containing
 block or scrollport and breaks `position: sticky`; (2) whether its flex-row parent has
 `alignItems: 'flex-start'` — `stretch` (the default) silently defeats sticky the same way; (3)
 whether any sibling sticky element's `top` value still accounts for the combined height of
@@ -2497,6 +2629,102 @@ resurfaced the stale path-selection screen instead of returning to the main page
 
 **Gap (not addressed, flagged rather than guessed):** the response's own `declarationData` (server-parsed NIF/businessName/etc.) is returned but not re-displayed on the result screen — the confirm screen already shows the equivalent client-known data, so this was a deliberate scope trim, not an oversight.
 
+### Popups — layout, stable size and 1280×720 (ETP-5584)
+
+`PresentModal` (303: "Registrar/Presentar"; 349: `fm.present.title_register_only`, "Registrar
+presentación", see "349 popup is 'Registrar presentación'"), `AeatSubmitFlow` ("Presentación telemática
+AEAT") and the `ConfigDrawer` modal are built on the window's standard `.fm-config-modal` shell
+(header / scrollable body / footer, 20px gutters) — the same shell as `NewDeclModal`,
+`FileGenModal` and `FileGenModal303`. They do not use the Radix `Dialog` from
+`@/components/ui/dialog`, and neither does any other fiscal-models modal; moving one popup alone
+would leave the window with two modal systems.
+
+**Rule: picking an option never changes a popup's size.** Content that an option reveals has its
+space reserved from the start:
+
+| Popup | Revealed by | How the space is reserved |
+|---|---|---|
+| `PresentModal` | "Con acuse de recibo" → "Subir justificante (PDF)" row | While the row is hidden, `PresentModalColumn` renders an empty `.fm-present-acuse-slot` after the card stack. The row (`.fm-present-acuse-upload`) and the slot take their height from the same CSS variables (`--fm-acuse-upload-h` + `--fm-acuse-upload-gap`), so one replaces the other with no change in height. The upload button never wraps: a long file name is ellipsized, and the full name is in its `title`. |
+| `AeatSubmitFlow` | "Validar sin presentar" → test-mode warning | The warning banner is always laid out inside `.fm-aeat-testmode-slot` and only its `visibility` toggles (`--visible` modifier). `visibility: hidden` keeps the banner's real box, so the reserved space always matches it, in any locale. The slot is `aria-hidden` while unchecked. |
+
+Not covered by the rule: the red `connError` banner in `AeatSubmitFlow` (IBAN/NRC required,
+connection failure). It only appears after a submit attempt, and the body scrolls to fit it.
+
+**Width.** `PresentModal` gets its width from the stylesheet: `.fm-present-modal` is 500px (349, a
+single column) and `.fm-present-modal--two-col` is 760px (303, with the "Presentar a la AEAT"
+column). It used to be an inline `max-width`. A legacy `.fm-present-modal` rule block from the
+pre-redesign modal (22px/24px padding, `min-width: 420px`) was deleted. It still matched the
+redesigned modal's root, so the modal had double padding on top of the `.fm-config-modal` gutters.
+
+**AEAT fields.** "NIF del presentador", "Nombre del presentador" and "NRC" are full-width,
+stacked (`.fm-aeat-fields` / `.fm-aeat-field`), each with its `<label htmlFor>`. The inputs are
+the shared `Input` (`@/components/ui/input`), so text and placeholder use the app's standard
+typography. They used to be fixed at 376px, and the NRC placeholder was monospace.
+
+**Viewport (1280×720).** `.fm-config-modal` is capped at `calc(100dvh - 32px)` (16px gutter top and
+bottom; `100vh` is the fallback). Its header and footer have `flex-shrink: 0`, so only the body
+scrolls and the footer actions are always on screen. The two popups above also drop the body's
+generic `min-height: 360px` (`.fm-present-modal`/`.fm-aeat-modal .fm-config-modal__body`), so a
+short viewport shrinks the body instead of pushing the footer off-screen. Measured in a headless
+browser: `PresentModal` is 436px tall in every state and at 1680×1000, 1280×720 and 1280×560.
+`AeatSubmitFlow` is 690px tall at 1680×1000 in both states. At 1280×720 it reaches the cap
+(688px), and its body scrolls by a couple of pixels — more once the declarant's NIF and IBAN rows
+are filled. The footer stays fully visible in every case.
+
+**No native selects.** The `ConfigDrawer` pickers (Prorrata on the 303 tab; Periodicidad and
+"Preferencia VIES" on the 349 tab) use the app's `Select` through a local `CfgSelect` helper. Its
+`SelectContent` is lifted to `z-[110]`, above `.fm-modal-overlay`. They stay uncontrolled
+(`defaultValue`), as the native ones were, because these options are not persisted yet. The dead
+`CfgSection303` (never rendered) was deleted.
+
+**Justificante formats — one constant (ETP-5584 P13).** `RECEIPT_ATTACHMENT_CONFIG`
+(`fiscalModelsUtils.js`, `{ allowedMimeTypes: ['application/pdf'], allowedExtensions: ['pdf'] }`)
+is the only list of formats for a declaration's justificante. Every place that states or
+enforces them derives from it:
+
+| Where | Derived how |
+|---|---|
+| "Justificante" tab, 303 and 349 (`AttachmentsTab config=`) | Dropzone filter and the "Formatos compatibles: …" text (`buildTypesLabel` inside `AttachmentsTab`) |
+| `PresentModal` "Subir justificante ({types})" button | `fm.present.upload_acuse` now takes a `{types}` param, filled with `buildTypesLabel(RECEIPT_ATTACHMENT_CONFIG, t)` |
+| `PresentModal` file input `accept` | `buildAcceptAttribute(RECEIPT_ATTACHMENT_CONFIG)` → `application/pdf,.pdf` |
+| `PresentModal` picked file | `isFileTypeAllowed(file, RECEIPT_ATTACHMENT_CONFIG)`. `accept` alone is only a hint the "All files" picker option bypasses, so a rejected file shows the dropzone's own `attachmentsInvalidType` toast and is never kept (Confirmar stays disabled, nothing is uploaded). |
+
+Before this, the popup said "PDF/XML", accepted `.pdf,.xml` and uploaded whatever was picked,
+while the tab said "PDF".
+- **Why PDF:** the AEAT justificante is a PDF. The telematic flow stores AEAT's own
+  `pdfBase64`, and ETP-4456 restricted the tab to PDF on purpose. The "Con acuse" card already
+  said "Sube el justificante PDF".
+- **What the backend accepts:** the backend attachment policy (`NeoAttachmentPolicy`,
+  `GET /sws/neo/attachments/config`) accepts XML too, for every attachment. So it still rejects
+  only what is outside its own list, and the client-side check is not a security control.
+- **How to change the list:** adding a format means adding it to the constant, which updates the
+  tab, the label, `accept` and the check together. The tab only lists and downloads files (no
+  preview), so it can show any format the backend stores.
+
+**349 popup is "Registrar presentación" (ETP-5584 P14).** Modelo 349 has no telematic
+submission:
+- `Fiscal349BoxesHandler#dispatch` has no `submit` entity.
+- There is no `AEAT349SubmissionService`.
+- `org.openbravo.module.aeat349.es` only generates the file.
+- See "Modelo 349 has no telematic submission path" above.
+
+`FmModel349Page` never passes `showAeatPath`. Without it, the popup:
+- is titled `fm.present.title_register_only` ("Registrar presentación" / "Register submission");
+- drops its single column's heading, which would only repeat the title (the description stays).
+
+The 349 trigger button uses `fm.action.present`, which no other screen uses. Its value changed
+from "Registrar/Presentar" to "Registrar presentación" in `en_US`, `es_ES` and `es_AR`, with no
+JSX change. The 303 trigger (`fm.action.submit`) and title (`fm.present.title`) keep
+"Registrar/Presentar", because 303 does offer the AEAT path.
+
+Tests: `__tests__/FmOverlays.vitest.jsx` ("PresentModal — stable size when an option is
+picked", two-column width variant, title per variant, justificante formats),
+`models/349/__tests__/FmModel349Page.receiptTab.realAttachments.vitest.jsx` (real modal + real
+upload: `accept`, XML rejected with no POST, PDF uploaded), `__tests__/FmOverlays.coverage.vitest.jsx` (ConfigDrawer: no
+native `<select>`), and `models/303/__tests__/AeatSubmitFlow.vitest.jsx` (test-mode slot,
+full-width shared `Input`). jsdom has no layout, so these tests check that the slot and the
+revealed content swap places. That the height stays the same was checked in a real browser.
+
 ### Base64 PDF download helpers (`fiscalModelsUtils.js`)
 
 `base64ToBlob(base64, mimeType = 'application/pdf')` and `triggerBase64Download(base64, downloadName, mimeType)`
@@ -2539,10 +2767,9 @@ item's split-and-revert) was deleted from both locale files rather than left dan
 
 ### "Justificante" tab — AEAT receipt storage (ETP-4456)
 
-A tab (`receipt`, labeled via `fm.tab.receipt`) is the last of the 5 tabs, positioned right after
-Files (the former Historial tab that used to sit here was removed, see "Tabs" above), and shows a
+A tab (`receipt`, labeled via `fm.tab.receipt`) is the last tab on both models and shows a
 generic `AttachmentsTab` (`@/components/attachments`) bound to `tableName="ETGO_Fiscal_Decl"` /
-`recordId={decl.id}`, restricted to `allowedMimeTypes: ['application/pdf']`. It surfaces **both**
+`recordId={decl.id}`, restricted to PDF through `RECEIPT_ATTACHMENT_CONFIG` (`fiscalModelsUtils.js`, ETP-5584 — see "Justificante formats" under "Popups" below). It surfaces **both**
 kinds of AEAT justificante a declaration can end up with:
 
 - **Automatic** — on a successful telematic submission (`AeatSubmitFlow`), AEAT returns the
@@ -2556,7 +2783,7 @@ kinds of AEAT justificante a declaration can end up with:
   touches `DeclarationStatus` or `DeclarationFileName`; no setter is called on the declaration and
   it is never saved. Because production signals via the status change but test mode has no such
   signal, the client can't rely on "a status change just succeeded" alone to know when to refresh
-  — see `onAttached`/`receiptRefreshTick` below for how the tab actually detects both cases.
+  — see `onAttached` below for how the tab and its counter detect both cases.
 - **Manual** — `PresentModal`'s "Presentación con Acuse de recibo" path (`submitted_ack`) lets the
   user upload their own acuse-de-recibo file. Previously this `acuseFile` was accepted by the UI but
   silently discarded (`FmModel303Page.handlePresent` only destructured `{ status: newStatus }` from
@@ -2581,53 +2808,42 @@ end-to-end: the dated section in
 `../plans/2026-07-15-ETP-4456-aeat-303-electronic-submission.md`.
 
 **Why `key={status}` on the tab's `AttachmentsTab`:** `status` is local state that changes on
-`handleStatusChange`/`handleTelematicSuccess` (i.e. exactly when a submission succeeds). Since the automatic AEAT attach is
-invisible server-side, remounting the tab (and its internal `useAttachments` fetch) on every status
-change is the only way for the tab to notice the new file without inventing a separate manual-refresh
-mechanism. **Known accepted edge case (Alex REVIEW, W3):** if `status` changes concurrently from
+`handleStatusChange`/`handleTelematicSuccess` (i.e. exactly when a submission succeeds), so the tab
+remounts and re-lists on every status change. Since ETP-5584 a server-side attach is also announced
+on the attachments bus (see "Refresh decoupled from `status`" below), so the remount is no longer
+the only refresh path. **Known accepted edge case (Alex REVIEW, W3):** if `status` changes concurrently from
 somewhere else while an upload through this tab is still in flight, the remount can drop the
 in-progress upload's own completion toast — the file still lands server-side (the upload request
 itself is unaffected by the remount), only the UI feedback for that one upload is lost. Narrow and
 accepted as-is; not fixed in this increment.
 
-**Known limitation, verified while implementing this (contradicts the original assumption):** the
-`useAttachments` hook accepts an `isActive` parameter but does **not** currently gate its eager
-`list()` fetch on it — `isActive` is destructured in the signature but never read in the effect that
-triggers the initial GET (`src/components/attachments/useAttachments.js`). This means the
-`isActive: false` instance `FmModel303Page` keeps mounted purely to grab `upload()` for the manual
-path still fires a (discarded) GET to `/sws/neo/attachments/ETGO_Fiscal_Decl/{recordId}` on every
-detail-page mount, in addition to the "Justificante" tab's own fetch when that tab is opened. This is
-extra, wasted network traffic, not a correctness bug (uploads still work), and is a pre-existing gap
-in the shared hook — not fixed here since `useAttachments` is consumed by several other windows
-(including `goods-receipt`) and changing its gating semantics needs its own audit across all
-consumers. Flagged as a follow-up for whoever owns
-`tools/app-shell/src/components/attachments/`. **Amplification noted by Sentinel QA (LOW,
-informational):** opening the "Justificante" tab fires its own GET on top of the always-mounted
-`isActive: false` instance's discarded one — i.e. two GETs per detail-page visit where one is
-expected, pure amplification of the same root cause above, not a separate bug.
+**Resolved limitation (history):** an eager-fetch gap was closed by ETP-4564 —
+`useAttachments` now honours `isActive: false` (no list fetch until the tab opens), and the page's
+instance only prefetches the lightweight count (`prefetchCount: true`, ETP-5584). Before that,
+the `isActive: false` instance kept only for `upload()` fired a discarded list GET on every
+detail-page mount, on top of the tab's own GET.
 
-**Refresh decoupled from `status` for test-mode successes.** The tab's `AttachmentsTab` remounts
-(forcing a fresh fetch) on `key={`${status}-${receiptRefreshTick}`}` instead of `key={status}`
-alone. `status` still covers production successes (`handleTelematicSuccess`). `receiptRefreshTick` is a
-counter bumped by `handleAeatAttached` (`FmModel303Page.jsx`), which `AeatSubmitFlow` calls via a new
-`onAttached` prop whenever the backend response carries `pdfBase64` — for both `SUCCESS` and
-`TEST_SUCCESS`. This lets a test-mode submission (which now also gets a PDF attached server-side)
-refresh the Justificante tab without changing the declaration's status, preserving the hard
-invariant that test mode never alters `status`.
+**Refresh decoupled from `status` for test-mode successes.**
+- `AeatSubmitFlow` calls `onAttached` whenever the backend response carries `pdfBase64`, for both
+  `SUCCESS` and `TEST_SUCCESS`.
+- 303's `handleAeatAttached` responds by announcing the attach on the attachments bus
+  (`notifyAttachmentsChanged`). The counter and, if it is mounted, the tab refresh without any
+  status change, so test mode still never alters `status`.
+- The tab also remounts on a status change (`key={status}`). The bus replaced a remount-key tick
+  (ETP-5584); see "Modelo 349 detail page › Tabs › Tab counters".
 
 **Other accepted, non-blocking findings from this increment's REVIEW/QA:**
-- **Client-side MIME gate is a UX hint only (Alex REVIEW, W1).** `config={{ allowedMimeTypes:
-  ['application/pdf'] }}` only steers the file picker and shows a client-side rejection message —
+- **Client-side MIME gate is a UX hint only (Alex REVIEW, W1).** `config={RECEIPT_ATTACHMENT_CONFIG}`
+  (PDF only) only steers the file picker and shows a client-side rejection message —
   there is no server-side MIME/magic-byte enforcement anywhere in the shared attachments stack. This
   is a pre-existing, cross-cutting gap (not introduced by this change) and is **not a security
   control** — do not rely on it to keep non-PDF files out of this store.
 - **No defensive test for `decl.id` falsy on mount (Sentinel QA, LOW).** Confirmed unreachable via
   every current call site into `FmModel303Page` (a declaration always has an id by the time this
   page renders), so left uncovered rather than adding a test for an unreachable branch.
-- **No badge/count on the "Justificante" tab (Alex REVIEW, cosmetic suggestion, not applied).**
-  Unlike Files (`decl.file ? 1 : null`) or Incidents, the tab has no attachment-count indicator.
-  Deferred — would need a lightweight count endpoint or a client-side list call just to render the
-  badge, judged not worth it for this increment.
+- **No badge/count on the "Justificante" tab — superseded.** Deferred in ETP-4456; ETP-5584 added
+  the counter (lightweight `/count` via `prefetchCount`, see "Modelo 349 detail page › Tabs › Tab
+  counters").
 
 ### Justificante delete blocked outside draft status (ETP-5432 pt.3)
 
@@ -2755,6 +2971,66 @@ operator rows and the key filter have one colour source.
 
 ### Tabs
 
+**Counters, empty states and the sticky column header (ETP-5584).** The counter and empty-state
+rules apply to both 303 and 349.
+
+- **Tab counters (P12).**
+  - The rule: every tab that lists records shows its count, 0 included, in the shared
+    `.fm-tabs__badge` counter (`tabCount` in `FmDetailChrome.jsx`). The counter is hidden only
+    while the number is still unknown (`null`), and never shown as a fake 0.
+  - **Tabs with a counter.** 303: Facturas, Incidencias, Justificante. 349: Operadores,
+    Rectificaciones, Facturas origen, Incidencias, Justificante.
+  - **Casillas** (303) is a form, not a list, so it has no counter.
+  - **Incidencias** counts blocking + warning, which is what the tab lists, on both models
+    (`incidentsTabBadge`). The tone is `danger` if anything blocks, else `warn`. Before this, 349
+    counted blocking only, and both models hid the counter at 0.
+  - **Justificante** reads the lightweight attachment count: `useAttachments({ isActive: false,
+    prefetchCount: true })` in the page. The attachments bus keeps it fresh after an upload or a
+    delete. The attachment list itself is still fetched only when the tab opens.
+  - **Receipts attached by the server (ETP-5584)** also update the counter right away. On a
+    successful telematic submission, both production SUCCESS and "Validar sin presentar"
+    TEST_SUCCESS, the backend attaches the AEAT receipt PDF itself. `AeatSubmitFlow` then calls
+    `onAttached`, and 303's `handleAeatAttached` announces the attach with
+    `notifyAttachmentsChanged({ tableName: 'ETGO_Fiscal_Decl', recordId })`. It passes no `source`,
+    so no view treats the attach as its own write.
+  - Each view then reloads through `useAttachments`' own `onExternalChange`. The page-level hook
+    invalidates the shared cache and re-reads `/count`, which updates the counter. A mounted
+    "Justificante" `AttachmentsTab` reloads its list.
+  - This replaced a remount-key tick (`receiptRefreshTick`) that refreshed only the tab, never the
+    counter. The tab still remounts on a status change (`key={status}`).
+  - A manual "Con acuse de recibo" registration needs nothing extra: the page uploads the file
+    through its own `useAttachments` instance, whose `upload()` re-reads the count itself.
+  - Only 303 has a telematic path; 349 is register-only.
+- **One empty state (P11).**
+  - `FmEmptyState` (`FmDetailChrome.jsx`, re-exported by `FmCommon.jsx` as `EmptyState`) is the
+    single icon + title + text block. Every tab that can be empty renders it:
+
+    | Tab | Icon | Title | Text |
+    |---|---|---|---|
+    | Facturas / Facturas origen | `ReceiptText` | `fm.sources.empty` | `fm.sources.empty_sub` |
+    | Incidencias | `CircleCheck` | `fm.incidents.empty` | `fm.incidents.empty_sub` |
+    | Rectificaciones | `FileEdit` | `fm.m349.rectif.empty_title` | `fm.m349.rectif.empty` |
+    | Operadores | `Users` | `fm.m349.operators.empty` | `fm.m349.operators.empty_sub` |
+
+    Operadores shows the empty state under the column header. When a filter or search leaves
+    nothing, the title is `fm.m349.operators.no_match` instead.
+  - The operator "origin" filter empties use the same component, with the filter message as the
+    title.
+  - **Why no app-wide component is reused.** The app has no shared generic empty-state
+    component: `LinesEmptyState` is specific to adding lines, and `AttachmentsTable`'s empty row
+    is inline markup.
+  - **Justificante** keeps the app's own `AttachmentsTab` empty state, which is also an icon plus
+    a text. Its wording belongs to the formats work (P13).
+- **Sticky operators column header (P15).**
+  - The operators table's `<th>` row (NIF-IVA, Operador…) is `position: sticky; top: 97px`
+    (`.fm-349-ops-table thead th`). That docks it under the tabs bar (49px) and the filter row
+    (48px), alongside `.fm-349-totals`.
+  - Its wrapper, `.fm-349-ops-wrap`, overrides `.fm-table-wrap`'s `overflow: auto` with
+    `visible`. A never-scrolling `overflow: auto` box would otherwise capture the sticky header.
+  - Together with the fixed action bar, scrolling the operators keeps the action bar, tabs,
+    filters and column header all visible. Measured at 1280×720: the header lands at
+    `scroll top + 97px`.
+
 - **Operadores** — operator table with key filter chips and live name/NIF-IVA search. Null `name`/`nif` fields are guarded (`?? ''`) before case-folding to avoid runtime crashes. Each row's "Origen" summary (`FmModel349Page.originByNif`) is keyed by the composite `(nifIva, key)`, not `nifIva` alone — the same counterparty can legitimately appear as two separate operator rows under two different AEAT349 keys (e.g. one row under `E` — Entregas, another under `I` — Servicios recibidos), so each row's origin count now reflects only the invoices that belong to that row's own key (ETP-4755).
 - **Rectificativas en Operadores (ETP-5027)** — `/fiscal349/operators` now also returns *corrective* operator rows inside the same `operators` array (ordered after all regular rows), plus a sibling `rectificativeSummary` object. Every row carries a `rectificative` boolean (`false` on regular rows, never omitted), so badging needs no `undefined` handling; `isRectificativeOp()` in `FmModel349Page.jsx` only normalizes the boolean/string shapes NEO can emit.
   - **The amounts are signed deltas and are usually NEGATIVE** — a rectification removing 3 units of a 10 EUR product reports `-30`. They are rendered through `formatAmount` (which delegates to the canonical `formatCurrency('EUR', …)`) and are **never** `Math.abs()`'d: a negative subtotal is the expected, valid case, tinted via `.fm-349-amount--negative` for legibility only, not as an error state.
@@ -2767,10 +3043,17 @@ operator rows and the key filter have one colour source.
   - i18n: `fm.m349.rectificative` ("Rectificativa") and `fm.m349.rectif_subtotal.title` ("Subtotal rectificativas"), in both locales. (`fm.m349.rectif_subtotal.total` was removed together with the grand-total row.)
   - **Corrective rows are marked by the `RectificativeBadge` alone — there is no row-background tint.** The first pass also tinted the whole `<tr>` amber (`.fm-349-row--rectificative`); the functional owner reviewed it on screen and rejected it as too heavy across a full-width table, so both the class usage and its CSS rule were removed. Do not reintroduce a row tint. The rows still carry `data-rectificative="true"`, which is a test/selector hook, not styling.
 - **Facturas origen** — source invoice drill-down. Clicking an operator's origin link pre-filters by the composite `(nifIva, key)` of the row that was clicked, not by NIF-IVA alone (see the per-key origin scoping above). The active filter is rendered as a removable chip labelled `fm.m349.origin_filter.operator` ("Operador {nif}") with a `fm.m349.origin_filter.clear` clear action, plus a count badge. Each invoice row carries an AEAT349 classification key (`E`/`S`/`A`/`I`), resolved server-side by `Fiscal349BoxesHandler#resolveInvoiceKeyBases` (formerly `resolveInvoiceKeys`) — this is what the Operadores tab's per-key origin scoping (above) relies on. Since ETP-5597 an invoice mixing goods and services produces **one row per key** — see "Mixed goods + services invoices and the 'Facturas origen' rows (ETP-5597)" below. The table hides the 303-only Cuota/Total/Casillas columns (`showTaxColumns={false}`, see "Sources tab — relabelled columns…" in the 303 section). **Clave column, no Tipo column (ETP-5597, QA observation + round 8).** A "Clave" column (`fm.m349.col.key`, the same label as the Operadores table) shows each row's `key` rendered **exactly like the Operadores Clave cell** — both use the shared `KeyCell` component in `FmModel349Page.jsx` (`KeyBadge` with the `.fm-key--{k}` colours + the `fm.m349.key.{k}` description) — so the two rows of a mixed goods + services invoice (E + S, A + I) can be told apart; a row with no key shows "—". The generic "Tipo" (Compra/Venta) column is **hidden** in this table, since the key already says it, and the Clave column takes its place. Both are opt-in `SourcesTab` props passed only by `InvoicesTabContent`: `keyColumn={{ label, render(row) }}` and `hiddenColumns={['type']}` (the empty-filter row's `colSpan` follows the visible columns). The 303 "Facturas" table passes neither and is unchanged (Tipo kept, no Clave). A presented declaration served from its submission snapshot keeps no per-invoice rows at all (`InvoiceDetailNotKept`), so the column only exists on live (draft/ready) declarations; the snapshot format was not changed.
-- **Incidencias** — badge = blocking + warning, tone from the shared severity helper (ETP-5597, see "Incidents severity" under the list page).
-- **Rectificaciones / Ficheros** — coming soon.
+- **Rectificaciones** — the period's rectifications (`rectifications`). **Incidencias** — blocking and warning validation messages; badge = blocking + warning, tone from the shared severity helper (ETP-5597, see "Incidents severity" under the list page). **Justificante** — the same `AttachmentsTab` as 303 (see "'Justificante' tab" above). There is no Ficheros tab: "Generar fichero 349" is an action-bar button.
 
 ### KPIs
+
+**Layout (ETP-5584).**
+- **P10:** the KPI row has the same `12px 20px` padding as 303's, so the cards line up with the
+  action bar and the content. They used to overhang both by 12px on each side.
+- **P15:** `KpiWidget` (`FmCommon.jsx`, shared by the list, 303 and 349) keeps the label and the
+  badge on one line. The label is `nowrap` and ellipsises, with the full text in its `title`. The
+  badge is `nowrap` and never shrinks. At 1280×720, "Total operaciones / Base total", "Periodos
+  previos" and "Pendientes VIES / Sin validar" used to wrap onto two lines.
 
 Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sourced from `_precomputed.operators`. Each operator's `vies` value (`'valid'`/`'invalid'`/`'pending'`, driving both the Operadores row badge and the Pendientes VIES count) is derived server-side by `Fiscal349BoxesHandler#mapViesStatus` from the operator's BusinessPartner VIES status (`C_BPartner.EM_OBTIK_VIESStatus`, the same "Estado VIES" field editable on the Contact/BusinessPartner record): `'V'` → `valid`, `'I'` → `invalid`, anything else (null/blank/`'P'`) → `pending` (ETP-4755 — previously this field was never populated, so the badge always defaulted to `pending` regardless of the contact's real verification status).
 
@@ -2899,7 +3182,20 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
 
 ### Action bar and kebab menu
 
-The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10). Since ETP-5597 the left side of the bar also carries the **"Tipo: Normal | Sustitutiva"** control right after the "Estado" chip, and "Registrar/Presentar" is disabled while a substitutive declaration lacks its 13-digit identifier — see "349 'Tipo: Normal | Sustitutiva'" below. Both buttons — along with "Guardar" and "Calcular" — are wrapped `{!isSubmitted && ...}` (ETP-5438): "Generar fichero 349" used to be unconditionally visible regardless of submission status, but is now gated on submission status exactly like "Registrar/Presentar", so the whole primary-action group disappears once the declaration reaches a submitted-family status. See "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard.
+**ETP-5584:** the 349 action bar uses the same shared header and button order as 303. **Left:**
+Cancelar, the status chip and (ETP-5597) the **"Tipo: Normal | Sustitutiva"** control
+(`DeclarationTypeControl`, a form control, so it stays on the left where ETP-5597 put it). **Right:**
+Calcular, Generar fichero 349, Guardar, and the primary
+**"Registrar presentación"** (`fm.action.present`; 349 is register-only, see "349 popup is
+'Registrar presentación'"), right-most. The title, breadcrumb, model badge and kebab are in the app
+TopBar, as on 303, with the same title format (`buildDeclTitle`, P9): "Modelo 349 - 2026/T4". See
+"Detail page header, action bar and 1280×720 layout (ETP-5584)". ETP-5597: "Registrar presentación"
+is disabled while a substitutive declaration lacks its 13-digit identifier, and Generar / Guardar /
+Registrar are locked while any of them is in flight (`actionBusy`); the `SubstitutiveBanner` is the
+first row of the scrolling area, above the VIES banner — see "349 'Tipo: Normal | Sustitutiva'"
+below.
+
+The page has no in-page kebab. The old `MoreOptionsMenu349` (VIES + "Vista previa PDF") was removed: **"Validar VIES"** lives in the VIES banner (see "VIES banner and the 'Validar VIES' action"), the PDF preview went with the kebab, and "Generar fichero 349" is a standalone action-bar button (`onClick={() => setShowFilegen(true)}`). Every action except Cancelar is wrapped `{!isSubmitted && ...}` (ETP-5438), so the whole right-hand group disappears once the declaration reaches a submitted-family status. See "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard.
 
 ### PDF preview and file generation
 
@@ -2996,7 +3292,8 @@ is now persisted.
 
 1. **"Tipo" segmented control in the header.** `DeclarationTypeControl` (`FmModel349Page.jsx`)
    replaces the ETP-5456 `SubstitutiveSection` checkbox that sat next to the "Todas las claves" key
-   filter. It renders in the header action bar right after the "Estado" chip: label "Tipo"
+   filter. It renders in the header action bar right after the status chip (`FmStatusChip`;
+   left group of the ETP-5584 action bar): label "Tipo"
    (`fm.m349.type.label`) and a two-option `role="radiogroup"` — **Normal** | **Sustitutiva**
    (`fm.m349.type.normal`/`.substitutive`, `data-testid="FmModel349Page__type_normal"` /
    `__type_sustitutiva`), styled with the shared `.fm-newdecl-segmented` idiom
@@ -3008,7 +3305,7 @@ is now persisted.
 2. **Substitutive banner with the "Identificador declaración anterior".** While Tipo =
    Sustitutiva, `SubstitutiveBanner` renders a full-width warning-role banner
    (`.fm-349-substitutive-banner`, `data-testid="FmModel349Page__substitutiveBanner"`) between the
-   action bar and the VIES banner/KPIs: title "Declaración sustitutiva", sub-text "Reemplaza por
+   action bar and the VIES banner/KPIs (the first row of `.fm-detail-scroll`, ETP-5584): title "Declaración sustitutiva", sub-text "Reemplaza por
    completo a la declaración presentada anteriormente para este periodo." and a required input
    **"Identificador declaración anterior"** (`maxLength` 13, `inputMode="numeric"`, placeholder
    "13 dígitos", `data-testid="FmModel349Page__formerStatement"`). The input keeps digits only
@@ -3024,8 +3321,10 @@ is now persisted.
    trimmed, must match `/^\d{13}$/` (exactly 13 digits). It sits in its own module, not in
    `fiscalModelsUtils.js`, because many page tests `vi.mock` that file with an explicit factory and
    would silently replace the real rule. `formerStatementInvalid = sustitutiva &&
-   !isValidFormerStatement(formerStatement)` disables the button (`data-testid="FmModel349Page__present"`, tooltip and new disabled style
-   `.fm-toolbar__btn--primary:disabled`) with `fm.m349.present_disabled.former_statement`
+   !isValidFormerStatement(formerStatement)` disables the button (`data-testid="FmModel349Page__present"`, tooltip; the disabled look is the
+   app `Button`'s own, since ETP-5584 renders every action through `FmDetailButton`, which adds
+   `disabled:pointer-events-auto disabled:cursor-not-allowed` so a disabled action's tooltip is
+   still reachable — the core `Button` otherwise sets `disabled:pointer-events-none`) with `fm.m349.present_disabled.former_statement`
    ("Introduce el identificador de la declaración anterior (13 dígitos) para presentar una
    declaración sustitutiva."). `handlePresent` re-checks it and toasts the same text (belt and
    braces). `FileGenModal` applies the SAME helper while `substitutive` is true: a blank
@@ -3182,33 +3481,76 @@ ETP-5456 deployment trap above applies: verify in a fresh tab after deploying.
 
 ## List page toolbar (`FmListPage`)
 
-`FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The toolbar's visible actions are, in order: the year/model/status `FilterDropdown` filters, the **"Ordenar"** sort button (opens the field-selector popover described below), the **"Catálogo de modelos (N)"** button (`N = activeCount`), and — only when `activeCount > 0` — **"+ Nueva declaración"**. There is no search input — see "Sort and search" below.
+### List page header (app TopBar) and declarations toolbar (ETP-5584)
 
-This is scoped to the list page's own toolbar. `ConfigDrawer` as a component still exists (in `FmOverlays.jsx`), but its only remaining caller is the model catalog drawer (`FmCatalogPage.jsx`, described below) — `FmModel303Page.jsx` no longer has a 3-dot menu at all; its former Comparar / Configuración / Generar kebab (`MoreOptionsMenu`, plus `CompareDrawer` and this page's own `ConfigDrawer` usage) was removed entirely (see "Modelo 303 detail page" below for where "Generar fichero" now lives). No config/demo functionality was removed from the app as a whole — only the redundant row-kebab entry point on the declarations list.
+The list page's title follows the same format as every generated list window (e.g. Contactos):
+`FmListPage` publishes it to the app **TopBar** through `useSetPageMeta`
+(`components/layout/PageMetaContext`), the exact API `ListView.jsx` uses — no in-content title
+block is rendered. The published meta is:
 
-### "More options" menu — favorites and help (`MoreOptionsMenu`, ETP-4755)
+| TopBar slot | Value |
+|---|---|
+| `title` | `ui('fm.breadcrumb.section')` — the window's menu name, "Modelos Fiscales" / "Fiscal Models" |
+| `recordCount` (badge next to the title) | `decls.length` — the declarations count |
+| `breadcrumb` (subtitle line) | `` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` `` — "Finanzas / Modelos Fiscales" |
+| kebab (⋮ next to the title) | `onAddToFavorites` → `toggleFavorite('fiscal-models', <window name>)` + `isFavorite`, and `onPageHelp` → the support chat "Ayuda" tab (`useSupportChatSafe`), the same two items the detail pages publish through `useFmDetailPageMeta` |
 
-The page-title `MoreVertical` icon in all three surfaces — the list header, `FmModel303Page`, and
-`FmModel349Page` — used to render with no `onClick` at all, a leftover from the old kebabs described
-above and below. It now opens a real, shared `MoreOptionsMenu({ favKey, favLabel })` (`FmCommon.jsx`),
-rendering exactly 2 items:
+**Hidden list, no meta.** `FiscalModelsPage` keeps `FmListPage` mounted (hidden with
+`display: none`) while a 303/349 detail page is shown, so auto-compute polling survives. It passes
+`active={!inDetail}`. The list publishes its meta from a `ListPageMeta` child rendered only while
+`active`, so a hidden list does not touch the TopBar at all. The detail pages publish their own
+meta: declaration title, breadcrumb, model badge and kebab (see "Detail page header, action bar
+and 1280×720 layout"). "Cancelar" (`onBack`) unmounts the detail and flips `active` back to
+`true`, and `ListPageMeta` re-publishes the list meta.
 
-- **"Añadir/Quitar de favoritos"** — wired to the real, server-synced `useFavorites()` context
-  (`toggleFavorite`/`isFavorite`), not a local toggle. All three call sites pass the identical
-  `favKey="fiscal-models"` (and the same `favLabel`, `t('fm.list.title')`), so favoriting from the
-  list header or from either detail page's header keeps all three in sync — there is one favorite
-  for this window, not one per surface.
-- **"Ayuda de esta página"** — wired to a new `useSupportChatSafe()` hook
-  (`components/support/SupportChatContext.jsx`), an additive, no-op-fallback sibling of the existing
-  `useSupportChat()` (same defensive pattern as `useFavorites()`): it calls `actions.setTab('ayuda')`
-  + `actions.open()`, landing on the real `SupportChatWidget` "Ayuda" tab.
+The page content, top to bottom (no bordered panels around any of it):
 
-**Why not the generic `TopBar.jsx` kebab's `onPageHelp` prop:** a separate, already-logged finding
-(`docs/feedback.md`) found `onPageHelp` is dead app-wide — no window ever sets `meta.onPageHelp`, so
-`TopBar`'s own "Ayuda de esta página" item renders everywhere but does nothing. That gap predates
-this change and is out of scope for a window-level fix. This window's kebab deliberately bypasses it
-and calls the real support-chat mechanism (`useSupportChatSafe`) directly instead of reproducing the
-same dead wiring.
+1. **Actions row** (`data-testid="fm-list-actions-row"`, right-aligned, `12px` top padding like the
+   `py-3` first content row of a generated `ListView`) — **"Catálogo de modelos (N)"** (`N =
+   activeCount`, outline secondary `Button`, `fm-list-catalog-button`) and, right-most, **"+ Nueva
+   declaración"** (dark primary `Button`, `fm-list-new-declaration-button`, only when
+   `catalogLoaded && activeCount > 0`). Both copy `ListView.jsx`'s Print/"New" button classes.
+2. **KPI cards row** (`KpiCardsRow`, `fm-list-kpi-row`) — the three cards share the full width
+   (`flex: 1 1 0%` each, `min-width: 0`) with `8px`/`12px` vertical padding. They used to be a
+   fixed `360px` each with no top padding, which only looked right while the filters toolbar sat
+   above them; once they became the first content row they were glued to the TopBar (the card
+   border touched the content container's top edge and read as clipped) and left the right third of
+   the row empty.
+3. **Declarations toolbar** (`.fm-toolbar`) — no section heading (a "Declaraciones" heading was
+   tried here and removed at the user's request); right-aligned after the `.fm-toolbar__space`
+   spacer: the year/model/status `FilterDropdown` filters and the **"Ordenar"** sort button (its popover is right-anchored, as the
+   button is the last item of the row). The filter triggers are sized like the app's standard list
+   filter trigger (`ListFilterBar.jsx`: `h-9`, `px-3`, `12px`, normal weight, muted text when idle)
+   rather than the larger `14px` `.fm-toolbar__pill` default. The declarations count is shown
+   only as the TopBar badge next to the title.
+4. The declarations table.
+
+"Declaraciones" used to be the page title (in an in-content title bar); ETP-5584 moved the title to
+the TopBar as the window's menu name. The `fm.list.title` locale key is no longer rendered anywhere
+in source (it is kept in the locale files).
+
+`FmListPage` no longer has a row-level "3 dots" kebab menu at all — the `RowKebab` component, its `DEMO_DECLARATIONS` fixture data, the `showConfig` state, and the `ConfigDrawer` render/import were all removed from this file. The page actions (catalog, new declaration) live in the actions row and the filters/sort in the declarations toolbar, as described above. There is no search input — see "Sort and search" below.
+
+This is scoped to the list page's own toolbar. `ConfigDrawer` as a component still exists (in `FmOverlays.jsx`), but its only remaining caller is the model catalog drawer (`FmCatalogPage.jsx`, described below) — `FmModel303Page.jsx` no longer has a 3-dot menu at all; its former Comparar / Configuración / Generar kebab (plus `CompareDrawer` and this page's own `ConfigDrawer` usage) was removed entirely (see "Modelo 303 detail page" below for where "Generar fichero" now lives). No config/demo functionality was removed from the app as a whole — only the redundant row-kebab entry point on the declarations list.
+
+### "More options" kebab — favorites and help (ETP-4755, TopBar since ETP-5584)
+
+Every surface of the window (the list and both detail pages) uses the app **TopBar's own kebab**
+(⋮ next to the title), fed through `useSetPageMeta` — the list from `ListPageMeta`
+(`FmListPage.jsx`), the detail pages from `useFmDetailPageMeta` (`FmDetailChrome.jsx`). It offers
+exactly 2 items:
+
+- **"Añadir/Quitar de favoritos"** — `onAddToFavorites` → `toggleFavorite('fiscal-models',
+  ui('fm.breadcrumb.section'))` + `isFavorite`, the real, server-synced `useFavorites()` context.
+  Every surface passes the same key, so there is one favourite for this window, not one per
+  surface.
+- **"Ayuda de esta página"** — `onPageHelp` → `useSupportChatSafe()`'s `actions.setTab('ayuda')` +
+  `actions.open()`, the real `SupportChatWidget` "Ayuda" tab.
+
+History: ETP-4755 first turned a dead in-page `MoreVertical` icon into a working in-page kebab
+component (`MoreOptionsMenu` in `FmCommon.jsx`). ETP-5584 moved the titles into the TopBar,
+which already renders this kebab from `onAddToFavorites`/`onPageHelp`, so the in-page component
+became dead code and was deleted (with its `.fm-more-options-trigger` CSS).
 
 ### Model color tags — centralized as CSS custom properties (ETP-4755)
 
@@ -3238,8 +3580,10 @@ was formatted with a hardcoded `toLocaleDateString('es-ES')`, always rendering t
 (the same hook `components/ui/date-range-popover.jsx` uses) and formats with the BCP-47 tag
 derived from it.
 
-**Addendum — Modelo 349's `periodLabel` month name (ETP-5338).** A related but distinct bug found
-in the same sweep: `FmModel349Page.jsx`'s breadcrumb/page-title `periodLabel` (`"{year} / {month
+**Addendum — Modelo 349's `periodLabel` month name (ETP-5338).** (Since ETP-5584 both models build
+their title with `buildDeclTitle` / `formatDeclPeriod` in `FmDetailChrome.jsx`, format
+`"{year}/{month name}"`, with the same explicit-locale rule described here.) A related but distinct
+bug found in the same sweep: `FmModel349Page.jsx`'s breadcrumb/page-title `periodLabel` (`"{year} / {month
 name}"`) built its month name with `new Intl.DateTimeFormat(undefined, { month: 'long' })`. Passing
 `undefined` as the locale does not fall back to the app's UI locale — it resolves to the
 **runtime's/browser's default locale** (typically the OS language), so under an es-language OS the
@@ -3499,7 +3843,7 @@ that was stale.
 
 ## Model catalog (`FmCatalogPage`)
 
-The catalog drawer is opened from the toolbar button described above — **"Catálogo de modelos (N)"**. It reuses `fm.catalog.title` for its label and calls `setShowCatalog(true)` inline on click. It uses the `fm-toolbar__btn` (non-`--primary`) style so it reads as a secondary action next to "+ Nueva declaración".
+The catalog drawer is opened from the toolbar button described above — **"Catálogo de modelos (N)"**. It reuses `fm.catalog.title` for its label and calls `setShowCatalog(true)` inline on click. It is an app `Button variant="outline" size="sm"` (`fm-list-catalog-button`), so it reads as a secondary action next to the dark primary "+ Nueva declaración" `Button`.
 
 The catalog drawer lists the tax forms the tenant can enable/disable. It currently exposes only the two supported forms — no locked/"coming soon" entries:
 
@@ -3737,7 +4081,8 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels); option `disabledWhen`, field `labelKeyWhen`, `getInvalidSelectedOptions`/`resolveFieldLabelKey` (ETP-5597) |
 | `models/303/AeatSubmitFlow.jsx` | AEAT electronic submission flow (ETP-4456) — confirm/submit/result, `POST /fiscal303/submit` |
 | `models/349/FmModel349Page.jsx` | Modelo 349 detail — incl. `DeclarationTypeControl` / `SubstitutiveBanner` (ETP-5597) |
-| `FmCommon.jsx` | Shared components: `NumberedStepper`, `ResultPill`, `SummaryCard` |
+| `FmDetailChrome.jsx` | Detail-page chrome shared by 303/349 (ETP-5584): `useFmDetailPageMeta` + `buildDeclTitle` (TopBar title/breadcrumb/badge/kebab), `FmDetailHeader`/`FmDetailActionBar`/`FmDetailButton`, `FmStatusChip` + `statusLabelKey`, `tabCount`/`incidentsTabBadge`, `FmEmptyState` |
+| `FmCommon.jsx` | Shared components: `KpiWidget`, `Tabs`, `NumberedStepper`, `ResultPill`, `SummaryCard`, `EmptyState` (re-export of `FmEmptyState`) |
 | `FmOverlays.jsx` | Modals and drawers: `PresentModal` (2 manual paths + opt-in `aeat_telematic` sentinel path), `FileGenModal`, `NewDeclModal`, `ConfigDrawer` |
 | `FmRowActions.jsx` | Row hover Edit/Delete icons for draft declarations (ETP-5187) — window-local, lighter counterpart to the generic `RowQuickActions` |
 | `FmDebugPanel.jsx` | Developer panel (keystroke-activated) for testing with fixture data |

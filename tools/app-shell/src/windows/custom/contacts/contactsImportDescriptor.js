@@ -1,5 +1,6 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
+import { registerImportRunReset } from '@etendosoftware/app-shell-core/lib/import/importRunState.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
 import { fetchNeoList } from '@etendosoftware/app-shell-core/lib/import/fetchNeoList.js';
@@ -15,6 +16,7 @@ import {
 } from '@/lib/taxIdValidation.js';
 import { registerExportHints } from '@/lib/importExportColumns.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
+import { stripUrlScheme } from './contactsWebUrl.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // `creditLimit` used to be listed here with no matching decisions.json column, so nothing
@@ -44,6 +46,10 @@ const HAS_ADDRESS = (row) => Boolean(
   row.address || row.city || row.postal || row.country || String(row.region ?? '').trim(),
 );
 const businessPartnerCategoriesCache = new Map();
+
+// ETP-5676: keyed by token, so a second file in the same tab would be answered from the first
+// file's snapshot. A new file starts a new run (see `importRunState`).
+registerImportRunReset(() => businessPartnerCategoriesCache.clear());
 
 function detectEtendoBase() {
   if (typeof window !== 'undefined' && window.location) {
@@ -80,7 +86,7 @@ function pick(row, targets) {
   return body;
 }
 
-/**
+/*
  * ETP-5031 follow-up — `etgoWeb` is stored WITHOUT its scheme: the Contacts form's fixed
  * "https://" chip (decisions.json `inputPrefix`) means a manually-entered contact never has
  * one in the stored value, and BusinessPartnerHandler's server-side domain-shape check
@@ -90,10 +96,8 @@ function pick(row, targets) {
  * so the import must normalize it the same way the form's chip does, not assume the cell is
  * already bare. Reproduced live: an un-normalized cell 400'd the whole business partner
  * create, which is what silently dropped rows from ETP-4905's own Tomcat integration spec.
+ * `stripUrlScheme` lives in `./contactsWebUrl.js`, shared with the list's website cell.
  */
-function stripUrlScheme(value) {
-  return String(value ?? '').replace(/^https?:\/\//i, '');
-}
 
 // Mirrors useEntity.js's derivePersonName exactly (the known-working manual create flow).
 function derivePersonName(firstName, lastName) {
@@ -318,7 +322,7 @@ async function resolveCategoryId(row, config) {
 async function resolveLocation(row, config) {
   if (!HAS_ADDRESS(row)) return null;
   const resolveCountry = config.resolveCountryFn || getFkResolver('contacts-country');
-  const countryResult = await resolveCountry(row.country, { token: config.token });
+  const countryResult = await resolveCountry(row.country, { token: config.token, fkResolutions: config.fkResolutions });
   if (countryResult.status !== 'auto-resolved') {
     const message = typeof config.translate === 'function'
       ? config.translate('importErrorCountryUnresolved', { country: row.country })

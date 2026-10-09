@@ -6,9 +6,10 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Shared financial-summary state for the Contacts detail view. The horizontal
- * summary widget (headerContent slot) and the period button (tabsBarRight slot)
- * are rendered in separate React subtrees, so they coordinate the selected
- * period and the fetched bp-stats / bp-trend data through this context.
+ * summary widget is rendered twice (General tab via the headerContent slot, and at
+ * the top of ContactsFinancialPanel) and hosts the period button, so the instances
+ * coordinate the selected period and the fetched bp-stats / bp-trend data through
+ * this context.
  *
  * Data is fetched lazily: the summary widget reports the active record id via
  * `setRecordId`, which triggers the fetch. The period button only reads/writes

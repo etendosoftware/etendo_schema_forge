@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // Vitest tests for FmListPage.jsx's ETP-5338 row hover "Reactivar declaración"
 // wiring: the canReactivate(decl) gate (status + submissionMethod truth table),
 // the confirm-dialog flow (open → confirm → PUT status:'draft' only → row
@@ -53,7 +54,6 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: ({ title, message }) =>
     React.createElement('div', { className: 'fm-empty-state' }, title || message || 'empty'),

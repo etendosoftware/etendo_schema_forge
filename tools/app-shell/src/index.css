@@ -212,6 +212,28 @@
   --switch-track-on-enabled: 240 12.2% 8%;
   --switch-track-off-disabled: 222.9 17.9% 92.4%;
   --switch-track-on-disabled: 224.2 12.4% 70%;
+
+  /*
+   * ETP-5598 — exact colours of the Figma "Enviar" pop-up (SaaS-Etendo-2025, node 5832-58481),
+   * used by SendDocumentModal / RecipientChipEditor and the PdfViewer controls they opt into.
+   * Light values are exact HSL conversions of the Figma hex (round-trip verified); dark values
+   * keep what the pop-up rendered before (border-subtle, foreground, icon-secondary,
+   * border-control, card, text-secondary) so dark mode does not regress. Prefixed `--sf-` so
+   * they never collide with a global token (`--surface-overlay` is already read as a full
+   * colour elsewhere). Global tokens are deliberately left untouched.
+   */
+  --sf-gray-100: 222.9 17.9% 92.4%;            /* #E8EAEF gray/100 */
+  --sf-gray-900: 240 12.2% 8%;                 /* #121217 gray/900, text/primary, text/body */
+  --sf-text-secondary: 240 11.8% 48%;          /* #6C6C89 text/secondary (placeholder) */
+  --sf-text-required: 345 90.2% 60%;           /* #F53D6B text/required */
+  --sf-icon-outline-secondary: 216.4 15.2% 57.5%; /* #828FA3 icon/outline/secondary */
+  --sf-border-input: 222 12.2% 83.9%;          /* #D1D4DB border/input/normal */
+  --sf-primary-gray-disabled: 222 12.2% 83.9%; /* #D1D4DB primary-gray-disabled */
+  --sf-on-primary-gray-disabled: 0 0% 100%;    /* #FFFFFF */
+  --sf-surface-overlay: 0 0% 100%;             /* #FFFFFF surface/overlay */
+  --sf-shadow-xs: 0 1px 2px rgba(18, 18, 23, 0.05);
+  --sf-shadow-overlay: 0 2px 4px rgba(18, 18, 23, 0.0399), 0 5px 8px rgba(18, 18, 23, 0.04),
+    0 10px 18px rgba(18, 18, 23, 0.03), 0 24px 48px rgba(18, 18, 23, 0.03), 0 0 0 1px rgba(18, 18, 23, 0.1);
 }
 
 .dark {
@@ -219,4 +241,23 @@
   --switch-track-on-enabled: 240 12.2% 8%;
   --switch-track-off-disabled: 0 0% 100% / 0.20;
   --switch-track-on-disabled: 224.2 12.4% 70%;
+
+  /* ETP-5598 — dark values of the --sf-* send pop-up tokens (see :root above). */
+  --sf-gray-100: 215 20% 30%;
+  --sf-gray-900: 210 20% 98%;
+  --sf-text-secondary: 215 16% 72%;
+  --sf-text-required: 345 90.2% 60%;
+  --sf-icon-outline-secondary: 215 16% 70%;
+  --sf-border-input: 215 16% 58%;
+  --sf-primary-gray-disabled: 215 20% 30%;
+  --sf-on-primary-gray-disabled: 0 0% 100%;
+  --sf-surface-overlay: 224 30% 15%;
+  --sf-shadow-xs: 0 1px 2px hsl(210 20% 98% / 0.05);
+  --sf-shadow-overlay: 0 2px 4px hsl(0 0% 0% / 0.2), 0 24px 48px hsl(0 0% 0% / 0.3), 0 0 0 1px hsl(210 20% 98% / 0.1);
+}
+
+/* Placeholders cannot be styled inline. */
+.sf-send-field::placeholder {
+  color: hsl(var(--sf-text-secondary));
+  opacity: 1;
 }

@@ -1,5 +1,4 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
-// @covers tools/app-shell/src/windows/custom/fiscal-models/FmBreadcrumb.jsx
 // ETP-5338 Bug B fix — "Cancelar" must genuinely discard unsaved edits.
 //
 // Root cause of the original bug: `identChecks`/`manualOverrides` used to autosave via a
@@ -21,9 +20,10 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import { lastMeta, renderWithMeta } from '../../../__tests__/testUtils/topBarMetaTestUtils.jsx';
 import { toast } from 'sonner';
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
@@ -44,7 +44,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: () => null,
@@ -81,6 +80,8 @@ vi.mock('../AeatSubmitFlow.jsx', () => ({
   isMissingDefaultIaeActivity: () => false,
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null,
   OctagonAlert: () => null, TriangleAlert: () => null, CircleCheck: () => null,
   ArrowLeftRight: () => null, Calculator: () => null, Loader2: () => null,
@@ -291,25 +292,27 @@ describe('FmModel303Page — Cancelar discards unsaved edits (ETP-5338 Bug B fix
     expect(server.openPutCount).toBe(0);
   });
 
-  // ETP-5597 — the "Modelos Fiscales" breadcrumb level is wired to the same `handleCancel` as the
-  // Cancelar button, so leaving through it must discard pending edits exactly like Cancelar does.
+  // ETP-5597 — the "Modelos Fiscales" level of the TopBar breadcrumb (published through
+  // useFmDetailPageMeta, ETP-5584) is wired to the same `handleCancel` as the Cancelar button, so
+  // leaving through it must discard pending edits exactly like Cancelar does. The TopBar calls the
+  // item's `onClick`; these tests call it the same way, off the published page meta.
   describe('the "Modelos Fiscales" breadcrumb crumb', () => {
     function clickSectionCrumb() {
-      fireEvent.click(screen.getByTestId('fm-breadcrumb-level-1'));
+      lastMeta.breadcrumb[1].onClick();
     }
 
-    it('is the section level of the breadcrumb, rendered as a link', () => {
+    it('is the section level of the breadcrumb, published as a navigable item', () => {
       installImmediateServer();
-      render(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
-      const crumb = screen.getByTestId('fm-breadcrumb-level-1');
-      expect(crumb.tagName).toBe('BUTTON');
-      expect(crumb.textContent).toBe('fm.breadcrumb.section');
+      renderWithMeta(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+      const crumb = lastMeta.breadcrumb[1];
+      expect(crumb.label).toBe('fm.breadcrumb.section');
+      expect(typeof crumb.onClick).toBe('function');
     });
 
     it('discards an identification edit and a box edit with ZERO PUT requests, then goes back once', async () => {
       installImmediateServer();
       const onBack = vi.fn();
-      render(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={onBack} onStatusChange={vi.fn()} />);
+      renderWithMeta(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={onBack} onStatusChange={vi.fn()} />);
 
       editNif('DISCARDED-VIA-CRUMB');
       editBox46('4321');
@@ -326,7 +329,7 @@ describe('FmModel303Page — Cancelar discards unsaved edits (ETP-5338 Bug B fix
       async function leaveAfterEdits(leave) {
         installImmediateServer();
         const onBack = vi.fn();
-        const { unmount } = render(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={onBack} onStatusChange={vi.fn()} />);
+        const { unmount } = renderWithMeta(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={onBack} onStatusChange={vi.fn()} />);
         editNif('SAME-EDIT');
         editBox46('77');
         await act(async () => { leave(); });

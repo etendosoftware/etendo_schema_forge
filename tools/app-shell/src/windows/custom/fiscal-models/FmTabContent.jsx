@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  TriangleAlert, OctagonAlert, CircleCheck, ChevronRight,
+  TriangleAlert, OctagonAlert, CircleCheck, ChevronRight, ReceiptText,
 } from 'lucide-react';
 import { EmptyState } from './FmCommon.jsx';
 import { formatAmount } from './fiscalModelsUtils.js';
@@ -80,11 +80,12 @@ export function SourcesTab({ decl, t, showTaxColumns = true, keyColumn = null, h
         </div>
       )}
       {sources.length === 0 ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {t('fm.sources.empty') ?? 'Sin facturas'}
-          </span>
-        </div>
+        // ETP-5584 (P11) — the window's one empty state (icon + title + text).
+        <EmptyState
+          icon={<ReceiptText size={28} strokeWidth={1.5} data-testid="ReceiptText__931756" />}
+          title={t('fm.sources.empty') ?? 'Sin facturas'}
+          sub={t('fm.sources.empty_sub')}
+          data-testid="fm-sources-empty" />
       ) : (
         <div className="fm-table-wrap">
           <table className="fm-dtable fm-dtable--plain">
@@ -175,12 +176,13 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
   }, [blocking, warning]);
 
   if (blocking === 0 && warning === 0) {
+    // ETP-5584 (P11) — same empty state (icon + title + text) as every other tab.
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-          {t('fm.incidents.empty') ?? 'Sin incidencias'}
-        </span>
-      </div>
+      <EmptyState
+        icon={<CircleCheck size={28} strokeWidth={1.5} data-testid="CircleCheck__incidentsEmpty" />}
+        title={t('fm.incidents.empty') ?? 'Sin incidencias'}
+        sub={t('fm.incidents.empty_sub')}
+        data-testid="fm-incidents-empty" />
     );
   }
 

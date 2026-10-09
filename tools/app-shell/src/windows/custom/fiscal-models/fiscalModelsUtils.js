@@ -124,6 +124,21 @@ export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
 // never be paired with a required/blocking validation.
 export const DECLARATION_TYPE_INGRESO = 'I';
 
+// ETP-5584 P13 — the one list of file formats accepted for a declaration's justificante
+// (AEAT receipt). Every place that mentions or enforces them derives from this:
+//   - the "Justificante" tab of 303 and 349 (`AttachmentsTab config=`), whose dropzone
+//     filter and "Formatos compatibles: …" text come from it;
+//   - PresentModal's "Subir justificante (…)" button label (`buildTypesLabel`) and its file
+//     input's `accept` (`buildAcceptAttribute`), both in FmOverlays.jsx.
+// PDF only: the AEAT receipt is a PDF (the telematic flow stores AEAT's own `pdfBase64`), and
+// the tab was restricted to PDF on purpose in ETP-4456. The backend attachment policy
+// (`NeoAttachmentPolicy`) also accepts XML for attachments in general, so adding a format here
+// is a product decision, not a backend change — the backend already enforces its own list.
+export const RECEIPT_ATTACHMENT_CONFIG = Object.freeze({
+  allowedMimeTypes: Object.freeze(['application/pdf']),
+  allowedExtensions: Object.freeze(['pdf']),
+});
+
 // ETP-5393 Bug C [W1 re-review] — boxes 111 (Rectificación – Importe) and 77 (IVA a la
 // importación liquidado por la Aduana pendiente de ingreso) are editable boxes the
 // classic AEAT303Report engine hard-rejects when negative (AEAT303Report2024.java:276-278 for

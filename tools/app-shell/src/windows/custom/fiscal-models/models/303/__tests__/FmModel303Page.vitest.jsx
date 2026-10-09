@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmDetailChrome.jsx
 // Vitest component tests for FmModel303Page.jsx
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -6,6 +8,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 const navigateMock = vi.fn();
 
 vi.mock('@/i18n', () => ({
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useUI: () => (key) => key,
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
@@ -28,7 +31,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -77,6 +79,8 @@ vi.mock('../../../FmOverlays.jsx', () => ({
   ),
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
@@ -120,14 +124,11 @@ describe('FmModel303Page — rendering', () => {
     expect(document.body.textContent).toContain('303');
   });
 
-  it('shows period in title', () => {
+  // ETP-5584 — the title moved to the app TopBar (useSetPageMeta); the year/period are
+  // asserted on the published meta in FmModel303Page.breadcrumb.i18n.vitest.jsx.
+  it('renders no in-page title row (the title is in the app TopBar)', () => {
     render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    expect(document.body.textContent).toContain('T2');
-  });
-
-  it('shows year in title', () => {
-    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    expect(document.body.textContent).toContain('2026');
+    expect(document.body.textContent).not.toContain('fm.config.m303.title');
   });
 
   it('renders FmBoxes303 when boxes tab is active (default)', () => {
@@ -261,20 +262,53 @@ describe('FmModel303Page — action bar', () => {
 // needed to observe the PUT ordering.
 
 describe('FmModel303Page — Guardar button (ETP-5338 pivot)', () => {
-  it('renders Guardar in the right-aligned group, before Calcular', () => {
+  // ETP-5584 — the status reads exactly like the list's "Estado" chip: the bare status, no
+  // "Estado:" prefix, rendered by the shared FmStatusChip.
+  it('shows the bare status in the status chip, with no "Estado:" prefix', () => {
     render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
-    expect(screen.getByTestId('FmModel303Page__save')).toBeTruthy();
-    const btns = Array.from(document.querySelectorAll('button'));
-    expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
-    // Order in the DOM matches visual left-to-right order in this flex toolbar: Guardar
-    // must come before Calcular, not after — and Cancelar (unrelated, on the left) must
-    // still precede both.
-    const cancelIdx = btns.findIndex(b => b.textContent.includes('fm.action.cancel'));
-    const saveIdx = btns.findIndex(b => b.getAttribute('data-testid') === 'FmModel303Page__save');
-    const computeIdx = btns.findIndex(b => b.textContent.includes('fm.action.compute'));
-    expect(cancelIdx).toBeGreaterThanOrEqual(0);
-    expect(saveIdx).toBeGreaterThan(cancelIdx);
-    expect(computeIdx).toBeGreaterThan(saveIdx);
+    const left = screen.getByTestId('FmDetailActionBar__left');
+    const chip = left.querySelector('.fm-status-chip');
+    expect(chip).toBeTruthy();
+    expect(chip.getAttribute('data-status')).toBe('draft');
+    expect(chip.textContent).toBe('fm.status.draft');
+    expect(left.textContent).not.toContain('fm.col.status');
+  });
+
+  // ETP-5584 — same size as the invoice detail chip (DocumentStatusPill metrics: 14px text,
+  // 4px 8px padding, 8px radius) and the same tone icon rule (Check only for success).
+  it('renders the status chip with the invoice detail chip metrics and tone', () => {
+    const { unmount } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    let badge = screen.getByTestId('FmStatusChip__badge');
+    expect(badge.getAttribute('data-tone')).toBe('neutral');
+    expect(badge.style.fontSize).toBe('14px');
+    expect(badge.style.padding).toBe('4px 8px');
+    expect(badge.style.borderRadius).toBe('8px');
+    unmount();
+    render(<FmModel303Page decl={{ ...BASE_DECL, status: 'submitted_ack', submissionMethod: 'aeat_telematic' }} {...defaultProps} />);
+    badge = screen.getByTestId('FmStatusChip__badge');
+    // (lucide-react is mocked to render nothing in this file, so the Check icon itself is not
+    // asserted here — the tone that selects it is.)
+    expect(badge.getAttribute('data-tone')).toBe('success');
+    // the submissionMethod label stays on the same line, next to the chip
+    const chip = document.querySelector('.fm-status-chip');
+    expect(chip.style.flexDirection).toBe('row');
+    expect(chip.textContent).toContain('fm.present.method.aeat_telematic');
+  });
+
+  // ETP-5584 — Cancelar + status chip on the LEFT; on the RIGHT, in this order: Calcular,
+  // Generar fichero, Guardar, and the primary Registrar/Presentar right-most.
+  it('renders Cancelar + status chip on the left, and Calcular, Generar fichero, Guardar, Registrar/Presentar on the right', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const left = screen.getByTestId('FmDetailActionBar__left');
+    const right = screen.getByTestId('FmDetailActionBar__right');
+    const leftBtns = Array.from(left.querySelectorAll('button'));
+    expect(leftBtns).toHaveLength(1);
+    expect(leftBtns[0].textContent).toContain('fm.action.cancel');
+    expect(left.querySelector('.fm-status-chip')).toBeTruthy();
+    const rightIds = Array.from(right.querySelectorAll('button')).map(b => b.getAttribute('data-testid'));
+    expect(rightIds).toEqual([
+      'FmModel303Page__compute', 'FmModel303Page__generate', 'FmModel303Page__save', 'FmModel303Page__present',
+    ]);
   });
 
   it('clicking Cancelar calls onBack via handleCancel, with no flush wiring added to it', () => {
@@ -405,13 +439,10 @@ describe('FmModel303Page — tab click switching', () => {
   });
 });
 
-// ── Kebab / MoreOptionsMenu ────────────────────────────────────────────────
-// The old MoreOptionsMenu349-style dropdown (Comparar / Configuración / Generar)
-// was removed from this page — Comparar and Configuración are gone entirely;
-// Generar fichero moved to a standalone action-bar button (see describe block
-// below). A NEW, functional MoreOptionsMenu (favorites + help) was added later
-// (ETP-4755) — since FmCommon.jsx is mocked wholesale at the top of this file,
-// its real behavior is covered directly in FmCommon.vitest.jsx instead.
+// ── Kebab ────────────────────────────────────────────────────────────────────
+// The page has no in-page kebab: the old dropdowns (Comparar / Configuración / VIES / PDF
+// preview) were removed, and since ETP-5584 the favourites + help kebab is the app TopBar's own,
+// published through useFmDetailPageMeta (covered in this model's breadcrumb.i18n test file).
 
 // ── Standalone "Generar fichero" action-bar button ────────────────────────────
 

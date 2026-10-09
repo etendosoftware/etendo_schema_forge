@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmDetailChrome.jsx
 // Additional Vitest tests for FmModel349Page — rendering, tabs, status, key filter
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -26,7 +27,6 @@ vi.mock('../use349Pdf.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: ({ value, label }) => React.createElement(
     'div',
     { className: 'test-kpi349' },
@@ -132,9 +132,11 @@ describe('FmModel349Page — rendering', () => {
     expect(document.body.textContent).toContain('349');
   });
 
-  it('shows year in header', () => {
+  // ETP-5584 — the title moved to the app TopBar (useSetPageMeta); the year/period are
+  // asserted on the published meta in FmModel349Page.breadcrumb.i18n.vitest.jsx.
+  it('renders no in-page title row (the title is in the app TopBar)', () => {
     render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
-    expect(document.body.textContent).toContain('2026');
+    expect(document.body.textContent).not.toContain('fm.config.m349.title');
   });
 
   it('renders the tab bar', () => {
@@ -311,8 +313,9 @@ describe('FmModel349Page — key filter dropdown badges (ETP-5597)', () => {
 describe('FmModel349Page — incidents tab badge counts block+warn with tone (ETP-5597)', () => {
   const incidentsTab = () => screen.getAllByRole('tab').find(b => b.getAttribute('data-tab-id') === 'incidents');
 
+  // ETP-5584 (P12) — every list tab shows its count, 0 included (no tone at 0).
   it.each([
-    [{ blocking: 0, warning: 0 }, '', ''],
+    [{ blocking: 0, warning: 0 }, '0', ''],
     [{ blocking: 0, warning: 2 }, '2', 'warn'],
     [{ blocking: 1, warning: 0 }, '1', 'danger'],
     [{ blocking: 1, warning: 2 }, '3', 'danger'],
@@ -354,14 +357,10 @@ describe('FmModel349Page — totals card', () => {
   });
 });
 
-// ── Kebab / MoreOptionsMenu ──────────────────────────────────────────────────
-// The old MoreOptionsMenu349 (VIES + Vista previa PDF) was removed from this
-// page. PDF preview machinery (use349Pdf, DocumentPreview, showPdf) went with
-// it; Generar fichero already lives in its own standalone action-bar button
-// (see describe block below). A NEW, functional MoreOptionsMenu (favorites +
-// help) was added later (ETP-4755) — since FmCommon.jsx is mocked wholesale at
-// the top of this file, its real behavior is covered directly in
-// FmCommon.vitest.jsx instead.
+// ── Kebab ────────────────────────────────────────────────────────────────────
+// The page has no in-page kebab: the old dropdowns (Comparar / Configuración / VIES / PDF
+// preview) were removed, and since ETP-5584 the favourites + help kebab is the app TopBar's own,
+// published through useFmDetailPageMeta (covered in this model's breadcrumb.i18n test file).
 
 // ── Standalone "Generar fichero" action-bar button ─────────────────────────────
 
@@ -537,16 +536,36 @@ describe('FmModel349Page — no Historial tab', () => {
 // once submitted, same as its 303 counterpart.
 
 describe('FmModel349Page — Guardar button (ETP-5338 pt.5)', () => {
-  it('renders Guardar in the right-aligned group, before Calcular', () => {
+  // ETP-5584 — the status reads exactly like the list's "Estado" chip: the bare status, no
+  // "Estado:" prefix, rendered by the shared FmStatusChip.
+  it('shows the bare status in the status chip, with no "Estado:" prefix', () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'draft' })} {...defaultProps} />);
+    const left = screen.getByTestId('FmDetailActionBar__left');
+    const chip = left.querySelector('.fm-status-chip');
+    expect(chip).toBeTruthy();
+    expect(chip.getAttribute('data-status')).toBe('draft');
+    expect(chip.textContent).toBe('fm.status.draft');
+    expect(left.textContent).not.toContain('fm.col.status');
+  });
+
+  // ETP-5584 — Cancelar + status chip on the LEFT; on the RIGHT, in this order: Calcular,
+  // Generar fichero, Guardar, and the primary Registrar/Presentar right-most.
+  it('renders Cancelar + status chip on the left, and Calcular, Generar fichero, Guardar, Registrar/Presentar on the right', () => {
     render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
-    expect(screen.getByTestId('FmModel349Page__save')).toBeTruthy();
-    const btns = Array.from(document.querySelectorAll('button'));
-    const cancelIdx = btns.findIndex(b => b.textContent.includes('fm.action.cancel'));
-    const saveIdx = btns.findIndex(b => b.getAttribute('data-testid') === 'FmModel349Page__save');
-    const computeIdx = btns.findIndex(b => b.textContent.includes('fm.action.comput'));
-    expect(cancelIdx).toBeGreaterThanOrEqual(0);
-    expect(saveIdx).toBeGreaterThan(cancelIdx);
-    expect(computeIdx).toBeGreaterThan(saveIdx);
+    const left = screen.getByTestId('FmDetailActionBar__left');
+    const right = screen.getByTestId('FmDetailActionBar__right');
+    // The only ACTION on the left is Cancelar; the other left-hand buttons are the two options
+    // of ETP-5597's "Tipo: Normal | Sustitutiva" control (role="radio"), a form control that
+    // sits right after the status chip.
+    const leftBtns = Array.from(left.querySelectorAll('button:not([role="radio"])'));
+    expect(leftBtns).toHaveLength(1);
+    expect(leftBtns[0].textContent).toContain('fm.action.cancel');
+    expect(left.querySelector('.fm-status-chip')).toBeTruthy();
+    expect(left.querySelectorAll('[role="radio"]')).toHaveLength(2);
+    const rightIds = Array.from(right.querySelectorAll('button')).map(b => b.getAttribute('data-testid'));
+    expect(rightIds).toEqual([
+      'FmModel349Page__compute', 'FmModel349Page__generate', 'FmModel349Page__save', 'FmModel349Page__present',
+    ]);
   });
 
   it('confirms immediately with a success toast and issues no network call — there is nothing to persist', async () => {
@@ -572,9 +591,7 @@ describe('FmModel349Page — Guardar button (ETP-5338 pt.5)', () => {
   it('renders no go-back button — Cancelar is the only left-side action', () => {
     render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
     expect(document.querySelector('[data-testid="FmModel349Page__goBack"]')).toBeNull();
-    // The header breadcrumb's navigable level (ETP-5597) is navigation, not an action button.
-    const btns = Array.from(document.querySelectorAll('button'))
-      .filter(b => !b.closest('[data-testid="fm-breadcrumb"]'));
+    const btns = Array.from(document.querySelectorAll('button'));
     const cancelIdx = btns.findIndex(b => b.textContent.includes('fm.action.cancel'));
     expect(cancelIdx).toBe(0);
   });

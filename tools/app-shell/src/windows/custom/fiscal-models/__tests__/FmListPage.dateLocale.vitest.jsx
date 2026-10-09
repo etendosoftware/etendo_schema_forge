@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // Real-locale `updatedAt` date-formatting coverage (ETP-5338).
 //
 // `normDecl()` used to hardcode `toLocaleDateString('es-ES')` regardless of the
@@ -47,7 +48,6 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: () => React.createElement('div', { className: 'fm-empty-state' }, 'empty'),
   KpiWidget: () => null,

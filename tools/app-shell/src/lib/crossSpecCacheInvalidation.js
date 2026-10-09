@@ -17,16 +17,24 @@
  * direction: a stale mark costs at most one extra GET on the next read.
  *
  * Add an entry when a new spec starts showing values derived from another spec's documents.
- * Only the Sales side is declared (ETP-5525 is a Sales ticket): the Purchase equivalent
- * (`goods-receipt` / `purchase-invoice` → `purchase-order`) is owned by the Purchase cell and
- * is just two more entries here.
+ * The order side is declared for Sales only (ETP-5525 is a Sales ticket): the Purchase
+ * equivalent (`goods-receipt` / `purchase-invoice` → `purchase-order`) is owned by the Purchase
+ * cell and is just two more entries here.
+ *
+ * ETP-5576 — the invoices also show values derived from their shipments / receipts: the
+ * `followUp` annotation («Gestionar envío / recepción»), the delivery status and the
+ * `linkedShipments` / `linkedReceipts` Related Documents chips. Completing (or editing, voiding,
+ * deleting) the follow-up document created from an invoice therefore marks the invoice stale,
+ * so returning to it — the back button, a Related Documents chip — refetches it instead of
+ * showing the pre-completion status for `recordStaleTime`.
  *
  * ETP-5571 adds a second map, `WRITE_INVALIDATES_ENTITIES`, for caches keyed by entity rather
  * than by spec — see its own comment below.
  */
 export const WRITE_INVALIDATES_SPECS = Object.freeze({
-  'goods-shipment': Object.freeze(['sales-order']),
+  'goods-shipment': Object.freeze(['sales-order', 'sales-invoice']),
   'sales-invoice': Object.freeze(['sales-order']),
+  'goods-receipt': Object.freeze(['purchase-invoice']),
 });
 
 /**
