@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/rowVisuals.js
 /**
  * Covers row-selection interactions in InlineLinesPanel — toggleRow,
  * toggleAll, and the "prune deleted IDs from selection" effect — none of
@@ -228,13 +229,21 @@ describe('InlineLinesPanel row selection (toggleRow / toggleAll)', () => {
  * colour inside `getRowClassName` and paints only that one background while a
  * selection is painting the row (Tailwind resolves two competing
  * `background-color` utilities by stylesheet order, not by class order).
- * InlineLinesPanel mirrors that contract with its own `bg-primary/5` literal.
- * DataTable has since moved its checked colour to `--field-hover` (ETP-5600,
- * covered in DataTable.rowHoverStyle.vitest.jsx); this panel keeps
- * `bg-primary/5` for now, so the two no longer share the literal.
+ * InlineLinesPanel mirrors that contract with the same checked colour DataTable
+ * uses: `--field-hover` (Figma "Fila / Selected", #F5F7F9), kept on hover, and
+ * exported as `--row-hover-bg` (ETP-5600; DataTable's side is covered in
+ * DataTable.rowHoverStyle.vitest.jsx). Tokens are spelled out literally here.
  */
-const SELECTED_ROW_BG = 'bg-primary/5';
+const SELECTED_ROW_BG = 'bg-[hsl(var(--field-hover))]';
+const CHECKED_TOKENS = [
+  SELECTED_ROW_BG,
+  'hover:bg-[hsl(var(--field-hover))]',
+  '[--row-hover-bg:hsl(var(--field-hover))]',
+];
 const BASE_ROW_BG = 'bg-card';
+// Figma Shadows/lg: on hover for a lifted line, unconditional for the line being edited.
+const HOVER_LIFT_SHADOW = 'hover:shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05),0_10px_15px_-3px_rgba(18,18,23,0.08)]';
+const LIFT_SHADOW_STATIC = 'shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05),0_10px_15px_-3px_rgba(18,18,23,0.08)]';
 
 function getRow(rowId) {
   return screen.getByTestId(`line-row-${rowId}`);
@@ -256,6 +265,18 @@ describe('InlineLinesPanel row selection shading (ETP-5030)', () => {
     expect(isRowShaded('L1')).toBe(true);
     expect(isRowShaded('L2')).toBe(false);
     expect(isRowShaded('L3')).toBe(false);
+  });
+
+  it('paints a ticked line with the --field-hover checked colour, kept on hover, instead of the former tint', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(getRowCheckbox('L1'));
+
+    const tokens = getRow('L1').className.split(/\s+/);
+    expect(tokens).toEqual(expect.arrayContaining(CHECKED_TOKENS));
+    expect(tokens).not.toContain('bg-primary/5');
+    expect(tokens).not.toContain(BASE_ROW_BG);
   });
 
   it('shades every selected row when several are ticked, leaving the rest untouched', async () => {
@@ -420,18 +441,13 @@ describe('InlineLinesPanel row highlight vs selection (ETP-5030)', () => {
     const edited = getRow('L1');
     expect(edited.querySelector('[data-testid="field-quantity"]')).not.toBeNull();
     expect(backgroundUtilitiesOn('L1')).toEqual([SELECTED_ROW_BG]);
+    // The line being edited stays lifted with the same Figma Shadows/lg, unconditionally.
+    expect(edited.classList.contains(LIFT_SHADOW_STATIC)).toBe(true);
     expect(edited.classList.contains('relative')).toBe(true);
     expect(edited.classList.contains('z-20')).toBe(true);
   });
 });
 
-/**
- * Behavioural counterpart to the source-text assertion in
- * InlineLinesPanel.test.js ("lifts the row with a shadow on hover"). That
- * regex-over-source check was previously satisfied by a stale prose comment
- * (`hover:z-10`) while the emitted class was `hover:z-20`, so it could not have
- * caught a drift. These assert the classes actually present on the rendered row.
- */
 /**
  * ETP-5029 — ticking a row's selection checkbox ALSO fired the row-body click
  * handler, so in Contacts' "Dirección" tab (whose `onRowClick` opens
@@ -547,16 +563,36 @@ describe('InlineLinesPanel selection checkbox vs row click (ETP-5029)', () => {
   });
 });
 
+/**
+ * Row hover elevation — the classes actually present on the rendered row. A
+ * line lifts on hover with Figma Shadows/lg, instantly (no shadow transition),
+ * stacked above its neighbours so the shadow spills over the rows below; a
+ * read-only (completed) document's lines do not lift at all.
+ */
 describe('InlineLinesPanel row hover elevation', () => {
-  it('gives every row the hover lift utilities so the shadow is not clipped by its neighbors', () => {
+  it('gives every row the instant hover lift so the shadow is not clipped by its neighbors', () => {
     renderPanel();
 
     for (const rowId of ['L1', 'L2', 'L3']) {
       const { classList } = getRow(rowId);
+      expect(classList.contains('transition-none')).toBe(true);
       expect(classList.contains('hover:relative')).toBe(true);
       expect(classList.contains('hover:z-20')).toBe(true);
+      expect(classList.contains(HOVER_LIFT_SHADOW)).toBe(true);
       expect(classList.contains('hover:z-10')).toBe(false);
-      expect(classList.contains('transition-shadow')).toBe(true);
+      expect(classList.contains('transition-shadow')).toBe(false);
+    }
+  });
+
+  it('does not lift the lines of a read-only document', () => {
+    renderPanel({ isDocumentReadOnly: true });
+
+    for (const rowId of ['L1', 'L2', 'L3']) {
+      const { classList } = getRow(rowId);
+      expect(classList.contains('hover:relative')).toBe(false);
+      expect(classList.contains('hover:z-20')).toBe(false);
+      expect(classList.contains(HOVER_LIFT_SHADOW)).toBe(false);
+      expect([...classList].some((cls) => cls.includes('shadow'))).toBe(false);
     }
   });
 

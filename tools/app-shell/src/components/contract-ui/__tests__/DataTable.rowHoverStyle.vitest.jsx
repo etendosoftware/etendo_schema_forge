@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
+// @covers tools/app-shell/src/components/contract-ui/rowVisuals.js
 /**
  * DataTable — row hover style and the row selection colours (getRowClassName) plus the
  * scroll wrapper's room for the lifted row's shadow.
@@ -181,6 +182,14 @@ describe('DataTable — non-clickable rows never lift', () => {
   });
 });
 
+// The lifted shadow's room: 24px of padding on the inner box, taken back from the layout
+// by a negative margin on this wrapper (no visible gap under the last row), with the
+// padding made click-through so it never swallows clicks on whatever follows the grid.
+const ROOM = [
+  '!-mb-6', '[&>div]:pb-6',
+  '[&>div]:pointer-events-none', '[&>div>table]:pointer-events-auto',
+];
+
 describe('DataTable — scroll wrapper room for the lifted shadow', () => {
   it.each([
     ['a clickable lifted grid', {}, true],
@@ -188,10 +197,15 @@ describe('DataTable — scroll wrapper room for the lifted shadow', () => {
     ['a clickable "tint" grid', { rowHoverStyle: 'tint' }, false],
     ['a non-clickable grid', { clickable: false }, false],
     ['an inlineEditable grid', { linesLayout: 'inlineEditable' }, false],
-  ])('pads the inner box only for %s', async (_label, props, padded) => {
+  ])('reserves the room only for %s', async (_label, props, padded) => {
     const { wrapper } = await renderRow(props);
 
-    expect(wrapper.includes('[&>div]:pb-6')).toBe(padded);
+    if (padded) {
+      expect(wrapper).toEqual(expect.arrayContaining(ROOM));
+    } else {
+      for (const cls of ROOM) expect(wrapper).not.toContain(cls);
+    }
+    // Never a bare padding on the wrapper itself: that would add a visible 24px gap.
     expect(wrapper).not.toContain('pb-6');
   });
 });
