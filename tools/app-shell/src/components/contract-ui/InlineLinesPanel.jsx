@@ -8,7 +8,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Layers, Pencil, Search, Trash2 } from 'lucide-react';
+import { Layers, Pencil, Search } from 'lucide-react';
+import { IconicTrashIcon } from '@/components/ui/custom-icons';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -38,7 +39,14 @@ import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 // expand chevron — DimensionGrid (the expanded content) is still reused as-is.
 import { DimensionGrid } from './DimensionsPanel.jsx';
 import { RowExpandToggle } from './RowExpandToggle.jsx';
-import { ROW_LIFT_SHADOW, ROW_LIFT_SHADOW_STATIC, ROW_CHECKED_BG } from './rowVisuals.js';
+import {
+  ROW_LIFT_SHADOW,
+  ROW_LIFT_SHADOW_STATIC,
+  ROW_CHECKED_BG,
+  ROW_ACTION_BUTTON_NEUTRAL,
+  ROW_ACTION_BUTTON_DESTRUCTIVE,
+  ROW_ACTION_BUTTON_ACTIVE,
+} from './rowVisuals.js';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
 const TOKENS = {
@@ -312,10 +320,22 @@ function useHorizontalOverflow(ref, enabled, columns, rowCount) {
  * ETP-4565 — `canDelete` mirrors DataTable's own `{onDeleteRow && (...)}` gate
  * (DataTable.jsx ~1450): when the caller doesn't pass `onDeleteRow` (e.g. a
  * `hideDelete: true` entity, whose capability resolves to `delete: false` in
- * the contract), the Trash2 button must not render at all — not just no-op on
+ * the contract), the delete button must not render at all — not just no-op on
  * click. Edit stays unaffected; only the delete button is gated. Defaults to
  * `true` so every existing caller (which always passes a real `onDeleteRow`
  * today) renders byte-for-byte the same as before this gate existed.
+ *
+ * ETP-5600 — the buttons are the list quick actions' Figma Icon Button sm (32x32,
+ * Round, Tertiary, 20px icon): the same `ROW_ACTION_BUTTON_*` classes from
+ * rowVisuals.js that RowQuickActions uses, so a list row and a document line show
+ * identical buttons. Delete is the Iconic trash. The pill behind them stays off
+ * (`QUICK_ACTIONS_USE_PILL`). `gap-0.5` (RowQuickActions' gap) keeps four 32px
+ * buttons (Add dimensions + a caller action + Edit + Delete) inside the 160px
+ * `ACTION_SLOT_WIDTH_PX` slot, and they fit the 40px (`h-10`) line row.
+ * The edit button of the line being edited keeps the hover overlay at rest
+ * (`ROW_ACTION_BUTTON_ACTIVE`): the row is lifted too, but the button is what the
+ * user pressed, so the cue stays on it — the same overlay hover shows, so it reads
+ * as "this button is engaged" without a new colour.
  */
 function renderRowActionStrip({
   showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete, canDelete = true, extraActions = [],
@@ -328,7 +348,7 @@ function renderRowActionStrip({
       data-testid="line-actions"
     >
       {showActions && (
-        <div className={`flex items-center gap-2 h-10 px-3 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
+        <div className={`flex items-center gap-0.5 h-10 px-2 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
           {extraActions.map(({ key, icon: Icon, tooltip, onClick, testId }) => (
             <button
               key={key}
@@ -336,10 +356,10 @@ function renderRowActionStrip({
               aria-label={tooltip}
               title={tooltip}
               onClick={onClick}
-              className="p-1 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+              className={ROW_ACTION_BUTTON_NEUTRAL}
               data-testid={testId ?? `line-action-${key}`}
             >
-              <Icon className="h-4 w-4" data-testid={`${key}Icon__3b7ec2`} />
+              <Icon className="h-5 w-5" data-testid={`${key}Icon__3b7ec2`} />
             </button>
           ))}
           <button
@@ -347,12 +367,9 @@ function renderRowActionStrip({
             aria-label={ui('editLineTooltip') ?? 'Edit line'}
             title={ui('editLineTooltip') ?? 'Edit line'}
             onClick={onEdit}
-            className={[
-              'p-1 rounded-full hover:bg-muted',
-              isEditing ? 'text-foreground bg-muted' : 'text-muted-foreground hover:text-foreground',
-            ].join(' ')}
+            className={isEditing ? `${ROW_ACTION_BUTTON_NEUTRAL} ${ROW_ACTION_BUTTON_ACTIVE}` : ROW_ACTION_BUTTON_NEUTRAL}
           >
-            <Pencil className="h-4 w-4" data-testid="Pencil__3b7ec2" />
+            <Pencil className="h-5 w-5" data-testid="Pencil__3b7ec2" />
           </button>
           {canDelete && (
             <button
@@ -361,9 +378,9 @@ function renderRowActionStrip({
               title={ui('deleteRowTooltip') ?? 'Delete'}
               onClick={onDelete}
               disabled={isDeleting}
-              className="p-1 rounded-full text-destructive hover:bg-destructive/10 disabled:opacity-50"
+              className={`${ROW_ACTION_BUTTON_DESTRUCTIVE} disabled:opacity-50`}
             >
-              <Trash2 className="h-4 w-4" data-testid="Trash2__3b7ec2" />
+              <IconicTrashIcon className="h-5 w-5" data-testid="IconicTrashIcon__3b7ec2" />
             </button>
           )}
         </div>
