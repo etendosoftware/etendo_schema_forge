@@ -488,13 +488,11 @@ export default function AccountsHeaderTable({
 
         {/* Vertical rule between the KPI panel and the rows, as in the original page */}
         <div className="w-px self-stretch bg-[hsl(var(--border-subtle))]" aria-hidden="true" />
-        {/* The only scrolling region. DataTable's own wrapper already reserves room
-            (`pb-6`) for the elevated hover shadow under its last row, but that only
-            helps inside DataTable's own overflow box. This div is an ADDITIONAL
-            `overflow: auto` ancestor layered on top of it — unique to this
-            hand-assembled headerTable, no other `rowHoverStyle="elevated"` consumer
-            has one — so it clips the shadow again at its own edge unless it also
-            carries the same 24px of trailing room. */}
+        {/* The only scrolling region. DataTable already reserves room (`[&>div]:pb-6`)
+            for the lifted hover shadow under its last row, but that only helps inside
+            DataTable's own overflow box. This div is an ADDITIONAL `overflow: auto`
+            ancestor layered on top of it — unique to this hand-assembled headerTable —
+            so it carries its own 24px of trailing room too. */}
         {/* `[&_table]:min-w-[1134px]` is the grid's floor: the sum of COLUMN_CHROME's
             widths (970px) plus the selection (40px) and actions (124px) cells. Above it the
             extra width is spread proportionally; below it the grid scrolls horizontally.
@@ -532,11 +530,8 @@ export default function AccountsHeaderTable({
             // `deselectRowIds` all reach DataTable through the `{...props}` spread above.
             // Nothing about selection is overridden here — this slot only READS
             // `selectedRows` to decide whether its toolbar is on screen.
-            // The retired page lifted the hovered row with a drop shadow instead of
-            // tinting it (`hover:z-10 hover:shadow-lg` on AccountRow's <tr>). Keeping
-            // that reading — the row as a raised card — is why DataTable takes a
-            // hover style rather than this slot restyling rows on its own.
-            rowHoverStyle="elevated"
+            // The hovered row lifts (white + shadow) through DataTable's default row
+            // hover (ETP-5600), the same reading the retired AccountRow had.
             // ETP-5457 — under the read-only tier the checkboxes go: their only use is ListView's
             // bulk delete, which ListView itself already drops for a read-only `window`, so a
             // selection would only raise an empty floating pill.

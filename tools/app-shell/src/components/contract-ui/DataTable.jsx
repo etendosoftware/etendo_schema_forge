@@ -171,15 +171,14 @@ function quickActionsColumnClassName(extraClassName) {
     // `has-[[data-state=open]]` keeps the cell sticky while a row kebab menu is open: the
     // portaled menu takes the pointer, the row loses `group-hover/row`, and without this the
     // cell falls back to its in-flow spot at the table's end and Radix re-anchors the menu there.
-    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,rgb(248,250,252)))] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,rgb(248,250,252)))]',
-    // ETP-5600 — Figma "Fila Contactos / Hover": a left-to-right fade from transparent to the
-    // row's own hover colour instead of a solid band, so the column it floats over fades out
-    // under the buttons rather than being cut off. The end colour is `--row-hover-bg`, so it
-    // blends with whatever the hosting window paints a hovered row: the default is the generic
-    // `hover:bg-muted/50` composited over white (≈ rgb(248,250,252), a literal — see
-    // DATA_COLOR_LITERALS in semanticThemeUsage.test.js for why this file is scoped-exempt);
-    // a window with its own row hover sets the variable on a wrapper (Contacts: `#fff`, and
-    // `#ECEEF1` on a checked row — `windows/custom/contacts/contacts.css`).
+    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card))))] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card))))]',
+    // ETP-5600 — Figma "Fila / Hover": a left-to-right fade from transparent to the row's own
+    // background instead of a solid band, so the column it floats over fades out under the
+    // buttons rather than being cut off. The end colour is `--row-hover-bg`, which every data
+    // row sets for its own state in getRowClassName (white on a lifted hover, the selected
+    // colour on a checked/active row, the composited tint under rowHoverStyle="tint"), so no
+    // window needs its own CSS variable. The `hsl(var(--card))` fallback only covers a row
+    // that does not set it (the header row never hovers as a group, so it never shows).
     extraClassName,
   ].filter(Boolean).join(' ');
 }
@@ -2052,43 +2051,65 @@ function isQuickActionsEnabled(rowQuickActions) {
   return true;
 }
 
+// ETP-5600 — the shared list-row visuals (Figma "Fila"): Shadows/lg, the checked
+// colour (#F5F7F9 = `--field-hover`, the exact design value) and the 1px line the
+// lifted row redraws on its own cells. Static strings so Tailwind's JIT sees them.
+const ROW_LIFT_SHADOW = 'hover:shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05),0_10px_15px_-3px_rgba(18,18,23,0.08)]';
+const ROW_LIFT_TOP_SEPARATOR = '[&:hover>td]:shadow-[inset_0_1px_0_hsl(var(--border-subtle))]';
+const ROW_CHECKED_BG = 'bg-[hsl(var(--field-hover))] hover:bg-[hsl(var(--field-hover))] [--row-hover-bg:hsl(var(--field-hover))]';
+const ROW_ACTIVE_BG = 'bg-primary/10 hover:bg-primary/10 [--row-hover-bg:color-mix(in_srgb,hsl(var(--primary))_10%,hsl(var(--card)))]';
+
+/** `'tint'` is the only opt-out; `'elevated'` (pre-ETP-5600 name) and anything else lift. */
+function isLiftHover(rowHoverStyle) {
+  return rowHoverStyle !== 'tint';
+}
+
+function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine }) {
+  // Inline-lines focus keeps its own look: a muted fill plus the focus ring.
+  if (isSelectedLine) return 'bg-muted ring-1 ring-focus-ring hover:bg-muted [--row-hover-bg:hsl(var(--muted))]';
+  if (selectedId != null && row.id === selectedId) return ROW_ACTIVE_BG;
+  if (isChecked) return selectedRowBg ?? ROW_CHECKED_BG;
+  return '';
+}
+
 /**
  * `rowHoverStyle` picks how a clickable row reacts to hover:
- *   - `tint` (default) tints the background, the behaviour every grid has today.
- *   - `elevated` lifts the row instead — an opaque background plus a drop shadow
- *     and `z-10`, so the shadow spills over the neighbouring row separators. Used
- *     by card-like lists (Accounts) where the row reads as a raised surface.
- * Selection always wins over hover, in both styles.
+ *   - `lift` (default, ETP-5600 — Figma "Fila"): transparent at rest; on hover an
+ *     opaque white background plus Shadows/lg, raised with `z-10` so the shadow falls
+ *     over the row below. Instant — no colour transition (a fading background made the
+ *     chips inside the row flash). The lifted row paints above the table's collapsed
+ *     border, which hid the line ABOVE it (the previous row's `border-b`); each of its
+ *     cells redraws that line as a 1px inset top shadow, which sits above every cell
+ *     background (the checkbox cell and the sticky quick-actions gradient included).
+ *     `elevated` is the former name of this style and stays an alias.
+ *   - `tint`: the pre-ETP-5600 translucent `bg-muted/50` wash, kept as an explicit
+ *     opt-out for a grid where a raised white row would read wrong.
+ * Selection always wins over hover: a checked / active row keeps its selection colour
+ * when hovered. Under `lift` it still gets the shadow, so the pointer feedback stays
+ * the same on every clickable row. Every row also sets `--row-hover-bg` to its own
+ * hovered background so the quick-actions fade ends on it (quickActionsColumnClassName).
  */
 function getRowClassName({
   onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine,
-  rowHoverStyle = 'tint',
+  rowHoverStyle = 'lift',
 }) {
   const clickable = onRowClick || onNavigate;
-  const elevated = rowHoverStyle === 'elevated';
-  // `bg-card` is what makes the drop shadow readable, but it competes with the
-  // selection backgrounds below on the same CSS property (Tailwind resolves that
-  // by stylesheet order, not by class order), so only opt in when no selection
-  // state is painting the row.
-  const selectionPainted = isChecked || isSelectedLine || (selectedId != null && row.id === selectedId);
-  let hoverClass;
-  if (isSelectedLine) {
-    hoverClass = 'hover:bg-muted';
-  } else if (!clickable) {
-    hoverClass = '';
-  } else if (elevated) {
-    hoverClass = 'hover:z-10 hover:bg-card hover:shadow-lg';
-  } else {
-    hoverClass = 'hover:bg-muted/50';
+  const lift = isLiftHover(rowHoverStyle);
+  const selectionClass = rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine });
+  let hoverClass = '';
+  if (clickable && !isSelectedLine && lift) {
+    hoverClass = [
+      'hover:z-10', ROW_LIFT_SHADOW, ROW_LIFT_TOP_SEPARATOR,
+      selectionClass ? '' : 'hover:bg-card [--row-hover-bg:hsl(var(--card))]',
+    ].filter(Boolean).join(' ');
+  } else if (clickable && !isSelectedLine && !selectionClass) {
+    hoverClass = 'hover:bg-muted/50 [--row-hover-bg:color-mix(in_srgb,hsl(var(--muted))_50%,hsl(var(--card)))]';
   }
   return [
     'h-12 group/row',
-    elevated ? 'relative transition-shadow' : 'transition-colors',
-    elevated && !selectionPainted ? 'bg-card' : '',
+    lift ? 'relative transition-none' : 'transition-colors',
     clickable ? 'cursor-pointer' : 'cursor-default',
-    isChecked ? selectedRowBg : '',
-    selectedId != null && row.id === selectedId ? 'bg-primary/10' : '',
-    isSelectedLine ? 'bg-muted ring-1 ring-focus-ring' : '',
+    selectionClass,
     hoverClass,
   ].filter(Boolean).join(' ');
 }
@@ -3026,7 +3047,7 @@ export function DataTable({
   navigate,
   selectedRowId,
   selectedId,
-  rowHoverStyle = 'tint',
+  rowHoverStyle = 'lift',
   compact,
   loading,
   addRow,
@@ -3420,8 +3441,10 @@ export function DataTable({
   const { quickActionsEnabled, legacyDeleteEnabled, colSpan } = computeRowActionColumnState({
     rowQuickActions, onDeleteRow, hoverRowActions, onCloneRow, visibleColumns, selectable,
   });
-  // ETP-5030 — InlineLinesPanel's `computeRowClassName` mirrors the `bg-primary/5` literal for tab grids; keep the two in sync.
-  const selectedRowBg = hoverRowActions ? 'bg-[hsl(var(--muted))]' : 'bg-primary/5';
+  // ETP-5600 — a checked row is Figma's "Fila / Selected" (#F5F7F9, `--field-hover`) in every
+  // grid. It used to be `bg-primary/5` (or `--muted` with hoverRowActions), mirrored by
+  // InlineLinesPanel's `computeRowClassName` (ETP-5030); that panel keeps `bg-primary/5` for now.
+  const selectedRowBg = ROW_CHECKED_BG;
 
   // Precompute the flex specs once so the colgroup below can both build the
   // fixed/grow <col> widths AND feed growColumnWidth() the totals it needs
@@ -3508,24 +3531,20 @@ export function DataTable({
       {stickyHeader}
       {/*
         `overflow-y-visible` next to `overflow-x-auto` is computed as `auto` by the CSS
-        spec, so this wrapper does clip vertically. With `rowHoverStyle="elevated"` the
-        hovered row's `shadow-lg` reaches ~22px below it (10px offset + 15px blur - 3px
-        spread); for the LAST row that lands past the table and got clipped away, which
-        read as "hover doesn't work on the last row".
+        spec, so this wrapper does clip vertically. Under the default `lift` row hover
+        (ETP-5600) the hovered row's Shadows/lg reaches ~22px below it (10px offset + 15px
+        blur - 3px spread); for the LAST row that lands past the table and got clipped
+        away, which read as "hover doesn't work on the last row" (ETP-5388).
 
-        Overflow clips at the PADDING box of the NEAREST ancestor whose own box ends
-        before the shadow does — and that is NOT this div. `<Table>`'s own hardcoded
-        wrapper (schema_forge_core's table.jsx: `<div className="relative w-full
-        overflow-auto">`, this div's direct child — the same one `[&>div]` reaches
-        below for the scrollbar) sizes itself to exactly the `<table>`'s content height
-        with zero slack, and its own `overflow-auto` clips the shadow there FIRST,
-        before it would ever reach this div's own padding box. `pb-6` on *this* div is
-        therefore a no-op for the last row on its own — `[&>div]:pb-6` is what actually
-        gives the shadow room, by padding the inner div that does the real clipping.
-        Both stay applied: dropping the outer `pb-6` would shrink the intrinsic height
-        this div reports to ITS OWN parent (e.g. a window's custom scroll wrapper, see
-        AccountsHeaderTable.jsx), re-clipping the now-visible shadow one level further
-        out.
+        The box that clips first is `<Table>`'s own hardcoded wrapper (schema_forge_core's
+        table.jsx: `<div className="relative w-full overflow-auto">`, this div's direct
+        child — the same one `[&>div]` reaches below for the scrollbar): it sizes itself
+        to exactly the `<table>`'s content height with zero slack. `[&>div]:pb-6` pads
+        that inner box so the shadow has room; the padding sits inside this div's content
+        box, so this div no longer needs its own `pb-6` (ETP-5600 dropped it: with the
+        lift now the default it added 24px more under every list). Only when rows can be
+        clicked (no hover otherwise), and not for `inlineEditable`, whose wrapper is
+        `overflow-visible` and never clips.
       */}
       <div
         ref={scrollContainerRef}
@@ -3548,7 +3567,7 @@ export function DataTable({
             // above this thumb once scrolled into view ("al final se ven
             // 2") — the `[&>div]` combinator reaches into that child instead.
             : 'overflow-x-auto overflow-y-visible [&>div]:[scrollbar-width:none] [&>div::-webkit-scrollbar]:hidden',
-          rowHoverStyle === 'elevated' ? 'pb-6 [&>div]:pb-6' : '',
+          linesLayout !== 'inlineEditable' && isLiftHover(rowHoverStyle) && (onRowClick || onNavigate) ? '[&>div]:pb-6' : '',
         ].filter(Boolean).join(' ')}
       >
         <Table style={getTableContainerStyle()} data-testid="Table__eb5261">
