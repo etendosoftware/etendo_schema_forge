@@ -326,7 +326,11 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     expect(getEnvironmentAccessDecision()).toBeNull();
   });
 
-  it('clears a previously-recorded decision on a 401', async () => {
+  // ETP-5047 — only a granted access map (2xx) proves the environment is usable again. Any other
+  // answer says nothing about the commercial block, so clearing on it made the blocked screen
+  // flicker away on a blocked tenant until the next 402 (docs/request-policy.md, "402 and the
+  // blocked-access screen").
+  it('leaves a previously-recorded decision UNCHANGED on a 401', async () => {
     stubFetch(jsonResponse(neoError('Environment access is not available: SUBSCRIPTION_REQUIRED'), false, 402));
     await fetchWindowAccess({ token: 'tok' });
     expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
@@ -334,10 +338,10 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     stubFetch(jsonResponse({ message: 'unauthorized' }, false, 401));
     await fetchWindowAccess({ token: 'tok' });
 
-    expect(getEnvironmentAccessDecision()).toBeNull();
+    expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
   });
 
-  it('clears a previously-recorded decision on an unrelated 500', async () => {
+  it('leaves a previously-recorded decision UNCHANGED on an unrelated 500', async () => {
     stubFetch(jsonResponse(neoError('Environment access is not available: DEMO_TRIAL_EXPIRED'), false, 402));
     await fetchWindowAccess({ token: 'tok' });
     expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
@@ -345,7 +349,18 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     stubFetch(jsonResponse({ message: 'internal error' }, false, 500));
     await fetchWindowAccess({ token: 'tok' });
 
-    expect(getEnvironmentAccessDecision()).toBeNull();
+    expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
+  });
+
+  it('leaves a previously-recorded decision UNCHANGED on a 402 that carries no blocking decision', async () => {
+    stubFetch(jsonResponse(guardDenial('DEMO_TRIAL_EXPIRED'), false, 402));
+    await fetchWindowAccess({ token: 'tok' });
+    expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
+
+    stubFetch(jsonResponse(neoError('Rate limit exceeded'), false, 402));
+    await fetchWindowAccess({ token: 'tok' });
+
+    expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
   });
 
   // Intentional behavior: a thrown/rejected `apiFetch()` call (DNS failure, connection

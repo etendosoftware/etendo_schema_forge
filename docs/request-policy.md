@@ -273,7 +273,8 @@ blocked-access screen.
 - The caller still gets its response, unread and unchanged — handle the 402 as before, or not at all.
 - The transport only ever **sets** a block. A 200 from another endpoint proves nothing (the account
   API stays reachable while ERP access is blocked); only a successful `/sws/neo/windowaccessmap`
-  clears it.
+  clears it. A 401, a 500, a 402 without a blocking decision or a network failure on that call
+  leaves the block in place (ETP-5047), and logging out through `useLogout` forgets it.
 - A 402 that arrives after the session changed identity (an environment switch) is not recorded.
 - Since ETP-5047 every refusing surface (NEO, MCP, the `/sws/go` tenant-session endpoints) answers
   the one body of `EnvironmentAccessGuard.Denial.errorBody` (com.etendoerp.go):
