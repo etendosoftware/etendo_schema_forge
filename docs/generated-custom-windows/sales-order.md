@@ -626,9 +626,15 @@ at a draft order.
 (com.etendoerp.go) before the button runs, on the REST action sub-endpoint and on MCP
 `etendo_action` alike:
 
-- **Which requests**: a POST on the `DocAction` / `documentAction` button whose value is `RE`, read
-  by `DocActionRequestSupport` from `fieldValues.documentAction`, root `docAction` or root
-  `documentAction` (the same parser the quotation's Reject routing uses).
+- **Which requests**: a POST on the `DocAction` / `documentAction` button whose **effective**
+  value is `RE` — the value the DB procedure will actually run, resolved from the one place
+  `NeoProcessService` resolves it: the root `docAction` parameter when non-blank
+  (`NeoProcessService.requestedDocAction`), otherwise the order's stored `C_Order.DocAction`
+  (`NeoProcessService.storedDocAction`), which `C_Order_Post` then executes. `fieldValues` is not
+  read: the procedure never reads it either. QA cycle 1 found the two bypasses this closes — a body
+  with `fieldValues.documentAction: "CO"` plus `docAction: "RE"` passed as a CO and reactivated,
+  and an empty body ran a stored `DocAction = 'RE'` unchecked (4 booked orders in the local DB carry
+  one).
 - **"Linked"** is exactly the flag's own rule — `AbstractOrderHeaderHandler.hasLinkedDocuments`,
   the query behind `hasLinkedDocuments`: an active `C_Invoice` or `M_InOut` whose header
   `C_Order_ID` is the order, **in any status (VO and DR included)**. Documents linked only through
@@ -636,7 +642,8 @@ at a draft order.
 - **Refusal**: HTTP 400 with AD_Message `ETGO_OrderReactivateLinkedDocs` ("This order cannot be
   reactivated because it has linked shipments or invoices."). The SPA maps it in `backendErrors.js`
   to the bulk bar's existing `cannotReactivateLinkedDocs` key, so both refusals read the same.
-- **Fails closed**: if the lookup cannot run, the reactivation is refused with HTTP 500 and
+- **Fails closed**: if the stored DocAction or the linked documents cannot be read, the action is
+  refused with HTTP 500 and
   `ETGO_OrderLinkedDocsCheckFailed`, mapped to `backendError.orderLinkedDocsCheckFailed`.
 
 No visible change in the normal flow — the SPA still hides the action. A user only meets the
