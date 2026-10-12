@@ -2058,6 +2058,9 @@ const ROW_LIFT_SHADOW = 'hover:shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05),0_10px
 const ROW_LIFT_TOP_SEPARATOR = '[&:hover>td]:shadow-[inset_0_1px_0_hsl(var(--border-subtle))]';
 const ROW_CHECKED_BG = 'bg-[hsl(var(--field-hover))] hover:bg-[hsl(var(--field-hover))] [--row-hover-bg:hsl(var(--field-hover))]';
 const ROW_ACTIVE_BG = 'bg-primary/10 hover:bg-primary/10 [--row-hover-bg:color-mix(in_srgb,hsl(var(--primary))_10%,hsl(var(--card)))]';
+// The composited `bg-muted/50` tint, for a row that tints on hover: a clickable row under
+// `rowHoverStyle="tint"`, or any non-clickable row (TableRow's own base `hover:bg-muted/50`).
+const ROW_TINT_HOVER_BG = '[--row-hover-bg:color-mix(in_srgb,hsl(var(--muted))_50%,hsl(var(--card)))]';
 
 /** `'tint'` is the only opt-out; `'elevated'` (pre-ETP-5600 name) and anything else lift. */
 function isLiftHover(rowHoverStyle) {
@@ -2094,20 +2097,23 @@ function getRowClassName({
   rowHoverStyle = 'lift',
 }) {
   const clickable = onRowClick || onNavigate;
-  const lift = isLiftHover(rowHoverStyle);
+  // Only a clickable row lifts; a non-clickable row renders as it did before ETP-5600.
+  const liftRow = clickable && isLiftHover(rowHoverStyle);
   const selectionClass = rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine });
   let hoverClass = '';
-  if (clickable && !isSelectedLine && lift) {
+  if (liftRow && !isSelectedLine) {
     hoverClass = [
       'hover:z-10', ROW_LIFT_SHADOW, ROW_LIFT_TOP_SEPARATOR,
       selectionClass ? '' : 'hover:bg-card [--row-hover-bg:hsl(var(--card))]',
     ].filter(Boolean).join(' ');
-  } else if (clickable && !isSelectedLine && !selectionClass) {
-    hoverClass = 'hover:bg-muted/50 [--row-hover-bg:color-mix(in_srgb,hsl(var(--muted))_50%,hsl(var(--card)))]';
+  } else if (!isSelectedLine && !selectionClass) {
+    // A non-clickable row still tints through TableRow's base `hover:bg-muted/50`, so it
+    // only needs the matching `--row-hover-bg` for the quick-actions fade to end on it.
+    hoverClass = clickable ? `hover:bg-muted/50 ${ROW_TINT_HOVER_BG}` : ROW_TINT_HOVER_BG;
   }
   return [
     'h-12 group/row',
-    lift ? 'relative transition-none' : 'transition-colors',
+    liftRow ? 'relative transition-none' : 'transition-colors',
     clickable ? 'cursor-pointer' : 'cursor-default',
     selectionClass,
     hoverClass,

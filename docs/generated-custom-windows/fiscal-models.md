@@ -3502,7 +3502,8 @@ from a `Date`. There was no locale leak to fix on 303.
 raised row (`position: relative; z-index: 2`) used to paint over the line above it (the previous
 row's `border-bottom` in the collapsed-border grid); `.fm-table tbody tr:hover td` now redraws it as
 `box-shadow: inset 0 1px 0 var(--fm-border-1)`. `.fm-table__row--selected` keeps its own inset
-borders (higher specificity).
+borders: both rules have the same specificity (0,2,3), so it wins by source order (it is declared
+after the hover rule in `fiscal-models.css`).
 
 ### Row hover actions — Edit/Delete/Reactivar (`FmRowActions`, ETP-5187, ETP-5338)
 
