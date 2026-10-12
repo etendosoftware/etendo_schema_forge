@@ -149,7 +149,8 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 // which sets no background of its own), composited to match the row's own
 // translucent hover tint (see quickActionsColumnClassName's own comment for
 // the exact math) while staying solid enough to mask real data underneath
-// while floating.
+// while floating. (ETP-5600: no longer solid — a fade to the row hover
+// colour, see the class list below.)
 function quickActionsColumnClassName(extraClassName) {
   // `relative` (not `sticky`) is the resting state — gives RowQuickActions'
   // `position: absolute` pill a containing block scoped to this cell either
@@ -170,16 +171,15 @@ function quickActionsColumnClassName(extraClassName) {
     // `has-[[data-state=open]]` keeps the cell sticky while a row kebab menu is open: the
     // portaled menu takes the pointer, the row loses `group-hover/row`, and without this the
     // cell falls back to its in-flow spot at the table's end and Radix re-anchors the menu there.
-    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[rgb(248,250,252)] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[rgb(248,250,252)]',
-    // Solid, not `bg-muted/50` — while floating this cell masks whatever row
-    // content is scrolled underneath it, so it can't be translucent or that
-    // content would show through. But a flat `bg-muted` (241/245/249) is
-    // visibly darker than the row's own `hover:bg-muted/50` OVER WHITE
-    // (≈248/250/252 — averaging bg-muted and white at 50/50), so the two
-    // states read as different shades of grey side by side. This is that same
-    // composited value, kept solid — matches the eye, still fully opaque.
-    // (Literal RGB, not a token — see DATA_COLOR_LITERALS in
-    // semanticThemeUsage.test.js for why this file is scoped-exempt.)
+    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,rgb(248,250,252)))] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,rgb(248,250,252)))]',
+    // ETP-5600 — Figma "Fila Contactos / Hover": a left-to-right fade from transparent to the
+    // row's own hover colour instead of a solid band, so the column it floats over fades out
+    // under the buttons rather than being cut off. The end colour is `--row-hover-bg`, so it
+    // blends with whatever the hosting window paints a hovered row: the default is the generic
+    // `hover:bg-muted/50` composited over white (≈ rgb(248,250,252), a literal — see
+    // DATA_COLOR_LITERALS in semanticThemeUsage.test.js for why this file is scoped-exempt);
+    // a window with its own row hover sets the variable on a wrapper (Contacts: `#fff`, and
+    // `#ECEEF1` on a checked row — `windows/custom/contacts/contacts.css`).
     extraClassName,
   ].filter(Boolean).join(' ');
 }

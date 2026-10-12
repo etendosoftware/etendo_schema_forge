@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ArrowUp, ArrowDown, LineChart } from 'lucide-react';
+import { LineChart } from 'lucide-react';
+import { IconicArrowUpIcon, IconicArrowDownIcon } from '@/components/ui/custom-icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { StatusTag } from '@/components/ui/status-tag';
 import { BPChartSVGContent } from './BPChartSVGContent';
@@ -66,22 +67,24 @@ function buildKpis(stats) {
 
 // ─── Trend badge ────────────────────────────────────────────────────────────
 
-// Direction icons, isolated so the final Figma SVGs are a one-line swap.
-const TREND_ICONS = { up: ArrowUp, down: ArrowDown };
+// Direction icons: the Figma "Iconic" arrows (24-grid, filled, currentColor), so the
+// arrow takes the chip's text colour (#17663A / #D50B3E).
+const TREND_ICONS = { up: IconicArrowUpIcon, down: IconicArrowDownIcon };
 
 /**
  * Variation chip (Figma "Badge sm", pill, no border): 24px high, 4px/8px padding,
  * gap 0, 16px icon then Inter 400 12/16 text. The ARROW follows the real
  * direction of the change; the COLOUR follows whether that change is good or
  * bad for the KPI (`goodWhenUp`), via the shared StatusTag success/destructive
- * tones (#EEFBF4/#17663A, #FEF0F4/#D50B3E).
+ * tones (#EEFBF4/#17663A, #FEF0F4/#D50B3E). A change that rounds to 0% is hidden
+ * like a missing one: a "0%" chip carries no information (ETP-5600).
  */
 function TrendBadge({ trend, goodWhenUp, period, ui }) {
   if (trend == null) return null;
-  const up = trend >= 0;
   const rounded = Math.abs(Math.round(trend));
-  let sign = '';
-  if (rounded !== 0) sign = up ? '+' : '\u2212';
+  if (rounded === 0) return null;
+  const up = trend > 0;
+  const sign = up ? '+' : '\u2212';
   const vsLabel = period === '6M' ? ui('bpVsLast6Months') : ui('bpVsLast3Months');
   const Arrow = up ? TREND_ICONS.up : TREND_ICONS.down;
   const good = up === goodWhenUp;

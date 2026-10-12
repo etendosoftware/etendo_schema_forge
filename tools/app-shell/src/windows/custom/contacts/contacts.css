@@ -119,3 +119,16 @@
 .contacts-rows tr {
   transition: none;
 }
+
+/* ── Row quick-actions fade end colour (ETP-5600, Figma "Fila Contactos / Hover") ──
+   The shared quick-actions cell (DataTable quickActionsColumnClassName) fades from
+   transparent to `--row-hover-bg`, defaulting to the generic grey row hover. Contacts
+   rows hover to white (core `.contacts-rows tr:hover`) and to #ECEEF1 when checked,
+   so the fade ends on those colours here; otherwise it would end on a grey band. */
+.contacts-rows {
+  --row-hover-bg: #ffffff;
+}
+
+.contacts-rows tr:has([aria-checked="true"]) {
+  --row-hover-bg: #ECEEF1;
+}

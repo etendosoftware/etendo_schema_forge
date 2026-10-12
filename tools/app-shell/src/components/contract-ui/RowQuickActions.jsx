@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { Pencil, Copy, Mail, MoreVertical, Trash2, Loader2 } from 'lucide-react';
+import { Pencil, Copy, Mail, MoreVertical, Loader2 } from 'lucide-react';
+import { IconicTrashIcon } from '@/components/ui/custom-icons';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
@@ -217,12 +218,14 @@ export default function RowQuickActions({
     // menuAction descriptor itself.
     .filter(a => isActionVisible(actionsConfig?.[a.key], a.visibleWhen, row));
 
-  // ETP-3504 — Figma exact colors:
-  // - Neutral icons (Edit, Clone, Email, More): hsl(var(--text-disabled))
-  // - Delete: hsl(var(--destructive))
-  // Hover darkens slightly: neutrals → text-foreground; delete → red-700.
-  const neutralBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:text-foreground hover:bg-muted/60 transition-colors';
-  const dangerBtnCls = 'h-8 w-8 p-0 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:text-destructive-foreground hover:bg-destructive transition-colors';
+  // ETP-5600 — Figma "Fila Contactos / Hover" buttons: sm 32x32, Round, Tertiary, 20px icon,
+  // 200ms ease-in. No fill at rest. Neutral icons stay #828FA3 (gray/400) in every state and
+  // hover only adds the #121217 @ 5% overlay; delete stays #D50B3E and hovers to the light
+  // destructive tint (--status-destructive-bg), never a solid red fill. Focus-visible draws the
+  // two-ring halo (2px white gap + 4px ink / pink-500) on a white fill. Supersedes ETP-3504.
+  const quickBtnBase = 'h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors duration-200 ease-in focus-visible:outline-none focus-visible:bg-white';
+  const neutralBtnCls = `${quickBtnBase} text-[#828FA3] hover:bg-[rgba(18,18,23,0.05)] focus-visible:shadow-[0_0_0_2px_#FFFFFF,0_0_0_4px_#121217]`;
+  const dangerBtnCls = `${quickBtnBase} text-[var(--status-destructive-fg)] hover:bg-[var(--status-destructive-bg)] focus-visible:shadow-[0_0_0_2px_#FFFFFF,0_0_0_4px_#F53D6B]`;
 
   const handleMenuActionClick = useCallback(async (action) => {
     setShowMenu(false);
@@ -499,7 +502,7 @@ export default function RowQuickActions({
           title={ui('quickAction.delete')}
           data-testid="row-quick-action-delete"
         >
-          {inFlight.delete ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__ec6673" />}
+          {inFlight.delete ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicTrashIcon className="h-5 w-5" data-testid="IconicTrashIcon__ec6673" />}
         </button>
       )}
     </div>
