@@ -554,6 +554,14 @@ lets blocked tenants in (for one tenant or for all) during an incident and logs 
 refused. Enforcement is on by default and stays on when the switch is unset or the control plane
 is unreachable.
 
+The polarity is inverted on purpose: every failure of the backend flag stack resolves to `false`,
+and `false` here means *enforcing*, so only a value that really resolves to `true` opens a blocked
+tenant; on ConfigCat it can be targeted per tenant through the `clientId` attribute. The SPA has no
+key for it in `flag-keys.js` and must never get one — it follows the 402 it is given: any 402 seen
+by `apiFetch` is recorded in the environment-access gate ([`request-policy.md`](request-policy.md)
+"402 and the blocked-access screen", ETP-5642), so with the switch on there is simply no 402 to
+block on. Registry entry: `environment-access-enforcement-kill-switch` in `flags-registry.json`.
+
 ---
 
 # Part 4 — The technical-debt system

@@ -117,35 +117,16 @@ are documented in [paid tenant infrastructure](paid-tenant-infrastructure.md).
 
 ## Backend-only flags
 
-A flag evaluated only in `com.etendoerp.go` has **no key in `flag-keys.js`**: the SPA reacts to
-what the backend answers, never to the flag itself. Its owned paths and specs are still registered
-in [`flags-registry.json`](../flags-registry.json) (root `backend`), like every other flag.
+A flag evaluated only in `com.etendoerp.go` (backend framework `featureflags/`, see
+*Architecture: flag code layout* above) has **no key in `flag-keys.js`, and none must be added**:
+the SPA reacts to what the backend answers, never to the flag itself — a browser key would be a
+second evaluator on a different control plane. Its owned paths, symbols and TTL are registered in
+[`flags-registry.json`](../flags-registry.json) under root `backend`, like every other flag, and
+its behaviour is documented in its topic doc and in `com.etendoerp.go`
+`docs/feature-flags-and-tenant-upgrade.md`. This page keeps only the list:
 
-### Environment access kill switch (`environment-access-enforcement-off`)
-
-ETP-5047's incident switch for the commercial access check — the HTTP 402 that NEO (every
-credential scheme), the `NEO_DATA` surfaces (favorites, fiscal test mode, report selectors, the
-OAuth2 API-key endpoints), MCP, the `/sws/go` tenant-session endpoints and the legacy
-`GET /sws/go/login?userId=` answer once a demo trial expired or a subscription's payment grace
-elapsed. The survey configuration (`NEO_AUXILIARY`) is deliberately not gated, and
-`POST /sws/go/session/environment` reports the decision without ever refusing. It is
-evaluated **only** in `com.etendoerp.go` (`EnvironmentAccessEnforcementFlag`, see that repo's
-`docs/feature-flags-and-tenant-upgrade.md`) and, like `bp-portal-link`, has **no key in
-`flag-keys.js`, and none must be added**: the SPA follows the 402 it is given. Any 402 seen by
-`apiFetch` records the block in the core's environment-access gate (ETP-5642, see
-[`request-policy.md`](request-policy.md) "402 and the blocked-access screen"), and
-`fetchWindowAccess()` reads the structured `error.decision` through
-`readEnvironmentAccessDecision` (`lib/environmentAccessGate.js`), falling back to the message
-prefix. With the switch on, no 402 is sent, so the SPA has nothing to block on.
-
-The polarity is inverted on purpose. Every failure of the backend flag stack resolves to `false`,
-and `false` here means **enforcing** — so an unset key or an unreachable control plane never opens
-a blocked tenant; only a value resolving to `true` does — on ConfigCat the boolean setting served
-as `true`, locally any of `true`, `Y`, `yes`, `1` (case-insensitive, trimmed; any other value keeps
-enforcing) — and the would-be refusal is then logged at INFO. It
-can be targeted per tenant on ConfigCat through the `clientId` attribute. Owned paths and pending
-specs are in [`flags-registry.json`](../flags-registry.json) under
-`environment-access-enforcement-kill-switch`. How to flip it in a shared environment, the deploy
-order and what support sees for a blocked tenant: "Operating environment-access enforcement" in
-`com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`; locally, see
-[`stripe-local-testing.md`](stripe-local-testing.md) "The 402 body and the kill switch".
+| Key | Registry entry | Topic doc |
+|---|---|---|
+| `bp-portal-link` | `bp-self-service-portal` | [BP self-service portal](plans/2026-09-10-bp-self-service-portal.md); backend: `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
+| `demo-data-transfer` | `demo-data-transfer` | Retired in `com.etendoerp.go` by ETP-5480 (`docs/feature-flags-and-tenant-upgrade.md`, "`demo-data-transfer` — retired"); the registry entry still awaits its retirement |
+| `environment-access-enforcement-off` | `environment-access-enforcement-kill-switch` | [Paid tenant infrastructure](paid-tenant-infrastructure.md) §3.7; local testing: [`stripe-local-testing.md`](stripe-local-testing.md) "The 402 body and the kill switch"; operating it: "Operating environment-access enforcement" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md` |
