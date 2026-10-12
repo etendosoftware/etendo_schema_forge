@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { ArrowUp, ArrowDown, LineChart } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { StatusTag } from '@/components/ui/status-tag';
 import { BPChartSVGContent } from './BPChartSVGContent';
 import ContactsPeriodButton from './ContactsPeriodButton';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { formatCurrency } from '@/lib/formatCurrency';
-import { useContactsFinance, useSyncFinanceRecordId } from './ContactsFinanceContext';
+import { useContactsFinance, useSyncFinanceRecordId, PERIOD_MONTHS } from './ContactsFinanceContext';
 
 /* eslint-disable react/prop-types */
-
-const PERIOD_MONTHS = { '3M': 3, '6M': 6 };
 
 // ─── KPI derivation ─────────────────────────────────────────────────────────
 
@@ -18,64 +17,85 @@ function findKpi(stats, key) {
   return Array.isArray(stats) ? stats.find(k => k.key === key) : null;
 }
 
-// Period-aware trend: % change of the last month vs the first month of the
-// selected window (e.g. 3M → Jun vs Apr). Computed from the bp-trend series so
-// it stays consistent with the chart and actually changes with the period.
-// Returns null when the window has fewer than 2 points or the base month is
-// zero / non-finite (no badge is shown in that case).
-function windowTrend(arr, months) {
-  if (!Array.isArray(arr)) return null;
-  const w = arr.slice(-months);
-  if (w.length < 2) return null;
-  const first = w[0];
-  const last = w[w.length - 1];
-  if (!Number.isFinite(first) || first === 0 || !Number.isFinite(last)) return null;
-  const t = ((last - first) / Math.abs(first)) * 100;
+function finiteOr(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// ETP-5600: the variation of a period block comes from bp-stats (`months`-aware):
+// current window = last N calendar months, previous = the N months before. It is
+// shown only when the backend reports a previous window (`hasPrevious`) and the
+// trend is a finite number — never a "0%" / "∞" placeholder.
+function blockTrend(block) {
+  if (!block?.hasPrevious) return null;
+  const t = Number(block.trend);
   return Number.isFinite(t) ? t : null;
 }
 
-function buildKpis(stats, trend, period) {
-  const revenue = findKpi(stats, 'revenueThisMonth');
-  const expenses = findKpi(stats, 'expensesThisMonth');
-  const revVal = revenue?.value ?? 0;
-  const expVal = expenses?.value ?? 0;
-  const months = PERIOD_MONTHS[period] ?? 3;
-  const revArr = trend?.revenue ?? [];
-  const expArr = trend?.expenses ?? [];
-  const netArr = revArr.map((r, i) => (r ?? 0) - (expArr[i] ?? 0));
+// Net balance variation, computed client-side from the two blocks:
+// (revCur − expCur) vs (revPrev − expPrev). Hidden when the previous net is 0
+// (no base to compare to); the base uses Math.abs so a negative previous net
+// still yields the real direction of the change.
+function netTrend(revenue, expenses) {
+  if (!revenue?.hasPrevious && !expenses?.hasPrevious) return null;
+  const cur = finiteOr(revenue?.value) - finiteOr(expenses?.value);
+  const prev = finiteOr(revenue?.previousValue) - finiteOr(expenses?.previousValue);
+  if (prev === 0) return null;
+  const t = ((cur - prev) / Math.abs(prev)) * 100;
+  return Number.isFinite(t) ? t : null;
+}
+
+// Amounts are the selected period's totals (bp-stats `revenue` / `expenses`,
+// net of VAT), so they follow the period selector. `goodWhenUp` drives the chip
+// colour: a rise is good for revenue and net balance, bad for expenses.
+function buildKpis(stats) {
+  const revenue = findKpi(stats, 'revenue');
+  const expenses = findKpi(stats, 'expenses');
+  const revVal = finiteOr(revenue?.value);
+  const expVal = finiteOr(expenses?.value);
   const netVal = revVal - expVal;
   return [
     { key: 'netBalance', labelKey: 'bpNetBalance', value: netVal,
-      trend: netVal === 0 ? null : windowTrend(netArr, months), positiveTone: netVal >= 0 },
+      trend: netTrend(revenue, expenses), positiveTone: netVal >= 0, goodWhenUp: true },
     { key: 'income', labelKey: 'bpRevenue', value: revVal,
-      trend: revVal === 0 ? null : windowTrend(revArr, months), positiveTone: true },
+      trend: blockTrend(revenue), positiveTone: true, goodWhenUp: true },
     { key: 'expenses', labelKey: 'bpExpenses', value: expVal,
-      trend: expVal === 0 ? null : windowTrend(expArr, months), positiveTone: false },
+      trend: blockTrend(expenses), positiveTone: false, goodWhenUp: false },
   ];
 }
 
 // ─── Trend badge ────────────────────────────────────────────────────────────
 
-function TrendBadge({ trend, period, ui }) {
+// Direction icons, isolated so the final Figma SVGs are a one-line swap.
+const TREND_ICONS = { up: ArrowUp, down: ArrowDown };
+
+/**
+ * Variation chip (Figma "Badge sm", pill, no border): 24px high, 4px/8px padding,
+ * gap 0, 16px icon then Inter 400 12/16 text. The ARROW follows the real
+ * direction of the change; the COLOUR follows whether that change is good or
+ * bad for the KPI (`goodWhenUp`), via the shared StatusTag success/destructive
+ * tones (#EEFBF4/#17663A, #FEF0F4/#D50B3E).
+ */
+function TrendBadge({ trend, goodWhenUp, period, ui }) {
   if (trend == null) return null;
   const up = trend >= 0;
-  const vsLabel = period === '3M' ? ui('bpVsLast3Months') : ui('bpVsLast6Months');
-  const Arrow = up ? ArrowUp : ArrowDown;
-  const pct = `${up ? '+' : '−'}${Math.abs(Math.round(trend))}%`;
+  const rounded = Math.abs(Math.round(trend));
+  let sign = '';
+  if (rounded !== 0) sign = up ? '+' : '\u2212';
+  const vsLabel = period === '6M' ? ui('bpVsLast6Months') : ui('bpVsLast3Months');
+  const Arrow = up ? TREND_ICONS.up : TREND_ICONS.down;
+  const good = up === goodWhenUp;
   return (
-    <span
-      className="flex items-center gap-0.5 px-2 py-1 rounded-full text-xs font-normal whitespace-nowrap"
-      style={{
-        background: up ? 'var(--status-success-bg)' : 'var(--status-destructive-bg)',
-        color: up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))',
-      }}
-    >
-      <Arrow
-        className="h-4 w-4 shrink-0"
-        style={{ color: up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))' }}
-        data-testid="Arrow__22ed51" />
-      {`${pct} ${vsLabel}`}
-    </span>
+    <StatusTag
+      tone={good ? 'success' : 'destructive'}
+      className="h-6 shrink-0 tracking-[-0.005em]"
+      label={(
+        <>
+          <Arrow className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="Arrow__22ed51" />
+          <span>{`${sign}${rounded}% ${vsLabel}`}</span>
+        </>
+      )}
+      data-testid="StatusTag__22ed51" />
   );
 }
 
@@ -90,6 +110,7 @@ function KpiBlock({ kpi, period, currencyCode, ui }) {
         </span>
         <TrendBadge
           trend={kpi.trend}
+          goodWhenUp={kpi.goodWhenUp}
           period={period}
           ui={ui}
           data-testid="TrendBadge__22ed51" />
@@ -144,6 +165,9 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
     <Dialog open={open} onOpenChange={onOpenChange} data-testid="Dialog__22ed51">
       <DialogContent
         className="max-w-[720px] w-full bg-popover text-popover-foreground sm:rounded-md"
+        // ETP-5600 (CP-5): opening the dialog must not land focus on the close X, which
+        // drew a focus ring before any keyboard interaction.
+        onOpenAutoFocus={(e) => e.preventDefault()}
         data-testid="DialogContent__22ed51">
         <DialogHeader data-testid="DialogHeader__22ed51">
           <DialogTitle data-testid="DialogTitle__22ed51">
@@ -194,7 +218,7 @@ export default function ContactsSummaryWidget({ data, optionalProvider = false }
   if (!data?.id) return null;
 
   const loading = stats === null;
-  const kpis = buildKpis(stats, trend, period);
+  const kpis = buildKpis(stats);
 
   return (
     // ETP-5600 spacing: no top padding (the tabs bar above already has 8px below it) and
