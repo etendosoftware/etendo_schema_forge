@@ -14,10 +14,10 @@ import { IconicTrashIcon } from '@/components/ui/custom-icons';
  * local; `[&_svg]:size-6` is not needed because this is a plain <button>.
  */
 export const DETAIL_DELETE_BTN_CLS = [
-  'h-10 w-10 p-2 flex items-center justify-center rounded-md border border-[#FBB1C4] bg-white',
+  'h-10 w-10 p-2 flex items-center justify-center rounded-md border border-[#FBB1C4] bg-card',
   'text-[var(--status-destructive-fg)] transition-[background-color,box-shadow] duration-200 ease-in',
   'hover:bg-[var(--status-destructive-bg)] hover:shadow-[0_1px_2px_0_rgba(18,18,23,0.05)]',
-  'focus-visible:outline-none focus-visible:bg-white focus-visible:shadow-[0_0_0_2px_#FFFFFF,0_0_0_4px_#F53D6B]',
+  'focus-visible:outline-none focus-visible:bg-card focus-visible:shadow-[0_0_0_2px_#FFFFFF,0_0_0_4px_#F53D6B]',
 ].join(' ');
 
 export function DetailDeleteButton({ onClick, title }) {

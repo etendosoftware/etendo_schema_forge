@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { LineChart } from 'lucide-react';
 import { IconicArrowUpIcon, IconicArrowDownIcon } from '@/components/ui/custom-icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -88,17 +88,19 @@ function TrendBadge({ trend, goodWhenUp, period, ui }) {
   const vsLabel = period === '6M' ? ui('bpVsLast6Months') : ui('bpVsLast3Months');
   const Arrow = up ? TREND_ICONS.up : TREND_ICONS.down;
   const good = up === goodWhenUp;
+  // StatusTag (core) does not spread extra props, so the testid lives on a wrapper.
   return (
-    <StatusTag
-      tone={good ? 'success' : 'destructive'}
-      className="h-6 shrink-0 tracking-[-0.005em]"
-      label={(
-        <>
-          <Arrow className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="Arrow__22ed51" />
-          <span>{`${sign}${rounded}% ${vsLabel}`}</span>
-        </>
-      )}
-      data-testid="StatusTag__22ed51" />
+    <span className="inline-flex shrink-0" data-testid="StatusTag__22ed51">
+      <StatusTag
+        tone={good ? 'success' : 'destructive'}
+        className="h-6 shrink-0 tracking-[-0.005em]"
+        label={(
+          <>
+            <Arrow className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="Arrow__22ed51" />
+            <span>{`${sign}${rounded}% ${vsLabel}`}</span>
+          </>
+        )} />
+    </span>
   );
 }
 
@@ -148,6 +150,7 @@ function ChartLegend({ ui }) {
  */
 function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
   const { locale } = useLocaleSwitch();
+  const contentRef = useRef(null);
 
   const labels = trend?.labels ?? [];
   const revenue = trend?.revenue ?? [];
@@ -167,10 +170,13 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange} data-testid="Dialog__22ed51">
       <DialogContent
-        className="max-w-[720px] w-full bg-popover text-popover-foreground sm:rounded-md"
+        className="max-w-[720px] w-full bg-popover text-popover-foreground sm:rounded-md focus:outline-none"
         // ETP-5600 (CP-5): opening the dialog must not land focus on the close X, which
-        // drew a focus ring before any keyboard interaction.
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        // drew a focus ring before any keyboard interaction. Focus moves to the content
+        // itself instead (Radix sets tabIndex=-1) so screen readers land inside the dialog;
+        // `focus:outline-none` keeps the content from drawing a ring of its own.
+        ref={contentRef}
+        onOpenAutoFocus={(e) => { e.preventDefault(); contentRef.current?.focus(); }}
         data-testid="DialogContent__22ed51">
         <DialogHeader data-testid="DialogHeader__22ed51">
           <DialogTitle data-testid="DialogTitle__22ed51">

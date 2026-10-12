@@ -2943,6 +2943,12 @@ Render each entry point only when it is defined. The reference implementation,
 an "Ask Copilot" button that calls `copilot.open`, and `useLaunchWalkthrough(source)`
 (`lib/walkthrough/useLaunchWalkthrough.js`, see `docs/walkthrough-flows.md` §9) to start a guided tutorial.
 
+The core `ImportDropzone` (`@etendosoftware/app-shell-core/components/import/ImportDropzone.jsx`) is shared
+by every window's `ImportDialog` and by this empty state, so its look changes everywhere at once (ETP-5600):
+by default a 1px dashed gray/200 border with no fill; on hover a 5% `#121217` overlay and a gray/400 border
+(200ms ease-in); while a file is dragged over, the primary highlight. An optional `disabled` prop (default
+`false`) renders the disabled fill, drops `tabIndex` to -1 and ignores clicks and drops.
+
 ### `primarySave` — keep Save as the primary button on existing records
 
 On an existing record, `DetailView` renders Save with the secondary (outline) look by default

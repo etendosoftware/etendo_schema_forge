@@ -223,7 +223,7 @@ export default function RowQuickActions({
   // hover only adds the #121217 @ 5% overlay; delete stays #D50B3E and hovers to the light
   // destructive tint (--status-destructive-bg), never a solid red fill. Focus-visible draws the
   // two-ring halo (2px white gap + 4px ink / pink-500) on a white fill. Supersedes ETP-3504.
-  const quickBtnBase = 'h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors duration-200 ease-in focus-visible:outline-none focus-visible:bg-white';
+  const quickBtnBase = 'h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors duration-200 ease-in focus-visible:outline-none focus-visible:bg-card';
   const neutralBtnCls = `${quickBtnBase} text-[#828FA3] hover:bg-[rgba(18,18,23,0.05)] focus-visible:shadow-[0_0_0_2px_#FFFFFF,0_0_0_4px_#121217]`;
   const dangerBtnCls = `${quickBtnBase} text-[var(--status-destructive-fg)] hover:bg-[var(--status-destructive-bg)] focus-visible:shadow-[0_0_0_2px_#FFFFFF,0_0_0_4px_#F53D6B]`;
 
