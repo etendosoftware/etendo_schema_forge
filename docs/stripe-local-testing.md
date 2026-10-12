@@ -202,8 +202,11 @@ enforcement" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`.
   `PAST_DUE` → `past_due`, `EXPIRED` → `canceled`, and the due date goes to `GRACE_ANCHOR`
   (cleared → null; before ETP-5047 it was `CURRENT_PERIOD_END`, and a `past_due` row still in
   that shape is read through a fallback). Since ETP-5047 `CURRENT_PERIOD_START/END` hold Stripe's
-  billing period (from `customer.subscription.*` and the `invoice.paid` lines) and `LAST_EVENT_AT`
-  the ordering watermark. Since ETP-5047 a cancellation also **closes** the row (`END_DATE` = Stripe's
+  billing period (from `customer.subscription.*` and the `invoice.paid` lines, and — for a new
+  purchase, whose first events arrive before the tenant exists and are ignored as `unresolved
+  subscription` — read once from `GET /v1/subscriptions/{id}` right after the paid onboarding,
+  never overwriting a period an event already wrote) and `LAST_EVENT_AT` the ordering watermark.
+  Since ETP-5047 a cancellation also **closes** the row (`END_DATE` = Stripe's
   `ended_at`, else `canceled_at`, else now); a closed row reads as `canceled` whatever `STATUS`
   says, so the tenant is `free` and `EXPIRED`, and a new checkout for the same tenant opens a
   **fresh** row. Query the tenant's rows, newest first:
@@ -566,6 +569,21 @@ brand-new account provisions without touching the checkout row at all.
 To assert the failure path instead, stop the stub and submit an upgrade: the call answers `502
 CHECKOUT_PROVIDER_ERROR` and the `CREATING` row deliberately survives, because it is the evidence
 that someone tried to buy something.
+
+**Expected WARNs on every offline paid onboarding (ETP-5047).** After provisioning, the backend
+reads the new row's billing period with `GET /v1/subscriptions/sub_sim_…` (the simulator's
+`checkout.session.completed` carries a `sub_sim_…` id). The stub answers only `POST`, so Python's
+HTTP server refuses the `GET` with `501`, and Tomcat logs two WARNs:
+
+```
+Provider answered 501 for GET /v1/subscriptions/sub_sim_… — treating it as unreachable
+Could not read the billing period of Stripe subscription sub_sim_… for client <AD_Client_ID>: the payment provider did not answer (…). The subscription row stays without a period until its next lifecycle event
+```
+
+Both are expected and harmless: the read is best effort, the onboarding succeeds, and the row
+keeps `current_period_start/end` NULL until a lifecycle event that reports a whole period writes
+them — the hand-written offline events below carry none, so offline the period normally stays
+NULL. The stub is deliberately not extended to answer the `GET`.
 
 The underlying script covers the rest of the matrix:
 
