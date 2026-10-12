@@ -192,6 +192,32 @@ export function __resetMenuAccessCacheForTest() {
   menuAccessInFlight = null;
 }
 
+// ETP-5047 — the client (environment) the last access map was requested for. A recorded
+// environment-access block belongs to that client: `fetchWindowAccess` clears a block only on a
+// granted access map, so without this a block would outlive the session it was recorded in.
+// `useLogout` forgets it on an explicit logout, but three automatic logouts inside the core
+// AuthContext end the session without going through it (an ambient 401 from a plain-module
+// apiFetch, a failed session restore, a logout broadcast from another tab). The next login in
+// the same tab would then open on the previous company's blocked screen, and keep it if that
+// client's first access map answered 401/500. Keyed on the client, not on the session: cookie
+// sessions carry no token, and a token renewal for the same client must keep the block.
+// `undefined` = no access map requested yet in this page load (nothing to compare with).
+let accessMapClientId;
+
+/** Forgets a block recorded for a client other than the one this access map is for. */
+function forgetEnvironmentBlockOfAnotherClient(session) {
+  const clientId = session?.clientId || null;
+  if (accessMapClientId !== undefined && accessMapClientId !== clientId) {
+    setEnvironmentAccessDecision(null);
+  }
+  accessMapClientId = clientId;
+}
+
+/** Test seam: forget which client the last access map was requested for. */
+export function __resetEnvironmentBlockClientForTest() {
+  accessMapClientId = undefined;
+}
+
 // ETP-5443 follow-up / ETP-5047 — recovers the `EnvironmentAccessPolicy.Decision` name from
 // a NEO 402. The body shape (structured `error.decision`, with the message-prefix fallback
 // whose envelope handling is the core gate's `readAccessErrorMessage`, shared with the
@@ -215,6 +241,7 @@ export async function fetchWindowAccess(session) {
   // push already-borderline waits past their timeout. Already fails open on its
   // own (see below), so racing it in parallel is safe.
   const menuAccessPromise = fetchMenuAccess().catch(() => ({}));
+  forgetEnvironmentBlockOfAnotherClient(session);
   try {
     // Reached via `/sws/neo/windowaccessmap` (NEO Headless's own JWT auth), not
     // `/webhooks/SFWindowAccessMap` — the Webhooks module additionally requires a
@@ -244,7 +271,8 @@ export async function fetchWindowAccess(session) {
       // again (ETP-5642: `apiFetch` also records a block from any other 402, but never
       // clears one). A thrown/rejected apiFetch (DNS, connection refused, abort) lands in
       // the outer catch below, which leaves the decision untouched for the same reason.
-      // Logout does not rely on any of this: `useLogout` (auth/useLogout.js) forgets the block,
+      // A block recorded for ANOTHER client was already forgotten above
+      // (`forgetEnvironmentBlockOfAnotherClient`); an explicit logout forgets it in `useLogout`,
       // and an environment switch reloads the page.
       if (res.status === 402) {
         const decision = await readNeoAccessDecision(res);

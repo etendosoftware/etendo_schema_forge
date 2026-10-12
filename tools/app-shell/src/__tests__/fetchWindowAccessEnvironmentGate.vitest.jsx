@@ -187,7 +187,11 @@ vi.mock('../lib/observability/RouteTracker.jsx', () => ({
   ObservabilityRouteTracker: () => null,
 }));
 
-import { fetchWindowAccess, __resetMenuAccessCacheForTest } from '../App.jsx';
+import {
+  fetchWindowAccess,
+  __resetMenuAccessCacheForTest,
+  __resetEnvironmentBlockClientForTest,
+} from '../App.jsx';
 import {
   getEnvironmentAccessDecision,
   resetEnvironmentAccessGateForTest,
@@ -231,6 +235,7 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
 
   beforeEach(() => {
     __resetMenuAccessCacheForTest();
+    __resetEnvironmentBlockClientForTest();
     resetEnvironmentAccessGateForTest();
   });
 
@@ -378,5 +383,76 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     await fetchWindowAccess({ token: 'tok' });
 
     expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
+  });
+
+  // ETP-5047 — a block belongs to the client (environment) it was recorded for. Three automatic
+  // logouts inside the core (an ambient 401, a failed session restore, a logout broadcast from
+  // another tab) end the session without going through `useLogout`, so the next login in the same
+  // tab can reach `fetchWindowAccess` with the previous client's block still recorded. Since only a
+  // granted access map clears a block, a 401/500 for the NEW client would otherwise keep showing
+  // the previous company's blocked screen.
+  describe('a block recorded for another client', () => {
+    const CLIENT_A = { token: 'tok-a', clientId: 'CLIENT_A' };
+    const CLIENT_B = { token: 'tok-b', clientId: 'CLIENT_B' };
+
+    async function recordBlockFor(session, decision = 'SUBSCRIPTION_REQUIRED') {
+      stubFetch(jsonResponse(guardDenial(decision), false, 402));
+      await fetchWindowAccess(session);
+      expect(getEnvironmentAccessDecision()).toBe(decision);
+    }
+
+    it('is forgotten when the access map of a different client answers 401', async () => {
+      await recordBlockFor(CLIENT_A);
+
+      stubFetch(jsonResponse({ message: 'unauthorized' }, false, 401));
+      await fetchWindowAccess(CLIENT_B);
+
+      expect(getEnvironmentAccessDecision()).toBeNull();
+    });
+
+    it('is forgotten when the access map of a different client answers 500', async () => {
+      await recordBlockFor(CLIENT_A, 'DEMO_TRIAL_EXPIRED');
+
+      stubFetch(jsonResponse({ message: 'internal error' }, false, 500));
+      await fetchWindowAccess(CLIENT_B);
+
+      expect(getEnvironmentAccessDecision()).toBeNull();
+    });
+
+    it('is forgotten when the access map of a different client cannot be reached at all', async () => {
+      await recordBlockFor(CLIENT_A);
+
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+      await fetchWindowAccess(CLIENT_B);
+
+      expect(getEnvironmentAccessDecision()).toBeNull();
+    });
+
+    it('is kept when the SAME client answers 401', async () => {
+      await recordBlockFor(CLIENT_A);
+
+      stubFetch(jsonResponse({ message: 'unauthorized' }, false, 401));
+      await fetchWindowAccess({ ...CLIENT_A, token: 'tok-a-renewed' });
+
+      expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
+    });
+
+    it('is replaced by the new client own block when that client is blocked too', async () => {
+      await recordBlockFor(CLIENT_A, 'SUBSCRIPTION_REQUIRED');
+
+      stubFetch(jsonResponse(guardDenial('DEMO_TRIAL_EXPIRED'), false, 402));
+      await fetchWindowAccess(CLIENT_B);
+
+      expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
+    });
+
+    it('is forgotten when the session no longer names a client', async () => {
+      await recordBlockFor(CLIENT_A);
+
+      stubFetch(jsonResponse({ message: 'unauthorized' }, false, 401));
+      await fetchWindowAccess({ token: 'tok' });
+
+      expect(getEnvironmentAccessDecision()).toBeNull();
+    });
   });
 });
