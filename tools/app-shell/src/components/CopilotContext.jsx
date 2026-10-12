@@ -94,6 +94,15 @@ export function CopilotProvider({ children, menuGroups }) {
   );
 }
 
+/**
+ * Same context as `useCopilot`, but `null` instead of throwing when there is no
+ * `CopilotProvider` above (embedded/chromeless renders, isolated tests). For an
+ * optional entry point that should simply not render without the panel.
+ */
+export function useCopilotOptional() {
+  return useContext(CopilotContext);
+}
+
 export function useCopilot() {
   const ctx = useContext(CopilotContext);
   if (!ctx) throw new Error('useCopilot must be used within CopilotProvider');

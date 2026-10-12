@@ -25,17 +25,17 @@ decisions.json → resolve-curated.js → generate-contract.js → push-to-neo.j
 
 ---
 
-## SPEC level — surfaced by `neo_discover`
+## SPEC level — surfaced by `etendo_discover`
 
 Built by `McpToolRouterSupport.buildDiscoverSpec` (`McpToolRouterSupport.java:191-198`),
 called from `McpToolRouter.java:165-168`.
 
 | Agent sees (JSON key) | Surfaced by | `ETGO_SF_SPEC` column | `decisions.json` source |
 |---|---|---|---|
-| `name` (kebab-case spec name) | `neo_discover` (`McpToolRouterSupport.java:191`) | `NAME` | derived via `toSpecName()` (`push-to-neo.js`) |
-| `type` (`"W"` / `"P"` / `"R"`) | `neo_discover` (`:192`) | `SPEC_TYPE` | set by the push path (W for windows) |
-| `agentPrompt` (only when non-empty) | `neo_discover` (`:198`) | `AGENT_PROMPT` | `window.agentPrompt` → `resolve-curated.js` → `push-to-neo.js:267` (`normalizeAgentPrompt`) → `neo-writer.js:103,118` |
-| `entities` summary — array of `{ name, methods[] }` (W specs only) | `neo_discover` (`buildEntitySummaryArray`, `McpToolRouter.java:167`; name at `McpToolRouterSupport.java:91`) | join to `ETGO_SF_ENTITY` (NAME + method flags) | — (derived from included entities) |
+| `name` (kebab-case spec name) | `etendo_discover` (`McpToolRouterSupport.java:191`) | `NAME` | derived via `toSpecName()` (`push-to-neo.js`) |
+| `type` (`"W"` / `"P"` / `"R"`) | `etendo_discover` (`:192`) | `SPEC_TYPE` | set by the push path (W for windows) |
+| `agentPrompt` (only when non-empty) | `etendo_discover` (`:198`) | `AGENT_PROMPT` | `window.agentPrompt` → `resolve-curated.js` → `push-to-neo.js:267` (`normalizeAgentPrompt`) → `neo-writer.js:103,118` |
+| `entities` summary — array of `{ name, methods[] }` (W specs only) | `etendo_discover` (`buildEntitySummaryArray`, `McpToolRouter.java:167`; name at `McpToolRouterSupport.java:91`) | join to `ETGO_SF_ENTITY` (NAME + method flags) | — (derived from included entities) |
 
 **Stored but NOT surfaced to the agent:** `DESCRIPTION`, `AD_WINDOW_ID`, `AD_PROCESS_ID`,
 `AD_MODULE_ID` (`neo-writer.js:115-118`) — they live in the spec row but `buildDiscoverSpec`
@@ -47,17 +47,17 @@ does not put them in the discover response.
 
 | Agent sees / uses | Surfaced by | `ETGO_SF_ENTITY` column | `decisions.json` source |
 |---|---|---|---|
-| `name` (the `entity` parameter for every CRUD/schema tool) | `neo_discover` summary (`McpToolRouterSupport.java:91`), `neo_schema` | `NAME` | entity name / contract name (`neo-writer.js:173-179`, `push-to-neo.js:571-590`) |
-| `methods` — which of GET / GETBYID / POST / PUT / PATCH / DELETE are allowed | `neo_discover` summary + `neo_schema` (`entitySchema.put("methods", …)`, `McpToolRouter.java:649`) | `ISGET`, `ISGETBYID`, `ISPOST`, `ISPUT`, `ISPATCH`, `ISDELETE` (`neo-writer.js:188-189,204`) | `populateWindowSpec` (`push-to-neo.js`) sets the method flags |
+| `name` (the `entity` parameter for every CRUD/schema tool) | `etendo_discover` summary (`McpToolRouterSupport.java:91`), `etendo_schema` | `NAME` | entity name / contract name (`neo-writer.js:173-179`, `push-to-neo.js:571-590`) |
+| `methods` — which of GET / GETBYID / POST / PUT / PATCH / DELETE are allowed | `etendo_discover` summary + `etendo_schema` (`entitySchema.put("methods", …)`, `McpToolRouter.java:649`) | `ISGET`, `ISGETBYID`, `ISPOST`, `ISPUT`, `ISPATCH`, `ISDELETE` (`neo-writer.js:188-189,204`) | `populateWindowSpec` (`push-to-neo.js`) sets the method flags |
 | `Java_Qualifier` — **NOT surfaced to the agent**; internal `NeoHandler` routing key (`NeoServlet` dispatch) | not in any agent response | `JAVA_QUALIFIER` (`neo-writer.js:189,205`) | entity-level `javaQualifier` (`resolve-curated.js:539`) |
 
 **`draftMode`** is an entity-level concept declared in `decisions.json`
-(`entities.<e>.draftMode`) and carried in the contract; it changes how `neo_create`/
-`neo_update` behave but is not a standalone field in the schema response.
+(`entities.<e>.draftMode`) and carried in the contract; it changes how `etendo_create`/
+`etendo_update` behave but is not a standalone field in the schema response.
 
 ---
 
-## FIELD level — surfaced by `neo_schema` (per field) and `neo_defaults`
+## FIELD level — surfaced by `etendo_schema` (per field) and `etendo_defaults`
 
 Each field object is built by `McpToolRouterSupport.buildSchemaField`
 (`McpToolRouterSupport.java:312-335`). Field metadata from the table is loaded once by
@@ -76,13 +76,13 @@ Each field object is built by `McpToolRouterSupport.buildSchemaField`
 | **`businessCritical`** (boolean) | **table** | `ISBUSINESSCRITICAL` (`neo-writer.js:314`; `push-to-neo.js:375`) | **`fields.<f>.businessCritical`** (`resolve-curated.js:279`) |
 | **`agentPrompt`** (only when non-empty) | **table** | `AGENT_PROMPT` (`neo-writer.js:275,316`; `push-to-neo.js:346-349,382-384`) | **`fields.<f>.agentPrompt`** (`resolve-curated.js:204`) |
 | `hasSelector` + `selectorType` (`TableDir`/`Table`/`Search`/…) | computed | from `AD_Reference` (`:332,404-408`) | — |
-| button info: `triggerValue`, `action`, `invokeVia:"neo_action"`, `processType`, `processName`, `processId` (button cols only) | from AD | `AD_Column.Process` / `OBUIAPPProcess` (`:334,345-364`) | AD |
+| button info: `triggerValue`, `action`, `invokeVia:"etendo_action"`, `processType`, `processName`, `processId` (button cols only) | from AD | `AD_Column.Process` / `OBUIAPPProcess` (`:334,345-364`) | AD |
 | **`actionValues`** (`[{value,label}]`, sorted) + **`actionParameter`** (`"docAction"`) — only for buttons whose AD column has an `AD_Reference_Value` list (ETP-4285) | from AD | `McpSchemaFieldBuilder.addActionValues` → `NeoSelectorService.getListLabels` (active-only) | **Not settable in `decisions.json`.** The AD list is the full active set and is intentionally broader than what is legal per state — the state machine lives in the field's `agentPrompt` |
 | `defaultValue` (resolved on create/read) | **table + AD** | `DEFAULTVALUE` (`neo-writer.js:314`) + AD default cascade | **`fields.<f>.defaultValue`** |
 
 ### `visibility` — wired but currently sourced as a pair, not a column
 
-`neo_schema` *can* emit `visibility` + `userRequired` (`addVisibility`,
+`etendo_schema` *can* emit `visibility` + `userRequired` (`addVisibility`,
 `McpToolRouterSupport.java:396-400`), reading `ETGO_SF_FIELD.VISIBILITY`
 (`loadFieldMetadata:258`). **But the schema_forge writer does not populate that column** —
 `push-to-neo.js`'s `mapVisibility` (`push-to-neo.js:52-64`) converts the `decisions.json`
@@ -102,7 +102,7 @@ The enum mapping (`mapVisibility`): `editable`→(included, not-readonly); `read
 ### `userRequired` also derives from `preconditions` (ETP-4276) — second, generic source
 
 Since ETP-4276 there is a **second source** for `userRequired`, independent of visibility/AD-mandatory
-and applicable to **any** entity — not just assets: `neo_schema` reads the entity's
+and applicable to **any** entity — not just assets: `etendo_schema` reads the entity's
 `ETGO_SF_ENTITY.preconditions` (the same declaration the runtime gate
 `NeoProcessPreconditionValidator` enforces, ETP-4275) and, for every field named in a precondition
 rule, emits:
@@ -118,7 +118,7 @@ two-layer model: this hint is advisory; the runtime gate is the enforcement. It 
 `ETGO_SF_FIELD.VISIBILITY` to be populated (unlike the visibility-derived value above), so it works
 today.
 
-**Caveat — aggregation across processes.** `neo_schema` describes an entity at the *window* level,
+**Caveat — aggregation across processes.** `etendo_schema` describes an entity at the *window* level,
 not per process invocation. `loadPreconditionRequirements` therefore **flattens the requirements of
 all processes** declared on the entity into one map: a field required only by process B is flagged
 `userRequired` on the window even when the agent intends process A, and if the same field appears

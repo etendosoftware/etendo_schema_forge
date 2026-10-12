@@ -27,6 +27,7 @@ import { useUI, useLocaleSwitch } from '@/i18n';
 import { useWindowAccess } from '@/auth/AuthContext.jsx';
 import { useBankConnectionActions, launchSaltEdgePopup } from '@/hooks/useBankConnectionActions.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { refreshNow } from '@/hooks/useNow.js';
 import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow.js';
 import {
   AccountsSidebar,
@@ -261,6 +262,12 @@ export default function AccountsHeaderTable({
   const [disconnecting, setDisconnecting] = useState(false);
 
   const reload = () => onDataMutated?.();
+  // ETP-5582 — the toolbar "Actualizar" also recomputes the relative sync labels right away
+  // (they otherwise keep the stale shared 30 s tick until the next one).
+  const handleRefresh = () => {
+    reload();
+    refreshNow();
+  };
 
   const { sync, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
   const bankConnectionFlow = useBankConnectionFlow({ onDone: reload });
@@ -456,7 +463,7 @@ export default function AccountsHeaderTable({
           // follows the role's access to the match-rule window instead (see canOpenMatchRules).
           windowReadOnly={windowReadOnly}
           showMatchingRules={canOpenMatchRules}
-          onRefresh={reload}
+          onRefresh={handleRefresh}
           // The "Ordenar por" control every other list gets from ListView's idle bar. This
           // window sets `hideListBar: true` and draws its own toolbar, so without rendering it
           // here the clickable headers would be the only sort affordance. Same component

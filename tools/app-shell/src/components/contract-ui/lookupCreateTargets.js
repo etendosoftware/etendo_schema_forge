@@ -59,6 +59,69 @@ export function buildContactSeed(query, { documentType } = {}) {
 }
 
 /**
+ * Search key (`C_BP_Group.Value`) of the contact category a contact created from a document
+ * of each nature starts in.
+ *
+ * Onboarding gives EVERY client three groups whose `Value` is `Cliente`, `Proveedor` and
+ * `Acreedor`, and flags `Cliente` as the default. That default is what the Contacts form
+ * proposes on its own, which is wrong for a contact created from a PURCHASE document: it
+ * appeared as "Cliente". The mapping is explicit for both natures rather than relying on the
+ * DB default for `sale`. Ids are never hardcoded — they differ per client — so the id is
+ * resolved at open time by `resolveContactCategorySeed`.
+ */
+export const CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE = {
+  purchase: 'Proveedor',
+  sale: 'Cliente',
+};
+
+/** `businessPartner` field that holds `C_BP_Group_ID`, and the selector that lists its options. */
+export const CONTACT_CATEGORY_FIELD = 'businessPartnerCategory';
+const CONTACT_CATEGORY_SELECTOR_PATH = `/businessPartner/selectors/${CONTACT_CATEGORY_FIELD}`;
+const CONTACT_CATEGORY_LOOKUP_TIMEOUT_MS = 4000;
+
+/**
+ * Resolves the contact-category seed for a new contact, or `{}` when the default must stand.
+ *
+ * Async because the category id is per client: it is read through the contacts spec's own
+ * `businessPartnerCategory` selector (`apiFetch` must be bound to the contacts API base).
+ * The selector only searches the group's identifier (its Name), not its search key, so the
+ * query is the key text and the result is narrowed to the row whose label equals it exactly.
+ * Onboarding creates Name == Value; a tenant that renamed the group, or an extra custom group
+ * that merely contains the text, therefore falls through to the default instead of being
+ * guessed at.
+ *
+ * Never throws and never blocks: a missing group, a non-OK answer, a network error or the
+ * timeout all resolve to `{}`, leaving the form's own default in place.
+ *
+ * @returns {Promise<object>} `{ businessPartnerCategory, 'businessPartnerCategory$_identifier' }` or `{}`
+ */
+export async function resolveContactCategorySeed({ apiFetch, documentType }) {
+  const key = CONTACT_CATEGORY_KEY_BY_DOCUMENT_TYPE[documentType];
+  if (!key || typeof apiFetch !== 'function') return {};
+  try {
+    const params = new URLSearchParams({ q: key, limit: '50' });
+    const res = await apiFetch(`${CONTACT_CATEGORY_SELECTOR_PATH}?${params}`, {
+      timeout: CONTACT_CATEGORY_LOOKUP_TIMEOUT_MS,
+    });
+    if (!res?.ok) return {};
+    const body = await res.json();
+    const rows = Array.isArray(body?.items) ? body.items : [];
+    const wanted = key.toLowerCase();
+    const match = rows.find(
+      row => row?.id && String(row.label ?? row._identifier ?? row.name ?? '').trim().toLowerCase() === wanted,
+    );
+    if (!match) return {};
+    return {
+      [CONTACT_CATEGORY_FIELD]: match.id,
+      // The label the selector shows for the seeded id; without it the field renders blank.
+      [`${CONTACT_CATEGORY_FIELD}$_identifier`]: match.label ?? match._identifier ?? match.name,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/**
  * The caption a caller shows for the contact that was just created.
  *
  * `name` holds the razón social and is what a COMPANY carries. A PERSON is stored as

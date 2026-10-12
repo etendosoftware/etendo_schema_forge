@@ -12,12 +12,13 @@ import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { RefreshButton } from '@/components/contract-ui/RefreshButton.jsx';
 import { DateRangePopover } from '@/components/ui/date-range-popover';
 import { Button } from '@/components/ui/button';
-import { Tag } from '@/components/ui/tag';
+import { StatusTag } from '@/components/ui/status-tag';
 import { useClientSort } from '@/hooks/useClientSort';
 import { showBulkActionToast } from '@/hooks/useBulkActionToast';
 
 // ETP-5022: this page carried its own buildHeaders copy; header policy now has one home.
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useCopyPageLink } from '@/hooks/useCopyLinkAction.js';
 import {
   translateBackendError,
   extractBackendMessageKeys,
@@ -79,7 +80,7 @@ function rowDocTypeLabel(row, ui, documentTypeLabels) {
 }
 
 // Same chrome as ListView's own link button, which these toolbar icons sit next to.
-const ICON_BUTTON_CLASS = 'h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors';
+const ICON_BUTTON_CLASS = 'h-10 w-10 flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:text-foreground transition-colors';
 
 export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const ui = useUI();
@@ -220,7 +221,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       id: row.documentId,
       documentTypeLabel: rowDocTypeLabel(row, ui, documentTypeLabels),
       accountingStatusLabel: statusDef ? ui(statusDef.labelKey) : '',
-      statusVariant: statusDef?.variant ?? null,
+      statusTone: statusDef?.tone ?? null,
     };
   }), [rows, ui, documentTypeLabels]);
 
@@ -239,10 +240,10 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       key: 'accountingStatusLabel',
       label: ui('statusLabel'),
       type: 'string',
-      render: (row) => (row.statusVariant
+      render: (row) => (row.statusTone
         ? (
           <span data-testid={`npd-status-${row.documentId}`}>
-            <Tag variant={row.statusVariant} label={row.accountingStatusLabel} data-testid="Tag__npdrow" />
+            <StatusTag tone={row.statusTone} label={row.accountingStatusLabel} data-testid="StatusTag__npdrow" />
           </span>
         )
         : null),
@@ -350,14 +351,8 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   }
 
   // ── Share: the page URL already carries the filters ──────────────────────────
-  async function copyPageLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success(ui('linkCopied'));
-    } catch {
-      toast.error(ui('copyFailed'));
-    }
-  }
+  // Same hook as ListView's toolbar Share (ETP-5593).
+  const copyPageLink = useCopyPageLink();
 
   useSetPageMeta({
     title: ui('notPostedDocuments'),
@@ -418,7 +413,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     <div
       className="flex-1 flex flex-col bg-card rounded-tl-2xl overflow-hidden min-h-0"
       data-testid="npd-page">
-      <div className="flex flex-wrap items-center gap-2 px-2 py-3" data-testid="npd-toolbar">
+      <div className="flex flex-wrap items-center gap-2 p-2" data-testid="npd-toolbar">
         <DistinctValuesFilter
           value={filters.document}
           onChange={(code) => updateFilters({ document: code })}
@@ -438,10 +433,10 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           renderLabel={(token) => (token === ALL_ERRORS_TOKEN
             ? statusLabel(token) // plain text, same weight as the "Todos los estados" row
             : (
-              <Tag
-                variant={statusDefForToken(token).variant}
+              <StatusTag
+                tone={statusDefForToken(token).tone}
                 label={statusLabel(token)}
-                data-testid="Tag__npdstatus" />
+                data-testid="StatusTag__npdstatus" />
             ))}
           allLabel={ui('allStatuses')}
           multipleLabel={statusTriggerLabel}
@@ -459,7 +454,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
             data-testid="DateRangePopover__npd" />
         </span>
         {!filtersAreDefault && (
-          <Button type="button" onClick={resetFilters} data-testid="npd-reset-filters">
+          <Button type="button" variant="outline" onClick={resetFilters} className="h-10 px-3 rounded-lg bg-card text-sm leading-6 font-medium text-[#121217]" data-testid="npd-reset-filters">
             {ui('resetFilters')}
           </Button>
         )}
@@ -471,7 +466,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           aria-label={ui('copyLink')}
           className={ICON_BUTTON_CLASS}
           data-testid="npd-share">
-          <Link2 className="h-4 w-4" data-testid="Link2__npd" />
+          <Link2 className="h-5 w-5" data-testid="Link2__npd" />
         </button>
         <ListSortPopover
           columns={columns}

@@ -5,13 +5,15 @@ import {
   Download, CircleCheck, Search,
   Loader2, Globe, ChevronDown, Users, FileEdit,
   TriangleAlert, ReceiptText, Calculator, PenLine, ShieldAlert, Info, FileCheck,
-  X, Save,
+  X, Save, RefreshCw,
 } from 'lucide-react';
-import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
+import { KpiWidget, Tabs } from '../../FmCommon.jsx';
+import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta, buildDeclTitle, tabCount, incidentsTabBadge, FmEmptyState } from '../../FmDetailChrome.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
-import { formatAmount, compute349Operators, generate349File, validate349Vies, persistManualData } from '../../fiscalModelsUtils.js';
+import { formatAmount, compute349Operators, generate349File, validate349Vies, persistManualData, RECEIPT_ATTACHMENT_CONFIG } from '../../fiscalModelsUtils.js';
+import { FORMER_STATEMENT_LENGTH, isValidFormerStatement, sanitizeFormerStatementInput } from '../../formerStatement.js';
 import { invalidateFiscalComputeCache, getCachedFiscalCompute, setCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import '../../fiscal-models.css';
@@ -21,13 +23,6 @@ import '../../fiscal-models.css';
 // "Presentación con Acuse de recibo" upload path here — no telematic
 // submission flow (no backend endpoint for it yet).
 const FISCAL_DECL_TABLE = 'ETGO_Fiscal_Decl';
-
-// statusLabelKey (ETP-4755): see FmModel303Page.jsx for the identical helper — the status
-// badge must always read the plain "Presentado" for BOTH `submitted` and `submitted_ack`;
-// HOW it was submitted is shown exclusively via the `submissionMethod` suffix below.
-function statusLabelKey(status) {
-  return status === 'submitted_ack' ? 'submitted' : status;
-}
 
 // ── Constants ────────────────────────────────────────────────────
 const KEY_IDS = ['E', 'S', 'A', 'I'];
@@ -59,19 +54,7 @@ function declaredPeriodLabel(op) {
   return [period, year].filter(Boolean).join(' ');
 }
 
-// ETP-5456 — extracted out of the main component (S3776 cognitive-complexity fix, pure
-// refactor, no behavior change). Mirrors the exact monthNum/monthName/periodLabel logic that
-// used to live inline: a numeric two-digit `period` resolves to its localized month name
-// (explicit `bcpLocale`, not the runtime default — see the call site's own ETP-5338 comment);
-// anything else (quarters like "T1") falls back to the raw `year period` string.
-function buildPeriodLabel(decl, bcpLocale) {
-  const monthNum = /^\d{2}$/.test(decl.period) ? parseInt(decl.period, 10) : null;
-  if (!monthNum) return `${decl.year} ${decl.period}`;
-  const monthName = new Intl.DateTimeFormat(bcpLocale, { month: 'long' }).format(new Date(2000, monthNum - 1, 1));
-  return `${decl.year} / ${monthName}`;
-}
-
-// ETP-5456 — extracted alongside buildPeriodLabel (same S3776 fix). A filter only ever
+// ETP-5456 — extracted out of the main component (S3776 cognitive-complexity fix). A filter only ever
 // applies to the tab it was created for; the other tab must read null even in the instant
 // before the clear lands (see the call sites' own comment, unchanged).
 function resolveOriginFilterForTab(originFilter, tab) {
@@ -160,8 +143,10 @@ function rectificationKeys(r) {
 }
 
 // ── Sub-components ───────────────────────────────────────────────
-function KeyBadge({ k }) {
-  return <span className={`fm-key fm-key--${k}`}>{k}</span>;
+// ETP-5597 — colour comes from `.fm-key--{k}` (fiscal-models.css), grouped by operation type:
+// sales/issued (E, S) share one colour, purchases/received (A, I) share another.
+function KeyBadge({ k, 'data-testid': testId }) {
+  return <span className={`fm-key fm-key--${k}`} data-testid={testId}>{k}</span>;
 }
 
 // Follows the same inline-pill shape as ViesBadge above (see .fm-vies in
@@ -296,10 +281,6 @@ function KeyFilterDropdown({ value, onChange, t }) {
     ? allLabel
     : `${value} — ${t('fm.m349.key.' + value) ?? value}`;
 
-  const keyColors = { E: 'var(--status-info-bg)', S: 'var(--status-info-bg)', A: 'var(--status-warning-bg)', I: 'var(--status-info-bg)' };
-  const keyFgColors = { E: 'var(--status-info-fg)', S: 'var(--status-info-fg)', A: 'var(--status-warning-fg)', I: 'var(--status-info-fg)' };
-  const keyBorderColors = { E: 'var(--status-info-border)', S: 'var(--status-info-border)', A: 'var(--status-warning-border)', I: 'var(--status-info-border)' };
-
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
@@ -330,12 +311,9 @@ function KeyFilterDropdown({ value, onChange, t }) {
               className={`fm-status-select__item${value === k ? ' fm-status-select__item--active' : ''}`}
               onClick={() => { onChange(k); setOpen(false); }}
             >
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 24, height: 24, borderRadius: 8, fontSize: 12, fontWeight: 500,
-                background: keyColors[k], color: keyFgColors[k],
-                border: `1px solid ${keyBorderColors[k]}`,
-              }}>{k}</span>
+              {/* ETP-5597 — same KeyBadge as the totals card, so the key colours (grouped by
+                  operation type, see `.fm-key--*` in fiscal-models.css) have ONE source. */}
+              <KeyBadge k={k} data-testid="KeyBadge__keyFilter" />
               <span style={{ flex: 1 }}>{t(`fm.m349.key.${k}`)}</span>
               {value === k && <span>✓</span>}
             </button>
@@ -513,15 +491,12 @@ function OriginFilterChip({ nif, count, onClear, t, testId }) {
 // "nothing here" message, which would otherwise imply the declaration has no
 // invoices / no rectifications at all rather than none for THIS operator.
 function OriginFilterEmpty({ message, testId }) {
+  // ETP-5584 (P11) — the window's one empty state; the message is the filter-specific title.
   return (
-    <div
-      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0' }}
-      data-testid={testId}
-    >
-      <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-        {message}
-      </span>
-    </div>
+    <FmEmptyState
+      icon={<Search size={28} strokeWidth={1.5} data-testid="Search__originFilterEmpty" />}
+      title={message}
+      data-testid={testId} />
   );
 }
 
@@ -560,6 +535,7 @@ function InvoicesTabContent({ decl, liveInvoices, t, originFilter, onClearOrigin
         <SourcesTab
           decl={{ ...decl, sources }}
           t={t}
+          showTaxColumns={false}
           data-testid="SourcesTab__346dd5" />
       )}
     </>
@@ -580,15 +556,13 @@ function RectificationsTabContent({ rows, t, originFilter, onClearOriginFilter }
     : allRows;
 
   if (allRows.length === 0) {
+    // ETP-5584 (P11) — the window's one empty state (icon + title + text).
     return (
-      <div style={{ padding: '60px 0', textAlign: 'center' }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: 'hsl(var(--foreground))', marginBottom: 6 }}>
-          {t('fm.m349.tab.rectif') ?? 'Rectificaciones'}
-        </div>
-        <div style={{ fontSize: 13, color: 'hsl(var(--text-disabled))' }}>
-          {t('fm.m349.rectif.empty')}
-        </div>
-      </div>
+      <FmEmptyState
+        icon={<FileEdit size={28} strokeWidth={1.5} data-testid="FileEdit__rectifEmpty" />}
+        title={t('fm.m349.rectif.empty_title') ?? 'Sin rectificaciones'}
+        sub={t('fm.m349.rectif.empty')}
+        data-testid="fm349-rectif-empty" />
     );
   }
 
@@ -690,7 +664,7 @@ function DetailTabContent({
           token={token}
           apiBaseUrl={apiBaseUrl}
           isActive={activeTab === 'receipt'}
-          config={{ allowedMimeTypes: ['application/pdf'] }}
+          config={RECEIPT_ATTACHMENT_CONFIG}
           // ETP-5432 pt.3 — the justificante must only be deletable while the
           // declaration is still a draft, same rule `FmRowActions`' own delete
           // action already enforces for the declaration record itself.
@@ -702,32 +676,113 @@ function DetailTabContent({
   );
 }
 
-// ETP-5456 (349 substitutiva, layout follow-up) — declaration-level "Sustitutiva" flag,
-// rendered inline next to the "Todas las claves" key filter (Operadores tab toolbar) rather
-// than as its own full-width banner: a substitute filing is a decision about the DECLARATION,
-// not a one-off parameter typed at file-generation time, so it belongs on the form and is
-// persisted (`manualData.identification.sustitutiva`) the same way 303's `rectificativa` is —
-// see `identChecks` state in the main component below, which mirrors 303's naming/shape.
+// ETP-5456 / ETP-5597 — declaration-level "Tipo" (Normal | Sustitutiva). A substitute filing is a
+// decision about the DECLARATION, not a one-off parameter typed at file-generation time, so it
+// lives on the form and is persisted (`manualData.identification.sustitutiva`, flushed by
+// "Guardar") the same way 303's `rectificativa` is — see `identChecks` in the main component.
 //
-// The former-declaration identifier text field does NOT live here anymore — it moved back into
-// FileGenModal / PresentModal (FmOverlays.jsx), captured fresh each time a file is generated or
-// the declaration is presented, gated on THIS checkbox's persisted value. Only the yes/no
-// decision is a durable property of the declaration; the identifier itself is not persisted
-// (see the modals' own comments).
-function SubstitutiveSection({ identChecks, onChange, isSubmitted, t }) {
-  const sustitutiva = identChecks?.sustitutiva === true || identChecks?.sustitutiva === 'Y';
+// ETP-5597 — rendered as a two-option segmented control in the header action bar, right after
+// the "Estado" chip (it used to be a checkbox next to the "Todas las claves" key filter).
+// Read-only once the declaration is submitted.
+function isSustitutivaChecked(identChecks) {
+  return identChecks?.sustitutiva === true || identChecks?.sustitutiva === 'Y';
+}
+
+// ETP-5597 (W4) — `isBusy` also locks it while a manual-data save / generate / present is in
+// flight, so no Tipo edit can land mid-save.
+function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = false, t }) {
+  const sustitutiva = isSustitutivaChecked(identChecks);
+  const options = [
+    { value: false, labelKey: 'fm.m349.type.normal', fallback: 'Normal', testId: 'normal' },
+    { value: true,  labelKey: 'fm.m349.type.substitutive', fallback: 'Sustitutiva', testId: 'sustitutiva' },
+  ];
   return (
-    <label
-      className="fm-349-substitutive-inline"
-      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: isSubmitted ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
-    >
-      <CheckboxField
-        checked={sustitutiva}
-        disabled={isSubmitted}
-        onToggle={val => onChange('sustitutiva', val)}
-        data-testid="FmModel349Page__sustitutiva" />
-      {t('fm.filegen.substitutive')}
-    </label>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span className="fm-toolbar__sep" aria-hidden="true" />
+      <span style={{ fontSize: 14, color: 'hsl(var(--muted-foreground))' }}>
+        {t('fm.m349.type.label') ?? 'Tipo'}
+      </span>
+      <div
+        className="fm-newdecl-segmented fm-349-type-segmented"
+        role="radiogroup"
+        aria-label={t('fm.m349.type.label') ?? 'Tipo'}
+      >
+        {options.map(o => {
+          const active = sustitutiva === o.value;
+          return (
+            <button
+              key={o.testId}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              disabled={isSubmitted || isBusy}
+              className={`fm-newdecl-segmented__btn${active ? ' fm-newdecl-segmented__btn--active' : ''}`}
+              onClick={() => { if (!active) onChange('sustitutiva', o.value); }}
+              data-testid={`FmModel349Page__type_${o.testId}`}
+            >
+              {t(o.labelKey) ?? o.fallback}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ETP-5597 — full-width warning banner shown between the action bar and the KPI cards while
+// Tipo = Sustitutiva. Hosts the former-declaration identifier ("Identificador declaración
+// anterior", AEAT: 13 digits), persisted with the flag as
+// `manualData.identification.formerStatement` and handed to FileGenModal, which still blocks
+// generation unless it is valid. Both gates — this page's "Registrar/Presentar" and
+// FileGenModal's "Generar fichero 349" — share ONE rule: exactly 13 digits after trim
+// (`isValidFormerStatement`, formerStatement.js). The input only accepts digits.
+function SubstitutiveBanner({ identChecks, onChange, isSubmitted, isBusy = false, t }) {
+  if (!isSustitutivaChecked(identChecks)) return null;
+  const label = t('fm.m349.substitutive_banner.former_statement') ?? 'Identificador declaración anterior';
+  return (
+    <div style={{ padding: '8px 20px', flexShrink: 0 }}>
+      <div
+        className="fm-349-substitutive-banner"
+        data-testid="FmModel349Page__substitutiveBanner"
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 320px', minWidth: 0 }}>
+          <RefreshCw
+            size={18}
+            strokeWidth={1.75}
+            style={{ color: 'var(--status-warning-fg)', flexShrink: 0 }}
+            data-testid="RefreshCw__substitutiveBanner" />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+              {t('fm.m349.substitutive_banner.title') ?? 'Declaración sustitutiva'}
+            </div>
+            <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
+              {t('fm.m349.substitutive_banner.sub') ?? 'Reemplaza por completo a la declaración presentada anteriormente para este periodo.'}
+            </div>
+          </div>
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap' }}>
+          <span>
+            {label}
+            <span aria-hidden="true" style={{ color: 'var(--status-destructive-fg)', marginLeft: 2 }}>*</span>
+          </span>
+          <input
+            value={identChecks?.formerStatement ?? ''}
+            onChange={e => onChange('formerStatement', sanitizeFormerStatementInput(e.target.value))}
+            disabled={isSubmitted || isBusy}
+            required
+            aria-label={label}
+            maxLength={FORMER_STATEMENT_LENGTH}
+            inputMode="numeric"
+            placeholder={t('fm.m349.substitutive_banner.former_statement_placeholder') ?? '13 dígitos'}
+            style={{
+              width: 180, height: 36, boxSizing: 'border-box', padding: '7px 12px', fontSize: 14,
+              border: '1px solid hsl(var(--border-control))', borderRadius: 8, outline: 'none',
+              color: 'hsl(var(--foreground))', background: 'hsl(var(--card))',
+            }}
+            data-testid="FmModel349Page__formerStatement" />
+        </label>
+      </div>
+    </div>
   );
 }
 
@@ -820,7 +875,18 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // race against, so this skips 303's `useRecordWriteQueue` machinery entirely.
   const [identChecks, setIdentChecks] = useState(decl.manualData?.identification ?? {});
   const hasPendingEditRef = useRef(false);
+  // ETP-5597 (W4) — bumped on every edit. A save only clears `hasPendingEditRef` when no edit
+  // happened after it started (same version on success), so an edit racing an in-flight save
+  // is never silently marked as persisted.
+  const editVersionRef = useRef(0);
+  // ETP-5597 (W4) — single-flight guards: the in-flight manual-data save (reused by any caller
+  // that asks for a save while one is running) and the in-flight present/generate actions (a
+  // double click starts only one).
+  const saveInFlightRef = useRef(null);
+  const presentInFlightRef = useRef(false);
+  const generateInFlightRef = useRef(false);
   const [isSavingManualData, setIsSavingManualData] = useState(false);
+  const [presenting, setPresenting] = useState(false);
 
   React.useEffect(() => {
     if (decl._precomputed?.operators) setLiveOperators(decl._precomputed.operators);
@@ -845,26 +911,30 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // Only used to grab `upload()` for the manual acuse-de-recibo path below —
   // isActive: false keeps it from eagerly listing/fetching attachments on
   // mount (that eager fetch is owned by the "receipt" tab's own AttachmentsTab).
-  const { upload: uploadReceipt } = useAttachments({
+  // P12 (ETP-5584) — `prefetchCount` also fetches the lightweight attachment count for the
+  // "Justificante" tab counter (kept fresh by the attachments bus after an upload/delete).
+  const { upload: uploadReceipt, count: receiptCount = null } = useAttachments({
     tableName: FISCAL_DECL_TABLE,
     recordId: decl.id,
     token,
     apiBaseUrl,
     isActive: false,
+    prefetchCount: true,
   });
 
   const operators = liveOperators ?? decl.operators ?? MOCK_OPERATORS;
 
-  // ETP-5338 — `undefined` locale here used to resolve to the RUNTIME's/browser's
-  // default locale (typically the OS language), not the app's selected UI locale —
-  // so under an es-language OS the breadcrumb showed "octubre" even with the UI
-  // set to English. Pass the resolved `bcpLocale` explicitly, same fix pattern as
-  // `normDecl.updatedAt` in FmListPage.jsx.
-  const periodLabel = buildPeriodLabel(decl, bcpLocale);
-
   // ETP-5456 — derived from `identChecks`, not `decl.manualData` directly, so an unsaved
   // edit is reflected immediately (same precedent as 303's `identChecks.rectificativa`).
-  const sustitutiva = identChecks?.sustitutiva === true || identChecks?.sustitutiva === 'Y';
+  const sustitutiva = isSustitutivaChecked(identChecks);
+  // ETP-5597 — a substitute declaration cannot be registered/presented without the AEAT
+  // former-declaration identifier: exactly 13 digits, the same rule FileGenModal applies
+  // (`isValidFormerStatement`, formerStatement.js).
+  const formerStatementInvalid = sustitutiva && !isValidFormerStatement(identChecks?.formerStatement);
+  // ETP-5597 (W4) — while a manual-data save (Guardar or the flush before Generar/Presentar), a
+  // generation or a presentation is in flight, every control that edits or acts on the
+  // declaration is locked: no edit mid-save, no second save/present/generate.
+  const actionBusy = isSavingManualData || generating || presenting;
 
   const blocking     = decl.incidents?.blocking ?? 0;
   const warning      = decl.incidents?.warning  ?? 0;
@@ -899,23 +969,65 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // single explicit PUT per click is enough.
   function handleIdentChange(id, value) {
     hasPendingEditRef.current = true;
+    editVersionRef.current += 1;
     setIdentChecks(prev => ({ ...prev, [id]: value }));
   }
 
-  async function handleSave() {
-    if (!hasPendingEditRef.current || !apiBaseUrl) {
-      toast.success(t('recordSaved') ?? 'Registro guardado');
-      return;
-    }
+  // ETP-5597 — the single write path for `identChecks` (the whole manualData payload this page
+  // edits), shared by "Guardar", "Generar fichero 349" and "Registrar/Presentar". Returns `null`
+  // SYNCHRONOUSLY when there is nothing to persist (so callers keep their synchronous path), or
+  // a promise resolving `{ ok }`. Never toasts on its own.
+  function persistIdentChecks() {
+    if (!hasPendingEditRef.current || !apiBaseUrl) return null;
+    return persistIdentChecksNow();
+  }
+
+  function persistIdentChecksNow() {
+    // ETP-5597 (W4) — single flight: a second request while a save is running joins it instead
+    // of issuing a parallel PUT.
+    // A joining caller's edit made after the running save started is not in that save's payload:
+    // it stays pending (editVersionRef) and the next action flushes it — safe, the form is locked
+    // while the save is in flight, so only a racing event can produce such an edit.
+    if (saveInFlightRef.current) return saveInFlightRef.current;
+    const startVersion = editVersionRef.current;
+    const payload = { identification: identChecks };
     setIsSavingManualData(true);
-    const result = await persistManualData(decl.id, { identification: identChecks }, { token, apiBaseUrl });
-    setIsSavingManualData(false);
-    if (result.ok) {
-      hasPendingEditRef.current = false;
-      // ETP-5338 Bug A precedent (303) — push the just-saved manualData into FmListPage's own
-      // cached `decls` entry so the "Tipo" column and a re-opened declaration both see it
-      // without a full page reload.
-      onManualDataSaved?.(decl.id, { identification: identChecks });
+    const run = (async () => {
+      try {
+        const result = await persistManualData(decl.id, payload, { token, apiBaseUrl });
+        if (result.ok) {
+          // Only an edit-free save clears the pending flag — see editVersionRef.
+          if (editVersionRef.current === startVersion) hasPendingEditRef.current = false;
+          // ETP-5338 Bug A precedent (303) — push the just-saved manualData into FmListPage's own
+          // cached `decls` entry so the "Tipo" column and a re-opened declaration both see it
+          // without a full page reload. ETP-5597 (W4) — the payload actually SENT, never a
+          // later in-memory state.
+          onManualDataSaved?.(decl.id, payload);
+        }
+        return { ok: !!result.ok };
+      } finally {
+        saveInFlightRef.current = null;
+        setIsSavingManualData(false);
+      }
+    })();
+    saveInFlightRef.current = run;
+    return run;
+  }
+
+  // ETP-5597 — flushes unsaved edits before an action that depends on them (generate/present).
+  // Resolves `true` when the action may proceed; on failure shows Guardar's own error toast.
+  async function flushBeforeAction() {
+    const pending = persistIdentChecks();
+    if (!pending) return true;
+    const { ok } = await pending;
+    if (!ok) toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
+    return ok;
+  }
+
+  async function handleSave() {
+    const pending = persistIdentChecks();
+    const { ok } = pending ? await pending : { ok: true };
+    if (ok) {
       toast.success(t('recordSaved') ?? 'Registro guardado');
     } else {
       toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
@@ -927,7 +1039,31 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // from. Fire-and-forget — useAttachments.upload() already toasts its
   // own errors and never rethrows, so a failed upload must not block the
   // status change the user explicitly confirmed.
-  async function handlePresent({ status: newStatus, acuseFile }) {
+  async function handlePresent(args) {
+    // ETP-5597 (W4) — a double confirm starts only one flush + one status change.
+    if (presentInFlightRef.current) return;
+    presentInFlightRef.current = true;
+    setPresenting(true);
+    try {
+      await presentNow(args);
+    } finally {
+      presentInFlightRef.current = false;
+      setPresenting(false);
+    }
+  }
+
+  async function presentNow({ status: newStatus, acuseFile }) {
+    // ETP-5597 — belt-and-braces for the disabled "Registrar/Presentar" button: a substitutive
+    // declaration cannot be presented without its 13-digit former-declaration identifier.
+    if (formerStatementInvalid) {
+      toast.error(t('fm.m349.present_disabled.former_statement') ?? 'Introduce el identificador de la declaración anterior (13 dígitos) para presentar una declaración sustitutiva.');
+      return;
+    }
+    // ETP-5597 (bug) — flush unsaved Tipo/identifier BEFORE the status change, same as 303's
+    // handlePresent → persistEditableFields. The status PUT only carries `status`, and once the
+    // declaration is submitted it is read-only, so an unsaved "Sustitutiva" was silently lost:
+    // the declaration came back as Normal and the list's "Tipo" column read "Ordinaria".
+    if (hasPendingEditRef.current && !(await flushBeforeAction())) return;
     if (newStatus === 'submitted_ack' && acuseFile) {
       uploadReceipt(acuseFile);
     }
@@ -937,7 +1073,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
     // ETP-5438 — roll back a presentation the backend rejected (it could not compute the
     // submission snapshot); see FmModel303Page.jsx's handlePresent.
     const previous = { status, submissionMethod };
-    const result = await handleStatusChange(newStatus, submissionMethodForPath);
+    // ETP-5597 — a rejected onStatusChange (network error, thrown handler) is treated exactly
+    // like a backend `{ ok: false }`: roll back + present_error toast, never an unhandled rejection.
+    let result;
+    try {
+      result = await handleStatusChange(newStatus, submissionMethodForPath);
+    } catch (err) {
+      console.error('349 status change failed for', decl.id, err);
+      result = { ok: false };
+    }
     if (result?.ok === false) {
       setStatus(previous.status);
       setSubmissionMethod(previous.submissionMethod);
@@ -1090,10 +1234,21 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   }, [decl.id]);
 
   // ETP-5456 — `substitutive` is the persisted `identChecks` value (the checkbox lives on the
-  // form, next to the key filter — see SubstitutiveSection). `formerStatement` comes back from
-  // FileGenModal's own payload: the identifier is captured fresh at generation time, not
-  // persisted with the declaration (see FmOverlays.jsx's FileGenModal comment).
-  async function handleGenerate({
+  // form — see DeclarationTypeControl). ETP-5597 — `formerStatement` is typed in the
+  // substitutive banner (persisted as `identChecks.formerStatement`) and comes
+  // back through FileGenModal's payload, which only forwards it while `substitutive` is true.
+  async function handleGenerate(args) {
+    // ETP-5597 (W4) — a double confirm starts only one flush + one generation.
+    if (generateInFlightRef.current) return;
+    generateInFlightRef.current = true;
+    try {
+      await generateNow(args);
+    } finally {
+      generateInFlightRef.current = false;
+    }
+  }
+
+  async function generateNow({
     phone, contact, fileName, formerStatement, representativeTaxId, navarra, guipuzcoa,
   } = {}) {
     // ETP-5438 — the button that opens FileGenModal is itself hidden once submitted, so this
@@ -1104,6 +1259,9 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
       toast.error(t('fm.validation.already_submitted') ?? 'Esta declaración ya ha sido presentada.');
       return;
     }
+    // ETP-5597 (bug) — persist unsaved Tipo/identifier first (same flush as Registrar/Presentar),
+    // so the declaration record never disagrees with the file just generated from it.
+    if (hasPendingEditRef.current && !(await flushBeforeAction())) return;
     setGenerating(true);
     const result = await generate349File(decl, {
       token, apiBaseUrl, phone, contact, fileName,
@@ -1202,391 +1360,378 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
 
 
   const TABS = [
-    { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
-    { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: rectifications || null,  icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
-    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: invoicesTabBadge(snapshotServed, submittedSnapshot, liveInvoices), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
-    { id:'incidents', label: t('fm.m349.tab.incidents'), badge: blocking || null,        icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
-    { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: null,        icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
+    // P12 (ETP-5584) — every list tab shows its count, 0 included, with the same counter and
+    // the same incident rule as 303 (FmDetailChrome's tabCount / incidentsTabBadge).
+    { id:'operators', label: t('fm.m349.tab.operators'), badge: tabCount(operators.length), icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
+    { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: tabCount(rectifications),   icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
+    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: tabCount(invoicesTabBadge(snapshotServed, submittedSnapshot, liveInvoices)), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
+    { id:'incidents', label: t('fm.m349.tab.incidents'), ...incidentsTabBadge(blocking, warning), icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
+    { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: tabCount(receiptCount), icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
   ];
 
+  // ETP-5584 — the declaration title lives in the app top bar (title, breadcrumb subtitle,
+  // model badge, kebab), like the list's "Modelos Fiscales" title. See FmDetailChrome.
+  // P9 — same title format as every model (FmDetailChrome's buildDeclTitle), e.g.
+  // "Modelo 349 - 2026/T4"; `bcpLocale` keeps a monthly period's month name in the UI locale.
+  const declTitle = buildDeclTitle(t('fm.config.m349.title') ?? 'Modelo 349', decl, bcpLocale);
+  useFmDetailPageMeta({
+    model: '349',
+    title: declTitle,
+    breadcrumb: `${ui('finance')} / ${ui('fm.breadcrumb.section')} / ${declTitle}`,
+    favLabel: ui('fm.breadcrumb.section'),
+  });
+
   return (
-    <div className="fm-page fm-page--freeflow">
-      {/* ── Title bar ────────────────────────────────────────────── */}
-      <div style={{
-        padding: '12px 20px',
-        background: 'hsl(var(--card))', flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="fm-model-badge fm-model-badge--349">349</span>
-          <span style={{ fontWeight: 600, fontSize: 20, color: 'hsl(var(--foreground))' }}>
-            {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
-          </span>
-          <div style={{ flex: 1 }} />
-          <MoreOptionsMenu
-            favKey="fiscal-models"
-            favLabel={t('fm.list.title') ?? 'Declaraciones'}
-            data-testid="MoreOptionsMenu__346dd5" />
-        </div>
-        <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 2 }}>
-          {ui('finance')} / {ui('fm.breadcrumb.section')} / {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
-        </div>
-      </div>
-      {/* ── Action bar ───────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '6px 20px 10px',
-        background: 'hsl(var(--card))', flexShrink: 0,
-      }}>
-        <button className="fm-btn" onClick={onBack}
-          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}>
-          {t('fm.action.cancel') ?? 'Cancelar'}
-        </button>
-        <span style={{
-          padding: '4px 8px', borderRadius: 8, fontSize: 14, fontWeight: 400,
-          background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
-        }}>
-          {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${statusLabelKey(status)}`) ?? status}
-          {/* submissionMethod (ETP-4755) — see FmModel303Page.jsx for the identical pattern.
-              The badge text itself never varies between `submitted` and `submitted_ack`
-              (see `statusLabelKey`) — only this sub-suffix does. */}
-          {submissionMethod && (status === 'submitted' || status === 'submitted_ack') && (
-            <span style={{ opacity: .75 }}> · {t(`fm.present.method.${submissionMethod}`)}</span>
+    <div className="fm-page fm-page--detail">
+      {/* ── Sticky action bar (ETP-5584) — the first row of the page, outside
+          `.fm-detail-scroll`, so it never scrolls away. The title, breadcrumb, model badge and
+          kebab are in the app top bar (useFmDetailPageMeta above). ─────────────────── */}
+      <FmDetailHeader data-testid="FmDetailHeader__346dd5">
+        {/* ETP-5584 — Cancelar + the list's status chip (FmStatusChip, no "Estado:" prefix) on
+            the LEFT; on the RIGHT, in order: Calcular, Generar fichero, Guardar, and the primary
+            Registrar/Presentar right-most (Save-before-primary, as in `saveActions.jsx`). The
+            whole right group is hidden once submitted: nothing left to compute, generate, save
+            or file. */}
+        <FmDetailActionBar
+          left={(
+            <>
+              <FmDetailButton onClick={onBack} data-testid="FmModel349Page__cancel">
+                {t('fm.action.cancel') ?? 'Cancelar'}
+              </FmDetailButton>
+              <FmStatusChip
+                status={status}
+                submissionMethod={submissionMethod}
+                t={t}
+                variant="detail"
+                data-testid="FmStatusChip__346dd5" />
+              {/* ETP-5597 — Tipo: Normal | Sustitutiva, persisted via "Guardar". A form control,
+                  not an action, so it sits on the left right after the status chip, where
+                  ETP-5597 placed it; the action buttons keep the ETP-5584 right-hand order. */}
+              <DeclarationTypeControl
+                identChecks={identChecks}
+                onChange={handleIdentChange}
+                isSubmitted={isSubmitted}
+                isBusy={actionBusy}
+                t={t}
+                data-testid="DeclarationTypeControl__346dd5" />
+            </>
           )}
-        </span>
+          right={!isSubmitted && (
+            <>
+              <FmDetailButton onClick={handleCompute} disabled={computing} data-testid="FmModel349Page__compute">
+                {computing
+                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__346dd5" />
+                  : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
+                {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+              </FmDetailButton>
+              {/* ETP-5597 (W4) — Generar / Guardar / Registrar are locked while any of them is in
+                  flight (`actionBusy`), so no Tipo edit can land mid-save. */}
+              <FmDetailButton onClick={() => setShowFilegen(true)} disabled={actionBusy} data-testid="FmModel349Page__generate">
+                <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
+                {t('fm.action.gen349') ?? 'Generar fichero 349'}
+              </FmDetailButton>
+              {/* "Guardar" (see `handleSave`, ETP-5456): PUTs the pending identification edits
+                  (e.g. the "Sustitutiva" data) as `manualData` and pushes them to the list; with
+                  nothing pending it just confirms, with no request. */}
+              <FmDetailButton
+                onClick={handleSave}
+                disabled={actionBusy}
+                title={t('fm.action.save') ?? 'Guardar'}
+                aria-label={t('fm.action.save') ?? 'Guardar'}
+                data-testid="FmModel349Page__save"
+              >
+                {isSavingManualData
+                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save" />
+                  : <Save size={16} strokeWidth={1.75} data-testid="Save__save" />}
+                {t('fm.action.save') ?? 'Guardar'}
+              </FmDetailButton>
+              <FmDetailButton
+                primary
+                onClick={() => setShowPresent(true)}
+                // ETP-5597 — a substitute declaration needs a valid former-declaration identifier.
+                disabled={formerStatementInvalid || actionBusy}
+                title={formerStatementInvalid
+                  ? (t('fm.m349.present_disabled.former_statement') ?? 'Introduce el identificador de la declaración anterior (13 dígitos) para presentar una declaración sustitutiva.')
+                  : undefined}
+                data-testid="FmModel349Page__present"
+              >
+                <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__346dd5" />
+                {t('fm.action.present') ?? 'Registrar/Presentar'}
+              </FmDetailButton>
+            </>
+          )}
+          data-testid="FmDetailActionBar__346dd5" />
+      </FmDetailHeader>
+      {/* ── Scrolling region: banners, KPIs, tabs, tab content ───── */}
+      <div className="fm-page--freeflow fm-detail-scroll">
+        {/* ── Substitutive banner (ETP-5597) ───────────────────────── */}
+        <SubstitutiveBanner
+          identChecks={identChecks}
+          onChange={handleIdentChange}
+          isSubmitted={isSubmitted}
+          isBusy={actionBusy}
+          t={t}
+          data-testid="SubstitutiveBanner__346dd5" />
+        {/* ── VIES banner ──────────────────────────────────────────── */}
+        <ViesBanner
+          onValidate={handleValidateVies}
+          validating={validatingVies}
+          viesPending={viesPending}
+          dismissed={viesBannerDismissed}
+          onDismiss={() => setViesBannerDismissed(true)}
+          t={t}
+          data-testid="ViesBanner__346dd5" />
+        {/* ── KPI bar ──────────────────────────────────────────────── */}
+        {/* ETP-5584 (P10) — same 20px side gutter and 12px vertical padding as 303's KPI row,
+            so the cards line up with the action bar and the content instead of overhanging. */}
+        <div style={{
+          display: 'flex', flexDirection: 'row', alignItems: 'center',
+          gap: 12, padding: '12px 20px',
+          flexShrink: 0,
+        }}>
+          <KpiWidget
+            icon={<Users size={20} strokeWidth={1.75} data-testid="Users__346dd5" />}
+            iconColor="hsl(var(--text-disabled))"
+            label={t('fm.m349.kpi.operators') ?? 'Operadores'}
+            value={String(operatorCount)}
+            badge={t('fm.m349.kpi.operators_desc') ?? 'Activos'}
+            badgeBg="hsl(var(--muted))"
+            badgeColor="hsl(var(--text-disabled))"
+            data-testid="KpiWidget__346dd5" />
+          <KpiWidget
+            icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
+            iconColor="hsl(var(--text-disabled))"
+            label={t('fm.m349.kpi.total_ops') ?? 'Total operaciones'}
+            value={formatAmount(totalBase)}
+            badge={t('fm.m349.kpi.total_ops_desc') ?? 'Base total'}
+            badgeBg="hsl(var(--muted))"
+            badgeColor="hsl(var(--text-disabled))"
+            data-testid="KpiWidget__346dd5" />
+          <KpiWidget
+            icon={<PenLine size={20} strokeWidth={1.75} data-testid="PenLine__346dd5" />}
+            iconColor="hsl(var(--text-disabled))"
+            label={t('fm.m349.kpi.rectif') ?? 'Rectificaciones'}
+            value={String(rectifications)}
+            badge={t('fm.m349.kpi.rectif_desc') ?? 'Previos'}
+            badgeBg="var(--status-warning-bg)"
+            badgeColor="var(--status-warning-fg)"
+            data-testid="KpiWidget__346dd5" />
+          {/* ETP-5027 — informational severity, not an error: the banner right above
+              this bar states the VIES check is "informativa, no bloquea la
+              declaración", so the destructive/red token was overstating it. Uses the
+              SAME --status-info-* pair as that banner. The genuinely-invalid VIES
+              state stays red — that lives in ViesBadge (.fm-vies--invalid). */}
+          <KpiWidget
+            icon={<ShieldAlert size={20} strokeWidth={1.75} data-testid="ShieldAlert__346dd5" />}
+            iconColor="hsl(var(--text-disabled))"
+            label={t('fm.m349.kpi.vies_pending') ?? 'Pendientes VIES'}
+            value={String(viesPending)}
+            valueColor={viesPending > 0 ? 'var(--status-info-fg)' : 'hsl(var(--foreground))'}
+            badge={t('fm.m349.kpi.vies_pending_desc') ?? 'Sin validar'}
+            badgeBg={viesPending > 0 ? 'var(--status-info-bg)' : 'hsl(var(--muted))'}
+            badgeColor={viesPending > 0 ? 'var(--status-info-fg)' : 'hsl(var(--text-disabled))'}
+            data-testid="KpiWidget__346dd5" />
+        </div>
+        {/* ── Tabs ─────────────────────────────────────────────────── */}
+        <div className="fm-tabs-sticky" style={{ padding: '0 8px' }}>
+          <Tabs
+            tabs={TABS}
+            active={activeTab}
+            onSelect={(id) => { setActiveTab(id); if (originFilter && id !== originFilter.tab) setOriginFilter(null); }}
+            data-testid="Tabs__346dd5" />
+        </div>
+        {/* ── Body ─────────────────────────────────────────────────── */}
+        <div className="fm-page__body">
 
-        <div style={{ flex: 1 }} />
-
-        {/* ETP-5338 pt.5 — "Guardar", right-aligned leftmost of the primary-action group
-            (matching 303 and `saveActions.jsx`'s Save-before-Confirm convention). See
-            `handleSave`'s own comment above for why this is a deliberate no-op confirmation:
-            349 has no locally-edited declaration data to actually persist. Hidden once
-            submitted, same `!isSubmitted` gate as "Calcular"/"Registrar-Presentar". */}
-        {!isSubmitted && (
-          <button
-            className="fm-btn"
-            onClick={handleSave}
-            disabled={isSavingManualData}
-            title={t('fm.action.save') ?? 'Guardar'}
-            aria-label={t('fm.action.save') ?? 'Guardar'}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}
-            data-testid="FmModel349Page__save"
-          >
-            {isSavingManualData
-              ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save" />
-              : <Save size={16} strokeWidth={1.75} data-testid="Save__save" />}
-            {t('fm.action.save') ?? 'Guardar'}
-          </button>
-        )}
-
-        {!isSubmitted && (
-          <button
-            className="fm-btn"
-            onClick={handleCompute}
-            disabled={computing}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
-          >
-            {computing
-              ? <Loader2
-                  size={16}
-                  strokeWidth={1.75}
-                  style={{ animation: 'spin 1s linear infinite' }}
-                  data-testid="Loader2__346dd5" />
-              : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__346dd5" />
-            }
-            {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
-          </button>
-        )}
-
-        {/* ETP-5438 — hidden once submitted: a declaration already presented must not be
-            re-generated, matching "Calcular"/"Registrar-Presentar"'s existing `!isSubmitted`
-            gate above. Previously always visible regardless of status (see
-            docs/generated-custom-windows/fiscal-models.md's Modelo 303 "Action bar" note for
-            the ANALOGOUS, still-deliberate 303 behavior — NOT changed here, out of this
-            ticket's scope). */}
-        {!isSubmitted && (
-          <button
-            className="fm-btn"
-            onClick={() => setShowFilegen(true)}
-            disabled={generating}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
-          >
-            <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
-            {t('fm.action.gen349') ?? 'Generar fichero 349'}
-          </button>
-        )}
-
-        {!isSubmitted && (
-          <button
-            className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
-            onClick={() => setShowPresent(true)}
-          >
-            <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__346dd5" />
-            {t('fm.action.present') ?? 'Registrar/Presentar'}
-          </button>
-        )}
-      </div>
-      {/* ── VIES banner ──────────────────────────────────────────── */}
-      <ViesBanner
-        onValidate={handleValidateVies}
-        validating={validatingVies}
-        viesPending={viesPending}
-        dismissed={viesBannerDismissed}
-        onDismiss={() => setViesBannerDismissed(true)}
-        t={t}
-        data-testid="ViesBanner__346dd5" />
-      {/* ── KPI bar ──────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', flexDirection: 'row', alignItems: 'center',
-        gap: 12, padding: '0 8px',
-        height: 84, flexShrink: 0,
-      }}>
-        <KpiWidget
-          icon={<Users size={20} strokeWidth={1.75} data-testid="Users__346dd5" />}
-          iconColor="hsl(var(--text-disabled))"
-          label={t('fm.m349.kpi.operators') ?? 'Operadores'}
-          value={String(operatorCount)}
-          badge={t('fm.m349.kpi.operators_desc') ?? 'Activos'}
-          badgeBg="hsl(var(--muted))"
-          badgeColor="hsl(var(--text-disabled))"
-          data-testid="KpiWidget__346dd5" />
-        <KpiWidget
-          icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
-          iconColor="hsl(var(--text-disabled))"
-          label={t('fm.m349.kpi.total_ops') ?? 'Total operaciones'}
-          value={formatAmount(totalBase)}
-          badge={t('fm.m349.kpi.total_ops_desc') ?? 'Base total'}
-          badgeBg="hsl(var(--muted))"
-          badgeColor="hsl(var(--text-disabled))"
-          data-testid="KpiWidget__346dd5" />
-        <KpiWidget
-          icon={<PenLine size={20} strokeWidth={1.75} data-testid="PenLine__346dd5" />}
-          iconColor="hsl(var(--text-disabled))"
-          label={t('fm.m349.kpi.rectif') ?? 'Rectificaciones'}
-          value={String(rectifications)}
-          badge={t('fm.m349.kpi.rectif_desc') ?? 'Previos'}
-          badgeBg="var(--status-warning-bg)"
-          badgeColor="var(--status-warning-fg)"
-          data-testid="KpiWidget__346dd5" />
-        {/* ETP-5027 — informational severity, not an error: the banner right above
-            this bar states the VIES check is "informativa, no bloquea la
-            declaración", so the destructive/red token was overstating it. Uses the
-            SAME --status-info-* pair as that banner. The genuinely-invalid VIES
-            state stays red — that lives in ViesBadge (.fm-vies--invalid). */}
-        <KpiWidget
-          icon={<ShieldAlert size={20} strokeWidth={1.75} data-testid="ShieldAlert__346dd5" />}
-          iconColor="hsl(var(--text-disabled))"
-          label={t('fm.m349.kpi.vies_pending') ?? 'Pendientes VIES'}
-          value={String(viesPending)}
-          valueColor={viesPending > 0 ? 'var(--status-info-fg)' : 'hsl(var(--foreground))'}
-          badge={t('fm.m349.kpi.vies_pending_desc') ?? 'Sin validar'}
-          badgeBg={viesPending > 0 ? 'var(--status-info-bg)' : 'hsl(var(--muted))'}
-          badgeColor={viesPending > 0 ? 'var(--status-info-fg)' : 'hsl(var(--text-disabled))'}
-          data-testid="KpiWidget__346dd5" />
-      </div>
-      {/* ── Tabs ─────────────────────────────────────────────────── */}
-      <div className="fm-tabs-sticky" style={{ padding: '0 8px' }}>
-        <Tabs
-          tabs={TABS}
-          active={activeTab}
-          onSelect={(id) => { setActiveTab(id); if (originFilter && id !== originFilter.tab) setOriginFilter(null); }}
-          data-testid="Tabs__346dd5" />
-      </div>
-      {/* ── Body ─────────────────────────────────────────────────── */}
-      <div className="fm-page__body">
-
-        {activeTab === 'operators' && (
-          <div>
-            {/* Filter + search + new operator row */}
-            {/* ETP-5456 (layout follow-up) — sticky, stacked directly below `.fm-tabs-sticky`
-                (top: 49, see that class's own comment for the 48px-tab-height + 1px-border
-                derivation). Before this it scrolled with the content and ended up peeking out
-                half-hidden under the (already-sticky) tabs bar — this docks it cleanly instead.
-                `marginTop`/`marginBottom` became `paddingTop`/`paddingBottom` on purpose: for a
-                sticky element the offset in `top` is measured from the MARGIN edge, so a margin
-                here would have shifted the actual stick point away from 49px; padding keeps the
-                same visual spacing while keeping the box's own height (and therefore the stick
-                point) predictable. `background` is required — without an opaque background the
-                table rows scrolling underneath would show through this bar once it is pinned.
-                `zIndex: 15` is intentionally below the tabs bar's 20 (they never overlap — this
-                bar docks strictly below the tabs — but keeps the ordering explicit) and above the
-                unset/auto z-index of the scrolling table content below.
-                `.fm-349-totals`'s `top` was bumped from 49 to 97 to dock below BOTH sticky bars —
-                97 = 49 (tabs) + 48 (this bar's own rendered height: 8px paddingTop + 36px content
-                row [`.fm-toolbar__pill` / the search box, both padding 7px 12px + ~20px line
-                content + 1px+1px border = 36px border-box] + 4px paddingBottom). See
-                `.fm-349-totals`'s own comment in fiscal-models.css for the full sticky-stack
-                writeup. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 4, paddingTop: 8, flexWrap: 'wrap', position: 'sticky', top: 49, zIndex: 15, background: 'hsl(var(--card))' }}>
-              <KeyFilterDropdown
-                value={keyFilter}
-                onChange={setKeyFilter}
-                t={t}
-                data-testid="KeyFilterDropdown__346dd5" />
-              {/* ETP-5456 (layout follow-up) — "Sustitutiva" moved here, right next to the key
-                  filter it now shares a toolbar row with, per the design's placement. The
-                  separator matches the one the toolbar already uses elsewhere (.fm-toolbar__sep)
-                  so the checkbox reads as its own grouped control rather than crowding the
-                  dropdown. Same `!isSubmitted || sustitutiva` visibility this section always had
-                  (still shown, read-only via `isSubmitted`, once a substitute declaration has
-                  been presented). */}
-              {(!isSubmitted || sustitutiva) && (
-                <>
-                  <span className="fm-toolbar__sep" aria-hidden="true" />
-                  <SubstitutiveSection
-                    identChecks={identChecks}
-                    onChange={handleIdentChange}
-                    isSubmitted={isSubmitted}
-                    t={t}
-                    data-testid="SubstitutiveSection__346dd5" />
-                </>
-              )}
-              <div style={{ flex: 1 }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: `1px solid ${searchQuery ? 'hsl(var(--focus-ring))' : 'hsl(var(--border-subtle))'}`, borderRadius: 8, fontSize: 14, color: 'hsl(var(--muted-foreground))', background: 'hsl(var(--card))', minWidth: 240 }}>
-                <Search
-                  size={15}
-                  strokeWidth={1.75}
-                  style={{ flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}
-                  data-testid="Search__346dd5" />
-                <input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder={t('fm.m349.search_placeholder')}
-                  style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'hsl(var(--muted-foreground))', width: '100%' }}
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', padding: 0, lineHeight: 1, fontSize: 16 }}>×</button>
-                )}
+          {activeTab === 'operators' && (
+            <div>
+              {/* Filter + search + new operator row */}
+              {/* ETP-5456 (layout follow-up) — sticky, stacked directly below `.fm-tabs-sticky`
+                  (top: 49, see that class's own comment for the 48px-tab-height + 1px-border
+                  derivation). Before this it scrolled with the content and ended up peeking out
+                  half-hidden under the (already-sticky) tabs bar — this docks it cleanly instead.
+                  `marginTop`/`marginBottom` became `paddingTop`/`paddingBottom` on purpose: for a
+                  sticky element the offset in `top` is measured from the MARGIN edge, so a margin
+                  here would have shifted the actual stick point away from 49px; padding keeps the
+                  same visual spacing while keeping the box's own height (and therefore the stick
+                  point) predictable. `background` is required — without an opaque background the
+                  table rows scrolling underneath would show through this bar once it is pinned.
+                  `zIndex: 15` is intentionally below the tabs bar's 20 (they never overlap — this
+                  bar docks strictly below the tabs — but keeps the ordering explicit) and above the
+                  unset/auto z-index of the scrolling table content below.
+                  `.fm-349-totals`'s `top` was bumped from 49 to 97 to dock below BOTH sticky bars —
+                  97 = 49 (tabs) + 48 (this bar's own rendered height: 8px paddingTop + 36px content
+                  row [`.fm-toolbar__pill` / the search box, both padding 7px 12px + ~20px line
+                  content + 1px+1px border = 36px border-box] + 4px paddingBottom). See
+                  `.fm-349-totals`'s own comment in fiscal-models.css for the full sticky-stack
+                  writeup. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 4, paddingTop: 8, flexWrap: 'wrap', position: 'sticky', top: 49, zIndex: 15, background: 'hsl(var(--card))' }}>
+                <KeyFilterDropdown
+                  value={keyFilter}
+                  onChange={setKeyFilter}
+                  t={t}
+                  data-testid="KeyFilterDropdown__346dd5" />
+                <div style={{ flex: 1 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: `1px solid ${searchQuery ? 'hsl(var(--focus-ring))' : 'hsl(var(--border-subtle))'}`, borderRadius: 8, fontSize: 14, color: 'hsl(var(--muted-foreground))', background: 'hsl(var(--card))', minWidth: 240 }}>
+                  <Search
+                    size={15}
+                    strokeWidth={1.75}
+                    style={{ flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}
+                    data-testid="Search__346dd5" />
+                  <input
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder={t('fm.m349.search_placeholder')}
+                    style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'hsl(var(--muted-foreground))', width: '100%' }}
+                  />
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', padding: 0, lineHeight: 1, fontSize: 16 }}>×</button>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Full-width separator above NIF-IVA columns */}
-            <div style={{ margin: '4px -20px 0', borderTop: '1px solid hsl(var(--border-subtle))' }} />
+              {/* Full-width separator above NIF-IVA columns */}
+              <div style={{ margin: '4px -20px 0', borderTop: '1px solid hsl(var(--border-subtle))' }} />
 
-            {/* Layout: totals panel + table */}
-            {/* ETP-5456 (bug follow-up) — `alignItems: 'flex-start'` so TotalsCard (now
-                `position: sticky`, see `.fm-349-totals` in fiscal-models.css) keeps its own short,
-                natural height instead of the default `stretch` matching it to the operators
-                table's height. A stretched sticky panel already spans the whole scrollable range,
-                leaving nothing for `position: sticky` to visibly reposition — same fix 303's
-                CasillasTab sidebar needed. See `.fm-349-totals`'s own comment for the full
-                root-cause writeup (this used to be papered over by a padding/margin trick that
-                does not actually work on a flex item, and caused a separate phantom-scroll bug). */}
-            <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
-              <TotalsCard
-                operators={operators}
-                rectifSummary={rectifSummary}
-                t={t}
-                data-testid="TotalsCard__346dd5" />
+              {/* Layout: totals panel + table */}
+              {/* ETP-5456 (bug follow-up) — `alignItems: 'flex-start'` so TotalsCard (now
+                  `position: sticky`, see `.fm-349-totals` in fiscal-models.css) keeps its own short,
+                  natural height instead of the default `stretch` matching it to the operators
+                  table's height. A stretched sticky panel already spans the whole scrollable range,
+                  leaving nothing for `position: sticky` to visibly reposition — same fix 303's
+                  CasillasTab sidebar needed. See `.fm-349-totals`'s own comment for the full
+                  root-cause writeup (this used to be papered over by a padding/margin trick that
+                  does not actually work on a flex item, and caused a separate phantom-scroll bug). */}
+              <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
+                <TotalsCard
+                  operators={operators}
+                  rectifSummary={rectifSummary}
+                  t={t}
+                  data-testid="TotalsCard__346dd5" />
 
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="fm-table-wrap" style={{ flex: 'none' }}>
-                  <table className="fm-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: 32, paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
-                          <CheckboxField
-                            checked={allSelected}
-                            onToggle={() => setSelected(allSelected ? new Set() : new Set(filteredOps.map(rowKey)))}
-                            onClick={e => e.stopPropagation()}
-                            data-testid="CheckboxField__346dd5" />
-                        </th>
-                        <th>{t('fm.m349.col.nif_iva')}</th>
-                        <th>{t('fm.m349.col.operator')}</th>
-                        <th>{t('fm.m349.col.key')}</th>
-                        <th style={{ textAlign: 'right' }}>{t('fm.m349.col.taxable_base')}</th>
-                        <th>{t('fm.m349.col.vies')}</th>
-                        <th>{t('fm.m349.col.origin')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredOps.map(op => (
-                        <tr
-                          key={rowKey(op)}
-                          className={selected.has(rowKey(op)) ? 'fm-table__row--selected' : ''}
-                          data-rectificative={isRectificativeOp(op) ? 'true' : undefined}
-                        >
-                          <td style={{ paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* ETP-5584 (P15) — `fm-349-ops-wrap` drops `.fm-table-wrap`'s `overflow: auto`
+                      (a non-scrolling scroll box would capture the sticky header) and
+                      `fm-349-ops-table` pins the column header at `top: 97px`, right under the
+                      sticky filter row — see fiscal-models.css. */}
+                  <div className="fm-table-wrap fm-349-ops-wrap" style={{ flex: 'none' }}>
+                    <table className="fm-table fm-349-ops-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 32, paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
                             <CheckboxField
-                              checked={selected.has(rowKey(op))}
-                              onToggle={() => toggleSelect(rowKey(op))}
+                              checked={allSelected}
+                              onToggle={() => setSelected(allSelected ? new Set() : new Set(filteredOps.map(rowKey)))}
                               onClick={e => e.stopPropagation()}
                               data-testid="CheckboxField__346dd5" />
-                          </td>
-                          <td>{op.nif}</td>
-                          <td style={{ fontWeight: 600 }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {op.name}
-                              {isRectificativeOp(op) && (
-                                <RectificativeBadge
-                                  t={t}
-                                  period={declaredPeriodLabel(op)}
-                                  data-testid="RectificativeBadge__346dd5" />
-                              )}
-                            </span>
-                          </td>
-                          <td>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <KeyBadge k={op.key} data-testid="KeyBadge__346dd5" />
-                              <span style={{ fontSize: 14, color: 'var(--fm-fg-1)' }}>{t(`fm.m349.key.${op.key}`)}</span>
-                            </span>
-                          </td>
-                          <td
-                            style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
-                            className={(parseFloat(op.base) || 0) < 0 ? 'fm-349-amount--negative' : undefined}
-                          >
-                            {formatAmount(op.base)}
-                          </td>
-                          <td><ViesBadge status={op.vies} data-testid="ViesBadge__346dd5" /></td>
-                          <td>
-                            {/* ETP-5438 — a snapshot-served declaration keeps the counts but not the
-                                invoice rows, so the link would land on the "not kept" note:
-                                plain text there, link everywhere else. */}
-                            {formatOrigin(op) && snapshotServed && (
-                              <span className="fm-origin-text" data-testid="fm-origin-text">{formatOrigin(op)}</span>
-                            )}
-                            {formatOrigin(op) && !snapshotServed && (
-                              <button className="fm-origin-link" onClick={() => goToOrigin(op)}>{formatOrigin(op)}</button>
-                            )}
-                            {!formatOrigin(op) && <span style={{ color: 'var(--fm-fg-4)' }}>—</span>}
-                          </td>
+                          </th>
+                          <th>{t('fm.m349.col.nif_iva')}</th>
+                          <th>{t('fm.m349.col.operator')}</th>
+                          <th>{t('fm.m349.col.key')}</th>
+                          <th style={{ textAlign: 'right' }}>{t('fm.m349.col.taxable_base')}</th>
+                          <th>{t('fm.m349.col.vies')}</th>
+                          <th>{t('fm.m349.col.origin')}</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {filteredOps.map(op => (
+                          <tr
+                            key={rowKey(op)}
+                            className={selected.has(rowKey(op)) ? 'fm-table__row--selected' : ''}
+                            data-rectificative={isRectificativeOp(op) ? 'true' : undefined}
+                          >
+                            <td style={{ paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
+                              <CheckboxField
+                                checked={selected.has(rowKey(op))}
+                                onToggle={() => toggleSelect(rowKey(op))}
+                                onClick={e => e.stopPropagation()}
+                                data-testid="CheckboxField__346dd5" />
+                            </td>
+                            <td>{op.nif}</td>
+                            <td style={{ fontWeight: 600 }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                {op.name}
+                                {isRectificativeOp(op) && (
+                                  <RectificativeBadge
+                                    t={t}
+                                    period={declaredPeriodLabel(op)}
+                                    data-testid="RectificativeBadge__346dd5" />
+                                )}
+                              </span>
+                            </td>
+                            <td>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <KeyBadge k={op.key} data-testid="KeyBadge__346dd5" />
+                                <span style={{ fontSize: 14, color: 'var(--fm-fg-1)' }}>{t(`fm.m349.key.${op.key}`)}</span>
+                              </span>
+                            </td>
+                            <td
+                              style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+                              className={(parseFloat(op.base) || 0) < 0 ? 'fm-349-amount--negative' : undefined}
+                            >
+                              {formatAmount(op.base)}
+                            </td>
+                            <td><ViesBadge status={op.vies} data-testid="ViesBadge__346dd5" /></td>
+                            <td>
+                              {/* ETP-5438 — a snapshot-served declaration keeps the counts but not the
+                                  invoice rows, so the link would land on the "not kept" note:
+                                  plain text there, link everywhere else. */}
+                              {formatOrigin(op) && snapshotServed && (
+                                <span className="fm-origin-text" data-testid="fm-origin-text">{formatOrigin(op)}</span>
+                              )}
+                              {formatOrigin(op) && !snapshotServed && (
+                                <button className="fm-origin-link" onClick={() => goToOrigin(op)}>{formatOrigin(op)}</button>
+                              )}
+                              {!formatOrigin(op) && <span style={{ color: 'var(--fm-fg-4)' }}>—</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {/* ETP-5584 (P11) — the window's one empty state, under the column header. */}
+                    {filteredOps.length === 0 && (
+                      <FmEmptyState
+                        icon={<Users size={28} strokeWidth={1.5} data-testid="Users__operatorsEmpty" />}
+                        title={operators.length === 0
+                          ? (t('fm.m349.operators.empty') ?? 'Sin operadores')
+                          : (t('fm.m349.operators.no_match') ?? 'Ningún operador coincide con el filtro')}
+                        sub={operators.length === 0 ? t('fm.m349.operators.empty_sub') : undefined}
+                        data-testid="fm349-operators-empty" />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {activeTab === 'rectif' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
-        {activeTab === 'rectif' && !snapshotServed && (
-          <RectificationsTabContent
-            rows={rectifRows}
-            t={t}
-            originFilter={rectifOriginFilter}
-            onClearOriginFilter={() => setOriginFilter(null)}
-            data-testid="RectificationsTabContent__346dd5" />
-        )}
+          {activeTab === 'rectif' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
+          {activeTab === 'rectif' && !snapshotServed && (
+            <RectificationsTabContent
+              rows={rectifRows}
+              t={t}
+              originFilter={rectifOriginFilter}
+              onClearOriginFilter={() => setOriginFilter(null)}
+              data-testid="RectificationsTabContent__346dd5" />
+          )}
 
+        </div>
+        {/* Shared tab content — same layout as 303 */}
+        {activeTab === 'invoices' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
+        <DetailTabContent
+          activeTab={detailTabFor(snapshotServed, activeTab)}
+          decl={decl}
+          liveInvoices={liveInvoices}
+          blocking={blocking}
+          warning={warning}
+          t={t}
+          onGoToSources={() => { setOriginFilter(null); setActiveTab('invoices'); }}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          status={status}
+          originFilter={invoiceOriginFilter}
+          onClearOriginFilter={() => setOriginFilter(null)}
+          data-testid="DetailTabContent__346dd5" />
       </div>
-      {/* Shared tab content — same layout as 303 */}
-      {activeTab === 'invoices' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
-      <DetailTabContent
-        activeTab={detailTabFor(snapshotServed, activeTab)}
-        decl={decl}
-        liveInvoices={liveInvoices}
-        blocking={blocking}
-        warning={warning}
-        t={t}
-        onGoToSources={() => { setOriginFilter(null); setActiveTab('invoices'); }}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        status={status}
-        originFilter={invoiceOriginFilter}
-        onClearOriginFilter={() => setOriginFilter(null)}
-        data-testid="DetailTabContent__346dd5" />
       {/* Overlays */}
       {showPresent && (
         <PresentModal
@@ -1602,6 +1747,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
           // not just whatever came down on the initial `decl` prop.
           decl={{ ...decl, contactFallback: liveContactFallback, phoneFallback: livePhoneFallback }}
           substitutive={sustitutiva}
+          formerStatement={identChecks?.formerStatement ?? ''}
           onConfirm={(payload) => handleGenerate(payload)}
           onClose={() => setShowFilegen(false)}
           data-testid="FileGenModal__346dd5" />

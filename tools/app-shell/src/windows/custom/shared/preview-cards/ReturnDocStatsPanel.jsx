@@ -6,7 +6,7 @@ import { MovementSummaryCard, InfoRow, PercentBar } from './SummaryCard.jsx';
 // ETP-5124 — `emailsCard` is optional: only a caller with a working send contract
 // (return-material-receipt) passes it. `return-to-vendor-shipment` has none yet and
 // omits it, so this stays exactly what it rendered before for that window.
-export default function ReturnDocStatsPanel({ doc, partnerName, movementDate, token, apiBaseUrl, ui, specs, relatedDefinition, emailsCard }) {
+export default function ReturnDocStatsPanel({ doc, partnerName, movementDate, token, apiBaseUrl, ui, specs, relatedDefinition, relatedLoadsDetail = false, emailsCard }) {
   const docStatus = doc.documentStatus;
   const statusLabel = ui(STATUS_KEYS[docStatus]) || doc['documentStatus$_identifier'] || docStatus || '—';
   const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-muted text-muted-foreground border-border-subtle';
@@ -43,7 +43,8 @@ export default function ReturnDocStatsPanel({ doc, partnerName, movementDate, to
         // ETP-5527 — when set (return-material-receipt), the card renders the shared
         // related-documents definition from this row instead of `specs`.
         definition={relatedDefinition}
-        record={relatedDefinition ? doc : undefined}
+        // relatedLoadsDetail: the row lacks the detail-only linked* fields, so the card loads the detail itself.
+        record={relatedDefinition && !relatedLoadsDetail ? doc : undefined}
         data-testid="RelatedDocumentsCard__2cd27e" />
     </div>
   );

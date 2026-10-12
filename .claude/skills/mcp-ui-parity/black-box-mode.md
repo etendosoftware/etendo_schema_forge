@@ -31,11 +31,11 @@ or is noted as not a capability (navigation, help, favourites).
 
 For each spec the window reaches:
 
-- The tool schemas: `spec` enums and descriptions of `neo_create`, `neo_update`, `neo_delete`,
-  `neo_action`, `neo_batch`.
-- `neo_discover`: entities, `methods`, `readOnly`, `actions[]`, `configError`, `agentPrompt`.
-- `neo_schema` with `view:"actions"`, `view:"create"` and `view:"full"` per entity.
-- `neo_defaults` and `neo_selectors` for each create the MCP advertises — and for each one it
+- The tool schemas: `spec` enums and descriptions of `etendo_create`, `etendo_update`, `etendo_delete`,
+  `etendo_action`, `etendo_batch`.
+- `etendo_discover`: entities, `methods`, `readOnly`, `actions[]`, `configError`, `agentPrompt`.
+- `etendo_schema` with `view:"actions"`, `view:"create"` and `view:"full"` per entity.
+- `etendo_defaults` and `etendo_selectors` for each create the MCP advertises — and for each one it
   hides.
 - The `docs` tool: topics about this area and the recipes they give.
 

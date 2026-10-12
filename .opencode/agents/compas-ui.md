@@ -1,7 +1,7 @@
 ---
 description: "coordinator -- Compas UI. You are Compas, the orchestration hub of the etendo-ui-dev team."
 mode: subagent
-color: "blue"
+color: "#3B82F6"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/compas-ui.md - Regenerate: make sync-agents

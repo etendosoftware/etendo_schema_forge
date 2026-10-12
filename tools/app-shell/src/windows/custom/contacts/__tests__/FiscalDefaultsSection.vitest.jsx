@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/contacts/FiscalDefaultsSection.jsx
 /**
  * Tests for FiscalDefaultsSection — the grouped SII/TicketBAI fiscal-defaults
  * block (ETP-4784). Faithful to Classic: no "SII/TBAI active" gating — the
@@ -6,7 +7,8 @@
  * Cliente block), and the TicketBAI block (`tbaiIssimplifiedinv`) always
  * renders.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import FiscalDefaultsSection from '../FiscalDefaultsSection';
 import { EntityForm } from '@/components/contract-ui';
 // Real (non-mocked) generated module + contract: the SII key-list options must
@@ -15,15 +17,24 @@ import { EntityForm } from '@/components/contract-ui';
 import CustomerForm from '@generated/contacts/generated/web/contacts/CustomerForm';
 import contract from '@generated/contacts/contract.json';
 
+// `useRealEntityForm` switches the EntityForm stub to the real component, for the one
+// behavior that only the real form can show: the key list's displayLogic gating.
+const formMode = vi.hoisted(() => ({ useRealEntityForm: false }));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (k) => k,
   useLabel: () => (column) => `label:${column}`,
+  useMenuLabel: () => (k) => k,
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
 }));
-vi.mock('@/components/contract-ui', () => ({
-  EntityForm: vi.fn(({ fields }) => (
-    <div data-testid="entity-form">{fields?.map(f => <span key={f.key}>{f.key}</span>)}</div>
-  )),
-}));
+vi.mock('@/components/contract-ui', async () => {
+  const { EntityForm: RealEntityForm } = await vi.importActual('@/components/contract-ui/EntityForm');
+  return {
+    EntityForm: vi.fn((props) => (formMode.useRealEntityForm
+      ? <RealEntityForm {...props} />
+      : <div data-testid="entity-form">{props.fields?.map(f => <span key={f.key}>{f.key}</span>)}</div>)),
+  };
+});
 
 function findFieldsCall(fieldKey) {
   return EntityForm.mock.calls.find(([props]) =>
@@ -57,6 +68,7 @@ function contractEnumValues() {
 describe('FiscalDefaultsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    formMode.useRealEntityForm = false;
   });
 
   it('always renders the section title and description', () => {
@@ -66,10 +78,10 @@ describe('FiscalDefaultsSection', () => {
   });
 
   describe('SII block — shown only when data.customer is true', () => {
-    it('renders the SII block title and fields when customer is true', () => {
+    it('renders the SII caption and fields when customer is true', () => {
       render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
 
-      expect(screen.getByText('fiscalDefaultsSiiBlock')).toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__aeatsii-default-caption')).toHaveTextContent('fiscalDefaultsSiiBlock');
       expect(findFieldsCall('aeatsiiSiikeylist')).toBeTruthy();
       expect(screen.getByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' })).toBeInTheDocument();
     });
@@ -77,15 +89,17 @@ describe('FiscalDefaultsSection', () => {
     it('does not render the SII block when customer is false', () => {
       render(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
 
-      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalToggle__aeatsii-default-caption')).not.toBeInTheDocument();
       expect(findFieldsCall('aeatsiiSiikeylist')).toBeUndefined();
       expect(screen.queryByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalDefaultsSection__sii-block')).not.toBeInTheDocument();
+      expect(screen.getByTestId('FiscalDefaultsSection__tbai-block')).toBeInTheDocument();
     });
 
     it('does not render the SII block when customer is undefined', () => {
       render(<FiscalDefaultsSection data={{}} onChange={vi.fn()} />);
 
-      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalToggle__aeatsii-default-caption')).not.toBeInTheDocument();
     });
 
     it('wires the aeatsiiDefaultsiikey toggle to onChange with the AD column name', () => {
@@ -200,10 +214,10 @@ describe('FiscalDefaultsSection', () => {
   });
 
   describe('TicketBAI block — always shown', () => {
-    it('renders the TicketBAI block title and toggle regardless of customer', () => {
+    it('renders the TicketBAI caption and toggle regardless of customer', () => {
       render(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
 
-      expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__tbai-simplified-caption')).toHaveTextContent('fiscalDefaultsTbaiBlock');
       expect(screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' })).toBeInTheDocument();
     });
 
@@ -220,10 +234,104 @@ describe('FiscalDefaultsSection', () => {
     it('renders both blocks simultaneously when customer is true', () => {
       render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
 
-      expect(screen.getByText('fiscalDefaultsSiiBlock')).toBeInTheDocument();
-      expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__aeatsii-default-caption')).toHaveTextContent('fiscalDefaultsSiiBlock');
+      expect(screen.getByTestId('FiscalToggle__tbai-simplified-caption')).toHaveTextContent('fiscalDefaultsTbaiBlock');
       expect(screen.getByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' })).toBeInTheDocument();
       expect(screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' })).toBeInTheDocument();
+    });
+  });
+
+  // ETP-5519: SII and TicketBAI sit side by side in one 2-column grid row, and each switch has
+  // its label right next to it (switch first), as in EntityForm's own `toggle` field.
+  describe('layout — both blocks in one row, label beside each switch', () => {
+    const SWITCHES = [
+      { testId: 'FiscalToggle__aeatsii-default', caption: 'fiscalDefaultsSiiBlock', label: 'label:EM_Aeatsii_Defaultsiikey', key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey' },
+      { testId: 'FiscalToggle__tbai-simplified', caption: 'fiscalDefaultsTbaiBlock', label: 'label:EM_Tbai_Issimplifiedinv', key: 'tbaiIssimplifiedinv', column: 'EM_Tbai_Issimplifiedinv' },
+    ];
+
+    it('places the SII and TicketBAI blocks as cells of the same 2-column grid', () => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      const sii = screen.getByTestId('FiscalDefaultsSection__sii-block');
+      const tbai = screen.getByTestId('FiscalDefaultsSection__tbai-block');
+      const grid = sii.parentElement;
+      expect(tbai.parentElement).toBe(grid);
+      expect(grid.className.split(/\s+/)).toEqual(expect.arrayContaining(['grid', 'grid-cols-2']));
+      expect(Array.from(grid.children)).toEqual([sii, tbai]);
+    });
+
+    it.each(SWITCHES)('renders the $key label right after its switch, bound to it', ({ testId, label }) => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      const sw = screen.getByTestId(testId);
+      expect(sw.id).toBeTruthy();
+      // The label lives in the wrapper that follows the switch (label + caption).
+      const wrapper = sw.nextElementSibling;
+      const lbl = wrapper.querySelector(`label[for="${sw.id}"]`);
+      expect(lbl).not.toBeNull();
+      expect(lbl).toHaveTextContent(label);
+      expect(lbl.htmlFor).toBe(sw.id);
+      // Switch first, label after it in document order.
+      expect(sw.compareDocumentPosition(lbl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // Same row: the switch and its label wrapper share one flex container.
+      expect(sw.parentElement.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex', 'items-center']));
+    });
+
+    it.each(SWITCHES)('puts the $key caption under its label, in the same wrapper', ({ testId, caption }) => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      const sw = screen.getByTestId(testId);
+      const cap = screen.getByTestId(`${testId}-caption`);
+      expect(cap).toHaveTextContent(caption);
+      const lbl = sw.nextElementSibling.querySelector('label');
+      expect(cap.parentElement).toBe(lbl.parentElement);
+      expect(lbl.nextElementSibling).toBe(cap);
+    });
+
+    it('renders no uppercase heading in either block', () => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      for (const id of ['FiscalDefaultsSection__sii-block', 'FiscalDefaultsSection__tbai-block']) {
+        expect(screen.getByTestId(id).querySelector('.uppercase')).toBeNull();
+      }
+    });
+
+    it.each(SWITCHES)('clicking the $key label toggles the switch', async ({ key, column, label }) => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(<FiscalDefaultsSection data={{ customer: true, [key]: false }} onChange={onChange} />);
+      await user.click(screen.getByText(label, { selector: 'label' }));
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenCalledWith(key, true, column);
+    });
+
+    it('gives the two switches distinct ids so each label targets its own switch', () => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(screen.getByTestId(SWITCHES[0].testId).id).not.toBe(screen.getByTestId(SWITCHES[1].testId).id);
+    });
+  });
+
+  // Rendered through the REAL EntityForm: "Clave tipo factura" appears only while the
+  // "Clave por defecto" switch is on.
+  describe('key list visibility (real EntityForm)', () => {
+    const KEY_LIST_LABEL = 'label:EM_Aeatsii_Siikeylist';
+
+    it('hides the key list while "Clave por defecto" is off', () => {
+      formMode.useRealEntityForm = true;
+      render(<FiscalDefaultsSection data={{ customer: true, aeatsiiDefaultsiikey: false }} onChange={vi.fn()} />);
+      const sii = screen.getByTestId('FiscalDefaultsSection__sii-block');
+      expect(within(sii).queryByText(KEY_LIST_LABEL)).toBeNull();
+    });
+
+    it('shows the key list once "Clave por defecto" is on', () => {
+      formMode.useRealEntityForm = true;
+      render(<FiscalDefaultsSection data={{ customer: true, aeatsiiDefaultsiikey: true }} onChange={vi.fn()} />);
+      const sii = screen.getByTestId('FiscalDefaultsSection__sii-block');
+      expect(within(sii).getByText(KEY_LIST_LABEL)).toBeInTheDocument();
+    });
+
+    it('reveals the key list when the switch flips on', () => {
+      formMode.useRealEntityForm = true;
+      const { rerender } = render(<FiscalDefaultsSection data={{ customer: true, aeatsiiDefaultsiikey: false }} onChange={vi.fn()} />);
+      expect(screen.queryByText(KEY_LIST_LABEL)).toBeNull();
+      rerender(<FiscalDefaultsSection data={{ customer: true, aeatsiiDefaultsiikey: true }} onChange={vi.fn()} />);
+      expect(screen.getByText(KEY_LIST_LABEL)).toBeInTheDocument();
     });
   });
 
@@ -231,8 +339,8 @@ describe('FiscalDefaultsSection', () => {
     it('does not crash when data is undefined', () => {
       expect(() => render(<FiscalDefaultsSection data={undefined} onChange={vi.fn()} />)).not.toThrow();
       expect(screen.getByText('fiscalDefaults')).toBeInTheDocument();
-      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
-      expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalToggle__aeatsii-default-caption')).not.toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__tbai-simplified-caption')).toHaveTextContent('fiscalDefaultsTbaiBlock');
     });
 
     it('does not crash when onChange is not provided (toggles are inert, no throw on click)', () => {
@@ -246,11 +354,11 @@ describe('FiscalDefaultsSection', () => {
 
     it('re-renders correctly when customer flips from true to false (SII block unmounts cleanly)', () => {
       const { rerender } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
-      expect(screen.getByText('fiscalDefaultsSiiBlock')).toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__aeatsii-default-caption')).toHaveTextContent('fiscalDefaultsSiiBlock');
 
       rerender(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
-      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
-      expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalToggle__aeatsii-default-caption')).not.toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__tbai-simplified-caption')).toHaveTextContent('fiscalDefaultsTbaiBlock');
     });
 
     it('toggling tbaiIssimplifiedinv off sends false to onChange (not just the "turn on" path)', () => {

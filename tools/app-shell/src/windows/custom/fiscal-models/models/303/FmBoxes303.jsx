@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
-import { getLayout303, matchesVisibility, isFieldRequired } from './fm303Layouts.js';
+import { getLayout303, matchesVisibility, isFieldRequired, resolveFieldLabelKey, isOptionDisabled, getInvalidSelectedOption } from './fm303Layouts.js';
 import { formatAmount, formatPercent, NEGATIVE_NOT_ALLOWED_BOXES, exceedsTypedIntegerDigits, exceedsTypedDecimalDigits } from '../../fiscalModelsUtils.js';
 
 const SECTION_ICON = {
@@ -21,6 +22,9 @@ const SECTION_ICON = {
 function formatCell(val, colType) {
   return colType === 'percent' ? formatPercent(val) : formatAmount(val);
 }
+
+// Radix Select item value standing for "no value" (Radix forbids '' as an item value).
+const EMPTY_OPTION = '__empty__';
 
 const COMPACT_SECTIONS = new Set(['iva_devengado', 'iva_deducible', 'resultado', 'info_adicional', 'resultado_final']);
 const TITLED_SECTIONS  = new Set(['iva_devengado', 'iva_deducible']);
@@ -191,24 +195,83 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     );
   };
 
-  const renderIdentSelectField = (f, compact = false) => (
-    <div key={f.id} className="fm-aeat-ident-inline-field">
-      <span className="fm-aeat-ident-inline-field__label">
-        {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
-      </span>
-      <select
-        className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}`}
-        value={identification?.[f.id] ?? ''}
-        onChange={e => onIdentChange?.(f.id, e.target.value)}
-        disabled={readOnly}
-      >
-        <option value="">{t('fm.ident.decl.placeholder')}</option>
-        {f.options?.map(opt => (
-          <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-        ))}
-      </select>
-    </div>
-  );
+  // ETP-5584 — the app's Select (Radix, `@/components/ui/select`) instead of the browser's
+  // native <select>, so these dropdowns look like every other form field of the app. Same
+  // contract as the app's own optional selects (SelectorInput / EntityForm):
+  // - always CONTROLLED: an unset field is `''` (never `undefined` — a controlled->uncontrolled
+  //   flip swallows the first pick), rendered as the "Seleccionar..." placeholder;
+  // - an OPTIONAL field also offers the placeholder as a real item, so it can be cleared back to
+  //   '' like the native select's "Seleccionar..." option allowed. Radix forbids '' as an item
+  //   value, hence the `EMPTY_OPTION` sentinel, mapped back to '' on change.
+  //
+  // ETP-5597 pt.1 — an option whose `disabledWhen` currently matches is rendered `disabled` (not
+  // selectable). If it is ALREADY the selected value (e.g. box 69 turned positive after choosing
+  // "Compensación"), it stays selected — FmModel303Page blocks generation/presentation instead of
+  // silently clearing the user's choice — and the option's `disabledReasonKey` is shown under the
+  // select so the user knows why the declaration cannot be filed as is.
+  const renderIdentSelectField = (f, compact = false) => {
+    const required = isFieldRequired(f, identification);
+    const placeholder = t('fm.ident.decl.placeholder');
+    const invalidOption = getInvalidSelectedOption(f, identification);
+    const errorId = invalidOption ? `fm-aeat-ident-${f.id}-error` : undefined;
+    return (
+      <div key={f.id} className={`fm-aeat-ident-inline-field${invalidOption ? ' fm-aeat-ident-inline-field--invalid' : ''}`}>
+        <span className="fm-aeat-ident-inline-field__label">
+          {t(resolveFieldLabelKey(f, identification))}{required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+        </span>
+        <Select
+          value={identification?.[f.id] ?? ''}
+          onValueChange={value => onIdentChange?.(f.id, value === EMPTY_OPTION ? '' : value)}
+          disabled={readOnly}
+          data-testid="FmBoxes303__identSelectRoot"
+        >
+          <SelectTrigger
+            className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}${invalidOption ? ' fm-aeat-ident-inline-field__select--invalid' : ''}`}
+            aria-label={t(resolveFieldLabelKey(f, identification))}
+            aria-invalid={invalidOption ? true : undefined}
+            aria-describedby={errorId}
+            data-field-id={f.id}
+            data-testid="FmBoxes303__identSelect"
+          >
+            <SelectValue placeholder={placeholder} data-testid="SelectValue__49d327" />
+          </SelectTrigger>
+          <SelectContent data-testid="SelectContent__49d327">
+            {!required && (
+              <SelectItem value={EMPTY_OPTION} data-option-value="" data-testid="SelectItem__empty49d327">{placeholder}</SelectItem>
+            )}
+            {f.options?.map(opt => {
+              const optDisabled = isOptionDisabled(opt, identification);
+              return (
+                <SelectItem
+                  key={opt.value}
+                  value={opt.value}
+                  disabled={optDisabled}
+                  // The core SelectItem sets `data-[disabled]:pointer-events-none`, which hides the
+                  // reason `title` below; Radix still refuses to select a disabled item.
+                  className="data-[disabled]:pointer-events-auto data-[disabled]:cursor-not-allowed"
+                  title={optDisabled && opt.disabledReasonKey ? t(opt.disabledReasonKey) : undefined}
+                  data-option-value={opt.value}
+                  data-testid="SelectItem__49d327"
+                >
+                  {t(opt.labelKey)}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+        {invalidOption && (
+          <span
+            id={errorId}
+            role="alert"
+            className="fm-aeat-ident-inline-field__error"
+            data-testid={`fm-aeat-ident-${f.id}-error`}
+          >
+            {t(invalidOption.disabledReasonKey ?? 'fm.ident.decl.option_not_allowed')}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   // Supports a single-field condition ({field, in:[...] | equals:...}) or an
   // OR-of-conditions shape ({ anyOf: [condition, ...] }) — kept minimal on
@@ -261,7 +324,10 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   };
 
   const renderBoxCell = (row, section, ci, boxNum) => {
-    const isCellEditable = row.editable || row.editableCells?.includes(boxNum);
+    // ETP-5597 pt.4 — `resolveEditable` (not just `row.editable`) so a grid row can also be
+    // conditionally editable via `editableWhen`, the same contract the bicolumn infoboxes use
+    // (boxes 70/109 are editable only while "Autoliquidación rectificativa" is checked).
+    const isCellEditable = resolveEditable(row) || row.editableCells?.includes(boxNum);
     const isFixed = !isCellEditable && row.fixedValues != null &&
       Object.prototype.hasOwnProperty.call(row.fixedValues, boxNum);
     let val = isFixed
@@ -358,7 +424,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     return (
                       <div key={f.id} className="fm-aeat-ident-inline-field">
                         <span className="fm-aeat-ident-inline-field__label">
-                          {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+                          {t(resolveFieldLabelKey(f, identification))}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
                         </span>
                         <input
                           type={f.type === 'date' ? 'date' : 'text'}
@@ -422,7 +488,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                   return (
                     <div key={f.id} className="fm-aeat-ident-inline-field">
                       <span className="fm-aeat-ident-inline-field__label">
-                        {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+                        {t(resolveFieldLabelKey(f, identification))}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
                       </span>
                       <input
                         type={f.type === 'date' ? 'date' : 'text'}

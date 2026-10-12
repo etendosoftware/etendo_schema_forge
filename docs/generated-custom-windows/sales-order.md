@@ -99,7 +99,7 @@ This window should let a user create, review, confirm, and manage sales orders f
 ## Manual verification
 
 1. Open `/sales-order` and confirm the list shows exactly Order Date (no red dot), Document No., Business Partner, Document Status, Total Gross Amount, Invoice Status, and Delivery Status in that order, and that the Delivery Status header reads "Delivery Status"/"Estado de entrega" rather than the default "Receipt Status"/"Estado del envío".
-2. Open `/sales-order?filter=pendingDelivery` and confirm the list starts in the pending-delivery quick filter rather than the full order set.
+2. Open `/sales-order?filter=pendingDelivery` and confirm the list starts in the pending-delivery filter with both conditions populated (Document Status = Completed, Delivery Status < 100) and the row count equals the dashboard card (ETP-5632: the condition uses the `eTGODeliveryStatus` grid column; a non-grid field is silently dropped).
 3. Start a new order and verify business partner is required, partner address stays disabled until a business partner is selected, the order-line tab is already visible, and `Save`, `Save draft`, and `Cancel` are present before the first save. Verify inline contact creation is available from the detail page.
 4. Verify the header now exposes `Payment Method`, `Payment Terms`, and `Warehouse` as visible fields on the generated header form. Confirm `Warehouse` appears at the end of the second row (4th column). On a draft order, confirm it is editable; on a confirmed order, confirm it is read-only.
 5. Add one or more lines and verify the line editor exposes product, ordered quantity, list price (`listPrice`), discount, tax, and line gross amount, then verify that changing quantity, price, or discount updates the line gross amount instantly without a server round-trip, and that header totals refresh after saving. Confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured sales taxes (filtered by `IsSOTrx=Y` and validity against the order date), not a free-text search that returns "Sin resultados".
@@ -304,14 +304,14 @@ controls the appearance.
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move this order through its
-workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+workflow over MCP. `etendo_schema` returns it with `invokeVia: "etendo_action"`, `actionValues` (the
 active AD list of the `C_Order.DocAction` reference) and `actionParameter: "docAction"`; its
 `agentPrompt` — defined in `decisions.json` -> `entities.header.fields.documentAction.agentPrompt`
 — states which transitions are legal and their preconditions.
 
 Booking a draft order over MCP:
 
-    neo_action { spec: "sales-order", entity: "header", id: "<orderId>",
+    etendo_action { spec: "sales-order", entity: "header", id: "<orderId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
 Flow encoded in the prompt: `DR -> CO` books, `DR -> VO` voids, `CO -> RE` reactivates **only
@@ -319,7 +319,7 @@ while the order has no linked documents** (same condition as the Reactivate menu
 `visibleWhenFieldFalse: hasLinkedDocuments`), `CO -> CL` closes pending quantities.
 
 This runs `SalesOrderHeaderHandler` exactly as the UI does — including the pre-CO total-discount
-line — because `neo_action` executes the entity's `NeoHandler` hooks (ETP-4285). If you change
+line — because `etendo_action` executes the entity's `NeoHandler` hooks (ETP-4285). If you change
 this window's workflow rules, update the `agentPrompt` in the same change: it is the only thing
 telling the agent what is legal.
 

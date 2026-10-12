@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // ETP-5338 Bug A fix — regression test.
 //
 // Root cause: `FmModel303Page` used to autosave `identChecks`/`manualOverrides` via a debounced
@@ -63,7 +64,6 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: ({ title, message }) =>
     React.createElement('div', { className: 'fm-empty-state' }, title || message || 'empty'),

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // ETP-5456 — a boundary-legal manual value (15 integer digits + 2 decimals, e.g.
 // "123456789012345.35") must be preserved EXACTLY through the real edit pipeline, not silently
 // corrupted by float64 precision loss (`Number('123456789012345.35')` alone, no arithmetic,
@@ -15,9 +16,9 @@ import { render, fireEvent } from '@testing-library/react';
 
 const navigateMock = vi.fn();
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
   const actual = await importOriginal();
@@ -105,7 +106,9 @@ describe('FmModel303Page — exact preservation of a boundary-legal value throug
     // Box 27 itself is a total (`total_devengada`), not directly editable — box 70 ("a_deducir")
     // lives in the same resultado_final bicolumn as box 77 and is a genuine N box, editable,
     // ceiling 15 positive / 14 negative — a legitimate stand-in for this magnitude check.
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    // ETP-5597 pt.4 — box 70 is only editable inside a rectificativa, so the decl checks it.
+    const decl = { ...BASE_DECL, identification: { tipo_declaracion: 'N', rectificativa: true } };
+    const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
     goToResultadoFinal();
 
     editBox(container, 70, '123456789012345.12');

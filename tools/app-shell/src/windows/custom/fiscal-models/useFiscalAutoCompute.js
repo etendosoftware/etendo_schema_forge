@@ -25,7 +25,11 @@ import { useEffect, useRef, useState } from 'react';
 function sessionCacheKey(declId) {
   // v4: 349 compute payload gained `contactFallback`/`phoneFallback` on
   // computeOperators (ETP-5456) — bump invalidates cached v3 results that lack these fields
-  return `fiscal_ac_v4_${declId}`;
+  // v5: 349 `invoices` rows are now one per (invoice, AEAT349 key) — a mixed goods+services
+  // invoice backs both its operator rows (ETP-5597). `checkModified349` only looks at invoice
+  // changes, so a v4 payload computed by the previous backend would otherwise be restored as-is
+  // and keep showing "—" in Origen for the services row.
+  return `fiscal_ac_v5_${declId}`;
 }
 
 /**

@@ -658,14 +658,26 @@ No engine change. No new component. If you needed one, say so in review.
 
 ## 9. Current trigger is interim
 
-The only entry point today is the **graduation-cap button in the top bar**, next
+The main entry point is the **graduation-cap button in the top bar**, next
 to the global search, with a flat list of the available flows. This is
 deliberate and explicitly interim.
+
+**Starting a flow from elsewhere: `useLaunchWalkthrough(source)`.** Any other
+caller uses this functional hook (`tools/app-shell/src/lib/walkthrough/useLaunchWalkthrough.js`)
+rather than calling `start()` directly. It returns
+`{ canLaunch(flowId), launch(flowId) }` and runs the same three steps as the
+launcher, in the same order: report `walkthrough_started` (with the status the
+flow had BEFORE this run, and `source` as the telemetry source), `markFlowStarted`,
+then `start`. `canLaunch` is false when there is no `WalkthroughProvider` or the
+flow id is unknown, so a caller can hide its link with it. `launch` returns
+`false` and does nothing in those cases and while another tour is running. Current caller: the Contacts empty
+state's "Ver guía" link, which launches `create-contact` with source
+`contacts_empty_state` (ETP-5600, `docs/generated-custom-windows/contacts.md`).
 
 Out of scope for now, and **not** designed around:
 
 - auto-triggering a walkthrough on first login;
-- per-window contextual entry points ("show me how to fill this in");
+- a generic per-field contextual entry point ("show me how to fill this in");
 - **resuming** a half-finished tour where it was left (which tutorials have
   been taken IS now tracked — see §11 — but a run always restarts at step 1).
 

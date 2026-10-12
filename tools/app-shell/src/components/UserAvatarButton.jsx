@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
 import { useLogout } from '@/auth/useLogout.js';
-import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
+import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 
 const LOCALES = [
   { code: 'en_US', flag: '🇺🇸', label: 'English' },
@@ -35,18 +35,32 @@ export function UserAvatarButton({ expanded = false }) {
   // actually has, so the guess is gone and the entry is unconditional.
 
   const initial = username?.charAt(0).toUpperCase() || '?';
-  const roleInitial = selectedRole?.name?.charAt(0).toUpperCase() || '';
-  // ETP-5329: prefer the composed effective/inherited role names (backend-resolved from the
-  // personal role's AD_Role_Inheritance) over the raw auto-generated personal-role name.
-  // Falls back to selectedRole.name when effectiveRoleNames is absent/empty — a legitimate
-  // state (rolling deploy, or a personal role with zero composed templates yet), not an error.
-  // Each composed name is translated via the shared roleNameI18n map (same mechanism as the
-  // "Roles" chips elsewhere: RoleChipsCell, UserRolesTab, RoleSummaryCard, etc.) so e.g. "Sales"
-  // renders as "Ventas" in es_ES instead of leaking the raw AD_Role.name. The fallback raw
-  // selectedRole.name is left untranslated, matching its pre-existing behavior.
-  const roleDisplay = selectedRole?.effectiveRoleNames?.length
-    ? selectedRole.effectiveRoleNames.map((name) => resolveRoleDisplayName(ui, name)).join('-')
-    : selectedRole?.name;
+  // ETP-5329: role label precedence, highest first:
+  //   1. selectedRole.isClientAdmin -> the localized generic admin label (ADMIN_NAME_I18N_KEY),
+  //      exactly what Settings > Users shows. A tenant admin's default role IS the client-admin
+  //      AD_Role: it has no composed templates (so no effectiveRoleNames) and its raw name is
+  //      tenant-specific ("<Company> Admin"), which used to leak into this menu (QA CP-6/CP-7).
+  //   2. effectiveRoleNames -> the composed template role names (backend-resolved from the
+  //      personal role's AD_Role_Inheritance), each translated via the shared roleNameI18n map
+  //      (same mechanism as the "Roles" chips: RoleChipsCell, UserRolesTab, RoleSummaryCard...)
+  //      so e.g. "Sales" renders as "Ventas" in es_ES, joined with '-'.
+  //   3. selectedRole.name, untranslated — a legitimate state (rolling deploy, or a personal
+  //      role with zero composed templates yet), not an error.
+  const isClientAdmin = selectedRole?.isClientAdmin === true;
+  const adminLabel = isClientAdmin ? ui(ADMIN_NAME_I18N_KEY) : null;
+  let roleDisplay = selectedRole?.name;
+  if (isClientAdmin) {
+    roleDisplay = adminLabel;
+  } else if (selectedRole?.effectiveRoleNames?.length) {
+    roleDisplay = selectedRole.effectiveRoleNames
+      .map((name) => resolveRoleDisplayName(ui, name))
+      .join('-');
+  }
+  // The avatar badge initial follows the raw role name, except for the client admin, whose raw
+  // name starts with the tenant's company name — it takes the admin label's initial instead
+  // ("A"dministrator / "A"dministrador). The personal-role case deliberately keeps the raw-name
+  // initial rather than the first composed role's.
+  const roleInitial = (adminLabel || selectedRole?.name)?.charAt(0).toUpperCase() || '';
 
   const trigger = expanded ? (
     <button

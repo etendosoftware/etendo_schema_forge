@@ -865,7 +865,8 @@ export default function ReversedInvoicesPanel({
       if (!parentId) {
         savedHeader = await onSaveHeader({ navigateAfter: false });
         if (!savedHeader?.id) {
-          toast.error(ui('rectSaveError'));
+          // null = the host already reported why (a failed save, or a save it cannot open), so
+          // a second toast here would only contradict it — see onSaveHeader in DetailView.
           failedDraftRef.current = draftSignature(newLine);
           return;
         }

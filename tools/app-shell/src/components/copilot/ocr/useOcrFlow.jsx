@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useUI } from '@/i18n';
+import { getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
+import { checkReceiverTaxId } from './receiverTaxIdCheck';
 import { getOcrDocType } from './ocrDocTypes';
 import { useBatch } from './ingest/useBatch';
 import { buildPurchaseInvoiceBatch } from './ingest/purchaseInvoiceDescriptor';
@@ -15,6 +20,40 @@ import { CREATE_COMPONENTS, PRE_RESOLVERS } from './strategies';
 // window is one entry here plus the descriptor file.
 const DESCRIPTORS = {
   'purchase-invoice': buildPurchaseInvoiceBatch,
+};
+
+// Reads the active organisation's tax id from the session. Returns `{ failed: true }` when the
+// call itself failed (network, 401, 5xx), so that is not mistaken for "no tax id configured".
+async function fetchOrgTaxId(apiFetch) {
+  try {
+    const res = await apiFetch(`${getNeoBaseUrl()}/session`, { baseUrl: '' });
+    if (!res.ok) return { failed: true };
+    const json = await res.json();
+    return { taxId: json?.organization?.taxId ?? null };
+  } catch {
+    return { failed: true };
+  }
+}
+
+// ETP-5585 — per-docType pre-flight checks, named by `docType.validateExtraction`. Each runs after
+// the extraction and before any modal. Returns `{ error }` to block the flow, or null to continue.
+const VALIDATORS = {
+  async receiverTaxId(payload, { apiFetch, ui }) {
+    // The org id is only needed once a receiver id is present, so skip the call otherwise.
+    if (!payload?.receiver?.tax_id_raw) return null;
+    const org = await fetchOrgTaxId(apiFetch);
+    if (org.failed) {
+      toast.warning(ui('ocrReceiverTaxIdUnverified'));
+      return null;
+    }
+    const orgTaxId = org.taxId;
+    const { status, receiverTaxId } = checkReceiverTaxId(payload, orgTaxId);
+    if (status === 'mismatch') {
+      return { error: ui('ocrReceiverTaxIdMismatch', { receiver: receiverTaxId }) };
+    }
+    if (status === 'no-org-tax-id') toast.warning(ui('ocrOrgTaxIdMissing'));
+    return null;
+  },
 };
 
 async function resolveField(field, extracted, context) {
@@ -100,6 +139,8 @@ export function useOcrFlow({
   // the flow, which genuinely needs this window's spec URL.
   const { runBatch } = useBatch({ token });
   const { showResult } = useBulkActionToast();
+  const apiFetch = useApiFetch('');
+  const ui = useUI();
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -192,6 +233,14 @@ export function useOcrFlow({
       setLoading(true);
       setResult(null);
       try {
+        const validate = VALIDATORS[docType.validateExtraction];
+        const blocked = validate ? await validate(payload, { apiFetch, ui }) : null;
+        if (blocked) {
+          // NOT showResult: it reads `failed[0].message`, and this flow passes `{ reason }`.
+          toast.error(blocked.error);
+          setResult({ committed: false, error: blocked.error });
+          return;
+        }
         const reviewed = await askUserToReview(payload);
         if (!reviewed) {
           markCancelled();
@@ -273,7 +322,7 @@ export function useOcrFlow({
 
     window.addEventListener(docType.eventName, handler);
     return () => window.removeEventListener(docType.eventName, handler);
-  }, [docType, token, apiBaseUrl, askUserToReview, askUserToReviewLines, askUserForProducts, runBatch, showResult, onRefresh]);
+  }, [docType, token, apiBaseUrl, askUserToReview, askUserToReviewLines, askUserForProducts, runBatch, showResult, onRefresh, apiFetch, ui]);
 
   const contactsBase = apiBaseUrl ? deriveContactsApiBase(apiBaseUrl) : null;
   let pendingModal = pendingPopup;

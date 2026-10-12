@@ -77,7 +77,10 @@ Resolves `@etendosoftware/app-shell-core` (and subpaths) from
 `../schema_forge_core/packages/app-shell-core/src`. React/react-dom and the shared
 runtime deps are pinned to this repo's copies (Vite `resolve.dedupe`) so there is a
 single React instance — no "Invalid hook call". Implemented in
-`tools/app-shell/vite.config.js` (see the `LOCAL_CORE` block).
+`tools/app-shell/vite.config.js` (see the `LOCAL_CORE` block). Ports: `SPA_PORT`
+(3100) and `BFF_PORT` (3400); only those two are freed before starting. With the
+`etendo-localenv` tooling, the `etendo-go` plugin runs this per environment on its
+own ports — see [local-env-plugin.md](local-env-plugin.md).
 
 **CLI (run the pipeline from local core source):**
 ```bash

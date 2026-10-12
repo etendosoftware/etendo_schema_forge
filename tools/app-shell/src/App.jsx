@@ -189,9 +189,10 @@ export function __resetMenuAccessCacheForTest() {
 }
 
 // ETP-5443 follow-up / ETP-5047 — recovers the `EnvironmentAccessPolicy.Decision` name from
-// a NEO 402. The body shape (structured `error.decision`, with the older message-prefix
-// fallback) is interpreted by `readEnvironmentAccessDecision` in lib/environmentAccessGate.js;
-// this only turns an unreadable body into "no decision".
+// a NEO 402. The body shape (structured `error.decision`, with the message-prefix fallback
+// whose envelope handling is the core gate's `readAccessErrorMessage`, shared with the
+// transport-level detection of ETP-5642) is interpreted by `readEnvironmentAccessDecision` in
+// lib/environmentAccessGate.js; this only turns an unreadable body into "no decision".
 async function readNeoAccessDecision(res) {
   try {
     return readEnvironmentAccessDecision(await res.json());
@@ -231,8 +232,9 @@ export async function fetchWindowAccess(session) {
       // that folding this into `null` (below, unchanged) used to produce. For a 402 with a
       // recognized decision text, record it; for any other resolved non-ok response (401,
       // differently-worded 402, 500, etc.), clear any previously-recorded decision — this is
-      // the only place a demo/subscription block can be detected, so a resolved response that
-      // is not a recognized 402 means access is not currently known to be blocked. NOTE: a
+      // the only place a block is CLEARED (ETP-5642: `apiFetch` also records a block from any
+      // other 402, but never clears one), so a resolved response that is not a recognized 402
+      // means access is not currently known to be blocked. NOTE: a
       // thrown/rejected apiFetch (DNS, connection refused, abort) never reaches here; it lands
       // in the outer catch below, which deliberately leaves the decision untouched so a
       // transient network failure does not replace the last server-confirmed block with a

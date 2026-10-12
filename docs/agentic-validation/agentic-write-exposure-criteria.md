@@ -167,10 +167,10 @@ blocked, that is a different mechanism (preconditions / role access), not this o
 | Path | Gate | Note |
 |---|---|---|
 | REST CRUD | `NeoCrudHandler.java:125` | `405 "<METHOD> not enabled for <entity>"` |
-| MCP write tools (`neo_create`/`neo_update`/`neo_delete`) | `McpToolRouterSupport.requireMethodEnabled` (`:202-210`) | Explained refusal naming the enabled methods, not a bare code |
-| `/batch` and MCP `neo_batch` | `BatchService.java:457` | Entered the CRUD pipeline *after* the gate, so a read-only entity used to reject a direct `POST` with `405` while accepting the same create smuggled inside a batch. Closed. |
+| MCP write tools (`etendo_create`/`etendo_update`/`etendo_delete`) | `McpToolRouterSupport.requireMethodEnabled` (`:202-210`) | Explained refusal naming the enabled methods, not a bare code |
+| `/batch` and MCP `etendo_batch` | `BatchService.java:457` | Entered the CRUD pipeline *after* the gate, so a read-only entity used to reject a direct `POST` with `405` while accepting the same create smuggled inside a batch. Closed. |
 
-`neo_discover` reports `readOnly: true` for an entity that is readable and has no mutation
+`etendo_discover` reports `readOnly: true` for an entity that is readable and has no mutation
 method (`NeoMethodPolicy.isReadOnly`, `:112`).
 
 **Gate granularity caveat:** `isMethodEnabled` treats `GET` as enabled when **either**
@@ -206,7 +206,7 @@ no generated page a user can reach, so there is no button to hide.
 
 Separate from the method flags, ETP-4254 also replaced a hardcoded `"dashboard"` spec-name
 literal with a data-driven rule for dropping a spec from the agentic catalog altogether
-(`neo_discover`, the CRUD/action tool enums, `McpResourceProvider`). A type-`W` spec is
+(`etendo_discover`, the CRUD/action tool enums, `McpResourceProvider`). A type-`W` spec is
 excluded only when it has **neither** surface — `isCatalogExcludedSpec`
 (`McpToolRouterSupport.java`):
 
@@ -220,11 +220,11 @@ two specs, not one:
 
 | Spec | Entities | Verdict |
 |---|---|---|
-| `dashboard` | 9 widget handlers, no AD_Tab, no actions | **excluded** — served by `neo_widget` |
+| `dashboard` | 9 widget handlers, no AD_Tab, no actions | **excluded** — served by `etendo_widget` |
 | `not-posted-documents` | 1 tab-less entity, handler serves `post` / `bulk-post` | **kept** — that is a transactional business action |
 
 Hiding `not-posted-documents` would have removed the ability to post unposted documents from
-agents, because `hasSpecAccess` gates `neo_action` too (`McpToolRouter.java:1032`) — the exact
+agents, because `hasSpecAccess` gates `etendo_action` too (`McpToolRouter.java:1032`) — the exact
 inverse of §1's rule, which says a transactional business action is precisely what *earns* write
 exposure. The REST/React path is unaffected either way (`NeoRequestRouter` never consults
 `hasSpecAccess`), so a mistake here is invisible in the UI and only shows up for agents.

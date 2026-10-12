@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/financial-accounts/AccountsToolbar.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 
 const toast = vi.fn();
@@ -108,8 +109,8 @@ describe('AccountsToolbar', () => {
     expect(trigger).toHaveTextContent('filters');
   });
 
-  // The button's own base height is h-9 (see docs/list-filters.md "Visual parity"); every
-  // control in THIS toolbar is 40px tall, so the window passes h-10 explicitly.
+  // The button's own base height is h-10 (40px, see docs/list-filters.md "Visual parity");
+  // the window still passes h-10 explicitly so this toolbar never depends on that default.
   it('overrides the funnel height to match the rest of the toolbar', () => {
     render(
       <AccountsToolbar

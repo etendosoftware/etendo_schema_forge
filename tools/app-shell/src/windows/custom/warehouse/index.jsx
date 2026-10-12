@@ -3,7 +3,6 @@ import { useUI } from '@/i18n';
 import WarehousePage from '@generated/warehouse/generated/web/warehouse/WarehousePage';
 import WarehouseSummary from './WarehouseSummary';
 import WarehouseTransactionsTable from './WarehouseTransactionsTable';
-import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import WarehouseProductsTab from './WarehouseProductsTab';
 import WarehouseCustomTable from './WarehouseCustomTable';
 import AccountingTable from '@generated/warehouse/generated/web/warehouse/AccountingTable';
@@ -75,7 +74,7 @@ export default function WarehouseWindow(props) {
       onAfterCreate={handleAfterCreate}
       sidebarContent={sidebarContent}
       secondaryTabs={secondaryTabs}
-      sidebarClassName="w-[30%] shrink-0 border-l border-[hsl(var(--border-subtle))] overflow-y-auto p-2"
+      sidebarClassName="w-[320px] shrink-0 border-l border-[hsl(var(--border-subtle))] overflow-y-auto p-2"
       sidebarAboveTabsOnly
       formScrollPaddingX=""
       contentOverflow="hidden"
@@ -87,8 +86,6 @@ export default function WarehouseWindow(props) {
       listbarPaddingY="py-2"
       tablePaddingX="px-2"
       tablePaddingBottom="pb-2"
-      SortIconComponent={SortIcon}
-      RefreshIconComponent={RefreshIcon}
       toolbarPaddingX="px-2"
       tabsBarPaddingX="px-2"
       compactSidebarPadding

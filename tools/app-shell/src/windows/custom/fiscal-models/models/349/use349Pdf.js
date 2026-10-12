@@ -233,7 +233,7 @@ const HTML = `
     </div>
   </div>
 
-  <div class="footer">BORRADOR — Generado desde Etendo GO · Modelo 349 · {{year}} {{period}}</div>
+  <div class="footer">BORRADOR — Generado desde Etendo · Modelo 349 · {{year}} {{period}}</div>
 </div>
 <div class="watermark">Solo referencia · No presentar</div>
 </body></html>

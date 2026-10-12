@@ -8,7 +8,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { ChevronDown, Layers, Pencil, Search, Trash2 } from 'lucide-react';
+import { Layers, Pencil, Search, Trash2 } from 'lucide-react';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -37,6 +37,7 @@ import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 // grid column (DimSummary, no longer used here) to a hover action + the existing
 // expand chevron — DimensionGrid (the expanded content) is still reused as-is.
 import { DimensionGrid } from './DimensionsPanel.jsx';
+import { RowExpandToggle } from './RowExpandToggle.jsx';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
 const TOKENS = {
@@ -791,6 +792,26 @@ function EditDateCell({ col, value, onCommit, isInvalid }) {
 /**
  * Edit-mode cell. Returns null for non-editable types so the caller falls back to read mode.
  */
+/**
+ * The keystroke limit of an edit-mode text cell: the column's AD length, but never below the
+ * length of the value the row already holds (ETP-5657).
+ *
+ * A limit below the stored value does not stop growth — it freezes the cell: the browser refuses
+ * every insertion while the value is at or over `maxLength`, so deleting one character still left
+ * the field uneditable. That is what a numeric column typed as text exposed — the Exchange rates
+ * tab's `rate` (AD length 10) holding `0.68027210884` (13 characters). The backend stays the real
+ * boundary for anything that does not fit.
+ *
+ * @param {number|string|undefined} maxLength the column's declared limit
+ * @param {*} value the value the cell starts from
+ * @returns {number|undefined}
+ */
+export function editTextMaxLength(maxLength, value) {
+  const limit = Number(maxLength);
+  if (!limit) return undefined;
+  return Math.max(limit, String(value ?? '').length);
+}
+
 function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid, ui, locale, t }) {
   const inputRef = useRef(null);
   useEffect(() => {
@@ -904,6 +925,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
       <MaskedAmountInput
         bare
         grouping={isTwoDecimal}
+        clearZeroOnFocus
         inputMode={col.type === 'integer' ? 'numeric' : 'decimal'}
         inputRef={inputRef}
         value={value}
@@ -929,7 +951,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
       data-testid={`field-${col.key}`}
       type="text"
       defaultValue={value ?? ''}
-      maxLength={col.maxLength}
+      maxLength={editTextMaxLength(col.maxLength, value)}
       onBlur={(e) => onCommit(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
@@ -1541,17 +1563,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 AmortizationLinesTable's chevron button (rotates 180deg when expanded). */}
             {hasDimensionsPanel && (
               <div className="flex items-center justify-center px-2" style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                <button
-                  type="button"
-                  onClick={() => setExpandedRowId(isRowExpanded ? null : row.id)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-                  style={{ transform: isRowExpanded ? 'rotate(180deg)' : undefined }}
-                  aria-label={ui(isRowExpanded ? 'collapse' : 'expand')}
-                  aria-expanded={isRowExpanded}
-                  data-testid="dimensions-panel-toggle"
-                >
-                  <ChevronDown className="h-4 w-4" data-testid="ChevronDown__3b7ec2" />
-                </button>
+                <RowExpandToggle
+                  expanded={isRowExpanded}
+                  onToggle={() => setExpandedRowId(isRowExpanded ? null : row.id)}
+                  iconTestId="ChevronDown__3b7ec2"
+                  data-testid="dimensions-panel-toggle" />
               </div>
             )}
             {/* Selection checkbox — ETP-5029: the cell swallows the click so ticking

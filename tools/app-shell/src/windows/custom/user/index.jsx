@@ -92,7 +92,7 @@ function ActiveStatusToggle({ data, recordId, token, apiBaseUrl, onRefresh }) {
 
   return (
     <div className="flex items-center gap-2" data-testid="ActiveStatusToggle__toolbar">
-      <span className="text-sm text-muted-foreground">{ui('active')}</span>
+      <span className="text-sm leading-6 font-medium text-[#121217]">{ui('active')}</span>
       <Switch
         checked={checked}
         disabled={disabled}
@@ -156,10 +156,10 @@ function useResendInvitationExtraActions() {
       disabled: sending,
       onClick: handleClick,
       label: (
-        <span className="flex items-center gap-1.5" data-testid="ResendInvitationButton">
+        <span className="flex items-center gap-2" data-testid="ResendInvitationButton">
           {sending
-            ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__ResendInvitation" />
-            : <Send className="h-3.5 w-3.5" data-testid="Send__ResendInvitation" />}
+            ? <Loader2 className="h-5 w-5 animate-spin text-[#828FA3]" data-testid="Loader2__ResendInvitation" />
+            : <Send className="h-5 w-5 text-[#828FA3]" data-testid="Send__ResendInvitation" />}
           <span>{ui('resendInvitationAction')}</span>
         </span>
       ),

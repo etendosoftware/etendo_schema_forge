@@ -23,9 +23,9 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         type="button"
         data-testid="statements-import-button"
         onClick={onImportClick}
-        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
+        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[#121217] px-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
       >
-        <Upload className="h-4 w-4" data-testid="Upload__8a428c" />
+        <Upload className="h-5 w-5" data-testid="Upload__8a428c" />
         {ui('financeAccountStatementsImport')}
       </button>
       <button
@@ -35,7 +35,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         aria-expanded={open}
         data-testid="statements-import-split"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-10 w-9 items-center justify-center rounded-r-lg border-l border-inverse-border/20 bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-r-lg border-l border-inverse-border/20 bg-[#121217] text-white transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
       >
         <ChevronDown
           className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -76,10 +76,10 @@ function SyncStatementsButton({ ui, onClick, syncing }) {
       data-testid="statements-bank-sync-button"
       onClick={onClick}
       disabled={syncing}
-      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#121217] px-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
     >
       <RefreshCw
-        className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`}
+        className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`}
         data-testid="RefreshCw__8a428c" />
       {ui('financeAccountStatementsBankConnectionSync')}
     </button>
@@ -138,16 +138,16 @@ export function StatementsToolbar({
   const columns = useMemo(() => buildStatementFilterColumns(ui), [ui]);
 
   return (
-    <div className="flex h-auto min-h-[52px] flex-wrap items-center gap-2 px-4 py-2">
+    <div className="flex h-auto min-h-[52px] flex-wrap items-center gap-2 px-2 py-2">
       {/* Back */}
       <button
         type="button"
         aria-label={ui('financeAccountDetailBack')}
         data-testid="statements-toolbar-back"
         onClick={() => navigate(-1)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-[#828FA3] transition-colors hover:bg-[hsl(var(--muted))] hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__8a428c" />
+        <ArrowLeft className="h-5 w-5" data-testid="ArrowLeft__8a428c" />
       </button>
       {/* Status filter — first, mirroring the standard list toolbar (e.g. Sales Order). */}
       <StatementStatusFilter

@@ -25,15 +25,15 @@ probes:
     mode: write
     prompt: "Cobrá la factura {{steps.inv.documentNo}} ({{marker}})"
     setup:
-      - tool: neo_create
+      - tool: etendo_create
         args: { description: "{{marker}}" }
         saveAs: inv
     expectEffect:
-      tool: neo_list
+      tool: etendo_list
       args: { filters: { id: "{{steps.inv.id}}" } }
       expect: atLeastOne
     teardown:
-      - tool: neo_delete
+      - tool: etendo_delete
         args: { id: "{{steps.inv.id}}" }
 """
 
@@ -63,9 +63,9 @@ class Harness:
         self.order: list[str] = []
         self.prompts: list[str] = []
         self.answers = answers or {
-            "neo_create": {"id": "INV1", "documentNo": "FV9"},
-            "neo_list": {"totalRows": 1},
-            "neo_delete": {},
+            "etendo_create": {"id": "INV1", "documentNo": "FV9"},
+            "etendo_list": {"totalRows": 1},
+            "etendo_delete": {},
         }
         self.agent = agent
 
@@ -115,18 +115,18 @@ class CliStepsTest(unittest.TestCase):
     def test_setup_agent_effect_teardown_in_order(self):
         h = Harness(self.tmp, SUITE)
         probe = h.run()
-        self.assertEqual(h.order, ["neo_create", "agent", "neo_list", "neo_delete"])
+        self.assertEqual(h.order, ["etendo_create", "agent", "etendo_list", "etendo_delete"])
         marker = f"{probe['runId']}-p"
-        self.assertEqual(h.calls[0], ("neo_create", {"description": marker}))
+        self.assertEqual(h.calls[0], ("etendo_create", {"description": marker}))
         # Setup results reach the prompt, the effect check and teardown.
         self.assertEqual(h.prompts[0], f"Cobrá la factura FV9 ({marker})")
         self.assertEqual(probe["prompt"], h.prompts[0])
-        self.assertEqual(h.calls[1], ("neo_list", {"filters": {"id": "INV1"}}))
-        self.assertEqual(h.calls[2], ("neo_delete", {"id": "INV1"}))
+        self.assertEqual(h.calls[1], ("etendo_list", {"filters": {"id": "INV1"}}))
+        self.assertEqual(h.calls[2], ("etendo_delete", {"id": "INV1"}))
         self.assertTrue(probe["effectVerified"])
         self.assertTrue(probe["teardownClean"])
-        self.assertEqual([r["tool"] for r in probe["setup"]], ["neo_create"])
-        self.assertEqual([r["tool"] for r in probe["teardown"]], ["neo_delete"])
+        self.assertEqual([r["tool"] for r in probe["setup"]], ["etendo_create"])
+        self.assertEqual([r["tool"] for r in probe["teardown"]], ["etendo_delete"])
         self.assertEqual(probe["schemaVersion"], 3)
         # Fixture calls are never counted as the agent's.
         self.assertEqual(probe["toolCallCount"], 3)
@@ -138,17 +138,17 @@ class CliStepsTest(unittest.TestCase):
     def test_teardown_runs_when_the_agent_crashes(self):
         h = Harness(self.tmp, SUITE, agent=RuntimeError("agent died"))
         probe = h.run()
-        self.assertEqual(h.order, ["neo_create", "agent", "neo_delete"])
+        self.assertEqual(h.order, ["etendo_create", "agent", "etendo_delete"])
         self.assertEqual(probe["harnessError"]["kind"], "provider")
         self.assertTrue(probe["teardownClean"])
 
     def test_failed_setup_skips_the_agent_but_still_tears_down(self):
         h = Harness(self.tmp, SUITE, answers={
-            "neo_create": RuntimeError("no period"), "neo_list": {}, "neo_delete": {}})
+            "etendo_create": RuntimeError("no period"), "etendo_list": {}, "etendo_delete": {}})
         probe = h.run()
         # The agent never ran; teardown ran, and could not resolve the id it
         # needed, so it made NO call rather than a half-filled one.
-        self.assertEqual(h.order, ["neo_create"])
+        self.assertEqual(h.order, ["etendo_create"])
         self.assertEqual(probe["harnessError"]["kind"], "setup")
         self.assertIn("no period", probe["harnessError"]["detail"])
         self.assertIsNone(probe["verdict"])
@@ -159,8 +159,8 @@ class CliStepsTest(unittest.TestCase):
 
     def test_failed_teardown_is_recorded_not_raised(self):
         h = Harness(self.tmp, SUITE, answers={
-            "neo_create": {"id": "INV1", "documentNo": "FV9"}, "neo_list": {"totalRows": 1},
-            "neo_delete": RuntimeError("still referenced")})
+            "etendo_create": {"id": "INV1", "documentNo": "FV9"}, "etendo_list": {"totalRows": 1},
+            "etendo_delete": RuntimeError("still referenced")})
         probe = h.run()
         self.assertFalse(probe["teardownClean"])
         self.assertEqual(probe["verdict"]["outcome"], "OKAY")

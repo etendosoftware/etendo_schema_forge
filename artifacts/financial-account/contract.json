@@ -1,14 +1,15 @@
 {
-  "version": "0.1.0",
+  "version": "0.3.0",
   "generatedAt": "2026-09-29T12:00:08.872Z",
-  "checksum": "024b2fcec65e5973",
+  "updatedAt": "2026-10-07T14:26:32.451Z",
+  "checksum": "117a1093353a7507",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
       "name": "Accounts",
       "primaryEntity": "account",
       "category": "finance",
-      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type, country). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead. To reconcile bank statement lines, never press the account's Core buttons: use the `bank-reconciliation` spec through neo_action (entity `bank-reconciliation`, id = the financial account id). neo_schema(spec:\"bank-reconciliation\", entity:\"bank-reconciliation\", view:\"actions\") lists its actions (pendingLines, candidates, autoMatch, reconcileGroup, reconcileDifference, applySuggestions, undoReconciliation, removeOperation, reactivateSelected) and their parameters. Never create or edit bank statements by writing the importedBankStatements / bankStatementLines entities (a statement written there is never processed and skips the UI's checks): create, import, edit, process, reactivate and delete them through the `bank-statements` spec with neo_action (entity `bank-statements`). neo_schema(spec:\"bank-statements\", entity:\"bank-statements\", view:\"actions\") lists its actions (listStatements, statementLines, previewStatement, createStatement, importStatement, updateStatement, processStatement, reactivateStatement, deleteStatement), their parameters and what id means for each (the financial account id for listStatements/previewStatement/createStatement/importStatement, the statement id for the others). A statement's lines can only be reconciled once it is processed.",
+      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type, country). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead. To reconcile bank statement lines, never press the account's Core buttons: use the `bank-reconciliation` spec through etendo_action (entity `bank-reconciliation`, id = the financial account id). etendo_schema(spec:\"bank-reconciliation\", entity:\"bank-reconciliation\", view:\"actions\") lists its actions (pendingLines, candidates, autoMatch, reconcileGroup, reconcileDifference, applySuggestions, undoReconciliation, removeOperation, reactivateSelected) and their parameters. Never create or edit bank statements by writing the importedBankStatements / bankStatementLines entities (a statement written there is never processed and skips the UI's checks): create, import, edit, process, reactivate and delete them through the `bank-statements` spec with etendo_action (entity `bank-statements`). etendo_schema(spec:\"bank-statements\", entity:\"bank-statements\", view:\"actions\") lists its actions (listStatements, statementLines, previewStatement, createStatement, importStatement, updateStatement, processStatement, reactivateStatement, deleteStatement), their parameters and what id means for each (the financial account id for listStatements/previewStatement/createStatement/importStatement, the statement id for the others). A statement's lines can only be reconciled once it is processed.",
       "hidePrint": true,
       "hideCreate": true,
       "hideMoreMenu": true,
@@ -819,6 +820,21 @@
             "validation": {
               "maxLength": 12
             }
+          },
+          {
+            "name": "pSD2LastSyncDate",
+            "apiKey": "pSD2LastSyncDate",
+            "column": "EM_PSD2_Last_Sync_Date",
+            "label": "Last Sync Date",
+            "type": "dateTime",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 19
+            }
           }
         ],
         "searchableFields": [
@@ -1283,10 +1299,6 @@
                 "en_US": "Not posted",
                 "es_ES": "Sin contabilizar"
               }
-            },
-            "badgeVariants": {
-              "true": "green",
-              "false": "orange"
             },
             "validation": {
               "required": true,
@@ -3326,7 +3338,7 @@
       "name": "Accounts",
       "primaryEntity": "account",
       "category": "finance",
-      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type, country). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead. To reconcile bank statement lines, never press the account's Core buttons: use the `bank-reconciliation` spec through neo_action (entity `bank-reconciliation`, id = the financial account id). neo_schema(spec:\"bank-reconciliation\", entity:\"bank-reconciliation\", view:\"actions\") lists its actions (pendingLines, candidates, autoMatch, reconcileGroup, reconcileDifference, applySuggestions, undoReconciliation, removeOperation, reactivateSelected) and their parameters. Never create or edit bank statements by writing the importedBankStatements / bankStatementLines entities (a statement written there is never processed and skips the UI's checks): create, import, edit, process, reactivate and delete them through the `bank-statements` spec with neo_action (entity `bank-statements`). neo_schema(spec:\"bank-statements\", entity:\"bank-statements\", view:\"actions\") lists its actions (listStatements, statementLines, previewStatement, createStatement, importStatement, updateStatement, processStatement, reactivateStatement, deleteStatement), their parameters and what id means for each (the financial account id for listStatements/previewStatement/createStatement/importStatement, the statement id for the others). A statement's lines can only be reconciled once it is processed.",
+      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type, country). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead. To reconcile bank statement lines, never press the account's Core buttons: use the `bank-reconciliation` spec through etendo_action (entity `bank-reconciliation`, id = the financial account id). etendo_schema(spec:\"bank-reconciliation\", entity:\"bank-reconciliation\", view:\"actions\") lists its actions (pendingLines, candidates, autoMatch, reconcileGroup, reconcileDifference, applySuggestions, undoReconciliation, removeOperation, reactivateSelected) and their parameters. Never create or edit bank statements by writing the importedBankStatements / bankStatementLines entities (a statement written there is never processed and skips the UI's checks): create, import, edit, process, reactivate and delete them through the `bank-statements` spec with etendo_action (entity `bank-statements`). etendo_schema(spec:\"bank-statements\", entity:\"bank-statements\", view:\"actions\") lists its actions (listStatements, statementLines, previewStatement, createStatement, importStatement, updateStatement, processStatement, reactivateStatement, deleteStatement), their parameters and what id means for each (the financial account id for listStatements/previewStatement/createStatement/importStatement, the statement id for the others). A statement's lines can only be reconciled once it is processed.",
       "hidePrint": true,
       "hideCreate": true,
       "hideMoreMenu": true,
@@ -3833,6 +3845,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "pSD2LastSyncDate",
+            "apiKey": "pSD2LastSyncDate",
+            "column": "EM_PSD2_Last_Sync_Date",
+            "type": "dateTime",
+            "visibility": "readOnly",
+            "required": false
           }
         ],
         "javaQualifier": "financialAccountHeaderHandler"
@@ -7829,6 +7849,14 @@
         "description": "Field 'pSD2ImportToDate' should be present in account"
       },
       {
+        "id": "t-field-presence-account-pSD2LastSyncDate",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "pSD2LastSyncDate",
+        "runner": "node",
+        "description": "Field 'pSD2LastSyncDate' should be present in account"
+      },
+      {
         "id": "t-field-presence-account-psd2Provider",
         "category": "field-presence",
         "entity": "account",
@@ -8683,6 +8711,14 @@
         "field": "pSD2ImportToDate",
         "runner": "node",
         "description": "Field 'pSD2ImportToDate' should have type 'string' in account"
+      },
+      {
+        "id": "t-field-type-account-pSD2LastSyncDate",
+        "category": "field-type",
+        "entity": "account",
+        "field": "pSD2LastSyncDate",
+        "runner": "node",
+        "description": "Field 'pSD2LastSyncDate' should have type 'string' in account"
       },
       {
         "id": "t-field-type-account-psd2Provider",
@@ -12933,15 +12969,15 @@
       }
     ],
     "summary": {
-      "total": 865,
+      "total": 867,
       "byCategory": {
         "action-endpoint": 28,
         "crud-flags": 7,
         "default-value-type": 33,
         "displaylogic-evaluable": 51,
         "displaylogic-valid": 51,
-        "field-presence": 107,
-        "field-type": 107,
+        "field-presence": 108,
+        "field-type": 108,
         "readonlylogic-evaluable": 33,
         "readonlylogic-valid": 33,
         "rule-declared": 226,
@@ -12951,7 +12987,7 @@
         "visibility": 7
       },
       "byRunner": {
-        "node": 865,
+        "node": 867,
         "junit": 0
       }
     }

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 // ETP-4277 — DataTable renderInputCell onBlur numeric clamp (max/min autocorrection).
 //
 // When a numeric field declares `max` (or `min`), blurring the input with an
@@ -150,5 +151,19 @@ describe('DataTable renderInputCell — onBlur numeric clamp (ETP-4277)', () => 
       fireEvent.blur(input);
       expect(input.value).toBe('1');
     });
+  });
+});
+
+describe('DataTable renderNumericInputCell — clearZeroOnFocus wiring (ETP-5611)', () => {
+  it('a zero-defaulted add-row amount is emptied on focus and keeps its 0 when left blank', () => {
+    // The lone field is the add-row's first input, so it is auto-focused on mount — which already
+    // clears it. Blur first to observe the idle "0,00", then focus again.
+    const input = renderNumericAddRow({ type: 'amount', defaultValue: 0 });
+    fireEvent.blur(input);
+    expect(input.value).toBe('0,00');
+    fireEvent.focus(input);
+    expect(input.value).toBe('');
+    fireEvent.blur(input);
+    expect(input.value).toBe('0,00');
   });
 });

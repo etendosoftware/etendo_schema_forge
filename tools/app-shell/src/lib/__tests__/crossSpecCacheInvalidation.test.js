@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/crossSpecCacheInvalidation.js
 /**
  * ETP-5525 — cross-spec cache invalidation after a write. A successful write to a child
  * document (goods shipment / sales invoice) must mark the sales order's cached record stale, so its
@@ -32,7 +33,12 @@ function fakeCache() {
 
 describe('specsInvalidatedByWrite', () => {
   const cases = [
-    ['goods-shipment write → sales-order', '/sws/neo/goods-shipment/goodsShipment/1', ['sales-order']],
+    // ETP-5576: the invoices show their shipments' / receipts' status (follow-up annotation,
+    // delivery status, linked documents), so the follow-up document's writes reach them too.
+    ['goods-shipment write → sales-order + sales-invoice', '/sws/neo/goods-shipment/goodsShipment/1',
+      ['sales-order', 'sales-invoice']],
+    ['goods-receipt process → purchase-invoice (not purchase-order: Purchase cell)',
+      '/sws/neo/goods-receipt/goodsReceipt/1/action/complete', ['purchase-invoice']],
     ['sales-invoice action on an absolute URL → sales-order',
       'https://erp.example/sws/neo/sales-invoice/header/1/action/complete', ['sales-order']],
     ['spec name only in the query string → nothing', '/sws/neo/sales-order/header?criteria=goods-shipment', []],
@@ -100,7 +106,7 @@ describe('invalidateAfterWrite', () => {
     it(`${method} to a child spec invalidates the parent spec`, () => {
       const cache = fakeCache();
       invalidateAfterWrite(cache, { url: WRITE_URL, method });
-      assert.deepEqual(cache.calls, [{ spec: 'sales-order' }]);
+      assert.deepEqual(cache.calls, [{ spec: 'sales-order' }, { spec: 'sales-invoice' }]);
     });
   }
 
@@ -146,11 +152,11 @@ describe('invalidateAfterWrite', () => {
     });
   }
 
-  // The unmapped spec used here is goods-receipt on purpose: ETP-5525 is scoped to the sales
-  // cell, so purchase child documents are deliberately NOT mapped to purchase-order.
-  it('a write to an unmapped spec (goods-receipt, purchase side out of scope) leaves the cache untouched', () => {
+  // purchase-invoice on purpose: ETP-5525 is scoped to the sales cell, so a purchase invoice is
+  // deliberately NOT mapped to purchase-order (and goods-receipt reaches purchase-invoice only).
+  it('a write to an unmapped spec (purchase-invoice, purchase-order side out of scope) leaves the cache untouched', () => {
     const cache = fakeCache();
-    invalidateAfterWrite(cache, { url: '/sws/neo/goods-receipt/goodsReceipt/1', method: 'POST' });
+    invalidateAfterWrite(cache, { url: '/sws/neo/purchase-invoice/header/1', method: 'POST' });
     assert.deepEqual(cache.calls, []);
   });
 

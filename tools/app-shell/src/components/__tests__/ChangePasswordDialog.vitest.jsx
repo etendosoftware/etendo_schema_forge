@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/ChangePasswordDialog.jsx
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -51,6 +52,20 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
     NO_LOCAL_PASSWORD: 'onboardingNoLocalPassword',
     CHANGE_PASSWORD_MISSING_CREDENTIALS: 'onboardingChangePasswordMissingCredentials',
   },
+  // ETP-5258: mirrors the core helper — code first, the caller's fallback key otherwise, and
+  // never the backend's English userMessage.
+  resolveAuthErrorMessage: (ui, err, fallbackKey) => ui(({
+    WEAK_PASSWORD: 'onboardingWeakPassword',
+    INVALID_CURRENT_PASSWORD: 'onboardingInvalidCurrentPassword',
+    NO_LOCAL_PASSWORD: 'onboardingNoLocalPassword',
+    CHANGE_PASSWORD_MISSING_CREDENTIALS: 'onboardingChangePasswordMissingCredentials',
+  })[err?.code] || fallbackKey),
+}));
+// The checklist itself is covered in core; here it only has to show up for the typed password.
+vi.mock('@etendosoftware/etendo-go-core/onboarding/password-strength-checklist', () => ({
+  PasswordStrengthChecklist: ({ password, testIdPrefix }) => (
+    password ? <ul data-testid={`${testIdPrefix}-requirements`} data-password={password} /> : null
+  ),
 }));
 vi.mock('../copilot/copilotApi.js', () => ({
   detectBaseUrl: () => 'https://base',
@@ -62,7 +77,9 @@ import {
 } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { ChangePasswordDialog } from '../ChangePasswordDialog.jsx';
 
-async function fillForm(user, { current = 'old', next = 'new', confirm = 'new' } = {}) {
+const STRONG = 'NewPass1!';
+
+async function fillForm(user, { current = 'old', next = STRONG, confirm = STRONG } = {}) {
   await user.type(screen.getByLabelText('onboardingCurrentPasswordLabel'), current);
   await user.type(screen.getByLabelText('onboardingNewPasswordLabel'), next);
   await user.type(screen.getByLabelText('onboardingConfirmPasswordLabel'), confirm);
@@ -94,8 +111,8 @@ describe('ChangePasswordDialog', () => {
     await waitFor(() => {
       expect(changePassword).toHaveBeenCalledWith(fetch, 'https://base', 'session-csrf', {
         currentPassword: 'old',
-        newPassword: 'new',
-        confirmPassword: 'new',
+        newPassword: STRONG,
+        confirmPassword: STRONG,
       });
     });
     expect(onSuccess).toHaveBeenCalledTimes(1);
@@ -126,7 +143,7 @@ describe('ChangePasswordDialog', () => {
 
     render(<ChangePasswordDialog open onOpenChange={vi.fn()} onSuccess={onSuccess} />);
 
-    await fillForm(user, { next: 'new', confirm: 'different' });
+    await fillForm(user, { next: STRONG, confirm: 'Different1!' });
     await user.click(screen.getByTestId('change-password-submit'));
 
     expect(screen.getByText('onboardingCredentialsMustMatch')).toBeInTheDocument();
@@ -134,7 +151,7 @@ describe('ChangePasswordDialog', () => {
     expect(onSuccess).not.toHaveBeenCalled();
   });
 
-  it('shows the server error and does not log out when the change fails', async () => {
+  it('shows the translated generic error for an unmapped failure and does not log out', async () => {
     const user = userEvent.setup();
     changePassword.mockRejectedValue({ userMessage: 'Wrong current password' });
     const onSuccess = vi.fn();
@@ -144,7 +161,9 @@ describe('ChangePasswordDialog', () => {
     await fillForm(user, { current: 'bad' });
     await user.click(screen.getByTestId('change-password-submit'));
 
-    expect(await screen.findByText('Wrong current password')).toBeInTheDocument();
+    // ETP-5258: an unmapped failure gets the translated fallback, never the English userMessage.
+    expect(await screen.findByText('onboardingCredentialChangeFailed')).toBeInTheDocument();
+    expect(screen.queryByText('Wrong current password')).not.toBeInTheDocument();
     expect(onSuccess).not.toHaveBeenCalled();
   });
 
@@ -176,7 +195,7 @@ describe('ChangePasswordDialog', () => {
     render(<ChangePasswordDialog open onOpenChange={onOpenChange} onSuccess={vi.fn()} />);
 
     // Produce a visible validation error first, then dismiss the dialog.
-    await fillForm(user, { next: 'new', confirm: 'different' });
+    await fillForm(user, { next: STRONG, confirm: 'Different1!' });
     await user.click(screen.getByTestId('change-password-submit'));
     expect(screen.getByText('onboardingCredentialsMustMatch')).toBeInTheDocument();
 
@@ -224,6 +243,38 @@ describe('ChangePasswordDialog', () => {
 
     resolveChange({ token: 'rotated' });
     await waitFor(() => expect(changePassword).toHaveBeenCalledTimes(1));
+  });
+
+  describe('password strength (ETP-5258)', () => {
+    it.each([
+      ['change', {}],
+      ['enrol', { hasPassword: false }],
+    ])('shows the checklist for the typed new password (%s)', async (_l, props) => {
+      const user = userEvent.setup();
+      render(<ChangePasswordDialog open onOpenChange={vi.fn()} onSuccess={vi.fn()} {...props} />);
+
+      expect(screen.queryByTestId('change-password-requirements')).not.toBeInTheDocument();
+      await user.type(screen.getByLabelText('onboardingNewPasswordLabel'), 'abc');
+
+      expect(screen.getByTestId('change-password-requirements'))
+        .toHaveAttribute('data-password', 'abc');
+    });
+
+    it.each([
+      ['change', {}],
+      ['enrol', { hasPassword: false }],
+    ])('keeps the submit disabled until the new password meets the policy (%s)', async (_l, props) => {
+      const user = userEvent.setup();
+      render(<ChangePasswordDialog open onOpenChange={vi.fn()} onSuccess={vi.fn()} {...props} />);
+
+      const newPassword = screen.getByLabelText('onboardingNewPasswordLabel');
+      await user.type(newPassword, 'weakpass');
+      expect(screen.getByTestId('change-password-submit')).toBeDisabled();
+
+      await user.clear(newPassword);
+      await user.type(newPassword, STRONG);
+      expect(screen.getByTestId('change-password-submit')).toBeEnabled();
+    });
   });
 
   describe('changing an existing password (hasPassword)', () => {
@@ -307,8 +358,8 @@ describe('ChangePasswordDialog', () => {
 
         renderEnrolling({ onSuccess });
 
-        await user.type(screen.getByLabelText('onboardingNewPasswordLabel'), 'brand-new');
-        await user.type(screen.getByLabelText('onboardingConfirmPasswordLabel'), 'brand-new');
+        await user.type(screen.getByLabelText('onboardingNewPasswordLabel'), 'BrandNew1!');
+        await user.type(screen.getByLabelText('onboardingConfirmPasswordLabel'), 'BrandNew1!');
         await user.click(screen.getByTestId('change-password-submit'));
 
         await waitFor(() => expect(changePassword).toHaveBeenCalledTimes(1));
@@ -317,7 +368,7 @@ describe('ChangePasswordDialog', () => {
         expect(baseUrl).toBe('https://base');
         expect(csrf).toBe('session-csrf');
         expect(payload).not.toHaveProperty('currentPassword');
-        expect(payload).toEqual({ newPassword: 'brand-new', confirmPassword: 'brand-new' });
+        expect(payload).toEqual({ newPassword: 'BrandNew1!', confirmPassword: 'BrandNew1!' });
         expect(onSuccess).toHaveBeenCalledTimes(1);
       });
 
@@ -327,8 +378,8 @@ describe('ChangePasswordDialog', () => {
 
       renderEnrolling({ onSuccess });
 
-      await user.type(screen.getByLabelText('onboardingNewPasswordLabel'), 'one');
-      await user.type(screen.getByLabelText('onboardingConfirmPasswordLabel'), 'other');
+      await user.type(screen.getByLabelText('onboardingNewPasswordLabel'), 'OnePass1!');
+      await user.type(screen.getByLabelText('onboardingConfirmPasswordLabel'), 'OtherPass1!');
       await user.click(screen.getByTestId('change-password-submit'));
 
       expect(screen.getByText('onboardingCredentialsMustMatch')).toBeInTheDocument();
@@ -346,8 +397,8 @@ describe('ChangePasswordDialog', () => {
 
       renderEnrolling({ onSuccess });
 
-      await user.type(screen.getByLabelText('onboardingNewPasswordLabel'), 'abc');
-      await user.type(screen.getByLabelText('onboardingConfirmPasswordLabel'), 'abc');
+      await user.type(screen.getByLabelText('onboardingNewPasswordLabel'), STRONG);
+      await user.type(screen.getByLabelText('onboardingConfirmPasswordLabel'), STRONG);
       await user.click(screen.getByTestId('change-password-submit'));
 
       expect(await screen.findByText('onboardingWeakPassword')).toBeInTheDocument();
@@ -361,7 +412,7 @@ describe('ChangePasswordDialog', () => {
 
       renderEnrolling({ onOpenChange });
 
-      await user.type(screen.getByLabelText('onboardingNewPasswordLabel'), 'brand-new');
+      await user.type(screen.getByLabelText('onboardingNewPasswordLabel'), 'BrandNew1!');
       await user.click(screen.getByTestId('dialog-request-close'));
 
       expect(onOpenChange).toHaveBeenCalledWith(false);

@@ -14,7 +14,7 @@ import { getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
  *
  * Find-or-create logic lives in the caller (typically a per-window descriptor).
  * This hook does no orchestration beyond POST + JSON parsing — the same shape
- * an MCP agent would use when calling a `neo_batch` tool.
+ * an MCP agent would use when calling a `etendo_batch` tool.
  */
 export function useBatch({ token }) {
   const [loading, setLoading] = useState(false);

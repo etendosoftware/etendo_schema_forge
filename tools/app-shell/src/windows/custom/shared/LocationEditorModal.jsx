@@ -10,6 +10,7 @@ import {
     DEFAULT_COUNTRY_QUERY,
     findDefaultCountryOption,
 } from '@/lib/defaultCountry.js';
+import { matchOptionByLabel } from '@/lib/matchOptionLabel.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const EMPTY_FORM = {
@@ -126,6 +127,65 @@ function applyDefaultCountryOption(option, setForm, baselineRef) {
 }
 
 /**
+ * Text fields of a caller-supplied seed (ETP-5654), trimmed, empty ones dropped.
+ *
+ * Only the three free-text keys are honoured. Region is deliberately NOT seedable, and the
+ * country travels as a NAME (`countryName`) because it has to be resolved to a selector id.
+ */
+function pickSeedText(initialValues) {
+    const patch = {};
+    for (const key of ['address', 'postalCode', 'city']) {
+        const value = String(initialValues?.[key] ?? '').trim();
+        if (value) patch[key] = value;
+    }
+    return patch;
+}
+
+/** Country name carried by a seed, or '' (ETP-5654). */
+function seedCountryName(initialValues) {
+    return String(initialValues?.countryName ?? '').trim();
+}
+
+/**
+ * Apply a caller-supplied seed to a NEW address (ETP-5654), e.g. the vendor address read
+ * from an OCR'd invoice. Edit mode (`rowId`) never takes a seed: the record's own data wins.
+ *
+ * Like `applyDefaultCountryOption` it writes the unsaved-changes baseline by the same delta
+ * as the form — a prefill is not a user edit, so the ETP-5022 guard must stay quiet.
+ */
+function applyInitialSeed({initialValues, rowId, setForm, baselineRef}) {
+    if (rowId) return;
+    const patch = pickSeedText(initialValues);
+    if (Object.keys(patch).length === 0) return;
+    setForm(prev => ({...prev, ...patch}));
+    baselineRef.current = {...(baselineRef.current || EMPTY_FORM), ...patch};
+}
+
+/**
+ * Resolve the country option to preselect (ETP-5654).
+ *
+ * The seeded country NAME is tried first, through the same `?q=` selector the default
+ * lookup uses and matched by `matchOptionByLabel` (exact or prefix, accent-insensitive,
+ * never guesses). When there is no name, nothing matches, or the request fails, it falls
+ * back to the ETP-5103 default (Spain). Returns null when neither resolves.
+ */
+async function resolveCountryOption({apiFetch, selectorBase, buildParams, preferredName}) {
+    const urlFor = (q, limit) =>
+        `${selectorBase}?${buildParams({q, limit: String(limit), offset: '0'}).toString()}`;
+    if (preferredName) {
+        try {
+            const {items} = await fetchSelectorPage(apiFetch, urlFor(preferredName, SELECTOR_PAGE_SIZE));
+            const options = items.map(toSelectorOption);
+            const matchedId = matchOptionByLabel(options, preferredName);
+            if (matchedId) return options.find(option => option.id === matchedId);
+        } catch (_error) {
+            // Fall through to the default country.
+        }
+    }
+    return fetchDefaultCountryOption(apiFetch, urlFor(DEFAULT_COUNTRY_QUERY, DEFAULT_COUNTRY_LIMIT));
+}
+
+/**
  * Save gating (ETP-5103): address line 1 and country are the mandatory fields, and a
  * save in flight or an in-progress initial load blocks too.
  *
@@ -159,8 +219,9 @@ function isSaveBlocked({saving, initialLoading, address, country}) {
  * @param {Function}      apiFetch      authenticated fetch bound to the window's API base
  * @param {Function}      buildParams   builds the selector query string with window context
  * @param {Function}      onResolved    receives the resolved { id, label } option
+ * @param {string}        [preferredCountryName] seeded country name tried before Spain (ETP-5654)
  */
-function useDefaultCountryPrefill({open, rowId, selectorBase, apiFetch, buildParams, onResolved}) {
+function useDefaultCountryPrefill({open, rowId, selectorBase, apiFetch, buildParams, onResolved, preferredCountryName = ''}) {
     const appliedRef = useRef(false);
 
     useEffect(() => {
@@ -171,13 +232,8 @@ function useDefaultCountryPrefill({open, rowId, selectorBase, apiFetch, buildPar
         if (!selectorBase || appliedRef.current) return undefined;
 
         let cancelled = false;
-        const params = buildParams({
-            q: DEFAULT_COUNTRY_QUERY,
-            limit: String(DEFAULT_COUNTRY_LIMIT),
-            offset: '0',
-        });
 
-        fetchDefaultCountryOption(apiFetch, `${selectorBase}?${params.toString()}`)
+        resolveCountryOption({apiFetch, selectorBase, buildParams, preferredName: preferredCountryName})
             .then(option => {
                 if (cancelled || !option || appliedRef.current) return;
                 appliedRef.current = true;
@@ -320,6 +376,9 @@ function renderRegionPickerBody(regionsLoading, ui, regionsLoadFailed, filteredR
  *                                    C_BPartner_Location (requires bpId on create). Contacts behaviour.
  *                       'location' → CRUD through {apiBase}/location, plain C_Location only, returns
  *                                    the C_Location id. Used by Warehouse's Location field.
+ *   initialValues   — optional seed for a NEW address (ignored when rowId is set): `{ address, postalCode,
+ *                     city, countryName }`. Text keys prefill the form; `countryName` is resolved to a
+ *                     selector option and falls back to Spain. Region is never seeded. ETP-5654.
  *   showAddressTypeCheckboxes — boolean (default true): render the Shipping/Invoicing Address checks.
  *                     Set false for windows (e.g. Warehouse) where address type does not apply.
  */
@@ -334,6 +393,7 @@ export default function LocationEditorModal({
                                                 selectorContext = {},
                                                 saveMode = 'bpartner',
                                                 showAddressTypeCheckboxes = true,
+                                                initialValues = null,
                                             }) {
     // Entity segment of the NEO path: 'locationAddress' (BP-linked) or 'location' (plain C_Location).
     const entityPath = saveMode === 'location' ? 'location' : 'locationAddress';
@@ -454,6 +514,7 @@ export default function LocationEditorModal({
 
         setForm(EMPTY_FORM);
         baselineRef.current = EMPTY_FORM;
+        applyInitialSeed({initialValues, rowId: bplLinkId, setForm, baselineRef});
         setRegions([]);
         setRegionSelectorBase('');
         setRegionOffset(0);
@@ -597,6 +658,7 @@ export default function LocationEditorModal({
         apiFetch,
         buildParams: buildSelectorParams,
         onResolved: option => applyDefaultCountryOption(option, setForm, baselineRef),
+        preferredCountryName: seedCountryName(initialValues),
     });
 
     // Reload region list when country selection changes

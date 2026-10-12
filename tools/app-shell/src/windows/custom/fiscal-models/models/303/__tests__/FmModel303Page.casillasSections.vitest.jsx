@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmBoxes303.jsx
 // Vitest render-level test for ETP-5391's CASILLAS_SECTIONS registration
 // (FmModel303Page.jsx). Unlike FmModel303Page.vitest.jsx, FmBoxes303.jsx is
 // intentionally NOT mocked here — this file renders the real component so a
@@ -15,6 +17,7 @@ import { render, fireEvent } from '@testing-library/react';
 const navigateMock = vi.fn();
 
 vi.mock('@/i18n', () => ({
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useUI: () => (key) => key,
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
@@ -37,7 +40,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -72,7 +74,11 @@ vi.mock('@/components/ui/checkbox', () => ({
 // lucide-react — includes Pencil (used by the real FmBoxes303's edit button),
 // unlike FmModel303Page.vitest.jsx's own mock which never needed it since that
 // file mocks FmBoxes303.jsx away entirely.
+// ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
+vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,

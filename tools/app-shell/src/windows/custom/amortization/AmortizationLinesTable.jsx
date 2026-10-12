@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ChevronDown, Layers, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Layers, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useUI, useLabel } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
@@ -30,6 +30,7 @@ import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
+import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
 // ── field definitions ────────────────────────────────────────────────
 /**
  * ETP-5107 — inline edit cell for an amortization amount/percentage.
@@ -443,18 +444,12 @@ export default function AmortizationLinesTable({
                     >
                       {/* expand toggle — circular icon button (matches financial-account MovementsTable) */}
                       <td className="w-10 p-2 align-middle">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); if (!isEditing) setExpandedId(isExpanded ? null : line.id); }}
-                          className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-                          style={{ transform: isExpanded ? 'rotate(180deg)' : undefined }}
-                          aria-label={ui(isExpanded ? 'collapse' : 'expand')}
-                          aria-expanded={isExpanded}
-                        >
-                          <ChevronDown
-                            className="h-4 w-4"
-                            data-testid="ChevronDown__fecdcf" />
-                        </button>
+                        <RowExpandToggle
+                          expanded={isExpanded}
+                          stopPropagation
+                          onToggle={() => { if (!isEditing) setExpandedId(isExpanded ? null : line.id); }}
+                          iconTestId="ChevronDown__fecdcf"
+                          data-testid="RowExpandToggle__fecdcf" />
                       </td>
 
                       {/* select row */}

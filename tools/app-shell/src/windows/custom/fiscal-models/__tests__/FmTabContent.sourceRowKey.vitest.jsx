@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmTabContent.jsx
 // ETP-5393 Bug A — SourcesTab must key each row by the invoice's own id, not by `ref`
 // (documentno). AR and AP invoice numbering sequences are independent, so two different
 // invoices (one sales, one purchase) can legitimately share the same documentno — confirmed
@@ -83,5 +84,42 @@ describe('SourcesTab — row key collision (ETP-5393 Bug A)', () => {
     render(<SourcesTab decl={decl} t={t} />);
 
     expect(screen.getByText('Solo')).toBeTruthy();
+  });
+
+  // ETP-5597 — a 349 invoice mixing goods and services emits one row per AEAT349 key with the
+  // SAME id, so the key is the (id, key) pair.
+  it('does not warn about duplicate keys when one invoice yields two rows with different AEAT349 keys', () => {
+    const decl = {
+      sources: [
+        { id: 'INV-1', ref: 'FAC-1', key: 'E', date: '2026-09-01', type: 'Venta', party: 'Goods row', base: 100, total: 100 },
+        { id: 'INV-1', ref: 'FAC-1', key: 'S', date: '2026-09-01', type: 'Venta', party: 'Services row', base: 50, total: 50 },
+      ],
+      incidents: { items: [] },
+    };
+
+    render(<SourcesTab decl={decl} t={t} showTaxColumns={false} />);
+
+    const duplicateKeyWarning = errorSpy.mock.calls.some(
+      (call) => typeof call[0] === 'string' && call[0].includes('same key'),
+    );
+    expect(duplicateKeyWarning).toBe(false);
+    expect(screen.getByText('Goods row')).toBeTruthy();
+    expect(screen.getByText('Services row')).toBeTruthy();
+  });
+
+  it('the composite key falls back to `ref` when the keyed row has no id', () => {
+    const decl = {
+      sources: [
+        { ref: 'FAC-2', key: 'E', date: '', type: 'Venta', party: 'No-id goods', base: 1, total: 1 },
+        { ref: 'FAC-2', key: 'S', date: '', type: 'Venta', party: 'No-id services', base: 2, total: 2 },
+      ],
+      incidents: { items: [] },
+    };
+
+    render(<SourcesTab decl={decl} t={t} />);
+
+    expect(errorSpy.mock.calls.some((c) => typeof c[0] === 'string' && c[0].includes('same key'))).toBe(false);
+    expect(screen.getByText('No-id goods')).toBeTruthy();
+    expect(screen.getByText('No-id services')).toBeTruthy();
   });
 });

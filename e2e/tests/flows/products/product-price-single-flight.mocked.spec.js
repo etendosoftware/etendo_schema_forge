@@ -215,9 +215,14 @@ async function openPricingTab(page, options) {
 /**
  * One tariff row. Anchored on the row's own `price-delete-{id}` testid — the only id-bearing hook
  * the row emits — so it never depends on row order or on the tariff's display text.
+ *
+ * ETP-5513 laid every row of a price section on one CSS grid (`PRICE_ROW_GRID` in
+ * ProductPriceBar.jsx), so a saved row is `div.grid.items-end`, no longer a flex row. The
+ * add-tariff row shares those classes but has no `price-delete-*` button, so the filter still
+ * picks exactly one row.
  */
 const tariffRow = (page, rowId) => page
-  .locator('div.flex.flex-row.items-end')
+  .locator('div.grid.items-end')
   .filter({ has: page.getByTestId(`price-delete-${rowId}`) })
   .first();
 

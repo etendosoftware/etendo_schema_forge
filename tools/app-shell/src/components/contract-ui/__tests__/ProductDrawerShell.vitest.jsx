@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/ProductDrawerShell.jsx
+// @covers tools/app-shell/src/components/contract-ui/productSelectorDrawerShared.jsx
 /**
  * ProductDrawerShell owns all shared chrome for the Product selector modals (overlay,
  * dialog container, search bar, loading / no-results states, footer, close behaviors,
@@ -20,6 +22,8 @@ vi.mock('@/i18n', () => ({
       productSearchNavigate: 'navigate',
       productSearchSelect: 'select',
       productSearchClose: 'close',
+      productSearchError: 'The search could not be completed',
+      retry: 'Retry',
     };
     return map[key] ?? key;
   },
@@ -309,6 +313,91 @@ describe('ProductDrawerShell — empty state', () => {
 // ────────────────────────────────────────────────────────────────────────────
 // ETP-5254 — inline record creation
 // ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Answers the selector endpoint with one scripted response per call, in order; the last one
+ * repeats. Image and bulk-product requests are answered as in setupFetchMock.
+ */
+function setupSelectorSequence(responses) {
+  let call = 0;
+  mockFetch.mockImplementation((url) => {
+    if (url.includes('/image/')) return Promise.resolve({ ok: false });
+    if (url.includes('product/product')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+    }
+    const next = responses[Math.min(call, responses.length - 1)];
+    call += 1;
+    return typeof next === 'function' ? next() : Promise.resolve(next);
+  });
+}
+
+const okPage = (items, hasMore = false) => ({
+  ok: true,
+  status: 200,
+  json: () => Promise.resolve({ items, hasMore, totalCount: items.length }),
+});
+const gatewayTimeout = { ok: false, status: 504, json: () => Promise.resolve({}) };
+
+describe('ProductDrawerShell — failed search', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows an explicit error, not the no-results message, when the selector answers 504', async () => {
+    setupSelectorSequence([okPage([]), gatewayTimeout]);
+    render(<ProductDrawerShell {...BASE_PROPS} useVariant={makeVariant()} />);
+    await userEvent.type(screen.getByTestId('product-search-input'), 'p');
+
+    expect(await screen.findByTestId('product-search-error'))
+      .toHaveTextContent('The search could not be completed');
+    expect(screen.queryByText(/No results for/)).not.toBeInTheDocument();
+    expect(screen.queryByText('No products found')).not.toBeInTheDocument();
+  });
+
+  it('shows the error state when the request never gets an HTTP answer', async () => {
+    setupSelectorSequence([() => Promise.reject(new TypeError('Failed to fetch'))]);
+    render(<ProductDrawerShell {...BASE_PROPS} useVariant={makeVariant()} />);
+
+    expect(await screen.findByTestId('product-search-error')).toBeInTheDocument();
+    expect(screen.getByTestId('product-search-retry')).toBeInTheDocument();
+    expect(screen.queryByText('No products found')).not.toBeInTheDocument();
+  });
+
+  it('retries the same search and renders the results once the selector recovers', async () => {
+    const user = userEvent.setup();
+    setupSelectorSequence([gatewayTimeout, okPage([{ id: '1', label: 'Producto 0001' }])]);
+    render(<ProductDrawerShell {...BASE_PROPS} useVariant={makeVariant()} />);
+
+    await user.click(await screen.findByTestId('product-search-retry'));
+
+    expect(await screen.findByText('Producto 0001')).toBeInTheDocument();
+    expect(screen.queryByTestId('product-search-error')).not.toBeInTheDocument();
+  });
+
+  it('clears a previous error when the user types a new search', async () => {
+    setupSelectorSequence([gatewayTimeout, okPage([])]);
+    render(<ProductDrawerShell {...BASE_PROPS} useVariant={makeVariant()} />);
+    await screen.findByTestId('product-search-error');
+
+    await userEvent.type(screen.getByTestId('product-search-input'), 'zzz');
+
+    await waitFor(() => expect(screen.getByText(/No results for "zzz"/)).toBeInTheDocument());
+    expect(screen.queryByTestId('product-search-error')).not.toBeInTheDocument();
+  });
+
+  it('keeps the loaded rows and offers a retry when loading the next page fails', async () => {
+    setupSelectorSequence([okPage([{ id: '1', label: 'Producto 0001' }], true), gatewayTimeout]);
+    render(<ProductDrawerShell {...BASE_PROPS} useVariant={makeVariant()} />);
+    await screen.findByText('Producto 0001');
+
+    fireEvent.scroll(screen.getByTestId('product-search-drawer').querySelector('.overflow-y-auto'));
+
+    expect(await screen.findByTestId('product-search-load-more-error'))
+      .toHaveTextContent('The search could not be completed');
+    expect(screen.getByText('Producto 0001')).toBeInTheDocument();
+    expect(screen.queryByTestId('product-search-error')).not.toBeInTheDocument();
+  });
+});
 
 const ALLOWLISTED_URL = BASE_PROPS.selectorUrl; // .../sales-order/.../selectors/product
 const DENIED_URL = 'http://localhost:8080/etendo/neo/requisition/lines/selectors/product';

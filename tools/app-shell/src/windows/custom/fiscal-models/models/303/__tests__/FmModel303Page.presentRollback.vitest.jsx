@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, waitFor, fireEvent, screen } from '@testing-library/react';
@@ -5,6 +6,7 @@ import { render, waitFor, fireEvent, screen } from '@testing-library/react';
 const navigateMock = vi.fn();
 
 vi.mock('@/i18n', () => ({
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useUI: () => (key) => key,
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
@@ -27,7 +29,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: () => null,
@@ -53,6 +54,8 @@ vi.mock('../../../FmOverlays.jsx', () => ({
   FileGenModal303: () => null,
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
