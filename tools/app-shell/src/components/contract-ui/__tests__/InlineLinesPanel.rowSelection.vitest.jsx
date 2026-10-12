@@ -9,7 +9,7 @@
  */
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import InlineLinesPanel from '../InlineLinesPanel.jsx';
+import InlineLinesPanel, { computeBodyScrollClassName } from '../InlineLinesPanel.jsx';
 import React, { createRef } from 'react';
 
 vi.mock('sonner', () => ({
@@ -605,5 +605,50 @@ describe('InlineLinesPanel row hover elevation', () => {
     for (const rowId of ['L1', 'L2']) {
       expect(getRow(rowId).classList.contains('hover:z-20')).toBe(true);
     }
+  });
+});
+
+/**
+ * Last-line shadow room. The rows' body box is an `overflow-x-auto` scroll box,
+ * so it clips vertically too: with nothing after the last line inside it, that
+ * line's hover shadow was cut. `computeBodyScrollClassName` reserves `pb-4` for
+ * it and, without horizontal overflow, takes it back with `-mb-4` plus
+ * click-through padding; with overflow it keeps only the padding so the native
+ * scrollbar is neither covered nor disabled.
+ */
+describe('InlineLinesPanel last-line shadow room', () => {
+  it.each([
+    [{ reserveShadowRoom: false, hasHorizontalOverflow: false }, 'overflow-x-auto'],
+    [{ reserveShadowRoom: false, hasHorizontalOverflow: true }, 'overflow-x-auto'],
+    [{ reserveShadowRoom: true, hasHorizontalOverflow: true }, 'overflow-x-auto pb-4'],
+    [
+      { reserveShadowRoom: true, hasHorizontalOverflow: false },
+      'overflow-x-auto pb-4 -mb-4 pointer-events-none [&>*]:pointer-events-auto',
+    ],
+  ])('computeBodyScrollClassName(%o) returns %s', (input, expected) => {
+    expect(computeBodyScrollClassName(input)).toBe(expected);
+  });
+
+  // The rows are direct children of the body scroll box (bodyScrollRef).
+  const getBodyBox = () => getRow('L1').parentElement;
+
+  it('reserves and takes back the room when editable lines end the box (jsdom: no horizontal overflow)', () => {
+    renderPanel();
+
+    const { classList } = getBodyBox();
+    expect(classList.contains('overflow-x-auto')).toBe(true);
+    expect(classList.contains('pb-4')).toBe(true);
+    expect(classList.contains('-mb-4')).toBe(true);
+    expect(classList.contains('pointer-events-none')).toBe(true);
+  });
+
+  it.each([
+    ['the document is read-only', { isDocumentReadOnly: true }],
+    ['a balance footer follows the lines', { balanceFooter: { debitField: 'quantity', creditField: 'product' } }],
+    ['the add-row form is active', { lineFormActive: true }],
+  ])('reserves no room when %s', (_label, props) => {
+    renderPanel(props);
+
+    expect(getBodyBox().className).toBe('overflow-x-auto');
   });
 });
