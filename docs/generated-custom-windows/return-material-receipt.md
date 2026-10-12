@@ -556,3 +556,28 @@ the list preview (`ReturnMaterialReceiptPreview.jsx` → `buildReturnPreviewCont
 extra request is made. Because every source is read from the record, there is nothing to refetch and
 the preview card no longer shows a refresh button. `return-to-vendor-shipment` does not pass
 `relatedDefinition` and keeps its `specs`. See `docs/ui-customization.md` §7.a for the shared definition (`SALES_RELATED_DOCS`), the `useRelatedDocuments` hook and the `RelatedDocumentsCard` `definition`/`record` props.
+
+## Header currency defaulted on create — ETP-5704
+
+`M_InOut.EM_ETGO_Currency_ID` (`etgoCurrency`) is mandatory in AD, curated `system` (read-only,
+never rendered) in this window, and had no default anywhere. Two consequences:
+
+- **MCP could not create a return at all.** `etendo_create` without the field answered 422
+  "Missing required fields" (the MCP mandatory check walks every AD-mandatory column), and with the
+  field it answered 422 `read_only_field`.
+- **The SPA's "+ Nuevo" saved the header with a NULL currency** (the REST validator only checks
+  mandatory fields the client sent, and the DB column is nullable). Returns created from the
+  goods-shipment "Crear devolución" wizard were unaffected — `NeoCommercialDocumentFactory` copies
+  the source shipment's currency.
+
+`decisions.json` now declares `etgoCurrency: { "visibility": "system", "defaultExpr":
+"@C_Currency_ID@" }` — the same default goods-shipment and goods-receipt use. `push-to-neo` writes
+it to `ETGO_SF_FIELD.DefaultValue` (row `30F49B14F1184833A70E70D7E3F20DBA`), and the shared
+`NeoMandatoryDefaultsService.injectMandatoryDefaults` fills it on every create path: REST single,
+REST batch, MCP `etendo_create` and `etendo_batch`. The field stays read-only: an agent that sends
+it explicitly is still refused with `read_only_field`, matching the UI, which does not show it.
+
+No visible UI change (`etgoCurrency` appears in no generated page or custom component of this
+window); `contract.json` and the generated JSX are unchanged by the regen. Existing returns with a
+NULL currency were deliberately left as they are. `return-to-vendor-shipment` has the same gap and
+is out of scope.

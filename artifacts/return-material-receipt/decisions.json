@@ -211,6 +211,10 @@
         "freightCurrency": {
           "visibility": "discarded"
         },
+        "etgoCurrency": {
+          "visibility": "system",
+          "defaultExpr": "@C_Currency_ID@"
+        },
         "freightCostRule": {
           "visibility": "discarded"
         },
