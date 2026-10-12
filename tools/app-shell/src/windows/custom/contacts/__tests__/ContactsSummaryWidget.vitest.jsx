@@ -1,17 +1,18 @@
 // @covers tools/app-shell/src/windows/custom/contacts/ContactsSummaryWidget.jsx
 // @covers tools/app-shell/src/windows/custom/contacts/ContactsPeriodButton.jsx
 /**
- * Tests for ContactsSummaryWidget — horizontal KPI summary in the headerContent slot.
+ * ContactsSummaryWidget — the three KPI blocks (net balance, revenue, expenses) and their
+ * variation chips follow the selected period: amounts and the per-block `trend` come from the
+ * period-aware bp-stats entries (`revenue` / `expenses`, `?months=3|6`); the net-balance chip is
+ * derived client-side from the current/previous values of both blocks.
  *
- * Trend badges are period-aware and computed from the bp-trend series via the
- * internal `windowTrend(arr, months)` helper:
- *   - slice the last N months (3M→3, 6M→6) and compute ((last − first)/|first|)*100
- *   - null (no badge) when the window has < 2 points or the first month is 0/non-finite
- *   - Net Balance trend = windowTrend over the per-month (revenue[i] − expenses[i]) array
- * KPI values still come from bp-stats (revenueThisMonth / expensesThisMonth).
+ * Requests go through `useApiFetch` (docs/request-policy.md) — mocked here, never `fetch`.
+ * The Iconic arrows are stubbed on top of the real custom-icons module so the chip's arrow
+ * direction is observable and the file does not depend on the core version that ships them.
  */
 
-// ─── Mocks before imports ────────────────────────────────────────────────────
+const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -19,327 +20,249 @@ vi.mock('@/i18n', () => ({
 }));
 
 vi.mock('lucide-react', () => ({
-  ArrowUp: () => <span data-testid="icon-arrow-up" />,
-  ArrowDown: () => <span data-testid="icon-arrow-down" />,
   LineChart: () => <span data-testid="icon-line-chart" />,
+  // Rendered by the core Radix dropdown-menu the period selector is built on.
   ChevronDown: () => <span data-testid="icon-chevron" />,
   Calendar: () => <span data-testid="icon-calendar" />,
   Check: () => <span data-testid="icon-check" />,
-  // Rendered by the core Radix dropdown-menu the period selector is built on.
   ChevronRight: () => <span data-testid="icon-chevron-right" />,
   Circle: () => <span data-testid="icon-circle" />,
+  X: () => <span data-testid="icon-x" />,
 }));
 
-vi.mock('@/hooks/useCurrency', () => ({
-  useCurrency: () => 'USD',
+vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+  ...(await importOriginal()),
+  IconicArrowUpIcon: (props) => <svg data-direction="up" {...props} />,
+  IconicArrowDownIcon: (props) => <svg data-direction="down" {...props} />,
 }));
 
+vi.mock('@/hooks/useCurrency', () => ({ useCurrency: () => 'USD' }));
+
+// Identifiable stub (not a formatter): proves the value and the currency code reach the
+// canonical utility; its real output is covered by formatCurrency's own tests.
 vi.mock('@/lib/formatCurrency', () => ({
-  formatCurrency: (_currency, val) => `$${val}`,
+  formatCurrency: (currency, val) => `${currency}:${val}`,
 }));
 
 vi.mock('../BPChartSVGContent', () => ({
-  // Exposes the plotted series so a test can tell which period the chart follows.
   BPChartSVGContent: ({ labels, revenue }) => (
     <svg data-testid="bp-chart-svg" data-labels={labels.length} data-revenue={JSON.stringify(revenue)} />
   ),
 }));
 
-vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ open, children }) => (open ? <div data-testid="dialog">{children}</div> : null),
-  DialogContent: ({ children }) => <div data-testid="dialog-content">{children}</div>,
-  DialogHeader: ({ children }) => <div>{children}</div>,
-  DialogTitle: ({ children }) => <div>{children}</div>,
-}));
-
-// ─── Imports after mocks ─────────────────────────────────────────────────────
+// Models Radix's open auto-focus: the content's onOpenAutoFocus runs first and, unless it calls
+// preventDefault(), focus lands on the first focusable child — the close X.
+vi.mock('@/components/ui/dialog', async () => {
+  const { forwardRef, useEffect, useRef } = await vi.importActual('react');
+  const DialogContent = forwardRef(({ children, onOpenAutoFocus }, ref) => {
+    const closeRef = useRef(null);
+    useEffect(() => {
+      const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+      onOpenAutoFocus?.(event);
+      if (!event.defaultPrevented) closeRef.current?.focus();
+    }, []);
+    return (
+      <div ref={ref} tabIndex={-1} data-testid="dialog-content">
+        {children}
+        <button ref={closeRef} type="button" data-testid="dialog-close-x">x</button>
+      </div>
+    );
+  });
+  return {
+    Dialog: ({ open, children }) => (open ? <div data-testid="dialog">{children}</div> : null),
+    DialogContent,
+    DialogHeader: ({ children }) => <div>{children}</div>,
+    DialogTitle: ({ children }) => <div>{children}</div>,
+  };
+});
 
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ContactsFinanceProvider } from '../ContactsFinanceContext';
 import ContactsSummaryWidget from '../ContactsSummaryWidget';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+const MINUS = '−';
 
-const STATS_DATA = [
-  { key: 'revenueThisMonth', value: 1300 },
-  { key: 'expensesThisMonth', value: 550 },
-];
+// bp-stats rows: the period-aware `revenue` / `expenses` blocks plus a legacy monthly row the
+// widget must ignore.
+const block = (key, value, previousValue, trend, hasPrevious = true) => ({
+  key, value, previousValue, trend, hasPrevious,
+});
+const LEGACY = { key: 'revenueThisMonth', value: 999 };
 
-// 6-month series. Chosen so 3M and 6M windows yield clearly different % values:
-//   revenue 3M window [1100,1200,1300] → ((1300-1100)/1100)*100 ≈ 18% (+18%)
-//   revenue 6M window [800..1300]      → ((1300-800)/800)*100   = 62.5% (+63%)
-//   expenses 3M window [450,500,550]   → ((550-450)/450)*100    ≈ 22% (+22%)
+// 3M: revenue 1500 (prev 1000, +50%), expenses 400 (prev 500, -20%) -> net 1100 vs 500 = +120%.
+const STATS_3M = [LEGACY, block('revenue', 1500, 1000, 50), block('expenses', 400, 500, -20)];
+// 6M: revenue 800 (prev 1000, -20%), expenses 600 (prev 400, +50%) -> net 200 vs 600 = -66.7%.
+const STATS_6M = [LEGACY, block('revenue', 800, 1000, -20), block('expenses', 600, 400, 50)];
+
 const TREND_DATA = {
   labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
   revenue: [800, 900, 1000, 1100, 1200, 1300],
   expenses: [300, 350, 400, 450, 500, 550],
 };
 
-function mockFetch({ stats = STATS_DATA, trend = TREND_DATA } = {}) {
-  globalThis.fetch = vi.fn().mockImplementation((url) => {
-    if (url.includes('bp-stats')) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ response: { data: stats } }),
-      });
+const ok = (data) => ({ ok: true, status: 200, json: async () => ({ response: { data } }) });
+
+function serve({ stats3 = STATS_3M, stats6 = STATS_6M, trend = TREND_DATA } = {}) {
+  mockApiFetch.mockImplementation(async (path) => {
+    const url = new URL(path, 'http://x');
+    if (url.pathname.endsWith('/bp-stats')) {
+      return ok(url.searchParams.get('months') === '6' ? stats6 : stats3);
     }
-    if (url.includes('bp-trend')) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ response: { data: trend } }),
-      });
-    }
-    return Promise.resolve({ ok: true, json: async () => ({}) });
+    if (url.pathname.endsWith('/bp-trend')) return ok(trend);
+    return ok({});
   });
 }
 
-function Wrapper({ children }) {
-  return (
+function renderWidget(data = { id: 'BP1' }) {
+  return render(
     <ContactsFinanceProvider token="tok" apiBaseUrl="/api">
-      {children}
-    </ContactsFinanceProvider>
+      <ContactsSummaryWidget data={data} />
+    </ContactsFinanceProvider>,
   );
 }
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
+/** The KPI block whose label is `labelKey` (label span -> block container). */
+const kpiBlock = (labelKey) => screen.getByText(labelKey).parentElement;
+const chipOf = (labelKey) => within(kpiBlock(labelKey)).queryByTestId('StatusTag__22ed51');
+
+async function switchTo6M(user) {
+  await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
+  await user.click(screen.getByRole('menuitemradio', { name: 'bpLast6Months' }));
+}
+
+function expectChip(labelKey, { text, direction, tone }) {
+  const chip = chipOf(labelKey);
+  expect(chip).not.toBeNull();
+  expect(within(chip).getByText(text)).toBeInTheDocument();
+  expect(within(chip).getByTestId('Arrow__22ed51')).toHaveAttribute('data-direction', direction);
+  expect(chip.querySelector('.status-tag')).toHaveClass(`status-tag--${tone}`);
+}
 
 describe('ContactsSummaryWidget', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mockFetch();
+    mockApiFetch.mockReset();
+    serve();
   });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  // ── No render with data.id ────────────────────────────────────────────────
 
   it('returns null when data has no id', () => {
-    const { container } = render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{}} />
-      </Wrapper>,
-    );
+    const { container } = renderWidget({});
     expect(container.firstChild).toBeNull();
   });
 
   it('returns null when data is null', () => {
-    const { container } = render(
-      <Wrapper>
-        <ContactsSummaryWidget data={null} />
-      </Wrapper>,
-    );
+    const { container } = renderWidget(null);
     expect(container.firstChild).toBeNull();
   });
 
   it('throws when used outside ContactsFinanceProvider', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(() =>
-      render(<ContactsSummaryWidget data={null} />),
-    ).toThrow('useContactsFinance must be used inside ContactsFinanceProvider');
+    expect(() => render(<ContactsSummaryWidget data={null} />))
+      .toThrow('useContactsFinance must be used inside ContactsFinanceProvider');
     spy.mockRestore();
   });
 
-  // ── Loading + render ────────────────────────────────────────────────────────
-
   it('renders loading skeletons while stats are being fetched', () => {
-    // The provider starts stats=null, so the first synchronous render shows skeletons.
-    const { container } = render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    const pulseEls = container.querySelectorAll('.animate-pulse');
-    expect(pulseEls.length).toBeGreaterThanOrEqual(3);
+    const { container } = renderWidget();
+    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThanOrEqual(3);
   });
 
-  it('renders KPI labels after stats load', async () => {
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
+  it('renders the KPI labels and View chart once stats load, with no skeletons left', async () => {
+    const { container } = renderWidget();
+    await waitFor(() => expect(screen.getByText('bpNetBalance')).toBeInTheDocument());
+    expect(screen.getByText('bpRevenue')).toBeInTheDocument();
+    expect(screen.getByText('bpExpenses')).toBeInTheDocument();
+    expect(screen.getByText('bpViewChart')).toBeInTheDocument();
+    expect(container.querySelectorAll('.animate-pulse')).toHaveLength(0);
+  });
+
+  it('syncs data.id into the provider, which requests bp-stats for that contact', async () => {
+    renderWidget({ id: 'BP-TEST' });
     await waitFor(() => {
-      expect(screen.getByText('bpNetBalance')).toBeInTheDocument();
-      expect(screen.getByText('bpRevenue')).toBeInTheDocument();
-      expect(screen.getByText('bpExpenses')).toBeInTheDocument();
+      expect(mockApiFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/bp-stats?businessPartnerId=BP-TEST'),
+        expect.anything(),
+      );
     });
   });
 
-  it('renders View chart button after stats load', async () => {
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    await waitFor(() => {
-      expect(screen.getByText('bpViewChart')).toBeInTheDocument();
-    });
+  it('takes amounts from the revenue/expenses blocks (net = revenue - expenses), ignoring legacy rows', async () => {
+    renderWidget();
+    await waitFor(() => expect(within(kpiBlock('bpRevenue')).getByText('USD:1500')).toBeInTheDocument());
+    expect(within(kpiBlock('bpExpenses')).getByText('USD:400')).toBeInTheDocument();
+    expect(within(kpiBlock('bpNetBalance')).getByText('USD:1100')).toBeInTheDocument();
+    expect(screen.queryByText('USD:999')).not.toBeInTheDocument();
   });
 
-  it('shows no loading skeletons after stats load', async () => {
-    const { container } = render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    await waitFor(() => screen.getByText('bpNetBalance'));
-    const pulseEls = container.querySelectorAll('.animate-pulse');
-    expect(pulseEls).toHaveLength(0);
-  });
-
-  // ── KPI values from bp-stats ──────────────────────────────────────────────
-
-  it('derives net balance value as income minus expenses (from bp-stats)', async () => {
-    // income=1300, expenses=550 → net = 750
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    await waitFor(() => {
-      expect(screen.getByText('$750')).toBeInTheDocument();
-    });
-  });
-
-  it('renders income and expenses KPI values from bp-stats', async () => {
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    await waitFor(() => {
-      expect(screen.getByText('$1300')).toBeInTheDocument(); // income
-      expect(screen.getByText('$550')).toBeInTheDocument();  // expenses
-    });
-  });
-
-  // ── Period-aware trend badges ──────────────────────────────────────────────
-
-  it('renders trend badges computed from bp-trend for the default 3M period', async () => {
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    await waitFor(() => screen.getByText('bpNetBalance'));
-
-    // Default period is 3M → badges use the "vs last 3 months" label.
-    const badges = screen.getAllByText(/bpVsLast3Months/);
-    expect(badges.length).toBe(3); // net balance + income + expenses
-
-    // 3M revenue window [1100,1200,1300] → +18%
-    expect(screen.getByText(/\+18% bpVsLast3Months/)).toBeInTheDocument();
-    // 3M expenses window [450,500,550] → +22%
-    expect(screen.getByText(/\+22% bpVsLast3Months/)).toBeInTheDocument();
-  });
-
-  it('recomputes trend badges when the period switches to 6M', async () => {
+  // Arrow follows the sign; colour follows good/bad for the KPI (expenses are good when down).
+  it.each([
+    ['3M — everything improves', '3M', {
+      bpNetBalance: { text: '+120% bpVsLast3Months', direction: 'up', tone: 'success' },
+      bpRevenue: { text: '+50% bpVsLast3Months', direction: 'up', tone: 'success' },
+      bpExpenses: { text: `${MINUS}20% bpVsLast3Months`, direction: 'down', tone: 'success' },
+    }],
+    ['6M — everything worsens', '6M', {
+      bpNetBalance: { text: `${MINUS}67% bpVsLast6Months`, direction: 'down', tone: 'destructive' },
+      bpRevenue: { text: `${MINUS}20% bpVsLast6Months`, direction: 'down', tone: 'destructive' },
+      bpExpenses: { text: '+50% bpVsLast6Months', direction: 'up', tone: 'destructive' },
+    }],
+  ])('renders a chip per KPI for the selected period: %s', async (_name, period, expected) => {
     const user = userEvent.setup();
-    // The period selector is rendered inside the widget (ETP-5600), so changing the
-    // period through it re-renders the widget badges.
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-
-    await waitFor(() => screen.getByText('bpNetBalance'));
-    // Sanity: 3M revenue badge shows +18%
-    expect(screen.getByText(/\+18% bpVsLast3Months/)).toBeInTheDocument();
-
-    // Switch to 6M via the embedded period selector
-    await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
-    await user.click(screen.getByText('bpLast6Months'));
-
-    await waitFor(() => {
-      // Badges now use the "vs last 6 months" label
-      expect(screen.getAllByText(/bpVsLast6Months/).length).toBe(3);
-    });
-    // 6M revenue window [800..1300] → +63% (different from the 3M +18%)
-    expect(screen.getByText(/\+63% bpVsLast6Months/)).toBeInTheDocument();
-    // The old 3M badge value is gone
-    expect(screen.queryByText(/\+18% bpVsLast3Months/)).not.toBeInTheDocument();
-  });
-
-  it('renders no trend badges when bp-trend has fewer than 2 points', async () => {
-    mockFetch({
-      trend: { labels: ['Jun'], revenue: [1000], expenses: [400] },
-    });
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    await waitFor(() => screen.getByText('bpNetBalance'));
-
-    expect(screen.queryByText(/bpVsLast3Months/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/bpVsLast6Months/)).not.toBeInTheDocument();
-  });
-
-  it('suppresses the badge for a KPI whose first window month is zero', async () => {
-    // Income 3M window [0,100,200] → first=0 → null (no badge).
-    mockFetch({
-      stats: [
-        { key: 'revenueThisMonth', value: 200 },
-        { key: 'expensesThisMonth', value: 80 },
-      ],
-      trend: {
-        labels: ['Apr', 'May', 'Jun'],
-        revenue: [0, 100, 200],
-        expenses: [40, 60, 80],
-      },
-    });
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    await waitFor(() => screen.getByText('bpRevenue'));
-
-    // Expenses window [40,60,80] → ((80-40)/40)*100 = +100% — badge present
-    expect(screen.getByText(/\+100% bpVsLast3Months/)).toBeInTheDocument();
-    // Net window [(0-40),(100-60),(200-80)] = [-40,40,120] first=-40 →
-    //   ((120-(-40))/|−40|)*100 = +400% — badge present
-    expect(screen.getByText(/\+400% bpVsLast3Months/)).toBeInTheDocument();
-    // Income badge suppressed (first month 0) → only 2 badges total
-    expect(screen.getAllByText(/bpVsLast3Months/).length).toBe(2);
-  });
-
-  // ── Chart dialog ───────────────────────────────────────────────────────────
-
-  it('opens the chart dialog when View chart is clicked', async () => {
-    const user = userEvent.setup();
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    await waitFor(() => screen.getByText('bpViewChart'));
-    await user.click(screen.getByText('bpViewChart'));
-
-    expect(screen.getByTestId('dialog')).toBeInTheDocument();
-    expect(screen.getByTestId('bp-chart-svg')).toBeInTheDocument();
+    renderWidget();
+    await waitFor(() => expect(screen.getByText('USD:1500')).toBeInTheDocument());
+    if (period === '6M') {
+      await switchTo6M(user);
+      await waitFor(() => expect(within(kpiBlock('bpRevenue')).getByText('USD:800')).toBeInTheDocument());
+      expect(within(kpiBlock('bpNetBalance')).getByText('USD:200')).toBeInTheDocument();
+    }
+    for (const [labelKey, chip] of Object.entries(expected)) expectChip(labelKey, chip);
   });
 
   it.each([
-    ['3M (default)', null, 3, [1100, 1200, 1300]],
-    ['6M', 'bpLast6Months', 6, [800, 900, 1000, 1100, 1200, 1300]],
-  ])('the chart dialog has no period toggle of its own and plots the summary period: %s', async (_label, pick, labels, revenue) => {
+    ['no block has a previous window (trend ignored without hasPrevious)',
+      [block('revenue', 100, 50, 100, false), block('expenses', 40, 20, 100, false)],
+      { bpNetBalance: false, bpRevenue: false, bpExpenses: false }],
+    ['every change rounds to 0%',
+      [block('revenue', 1002, 1000, 0.2), block('expenses', 200, 200, 0)],
+      { bpNetBalance: false, bpRevenue: false, bpExpenses: false }],
+    ['previous net is 0 — net chip hidden, block chips kept',
+      [block('revenue', 500, 300, 66.67), block('expenses', 100, 300, -66.67)],
+      { bpNetBalance: false, bpRevenue: true, bpExpenses: true }],
+    ['empty stats — zeroed KPIs',
+      [],
+      { bpNetBalance: false, bpRevenue: false, bpExpenses: false }],
+  ])('shows a chip only when it carries information: %s', async (_name, stats3, shown) => {
+    serve({ stats3 });
+    renderWidget();
+    await waitFor(() => expect(screen.getByText('bpNetBalance')).toBeInTheDocument());
+    for (const [labelKey, visible] of Object.entries(shown)) {
+      if (visible) expect(chipOf(labelKey)).not.toBeNull();
+      else expect(chipOf(labelKey)).toBeNull();
+    }
+    if (stats3.length === 0) expect(screen.getAllByText('USD:0')).toHaveLength(3);
+  });
+
+  it('opens the chart dialog with focus on the dialog content, not on the close X', async () => {
     const user = userEvent.setup();
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    // Wait for the trend series (the badges are computed from it), not just the stats.
-    await waitFor(() => screen.getByText(/\+18% bpVsLast3Months/));
-    if (pick) {
-      await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
-      await user.click(screen.getByText(pick));
-      await waitFor(() => screen.getByText(/\+63% bpVsLast6Months/));
+    renderWidget();
+    await waitFor(() => expect(screen.getByText('bpViewChart')).toBeInTheDocument());
+    await user.click(screen.getByText('bpViewChart'));
+
+    expect(screen.getByTestId('bp-chart-svg')).toBeInTheDocument();
+    expect(screen.getByTestId('dialog-content')).toHaveFocus();
+    expect(screen.getByTestId('dialog-close-x')).not.toHaveFocus();
+  });
+
+  it.each([
+    ['3M (default)', false, 3, [1100, 1200, 1300]],
+    ['6M', true, 6, [800, 900, 1000, 1100, 1200, 1300]],
+  ])('the chart dialog has no period toggle of its own and plots the summary period: %s', async (_label, pick6M, labels, revenue) => {
+    const user = userEvent.setup();
+    renderWidget();
+    await waitFor(() => expect(screen.getByText('USD:1500')).toBeInTheDocument());
+    if (pick6M) {
+      await switchTo6M(user);
+      await waitFor(() => expect(screen.getByText('USD:800')).toBeInTheDocument());
     }
     await user.click(screen.getByText('bpViewChart'));
 
@@ -348,35 +271,5 @@ describe('ContactsSummaryWidget', () => {
     const chart = within(dialog).getByTestId('bp-chart-svg');
     expect(chart).toHaveAttribute('data-labels', String(labels));
     expect(JSON.parse(chart.getAttribute('data-revenue'))).toEqual(revenue);
-  });
-
-  // ── Fetch wiring ───────────────────────────────────────────────────────────
-
-  it('calls useSyncFinanceRecordId with data.id — triggers bp-stats fetch', async () => {
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP-TEST' }} />
-      </Wrapper>,
-    );
-    await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('bp-stats?businessPartnerId=BP-TEST'),
-        expect.anything(),
-      );
-    });
-  });
-
-  it('renders correctly with empty stats array (zeroed KPIs, no badges)', async () => {
-    mockFetch({ stats: [], trend: { labels: [], revenue: [], expenses: [] } });
-    render(
-      <Wrapper>
-        <ContactsSummaryWidget data={{ id: 'BP1' }} />
-      </Wrapper>,
-    );
-    await waitFor(() => screen.getByText('bpNetBalance'));
-    // All three KPIs (net/income/expenses) are 0 → three "$0" values.
-    expect(screen.getAllByText('$0')).toHaveLength(3);
-    // empty trend arrays → no badges
-    expect(screen.queryByText(/bpVsLast3Months/)).not.toBeInTheDocument();
   });
 });
