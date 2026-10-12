@@ -488,11 +488,12 @@ export default function AccountsHeaderTable({
 
         {/* Vertical rule between the KPI panel and the rows, as in the original page */}
         <div className="w-px self-stretch bg-[hsl(var(--border-subtle))]" aria-hidden="true" />
-        {/* The only scrolling region. DataTable already reserves room (`[&>div]:pb-6`)
-            for the lifted hover shadow under its last row, but that only helps inside
-            DataTable's own overflow box. This div is an ADDITIONAL `overflow: auto`
-            ancestor layered on top of it — unique to this hand-assembled headerTable —
-            so it carries its own 24px of trailing room too. */}
+        {/* The only scrolling region. It needs no trailing padding of its own for the
+            lifted hover shadow under the last row (ETP-5388): DataTable's scroll wrapper
+            keeps that 24px as its own border box and only gives it back to the layout
+            with a negative margin (ETP-5600), and a scroll container still counts a
+            descendant's border box as scrollable overflow — so scrolled to the bottom,
+            the shadow has its room here without a second, visible 24px gap. */}
         {/* `[&_table]:min-w-[1134px]` is the grid's floor: the sum of COLUMN_CHROME's
             widths (970px) plus the selection (40px) and actions (124px) cells. Above it the
             extra width is spread proportionally; below it the grid scrolls horizontally.
@@ -500,7 +501,7 @@ export default function AccountsHeaderTable({
             identical widths and stay aligned. */}
         <div
           className="[&_table]:min-w-[1134px]"
-          style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'auto', paddingBottom: 24 }}>
+          style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'auto' }}>
           <DataTable
             {...props}
             data={visibleAccounts}

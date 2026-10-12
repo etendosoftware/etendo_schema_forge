@@ -567,6 +567,7 @@ import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
 import { LOOKUP_DRAWERS } from './lookupDrawers.js';
+import { ROW_LIFT_SHADOW, ROW_LIFT_TOP_SEPARATOR, ROW_CHECKED_BG } from './rowVisuals.js';
 
 import { apiFetch } from '@/auth/api.js';
 /**
@@ -2051,12 +2052,9 @@ function isQuickActionsEnabled(rowQuickActions) {
   return true;
 }
 
-// ETP-5600 — the shared list-row visuals (Figma "Fila"): Shadows/lg, the checked
-// colour (#F5F7F9 = `--field-hover`, the exact design value) and the 1px line the
-// lifted row redraws on its own cells. Static strings so Tailwind's JIT sees them.
-const ROW_LIFT_SHADOW = 'hover:shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05),0_10px_15px_-3px_rgba(18,18,23,0.08)]';
-const ROW_LIFT_TOP_SEPARATOR = '[&:hover>td]:shadow-[inset_0_1px_0_hsl(var(--border-subtle))]';
-const ROW_CHECKED_BG = 'bg-[hsl(var(--field-hover))] hover:bg-[hsl(var(--field-hover))] [--row-hover-bg:hsl(var(--field-hover))]';
+// ETP-5600 — the shared row visuals (Shadows/lg, the checked colour, the lifted row's
+// top separator) live in rowVisuals.js, shared with InlineLinesPanel's line rows.
+// The two below are DataTable-only.
 const ROW_ACTIVE_BG = 'bg-primary/10 hover:bg-primary/10 [--row-hover-bg:color-mix(in_srgb,hsl(var(--primary))_10%,hsl(var(--card)))]';
 // The composited `bg-muted/50` tint, for a row that tints on hover: a clickable row under
 // `rowHoverStyle="tint"`, or any non-clickable row (TableRow's own base `hover:bg-muted/50`).
@@ -3448,8 +3446,8 @@ export function DataTable({
     rowQuickActions, onDeleteRow, hoverRowActions, onCloneRow, visibleColumns, selectable,
   });
   // ETP-5600 — a checked row is Figma's "Fila / Selected" (#F5F7F9, `--field-hover`) in every
-  // grid. It used to be `bg-primary/5` (or `--muted` with hoverRowActions), mirrored by
-  // InlineLinesPanel's `computeRowClassName` (ETP-5030); that panel keeps `bg-primary/5` for now.
+  // grid, and InlineLinesPanel's `computeRowClassName` uses the same ROW_CHECKED_BG (ETP-5030
+  // parity), so a tab grid, a list and a document's lines shade a checked row identically.
   const selectedRowBg = ROW_CHECKED_BG;
 
   // Precompute the flex specs once so the colgroup below can both build the
@@ -3546,11 +3544,31 @@ export function DataTable({
         table.jsx: `<div className="relative w-full overflow-auto">`, this div's direct
         child — the same one `[&>div]` reaches below for the scrollbar): it sizes itself
         to exactly the `<table>`'s content height with zero slack. `[&>div]:pb-6` pads
-        that inner box so the shadow has room; the padding sits inside this div's content
-        box, so this div no longer needs its own `pb-6` (ETP-5600 dropped it: with the
-        lift now the default it added 24px more under every list). Only when rows can be
-        clicked (no hover otherwise), and not for `inlineEditable`, whose wrapper is
-        `overflow-visible` and never clips.
+        that inner box so the shadow has room. Only when rows can be clicked (no lift
+        otherwise), and not for `inlineEditable`, whose wrapper is `overflow-visible`.
+
+        ETP-5600 — that room must not read as a 24px gap under the last row (Figma ends a
+        list at its last row / totals row, and a tab grid runs straight into its add-line
+        bar), so THIS div takes it back with `-mb-6` (`!`: the parent's `space-y-0` zeroes
+        `margin-bottom` on every child after the sticky header with a stronger selector,
+        `.space-y-0 > :not([hidden]) ~ :not([hidden])`, which would silently win). It keeps
+        its full 24px border box (the shadow paints inside it, unclipped) but its margin
+        box ends at the table, so whatever follows starts right under the last row and
+        overlaps the empty padding.
+        The negative margin goes here, NOT on the inner div: this div is itself a scroll
+        container (`overflow-y-visible` next to `overflow-x-auto` computes to `auto`), so
+        an inner `-mb-6` would overflow it by 24px — a stray vertical scrollbar on every
+        list, and the shadow clipped again at this div's edge.
+        The inner div is `position: relative`, so it would sit above a following
+        non-positioned sibling and swallow clicks on the overlapped 24px (the top of an
+        add-line bar). `pointer-events-none` on it, `auto` again on its `<table>`, makes
+        the padding click-through without touching the rows; wheel/touch scrolling still
+        reaches it through the hit row. The hovered row (`hover:z-10`) paints its shadow
+        over that sibling, but a box-shadow is never a hit target.
+        An overflow ancestor that scrolls vertically (ListView's ScrollPane, the Accounts
+        scroll region) still counts this div's full border box as scrollable overflow, so
+        scrolled to the bottom the last row's shadow has its 24px there — no extra layout,
+        no row hidden behind what follows.
       */}
       <div
         ref={scrollContainerRef}
@@ -3573,7 +3591,9 @@ export function DataTable({
             // above this thumb once scrolled into view ("al final se ven
             // 2") — the `[&>div]` combinator reaches into that child instead.
             : 'overflow-x-auto overflow-y-visible [&>div]:[scrollbar-width:none] [&>div::-webkit-scrollbar]:hidden',
-          linesLayout !== 'inlineEditable' && isLiftHover(rowHoverStyle) && (onRowClick || onNavigate) ? '[&>div]:pb-6' : '',
+          linesLayout !== 'inlineEditable' && isLiftHover(rowHoverStyle) && (onRowClick || onNavigate)
+            ? '!-mb-6 [&>div]:pb-6 [&>div]:pointer-events-none [&>div>table]:pointer-events-auto'
+            : '',
         ].filter(Boolean).join(' ')}
       >
         <Table style={getTableContainerStyle()} data-testid="Table__eb5261">
