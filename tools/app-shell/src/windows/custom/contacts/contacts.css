@@ -105,3 +105,17 @@
 .contacts-header-form .grid.gap-x-5 {
   row-gap: 1.25rem;
 }
+
+/* ── List rows: no hover colour transition (ETP-5600, CP-1) ──────────────────
+   The core rule `.contacts-rows tr:hover` (app-shell-core styles.css) paints the
+   hovered row white and lifts it with `filter: drop-shadow(...)`. The filter is
+   applied instantly, but the shared DataTable row carries `transition-colors`,
+   so for ~150ms the row background is still fading in: a drop-shadow filter
+   follows the alpha of everything painted, and while the row is see-through the
+   opaque chips inside it cast their own shadows — the "flash" on the chips.
+   Dropping the transition makes the white background land in the same frame as
+   the shadow. The visible shadow itself is unchanged.
+   Specificity (0,1,1) beats Tailwind's single-class `transition-colors` (0,1,0). */
+.contacts-rows tr {
+  transition: none;
+}

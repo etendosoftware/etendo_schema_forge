@@ -1561,7 +1561,7 @@ export function ListView({
                   )}
                   {/* Split "New" button */}
                   {canCreate && (
-                    <div className={newButtonGroupClass(isSplitNew)}>
+                    <div className={newButtonGroupClass(isSplitNew)} data-testid="action-new-group">
                       <Button
                         className={newButtonClass(isSplitNew)}
                         data-testid="action-new"
