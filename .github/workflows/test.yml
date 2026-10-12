@@ -2,15 +2,35 @@ name: Tests
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
   push:
-    branches: [main]
+    branches: [main, develop]
+
+# Least privilege: jobs widen only what their steps need.
+permissions:
+  contents: read
+
+concurrency:
+  # A PR shares one group, so a new push to it cancels the stale run. Each push
+  # to main/develop gets its own group (its sha): a group holds only one pending
+  # run, so a shared push group would silently drop queued shas, and every push
+  # sha must keep its own run and its own artifact.
+  group: tests-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read   # npm install from npm.pkg.github.com
+      checks: write    # dorny/test-reporter publishes the "Test Results" check
     steps:
+      # Test the PR head commit (the sha Jenkins analyzes), not the merge ref.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -22,31 +42,89 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: CLI tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results.xml 'cli/test/*.test.js'
+      # Same target Jenkins runs: JUnit XML in test-results/, merged LCOV in coverage/.
+      - name: Unit tests with coverage
+        run: make test-ci-coverage
 
-      - name: Repo script tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout 'scripts/__tests__/*.test.js'
-
-      - name: App-shell Node tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout $(find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js')
-
-      - name: App-shell extra tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout 'tools/app-shell/test/*.test.js'
-
-      - name: Artifact custom tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout 'artifacts/**/__tests__/*.test.js'
-
-      - name: Vitest (React components)
-        run: cd tools/app-shell && npx vitest run
+      - name: Build app-shell
+        run: npm run build --workspace=tools/app-shell
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
         if: always()
         with:
           name: Test Results
-          path: test-results.xml
+          path: test-results/*.xml
           reporter: java-junit
+          fail-on-empty: false
 
-      - name: Build app-shell
-        run: npm run build --workspace=tools/app-shell
+      # Consumed later by Jenkins instead of re-running the suites.
+      - name: Upload coverage and test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-coverage
+          path: |
+            coverage/merged-lcov.info
+            test-results/*.xml
+          retention-days: 7
+          if-no-files-found: warn
+
+  # Sonar analysis fed with the coverage computed by the test job.
+  sonar:
+    name: Sonar Build
+    needs: test
+    # PRs always run it (it fails when `test` did not succeed, see the last
+    # step); pushes scan only with real coverage.
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || needs.test.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # Never feed Sonar a partial LCOV; extracts to coverage/ and test-results/.
+      - name: Download coverage
+        if: needs.test.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-coverage
+
+      - uses: sonarsource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_SCANNER_OPTS: "-Xmx4096m"
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # Same rule as Jenkins' Compare Coverage Results; fails this check on a drop.
+      - uses: actions/setup-node@v4
+        if: github.event_name == 'pull_request' && needs.test.result == 'success'
+        with:
+          node-version: 22
+
+      - name: Compare coverage with the base branch
+        if: github.event_name == 'pull_request' && needs.test.result == 'success'
+        env:
+          # Read-only user token: the analysis token cannot read measures (403).
+          SONAR_TOKEN: ${{ secrets.SONAR_READ_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: >-
+          node scripts/compare-sonar-coverage.js --context ci
+          --pull-request "$PR_NUMBER" --base-branch "$BASE_BRANCH"
+          --report-task .scannerwork/report-task.txt
+
+      # Fail closed: a PR whose tests failed (or did not finish) must not get a
+      # green required check just because the coverage comparison was skipped.
+      - name: Fail when the tests did not succeed
+        if: github.event_name == 'pull_request' && needs.test.result != 'success'
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: |
+          echo "::error title=Coverage gate::The Tests job ended '$TEST_RESULT', so coverage was not evaluated. Fix the tests and push again."
+          exit 1
