@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 /**
  * Covers row-selection interactions in InlineLinesPanel — toggleRow,
  * toggleAll, and the "prune deleted IDs from selection" effect — none of
@@ -223,13 +224,14 @@ describe('InlineLinesPanel row selection (toggleRow / toggleAll)', () => {
  * never reached the row's className, so the selected row rendered
  * byte-identically to an unselected one.
  *
- * The reference behaviour lives in DataTable: `selectedRowBg` (DataTable.jsx,
- * `bg-primary/5` for the non-hoverRowActions grids) applied inside
- * `getRowClassName`, guarded by `selectionPainted` so the row's own hardcoded
- * base background is dropped while a selection is painting the row (Tailwind
- * resolves two competing `background-color` utilities by stylesheet order, not
- * by class order). InlineLinesPanel must mirror both halves of that contract so
- * the tab grid and the main list grid shade a selected row the same way.
+ * The reference behaviour came from DataTable, which applies its checked-row
+ * colour inside `getRowClassName` and paints only that one background while a
+ * selection is painting the row (Tailwind resolves two competing
+ * `background-color` utilities by stylesheet order, not by class order).
+ * InlineLinesPanel mirrors that contract with its own `bg-primary/5` literal.
+ * DataTable has since moved its checked colour to `--field-hover` (ETP-5600,
+ * covered in DataTable.rowHoverStyle.vitest.jsx); this panel keeps
+ * `bg-primary/5` for now, so the two no longer share the literal.
  */
 const SELECTED_ROW_BG = 'bg-primary/5';
 const BASE_ROW_BG = 'bg-card';
