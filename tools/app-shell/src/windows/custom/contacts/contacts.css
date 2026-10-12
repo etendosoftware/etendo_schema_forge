@@ -132,3 +132,17 @@
 .contacts-rows tr:has([aria-checked="true"]) {
   --row-hover-bg: #ECEEF1;
 }
+
+/*
+ * ETP-5600 — keep the top separator on a hovered row (design call: Figma loses it, the line stays).
+ * The line above a row is the PREVIOUS row's `border-b` (shared TableRow), resolved into the
+ * table's collapsed-border grid (Tailwind preflight: `border-collapse: collapse`). The core hover
+ * rule raises the hovered row into its own stacking context (`position: relative; z-index: 1;
+ * filter: drop-shadow`) with an opaque background, so the row paints above the table's border
+ * layer and hides that line. Redraw it on the hovered row's own cells as a 1px inset top shadow
+ * in the same token: it sits above every cell background, including the quick-actions cell's
+ * sticky gradient, and leaves the row's bottom border, hover shadow and checked colour untouched.
+ */
+.contacts-rows tbody tr:hover > td {
+  box-shadow: inset 0 1px 0 hsl(var(--border-subtle));
+}
