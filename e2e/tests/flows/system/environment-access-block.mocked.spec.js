@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/App.jsx
+// @covers tools/app-shell/src/lib/environmentAccessGate.js
+// @covers tools/app-shell/src/layout/AppLayout.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -5,8 +8,9 @@ import { login } from '../../helpers/auth.js';
  * Environment commercial access block — `BlockedAccessScreen` (ETP-5443 follow-up, ETP-5047).
  *
  * The shared `EnvironmentAccessGuard` (com.etendoerp.go), reached for NEO through the bind step
- * of `EnvironmentRequestAuthenticator`, answers every NEO request with HTTP 402 once an environment's commercial access is cut off (demo trial expired /
- * subscription payment grace elapsed). Since ETP-5047 the body is the structured
+ * of `EnvironmentRequestAuthenticator`, answers every NEO request with HTTP 402 once an
+ * environment's commercial access is cut off (demo trial expired / subscription payment grace
+ * elapsed). Since ETP-5047 the body is the structured
  * `EnvironmentAccessGuard.Denial.errorBody`:
  *
  *   { error: { message: "Environment access is not available: <DECISION>", status: 402,
@@ -165,6 +169,10 @@ test.describe('Environment access block — structured decision precedence', () 
     await installAccountMock(page);
   });
 
+  // Two writers record the decision: core `apiFetch`'s `observeEnvironmentAccessResponse`
+  // (message-first) and App's `fetchWindowAccess` (decision-first), so this outcome holds by
+  // write order. On a real backend the guard writes the same decision to both fields.
+  // Follow-up: move `readEnvironmentAccessDecision` into app-shell-core.
   test('the structured decision wins over a message naming a different decision', async ({ page }) => {
     await installEnvironmentAccessBlock(page, structuredDenialBody('DEMO_TRIAL_EXPIRED', {
       message: `${ENVIRONMENT_ACCESS_PREFIX}SUBSCRIPTION_REQUIRED`,

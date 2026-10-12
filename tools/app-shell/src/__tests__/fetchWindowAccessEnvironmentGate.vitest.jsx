@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/App.jsx
+// @covers tools/app-shell/src/lib/environmentAccessGate.js
 /**
  * ETP-5443 follow-up — `fetchWindowAccess`'s environment-access-gate side effect: a NEO
  * `/sws/neo/windowaccessmap` 402 records the demo/subscription block via
@@ -7,7 +9,8 @@
  * message parsing, the blocking-decision allowlist, notify semantics) and
  * `layout/__tests__/AppLayout.vitest.jsx` (which mocks the React binding and tests the RENDER
  * side). This file tests the DETECTION side, at the source, through the real
- * `fetchWindowAccess` + `readNeoErrorMessage` + `parseEnvironmentAccessDecision` pipeline.
+ * `fetchWindowAccess` + `readNeoAccessDecision` (App.jsx) + `readEnvironmentAccessDecision`
+ * (lib/environmentAccessGate.js) pipeline.
  *
  * A NEW file rather than an addition to `__tests__/App.vitest.jsx`'s own
  * `describe('fetchWindowAccess', ...)` block: that file's heavy mock set (below) exists only to
