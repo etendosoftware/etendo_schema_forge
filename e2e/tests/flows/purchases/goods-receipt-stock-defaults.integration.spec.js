@@ -267,7 +267,7 @@ async function addGoodsReceiptLine(page, { isFirst = false, searchKey, quantity 
  * state.
  *
  * The label and count render as adjacent text nodes with NO separating
- * whitespace (`TabStripButton` in `DetailView.jsx`), so the button's text is
+ * whitespace (`TabStripButton.jsx`), so the button's text is
  * a direct concatenation like "Líneas1" / "Lines1" — there is no `\b` word
  * boundary between the label's trailing letter and the count digit(s)
  * (both are `\w`). Anchor the regex on the known label prefix instead, with

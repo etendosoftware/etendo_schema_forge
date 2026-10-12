@@ -2,7 +2,6 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:gLJournalLine
 const fields = [
-  { key: 'lineNo', column: 'Line', type: 'number', label: 'LineNo', required: true, readOnly: true, section: 'other', defaultValue: '@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', lookup: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') || (record['multigeneralLedger'] === true || record['multigeneralLedger'] === 'Y') },
   { key: 'foreignCurrencyDebit', column: 'AmtSourceDr', type: 'number', labels: {"en_US":"Debit","es_ES":"Débito"}, label: 'Debit', required: true, section: 'principal', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'foreignCurrencyCredit', column: 'AmtSourceCr', type: 'number', labels: {"en_US":"Credit","es_ES":"Crédito"}, label: 'Credit', required: true, section: 'principal', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },

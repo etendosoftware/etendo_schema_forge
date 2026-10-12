@@ -51,6 +51,10 @@ import { LocaleProvider, useLocale, useLocaleSwitch, useMenuLabel, useUI } from 
  *                                  `initialQuery`/`target.prefill` only reach the FALLBACK form;
  *                                  the window mounts its own `useEntity`, so a seed for it has to
  *                                  travel as a prop down to `useEntity({ initialData })` (ETP-5332).
+ * @param {object}   initialChildData - seeds for secondary (child) tabs' custom add modals, keyed
+ *                                  by tab key, e.g. `{ locationAddress: { address, ... } }`. Forwarded
+ *                                  to the window as a prop and applied only to a first, brand-new
+ *                                  row (ETP-5654). Optional; no seed by default.
  * @param {Function} onCancel     - () => void. Closes without writing anything.
  * @param {Function} onCreated    - (createdRecord) => void. Receives the POST response.
  */
@@ -60,6 +64,7 @@ export default function RecordCreateModal({
   initialQuery = '',
   token,
   initialData = null,
+  initialChildData = null,
   onCancel,
   onCreated,
 }) {
@@ -445,6 +450,7 @@ export default function RecordCreateModal({
                     apiBaseUrl={target.apiBaseUrl}
                     token={token}
                     initialData={initialData}
+                    initialChildData={initialChildData}
                     // Per-target opt-in, not unconditional: DetailView renders a delete button
                     // on any saved record regardless of who created it, but a record created
                     // seconds ago inside THIS popup has Cancel/the dialog's X for "discard it"

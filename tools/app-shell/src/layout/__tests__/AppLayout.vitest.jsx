@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/layout/AppLayout.jsx
+// @covers tools/app-shell/src/components/access/SessionConflictNotice.jsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -1174,5 +1176,129 @@ describe('AppLayout — environment access gate (ETP-5443 follow-up)', () => {
     render(<AppLayout {...defaultProps} />);
 
     expect(screen.getByTestId('BlockedAccessScreen__488148')).toBeInTheDocument();
+  });
+});
+
+// ETP-5675 — the session cookie belongs to the browser profile and production is one domain for
+// every customer. When another tab signs in as a different account, this tab used to keep B's name
+// and avatar while every read answered with C's tenant data. The core records the conflict; what
+// AppLayout owes is to replace the whole page — before every other gate — and to offer the two ways
+// out, the destructive one only on an explicit click.
+describe('AppLayout — another account signed in from another tab (ETP-5675)', () => {
+  const defaultProps = { menuGroups: [{ label: 'Sales', items: [] }] };
+  const originalLocation = window.location;
+  let requests;
+  let locationStub;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    requests = [];
+    locationStub = { reload: vi.fn(), assign: vi.fn(), pathname: '/contacts', search: '' };
+    Object.defineProperty(window, 'location', { configurable: true, value: locationStub });
+    useAuthOptionalMock.mockReturnValue({
+      sessionConflict: { reason: 'request', accountId: null },
+      account: { id: 'acc-B', email: 'b@example.test' },
+    });
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      const method = (init.method || 'GET').toUpperCase();
+      requests.push({ url: String(url), method, headers: init.headers || {} });
+      if (method === 'DELETE') return new Response(null, { status: 204 });
+      return new Response(JSON.stringify({
+        account: { id: 'acc-C', email: 'c@example.test' }, csrfToken: 'csrf-C',
+      }), { status: 200 });
+    }));
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+    vi.unstubAllGlobals();
+    useAuthOptionalMock.mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+  });
+
+  it('replaces the page before any other gate, naming both accounts', async () => {
+    vi.mocked(useRoleMenu).mockReturnValue(undefined);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('SessionConflictScreen__488148')).toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+    expect(await screen.findByText(/c@example\.test signed in on this browser/)).toBeInTheDocument();
+    expect(screen.getByText(/still open as b@example\.test/)).toBeInTheDocument();
+  });
+
+  it('continues as the other account by reloading, and revokes nothing', async () => {
+    const user = userEvent.setup();
+    render(<AppLayout {...defaultProps} />);
+    await screen.findByText(/c@example\.test signed in/);
+
+    await user.click(screen.getByTestId('session-conflict-continue'));
+
+    expect(locationStub.reload).toHaveBeenCalledTimes(1);
+    expect(requests.some((r) => r.method === 'DELETE')).toBe(false);
+  });
+
+  it('signs the other account out with ITS proof and account, then goes to the login', async () => {
+    const user = userEvent.setup();
+    render(<AppLayout {...defaultProps} />);
+    await screen.findByText(/c@example\.test signed in/);
+
+    await user.click(screen.getByTestId('session-conflict-switch-back'));
+
+    await vi.waitFor(() => { expect(locationStub.assign).toHaveBeenCalledWith('/login'); });
+    const revoke = requests.find((r) => r.method === 'DELETE');
+    expect(revoke.headers).toEqual({ 'X-Go-CSRF': 'csrf-C', 'X-Go-Account': 'acc-C' });
+  });
+
+  it('stays on the screen and says so when the other session could not be closed', async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      if ((init.method || 'GET').toUpperCase() === 'DELETE') {
+        return new Response(JSON.stringify({ error: { message: 'Origin not allowed' } }), { status: 403 });
+      }
+      return new Response(JSON.stringify({
+        account: { id: 'acc-C', email: 'c@example.test' }, csrfToken: 'csrf-C',
+      }), { status: 200 });
+    });
+    const user = userEvent.setup();
+    render(<AppLayout {...defaultProps} />);
+    await screen.findByText(/c@example\.test signed in/);
+
+    await user.click(screen.getByTestId('session-conflict-switch-back'));
+
+    expect(await screen.findByText(LABELS.sessionConflictSwitchBackFailed)).toBeInTheDocument();
+    expect(locationStub.assign).not.toHaveBeenCalled();
+  });
+
+  // An unreadable session may still be alive: going to /login would let the onboarding restore the
+  // very account the person asked to sign out.
+  it('stays on the screen when the live session cannot be read', async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      requests.push({ url: String(url), method: (init.method || 'GET').toUpperCase() });
+      return new Response('', { status: 503 });
+    });
+    const user = userEvent.setup();
+    render(<AppLayout {...defaultProps} />);
+    await vi.waitFor(() => { expect(screen.getByTestId('session-conflict-switch-back')).toBeEnabled(); });
+
+    await user.click(screen.getByTestId('session-conflict-switch-back'));
+
+    expect(await screen.findByText(LABELS.sessionConflictSwitchBackFailed)).toBeInTheDocument();
+    expect(locationStub.assign).not.toHaveBeenCalled();
+    expect(requests.some((r) => r.method === 'DELETE')).toBe(false);
+  });
+
+  it('goes to the login without a revoke when the browser has no session left', async () => {
+    fetch.mockImplementation(async (url, init = {}) => {
+      requests.push({ url: String(url), method: (init.method || 'GET').toUpperCase() });
+      return new Response(JSON.stringify({ error: { message: 'No active session' } }), { status: 401 });
+    });
+    const user = userEvent.setup();
+    render(<AppLayout {...defaultProps} />);
+    await vi.waitFor(() => { expect(screen.getByTestId('session-conflict-switch-back')).toBeEnabled(); });
+
+    await user.click(screen.getByTestId('session-conflict-switch-back'));
+
+    await vi.waitFor(() => { expect(locationStub.assign).toHaveBeenCalledWith('/login'); });
+    expect(requests.some((r) => r.method === 'DELETE')).toBe(false);
   });
 });

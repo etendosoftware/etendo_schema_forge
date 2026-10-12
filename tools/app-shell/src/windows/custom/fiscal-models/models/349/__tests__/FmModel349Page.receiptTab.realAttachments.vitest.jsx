@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 // Adversarial QA pass on the "Justificante" receipt tab port (ETP-4755) —
 // deliberately does NOT mock '@/components/attachments' (unlike the sibling
 // FmModel349Page.receiptTab.vitest.jsx), so the REAL AttachmentsTab/useAttachments
@@ -25,7 +26,10 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
-vi.mock('../../../fiscalModelsUtils.js', () => ({
+// RECEIPT_ATTACHMENT_CONFIG is the REAL constant (ETP-5584 P13): the page passes it to the
+// Justificante tab and PresentModal derives its upload label/accept/type check from it.
+vi.mock('../../../fiscalModelsUtils.js', async () => ({
+  RECEIPT_ATTACHMENT_CONFIG: (await vi.importActual('../../../fiscalModelsUtils.js')).RECEIPT_ATTACHMENT_CONFIG,
   formatAmount: (n) => (n == null ? '—' : String(n)),
   formatPeriod: (p) => p,
   compute349Operators: vi.fn().mockResolvedValue(null),
@@ -33,7 +37,6 @@ vi.mock('../../../fiscalModelsUtils.js', () => ({
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
     'div',
@@ -56,8 +59,8 @@ vi.mock('../../../fiscal-models.css', () => ({}));
 // Real icons are cheap, side-effect-free SVG components — safe to render as-is.
 
 // Real PresentModal from FmOverlays.jsx is used unmocked in one describe block
-// below (MIME-gap trace) so the real file-picker `accept` attribute can be
-// inspected; every other test mocks it the same way the sibling suite does.
+// below (acuse file type, ETP-5584 P13) so the real file-picker `accept` and type
+// check can be exercised; every other test mocks it the same way the sibling suite does.
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
@@ -121,28 +124,32 @@ describe('FmModel349Page — real useAttachments: lazy-load honours isActive (ET
     // listing/fetching attachments on mount"). Previously this fired a redundant
     // GET regardless of tab; the shared-cache lazy-load (`&& active` gate on the
     // list effect) closed that gap. Give effects a tick to prove no fetch fires.
+    // ETP-5584 (P12) — the only request allowed on mount is the lightweight `/count` read that
+    // feeds the "Justificante" tab counter (`prefetchCount`); the attachment LIST is never fetched.
     await new Promise(resolve => setTimeout(resolve, 50));
-    const calledUrls = globalThis.fetch.mock.calls.map(c => c[0]);
-    expect(calledUrls.some(u => u.includes('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-1'))).toBe(false);
+    const calledUrls = globalThis.fetch.mock.calls.map(c => String(c[0]));
+    const listUrls = calledUrls.filter(u => u.includes('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-1') && !u.includes('/count'));
+    expect(listUrls).toHaveLength(0);
   });
 
   it('fetches ONCE — only once the receipt tab is opened — for the same table/record', async () => {
     render(<FmModel349Page decl={makeDecl({ id: 'decl-eager-2' })} {...defaultProps} />);
 
-    // No eager fetch while the receipt tab is inactive (ETP-4564).
+    // No eager LIST fetch while the receipt tab is inactive (ETP-4564) — only the `/count` read
+    // behind the tab counter (ETP-5584 P12).
+    const listCalls = () => globalThis.fetch.mock.calls
+      .map(c => String(c[0]))
+      .filter(u => u.includes('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-2') && !u.includes('/count'));
     await new Promise(resolve => setTimeout(resolve, 50));
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(listCalls()).toHaveLength(0);
 
     const tabs = screen.getAllByRole('tab');
     fireEvent.click(tabs.find(t => t.textContent.includes('fm.tab.receipt')));
 
     // AttachmentsTab's own useAttachments({ isActive: true }) mounts and fires
-    // the single list() for this record. The previously-redundant second GET
-    // from the top-level hook is gone: that hook stays inactive and never
-    // fetches, so the receipt tab hits the endpoint exactly once.
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
-    const urls = globalThis.fetch.mock.calls.map(c => c[0]);
-    expect(urls[0]).toContain('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-2');
+    // the single list() for this record. The top-level hook stays inactive and
+    // never lists, so the receipt tab hits the list endpoint exactly once.
+    await waitFor(() => expect(listCalls()).toHaveLength(1));
   });
 });
 
@@ -208,40 +215,45 @@ describe('FmModel349Page — rapid tab switching against the real hook', () => {
   });
 });
 
-describe('FmModel349Page — real PresentModal: acuse-de-recibo MIME-type gap (pre-existing, inherited from 303)', () => {
-  // Uses the REAL PresentModal from FmOverlays.jsx (not mocked in this file),
-  // so the modal's own `accept=".pdf,.xml"` file-input attribute is exercised,
-  // and the real handlePresent -> uploadReceipt -> useAttachments.upload() path
-  // runs against a mocked fetch. Neither layer validates the file's actual
-  // MIME type — this mirrors FmModel303Page's identical handlePresent wiring
-  // (same lack of validation there too), so this is NOT a new-to-349 regression,
-  // just confirmation that 349 replicates the same gap verbatim.
-  it("uploads a non-PDF file selected through the modal's own file input with no MIME check", async () => {
-    render(<FmModel349Page decl={makeDecl({ id: 'decl-mime' })} {...defaultProps} />);
-
-    const presentBtn = screen.getByText((t) => t.includes('fm.action.present'));
-    fireEvent.click(presentBtn);
-
-    // Select the "Presentación con Acuse de recibo" path (first PATHS entry).
+describe('FmModel349Page — real PresentModal: acuse file type matches the Justificante tab (ETP-5584 P13)', () => {
+  // Uses the REAL PresentModal from FmOverlays.jsx (not mocked in this file) and the real
+  // handlePresent -> uploadReceipt -> useAttachments.upload() path against a mocked fetch.
+  // Until ETP-5584 this pinned a gap: the modal's input accepted `.pdf,.xml` and uploaded
+  // whatever was picked, while the tab's dropzone only took PDF. Both now derive from
+  // RECEIPT_ATTACHMENT_CONFIG, and the modal checks the picked file against it.
+  function openAcusePath(declId) {
+    render(<FmModel349Page decl={makeDecl({ id: declId })} {...defaultProps} />);
+    fireEvent.click(screen.getByText((t) => t.includes('fm.action.present')));
     fireEvent.click(screen.getByText('fm.present.path.acuse'));
+    return screen.getByTestId('PresentModal__acuseInput');
+  }
 
-    // The modal's own <input type="file" accept=".pdf,.xml"> — note it already
-    // allows .xml, not just PDF, despite AttachmentsTab's own dropzone being
-    // configured with allowedMimeTypes: ['application/pdf'] for this same table.
-    const fileInput = document.querySelector('input[type="file"][accept=".pdf,.xml"]');
-    expect(fileInput).not.toBeNull();
+  it('the file input accepts exactly what the tab accepts (PDF)', () => {
+    const fileInput = openAcusePath('decl-accept');
+    expect(fileInput).toHaveAttribute('accept', 'application/pdf,.pdf');
+  });
 
+  it('rejects an XML picked via "All files": no upload, confirm stays disabled, dropzone message shown', async () => {
+    const fileInput = openAcusePath('decl-mime');
     const xmlFile = new File(['<root/>'], 'acuse.xml', { type: 'application/xml' });
     fireEvent.change(fileInput, { target: { files: [xmlFile] } });
 
-    const confirmBtn = screen.getByText((t) => t.includes('fm.action.confirm_presentation') || t.includes('Confirmar'));
+    expect(toast.error).toHaveBeenCalledWith('attachmentsInvalidType');
+    const confirmBtn = screen.getByText((t) => t.includes('fm.action.confirm_presentation'));
+    expect(confirmBtn.closest('button')).toBeDisabled();
     fireEvent.click(confirmBtn);
-
-    // useAttachments.upload() does no MIME validation whatsoever (unlike
-    // UploadDropzone's isMimeAllowed check) — the POST goes out regardless.
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     const postCall = globalThis.fetch.mock.calls.find((c) => c[1]?.method === 'POST');
-    expect(postCall).toBeDefined();
-    expect(postCall[0]).toContain('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-mime');
+    expect(postCall).toBeUndefined();
+  });
+
+  it('uploads a PDF picked through the modal to the declaration attachments', async () => {
+    const fileInput = openAcusePath('decl-pdf');
+    const pdf = new File(['%PDF-1.4'], 'acuse.pdf', { type: 'application/pdf' });
+    fireEvent.change(fileInput, { target: { files: [pdf] } });
+    fireEvent.click(screen.getByText((t) => t.includes('fm.action.confirm_presentation')));
+    await waitFor(() => {
+      const postCall = globalThis.fetch.mock.calls.find((c) => c[1]?.method === 'POST');
+      expect(postCall?.[0]).toContain('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-pdf');
+    });
   });
 });

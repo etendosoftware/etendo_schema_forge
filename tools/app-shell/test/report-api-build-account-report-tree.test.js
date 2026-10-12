@@ -1,3 +1,4 @@
+// @covers tools/app-shell/vite-plugins/report-api.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAccountReportTree } from '../vite-plugins/report-api.js';
@@ -358,6 +359,9 @@ describe('buildAccountReportTree — flattening', () => {
       indent: 0,
       indentClass: 'ind-0',
       isHeading: false,
+      // ETP-5663 — formula node (no children, has operands); the Excel/CSV
+      // exports label a formula heading "Total".
+      isFormula: false,
       // ETP-4899 — `group`/`isGroupStart` drive the .group-header band the
       // templates render between `c_acct_rpt_group` roots. A single-group
       // report (Profit & Loss) never flips isGroupStart.

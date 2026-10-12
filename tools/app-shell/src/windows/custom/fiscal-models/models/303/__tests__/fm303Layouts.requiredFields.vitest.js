@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
 // Vitest tests for two ETP-5187 additions to fm303Layouts.js — the required-field
 // pre-flight validation gate used by FmModel303Page.jsx's handleGenerate/handlePresent:
 //   - matchesVisibility — single source of truth for visibility matching (equals/in/anyOf),
@@ -7,7 +8,10 @@
 //   - getMissingRequiredFields — walks the resolved layout for the currently-visible
 //     required identification fields that are still blank.
 
-import { getMissingRequiredFields, matchesVisibility } from '../fm303Layouts.js';
+import {
+  getMissingRequiredFields, matchesVisibility, resolveFieldLabelKey, isOptionDisabled,
+  getInvalidSelectedOption, getInvalidSelectedOptions,
+} from '../fm303Layouts.js';
 
 // ── matchesVisibility ─────────────────────────────────────────────────────────
 
@@ -106,9 +110,20 @@ describe('getMissingRequiredFields', () => {
     expect(missing.map(f => f.id)).toEqual(['tipo_declaracion']);
   });
 
-  it('reports ONLY bank_iban (not the full block) for a plain devolución (tipo D, condition A alone) — manual-QA fix', () => {
+  // ETP-5597 pt.2 — the marca SEPA is now required wherever it is shown (it decides which other
+  // bank fields are mandatory), so a plain devolución reports IBAN + marca, never the full block.
+  it('reports bank_iban and bank_sepa (not the full block) for a plain devolución (tipo D, condition A alone)', () => {
     const missing = getMissingRequiredFields(2026, 'T2', { tipo_declaracion: 'D' });
-    expect(missing.map(f => f.id)).toEqual(['bank_iban']);
+    expect(missing.map(f => f.id).sort()).toEqual(['bank_iban', 'bank_sepa']);
+  });
+
+  it.each([
+    ['1', ['bank_iban']],
+    ['2', ['bank_iban']],
+    ['3', ['bank_ciudad', 'bank_direccion', 'bank_iban', 'bank_nombre', 'bank_pais', 'bank_swift_bic']],
+  ])('plain devolución (tipo D) at marca %s demands exactly the fields that marca calls for', (marca, expected) => {
+    const missing = getMissingRequiredFields(2026, 'T2', { tipo_declaracion: 'D', bank_sepa: marca });
+    expect(missing.map(f => f.id).sort()).toEqual([...expected].sort());
   });
 
   // ETP-5393 Bug E — bank_iban's requiredWhen now ALSO needs box 111 (Rectificación - Importe)
@@ -131,7 +146,8 @@ describe('getMissingRequiredFields', () => {
 
   it.each([
     ['1', ['bank_iban']],
-    ['2', ['bank_iban', 'bank_swift_bic']],
+    // ETP-5597 pt.2 — marca 2 shows SWIFT-BIC but no longer requires it.
+    ['2', ['bank_iban']],
     ['3', ['bank_ciudad', 'bank_direccion', 'bank_iban', 'bank_nombre', 'bank_pais', 'bank_swift_bic']],
   ])('marca %s demands exactly the fields that marca calls for', (marca, expected) => {
     const missing = getMissingRequiredFields(2026, 'T2', {
@@ -236,8 +252,9 @@ describe('getMissingRequiredFields — fecha_concurso (ETP-5272 pt.7)', () => {
     const missing = getMissingRequiredFields(2026, 'T2', {
       tipo_declaracion: 'D', concurso: true,
     });
-    // Manual-QA fix — tipo D alone (condition A) requires only bank_iban, not the full block.
-    expect(missing.map(f => f.id).sort()).toEqual(['bank_iban', 'fecha_concurso'].sort());
+    // Tipo D alone (condition A) requires bank_iban plus the marca selector (ETP-5597 pt.2),
+    // never the full block.
+    expect(missing.map(f => f.id).sort()).toEqual(['bank_iban', 'bank_sepa', 'fecha_concurso'].sort());
   });
 
   // A pre-2025 patched year (_2024_IDENTIFICACION_FIELDS) carries the exact
@@ -253,3 +270,68 @@ describe('getMissingRequiredFields — fecha_concurso (ETP-5272 pt.7)', () => {
     expect(missingFilled.map(f => f.id)).not.toContain('fecha_concurso');
   });
 });
+
+// ── ETP-5597 — dynamic labels and disabled select options ─────────────────────
+
+describe('resolveFieldLabelKey', () => {
+  const field = {
+    labelKey: 'base',
+    labelKeyWhen: [
+      { when: { field: 'm', equals: '3' }, labelKey: 'three' },
+      { when: { field: 'm', in: ['3', '4'] }, labelKey: 'three-or-four' },
+    ],
+  };
+
+  it('returns the first matching labelKeyWhen entry', () => {
+    expect(resolveFieldLabelKey(field, { m: '3' })).toBe('three');
+    expect(resolveFieldLabelKey(field, { m: '4' })).toBe('three-or-four');
+  });
+
+  it('falls back to the static labelKey when nothing matches or labelKeyWhen is absent', () => {
+    expect(resolveFieldLabelKey(field, { m: '1' })).toBe('base');
+    expect(resolveFieldLabelKey({ labelKey: 'plain' }, { m: '3' })).toBe('plain');
+  });
+});
+
+describe('isOptionDisabled / getInvalidSelectedOption', () => {
+  const opt = { value: 'C', disabledWhen: { field: '_box69Positive', equals: true } };
+  const select = { id: 'tipo', type: 'select', options: [opt, { value: 'I' }] };
+
+  it('isOptionDisabled follows disabledWhen; options without it are never disabled', () => {
+    expect(isOptionDisabled(opt, { _box69Positive: true })).toBe(true);
+    expect(isOptionDisabled(opt, { _box69Positive: false })).toBe(false);
+    expect(isOptionDisabled({ value: 'I' }, { _box69Positive: true })).toBe(false);
+    expect(isOptionDisabled(null, {})).toBe(false);
+  });
+
+  it('getInvalidSelectedOption returns the selected option only when it is disabled now', () => {
+    expect(getInvalidSelectedOption(select, { tipo: 'C', _box69Positive: true })).toBe(opt);
+    expect(getInvalidSelectedOption(select, { tipo: 'I', _box69Positive: true })).toBeNull();
+    expect(getInvalidSelectedOption(select, { tipo: 'C', _box69Positive: false })).toBeNull();
+    expect(getInvalidSelectedOption(select, { tipo: '', _box69Positive: true })).toBeNull();
+    expect(getInvalidSelectedOption({ id: 'x', type: 'text' }, { x: 'C' })).toBeNull();
+  });
+});
+
+describe('getInvalidSelectedOptions (2026 layout)', () => {
+  it.each(['C', 'D', 'V', 'X'])('reports tipo_declaracion=%s while box 69 is positive', (tipo) => {
+    const invalid = getInvalidSelectedOptions(2026, 'T2', { tipo_declaracion: tipo, _box69Positive: true });
+    expect(invalid).toHaveLength(1);
+    expect(invalid[0].field.id).toBe('tipo_declaracion');
+    expect(invalid[0].option.value).toBe(tipo);
+    expect(invalid[0].option.disabledReasonKey).toBe('fm.ident.decl.disabled_positive_result');
+  });
+
+  it.each(['I', 'U', 'N'])('reports nothing for tipo %s with box 69 positive', (tipo) => {
+    expect(getInvalidSelectedOptions(2026, 'T2', { tipo_declaracion: tipo, _box69Positive: true })).toEqual([]);
+  });
+
+  it('reports nothing for tipo C while box 69 is not positive', () => {
+    expect(getInvalidSelectedOptions(2026, 'T2', { tipo_declaracion: 'C', _box69Positive: false })).toEqual([]);
+  });
+
+  it('applies to an older year layout too (2023)', () => {
+    expect(getInvalidSelectedOptions(2023, 'T2', { tipo_declaracion: 'D', _box69Positive: true })).toHaveLength(1);
+  });
+});
+

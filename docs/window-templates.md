@@ -120,6 +120,24 @@ The pipeline generates the initial scaffold with rich JSDoc comments (all entiti
 
 **Regeneration safety:** If `index.jsx` already exists when the pipeline runs again, the new scaffold is written as `index.jsx.new`. The existing file is never touched. Same for `mockCatalogs.js`. Use AI or a diff tool to merge updated metadata.
 
+### Page title, breadcrumb and kebab — publish to the app TopBar
+
+A custom window does not render its own title row. Like `ListView`/`DetailView`, it publishes
+`title`, `breadcrumb`, `recordCount`, `titleExtra` (a badge or status next to the title),
+`onAddToFavorites`/`isFavorite` and `onPageHelp` through `useSetPageMeta`
+(`@/components/layout/PageMetaContext`), and the TopBar renders them, kebab included. Examples:
+`organization/OrganizationPage.jsx` (one page), `fiscal-models/` (list plus detail pages).
+
+**List and detail in one window.** If the list stays mounted (hidden) while a detail page is open,
+for example to keep polling, the hidden list must not publish anything. `useSetPageMeta`'s cleanup
+resets the TopBar on every dependency change, so a hidden list that re-publishes, even `{}`, wipes
+the detail's title. Publish the list meta from a small child component rendered only while the
+list is active. On close, the detail's cleanup withdraws its meta and the remounted child
+re-publishes the list's. Reference: `ListPageMeta` in `fiscal-models/FmListPage.jsx` and
+`useFmDetailPageMeta` in `fiscal-models/FmDetailChrome.jsx`, described in
+`docs/generated-custom-windows/fiscal-models.md` › "Detail page header, action bar and 1280×720
+layout".
+
 ## Registry: customLoaders
 
 `tools/app-shell/src/windows/registry.js` contains a `customLoaders` map alongside `windowLoaders`. When the pipeline creates a custom scaffold for the first time, it auto-registers the loader. Resolution order:

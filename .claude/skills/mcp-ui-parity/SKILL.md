@@ -7,7 +7,7 @@ description: >
   plans the MCP-layer fixes. Use when asked for a UI/MCP parity check or report on a window, when
   an agent cannot do something a person does in the UI (or does something the UI never offers),
   when deciding what to hide from the MCP, or when auditing whether the advertised MCP surface is
-  honest (neo_discover, neo_schema, tool enums).
+  honest (etendo_discover, etendo_schema, tool enums).
   Triggers on: "UI MCP parity", "parity check", "parity report", "paridad UI MCP",
   "validar paridad", "informe de paridad", "lo que la UI hace el MCP debe poder",
   "ocultar del MCP", "hide from MCP", "el agente no puede hacer lo que hace la UI",
@@ -25,8 +25,8 @@ description: >
 - What the UI does not offer, the MCP hides. An unvalidated route is where agents corrupt data: a
   hand-built payment (header + lines through the generic create) was no UI route, nothing validated
   it, and a line landed on an unrelated, already processed collection.
-- The advertised surface is **honest**: an agent reading only the tool schemas, `neo_discover`,
-  `neo_schema` and the `docs` tool must reach the right route, and must never believe it can do
+- The advertised surface is **honest**: an agent reading only the tool schemas, `etendo_discover`,
+  `etendo_schema` and the `docs` tool must reach the right route, and must never believe it can do
   something it cannot. A clear refusal is the fallback for an agent that ignored the surface, not
   the design.
 
@@ -60,7 +60,7 @@ Both modes fill [`template.md`](template.md), one report per window.
 
 Run these at the start, and again after every MCP reconnect or server restart:
 
-1. **Who is the MCP session.** `neo_list` a record you know belongs to the tenant under test (or
+1. **Who is the MCP session.** `etendo_list` a record you know belongs to the tenant under test (or
    read the session's tenant/user if the instance exposes it). A reconnect can authenticate as a
    different user or tenant without saying so. Log in to the UI as the same tenant user and role.
    A known record of another tenant answering 404 is a useful isolation check — record it.
@@ -74,8 +74,8 @@ schemas were loaded.
 
 ## Safe-testing protocol
 
-1. **Read-only probes first**: `neo_discover`, `neo_schema`, `neo_list`, `neo_get`, `neo_defaults`,
-   `neo_selectors`, `docs`, and read actions. Most of the surface audit needs nothing else.
+1. **Read-only probes first**: `etendo_discover`, `etendo_schema`, `etendo_list`, `etendo_get`, `etendo_defaults`,
+   `etendo_selectors`, `docs`, and read actions. Most of the surface audit needs nothing else.
 2. **Mutating probes only on test data the user approves**: name the records you will create or
    change and ask before the first write. Use a test tenant or clearly named test records
    (*Cliente Paridad*, *Banco Paridad*).
@@ -96,7 +96,7 @@ schemas were loaded.
      `paymentId`) rather than the generic `DELETE`/`PUT`. Read the network call before concluding
      the UI and MCP paths are the same.
    - **Verify every reported success independently.** After a write answers `ok`, re-read the
-     record (`neo_get`, the UI) and check the outcome the answer claims. A success for a write
+     record (`etendo_get`, the UI) and check the outcome the answer claims. A success for a write
      that did not persist is a bug.
 3. **Audit the surface for honesty** (checklist below), independent of the rows.
 4. **Classify** every finding: bug (with severity), friction (`FR-n`), or surface to hide.
@@ -109,21 +109,21 @@ on every spec the window reaches.
 
 ### Surface honesty checklist
 
-- **Tool enums vs discovery.** The `spec` enums of `neo_create`, `neo_update` and `neo_delete`
-  match `neo_discover`'s `methods`: a spec listed in `neo_delete` whose entities are all GET-only
+- **Tool enums vs discovery.** The `spec` enums of `etendo_create`, `etendo_update` and `etendo_delete`
+  match `etendo_discover`'s `methods`: a spec listed in `etendo_delete` whose entities are all GET-only
   is a lie.
-- **`neo_discover`**: `methods`, `readOnly`, `actions[]`, `actionsHint`, `configError`,
+- **`etendo_discover`**: `methods`, `readOnly`, `actions[]`, `actionsHint`, `configError`,
   `agentPrompt` agree with what the UI offers.
-- **`neo_schema view:"actions"`**: every action the UI uses is listed and invokable; a discarded
+- **`etendo_schema view:"actions"`**: every action the UI uses is listed and invokable; a discarded
   button points to the real route (`useInstead`); a list-backed button parameter offers only the
   values the UI sends (narrow it otherwise).
-- **`neo_schema view:"create"`**: required / optional / `serverDefaulted` match what the server
+- **`etendo_schema view:"create"`**: required / optional / `serverDefaulted` match what the server
   actually accepts and refuses.
 - **Child entities that hand-write allocations** (payment details, installments, schedule
   details, reservations) offered writable while the UI only writes them through a parent action.
 - **Cross-window contradictions**: a button offered on one entity that a related window's
   `agentPrompt` forbids.
-- **Hidden create still answered**: `neo_defaults` / `neo_selectors` answering for a create the
+- **Hidden create still answered**: `etendo_defaults` / `etendo_selectors` answering for a create the
   MCP hides, or an empty selector / a default that needs a parent the entity cannot have.
 - **Errors**: `detail` names what was actually wrong; `hint` names a call that works.
 - **`docs` tool**: every recipe runs as written, and every tool it names exists.

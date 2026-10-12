@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactTypeToggle.jsx
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsBusinessPartnerForm.jsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -14,7 +16,15 @@ vi.mock('../ContactsContext', () => ({
   }),
 }));
 
+// ContactsBusinessPartnerForm (the header form the toggle drives) wraps the generated form;
+// the stub only marks where it rendered.
+vi.mock('@generated/contacts/generated/web/contacts/BusinessPartnerForm', () => ({
+  default: () => <div data-testid="generated-bp-form" />,
+}));
+
 import ContactTypeToggle from '../ContactTypeToggle.jsx';
+import ContactsBusinessPartnerForm from '../ContactsBusinessPartnerForm.jsx';
+import { EmbeddedWindowContext } from '@/lib/embeddedWindow.js';
 
 const fieldWrites = (onChange, field) => onChange.mock.calls
   .filter(([key]) => key === field)
@@ -138,5 +148,23 @@ describe('ContactTypeToggle', () => {
       <ContactTypeToggle data={{ id: 'company-2', etgoIsperson: false, name: 'Globex SA' }} onChange={onChange} />,
     );
     expect(mockSetPersonType).toHaveBeenLastCalledWith('company');
+  });
+});
+
+// The Figma 20px row gap (contacts.css) is scoped by the `contacts-header-form` wrapper to the
+// full Contacts form; the "Nuevo contacto" quick-create popup (a chromeless embed) keeps the
+// compact core rhythm, so it must not get the wrapper.
+describe('ContactsBusinessPartnerForm — row-gap scope', () => {
+  it.each([
+    ['the full window form gets the contacts-header-form wrapper', false, true],
+    ['the quick-create popup (EmbeddedWindowContext) does not', true, false],
+  ])('%s', (_label, embedded, wrapped) => {
+    const { container } = render(
+      <EmbeddedWindowContext.Provider value={embedded}>
+        <ContactsBusinessPartnerForm />
+      </EmbeddedWindowContext.Provider>,
+    );
+    expect(screen.getByTestId('generated-bp-form')).toBeInTheDocument();
+    expect(container.querySelector('.contacts-header-form') !== null).toBe(wrapped);
   });
 });

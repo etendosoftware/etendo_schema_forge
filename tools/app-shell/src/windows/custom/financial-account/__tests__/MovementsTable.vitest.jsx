@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/MovementsTable.jsx
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -105,6 +106,7 @@ import {
   buildMovementSortAccessors,
 } from '../MovementsTable.jsx';
 import { backgroundUtilities, hoverBackgroundUtilities, countBackgroundUtilities } from '@/test/rowShading.js';
+import { formatCurrency } from '@/lib/formatCurrency';
 
 const baseMovement = (over = {}) => ({
   id: 'm1',
@@ -339,6 +341,164 @@ describe('MovementsTable — expandable dimensions panel', () => {
 // The funds-transfer counterpart link (ETP-4882). One panel slot serves both directions:
 // the backend collapses em_etgo_finacc_trans_dest / em_aprm_finacc_trans_origin into the
 // same transfer* props and flags the side via transferDirection.
+// ETP-5657 — the original side of a foreign-currency movement, first in the "more info" panel
+// (Classic's Foreign Amount / Foreign Rate). The backend only sends foreignAmount / foreignCurrency /
+// foreignConversionRate on a foreign-currency transaction.
+describe('MovementsTable — foreign-currency amount and rate', () => {
+  const foreignMovement = (over = {}) => baseMovement({
+    amount: -27.8,
+    foreignAmount: -40.91,
+    foreignCurrency: 'USD',
+    foreignConversionRate: 0.67954,
+    dimensions: { project: 'Proj A' },
+    posted: 'Y',
+    ...over,
+  });
+
+  function openPanel(movement) {
+    renderTable({ enabledDimensions: ['project'], movements: [movement] });
+    fireEvent.click(screen.getByTestId('movement-expand-m1'));
+    return screen.getByTestId('movement-moreinfo-m1');
+  }
+
+  it('shows the unsigned foreign amount with its currency and the bare rate, both read-only', () => {
+    const panel = openPanel(foreignMovement());
+    const amount = within(panel).getByTestId('movement-foreign-amount-m1');
+    const rate = within(panel).getByTestId('movement-foreign-rate-m1');
+    expect(amount).toHaveValue(formatCurrency('USD', 40.91));
+    expect(amount.value).not.toMatch(/^-/);
+    expect(rate).toHaveValue('0,67954');
+    expect(amount).toBeDisabled();
+    expect(rate).toBeDisabled();
+    expect(within(panel).getByText('financeAccountMovementsForeignAmount')).toBeInTheDocument();
+    expect(within(panel).getByText('financeAccountMovementsForeignRate')).toBeInTheDocument();
+  });
+
+  it('shows a positive foreign amount the same way', () => {
+    const panel = openPanel(foreignMovement({ amount: 27.8, foreignAmount: 40.91 }));
+    expect(within(panel).getByTestId('movement-foreign-amount-m1')).toHaveValue(formatCurrency('USD', 40.91));
+  });
+
+  it('renders both fields first, before Proyecto', () => {
+    const panel = openPanel(foreignMovement());
+    const amount = within(panel).getByTestId('movement-foreign-amount-m1');
+    const rate = within(panel).getByTestId('movement-foreign-rate-m1');
+    const project = within(panel).getByText('financeAccountMovementsDimProject');
+    // eslint-disable-next-line no-bitwise
+    expect(amount.compareDocumentPosition(rate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // eslint-disable-next-line no-bitwise
+    expect(rate.compareDocumentPosition(project) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(panel).getByDisplayValue('Proj A')).toBeInTheDocument();
+  });
+
+  for (const [raw, shown] of [
+    [0.681252000000, '0,681252'],
+    [1.3059981234, '1,305998'],
+    [0.6812525, '0,681253'],
+    ['0.67954', '0,67954'],
+    [2, '2'],
+  ]) {
+    it(`formats the rate ${raw} as ${shown} (6 decimals HALF_UP, no trailing zeros, no grouping)`, () => {
+      const panel = openPanel(foreignMovement({ foreignConversionRate: raw }));
+      expect(within(panel).getByTestId('movement-foreign-rate-m1')).toHaveValue(shown);
+    });
+  }
+
+  it('hides both fields on a row with no foreign currency', () => {
+    const panel = openPanel(baseMovement({ dimensions: { project: 'Proj A' } }));
+    expect(within(panel).queryByTestId('movement-foreign-amount-m1')).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('movement-foreign-rate-m1')).not.toBeInTheDocument();
+    expect(within(panel).queryByText('financeAccountMovementsForeignAmount')).not.toBeInTheDocument();
+    // The dimensions still render.
+    expect(within(panel).getByText('financeAccountMovementsDimProject')).toBeInTheDocument();
+  });
+
+  it('hides both fields when the foreign currency is the account\'s own', () => {
+    const panel = openPanel(foreignMovement({ foreignCurrency: 'EUR' }));
+    expect(within(panel).queryByTestId('movement-foreign-amount-m1')).not.toBeInTheDocument();
+    expect(within(panel).queryByTestId('movement-foreign-rate-m1')).not.toBeInTheDocument();
+  });
+
+  it('leaves the amount box empty when the foreign amount is missing', () => {
+    const panel = openPanel(foreignMovement({ foreignAmount: undefined }));
+    expect(within(panel).getByTestId('movement-foreign-amount-m1')).toHaveValue('');
+    expect(within(panel).getByTestId('movement-foreign-rate-m1')).toHaveValue('0,67954');
+  });
+
+  // A foreign original alone makes the row expandable: without it, a client with no displayable
+  // dimension enabled could never see the foreign amount and rate.
+  describe('expandable on its own, with no accounting dimension enabled', () => {
+    const bareForeign = (over = {}) => foreignMovement({ dimensions: {}, ...over });
+
+    it('shows the expand control and opens the panel on click', () => {
+      renderTable({ enabledDimensions: [], movements: [bareForeign()] });
+      fireEvent.click(screen.getByTestId('movement-expand-m1'));
+      expect(screen.getByTestId('movement-moreinfo-m1')).toBeInTheDocument();
+    });
+
+    it('opens it from a click on the row itself, and closes it again', () => {
+      renderTable({ enabledDimensions: [], movements: [bareForeign()] });
+      fireEvent.click(screen.getByTestId('movement-row-m1'));
+      expect(screen.getByTestId('movement-moreinfo-m1')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('movement-row-m1'));
+      expect(screen.queryByTestId('movement-moreinfo-m1')).not.toBeInTheDocument();
+    });
+
+    it('shows only the foreign amount and rate in that panel — no dimension, no transfer link', () => {
+      renderTable({ enabledDimensions: [], movements: [bareForeign()] });
+      fireEvent.click(screen.getByTestId('movement-expand-m1'));
+      const panel = screen.getByTestId('movement-moreinfo-m1');
+
+      const inputs = Array.from(panel.querySelectorAll('input'));
+      expect(inputs.map((el) => el.getAttribute('data-testid'))).toEqual([
+        'movement-foreign-amount-m1', 'movement-foreign-rate-m1',
+      ]);
+      expect(within(panel).getByTestId('movement-foreign-amount-m1')).toHaveValue(formatCurrency('USD', 40.91));
+      expect(within(panel).getByTestId('movement-foreign-rate-m1')).toHaveValue('0,67954');
+      expect(panel.querySelector('[data-testid^="movement-dimension-"]')).toBeNull();
+      expect(within(panel).queryByTestId('movement-transfer-link-m1')).not.toBeInTheDocument();
+      for (const dim of ['Project', 'Costcenter', 'Product']) {
+        expect(within(panel).queryByText(`financeAccountMovementsDim${dim}`)).not.toBeInTheDocument();
+      }
+    });
+
+    for (const [label, over] of [
+      ['carries no foreign keys', {}],
+      ['has the account currency as its foreign currency', {
+        foreignAmount: 27.8, foreignCurrency: 'EUR', foreignConversionRate: 1,
+      }],
+    ]) {
+      it(`keeps a same-currency row that ${label} unexpandable: no chevron, the row click opens nothing`, () => {
+        renderTable({ enabledDimensions: [], movements: [baseMovement(over)] });
+        expect(screen.queryByTestId('movement-expand-m1')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByTestId('movement-row-m1'));
+        expect(screen.queryByTestId('movement-moreinfo-m1')).not.toBeInTheDocument();
+      });
+    }
+
+    it('auto-expands a highlighted foreign row even with no dimension enabled', () => {
+      Element.prototype.scrollIntoView = vi.fn();
+      renderTable({
+        enabledDimensions: [],
+        movements: [baseMovement({ id: 'm0' }), bareForeign()],
+        highlightTxnId: 'm1',
+      });
+      expect(screen.getByTestId('movement-moreinfo-m1')).toBeInTheDocument();
+      expect(screen.getByTestId('movement-foreign-amount-m1')).toBeInTheDocument();
+      // The same-currency neighbour stays unexpandable.
+      expect(screen.queryByTestId('movement-expand-m0')).not.toBeInTheDocument();
+    });
+  });
+
+  for (const missing of [undefined, null, '']) {
+    it(`leaves the rate box empty when the rate is ${JSON.stringify(missing)}`, () => {
+      const panel = openPanel(foreignMovement({ foreignConversionRate: missing }));
+      expect(within(panel).getByTestId('movement-foreign-rate-m1')).toHaveValue('');
+      expect(within(panel).getByTestId('movement-foreign-amount-m1')).toHaveValue(formatCurrency('USD', 40.91));
+    });
+  }
+});
+
 describe('MovementsTable — funds-transfer counterpart link', () => {
   const transferMovement = (over = {}) => baseMovement({
     transferTxnId: 'txn-far',

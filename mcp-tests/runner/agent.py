@@ -33,7 +33,7 @@ PROMPT_VERSION = 4
 
 #: Default cap on how much of a tool RESULT is stored per call (§6.1). Results
 #: are recorded because without them a failure cannot be diagnosed from the run
-#: files alone; the cap exists because a single `neo_discover` answer is ~79 KB
+#: files alone; the cap exists because a single `etendo_discover` answer is ~79 KB
 #: and would otherwise dominate every probe file. The TRUE size always survives
 #: as `resultBytes`, so the cap costs detail, never the metric.
 DEFAULT_MAX_RESULT_CHARS = 20000

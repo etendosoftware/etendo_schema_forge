@@ -65,6 +65,15 @@ export function createObservability(options = {}) {
       );
     },
 
+    async addFeatureFlagEvaluation(key, value) {
+      if (!initialized || !key) return;
+      await Promise.all(
+        providers
+          .filter(provider => provider.capabilities?.includes('featureFlagTracking'))
+          .map(provider => callProvider(provider, 'addFeatureFlagEvaluation', [key, value]))
+      );
+    },
+
     async page(path, properties = {}) {
       if (!initialized || !path) return;
       const payload = buildEventPayload({ properties, context, metadata, route: path });

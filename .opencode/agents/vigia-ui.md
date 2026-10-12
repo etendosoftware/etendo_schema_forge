@@ -1,7 +1,7 @@
 ---
 description: "security -- Vigia UI. You are Vigia, the security auditor of the etendo-ui-dev team."
 mode: subagent
-color: "red"
+color: "#EF4444"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/vigia-ui.md - Regenerate: make sync-agents

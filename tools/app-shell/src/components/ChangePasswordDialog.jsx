@@ -12,7 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
-import { changePassword, AUTH_ERROR_UI_KEYS } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { changePassword, resolveAuthErrorMessage } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { isStrongPassword } from '@etendosoftware/etendo-go-core/onboarding/password-policy';
+import { PasswordStrengthChecklist } from '@etendosoftware/etendo-go-core/onboarding/password-strength-checklist';
 import { getSessionCsrfToken } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { detectBaseUrl } from './copilot/copilotApi.js';
 
@@ -69,17 +71,10 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess, hasPasswor
       // re-authenticate with the new password.
       onSuccess?.();
     } catch (err) {
-      // AUTH-07 / ETP-5022: `err.userMessage` is the backend's English developer text and used
-      // to win here, which is why even WEAK_PASSWORD — a code explicitly documented as
-      // "translate on the frontend" — showed in English. Resolve the code through
-      // AUTH_ERROR_UI_KEYS (a raw code is NOT a dictionary key, so `ui(err.code)` never
-      // matched either) and keep userMessage only as the last resort for an unmapped code.
-      const uiKey = AUTH_ERROR_UI_KEYS[err.code];
-      setError(
-        (uiKey && ui(uiKey))
-        || err.userMessage
-        || ui('onboardingCredentialChangeFailed')
-      );
+      // AUTH-07 / ETP-5022: `err.userMessage` is the backend's English developer text, so the
+      // error is resolved from its code only. ETP-5258: an unmapped code no longer falls back to
+      // that English text either — it gets the generic, translated failure.
+      setError(resolveAuthErrorMessage(ui, err, 'onboardingCredentialChangeFailed'));
       setLoading(false);
     }
   };
@@ -131,6 +126,11 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess, hasPasswor
               disabled={loading}
               data-testid="Input__c015d3" />
           </div>
+          <PasswordStrengthChecklist
+            password={form.newPassword}
+            testIdPrefix="change-password"
+            className="space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-sm"
+            data-testid="PasswordStrengthChecklist__c015d3" />
           <div className="space-y-2">
             <Label htmlFor="change-confirm-password" data-testid="Label__c015d3">{ui('onboardingConfirmPasswordLabel')}</Label>
             <Input
@@ -159,7 +159,10 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess, hasPasswor
               data-testid="Button__c015d3">
               {ui('cancel')}
             </Button>
-            <Button type="submit" disabled={loading} data-testid="change-password-submit">
+            <Button
+              type="submit"
+              disabled={loading || !isStrongPassword(form.newPassword)}
+              data-testid="change-password-submit">
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" data-testid="Loader2__c015d3" />

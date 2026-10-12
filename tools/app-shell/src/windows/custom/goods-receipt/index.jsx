@@ -27,7 +27,7 @@ const HEADER_COLUMNS = [
   { key: 'orderReference', column: 'POReference', type: 'string' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
-  { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+  { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } } },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', required: true },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent' },
 ];

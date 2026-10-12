@@ -32,7 +32,7 @@ friction; re-read the record to confirm the outcome.
 | Item | Value |
 |---|---|
 | Instance (UI and MCP) | <URL — confirmed the same for both> |
-| Tenant / user / role | <…> — MCP identity checked with `neo_list` on <record> |
+| Tenant / user / role | <…> — MCP identity checked with `etendo_list` on <record> |
 | Tool schemas loaded | <time; reloaded after each reconnect> |
 | Windows / specs covered | `<spec>`, … |
 | Safe-testing | read-only first; writes approved by <who> on test data below |
@@ -67,9 +67,9 @@ POST /sws/neo/<spec>/<entity>/<id>/action/<name>  → <status>
 
 ### Row 1 — MCP, <capability>
 
-1. `neo_schema(<spec>, <entity>, view:"actions")` → <what is listed>.
-2. `neo_action(...)` → <answer>.
-3. Re-read: `neo_get(...)` → <the outcome actually persisted>.
+1. `etendo_schema(<spec>, <entity>, view:"actions")` → <what is listed>.
+2. `etendo_action(...)` → <answer>.
+3. Re-read: `etendo_get(...)` → <the outcome actually persisted>.
 
 ## Bugs found
 
@@ -89,11 +89,11 @@ The UI check that justifies each row (state, screenshot, missing button).
 
 | Check | Finding | Suggested fix area |
 |---|---|---|
-| Tool enums vs `neo_discover` methods | <…> | <area> |
-| `neo_schema view:"actions"` / `view:"create"` | <…> | <area> |
+| Tool enums vs `etendo_discover` methods | <…> | <area> |
+| `etendo_schema view:"actions"` / `view:"create"` | <…> | <area> |
 | Writable allocation children | <…> | <area> |
 | Cross-window `agentPrompt` contradictions | <…> | <area> |
-| `neo_defaults` / `neo_selectors` on hidden creates | <…> | <area> |
+| `etendo_defaults` / `etendo_selectors` on hidden creates | <…> | <area> |
 | List-backed parameters vs values the UI sends | <…> | <area> |
 | Error `detail` / `hint` | <…> | <area> |
 | `docs` tool recipes and referenced tools | <…> | <area> |

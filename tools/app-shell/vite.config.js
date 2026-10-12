@@ -1,7 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { resolve } from 'path';
 import { readFileSync } from 'fs';
 import schemaApiPlugin from './vite-plugins/schema-api.js';
@@ -10,7 +9,7 @@ import mcpRetryProxy from './vite-plugins/mcp-proxy.js';
 import appsSpikePlugin from './vite-plugins/apps-spike.js';
 import sliceLabelsPlugin from './vite-plugins/slice-labels.js';
 
-// Read ETENDO_URL from .env.local for proxy config only (not exposed to client)
+// Read ETENDO_URL from .env.local for the dev proxy and report API (not exposed to client)
 function readEnvFile() {
   try {
     const content = readFileSync(resolve(process.cwd(), '.env.local'), 'utf-8');
@@ -43,7 +42,7 @@ function buildWellKnownPayloads(base) {
   const protectedResource = {
     resource: `${base}/mcp`,
     authorization_servers: [base],
-    scopes_supported: ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'],
+    scopes_supported: ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', 'etendo:*'],
     bearer_methods_supported: ['header'],
   };
   const oauthServerMeta = {
@@ -51,7 +50,7 @@ function buildWellKnownPayloads(base) {
     authorization_endpoint: `${base}/authorize`,
     token_endpoint: `${base}/oauth2/token`,
     registration_endpoint: `${base}/oauth2/register`,
-    scopes_supported: ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'],
+    scopes_supported: ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', 'etendo:*'],
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'client_credentials', 'refresh_token'],
     token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
@@ -146,6 +145,18 @@ export default defineConfig(({ mode }) => {
   // Target Etendo instance for dev proxy. Override via ETENDO_URL in .env.local
   // if your instance uses a different context.name (e.g. ETENDO_URL=http://localhost:8080/mycontext)
   const ETENDO_URL = env.ETENDO_URL || process.env.ETENDO_URL || readEnvFile() || 'http://localhost:8080/etendo';
+  // jsreport base for the dev report API plugin and both `/jsreport` proxies
+  // (dev + preview). loadEnv(mode, cwd, '') already reads every key from .env,
+  // .env.local and .env.[mode](.local), so no readEnvFile() fallback is needed;
+  // a real exported JSREPORT_URL still wins over the default. A path-bearing
+  // value is fine for the proxies: the rewrite strips `/jsreport` and
+  // http-proxy prepends the target's path to what remains.
+  const JSREPORT_URL = env.JSREPORT_URL || process.env.JSREPORT_URL || 'http://localhost:5488';
+  // Dev server and AI BFF ports. `make dev` / `make dev-local-core` pass them; unset,
+  // they are the canonical 3100/3400. local-env's etendo-go plugin gives each
+  // environment its own pair so several SPAs run side by side (docs/local-env-plugin.md).
+  const SPA_PORT = Number(process.env.SPA_PORT) || 3100;
+  const BFF_PORT = Number(process.env.BFF_PORT) || 3400;
   // Origin only (no path) — `vite preview` proxies the built bundle's *relative*
   // VITE_API_BASE (e.g. "/etendo") verbatim to Tomcat, so the target here must not
   // duplicate the context path already baked into the request.
@@ -226,7 +237,7 @@ export default defineConfig(({ mode }) => {
     react(),
     sliceLabelsPlugin(),
     schemaApiPlugin(),
-    reportApiPlugin(),
+    reportApiPlugin({ etendoUrl: ETENDO_URL, jsreportUrl: JSREPORT_URL }),
     mcpWellKnownPlugin(),
     mcpRetryProxy(ETENDO_URL),
     appsSpikePlugin({
@@ -267,13 +278,6 @@ export default defineConfig(({ mode }) => {
         ],
       },
     })]),
-    sentryVitePlugin({
-      org: 'etendo-22',
-      project: 'schema_forge',
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-      telemetry: false,
-      silent: !process.env.SENTRY_AUTH_TOKEN,
-    }),
   ],
   build: {
     sourcemap: 'hidden',
@@ -291,6 +295,7 @@ export default defineConfig(({ mode }) => {
         // aliases before the generic catch-all (which handles onboarding/api|sso|state as-is).
         { find: /^@etendosoftware\/etendo-go-core$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'index.js') },
         { find: /^@etendosoftware\/etendo-go-core\/onboarding\/password-policy$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/passwordPolicy.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/password-strength-checklist$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/components/PasswordStrengthChecklist.jsx') },
         { find: /^@etendosoftware\/etendo-go-core\/onboarding\/oauth-return-to$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/oauthReturnTo.js') },
         { find: /^@etendosoftware\/etendo-go-core\/onboarding$/, replacement: resolve(CORE_ETENDO_GO_SRC, 'onboarding/index.js') },
         { find: /^@etendosoftware\/etendo-go-core\/(.*)$/, replacement: resolve(CORE_ETENDO_GO_SRC, '$1') },
@@ -361,7 +366,7 @@ export default defineConfig(({ mode }) => {
     // resolve and then 403, so the dev profile fails at request time rather than
     // at config time. Only widened when LOCAL_CORE is set.
     ...(LOCAL_CORE ? { fs: { allow: [resolve(__dirname, '../..'), CORE_REPO] } } : {}),
-    port: 3100,
+    port: SPA_PORT,
     // Fail loudly instead of silently drifting to 3101/3102/... when 3100 is already
     // taken (e.g. a leftover `preview` or a stale dev server from another checkout) —
     // tests and the CORS/OAuth2 allowlist are hardcoded to :3100, so a silent port
@@ -385,11 +390,11 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
       },
       '/api/ai': {
-        target: 'http://localhost:3400',
+        target: `http://localhost:${BFF_PORT}`,
         changeOrigin: true,
       },
       '/jsreport': {
-        target: 'http://localhost:5488',
+        target: JSREPORT_URL,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/jsreport/, ''),
       },
@@ -437,7 +442,7 @@ export default defineConfig(({ mode }) => {
         changeOrigin: true,
       },
       '/jsreport': {
-        target: 'http://localhost:5488',
+        target: JSREPORT_URL,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/jsreport/, ''),
       },

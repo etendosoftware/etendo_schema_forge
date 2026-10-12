@@ -75,6 +75,20 @@ export function useMainAttachment({
   const [storeFailed, setStoreFailed] = useState(false);
   const apiFetch = useApiFetch(apiBaseUrl);
   const objectUrlRef = useRef(null);
+  // ETP-5518 — the id of the attachment currently shown, read after an await to tell
+  // whether a newer file was stored while a delete was in flight.
+  const storedIdRef = useRef(null);
+  // ETP-5518 — operations in flight. `isBusy` is true while any of them runs, so one
+  // finishing (e.g. a cross-view refresh) cannot re-enable Replace/Delete under another.
+  const pendingRef = useRef(0);
+  const beginBusy = useCallback(() => {
+    pendingRef.current += 1;
+    setIsBusy(true);
+  }, []);
+  const endBusy = useCallback(() => {
+    pendingRef.current = Math.max(0, pendingRef.current - 1);
+    setIsBusy(pendingRef.current > 0);
+  }, []);
   const sourceRef = useRef(null);
   if (!sourceRef.current) sourceRef.current = newAttachmentsSource();
 
@@ -90,7 +104,15 @@ export function useMainAttachment({
   const applyAttachment = useCallback((attachmentId, fileName, mimeType, objectUrl) => {
     revokeUrl();
     objectUrlRef.current = objectUrl;
+    storedIdRef.current = attachmentId;
     setStoredFile({ attachmentId, fileName, mimeType, objectUrl });
+  }, [revokeUrl]);
+
+  const clearAttachment = useCallback(() => {
+    revokeUrl();
+    storedIdRef.current = null;
+    setStoredFile(null);
+    setStoredFileIsStale(false);
   }, [revokeUrl]);
 
   // Look up the marked attachment, then fetch its blob. Used both on mount and
@@ -98,7 +120,7 @@ export function useMainAttachment({
   const refresh = useCallback(async () => {
     if (!active) return;
     let objectUrl = null;
-    setIsBusy(true);
+    beginBusy();
     try {
       // ETP-5541 — the session's `brandingUpdated` is the third staleness input (a new
       // logo moves no record's `updated`). Only asked for when `recordUpdated` opts the
@@ -108,9 +130,7 @@ export function useMainAttachment({
         toInstantMs(recordUpdated) == null ? null : fetchBrandingUpdated({ token, apiBaseUrl }),
       ]);
       if (!main) {
-        revokeUrl();
-        setStoredFile(null);
-        setStoredFileIsStale(false);
+        clearAttachment();
         return;
       }
       setStoredFileIsStale(
@@ -128,9 +148,10 @@ export function useMainAttachment({
     } catch {
       // keep whatever was already shown; a transient refresh failure isn't fatal
     } finally {
-      setIsBusy(false);
+      endBusy();
     }
-  }, [active, token, tableName, documentId, apiBaseUrl, recordUpdated, skipBlobFetch, applyAttachment, revokeUrl]);
+  }, [active, token, tableName, documentId, apiBaseUrl, recordUpdated, skipBlobFetch,
+    applyAttachment, clearAttachment, beginBusy, endBusy]);
 
   // Restore from server on mount / whenever the record identity changes.
   useEffect(() => {
@@ -168,33 +189,33 @@ export function useMainAttachment({
 
   const storeFile = useCallback(async (file) => {
     if (!active) return;
-    setIsBusy(true);
+    beginBusy();
     setStoreFailed(false);
     try {
       await uploadAndMark(file, file.name, file.type);
     } catch {
       setStoreFailed(true);
     } finally {
-      setIsBusy(false);
+      endBusy();
     }
-  }, [active, uploadAndMark]);
+  }, [active, uploadAndMark, beginBusy, endBusy]);
 
   const storeBlob = useCallback(async (blob, fileName) => {
     if (!active) return;
-    setIsBusy(true);
+    beginBusy();
     setStoreFailed(false);
     try {
       await uploadAndMark(blob, fileName, blob.type || 'application/pdf');
     } catch {
       setStoreFailed(true);
     } finally {
-      setIsBusy(false);
+      endBusy();
     }
-  }, [active, uploadAndMark]);
+  }, [active, uploadAndMark, beginBusy, endBusy]);
 
   const storeUrl = useCallback(async (url, fileName) => {
     if (!active) return;
-    setIsBusy(true);
+    beginBusy();
     setStoreFailed(false);
     try {
       const res = await apiFetch(url, { baseUrl: '', token });
@@ -204,9 +225,9 @@ export function useMainAttachment({
     } catch {
       setStoreFailed(true);
     } finally {
-      setIsBusy(false);
+      endBusy();
     }
-  }, [active, token, apiFetch, uploadAndMark]);
+  }, [active, token, apiFetch, uploadAndMark, beginBusy, endBusy]);
 
   /**
    * Marks an already-uploaded attachment (e.g. one created by an external
@@ -225,15 +246,23 @@ export function useMainAttachment({
     return true;
   }, [active, token, apiBaseUrl, applyAttachment, tableName, documentId]);
 
+  // ETP-5518 — busy for its whole duration, like every other write, so Replace and Delete
+  // are disabled (menu and lightbox, form sidebar and list preview) until the DELETE returns.
+  // A file stored while the DELETE was in flight is left on screen: only the attachment
+  // this call deleted is cleared.
   const deleteFile = useCallback(async () => {
-    if (!active || !storedFile?.attachmentId) return;
-    const result = await deleteAttachment({ token, attachmentId: storedFile.attachmentId, apiBaseUrl });
-    if (!result?.ok) return;
-    revokeUrl();
-    setStoredFile(null);
-    setStoredFileIsStale(false);
-    notifyAttachmentsChanged({ tableName, recordId: documentId, source: sourceRef.current });
-  }, [active, storedFile, token, apiBaseUrl, revokeUrl, tableName, documentId]);
+    const attachmentId = storedFile?.attachmentId;
+    if (!active || !attachmentId) return;
+    beginBusy();
+    try {
+      const result = await deleteAttachment({ token, attachmentId, apiBaseUrl });
+      if (!result?.ok) return;
+      if (storedIdRef.current === attachmentId) clearAttachment();
+      notifyAttachmentsChanged({ tableName, recordId: documentId, source: sourceRef.current });
+    } finally {
+      endBusy();
+    }
+  }, [active, storedFile, token, apiBaseUrl, clearAttachment, beginBusy, endBusy, tableName, documentId]);
 
   // ETP-5358 Part 2 — the on-demand counterpart to `skipBlobFetch`. In metadata-only mode
   // `storedFile.objectUrl` is null even though the attachment is known to exist; this fetches

@@ -28,6 +28,7 @@ const AcctProcessMonitorPage = lazy(() => import('./pages/AcctProcessMonitorPage
 const AuthorizePage = lazy(() => import('./pages/AuthorizePage.jsx'));
 const QuickSalesOrderPage = lazy(() => import('./pages/QuickSalesOrderPage.jsx'));
 const QuickPurchaseOrderPage = lazy(() => import('./pages/QuickPurchaseOrderPage.jsx'));
+const UnifiedCalendarPage = lazy(() => import('./pages/UnifiedCalendarPage.jsx'));
 const AppStorePage = lazy(() => import('./pages/AppStorePage.jsx'));
 const UpgradePage = lazy(() => import('./pages/UpgradePage.jsx'));
 const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage.jsx'));
@@ -114,6 +115,9 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     lazyRoute('authorize', AuthorizePage),
     lazyRoute('quick-sales-order', QuickSalesOrderPage, { apiBaseUrl }),
     lazyRoute('quick-purchase-order', QuickPurchaseOrderPage, { apiBaseUrl }),
+    // Unified Calendar PoC: the `unified-calendar-poc` flag gates the menu entry, not the route.
+    // Static mock data only, no backend access.
+    lazyRoute('unified-calendar', UnifiedCalendarPage),
     lazyRoute('app-store', AppStorePage),
     // Registered unconditionally: the feature flag gates the visible entry
     // point, not the route, and the backend enforces the paywall regardless.

@@ -128,7 +128,7 @@ describe('OAuth2ClientsPage', () => {
 
   it('renders a table when clients exist', async () => {
     listClients.mockResolvedValue([
-      { id: '1', name: 'Agent-1', clientId: 'cid-123456789012', scopes: ['neo:read'], isActive: true },
+      { id: '1', name: 'Agent-1', clientId: 'cid-123456789012', scopes: ['etendo:read'], isActive: true },
     ]);
     render(<OAuth2ClientsPage />);
     await waitFor(() => {
@@ -138,12 +138,12 @@ describe('OAuth2ClientsPage', () => {
 
   it('renders scope badges for each client', async () => {
     listClients.mockResolvedValue([
-      { id: '1', name: 'A', clientId: 'cid', scopes: ['neo:read', 'neo:write'], isActive: true },
+      { id: '1', name: 'A', clientId: 'cid', scopes: ['etendo:read', 'etendo:write'], isActive: true },
     ]);
     render(<OAuth2ClientsPage />);
     await waitFor(() => {
-      expect(document.body.textContent).toContain('neo:read');
-      expect(document.body.textContent).toContain('neo:write');
+      expect(document.body.textContent).toContain('etendo:read');
+      expect(document.body.textContent).toContain('etendo:write');
     });
   });
 

@@ -31,7 +31,7 @@ export function useVectorSearch({ query, requestedTargetKeys, selectedTargetKeys
             query: normalizedQuery,
             targets: targets.join(','),
             minScore: String(VECTOR_FETCH_MIN_SCORE),
-            maxResults: String(VECTOR_MAX_RESULTS),
+            topK: String(VECTOR_MAX_RESULTS),
           });
           const response = await apiFetch(`/sws/neo/vectorsearch?${params}`, {
             signal: controller.signal,

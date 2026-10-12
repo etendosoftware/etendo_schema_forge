@@ -106,6 +106,7 @@ vi.mock('../../shared/pdfUtils.js', () => ({
 }));
 
 import { render, screen, fireEvent } from '@testing-library/react';
+import { PURCHASE_RELATED_DOCS } from '@/components/related-documents';
 import ReturnToVendorShipmentPreview from '../ReturnToVendorShipmentPreview.jsx';
 
 const defaultShipment = {
@@ -179,6 +180,18 @@ describe('ReturnToVendorShipmentPreview', () => {
     renderPreview();
     expect(mockBuildReturnPreviewContent).toHaveBeenCalledWith(
       expect.objectContaining({ pdfBlob }),
+    );
+  });
+
+  // ETP-5539 — same related documents as the form. The list row lacks the detail-only
+  // sourceReceipts/returnInvoices, so the preview declares that the card must load the detail.
+  it('forwards the return-to-vendor-shipment related definition and relatedLoadsDetail', () => {
+    renderPreview();
+    expect(mockBuildReturnPreviewContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relatedDefinition: PURCHASE_RELATED_DOCS['return-to-vendor-shipment'],
+        relatedLoadsDetail: true,
+      }),
     );
   });
 

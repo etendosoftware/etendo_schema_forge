@@ -1,3 +1,5 @@
+// @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
+// @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
 import { test, expect } from '@playwright/test';
 import { apiAuthHeaders, login, navigateTo } from '../../helpers/auth.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
@@ -42,18 +44,144 @@ const onboardingCreds = loadCredentials();
 const RUN_INTEGRATION = process.env.E2E_SALES_INTEGRATION === '1';
 
 /**
- * Locates the line row whose given quantity cell is negative. Mirrors the
- * identically-named helper in sales-quotation-full-flow.integration.spec.js.
+ * Locate the line row (rendered by the shared InlineLinesPanel —
+ * `data-testid="line-row-{id}"`, `data-cell-key="{fieldKey}"` per cell, see
+ * tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx) whose
+ * `qtyFieldKey` cell holds a negative value, and return a locator bound to
+ * that row's PRODUCT. The purchase and sales full-flow specs carry identical
+ * copies of this helper — keep them in sync.
+ *
+ * What is guaranteed:
+ *   - The quantity and the product are read from the SAME DOM snapshot (one
+ *     `evaluateAll` over every row), so the product returned is the one whose
+ *     quantity was negative — a re-render that reorders the table between two
+ *     separate reads can no longer pair the negative quantity with the
+ *     positive line's product.
+ *   - The scan is retried, so the detail view's reload flash (0 rows, cells
+ *     not rendered yet) does not make it wrongly conclude there is none.
+ *   - The returned locator is matched by product, not by position, so it
+ *     keeps pointing at that line however the table reorders afterwards.
+ *
+ * What is NOT guaranteed: that the row's cells still hold the same values when
+ * the caller reads them. Callers must read them with retrying assertions
+ * (`toHaveText`, `readSettledCellAmount`), never a one-shot `textContent()`.
+ * Reading the cell value (rather than pattern-matching the row's text) avoids
+ * false positives from unrelated hyphens in a product name/description.
  */
 async function findNegativeLineRow(page, qtyFieldKey) {
   const rows = page.locator('[data-testid^="line-row-"]');
-  const count = await rows.count();
-  for (let i = 0; i < count; i++) {
-    const row = rows.nth(i);
-    const qtyText = await row.locator(`[data-cell-key="${qtyFieldKey}"]`).textContent().catch(() => '');
-    if (parseAmount(qtyText) < 0) return row;
+  let productName = null;
+  await expect(async () => {
+    const cells = await rows.evaluateAll((els, key) => els.map((el) => ({
+      qty: el.querySelector(`[data-cell-key="${key}"]`)?.textContent ?? '',
+      product: el.querySelector('[data-cell-key="product"]')?.textContent?.trim() ?? '',
+    })), qtyFieldKey);
+    productName = cells.find((c) => c.product && parseAmount(c.qty) < 0)?.product ?? null;
+    expect(productName,
+      `No line row with a negative "${qtyFieldKey}" was found (rows: ${JSON.stringify(cells)})`,
+    ).toBeTruthy();
+  }).toPass({ timeout: 15_000 });
+  return rows.filter({ has: page.locator('[data-cell-key="product"]', { hasText: productName }) });
+}
+
+/**
+ * Locate the line row whose product cell names `productName`. Rows are matched
+ * by product, never by position: the lines table does not keep insertion order
+ * stable across saves.
+ */
+function lineRowByProduct(page, productName) {
+  return page.locator('[data-testid^="line-row-"]').filter({
+    has: page.locator('[data-cell-key="product"]', { hasText: productName }),
+  });
+}
+
+/**
+ * Read a line-row cell's amount once it renders a digit-bearing value, so a
+ * blank cell fails loudly instead of being parsed as 0.
+ */
+async function readSettledCellAmount(row, fieldKey, label, timeoutMs = 10_000) {
+  const cell = row.locator(`[data-cell-key="${fieldKey}"]`);
+  await expect(cell,
+    `${label} cell should render a settled (non-blank) value before being read`,
+  ).toHaveText(/\d/, { timeout: timeoutMs });
+  return parseAmount(await cell.textContent());
+}
+
+/**
+ * Assert every expected line is present exactly once and carries exactly its
+ * expected quantity, matching lines by product.
+ */
+async function expectLineQuantities(page, lines, { stage, qtyKey }) {
+  await expect(page.locator('[data-testid^="line-row-"]'),
+    `${stage} should render exactly ${lines.length} line rows`,
+  ).toHaveCount(lines.length, { timeout: 15_000 });
+  for (const { product, qty } of lines) {
+    const row = lineRowByProduct(page, product.name);
+    await expect(row, `${stage} should have exactly one line for "${product.name}"`)
+      .toHaveCount(1, { timeout: 15_000 });
+    expect(await readSettledCellAmount(row, qtyKey, `${stage} "${product.name}" quantity`),
+      `[ETP-4567] ${stage} "${product.name}" quantity should be ${qty}`,
+    ).toBe(qty);
   }
-  throw new Error(`No line row with a negative "${qtyFieldKey}" was found`);
+}
+
+/**
+ * Non-blocking line gross-amount check. ETP-4726 (another team): the line gross
+ * amount is a known stub on some purchase paths, so a missing or non-negative
+ * value is annotated and logged, never failed — same policy as the mixed-sign
+ * test above. The document totals, which do not depend on that stub, stay strict.
+ */
+async function softCheckLineGross(page, lines, { stage, grossKey }) {
+  for (const { product } of lines) {
+    let gross = null;
+    try {
+      gross = await readSettledCellAmount(lineRowByProduct(page, product.name), grossKey,
+        `${stage} "${product.name}" gross amount`, 5_000);
+    } catch (err) {
+      test.info().annotations.push({ type: 'ETP-4726-known-issue', description: `${stage} "${product.name}" gross amount never settled: ${err.message}` });
+      continue;
+    }
+    if (!(gross < 0)) {
+      test.info().annotations.push({ type: 'ETP-4726-known-issue', description: `${stage} "${product.name}" gross amount = ${gross} (expected < 0)` });
+      // eslint-disable-next-line no-console
+      console.warn(`[ETP-4726] ${stage} "${product.name}" gross amount = ${gross}, expected < 0 — known issue, non-blocking.`);
+    }
+  }
+}
+
+/** Poll a totals-panel value until it reads `expected` (2 decimals). */
+async function expectTotalValue(page, key, expected, stage) {
+  const el = page.getByTestId(`totals-row-${key}-value`);
+  await expect.poll(async () => parseAmount(await el.textContent()), {
+    timeout: 15_000,
+    message: `[ETP-4567] ${stage} ${key} should be ${expected.toFixed(2)}`,
+  }).toBeCloseTo(expected, 2);
+}
+
+/**
+ * Click `trigger` and return the `response.data` of the NEO action it fires
+ * (`actionPattern` matched against the POST URL). Success is read from the
+ * action's own response: a negative `toBeHidden()` on an error toast passes
+ * before the response has even arrived.
+ */
+async function clickAndExpectAction(page, trigger, actionPattern, label) {
+  const respPromise = page.waitForResponse(
+    (resp) => resp.request().method() === 'POST' && actionPattern.test(resp.url()),
+    { timeout: 30_000 },
+  );
+  await trigger.click();
+  const resp = await respPromise;
+  const text = await resp.text().catch(() => '');
+  expect(resp.status(), `${label} should succeed — response: ${text.slice(0, 300)}`).toBeLessThan(400);
+  expect(text,
+    `[ETP-4567] ${label} must not answer "No pending lines to invoice"`,
+  ).not.toMatch(/no pending lines|no hay l[ií]neas pendientes/i);
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text)?.response?.data;
+  } catch (err) {
+    throw new Error(`${label}: the action answered a non-JSON body (${err.message}): ${text.slice(0, 300)}`);
+  }
 }
 
 /**
@@ -562,10 +690,9 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // value and verify it — and its gross amount — stayed negative.
     const negPoRow = await findNegativeLineRow(page, 'orderedQuantity');
 
-    const poQtyText = await negPoRow.locator('[data-cell-key="orderedQuantity"]').textContent();
-    expect(parseAmount(poQtyText),
+    await expect(negPoRow.locator('[data-cell-key="orderedQuantity"]'),
       '[ETP-4567] Line quantity should remain negative',
-    ).toBeLessThan(0);
+    ).toHaveText(/-\s?\d/, { timeout: 10_000 });
 
     // ETP-4726 (tracked by another team, pricing bugs): lineGrossAmount on
     // PO lines is a known stub on some conversion paths — `contract.json`
@@ -675,10 +802,9 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     ).toBeVisible({ timeout: 10_000 });
 
     const negReceiptRow = await findNegativeLineRow(page, 'movementQuantity');
-    const receiptQtyText = await negReceiptRow.locator('[data-cell-key="movementQuantity"]').textContent();
-    expect(parseAmount(receiptQtyText),
+    await expect(negReceiptRow.locator('[data-cell-key="movementQuantity"]'),
       '[ETP-4567] Receipt movement quantity should still be negative after PO → Receipt conversion',
-    ).toBeLessThan(0);
+    ).toHaveText(/-\s?\d/, { timeout: 10_000 });
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 7: Confirm receipt with "Create invoice"
@@ -734,10 +860,9 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     // [Checks #1 & #2] Negative line survived the Receipt → Invoice conversion.
     const negInvoiceRow = await findNegativeLineRow(page, 'invoicedQuantity');
 
-    const invQtyText = await negInvoiceRow.locator('[data-cell-key="invoicedQuantity"]').textContent();
-    expect(parseAmount(invQtyText),
+    await expect(negInvoiceRow.locator('[data-cell-key="invoicedQuantity"]'),
       '[ETP-4567] Invoiced quantity should still be negative after Receipt → Invoice conversion',
-    ).toBeLessThan(0);
+    ).toHaveText(/-\s?\d/, { timeout: 10_000 });
 
     // Note: purchase-invoice's line-level gross-amount field key is
     // "grossAmount" (not "lineGrossAmount" as on PO/receipt) — see
@@ -803,10 +928,9 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       '[ETP-4567] Invoice should read Completed, negative line still present');
 
     const negCompletedRow = await findNegativeLineRow(page, 'invoicedQuantity');
-    const completedQtyText = await negCompletedRow.locator('[data-cell-key="invoicedQuantity"]').textContent();
-    expect(parseAmount(completedQtyText),
+    await expect(negCompletedRow.locator('[data-cell-key="invoicedQuantity"]'),
       '[ETP-4567] Invoiced quantity should remain negative on the completed invoice',
-    ).toBeLessThan(0);
+    ).toHaveText(/-\s?\d/, { timeout: 10_000 });
     await slow(page);
   });
 
@@ -1029,21 +1153,221 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
    * still > 0), here BOTH lines are negative so the document total itself goes
    * fully negative. This exercises two independent fixes together:
    *
-   *   1. Frontend (this Tester's own commit): the confirm modal's big
-   *      grand-total amount used to fall back to a hardcoded '0,00' whenever
-   *      `grandTotal > 0` was false — i.e. always, for a fully-negative order —
-   *      instead of calling formatCurrency(currency, grandTotal) unconditionally
-   *      like the working subtotal line a few lines below it already does.
-   *      See artifacts/purchase-order/custom/PurchaseOrderActions.jsx:472
-   *      (ConfirmModal) and :676 (CreateDocsModal).
-   *   2. Backend (developer fix landing in parallel, com.etendoerp.go): a
-   *      fully-negative-total PO/receipt previously could not be converted —
-   *      the confirm call threw "No pending lines to invoice"/"No hay líneas
-   *      pendientes de facturar" instead of creating the receipt/invoice.
+   *   1. Frontend: the confirm modal's big grand-total amount used to fall
+   *      back to a hardcoded '0,00' whenever `grandTotal > 0` was false — i.e.
+   *      always, for a fully-negative order — instead of calling
+   *      formatCurrency(currency, grandTotal) unconditionally like the working
+   *      subtotal line below it already does. See `ConfirmModal` and
+   *      `CreateDocsModal` in artifacts/purchase-order/custom/PurchaseOrderActions.jsx.
+   *   2. Backend (com.etendoerp.go): a fully-negative-total PO/receipt
+   *      previously could not be converted — the confirm call threw "No
+   *      pending lines to invoice"/"No hay líneas pendientes de facturar"
+   *      instead of creating the receipt/invoice.
    *
-   * If fix #2 has not landed on this branch yet, the "no pending lines" guard
-   * below will legitimately fail — that is expected and documented, not a
-   * flaw in this test (see the class-level report for how to distinguish the
-   * two failure causes).
+   * Both fixes have landed, so any failure here is a regression, not an
+   * expected red. A "no pending lines" failure points at the backend
+   * conversion; a bare '0,00' (or no negative amount) in the modal points at
+   * the frontend formatter.
+   *
+   * ETP-5508: hotfix ETP-5383 deleted this case as a duplicate of the
+   * mixed-sign test above. It is not one — that test's total stays > 0, so it
+   * never reaches the `grandTotal > 0` fallback branch nor the backend's
+   * "nothing pending" check. This is the only end-to-end coverage of a
+   * fully-negative purchase document.
    */
+  test('PO with ALL-negative lines (fully negative total) converts through receipt and invoice, and the confirm modal shows the real negative grand total (ETP-4567)', async ({ page }) => {
+    await ensureOpenPeriod();
+
+    const user = onboardingCreds?.email || process.env.E2E_USER;
+    const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
+
+    await login(page, { user, password });
+    await expect(page, 'Login should redirect to /dashboard').toHaveURL(/dashboard/, { timeout: 30_000 });
+    await slow(page);
+
+    await ensureVendorSetup(page, { navigateTo });
+
+    // ETP-5079: no product is seeded on a fresh tenant — provision the two
+    // fixtures the negative lines below are built from.
+    await ensureProductFixtures(page);
+
+    await navigateTo(page, 'purchase-order');
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
+    await slow(page);
+
+    await page.getByTestId('action-new').click();
+    await waitForDetailReady(page);
+    await slow(page);
+
+    await selectVendorBP(page);
+    await saveDraft(page);
+
+    await expect(page,
+      'After saving, URL should include the PO record ID',
+    ).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await waitForDetailReady(page);
+
+    // Two NEGATIVE-quantity lines — every line negative, so the document
+    // total itself goes fully negative (unlike the mixed-sign case above).
+    // Quantities are bound to a product, and the expected net subtotal is
+    // derived from the fixture prices: -2 × 12 + -3 × 25 = -99.00.
+    const LINES = [
+      { product: PRODUCT_FIXTURE_ALPHA, qty: -2 },
+      { product: PRODUCT_FIXTURE_BETA, qty: -3 },
+    ];
+    const expectedSubtotal = LINES.reduce((sum, l) => sum + l.qty * l.product.listPrice, 0);
+
+    await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name, quantity: String(LINES[0].qty) });
+    await addProductLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: String(LINES[1].qty) });
+
+    await waitForLinesSettled(page, 2, 'PO should have 2 lines, both negative');
+    await expectLineQuantities(page, LINES, { stage: 'PO', qtyKey: 'orderedQuantity' });
+    await softCheckLineGross(page, LINES, { stage: 'PO', grossKey: 'lineGrossAmount' });
+
+    await expectTotalValue(page, 'subtotal', expectedSubtotal, 'PO');
+    // The grand total carries the tax, so it depends on the tenant's tax setup:
+    // read it once settled and require every later document to match it exactly.
+    const poTotalCell = page.getByTestId('totals-row-total-value');
+    await expect(poTotalCell, 'PO total should render a value').toHaveText(/\d/, { timeout: 10_000 });
+    const poTotal = parseAmount(await poTotalCell.textContent());
+    expect(poTotal,
+      '[ETP-4567] PO total should be fully negative, at least as negative as the subtotal (tax on a negative base)',
+    ).toBeLessThanOrEqual(expectedSubtotal);
+
+    // Confirming a negative-quantity line into a receipt inverts the normal
+    // stock-movement direction — ensure enough on-hand stock for both products.
+    for (const { product } of LINES) {
+      await ensureStockOnHand(page, { productName: product.name, warehouseName: DEFAULT_WAREHOUSE_NAME, minQty: 200 });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Confirm PO — check the modal's grand total BEFORE submitting. This is
+    // the exact spot the frontend bug lived: the modal must show the real
+    // negative amount, never the hardcoded '0,00' fallback.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await clickConfirmButton(page, /confirmar pedido|confirm order/i);
+
+    // Scope to the confirm card through the receipt card's own test id
+    // (ETP-5255), not through the title text — `getByText(...).first()` would
+    // bind to any earlier element in the DOM carrying the same words.
+    const receiptCard = page.getByTestId('purchase-order-confirm-receipt-card');
+    await expect(receiptCard).toBeVisible({ timeout: 5_000 });
+    const confirmCard = receiptCard.locator('xpath=ancestor::div[contains(@style,"width")][1]');
+
+    // [ETP-4567 frontend fix] The literal '0,00' fallback text must be gone —
+    // a legitimate formatted amount always carries the currency symbol
+    // (e.g. "-46,50 €"), so an exact-text match on bare '0,00' uniquely
+    // targets the buggy ternary's fallback branch.
+    await expect(confirmCard.getByText('0,00', { exact: true }),
+      '[ETP-4567] Confirm modal must not fall back to a literal 0,00 for a fully-negative total',
+    ).toHaveCount(0);
+    // The grand total is read from its own test id, never from "the first
+    // negative amount in the card": the subtotal span of the same card is
+    // negative too, so a grand total rendered as "0,00 €" would still pass.
+    const confirmGrandTotal = page.getByTestId('purchase-order-confirm-grand-total');
+    await expect(confirmGrandTotal).toBeVisible({ timeout: 5_000 });
+    await expect.poll(async () => parseAmount(await confirmGrandTotal.textContent()), {
+      timeout: 10_000,
+      message: `[ETP-4567] Confirm modal grand total should equal the PO total ${poTotal.toFixed(2)}`,
+    }).toBeCloseTo(poTotal, 2);
+    expect(parseAmount(await confirmGrandTotal.textContent()),
+      '[ETP-4567] Confirm modal grand total should be negative',
+    ).toBeLessThan(0);
+
+    await receiptCard.click();
+    await slow(page);
+
+    const modalConfirmBtn = page.getByTestId('action-confirm-modal');
+    await expect(modalConfirmBtn).toBeVisible({ timeout: 5_000 });
+
+    // [ETP-4567 backend fix] A fully-negative-total PO previously threw "No
+    // pending lines to invoice" instead of creating the receipt — read straight
+    // from the createGoodsReceipt response, which also names the receipt.
+    const receipt = await clickAndExpectAction(page, modalConfirmBtn,
+      /\/purchase-order\/header\/[^/]+\/action\/createGoodsReceipt/,
+      'Creating the goods receipt from a fully-negative PO');
+    expect(receipt?.id, '[ETP-4567] createGoodsReceipt should return the new receipt id').toBeTruthy();
+
+    const successMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
+    await expect(successMsg,
+      '[ETP-4567] PO with a fully-negative total should confirm successfully',
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/no pending lines|no hay líneas pendientes/i),
+      '[ETP-4567] The PO result must not show "No pending lines to invoice"',
+    ).toHaveCount(0);
+    await dismissSuccessModal(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Open THE receipt this PO created (by id) — the first draft in the list
+    // can be a leftover from another run on the shared tenant
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await page.goto(`/goods-receipt/${receipt.id}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await expect(page).toHaveURL(new RegExp(`/goods-receipt/.*${receipt.id}`), { timeout: 15_000 });
+    await waitForDetailReady(page);
+    await expectStatusPill(page, /borrador|draft/i, 'Receipt should be in Draft status');
+    await waitForLinesSettled(page, 2, 'Receipt should have 2 lines inherited from the PO');
+    await expectLineQuantities(page, LINES, { stage: 'Receipt', qtyKey: 'movementQuantity' });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Confirm receipt with "Create invoice"
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await clickConfirmButton(page);
+
+    const receiptModal = page.getByTestId('confirm-inout-modal');
+    await expect(receiptModal).toBeVisible({ timeout: 10_000 });
+    const createInvoiceToggle = receiptModal.getByTestId('confirm-modal-invoice-toggle');
+    await expect(createInvoiceToggle).toBeVisible({ timeout: 5_000 });
+    if ((await createInvoiceToggle.getAttribute('aria-checked')) !== 'true') {
+      await createInvoiceToggle.click();
+      await slow(page);
+    }
+
+    const receiptConfirmBtn = receiptModal.getByTestId('confirm-modal-confirm-btn');
+    await expect(receiptConfirmBtn).toBeVisible({ timeout: 5_000 });
+
+    // [ETP-4567 backend fix] Same "no pending lines" guard on the receipt →
+    // invoice conversion, read from the createPurchaseInvoice response.
+    const invoice = await clickAndExpectAction(page, receiptConfirmBtn,
+      /\/goods-receipt\/goodsReceipt\/[^/]+\/action\/createPurchaseInvoice/,
+      'Creating the invoice from a fully-negative receipt');
+    expect(invoice?.id, '[ETP-4567] createPurchaseInvoice should return the new invoice id').toBeTruthy();
+    // ETP-5381: the invoice is created AND confirmed in one step.
+    expect(invoice?.documentStatus,
+      '[ETP-5381] The invoice generated from the fully-negative receipt should be created Completed',
+    ).toBe('CO');
+
+    const viewInvoiceBtn = page.getByRole('button', { name: /ver factura|view invoice/i });
+    await expect(viewInvoiceBtn,
+      '[ETP-4567] Result modal should offer to view the invoice created from a fully-negative receipt',
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/no pending lines|no hay líneas pendientes/i),
+      '[ETP-4567] The receipt result must not show "No pending lines to invoice"',
+    ).toHaveCount(0);
+    await viewInvoiceBtn.click();
+    await slow(page);
+
+    await expect(page).toHaveURL(new RegExp(`/purchase-invoice/.*${invoice.id}`), { timeout: 15_000 });
+    await waitForDetailReady(page);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // On the Purchase Invoice — arrives Completed, same lines and totals.
+    // The purchase invoice's line amount column is "grossAmount".
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await expectAlreadyConfirmed(page,
+      '[ETP-5381] The invoice generated from the fully-negative receipt should arrive already Completed');
+    await expectStatusPill(page, /completado|registrado|booked|completed/i,
+      '[ETP-4567] Invoice should read Completed, still fully negative');
+
+    await waitForLinesSettled(page, 2, 'Invoice should have 2 lines inherited from the receipt');
+    await expectLineQuantities(page, LINES, { stage: 'Invoice', qtyKey: 'invoicedQuantity' });
+    await softCheckLineGross(page, LINES, { stage: 'Invoice', grossKey: 'grossAmount' });
+    await expectTotalValue(page, 'subtotal', expectedSubtotal, 'Invoice');
+    await expectTotalValue(page, 'total', poTotal, 'Invoice');
+    await slow(page);
+  });
 });

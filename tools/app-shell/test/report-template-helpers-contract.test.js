@@ -1,10 +1,12 @@
+// @covers templates/reports/helpers/report-html-helpers.js
+// @covers tools/app-shell/vite-plugins/report-api.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Handlebars from 'handlebars';
-import { registerReportHelpers } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
 
 // ETP-4908: the server render path (both the local HTML preview and the
 // jsreport PDF/XLSX payload built by report-api.js) registers ONLY the
@@ -23,9 +25,12 @@ const REPORT_API_PLUGIN = fileURLToPath(
 );
 
 /**
- * Recursively find every `template.hbs` under artifacts/ (reports live at
+ * Recursively find every report template under artifacts/ (reports live at
  * varying depths, e.g. artifacts/print-sales-invoice/template.hbs vs.
- * artifacts/business-partner/reports/listing/template.hbs).
+ * artifacts/business-partner/reports/listing/template.hbs) — the HTML/PDF
+ * `template.hbs` AND the per-format `template-<format>.hbs` (Excel, CSV, ...).
+ * A missing helper in an export template breaks that export only, where
+ * nobody looks — so they are checked too (ETP-5663).
  */
 function findTemplates(dir) {
   const results = [];
@@ -33,7 +38,7 @@ function findTemplates(dir) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...findTemplates(full));
-    } else if (entry.name === 'template.hbs') {
+    } else if (/^template(-[\w-]+)?\.hbs$/.test(entry.name)) {
       results.push(full);
     }
   }
@@ -99,6 +104,23 @@ function canonicalRegisteredHelperNames() {
   return new Set(Object.keys(hb.helpers));
 }
 
+/**
+ * The helper names jsreport registers for one report: the canonical source
+ * set plus the report-specific top-level functions of its helpers.js, read
+ * back from the very string both render paths send (report-api.js and the
+ * report-server's server.js). Per-format export templates (template-excel.hbs,
+ * template-csv.hbs) are rendered ONLY by jsreport, so this is their whitelist.
+ * template.hbs is also rendered as server-side HTML, which registers the
+ * canonical set alone — it keeps the stricter canonical-only check.
+ */
+function jsreportRegisteredHelperNames(templatePath) {
+  const helpersPath = join(dirname(templatePath), 'helpers.js');
+  const helpersCode = existsSync(helpersPath) ? readFileSync(helpersPath, 'utf8') : '';
+  return new Set(
+    [...buildJsreportHelpersString(helpersCode).matchAll(/^function\s+(\w+)\s*\(/gm)].map((m) => m[1])
+  );
+}
+
 function expandDocumentPartials(source) {
   const branding = readFileSync(join(REPORT_TEMPLATES_DIR, 'document-branding.hbs'), 'utf8');
   return source.replace(/\{\{>\s*document-branding\s*\}\}/g, branding);
@@ -118,7 +140,10 @@ describe('report template ↔ server helper whitelist contract', () => {
     it(`${relPath} only invokes helpers the server render path registers`, () => {
       const source = readFileSync(templatePath, 'utf8');
       const invoked = collectHelperNames(source);
-      const unregistered = [...invoked].filter((name) => !registeredNames.has(name));
+      const allowed = basename(templatePath) === 'template.hbs'
+        ? registeredNames
+        : jsreportRegisteredHelperNames(templatePath);
+      const unregistered = [...invoked].filter((name) => !allowed.has(name));
       assert.deepEqual(
         unregistered,
         [],

@@ -33,17 +33,35 @@ export const ACCT_PROCESS_MONITOR = 'acct-process-monitor';
 /** Enables the admin-only public API key management entry point (ETP-5345). */
 export const PUBLIC_API_KEYS = 'public-api-keys';
 
+/**
+ * Reveals the Unified Calendar proof of concept (static mock data, no backend) in the
+ * Proof of Concept menu group. Short-lived: see its flags-registry.json entry.
+ */
+export const UNIFIED_CALENDAR_POC = 'unified-calendar-poc';
+
+/**
+ * NUMERIC flag (ETP-5676): rows per `/batch` request in the generic import, overriding every
+ * window's `window.import.limit.batchSize`. `0` (the default), unset, negative or non-numeric means
+ * "no override" — the window's decisions value applies, else 1; the engine clamps to 1..50. One
+ * global flag by design, with no per-window variants. Read with `useNumberFlag`, resolved by
+ * `resolveImportBatchSize` (`lib/importBatchSize.js`).
+ */
+export const IMPORT_BATCH_SIZE = 'import-batch-size';
+
 export const FLAG_DEFAULTS = Object.freeze({
   [PROOF_OF_CONCEPT_MENU]: false,
   [WEBMCP_AGENT_CHAT]: false,
   [PAGE_HELP_SUGGESTIONS]: false,
   [ACCT_PROCESS_MONITOR]: false,
   [PUBLIC_API_KEYS]: false,
+  [UNIFIED_CALENDAR_POC]: false,
+  [IMPORT_BATCH_SIZE]: 0,
 });
 
 /**
  * Safe default for a key. Unknown keys resolve to `false` so a typo hides the
- * feature rather than revealing it.
+ * feature rather than revealing it. A declared numeric default (`0`) is returned
+ * as is — `??` only replaces a missing entry, never a falsy one.
  */
 export function defaultForFlag(key) {
   return FLAG_DEFAULTS[key] ?? false;

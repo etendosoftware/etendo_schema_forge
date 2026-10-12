@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/index.jsx
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { forwardRef, useImperativeHandle } from 'react';
 
@@ -87,12 +88,12 @@ vi.mock('../CashClose/index.jsx', () => ({
 // Exposes the same ref API the real tab does, driven per-test by mockStatementsApi.
 let mockStatementsApi = { selected: [], filtered: [] };
 vi.mock('../ImportedStatementsTab.jsx', () => ({
-  ImportedStatementsTab: forwardRef(function ImportedStatementsTabMock(_props, ref) {
+  ImportedStatementsTab: forwardRef(function ImportedStatementsTabMock({ onSynced }, ref) {
     useImperativeHandle(ref, () => ({
       getSelectedStatementIds: () => mockStatementsApi.selected,
       getFilteredStatements: () => mockStatementsApi.filtered,
     }));
-    return <div data-testid="tab-statements" />;
+    return <div data-testid="tab-statements"><button type="button" data-testid="tab-statements-synced" onClick={onSynced} /></div>;
   }),
 }));
 
@@ -217,6 +218,17 @@ describe('FinancialAccountWindow', () => {
 
     fireEvent.click(screen.getByText('financeAccountDetailTabStatements'));
     expect(screen.getByTestId('tab-statements')).toBeInTheDocument();
+  });
+
+  it('reloads the account (lastSyncDate) when the statements tab reports a finished sync', () => {
+    setHooks();
+    render(<FinancialAccountWindow recordId="acc-1" />);
+    fireEvent.click(screen.getByText('financeAccountDetailTabStatements'));
+    reloadAccountMock.mockClear();
+
+    fireEvent.click(screen.getByTestId('tab-statements-synced'));
+
+    expect(reloadAccountMock).toHaveBeenCalledTimes(1);
   });
 
   it('replaces Export with a clickable-looking Automatch button on the reconciliation tab', () => {

@@ -1,8 +1,8 @@
 {
   "version": "0.15.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
-  "updatedAt": "2026-09-07T16:05:37.702Z",
-  "checksum": "26f17d6d560e122f",
+  "updatedAt": "2026-10-06T17:28:57.328Z",
+  "checksum": "ab424b8456cec433",
   "frontendContract": {
     "window": {
       "id": "252",
@@ -11,7 +11,6 @@
       "category": "finance",
       "hidePrint": true,
       "hideLink": true,
-      "customListIcons": true,
       "secondaryTabs": {
         "accounting": {
           "tabOrder": 1,
@@ -336,7 +335,6 @@
       "category": "finance",
       "hidePrint": true,
       "hideLink": true,
-      "customListIcons": true,
       "secondaryTabs": {
         "accounting": {
           "tabOrder": 1,

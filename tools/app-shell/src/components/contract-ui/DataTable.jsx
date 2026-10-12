@@ -1058,6 +1058,7 @@ function renderNumericInputCell({
       <MaskedAmountInput
         bare
         grouping={isTwoDecimal}
+        clearZeroOnFocus
         inputMode={numericInputMode}
         inputRef={isFirst ? firstInputRef : undefined}
         value={values[field.key]}

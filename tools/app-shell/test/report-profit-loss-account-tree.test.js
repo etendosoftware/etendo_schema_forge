@@ -1,9 +1,14 @@
+// @covers artifacts/profit-loss/report-contract.json
+// @covers artifacts/profit-loss/template.hbs
+// @covers artifacts/profit-loss/template-excel.hbs
+// @covers artifacts/profit-loss/template-csv.hbs
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Handlebars from 'handlebars';
 import { registerReportHelpers, buildJsreportHelpersString } from '../../../templates/reports/helpers/report-html-helpers.js';
+import { buildContractLabels } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
 import { expandBrandingPartial } from './reportBrandingPartialHelper.js';
 
 // ETP-4899 — profit-loss ("Pérdidas y Ganancias") is an INDENTED ACCOUNT-REPORT
@@ -378,12 +383,13 @@ describe('profit-loss SQL — operandsQuery (formula edges)', () => {
 
 // ── Part 3: template rendering (real Handlebars, real .hbs from disk) ───────
 
-// Labels as they actually resolve in meta.labels (buildContractLabels() in
-// report-api.js keys contract.columns by `field`) — verified against
-// artifacts/profit-loss/report-contract.json above.
+// meta.labels exactly as both render paths build it: buildContractLabels() over
+// the REAL contract (columns by `field`, parameters by `name`, plus the
+// `contract.labels` export headers and Type names, ETP-5663). The Type column
+// itself is pinned for both reports in report-balance-sheet-account-tree.test.js.
 const LABELS = {
-  en_US: { element: 'Element', amount: 'Amount', amount_ref: 'Reference Amount' },
-  es_ES: { element: 'Elemento', amount: 'Importe', amount_ref: 'Importe de Referencia' },
+  en_US: buildContractLabels(CONTRACT, 'en_US'),
+  es_ES: buildContractLabels(CONTRACT, 'es_ES'),
 };
 
 const META_BASE = {
@@ -527,18 +533,14 @@ function renderExcel({ compareTo, locale = 'en_US', rows = ROWS } = {}) {
 }
 
 describe('profit-loss template-excel.hbs', () => {
-  it('flattens the tree: depth becomes a numeric "Level" column plus separate Code/Name columns', () => {
+  it('flattens the tree: depth becomes a numeric "Depth" column plus Type/Code/Name columns', () => {
     const html = renderExcel({ compareTo: false });
     assert.doesNotMatch(html, /Missing helper/);
-    assert.match(html, /<th>Group<\/th>/);
-    assert.match(html, /<th>Level<\/th>/);
-    assert.match(html, /<th>Code<\/th>/);
-    assert.match(html, /<th>Name<\/th>/);
-    // ETP-4899 — Group is the LEADING column, ahead of Level/Code/Name.
+    // ETP-4899 — Group is the LEADING column; ETP-5663 — Type sits before Code.
     const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
     assert.deepEqual(
       [...header.matchAll(/<th>([^<]*)<\/th>/g)].map((m) => m[1]),
-      ['Group', 'Level', 'Code', 'Name', 'Amount']
+      ['Group', 'Depth', 'Type', 'Code', 'Name', 'Amount']
     );
     // No indentation classes leak into the calculation-friendly grid.
     assert.doesNotMatch(html, /ind-\d/);
@@ -552,10 +554,10 @@ describe('profit-loss template-excel.hbs', () => {
     assert.match(row, /<td data-cell-type="number">2<\/td>/, 'the "6000" row sits at indent 2');
     assert.match(row, /<td>6000<\/td>/);
     assert.match(row, /<td>Compras de mercaderías<\/td>/);
-    // The row's own cells, in order: Group first, then Level/Code/Name/Amount.
+    // The row's own cells, in order: Group first, then Depth/Type/Code/Name/Amount.
     assert.deepEqual(
       [...row.matchAll(/<td(?: data-cell-type="number")?>([^<]*)<\/td>/g)].map((m) => m[1]),
-      [GROUP, '2', '6000', 'Compras de mercaderías', '-22.48']
+      [GROUP, '2', 'Breakdown', '6000', 'Compras de mercaderías', '-22.48']
     );
   });
 
@@ -576,10 +578,13 @@ describe('profit-loss template-excel.hbs', () => {
     assert.doesNotMatch(off, /<td data-cell-type="number">8000<\/td>/);
   });
 
-  it('amount headers are translated [es_ES]', () => {
+  it('every header is translated [es_ES]', () => {
     const html = renderExcel({ compareTo: true, locale: 'es_ES' });
-    assert.match(html, /<th>Importe<\/th>/);
-    assert.match(html, /<th>Importe de Referencia<\/th>/);
+    const header = html.slice(html.indexOf('<thead>'), html.indexOf('</thead>'));
+    assert.deepEqual(
+      [...header.matchAll(/<th>([^<]*)<\/th>/g)].map((m) => m[1]),
+      ['Grupo', 'Profundidad', 'Tipo', 'Código', 'Nombre', 'Importe', 'Importe de Referencia']
+    );
   });
 });
 
@@ -612,16 +617,16 @@ describe('profit-loss template-csv.hbs', () => {
     assert.doesNotMatch(csv, /</, 'the CSV export must contain no markup at all');
     const lines = csv.trim().split('\n');
     assert.equal(lines.length, ROWS.length + 1);
-    // ETP-4899 — a leading Group column (the c_acct_rpt_group name) now
-    // precedes Level/Code/Element/Amount, mirroring template-excel.hbs.
-    assert.equal(lines[0], 'Group,Level,Code,Element,Amount');
+    // ETP-4899 — a leading Group column (the c_acct_rpt_group name);
+    // ETP-5663 — same columns and header labels as template-excel.hbs.
+    assert.equal(lines[0], 'Group,Depth,Type,Code,Name,Amount');
   });
 
-  it('writes the group, the tree depth as the Level column and the raw dot-decimal amount', () => {
+  it('writes the group, the tree depth, the account type and the raw dot-decimal amount', () => {
     const csv = renderCsv({ compareTo: false });
     const lines = csv.trim().split('\n');
-    assert.equal(lines[1], `${GROUP},0,P.G.1,Importe neto de la cifra de negocios,8716.16`);
-    assert.equal(lines[4], `${GROUP},2,6000,Compras de mercaderías,-22.48`);
+    assert.equal(lines[1], `${GROUP},0,Heading,P.G.1,Importe neto de la cifra de negocios,8716.16`);
+    assert.equal(lines[4], `${GROUP},2,Breakdown,6000,Compras de mercaderías,-22.48`);
     assert.doesNotMatch(csv, /8\.716,16/, 'amounts must never go through formatCurrency in the CSV export');
     // Every data line carries its group, not just the first of each band.
     for (const line of lines.slice(1)) assert.ok(line.startsWith(`${GROUP},`), `missing group prefix: ${line}`);
@@ -635,17 +640,17 @@ describe('profit-loss template-csv.hbs', () => {
 
   it('appends the reference-amount column only when compareTo === "true"', () => {
     const on = renderCsv({ compareTo: true }).trim().split('\n');
-    assert.equal(on[0], 'Group,Level,Code,Element,Amount,Reference Amount');
-    assert.equal(on[1], `${GROUP},0,P.G.1,Importe neto de la cifra de negocios,8716.16,8000`);
+    assert.equal(on[0], 'Group,Depth,Type,Code,Name,Amount,Reference Amount');
+    assert.equal(on[1], `${GROUP},0,Heading,P.G.1,Importe neto de la cifra de negocios,8716.16,8000`);
 
     const off = renderCsv({ compareTo: false }).trim().split('\n');
-    assert.equal(off[0], 'Group,Level,Code,Element,Amount');
-    assert.equal(off[1], `${GROUP},0,P.G.1,Importe neto de la cifra de negocios,8716.16`);
+    assert.equal(off[0], 'Group,Depth,Type,Code,Name,Amount');
+    assert.equal(off[1], `${GROUP},0,Heading,P.G.1,Importe neto de la cifra de negocios,8716.16`);
   });
 
   it('header row uses translated labels [es_ES]', () => {
     const csv = renderCsv({ compareTo: true, locale: 'es_ES' });
-    assert.equal(csv.trim().split('\n')[0], 'Group,Level,Code,Elemento,Importe,Importe de Referencia');
+    assert.equal(csv.trim().split('\n')[0], 'Grupo,Profundidad,Tipo,Código,Nombre,Importe,Importe de Referencia');
   });
 
   it('quotes a group name containing a comma through csvField', () => {

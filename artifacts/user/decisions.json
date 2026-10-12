@@ -55,8 +55,8 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "readOnlyLogicJs": "!!record.id",
-          "reason": "ETP-4829: mandatory on the admin-facing create form — it is also the sole basis for username and the linked etgo_account row, so a user can never be created without it. ETP-4830: locked read-only once the record is persisted (readOnlyLogicJs, same 'locks after first save' pattern as sales-invoice/purchase-invoice's transactionDocument) — email seeds username and the linked etgo_account row at creation time only; editing it afterward would desync the two."
+          "readOnlyLogicJs": "!!record.id && record.emailEditable !== true",
+          "reason": "ETP-4829: mandatory on the admin-facing create form — it is also the sole basis for username and the linked etgo_account row, so a user can never be created without it. ETP-4830: locked read-only once the record is persisted (readOnlyLogicJs, same 'locks after first save' pattern as sales-invoice/purchase-invoice's transactionDocument) — email seeds username and the linked etgo_account row at creation time only; editing it afterward would desync the two. ETP-5194: the lock is relaxed while the email can still be corrected — the user was invited (a business-partner contact never is, and must never be invited) and the invitation to the address is EXPIRED / DELIVERY_FAILED and was never accepted; never for the owner, never for a blank email. The backend computes that verdict once (UserRoleAssignmentHandler#isEmailEditable) and sends it on every GET row as emailEditable, which this rule reads instead of re-deriving it: the same predicate guards the PUT server-side, and a form value cannot flip it while typing. A missing flag (`!== true`) stays read-only. A saved correction re-derives username and re-invites the new address."
         },
         "password": {
           "visibility": "editable",

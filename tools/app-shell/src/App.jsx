@@ -26,7 +26,11 @@ import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from './lib
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
 import { resolveUnauthenticatedRedirect } from './lib/unauthenticatedRedirect.js';
-import { parseEnvironmentAccessDecision, setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
+import {
+  parseEnvironmentAccessDecision,
+  readAccessErrorMessage,
+  setEnvironmentAccessDecision,
+} from '@/lib/environmentAccessGate.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { ListStateRouteGuard } from './lib/ListStateRouteGuard.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
@@ -189,17 +193,13 @@ export function __resetMenuAccessCacheForTest() {
 }
 
 // ETP-5443 follow-up — `NeoResponse.error()` (com.etendoerp.go) nests the human-readable
-// text under `error.message` on this path (the server-side `ensureTopLevelMessage`
-// normalization is not applied here); mirrors menuTree.js's own defensive `data?.error ||
-// data?.message` handling for a string `error`, and falls back to a top-level `message`
-// for forward compatibility. Used only to recover the `EnvironmentAccessPolicy.Decision`
-// name from a 402 — see lib/environmentAccessGate.js.
+// text under `error.message` on this path. Used only to recover the
+// `EnvironmentAccessPolicy.Decision` name from a 402; the envelope handling is the gate's own
+// (`readAccessErrorMessage`), shared with the transport-level detection — see
+// lib/environmentAccessGate.js.
 async function readNeoErrorMessage(res) {
   try {
-    const data = await res.json();
-    if (typeof data?.error === 'string') return data.error;
-    if (data?.error && typeof data.error === 'object') return data.error.message || '';
-    return data?.message || '';
+    return readAccessErrorMessage(await res.json());
   } catch {
     return '';
   }
@@ -236,8 +236,9 @@ export async function fetchWindowAccess(session) {
       // that folding this into `null` (below, unchanged) used to produce. For a 402 with a
       // recognized decision text, record it; for any other resolved non-ok response (401,
       // differently-worded 402, 500, etc.), clear any previously-recorded decision — this is
-      // the only place a demo/subscription block can be detected, so a resolved response that
-      // is not a recognized 402 means access is not currently known to be blocked. NOTE: a
+      // the only place a block is CLEARED (ETP-5642: `apiFetch` also records a block from any
+      // other 402, but never clears one), so a resolved response that is not a recognized 402
+      // means access is not currently known to be blocked. NOTE: a
       // thrown/rejected apiFetch (DNS, connection refused, abort) never reaches here; it lands
       // in the outer catch below, which deliberately leaves the decision untouched so a
       // transient network failure does not replace the last server-confirmed block with a

@@ -275,7 +275,7 @@ export function getAllWindowNames() {
  *    conversion-rate downloader job that added no value to the Etendo Go end
  *    user, so it was dropped from the Settings menu. Administrators read it in
  *    Etendo classic (the GO template roles keep their AD window grant, see
- *    `TemplateRoleWindowAccess` in com.etendoerp.go), and `neo_discover` still
+ *    `TemplateRoleWindowAccess` in com.etendoerp.go), and `etendo_discover` still
  *    reports it read-only for agents.
  */
 export const apiOnlyWindows = new Set([

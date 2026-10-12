@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -310,6 +311,68 @@ describe('buildSecondaryLineHandlers.onDelete', () => {
     expect(toast.warning).toHaveBeenCalledWith('bulkDeletePartialFailure:{"succeeded":1,"total":3,"failed":2}');
     expect(toast.success).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  // ETP-5657 (ETP-5111 shape) — a refused DELETE now carries the backend's translated reason and
+  // the 4xx status, so a ONE-row refusal shows the reason itself instead of the counter message.
+  describe('refusal reason (a completed invoice\'s exchange rate)', () => {
+    const RAW = 'The exchange rate of a completed invoice cannot be deleted. Edit it instead.';
+    // backendError.* keys resolve to `t:<key>`: translateBackendError keeps the English when
+    // t(key) === key, so a pure echo could not tell a translated reason from an untranslated one.
+    const translatingUi = (key, vars) => {
+      if (key.startsWith('backendError.')) return `t:${key}`;
+      return vars ? `${key}:${JSON.stringify(vars)}` : key;
+    };
+
+    function refusalDeps(rows, status) {
+      global.fetch = vi.fn(async () => ({ ok: false, status }));
+      return makeDeps({
+        st: { key: 'exchangeRates', addLineFields: { entry: [] } },
+        __clearSelection: vi.fn(),
+        ui: translatingUi,
+        extractErrorMessage: vi.fn(async () => RAW),
+        secondarySelectedRows: { exchangeRates: rows },
+      });
+    }
+
+    it('a one-row 4xx refusal shows the translated backend reason, and removes nothing', async () => {
+      const deps = refusalDeps([{ id: 'r1' }], 409);
+      await buildSecondaryLineHandlers(deps).onDelete();
+
+      expect(deps.extractErrorMessage).toHaveBeenCalledWith(expect.objectContaining({ status: 409 }));
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledWith('t:backendError.conversionRateDeleteCompleted');
+      expect(deps.secondaryHooks[0].handleDeleteChild).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('also shows it for a 400', async () => {
+      const deps = refusalDeps([{ id: 'r1' }], 400);
+      await buildSecondaryLineHandlers(deps).onDelete();
+      expect(toast.error).toHaveBeenCalledWith('t:backendError.conversionRateDeleteCompleted');
+    });
+
+    it('a one-row 5xx keeps only the counter message', async () => {
+      const deps = refusalDeps([{ id: 'r1' }], 500);
+      await buildSecondaryLineHandlers(deps).onDelete();
+      expect(toast.error).toHaveBeenCalledWith('bulkDeleteAllFailed:{"count":1}');
+      expect(toast.error).not.toHaveBeenCalledWith('t:backendError.conversionRateDeleteCompleted');
+    });
+
+    it('a multi-row 4xx refusal keeps only the counter message', async () => {
+      const deps = refusalDeps([{ id: 'r1' }, { id: 'r2' }], 409);
+      await buildSecondaryLineHandlers(deps).onDelete();
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledWith('bulkDeleteAllFailed:{"count":2}');
+      expect(deps.secondaryHooks[0].handleDeleteChild).not.toHaveBeenCalled();
+    });
+
+    it('a status-only refusal ("Error 409") never reaches the toast as a reason', async () => {
+      const deps = refusalDeps([{ id: 'r1' }], 409);
+      deps.extractErrorMessage = vi.fn(async () => 'Error 409');
+      await buildSecondaryLineHandlers(deps).onDelete();
+      expect(toast.error).toHaveBeenCalledWith('bulkDeleteAllFailed:{"count":1}');
+    });
   });
 
   it('uses api.crud detailUrl template when present', async () => {

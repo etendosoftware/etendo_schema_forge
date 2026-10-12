@@ -392,3 +392,19 @@ changed is that the form tab and the list preview's `RelatedDocumentsCard` (`Goo
 now both render `SALES_RELATED_DOCS['goods-shipment']`; the preview's hand-written detail-fetching
 specs are gone — the card loads the detail record itself. Each preview row is one line; a long status
 tag is truncated with the full text on hover. See `docs/ui-customization.md` §7.a for the shared definition (`SALES_RELATED_DOCS`), the `useRelatedDocuments` hook and the `RelatedDocumentsCard` `definition`/`record` props.
+
+## List toolbar: gap between filters and actions — ETP-5509
+
+At narrow widths the "Filtros" button used to touch the actions on the right (sort, refresh,
+"Imprimir", "Nuevo albarán"): nothing reserved space between the two clusters of the shared list
+bar. The bar (`ListView.jsx`) now keeps a 16px minimum gap between them at every width, and when
+space runs out the filters yield — the status / date / "Filtros" buttons wrap onto an extra line
+inside their cluster, the actions never shrink, and only far below the supported 1280px do the
+actions drop below the filters. They never touch or overlap. This window has no tab group, so its
+toolbar is otherwise a single row. Nothing changed in this window's own files or in
+`decisions.json`; see `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: with the rail expanded, open `/goods-shipment` at 1280×720 and confirm one
+toolbar row with clear space between "Filtros" and the sort button; narrow the window (≈1000px)
+and confirm the filter buttons wrap onto a second line while the actions stay on the right with
+the same gap.

@@ -39,7 +39,7 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status, on
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
+        className="inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
         style={{ padding: '0 12px', borderRadius: '8px', border: '1px solid hsl(var(--border-subtle))', color: 'hsl(var(--foreground))', background: 'hsl(var(--card))' }}
       >
         {ui('sendToSif')}

@@ -13,6 +13,7 @@ Show one row per account with opening balance, period debit, period credit, and 
 
 ## Interaction model
 - Route: `/report-viewer?report=report-trial-balance`.
+- No ← back button in the TopBar breadcrumb (ETP-5519, shared by every report in `ReportViewerPage.jsx`); the in-page **Cancelar** button (`action-cancel`) returns to the report catalog.
 - Visibility: Finance / Reports menu, category `finance`.
 - Implementation type: contract-driven SQL report served by the `report-api` Vite plugin in dev and by the static manifest in production.
 - Layout: flat listing (`type: listing`) in landscape orientation, default sort by account number ascending.
