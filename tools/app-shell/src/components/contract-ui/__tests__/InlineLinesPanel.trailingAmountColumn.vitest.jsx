@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 /**
  * InlineLinesPanel — the hover "action strip" may only take over the LAST column.
  *
@@ -24,6 +25,13 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import React from 'react';
+
+// The line delete button renders the Iconic trash from the core custom-icons barrel;
+// the published core may predate it, so stub it while keeping every other icon real.
+vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+  ...(await importOriginal()),
+  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+}));
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -190,7 +198,7 @@ describe('InlineLinesPanel — hover action strip vs. a non-trailing amount colu
     await user.hover(row);
 
     expect(screen.getByTestId('Pencil__3b7ec2')).toBeTruthy();
-    expect(screen.queryByTestId('Trash2__3b7ec2')).toBeNull();
+    expect(screen.queryByTestId('IconicTrashIcon__3b7ec2')).toBeNull();
     expect(cellKeys(row)).toEqual(before);
   });
 
