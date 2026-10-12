@@ -99,7 +99,8 @@ function TrendBadge({ trend, goodWhenUp, period, ui }) {
             <Arrow className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="Arrow__22ed51" />
             <span>{`${sign}${rounded}% ${vsLabel}`}</span>
           </>
-        )} />
+        )}
+        data-testid="StatusTag__22ed51" />
     </span>
   );
 }

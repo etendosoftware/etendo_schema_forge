@@ -2917,7 +2917,10 @@ export function DetailView({
                 // processed-document delete behavior changes.
                 hideDeleteButton: hideDeleteButton || windowReadOnly,
               }) && (
-                <DetailDeleteButton onClick={() => setShowDeleteConfirm(true)} title={ui('delete')} />
+                <DetailDeleteButton
+                  onClick={() => setShowDeleteConfirm(true)}
+                  title={ui('delete')}
+                  data-testid="DetailDeleteButton__fa3275" />
               )}
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
