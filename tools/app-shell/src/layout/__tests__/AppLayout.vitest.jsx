@@ -1195,6 +1195,11 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     requests = [];
     locationStub = { reload: vi.fn(), assign: vi.fn(), pathname: '/contacts', search: '' };
     Object.defineProperty(window, 'location', { configurable: true, value: locationStub });
+    // Pinned, not inherited: the environment-gate block above leaves its last decision and
+    // pathname behind (clearAllMocks keeps return values), which would put every test here on
+    // top of an accidental SUBSCRIPTION_REQUIRED block. A test that wants one opts in.
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/sales-order/123' });
     useAuthOptionalMock.mockReturnValue({
       sessionConflict: { reason: 'request', accountId: null },
       account: { id: 'acc-B', email: 'b@example.test' },
@@ -1214,6 +1219,7 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     vi.unstubAllGlobals();
     useAuthOptionalMock.mockReturnValue(null);
     vi.mocked(useRoleMenu).mockReturnValue(null);
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
   });
 
   it('replaces the page before any other gate, naming both accounts', async () => {
@@ -1226,6 +1232,27 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     expect(await screen.findByText(/c@example\.test signed in on this browser/)).toBeInTheDocument();
     expect(screen.getByText(/still open as b@example\.test/)).toBeInTheDocument();
   });
+
+  // A tab whose session another account took over may also hold a commercial-access block
+  // (ETP-5047) recorded for the PREVIOUS account's environment. The conflict wins: the block is
+  // about a tenant this tab no longer speaks for, and its CTA would act on the wrong account.
+  // The access map is resolved (an empty Set, as the 402 leaves it) so the loading gate cannot
+  // be what hides the blocked screen.
+  it.each(['SUBSCRIPTION_REQUIRED', 'DEMO_TRIAL_EXPIRED'])(
+    'shows the conflict, not the blocked-access screen, when %s is also recorded',
+    async (decision) => {
+      vi.mocked(useEnvironmentAccessGate).mockReturnValue(decision);
+      vi.mocked(useRoleMenu).mockReturnValue(new Set());
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('SessionConflictScreen__488148')).toBeInTheDocument();
+      expect(screen.queryByTestId('BlockedAccessScreen__488148')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-cta')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+      expect(await screen.findByText(/c@example\.test signed in on this browser/)).toBeInTheDocument();
+    },
+  );
 
   it('continues as the other account by reloading, and revokes nothing', async () => {
     const user = userEvent.setup();
