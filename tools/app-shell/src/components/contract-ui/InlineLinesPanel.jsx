@@ -239,6 +239,63 @@ function computeRowClassName({ isHighlighted, isEditing, hasRowClick, isSelected
 }
 
 /**
+ * ETP-5600 — class list of the rows' horizontal scroll box (`bodyScrollRef`).
+ *
+ * `overflow-x-auto` forces `overflow-y` to `auto` too, so the box clips at its
+ * own bottom edge. A lifted row's Shadows/lg (`0 10px 15px -3px`) spills below
+ * the row — its visible tail ~14px, its faint geometric edge 22px — so on the
+ * LAST row — very often the only one — the whole shadow was cut away unless
+ * something else (the balance-footer row, the add-row host) followed it inside
+ * the box. `reserveShadowRoom` (= the rows can lift AND nothing follows them in
+ * the box) adds `pb-4` (16px) of room for it.
+ *
+ * Without horizontal overflow, the box also takes that room back with `-mb-4`
+ * (the DataTable `[&>div]:pb-6 !-mb-6` precedent), so no 16px gap shows under
+ * the last line and the add-line bar keeps sitting right below it, overlapping
+ * the empty padding. That bar is `sticky z-10` (positioned) and the hovered row
+ * is `relative z-20` in the same stacking context, so the shadow paints over the
+ * bar and the bar still wins every click on the overlap.
+ * `pointer-events-none` on the box (`auto` again on its children, inherited down
+ * the tree) makes the padding click-through for a NON-positioned follower too.
+ *
+ * With horizontal overflow the native scrollbar sits under that padding, inside
+ * the overlapped strip: a negative margin would let the add-line bar cover it,
+ * and `pointer-events-none` would disable it. So in that case the box keeps only
+ * `pb-4` — the scrollbar moves 16px down, below the shadow's room.
+ */
+export function computeBodyScrollClassName({ reserveShadowRoom, hasHorizontalOverflow }) {
+  if (!reserveShadowRoom) return 'overflow-x-auto';
+  if (hasHorizontalOverflow) return 'overflow-x-auto pb-4';
+  return 'overflow-x-auto pb-4 -mb-4 pointer-events-none [&>*]:pointer-events-auto';
+}
+
+/**
+ * ETP-5600 — whether `ref`'s box scrolls horizontally (`scrollWidth` beyond
+ * `clientWidth`, 1px slack for subpixel rounding). Re-measured on every resize
+ * of the box and whenever the column set or the row count changes, so it
+ * follows both a narrower pane and a wider column set. Off (`false`, never measured)
+ * while `enabled` is false; a no-op without `ResizeObserver` (jsdom), where the
+ * initial measurement stands.
+ */
+function useHorizontalOverflow(ref, enabled, columns, rowCount) {
+  const [hasOverflow, setHasOverflow] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!enabled || !el) {
+      setHasOverflow(false);
+      return undefined;
+    }
+    const measure = () => setHasOverflow(el.scrollWidth > el.clientWidth + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, enabled, columns, rowCount]);
+  return hasOverflow;
+}
+
+/**
  * Hover/edit action strip shown to the right of each row — extracted alongside
  * renderLineCell to keep the row callback's own cognitive complexity under
  * Sonar's threshold.
@@ -1271,6 +1328,13 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
 
   const selectableRows = useMemo(() => data || [], [data]);
 
+  // ETP-5600 — room for the last line's hover shadow inside the body scroll box,
+  // only when the rows can lift (not read-only) and nothing else follows them in
+  // the box: no add-row host (`lineFormActive`) and no balance-footer row (its
+  // render below is gated by the same two values). See computeBodyScrollClassName.
+  const reserveShadowRoom = !isDocumentReadOnly && !lineFormActive && !balanceFooter && selectableRows.length > 0;
+  const bodyHasHorizontalOverflow = useHorizontalOverflow(bodyScrollRef, reserveShadowRoom, visibleColumns, selectableRows.length);
+
   // Prune deleted IDs from the selection Set — keeps the master checkbox in sync
   // when rows are removed (single-row trash, external mutations, etc.).
   useEffect(() => {
@@ -1536,14 +1600,21 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           pane into the sidebar (and, on windows with a right-side panel,
           into that panel too). Mirrors the scoped `overflow-x-auto` wrapper
           DataTable's classic (non-inlineEditable) path already uses around
-          its own `<Table>`. Unlike that wrapper, this one reserves no room
-          for the lifted row's shadow (DataTable's `[&>div]:pb-6 !-mb-6`,
-          ETP-5216/ETP-5600): this box shows the NATIVE horizontal scrollbar,
-          which padding would push 24px down into whatever follows the panel.
-          So, when nothing else (the balance footer, the add-row host) sits
-          below the last line inside this box, that line's hover shadow is
-          cut at this box's bottom edge. */}
-      <div ref={bodyScrollRef} className="overflow-x-auto" onScroll={handleBodyScroll}>
+          its own `<Table>`. Being a scroll box, it clips vertically too, so
+          when nothing else (the balance footer, the add-row host) sits below
+          the last line inside it, that line's hover shadow would be cut at its
+          bottom edge. ETP-5600 — `computeBodyScrollClassName` then reserves
+          16px for it (`pb-4`) and, while there is no horizontal overflow,
+          takes it back with `-mb-4` + click-through padding (the DataTable
+          `[&>div]:pb-6 !-mb-6` precedent), so no gap shows under the last
+          line. With horizontal overflow it keeps only the padding: this box
+          shows the NATIVE scrollbar, which then sits 16px lower instead of
+          being covered by the add-line bar. */}
+      <div
+        ref={bodyScrollRef}
+        className={computeBodyScrollClassName({ reserveShadowRoom, hasHorizontalOverflow: bodyHasHorizontalOverflow })}
+        onScroll={handleBodyScroll}
+      >
       {selectableRows.map((row) => {
         const isEditing = editingRowId === row.id;
         const isHovered = hoveredRowId === row.id;
