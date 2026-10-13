@@ -34,20 +34,66 @@ debug contracts.
 - Page title — list page: **"Modelos Fiscales"** / "Fiscal Models", the window's menu name, resolved from the same `ui('fm.breadcrumb.section')` key as the breadcrumb's last segment so the title and the breadcrumb can never disagree (ETP-5584 — it used to read "Declaraciones", `fm.list.title`, while the menu and the breadcrumb said "Modelos Fiscales"). It is published to the app TopBar via `useSetPageMeta` — see "List page header (app TopBar) and declarations toolbar" below.
 - Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`). Since ETP-5584 it is the TopBar subtitle, published by `useFmDetailPageMeta`, not in-page text. **Title format (P9, ETP-5584):** both models build the title with one helper, `buildDeclTitle` in `FmDetailChrome.jsx`, so the format is `<model title> - <year>/<period>`. A quarter reads "Modelo 349 - 2026/T4" (349 used to read "2026 T4"). A monthly period shows its month name in the UI locale: "Modelo 303 - 2024/octubre" or "Form 303 - 2024/October". 303 used to show "10M", and 349 used "2026 / octubre". The locale is passed explicitly (`useLocaleSwitch`), never left to the runtime default.
 
+## Model registry (ETP-5716)
+
+Every AEAT model this window knows is declared once, in `modelRegistry.js`. No shared file of the
+window compares against a model id (`'303'`, `'349'`) any more: the catalog, the "Nueva
+declaración" modal, the config drawer, the list (model filter, "Resultado" auto-compute, row
+result), the detail-page switch in `FiscalModelsPage` and the AEAT monthly deadline all read the
+model's entry or its bindings. Display order is registry order (303, then 349) and the default
+model is the first entry (`DEFAULT_MODEL_ID`, 303).
+
+| Module | Holds | Imported by |
+|---|---|---|
+| `modelRegistry.js` | One entry per model: `id`, `periodicities`, `defaultActive`, `locked`, `badgeVariant`, `monthlyDeadline(year, month)`, `iaeReminderOnActivate`, `iaeReminderOnYearEndPeriod`, `telematicFiling`, `syncDraftComputeToDetail`. Accessors `listModels`, `getModel`, `isKnownModel`, `getModelOrDefault`, `modelTitleKey`, `DEFAULT_MODEL_ID`. | everything, including `fiscalModelsUtils.js` |
+| `modelRegistryList.js` | id → `models/<id>/listBehavior<id>.js`: `computeFn`, `checkModifiedFn`, `deriveListResult(decl, computed)` | `FmListPage.jsx` |
+| `modelRegistryPages.js` | id → detail page (`models/<id>/FmModel<id>Page.jsx`) | `FiscalModelsPage.jsx` |
+| `modelRegistryConfig.js` | id → config drawer section (`models/<id>/ConfigSection<id>.jsx`) | `FmOverlays.jsx` (`ConfigDrawer`) |
+
+Why four modules and not one: `modelRegistry.js` is a leaf (no React, no `@/` alias, plain `.js`
+imports) because `fiscalModelsUtils.js` imports it and is itself loaded by plain `node --test`
+suites. The bindings import modules that import `fiscalModelsUtils.js` or `FmOverlays.jsx` back,
+so binding them from the leaf would close an import cycle, and binding the detail pages next to
+the config sections would drag the pages into every `FmOverlays.jsx` consumer.
+
+Lookups are strict (`getModel(303)` with a number is unknown), like the comparisons they replaced.
+Two call sites keep their pre-registry fallback for an unknown model id on purpose, through
+`getModelOrDefault`: the monthly deadline (an unknown model uses the 303 rule) and the list's
+computed-map lookup and row result (an unknown model reads the 303 maps and derivation). Every
+other surface ignores an unknown model (no detail page, no "computing" spinner, not in the catalog).
+
+**Adding a model** (e.g. 390):
+
+1. Add its entry to `modelRegistry.js`, in display order.
+2. Create `models/<id>/` with its detail page, `deadline<id>.js` (monthly rule), `listBehavior<id>.js`
+   and `ConfigSection<id>.jsx`, and bind each in the matching `modelRegistry*.js` module.
+3. Add its i18n keys (`fm.catalog.<id>.name`/`.desc`, `fm.config.m<id>.title`, …) to both locales
+   and its badge colours (`fm-model-badge--<id>`, `fm-catalog-card__badge--<variant>`) to
+   `fiscal-models.css`.
+4. `__tests__/modelRegistry.vitest.js` checks that the entry has every field with the right type and
+   that all three bindings exist; its guardrail fails if a shared file of the window spells a model
+   id (3-digit quoted literal) outside the registry modules and `models/<id>/`. The only exception
+   is the developer-only `FmDebugPanel.jsx` (fixture declarations), listed with its reason in the
+   test's allowlist.
+
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
-`FmListPage` calls `useFiscalAutoCompute` **six times** — once per (model × draft-vs-other-vs-
-submitted) combination — because drafts, non-draft/non-submitted declarations, and submitted-family
-declarations each need different refresh semantics:
+`FmListPage` (through its local `useDeclarationsAutoCompute` hook) calls `useFiscalAutoCompute`
+**once per (bucket × registered model)** — six times for 303 + 349 — because drafts,
+non-draft/non-submitted declarations, and submitted-family declarations each need different
+refresh semantics. The calls loop over the registry (a module-level constant, so the number and
+order of hook calls never changes between renders): every model's draft bucket, then every model's
+"other" bucket, then every model's legacy-submitted bucket. Each model's `computeFn` /
+`checkModifiedFn` come from its list behaviour (`modelRegistryList.js`):
 
 ```
-FmListPage
-  ├── useFiscalAutoCompute(draftDecls303,     { computeFn, checkModifiedFn,          token, apiBaseUrl, pollIntervalMs=180_000 })
-  ├── useFiscalAutoCompute(draftDecls349,     { computeFn, checkModifiedFn,          token, apiBaseUrl, pollIntervalMs=180_000 })
-  ├── useFiscalAutoCompute(otherDecls303,     { computeFn,                          token, apiBaseUrl })   ← no checkModifiedFn
-  ├── useFiscalAutoCompute(otherDecls349,     { computeFn,                          token, apiBaseUrl })   ← no checkModifiedFn
-  ├── useFiscalAutoCompute(submittedDecls303, { computeFn, checkModifiedFn: neverModifiedFn, token, apiBaseUrl })   ← ETP-5438
-  └── useFiscalAutoCompute(submittedDecls349, { computeFn, checkModifiedFn: neverModifiedFn, token, apiBaseUrl })   ← ETP-5438
+FmListPage → useDeclarationsAutoCompute
+  ├── useFiscalAutoCompute(draft[303],     { computeFn, checkModifiedFn,          token, apiBaseUrl, pollIntervalMs=180_000 })
+  ├── useFiscalAutoCompute(draft[349],     { computeFn, checkModifiedFn,          token, apiBaseUrl, pollIntervalMs=180_000 })
+  ├── useFiscalAutoCompute(other[303],     { computeFn,                          token, apiBaseUrl })   ← no checkModifiedFn
+  ├── useFiscalAutoCompute(other[349],     { computeFn,                          token, apiBaseUrl })   ← no checkModifiedFn
+  ├── useFiscalAutoCompute(submitted[303], { computeFn, checkModifiedFn: neverModifiedFn, token, apiBaseUrl })   ← ETP-5438
+  └── useFiscalAutoCompute(submitted[349], { computeFn, checkModifiedFn: neverModifiedFn, token, apiBaseUrl })   ← ETP-5438
         ├── On mount: calls computeFn for every decl in parallel
         │     result → computedMap[decl.id] = { boxes, summary, error, computedAt }
         │     null result → { boxes: null, summary: null, error: 'compute_failed', computedAt }  ← not "computing"
@@ -55,9 +101,9 @@ FmListPage
               if modified → calls computeFn and updates computedMap
 ```
 
-- `draftDecls303`/`draftDecls349` = declarations with `status === 'draft'` — their underlying
+- `draft` buckets = declarations with `status === 'draft'` — their underlying
   invoices can still change, so they get the full compute-on-mount + poll-for-changes treatment.
-- `otherDecls303`/`otherDecls349` (ETP-4755, narrowed by ETP-5438) = every non-draft,
+- `other` buckets (ETP-4755, narrowed by ETP-5438) = every non-draft,
   **non-submitted-family** declaration (`ready`/`skipped`) — computed **once** on mount and never
   polled (omitting `checkModifiedFn` makes the hook's polling effect a no-op). Without this, the
   "Resultado" column was permanently stuck on "—" for any declaration that had left draft, since
@@ -71,15 +117,20 @@ FmListPage
 - `snapshotMap` (ETP-5438) = every submitted-family declaration that carries a persisted
   `submittedSnapshot` — the snapshot itself is its computed result, spread into the non-draft map;
   no hook ever receives it, so it is never computed.
-- `submittedDecls303`/`submittedDecls349` (ETP-5438) = every **legacy** declaration whose `status`
+- `submitted` buckets (ETP-5438) = every **legacy** declaration whose `status`
   is in the submitted family (`submitted`/`submitted_ext`/`submitted_ack`) but that has **no**
-  snapshot (presented before snapshots existed) — carved out of the `other*`
+  snapshot (presented before snapshots existed) — carved out of the `other`
   buckets above so a presented declaration gets its one bootstrap compute and is then **frozen**:
   see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" below for the full
   rationale (`neverModifiedFn`, `getCachedFiscalCompute`, and the backend defense-in-depth).
-- `computeFn` = `computeBoxes303(decl, { token, apiBaseUrl })` → `GET /fiscal303/boxes?year=&period=`
-  (303) or `compute349Operators(decl, { token, apiBaseUrl })` → `GET /fiscal349/operators?year=&period=`
-  (349).
+- `computeFn` = `computeBoxes303Real(decl, { token, apiBaseUrl })` (`models/303/listBehavior303.js`)
+  → `GET /fiscal303/boxes?year=&period=` (303) or `compute349Operators(decl, { token, apiBaseUrl })`
+  (`models/349/listBehavior349.js`) → `GET /fiscal349/operators?year=&period=` (349).
+- The row's "Resultado" is the model's `deriveListResult(decl, computed)` (303: box 71 re-derived
+  with the row's `manualOverrides`; 349: `sumAbsKeyTotals` of `summary` + `rectificativeSummary`).
+- Only a model whose registry entry sets `syncDraftComputeToDetail` (349) pushes its draft map to
+  `onComputeUpdate`, so an open 349 detail page gets fresh operators; `FiscalModelsPage` applies it
+  only while that model's detail page is open.
 - `checkModifiedFn` = `checkModified303`/`checkModified349` → `GET /fiscal{model}/modified?year=&period=&since=`.
 - `computedAtRef` tracks the last **successful** compute timestamp per declaration to bound the `since` query parameter. It is intentionally not updated on errors, so `sinceMs` stays at the last success and any subsequent invoice change still triggers a retry.
 - Precomputed data (`decl._precomputed`) is seeded from whichever map (draft, other, or submitted) matches the row's status, when it is opened, so the detail page loads instantly instead of redoing its own compute.
@@ -216,11 +267,11 @@ that already carries it is just as frozen as one presented through either curren
   rows are absent) and renders them as plain text, not the link to "Facturas origen"/"Rectificaciones"
   (which would only land on the note). Legacy submitted, draft and ready
   declarations are unchanged. **Legacy fallback** (no snapshot):
-  `submittedDecls303`/`submittedDecls349` are carved out of the
-  pre-existing `otherDecls303`/`otherDecls349` buckets (see "Auto-compute architecture" above) into
-  their own two `useFiscalAutoCompute` instances, passed `checkModifiedFn: neverModifiedFn` — a
+  the legacy `submitted` buckets are carved out of the
+  pre-existing `other` buckets (see "Auto-compute architecture" above) into
+  their own `useFiscalAutoCompute` instances (one per model), passed `checkModifiedFn: neverModifiedFn` — a
   function that always resolves `false`. This is the deliberate mechanism, not an oversight:
-  *omitting* `checkModifiedFn` (like `otherDecls303`/`349` do) makes the hook's mount effect skip
+  *omitting* `checkModifiedFn` (like the `other` buckets do) makes the hook's mount effect skip
   its cache-consult branch entirely and unconditionally recompute from live data on every mount —
   which is exactly the ETP-5438 root cause, because `FmListPage` never truly unmounts (it stays
   mounted so polling keeps running) but its `decls` array reference still changes on every
@@ -235,10 +286,10 @@ that already carries it is just as frozen as one presented through either curren
   returned `409` there too, which made every cold cache (new tab, reload, another browser/user)
   render "Error de cálculo" in "Resultado" (or "…" while in flight).
   A failed bootstrap is never cached (the hook only writes a non-`null` result), so the list
-  retries it on the next declarations refetch rather than freezing an error. The resulting
-  `computedMapSubmitted303`/`349` maps are unioned with `computedMapOther303`/`349` into
-  `computedMapOther303Merged`/`computedMapOther349Merged` — `getComputedForDecl` only needs "the
-  non-draft compute for this decl.id", it does not care which of the two hooks produced it.
+  retries it on the next declarations refetch rather than freezing an error. Each model's
+  resulting `submitted` map is unioned with its `other` map (and `snapshotMap`) into that model's
+  entry of `otherMapById` — `getComputedForDecl` only needs "the non-draft compute for this
+  decl.id", it does not care which of the two hooks produced it.
 - **Session cache (`useFiscalAutoCompute.js`, legacy fallback only).** `getCachedFiscalCompute(declId)`
   reads back the last payload this hook cached for one declaration, keyed `fiscal_ac_v4_<declId>` in
   `sessionStorage` (bumped from `v3` by ETP-5456: the 349 compute payload gained
@@ -635,7 +686,7 @@ Fix, in `FmModel303Page.jsx`'s `handlePresent` (now `async`): it `await`s `persi
 
 **"Autoliquidación Rectificativa" LOOKS unchecked on an already-submitted declaration, even though the persisted value is `true` (ETP-5338, second, unrelated bug — pure rendering, not data).** Follow-up report after the pt.4 fix above: on a submitted declaration whose `manualData.identification.rectificativa` really is `true` (confirmed — the adjacent "Nº de justificante" text field on the same identification section showed its correct saved value), the checkbox itself still rendered visually unchecked in read-only mode. This is NOT a recurrence of pt.4 and NOT a hydration bug — `identChecks` is seeded correctly from `decl.manualData?.identification` on mount (`FmModel303Page.jsx` line ~220), `identification={{ ...orgIdent, ...identChecks }}` is passed straight through to `FmBoxes303`, and the native `<input type="checkbox">` really did have `checked={true}`/`aria-checked="true"` the whole time — verified with a source-level trace, not just the report. The bug was generic to the shared `Checkbox` component (`@etendosoftware/app-shell-core/components/ui/checkbox.jsx`, consumed here via `tools/app-shell/src/components/ui/checkbox.jsx`), not specific to this window or this field: the checked+disabled visual state used the identical `bg-muted` box class as unchecked+disabled, and the checkmark's `stroke` was hardcoded to `"white"` — invisible against the near-white `--muted` token (96% lightness in the light theme). Every other read-only checkbox in this window (`sin_actividad`, `baja_domiciliacion`, `redeme`, `concurso`, …) shared the exact same risk since they all rendered through the same component.
 
-A component-level fix for this exists in `schema_forge_core` (`packages/app-shell-core/src/components/ui/checkbox.jsx`, commit `a8b8384a0`: checkmark stroke changed to `currentColor` plus a `border-text-disabled` accent on the checked+disabled box class). **That fix is not what fiscal-models ships on.** Publishing it would require bumping `@etendosoftware/app-shell-core` in this repo (see `docs/repo-topology.md`), affects every OTHER consumer of the shared `Checkbox` too, and — critically — would have left fiscal-models with two coexisting checkbox implementations: the (now-fixed) shared `Checkbox` here, and the already-correct hand-rolled checkbox the Sales Invoice SIF tab (`SifTab.jsx`) used all along, which never had this bug because it dims the whole control via `disabled:opacity-50` instead of swapping the box/checkmark colors. The product decision was instead to **consolidate fiscal-models on the SIF tab's implementation**: it was extracted into `tools/app-shell/src/windows/custom/shared/CheckboxField.jsx` (a `<button role="checkbox">`, exported for reuse — `SifTab.jsx` now imports it too, replacing its former inline copy) and every checkbox in both Modelo 303 and Modelo 349 (`FmOverlays.jsx`, `FmListPage.jsx`, `FmModel349Page.jsx`, `FmBoxes303.jsx`, `AeatSubmitFlow.jsx`) was switched from `@/components/ui/checkbox`'s `Checkbox` (or, for `AeatSubmitFlow`'s `testMode` toggle, a raw `<input type="checkbox">`) to `CheckboxField`. Fiscal-models now has exactly one checkbox implementation, and it does not depend on a cross-repo publish to stay correct. The `schema_forge_core` fix (`a8b8384a0`) remains valid for other consumers of the shared `Checkbox`; whether to pursue publishing it is a separate, still-open decision. Two small pre-existing spots were deliberately left alone as out of scope: `FmOverlays.jsx`'s `CfgSection303` (dead code, never rendered — since deleted, ETP-5584) and the "keys" checkboxes in `CfgSection349` (uncontrolled `defaultChecked` placeholders with no `onChange`/state at all) — converting either to `CheckboxField` would mean inventing controlled state that doesn't exist today, which is a behavior change, not the pure visual swap this fix is scoped to.
+A component-level fix for this exists in `schema_forge_core` (`packages/app-shell-core/src/components/ui/checkbox.jsx`, commit `a8b8384a0`: checkmark stroke changed to `currentColor` plus a `border-text-disabled` accent on the checked+disabled box class). **That fix is not what fiscal-models ships on.** Publishing it would require bumping `@etendosoftware/app-shell-core` in this repo (see `docs/repo-topology.md`), affects every OTHER consumer of the shared `Checkbox` too, and — critically — would have left fiscal-models with two coexisting checkbox implementations: the (now-fixed) shared `Checkbox` here, and the already-correct hand-rolled checkbox the Sales Invoice SIF tab (`SifTab.jsx`) used all along, which never had this bug because it dims the whole control via `disabled:opacity-50` instead of swapping the box/checkmark colors. The product decision was instead to **consolidate fiscal-models on the SIF tab's implementation**: it was extracted into `tools/app-shell/src/windows/custom/shared/CheckboxField.jsx` (a `<button role="checkbox">`, exported for reuse — `SifTab.jsx` now imports it too, replacing its former inline copy) and every checkbox in both Modelo 303 and Modelo 349 (`FmOverlays.jsx`, `FmListPage.jsx`, `FmModel349Page.jsx`, `FmBoxes303.jsx`, `AeatSubmitFlow.jsx`) was switched from `@/components/ui/checkbox`'s `Checkbox` (or, for `AeatSubmitFlow`'s `testMode` toggle, a raw `<input type="checkbox">`) to `CheckboxField`. Fiscal-models now has exactly one checkbox implementation, and it does not depend on a cross-repo publish to stay correct. The `schema_forge_core` fix (`a8b8384a0`) remains valid for other consumers of the shared `Checkbox`; whether to pursue publishing it is a separate, still-open decision. Two small pre-existing spots were deliberately left alone as out of scope: `FmOverlays.jsx`'s `CfgSection303` (dead code, never rendered — since deleted, ETP-5584) and the "keys" checkboxes in `CfgSection349` (since ETP-5716 `models/349/ConfigSection349.jsx`; uncontrolled `defaultChecked` placeholders with no `onChange`/state at all) — converting either to `CheckboxField` would mean inventing controlled state that doesn't exist today, which is a behavior change, not the pure visual swap this fix is scoped to.
 
 This also closes a narrower, related gap: `handlePresent` calling `persistEditableFields()` can now race an already-in-flight Calcular/Guardar flush queued behind an earlier one (e.g. Guardar's PUT still open when the user immediately clicks Calcular, then immediately Registrar/Presentar). Both concurrent callers proceed independently — neither is deduped — and `useRecordWriteQueue`'s own single-flight `persist()` (`tools/app-shell/src/hooks/useRecordWriteQueue.js`) correctly serializes them: the second caller's write is coalesced into `queuedRef` and replayed once the first settles, rather than overlapping on the wire. In this specific interleaving that can mean one extra, content-identical PUT (the queued replay) beyond the minimum — harmless (same content, single-flight, no data loss) but a known follow-on effect, not eliminated here; see `FmModel303Page.explicitSaveSingleFlight.vitest.jsx`'s "flushes a queued save before filing the declaration, instead of dropping it" test, which drains every PUT this path can produce rather than asserting an exact count.
 
@@ -3362,7 +3413,7 @@ ETP-5456 deployment trap above applies: verify in a fresh tab after deploying.
 
 **Bug fixed (ETP-5432 pt.2) — a rectification-only period showed `0`/"Informativa" even with real corrective operators.** `FmListPage.jsx`'s "Resultado" total for a 349 row used to be `['totalE','totalS','totalA','totalI'].reduce((s, k) => s + (parseFloat(computed.summary[k]) || 0), 0)` — `computed.summary` ONLY, never `computed.rectificativeSummary`. `Fiscal349BoxesHandler` always emits `summaryByKey` from the REGULAR aggregation alone, so a period with corrective operators but no regular ones has an all-zero `summary`, and the list showed `0`/"Informativa" even though the declaration has real (corrective) activity — a list-only gap, since the detail page's own `RectificativeSubtotalCard` (see "Rectificativas en Operadores" above) already renders `rectificativeSummary` correctly.
 
-**Fix:** a new `sumAbsKeyTotals(obj)` helper sums `totalE`/`totalS`/`totalA`/`totalI` via `Math.abs` on each key — the SAME anti-cancellation rule `RectificativeSubtotalCard` already applies to why E/S/A/I are never netted against each other (see "Rectificativas en Operadores" above): correctives are signed deltas, so without `Math.abs` a `-30` sales correction offset by a `+30` purchase correction would still sum to `0` and reproduce this exact bug. The list's total is now `sumAbsKeyTotals(computed.summary) + sumAbsKeyTotals(computed.rectificativeSummary)` — both objects contribute, each internally anti-cancelled first. This is a magnitude-of-activity figure for the list's single "Resultado" cell, distinct from `RectificativeSubtotalCard`'s own per-key breakdown on the detail page (which deliberately has no grand total at all — see "Rectificativas en Operadores" above); the two are not meant to match numerically.
+**Fix:** a new `sumAbsKeyTotals(obj)` helper (since ETP-5716 in `models/349/listBehavior349.js`) sums `totalE`/`totalS`/`totalA`/`totalI` via `Math.abs` on each key — the SAME anti-cancellation rule `RectificativeSubtotalCard` already applies to why E/S/A/I are never netted against each other (see "Rectificativas en Operadores" above): correctives are signed deltas, so without `Math.abs` a `-30` sales correction offset by a `+30` purchase correction would still sum to `0` and reproduce this exact bug. The list's total is now `sumAbsKeyTotals(computed.summary) + sumAbsKeyTotals(computed.rectificativeSummary)` — both objects contribute, each internally anti-cancelled first. This is a magnitude-of-activity figure for the list's single "Resultado" cell, distinct from `RectificativeSubtotalCard`'s own per-key breakdown on the detail page (which deliberately has no grand total at all — see "Rectificativas en Operadores" above); the two are not meant to match numerically.
 
 ### Polling propagation
 
@@ -3741,7 +3792,7 @@ The catalog drawer lists the tax forms the tenant can enable/disable. It current
 | `303` | Modelo 303 - Autoliquidación IVA | Trimestral + Mensual | Autoliquidación del IVA |
 | `349` | Modelo 349 — Operaciones intracomunitarias | Mensual + Trimestral | Declaración informativa de operaciones con empresas de la Unión Europea |
 
-Each catalog entry declares a `periodicities: string[]` array (not a single `periodicity` string) — `FmCatalogPage` renders one `.fm-catalog-card__pill` per value, reusing the existing `fm.catalog.periodicity.monthly/quarterly/annual` locale keys. The header's model-count badge (`CATALOG.length`) and the "active models" counter are always derived from the `CATALOG` array, never hardcoded.
+Each catalog entry declares a `periodicities: string[]` array (not a single `periodicity` string) — `FmCatalogPage` renders one `.fm-catalog-card__pill` per value, reusing the existing `fm.catalog.periodicity.monthly/quarterly/annual` locale keys. The header's model-count badge (`CATALOG.length`) and the "active models" counter are always derived from the `CATALOG` array, never hardcoded. Since ETP-5716 `CATALOG` is the model registry itself (`listModels()`, see "Model registry" above).
 
 Toggling a model on/off in the drawer updates a local `active` map (`{ [modelId]: boolean }`) inside `FmCatalogPage`; closing the drawer calls `onSave(active)`, which `FmListPage` uses to update its own `activeModels` state. That same map is threaded down to `NewDeclModal` (see below) so the "new declaration" flow only ever offers models the tenant actually activated.
 
@@ -3962,6 +4013,12 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `FiscalModelsPage.jsx` | Root — routes between list and per-model detail |
 | `FmListPage.jsx` | Declaration table, toolbar, auto-compute wiring |
 | `FmCatalogPage.jsx` | Model catalog drawer — enable/disable tax forms, drives `activeModels` |
+| `modelRegistry.js` | The fiscal model registry (ETP-5716) — one entry per model + accessors; leaf module, see "Model registry" |
+| `modelRegistryList.js` / `modelRegistryPages.js` / `modelRegistryConfig.js` | Registry bindings: list behaviour, detail page, config drawer section per model id |
+| `FmConfigFields.jsx` | Config drawer building blocks (`CfgSection`, `CfgField`, `CfgSelect`, `INPUT_ST`), shared by `ConfigDrawer` and the per-model config sections |
+| `models/<id>/listBehavior<id>.js` | The model's list "Resultado" auto-compute (`computeFn`, `checkModifiedFn`) and row result derivation |
+| `models/<id>/ConfigSection<id>.jsx` | The model's tab of the config drawer |
+| `models/<id>/deadline<id>.js` | The model's monthly AEAT filing deadline rule |
 | `useFiscalAutoCompute.js` | Background compute + polling hook |
 | `incidentSeverity.js` | `getIncidentSeverity` / `getIncidentIndicator` — single source of the incidents tone/label for the list KPI, 303 KPI and tab badges (ETP-5597, see "Incidents severity") |
 | `fiscalModelsUtils.js` | `computeBoxes303`, `checkModified303`, `generate303File`, `fetchDeclarationIncidents` (ETP-4456), formatters, deadline logic; `withDerivedBoxFlags`, `RECTIFICATION_ONLY_BOXES`/`isRectificationAdjustmentActive` (ETP-5597); `toBoxArray`/`applyOverrides`/`recomputeDerivedBoxes`/`getBoxValue` (ETP-5272 pt.6, shared between `FmModel303Page.jsx` and `FmListPage.jsx` — see "Manual box overrides" above) |
