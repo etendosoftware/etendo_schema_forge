@@ -650,7 +650,7 @@ the wrong reason). Hand-sign these instead, the same way as the "Doing it by han
 `sub_sim_<epoch>` from the timestamp the script ran at. Read them back:
 
 ```sql
-select stripe_customer, stripe_subscription from etgo_checkout_request where request_id = '<RID>';
+select stripe_customer_id, stripe_subscription_id from etgo_checkout_request where request_id = '<RID>';
 ```
 
 **Step 2 — sign and post the lifecycle event.** Reuse `$SECRET` from §4 and the `SUB`/`CUST`
@@ -756,14 +756,30 @@ configured with the *same* secret. Because `stripe listen` mints a new secret pe
 use `stripe listen` with a fixed endpoint secret from the Dashboard, or copy the printed value into
 `Openbravo.properties` and redeploy before the payment.
 
+**Stripe CLI 1.53 and later:** the listener this script starts runs `stripe listen` without
+`--events`, which those CLI versions refuse ("must specify events to forward using --events,
+--all-snapshot, or --all-thin"). Until the script names its events, start the listener by hand as
+in "Manual forwarding" below.
+
 ### Manual forwarding
 
+Stripe CLI 1.53 and later require the forwarded events to be named. Name exactly the ones the
+webhook handles (§1):
+
 ```bash
-stripe listen --forward-to localhost:8080/etendo/sws/go/checkout/webhook
+stripe listen \
+  --events checkout.session.completed,checkout.session.async_payment_succeeded,invoice.paid,invoice.payment_failed,customer.subscription.updated,customer.subscription.deleted,charge.dispute.created \
+  --forward-to localhost:8080/etendo/sws/go/checkout/webhook
 ```
 
-Copy the printed `whsec_...` into `etendo.go.checkout.webhook.secret` and redeploy. Do not use
-`--live`.
+Without `--events` the CLI exits with "must specify events to forward using --events,
+--all-snapshot, or --all-thin". `--all-snapshot` works too, but it forwards every event of the
+account, and each unhandled one lands in `etgo_billing_event` as an `IGNORED` /
+`unhandled event type` row.
+
+Copy the printed `whsec_...` into `etendo.go.checkout.webhook.secret` and redeploy. To compare
+the listener's secret with the configured one later, `stripe listen --print-secret` prints it and
+exits. Do not use `--live`.
 
 ```bash
 stripe events list --limit 10
@@ -826,7 +842,7 @@ resolved to its linked checkout request first), reads the real `stripe_subscript
 `stripe_customer_id` / `created_client_id` from `ETGO_CHECKOUT_REQUEST`, and drives Stripe directly:
 
 ```bash
-stripe listen --forward-to localhost:8080/etendo/sws/go/checkout/webhook   # keep this running
+# keep the listener from "Manual forwarding" above running (with --events)
 
 make stripe-past-due ID=<etgo_checkout_request_id_or_billing_event_id>            # CMD=fail (default)
 make stripe-past-due ID=<same id> CMD=recover
@@ -834,6 +850,16 @@ make stripe-past-due ID=<same id> CMD=status                                    
 ```
 
 or directly: `tools/stripe-subscription-past-due.sh [fail|recover|status] <id>`.
+
+The script reads the DB credentials from `${STRIPE_ETENDO_ROOT}/gradle.properties`, and
+`STRIPE_ETENDO_ROOT` defaults to `<schema_forge>/etendo_core`. In the usual layout, where
+`schema_forge` sits inside the Etendo root, that path does not exist and the script stops with
+`gradle.properties not found at .../schema_forge/etendo_core/gradle.properties`. Point it at the
+Etendo root, on the command line or in `.env`:
+
+```bash
+STRIPE_ETENDO_ROOT="$(cd .. && pwd)" make stripe-past-due ID=<etgo_checkout_request_id>
+```
 
 - **`fail`** attaches the well-known test payment method `pm_card_chargeCustomerFail` as the
   subscription's default, creates and finalizes a manual invoice for the subscription's own price
@@ -1015,7 +1041,7 @@ and the resulting tenant/payment state in Etendo.
 | SF-STRIPE-LOCAL-23 | A dispute is an alert only (ETP-5047) | Test Mode card `4000000000000259`, or a hand-signed `charge.dispute.created` (§4) | `event_result=APPLIED`; a WARN `Billing alert: ... charge.dispute.created`; no status or due-date change | P1 |
 | SF-STRIPE-LOCAL-24 | Blocked tenant: structured 402 on NEO and MCP (ETP-5047) | a tenant past its grace (e.g. SF-STRIPE-LOCAL-10 with an old `period_end`); call any `/sws/neo/...` and `POST /sws/mcp` | 402 with `error.code=ENVIRONMENT_ACCESS_DENIED`, `error.decision=SUBSCRIPTION_REQUIRED`, `error.message` unchanged; `/account` and `/upgrade` still load; the SPA shows the blocked screen | P0 |
 | SF-STRIPE-LOCAL-25 | Kill switch on (ETP-5047) | SF-STRIPE-LOCAL-24 with `etendo.go.flags.environment-access-enforcement-off=true`, Tomcat restarted | 200 on NEO and MCP; INFO `Environment access enforcement is switched off: ... would have refused tenant` in the log; `GET /sws/go/environments` shows that tenant's `accessState` as `ALLOWED` (subscription status and trial fields unchanged); remove the property → 402 again and `accessState` back to the refusal | P0 |
-| SF-STRIPE-LOCAL-26 | Period and grace anchor are separate columns (ETP-5047) | Test Mode `tools/stripe-subscription-past-due.sh fail` then `recover` (§5), on a tenant with a row | after `fail`: `STATUS=past_due`, `GRACE_ANCHOR` = end of the paid period, `CURRENT_PERIOD_START/END` = Stripe's current period (unchanged by the failure); after `recover`: `STATUS=active`, `GRACE_ANCHOR` NULL, period advanced; `LAST_EVENT_AT` moves forward with each applied event | P0 |
+| SF-STRIPE-LOCAL-26 | Period and grace anchor are separate columns (ETP-5047) | Test Mode `tools/stripe-subscription-past-due.sh fail` then `recover` (§5), on a tenant with a row | after `fail`: `STATUS=past_due`, `GRACE_ANCHOR` = the failed invoice's `period_end` (the script's manual invoice: the moment it was created; a real renewal: the end of the paid period), `CURRENT_PERIOD_START/END` = Stripe's current period (unchanged by the failure); after `recover`: `STATUS=active`, `GRACE_ANCHOR` NULL, period advanced; `LAST_EVENT_AT` moves forward with each applied event | P0 |
 
 ## 8. Troubleshooting
 
@@ -1137,3 +1163,238 @@ Confirm the Dashboard is in Test Mode, the session was created with the `sk_test
 - For the access scenarios (SF-STRIPE-LOCAL-24/25): the raw 402 response body from NEO and from
   `POST /sws/mcp`, the `accessState` of the tenant in `GET /sws/go/environments`, and the INFO log
   line with the kill switch on.
+
+## 10. Happy flow walkthrough (ETP-5046 + ETP-5047)
+
+One end-to-end pass through the paid lifecycle against real Stripe Test Mode: a demo expires, the
+customer buys, a renewal fails, grace runs out, the customer pays, and finally cancels. It ties
+the reference sections above into one sequence and says what to look at after each step. It was
+run successfully on 2026-10-14 against `com.etendoerp.go` `82f0c3be6` and `schema_forge`
+`efa6e1caa` on a local Etendo.
+
+Run the steps in order: each one starts from the state the previous one left. Step 8 ends the
+subscription, so it goes last.
+
+### 10.1 Setup
+
+1. Check out both repos (`com.etendoerp.go` and `schema_forge`) on the branch under test.
+2. Stop Tomcat, switch to JDK 17 (`export JAVA_HOME=<your JDK 17 home>`), and rebuild from the
+   Etendo root:
+
+   ```bash
+   ./gradlew update.database smartbuild
+   ```
+
+   Start Tomcat again, and start the SPA from `schema_forge` with `make dev` (`http://localhost:3100`).
+3. Configure the backend as in §3: `etendo.go.checkout.secret.key` (`sk_test_...`),
+   `etendo.go.checkout.webhook.secret`, `etendo.go.checkout.price.id`, plus
+   `etendo.go.app.baseUrl=http://localhost:3100` (the Customer Portal's return URL, §1 "The two
+   account endpoints"). Two things must **not** be set:
+   - `etendo.go.checkout.api.base.url` pointing at the offline stub (`http://localhost:8099`, §4)
+     — remove it, or the backend never reaches Stripe;
+   - `etendo.go.flags.environment-access-enforcement-off` — with the kill switch on nothing is
+     ever blocked (§1 "The 402 body and the kill switch").
+4. Leave the plan catalog without a **Provider Price ID** on any plan. Checkout then sells
+   `legacy-productive` at `etendo.go.checkout.price.id` under the legacy price fallback (§3
+   "What is for sale"); that is the configuration this walkthrough was run with.
+5. Start the listener with the event list from §5 "Manual forwarding" and keep it running. Check
+   that its secret matches `etendo.go.checkout.webhook.secret`:
+
+   ```bash
+   stripe listen --print-secret
+   ```
+
+6. Save a Customer Portal configuration in Test Mode, or opening the portal fails: Dashboard
+   **Settings → Billing → Customer portal**
+   (`https://dashboard.stripe.com/test/settings/billing/portal`), then **Save**. Check it with:
+
+   ```bash
+   stripe billing_portal configurations list
+   ```
+
+   Note the configured cancel mode (`features.subscription_cancel.mode`); step 8 depends on it.
+   The test account this was written against cancels `at_period_end`.
+
+### 10.2 Queries used throughout
+
+Keep these at hand; each step below says which one to read.
+
+```sql
+-- the purchase (latest first)
+select request_id, checkout_status, client_name, demo_client_id, created_client_id,
+       stripe_customer_id, stripe_subscription_id, stripe_price_id, etgo_plan_id,
+       transfer_products, transfer_contacts, failure_reason
+  from etgo_checkout_request order by created desc limit 3;
+
+-- the webhook ledger (latest first)
+select event_id, event_type, event_result, failure_reason, received_at
+  from etgo_billing_event order by received_at desc limit 15;
+
+-- the lifecycle preferences of one client (demo or productive)
+select attribute, value, updated
+  from ad_preference
+ where attribute like 'ETGO\_%'
+   and (ad_client_id = '<CLIENT>' or visibleat_client_id = '<CLIENT>')
+ order by attribute;
+```
+
+For the tenant's subscription rows use the §1 query ("Where the outcome is stored"), with
+`environment_client_id = '<CLIENT>'`. The `etgo_billing_event` columns are explained in §1
+"Billing events are durable".
+
+### 10.3 The steps
+
+**Step 1 — Sign up a demo.** Create a demo environment from the SPA.
+
+- Expect, on the demo client: preferences `ETGO_EnvironmentType = DEMO` and
+  `ETGO_DemoTrialStartedAt` (an ISO-8601 instant).
+- Expect **no** `etgo_subscription` row. That is by design: only a paid tenant ever has one, and a
+  row would send the tenant down the productive path (§1 "Where the outcome is stored").
+
+**Step 2 — Expire the trial.** The trial lasts `etendo.go.demo.trial.days` (default 14), counted
+from `ETGO_DemoTrialStartedAt`. Move that start back 15 days:
+
+```sql
+update ad_preference
+   set value = to_char((now() - interval '15 days') at time zone 'UTC',
+                       'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+       updated = now()
+ where attribute = 'ETGO_DemoTrialStartedAt'
+   and (ad_client_id = '<DEMO>' or visibleat_client_id = '<DEMO>');
+```
+
+The value must stay a parseable ISO instant. An unparsable value makes the lifecycle unresolvable,
+which resolves to **allowed**, not blocked, so a typo here looks like "the block does not work".
+
+- Expect, without a restart (the decision is evaluated on every request): the SPA shows the
+  blocked screen, and NEO answers `402` with `error.decision = DEMO_TRIAL_EXPIRED` (§1 "The 402
+  body and the kill switch").
+- Expect `/upgrade` and `/account` to stay reachable.
+
+**Step 3 — Buy.** From the blocked demo, go to `/upgrade`, choose the products and contacts to
+carry over, and pay on the hosted Checkout page with `4242 4242 4242 4242` (§5 "Test cards").
+
+> **Use a company name that no client has yet**, neither the demo's nor any other. Until ETP-5737
+> is fixed, a duplicate name passes the check on `/upgrade`, but provisioning fails *after*
+> payment on the `AD_CLIENT_NAME` unique index, and the SPA says "We could not finish setting up
+> your environment. Your payment is safe." To recover locally, rename the clashing client
+> (`update ad_client set name = '<other name>' where ad_client_id = '<clashing client>';`) and
+> retry from the same page; the payment is not repeated.
+
+Expect, in the ledger and on the purchase:
+
+- `checkout.session.completed` → `APPLIED`.
+- The purchase row goes to `PROVISIONED`, with the real `stripe_customer_id`,
+  `stripe_subscription_id`, `stripe_price_id` and `etgo_plan_id` filled in (§1 "Payment state is
+  durable").
+- The first `invoice.paid` → `IGNORED`, `failure_reason = unresolved subscription`. This is the
+  expected timing gap: it arrives before the new tenant exists (§1 "Correlation is different from
+  the checkout path"). If it lands after the purchase is linked to its client but before the row
+  opens, the reason reads `no open subscription row` instead; both are harmless.
+
+Expect, on the environments:
+
+- A **new** productive environment, `created_client_id` on the purchase (a client claimed from
+  the pool and renamed to the company name). A purchase never converts the demo into a productive
+  environment.
+- The demo data transfer copied only the products and contacts selected on `/upgrade`; the
+  productive client's `ETGO_DemoDataTransferStatus` reads `COMPLETED`.
+- The demo stays blocked. Besides its expired trial, the purchase associates it with the
+  productive environment (`ETGO_AssociatedProductiveClientId` on the demo,
+  `ETGO_AssociatedDemoClientId` on the productive client), which revokes demo access on its own.
+
+**Step 4 — The billing period is filled (ETP-5047).** Right after provisioning, the backend reads
+the new subscription once from Stripe (`GET /v1/subscriptions/{id}`) to fill the period the
+ignored first events could not write (§1 "Where the outcome is stored").
+
+- Expect the log line `Subscription <row id> of tenant <client id> got its billing period from the
+  provider`.
+- Expect the tenant's `etgo_subscription` row: `status = active`, `end_date` and `grace_anchor`
+  null, `current_period_start` / `current_period_end` filled.
+- Compare with Stripe. The period is on the first subscription item on current API versions (§1,
+  "The Stripe API version is not pinned"):
+
+  ```bash
+  stripe subscriptions retrieve <sub_id> | jq '.items.data[0] | {current_period_start, current_period_end}'
+  date -d @<epoch>      # the row stores the same instant in the server's local time
+  ```
+
+**Step 5 — A renewal fails.** Force a real declined charge with the script from §5 ("Forcing a
+real `invoice.payment_failed` / `invoice.paid` cycle"), giving it the purchase's
+`etgo_checkout_request_id` (and `STRIPE_ETENDO_ROOT`, as explained there):
+
+```bash
+STRIPE_ETENDO_ROOT="$(cd .. && pwd)" make stripe-past-due ID=<etgo_checkout_request_id>
+```
+
+- Expect a real `card_declined`, and `invoice.payment_failed` → `APPLIED`.
+- Expect the row: `status = past_due`, `grace_anchor` set, `last_event_at` set. The anchor is the
+  failed invoice's `period_end`; for the script's manual invoice that is the moment it was
+  created, for a real renewal it is the end of the paid period (§1, "The grace anchor is the end
+  of the paid period").
+- Expect the tenant to stay **allowed**: it is inside its grace window (§1 lifecycle matrix).
+- There is no in-app warning during grace today; only `/account` shows the grace state
+  (`graceDaysRemaining`). Tracked in ETP-5049.
+
+**Step 6 — Grace runs out.** Move the anchor past the grace window (`etendo.go.billing.grace.days`,
+default 15):
+
+```sql
+update etgo_subscription
+   set grace_anchor = grace_anchor - interval '20 days'
+ where environment_client_id = '<CLIENT>' and end_date is null;
+```
+
+- Expect, without a restart: the blocked screen, and NEO answering `402` with
+  `error.decision = SUBSCRIPTION_REQUIRED` (SF-STRIPE-LOCAL-24).
+- Expect `/account` and the Customer Portal (**Manage subscription**) to stay reachable.
+
+**Step 7 — The customer pays.** Either pay through the Customer Portal (**Manage subscription** on
+`/account` or on the blocked screen), or let the script pay the open invoice with a working card:
+
+```bash
+STRIPE_ETENDO_ROOT="$(cd .. && pwd)" make stripe-past-due ID=<etgo_checkout_request_id> CMD=recover
+```
+
+- Expect `invoice.paid` → `APPLIED`.
+- Expect the row back to `status = active` with `grace_anchor` null.
+- Expect access restored without a restart (SF-STRIPE-LOCAL-26 covers steps 5 to 7).
+
+**Step 8 — The customer cancels (do this last).**
+
+- **From the Customer Portal**, with the `at_period_end` cancel mode: the subscription stays
+  `active` and only gets `cancel_at_period_end = true`. That flag is display-only, never stored;
+  access continues until Stripe sends `customer.subscription.deleted` at the period boundary (§1,
+  "`cancel_at_period_end = true` does not change the status").
+- **To see the end now**, cancel immediately from the CLI. `--confirm` is required: without it the
+  CLI waits for an interactive "yes" and fails on end of input.
+
+  ```bash
+  stripe subscriptions cancel <sub_id> --confirm
+  ```
+
+  Expect `customer.subscription.deleted` → `APPLIED`; the row `status = canceled` and closed
+  (`end_date` set), with no grace; NEO answering `402` with `error.decision =
+  SUBSCRIPTION_REQUIRED` (SF-STRIPE-LOCAL-14). The way back is a new purchase, which opens a fresh
+  row (SF-STRIPE-LOCAL-22).
+
+### 10.4 Local problems met on the way
+
+- **`Bundled GOClient sampledata index not found on the classpath:
+  com/etendoerp/go/onboarding/sampledata/index.txt`** during provisioning. `smartbuild` stages the
+  onboarding sampledata into the root `WebContent/WEB-INF/classes` (the `prepareOnboardingSampledata`
+  task, see `com.etendoerp.go` `docs/onboarding-sampledata-packaging.md`), but the staged copy did
+  not reach the deployed webapp. Copy it over from the Etendo root and restart Tomcat:
+
+  ```bash
+  cp -r WebContent/WEB-INF/classes/com/etendoerp/go/onboarding/sampledata \
+        <tomcat>/webapps/etendo/WEB-INF/classes/com/etendoerp/go/onboarding/
+  ```
+
+- **`update.database` fails with a foreign-key error on `ETGO_SF_FIELD`** (an `ad_column_id` that
+  does not exist). A dependency module's checkout is older than the NEO configuration that
+  references its columns — here `com.etendoerp.psd2.bank.integration`, behind ETP-5582. Update
+  that module's checkout and run `update.database` again.
+- **`Database has local changes`** stops `update.database`. `./gradlew update.database
+  -Dforce=yes` goes ahead, but it **discards** every AD / NEO change in the local DB that was not
+  exported; run `export.database` first if any of them should be kept.
