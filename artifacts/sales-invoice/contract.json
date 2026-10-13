@@ -1,8 +1,8 @@
 {
-  "version": "0.90.0",
+  "version": "0.91.0",
   "generatedAt": "2026-09-17T15:12:05.781Z",
-  "updatedAt": "2026-10-13T15:55:32.160Z",
-  "checksum": "e7478aaefff97669",
+  "updatedAt": "2026-10-13T13:49:29.304Z",
+  "checksum": "c28a95219dca050e",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -21,7 +21,8 @@
         "topbarExtra": "InvoiceDeliveryBadge",
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
-        "topbarRight": "InvoiceTopbarExtra"
+        "topbarRight": "InvoiceTopbarExtra",
+        "moreMenuContent": "SifSendMenuItem"
       },
       "menuActions": [
         {
@@ -41,6 +42,16 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenStatus": "CO",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {},
@@ -825,9 +836,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           },
           {
@@ -854,9 +865,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           },
           {
@@ -1831,7 +1842,13 @@
           "processValue": "CO",
           "label": "Confirm",
           "keepSaveWhenCompletedFields": [
-            "accountingDate"
+            "accountingDate",
+            "project",
+            "costcenter"
+          ],
+          "editableLineFieldsWhenCompleted": [
+            "project",
+            "costcenter"
           ]
         }
       },
@@ -2126,9 +2143,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           },
           {
@@ -2155,9 +2172,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           }
         ],
@@ -2838,7 +2855,8 @@
         "topbarExtra": "InvoiceDeliveryBadge",
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
-        "topbarRight": "InvoiceTopbarExtra"
+        "topbarRight": "InvoiceTopbarExtra",
+        "moreMenuContent": "SifSendMenuItem"
       },
       "menuActions": [
         {
@@ -2858,6 +2876,16 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenStatus": "CO",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {},

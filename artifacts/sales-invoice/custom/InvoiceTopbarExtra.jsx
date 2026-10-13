@@ -45,7 +45,7 @@ const BADGE_STYLES = {
  *
  * The badge is the ONLY entry point. Clicking it opens the payments modal.
  */
-export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api, onSave, isDirty, isDocumentReadOnly }) {
+export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api, onSave, isDirty, windowReadOnly }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
@@ -343,7 +343,9 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         status={data?.documentStatus}
         onSave={onSave}
         isDirty={isDirty}
-        isDocumentReadOnly={isDocumentReadOnly}
+        // ETP-5700: the Solo Lectura tier, NOT isDocumentReadOnly (true on every
+        // completed invoice through the processed lock) — see SendToSifButton.jsx.
+        windowReadOnly={windowReadOnly}
         data-testid="SendToSifButton__329004" />
 
       {/* View payments modal — installment breakdown */}

@@ -3713,6 +3713,16 @@ finished**, as relative time. Cash, offline/reconnectable and unconnected accoun
 - The sidebar "Saldo" header carries no sync pill (removed by product decision); only the per-account labels exist.
 - Out of scope: a "next sync in..." estimate (the sync is a per-client scheduled process).
 
+## Account selectors — ETP-5681
+
+The account fields of the edit modal's **Contabilidad** tab (`AccountingConfigurationSection` in
+`EditAccountModal.jsx`) use `AccountSelect`: the field is a button that opens the shared centered
+account search popup (`SearchPopup`, the one the report filters use for "Desde la cuenta"), titled
+with the field label. Optional fields show an ✕ to clear. The catalog (`catalogs.accounts` of
+`FinancialAccountAccountingHandler`) lists **posting accounts only**, and its labels now read
+`"<code> - <name>"` like every other account selector (they used an em dash, `"<code> — <name>"`,
+before ETP-5681; the `$_identifier` of each stored account changed the same way).
+
 ## Accounting visibility — "Show Accounting Fields" (ETP-5684)
 
 A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.

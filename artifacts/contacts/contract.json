@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-08T17:37:41.052Z",
-  "checksum": "f0c051e59f5c6853",
+  "updatedAt": "2026-10-09T15:04:44.751Z",
+  "checksum": "f8ed5ca0ca57c7f9",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -2383,6 +2383,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "section": "principal",
             "labels": {
               "en_US": "Receivables Account",
@@ -2406,6 +2408,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "section": "principal",
             "labels": {
               "en_US": "Prepayment Account",
@@ -3436,6 +3440,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "section": "principal",
             "labels": {
               "en_US": "Liability Account",
@@ -3459,6 +3465,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "section": "principal",
             "labels": {
               "en_US": "Prepayment Account",

@@ -80,23 +80,31 @@
       "fields": {
         "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
         "fixedAsset": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "seq": 1
         },
         "productExpense": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,
           "seq": 2
         },
         "productRevenue": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,
           "seq": 3
         },
         "productCOGS": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,
@@ -109,6 +117,8 @@
           "visibility": "discarded"
         },
         "invoicePriceVariance": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,
