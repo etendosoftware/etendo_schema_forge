@@ -82,14 +82,14 @@ const PLAIN_FIELD_CLS = `${FIELD_HEIGHT} rounded-lg border border-[hsl(var(--bor
 function renderAccountOption(a) {
   return (
     <span className="flex w-full items-center gap-2.5">
-      <BankTile size={34} />
+      <BankTile size={34} data-testid="BankTile__7ff08b" />
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-sm font-medium leading-[18px] text-[hsl(var(--foreground))]">{a.name}</span>
         <span className="truncate text-xs leading-4 tabular-nums text-[hsl(var(--muted-foreground))]">
           {a.iban || a.maskedPan || ''}
         </span>
       </span>
-      <CurrencyBadge iso={a.currencyIso} />
+      <CurrencyBadge iso={a.currencyIso} data-testid="CurrencyBadge__7ff08b" />
       <span className="ml-auto text-[13px] font-medium leading-4 tabular-nums text-[hsl(var(--muted-foreground))]">
         {formatCurrency(a.currencyIso, a.currentBalance)}
       </span>
@@ -121,7 +121,8 @@ function AccountSelect({ accounts, value, onChange, placeholder }) {
       renderOption={renderAccountOption}
       filterFn={accountFilter}
       chipLabel={accountChipLabel}
-      placeholderOverride={placeholder} />
+      placeholderOverride={placeholder}
+      data-testid="CreatableSearchSelect__7ff08b" />
   );
 }
 
@@ -136,7 +137,8 @@ function GlSelect({ value, onChange, placeholder }) {
       onChange={onChange}
       useLookup={useGLItemLookup}
       placeholder={placeholder}
-      testId="transfer-gl" />
+      testId="transfer-gl"
+      data-testid="ChipSelect__7ff08b" />
   );
 }
 

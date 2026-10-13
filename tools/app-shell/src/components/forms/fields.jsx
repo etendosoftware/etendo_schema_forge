@@ -475,6 +475,7 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
       onChange={handleChange}
       useLookup={useLookup}
       placeholderOverride={placeholder}
-      disabled={disabled} />
+      disabled={disabled}
+      data-testid="CreatableSearchSelect__7183e9" />
   );
 }
