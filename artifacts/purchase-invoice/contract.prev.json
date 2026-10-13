@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "updatedAt": "2026-10-07T14:31:25.639Z",
-  "checksum": "8bb0681ba2b2550c",
+  "updatedAt": "2026-10-09T15:19:11.688Z",
+  "checksum": "5aa62cceb7f9fd31",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -36,6 +36,16 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenStatus": "CO",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {},
@@ -977,9 +987,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           },
           {
@@ -1006,9 +1016,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           },
           {
@@ -1870,7 +1880,13 @@
           "label": "Confirm",
           "keepSaveWhenCompletedFields": [
             "orderReference",
-            "accountingDate"
+            "accountingDate",
+            "project",
+            "costcenter"
+          ],
+          "editableLineFieldsWhenCompleted": [
+            "project",
+            "costcenter"
           ]
         }
       },
@@ -2292,9 +2308,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           },
           {
@@ -2321,9 +2337,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           },
           {
@@ -5318,6 +5334,16 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenStatus": "CO",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {},
