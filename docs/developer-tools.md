@@ -12,6 +12,7 @@ Since ETP-5695 the pre-push runs less than CI, and CI runs the rest:
 
 - **Unit tests:** only the ones the branch can affect, selected by `scripts/select-tests.js` against the base branch (`make test-changed-coverage`). `make test-changed` runs the same selection while you work; `PLAN=1 make test-changed` only prints it. The PR's `Tests` job runs the whole suite.
 - **Coverage:** the overall comparison against the base branch is left to the PR's `Sonar Build` check (`docs/coverage-gate.md`).
+- **Target branch:** the pre-push measures the push against the branch it will merge into (`.githooks/lib/target-branch.sh`): `PRE_PUSH_TARGET` when set, else the base of the branch's open PR (via `gh`), else `main` for `main` and `hotfix/*` and `develop` for the rest. The conflict check, the relevance diff, Sonar's base and the unit-test selection all use it.
 - **Playwright integration specs:** left to CI's full pipeline. `PRE_PUSH_INTEGRATION=1` runs them in the pre-push too, against the backend resolved as described above.
 
 `PRE_PUSH_WORKERS` (default: half the logical CPUs) sets the vitest worker processes and caps the mocked Playwright workers at that number, and never above 4. `TEST_WORKERS` (vitest) and `E2E_WORKERS` (Playwright) override each one. Each vitest worker uses about 1.5 cores. Measured on a 10-core machine:
