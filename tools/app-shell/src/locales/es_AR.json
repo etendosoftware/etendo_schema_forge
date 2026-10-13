@@ -20755,7 +20755,7 @@
     "firstStepsSetupPayments": "Configura métodos de pago",
     "firstStepsInviteTeam": "Invita a tu equipo",
     "firstStepsFiscalConfig": "Configuración fiscal",
-    "firstStepsFiscalConfigQuestion": "¿Tenés que informar las facturas a algún Sistema de Facturación (SIF), como SII, Verifactu o TicketBai?",
+    "firstStepsFiscalConfigQuestion": "¿Tenés que informar las facturas a algún Sistema de Información Fiscal (SIF) como SII, TicketBai o Verifactu?",
     "firstStepsDemoDataTransfer": "Transferir datos de tu demo",
     "firstStepsDemoDataTransferDesc": "Transferimos los datos que seleccionaste cuando tu entorno productivo esté listo. Podés salir de esta página mientras se realiza.",
     "firstStepsDemoDataTransferStarting": "Iniciando la transferencia de datos…",

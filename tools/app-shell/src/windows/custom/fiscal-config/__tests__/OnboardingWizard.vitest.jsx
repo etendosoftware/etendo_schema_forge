@@ -287,6 +287,17 @@ describe('OnboardingWizard — SubquestionScreen (volume)', () => {
     expect(screen.getByText('fiscal.onboarding.subq.sii.vol.label')).toBeInTheDocument();
   });
 
+  // ETP-5597 — SIF options are offered in the order SII → TicketBAI → VERI*FACTU.
+  it('offers SII before VERI*FACTU in the low-volume system choice', () => {
+    navigateToVolumeSubquestion();
+    fireEvent.click(screen.getByText('fiscal.onboarding.subq.obligation.no.label'));
+    const sii = screen.getByTestId('BulletOptionCard__sii');
+    const verifactu = screen.getByTestId('BulletOptionCard__verifactu');
+    expect(sii).toHaveTextContent('fiscal.onboarding.subq.sii.vol.label');
+    expect(verifactu).toHaveTextContent('fiscal.onboarding.subq.verifactu.label');
+    expect(sii.compareDocumentPosition(verifactu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('continue is enabled after choosing system for low volume', () => {
     navigateToVolumeSubquestion();
     fireEvent.click(screen.getByText('fiscal.onboarding.subq.obligation.no.label'));
