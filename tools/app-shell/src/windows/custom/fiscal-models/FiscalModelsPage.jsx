@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import FmListPage from './FmListPage';
-import FmModel303Page from './models/303/FmModel303Page';
-import FmModel349Page from './models/349/FmModel349Page';
+import { getModel, isKnownModel } from './modelRegistry.js';
+import { getDetailPage } from './modelRegistryPages.js';
 import FmDebugPanel from './FmDebugPanel.jsx';
 import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
 import { persistDeclarationStatus, fetchDeclaration } from './fiscalModelsUtils.js';
@@ -31,10 +31,12 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
     setView({ type: 'list' });
   }, []);
 
-  const handleComputeUpdate = useCallback((computedMap349) => {
+  // FmListPage pushes the draft auto-compute map of every model whose registry entry sets
+  // `syncDraftComputeToDetail` (349); only an open detail page of such a model takes it.
+  const handleComputeUpdate = useCallback((computedMap) => {
     setView(v => {
-      if (v.type !== '349') return v;
-      const updated = computedMap349[v.decl.id];
+      if (!getModel(v.type)?.syncDraftComputeToDetail) return v;
+      const updated = computedMap[v.decl.id];
       if (!updated) return v;
       return { ...v, decl: { ...v.decl, _precomputed: updated } };
     });
@@ -63,7 +65,13 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
     }
   }, [token, apiBaseUrl]);
 
-  const inDetail = view.type === '303' || view.type === '349';
+  // A registered model's declaration is open: render that model's detail page (registry
+  // binding in modelRegistryPages.js). `detailType` is captured so the status callback only
+  // patches the view while it still shows that model, as each per-model block did before.
+  const inDetail = isKnownModel(view.type);
+  const detailType = view.type;
+  const DetailPage = inDetail ? getDetailPage(detailType) : undefined;
+  const detailModel = getModel(detailType);
 
   return (
     <>
@@ -79,8 +87,8 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           declManualDataPatch={declManualDataPatch}
           data-testid="FmListPage__ca1112" />
       </div>
-      {view.type === '303' && (
-        <FmModel303Page
+      {DetailPage && (
+        <DetailPage
           decl={view.decl}
           onBack={handleBack}
           token={token}
@@ -91,38 +99,16 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
               // ETP-5438 — carry the snapshot the backend froze at submission into both the
               // detail view and the list, so the list freezes on it without a refetch.
               const snapshotPatch = result.submittedSnapshot ? { submittedSnapshot: result.submittedSnapshot } : {};
-              setView(v => v.type === '303' ? { ...v, decl: { ...v.decl, status: newStatus, ...snapshotPatch } } : v);
+              setView(v => v.type === detailType ? { ...v, decl: { ...v.decl, status: newStatus, ...snapshotPatch } } : v);
               setDeclStatusPatch({ id, patch: { status: newStatus, ...(submissionMethod ? { submissionMethod } : {}), ...snapshotPatch } });
             }
             return result;
           }}
-          onSubmittedRemotely={handleSubmittedRemotely}
+          {...(detailModel.telematicFiling ? { onSubmittedRemotely: handleSubmittedRemotely } : {})}
           onManualDataSaved={(id, manualData) => {
             setDeclManualDataPatch({ id, patch: { manualData } });
           }}
-          data-testid="FmModel303Page__ca1112" />
-      )}
-      {view.type === '349' && (
-        <FmModel349Page
-          decl={view.decl}
-          onBack={handleBack}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          onStatusChange={async (id, newStatus, submissionMethod) => {
-            const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod });
-            if (result.ok) {
-              // ETP-5438 — carry the snapshot the backend froze at submission into both the
-              // detail view and the list, so the list freezes on it without a refetch.
-              const snapshotPatch = result.submittedSnapshot ? { submittedSnapshot: result.submittedSnapshot } : {};
-              setView(v => v.type === '349' ? { ...v, decl: { ...v.decl, status: newStatus, ...snapshotPatch } } : v);
-              setDeclStatusPatch({ id, patch: { status: newStatus, ...(submissionMethod ? { submissionMethod } : {}), ...snapshotPatch } });
-            }
-            return result;
-          }}
-          onManualDataSaved={(id, manualData) => {
-            setDeclManualDataPatch({ id, patch: { manualData } });
-          }}
-          data-testid="FmModel349Page__ca1112" />
+          data-testid={`FmModel${detailType}Page__ca1112`} />
       )}
       {debugMode && <FmDebugPanel view={view} setView={setView} data-testid="FmDebugPanel__ca1112" />}
     </>
