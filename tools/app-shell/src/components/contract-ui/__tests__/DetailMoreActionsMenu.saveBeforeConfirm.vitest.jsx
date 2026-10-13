@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailMoreActionsMenu.jsx
 // ETP-4940 — regression coverage for the kebab-menu ("more actions")
 // documentAction path (Complete/Void/Reactivate/etc. for windows that don't
 // use draftMode). Before this fix, `runDocumentAction` called
@@ -16,6 +17,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
 import { DetailMoreActionsMenu } from '../DetailMoreActionsMenu.jsx';
 
 vi.mock('../DetailView.jsx', () => ({
@@ -24,7 +26,8 @@ vi.mock('../DetailView.jsx', () => ({
 }));
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('@/lib/backendErrors.js', () => ({ translateBackendError: (m) => m }));
+// backendErrors.js is used for real: the documentAction failure toast is asserted through the
+// actual translation map, and the module has no imports of its own.
 
 const REACTIVATE_ACTION = {
   key: 'reactivate',
@@ -52,7 +55,7 @@ function makeDocAction(overrides = {}) {
   };
 }
 
-function renderMenu({ hook, docAction, menuActions = [REACTIVATE_ACTION] } = {}) {
+function renderMenu({ hook, docAction, menuActions = [REACTIVATE_ACTION], ui = (key) => key } = {}) {
   return render(
     <DetailMoreActionsMenu
       apiBaseUrl="https://example.test/api"
@@ -68,7 +71,7 @@ function renderMenu({ hook, docAction, menuActions = [REACTIVATE_ACTION] } = {})
       sqBtnSize="h-9 w-9"
       statusField="documentStatus"
       token="tok"
-      ui={(key) => key}
+      ui={ui}
     />,
   );
 }
@@ -170,5 +173,34 @@ describe('DetailMoreActionsMenu — save-before-confirm guard (ETP-4940)', () =>
     // be silently lost exactly like the original ETP-4940 bug.
     expect(hook.handleSave).not.toHaveBeenCalled();
     expect(docAction.execute).toHaveBeenCalledWith('rec-1', 'RE');
+  });
+});
+
+describe('DetailMoreActionsMenu — documentAction failure toast', () => {
+  const LINKED_DOCS = 'This order cannot be reactivated because it has linked shipments or invoices.';
+  const DICT = {
+    cannotReactivateLinkedDocs: 'No se puede reactivar: el pedido tiene documentos vinculados',
+    actionFailed: 'La acción ha fallado',
+  };
+  const ui = (key) => DICT[key] ?? key;
+
+  it.each([
+    // Fails pre-fix: the raw English text was toasted untranslated.
+    ['a mapped backend message is translated', LINKED_DOCS, DICT.cannotReactivateLinkedDocs],
+    // Unchanged behaviour: an unmapped message still reaches the user verbatim.
+    ['an unmapped backend message is shown verbatim', 'Something unexpected', 'Something unexpected'],
+    // Fails pre-fix: an empty message toasted an empty string instead of the generic failure.
+    ['an empty message falls back to actionFailed', '', DICT.actionFailed],
+  ])('%s', async (_label, message, expected) => {
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
+    const docAction = makeDocAction({ execute: vi.fn().mockRejectedValue(new Error(message)) });
+
+    renderMenu({ hook: makeHook(), docAction, ui });
+    await openMenuAndClickAction();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.error).toHaveBeenCalledWith(expected);
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });
