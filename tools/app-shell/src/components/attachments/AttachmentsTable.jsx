@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Download, FileX, Loader2, Trash2 } from 'lucide-react';
 import {
   Table,
@@ -35,10 +34,10 @@ function formatDate(value) {
 /**
  * Single row for a file that is currently being uploaded.
  */
-function UploadingRow({ name, size, formatBytes }) {
+function UploadingRow({ name, size, formatBytes, selectable }) {
   return (
     <TableRow className="h-10" data-testid="TableRow__e868a0">
-      <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0" />
+      {selectable && <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0" />}
       <TableCell className="px-3 py-0 font-medium" data-testid="TableCell__e868a0">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2
@@ -65,9 +64,34 @@ function UploadingRow({ name, size, formatBytes }) {
  *   loading        - True while the list is being fetched.
  *   uploadingFiles - Map<string, { name, size }> with optimistic upload rows.
  *   onDownload     - (attachment) => void
- *   onEdit         - (attachment) => void
  *   onDelete       - (attachment) => void
+ *   onDownloadAll  - () => void. Renders the header-wide "Download all (ZIP)" control.
+ *                    Still used by SifAttachmentsSection, which has no selection and
+ *                    no other way to pull its fiscal XML bundle; the Adjuntos tab
+ *                    stopped passing it when the selection bar replaced it (ETP-5526).
  *   formatBytes    - (bytes) => string
+ *
+ * ── Selection is an opt-in capability (ETP-5526) ──────────────────────────────
+ * This component is shared, and selection is NOT part of its baseline contract.
+ * It is a CONTROLLED capability: the owner of the selection is the caller, exactly
+ * as in MovementsTab → StatementsTable (`selectedIds` down, toggles up), which is
+ * how the rest of the app wires a bulk-selection surface.
+ *
+ *   selectedIds  - Set<string> | undefined. Supplying it turns the capability ON:
+ *                  the checkbox column appears and the rows tint. Leaving it out
+ *                  means the capability does not exist here at all — no column, no
+ *                  state, nothing to toggle. It used to render unconditionally, so
+ *                  SifAttachmentsSection (the other consumer, read-only by design)
+ *                  showed checkboxes that could not drive anything: the very
+ *                  inert-control defect this ticket reports, in a second screen.
+ *   onToggleRow  - (id) => void. One row's checkbox.
+ *   onToggleAll  - (nextIds: string[]) => void. Header checkbox; receives the full
+ *                  id list, or [] when it is clearing an already-complete selection.
+ *
+ * The selection BAR itself is deliberately not rendered here: SelectionToolbar
+ * portals to document.body and its actions are caller business (download a subset,
+ * delete a subset — each with its own gating), so the caller that owns the
+ * selection owns the bar too. See AttachmentsTab.
  */
 export default function AttachmentsTable({
   items,
@@ -76,30 +100,37 @@ export default function AttachmentsTable({
   onDownload,
   onDelete,
   onDownloadAll,
-  onDeleteAll,
+  selectedIds,
+  onToggleRow,
+  onToggleAll,
   formatBytes,
 }) {
   const ui = useUI();
-  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  const selectable = selectedIds != null;
+  const isSelected = (id) => selectable && selectedIds.has(id);
 
   const uploadingEntries = uploadingFiles ? Array.from(uploadingFiles.entries()) : [];
   const hasItems = items && items.length > 0;
   const hasUploads = uploadingEntries.length > 0;
 
-  // 7 columns: checkbox, fileName, size, uploadedAt, updatedAt, uploadedBy, actions
-  const COLUMNS = 7;
+  // fileName, size, uploadedAt, updatedAt, uploadedBy, actions — plus the
+  // checkbox column only when the caller opted into selection.
+  const COLUMNS = selectable ? 7 : 6;
 
-  const allSelected = hasItems && selectedIds.size === items.length;
-  const someSelected = selectedIds.size > 0 && !allSelected;
+  // Counted against `items`, not against the raw Set: a row deleted by a bulk
+  // action leaves its id behind in the caller's Set for one render, and an
+  // "all selected" that includes ids no longer on screen would tick the header
+  // checkbox for a selection the user can no longer see.
+  const selectedCount = selectable && hasItems
+    ? items.filter((i) => selectedIds.has(i.id)).length
+    : 0;
+  const allSelected = hasItems && selectedCount === items.length;
+  const someSelected = selectedCount > 0 && !allSelected;
 
-  const toggleAll = () => setSelectedIds(
-    allSelected ? new Set() : new Set(items.map((i) => i.id))
+  const toggleAll = () => onToggleAll?.(
+    allSelected || !hasItems ? [] : items.map((i) => i.id)
   );
-  const toggleOne = (id) => {
-    const next = new Set(selectedIds);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setSelectedIds(next);
-  };
 
   // h-10 overrides the default h-11 from TableHead base styles
   const headCell = 'h-10 px-3 py-0 text-xs font-semibold text-foreground';
@@ -109,43 +140,37 @@ export default function AttachmentsTable({
     <Table data-testid="attachments-table">
       <TableHeader data-testid="TableHeader__e868a0">
         <TableRow className="h-10" data-testid="TableRow__e868a0">
-          <TableHead className={`${headCell} w-10 px-2`} data-testid="TableHead__e868a0">
-            <Checkbox
-              checked={allSelected}
-              indeterminate={someSelected}
-              onChange={toggleAll}
-              data-testid="Checkbox__e868a0" />
-          </TableHead>
+          {selectable && (
+            <TableHead className={`${headCell} w-10 px-2`} data-testid="TableHead__e868a0">
+              <Checkbox
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={toggleAll}
+                data-testid="attachments-select-all" />
+            </TableHead>
+          )}
           <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsFileName')}</TableHead>
           <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsSize')}</TableHead>
           <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUploadedAt')}</TableHead>
           <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUpdatedAt')}</TableHead>
           <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUploadedBy')}</TableHead>
+          {/* ETP-5526 — the delete-all header control is gone from here: the selection
+              bar is the one bulk-delete affordance now, and the Figma header has exactly
+              the five data columns above. The download-all ZIP control survives only
+              because a caller without selection (SifAttachmentsSection) has no other way
+              to pull the whole bundle; the attachments tab no longer passes it. */}
           <TableHead className={headCell} data-testid="TableHead__e868a0">
-            {(onDownloadAll || onDeleteAll) && (
+            {onDownloadAll && (
               <div className="flex justify-end items-center gap-3">
-                {onDownloadAll && (
-                  <button
-                    type="button"
-                    data-testid="attachments-download-all"
-                    onClick={onDownloadAll}
-                    className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
-                  >
-                    <Download className="h-3.5 w-3.5" data-testid="Download__e868a0" />
-                    {ui('attachmentsDownloadAll')}
-                  </button>
-                )}
-                {onDeleteAll && (
-                  <button
-                    type="button"
-                    data-testid="attachments-delete-all"
-                    onClick={onDeleteAll}
-                    className="flex items-center gap-1.5 text-xs font-medium text-[hsl(var(--destructive))] hover:text-[hsl(var(--destructive))] transition-colors whitespace-nowrap"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__e868a0" />
-                    {ui('attachmentsDeleteAll')}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  data-testid="attachments-download-all"
+                  onClick={onDownloadAll}
+                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+                >
+                  <Download className="h-3.5 w-3.5" data-testid="Download__e868a0" />
+                  {ui('attachmentsDownloadAll')}
+                </button>
               </div>
             )}
           </TableHead>
@@ -158,13 +183,16 @@ export default function AttachmentsTable({
             name={info.name}
             size={info.size}
             formatBytes={formatBytes}
+            selectable={selectable}
             data-testid="UploadingRow__e868a0" />
         ))}
 
         {loading && !hasItems && !hasUploads && (
           [0, 1, 2].map((i) => (
             <TableRow key={`skeleton-${i}`} className="h-10" data-testid="TableRow__e868a0">
-              <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-4" data-testid="Skeleton__e868a0" /></TableCell>
+              {selectable && (
+                <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-4" data-testid="Skeleton__e868a0" /></TableCell>
+              )}
               <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-32" data-testid="Skeleton__e868a0" /></TableCell>
               <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-16" data-testid="Skeleton__e868a0" /></TableCell>
               <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-28" data-testid="Skeleton__e868a0" /></TableCell>
@@ -204,16 +232,18 @@ export default function AttachmentsTable({
             <TableRow
               key={item.id}
               data-testid={`attachment-row-${item.id}`}
-              className={selectedIds.has(item.id)
+              className={isSelected(item.id)
                 ? 'group h-10 bg-primary/5 hover:bg-primary/5'
                 : 'group h-10'}
             >
-              <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0">
-                <Checkbox
-                  checked={selectedIds.has(item.id)}
-                  onChange={() => toggleOne(item.id)}
-                  data-testid="Checkbox__e868a0" />
-              </TableCell>
+              {selectable && (
+                <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0">
+                  <Checkbox
+                    checked={isSelected(item.id)}
+                    onChange={() => onToggleRow?.(item.id)}
+                    data-testid={`attachment-select-${item.id}`} />
+                </TableCell>
+              )}
               <TableCell data-testid={`attachment-name-${item.id}`} className={`${dataCell} font-medium`}>
                 {item.name || item.fileName || item.id}
               </TableCell>
@@ -228,7 +258,17 @@ export default function AttachmentsTable({
                       type="button"
                       data-testid={`attachment-download-${item.id}`}
                       onClick={() => onDownload(item)}
-                      className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))] transition-all"
+                      // ETP-5526 — the hover plate was `--muted`, which in light mode is
+                      // hsl(210 40% 96%) against a row already hovering on `bg-muted/50`:
+                      // roughly a 7/255 lift, i.e. no visible circle at all, while the
+                      // sibling delete button reads clearly off its own
+                      // `--status-destructive-bg`. `--border-subtle` is the palette's
+                      // neutral counterpart with real separation from the hovered row in
+                      // BOTH themes (#E1E7EF light / hsl(215 20% 30%) dark), and it is
+                      // already the app's idiom for exactly this control — same h-8 w-8
+                      // rounded-full `--text-disabled` icon button in AccountRowActions,
+                      // MovementRowKebab, StatementsTable and ListModalWindow.
+                      className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))] hover:text-[hsl(var(--foreground))] transition-all"
                       aria-label={ui('attachmentsDownload')}
                       title={ui('attachmentsDownload')}
                     >

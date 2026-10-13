@@ -446,7 +446,8 @@ function CheckboxCard({ checked, onChange, icon, title, subtitle }) {
 /**
  * One created-document pill. The badge reads the document's OWN status: ETP-5381 makes an
  * auto-generated invoice arrive confirmed while the shipment beside it is still a draft, so
- * the two can legitimately disagree. Same palette and label rule as ConfirmResultModal.
+ * the two can legitimately disagree. Only the 'CO' rule is shared with ConfirmResultModal; this
+ * pill keeps its own palette and labels (ConfirmResultModal uses StatusTag tones and gendered labels).
  */
 function DocPill({ label, total, documentStatus }) {
   const ui = useUI();

@@ -62,7 +62,7 @@ No dependent selector behavior, automatic defaulting between these fields, statu
 7. Confirm `Base Amount` offers `Line Net Amount`, `Line Net Amount + Tax`, `Tax Amount`, `Alternative Base Amount`, and `Alternative Base + Tax`.
 8. Confirm the visible form does not show `Description`, and that print / generic More actions are not present.
 9. Save a change and reopen the record to confirm the updated definition persists.
-10. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+10. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 11. Open the **Accounting** tab on a tax record with no existing accounting rows and add a new line without touching the (hidden) accounting schema field. Confirm the row saves successfully — `TaxAccountingHandler` should auto-fill `accountingSchema` server-side.
 12. Add a second accounting row and confirm it inherits `accountingSchema` from the first (sibling) row rather than requiring the handler default again.
 13. Confirm only `Tax Due` and `Tax Credit` selectors are editable on each accounting row, and that Tax Expense, Tax Liability, Tax Receivables, and the two transitory accounts are not shown.
@@ -221,3 +221,14 @@ QA rejected the `editable` classification: the ticket was mis-specified, and pro
 - `entities.tax.fields.taxCategory.visibility` is back to `"readOnly"`; `grid`, `form`, `section`, `seq` and the `labelOverrides` entry are unchanged, so the field is still shown in both the grid and the form.
 - Regenerated via `make regen ONLY=tax SKIP_EXTRACT=1 PUSH_TO_NEO=1`. `TaxForm.jsx`'s `taxCategory` entry carries `readOnly: true` again, and `taxCategory` is back in the `summary` array of `TaxPage.jsx` (the `summaryFields` default is every `readOnly` field). `contract.json` reports `visibility: "readOnly"` for the field; NEO spec `tax` pushed (76 fields updated, 0 errors) — run `./gradlew export.database` to persist it.
 - `sf-validate-pipeline --scope=tax`: OK, 0 violations.
+
+## Account selectors — ETP-5681
+
+Every account field of the **Accounting** tab (the tax due/credit account fields) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+

@@ -159,7 +159,11 @@ describe('QuotationConfirmModal — mounted on ActionChoiceModal (ETP-5398)', ()
     const urls = calledUrls(fetchMock);
     expect(urls).toContain(`${API_BASE}/quotation/${QUOTATION_ID}/action/createDraftInvoice`);
     expect(urls.some((url) => url.includes('Convertquotation'))).toBe(false);
-    expect(await screen.findByText('soInvoiceCreated')).toBeInTheDocument();
+    // ETP-5674 — the invoice branch ends in the shared ConfirmResultModal, badged from the
+    // invoice's real status.
+    const card = await screen.findByTestId('confirm-result-card-0');
+    expect(card).toHaveAttribute('data-doc-type', 'facturaVenta');
+    expect(card).toHaveAttribute('data-doc-status', 'CO');
   });
 
   it('shows the server error inside the modal when the conversion fails', async () => {

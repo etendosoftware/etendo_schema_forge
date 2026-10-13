@@ -43,6 +43,15 @@ If unsure, ask: _"Would this also happen if we ran the pipeline on a different w
 
 Only proceed if the code confirms the behavior is truly absent or broken. If it IS already handled somewhere, tell the user where and explain why the issue might be something else (configuration, data, window decision).
 
+**Then pick the route** with the `etendo-roadmap` skill's public/internal criterion:
+
+- **Public**: a customer could see it (wrong UI, broken flow, wrong data in the SPA) → a bug
+  issue in `etendosoftware/etendo-ai` on the Etendo Roadmap.
+- **Internal-only**: no customer would ever see it (pipeline internals, dev tooling, agent
+  config) → a Jira task only, no GitHub issue. This route ends the skill at Step 5 with that Jira
+  task, created via Clerk.
+- Unsure → ask the user.
+
 ---
 
 ## Step 2: Capture the bug details
@@ -71,14 +80,15 @@ Show a summary:
 Title:     [title]
 Component: [affected files/layer]
 Assignee:  valenvivaldi
-GH Repo:   etendosoftware/etendo_schema_forge
+Route:     public → etendosoftware/etendo-ai + Etendo Roadmap (Product = Etendo)
+           | internal-only → Jira task only
 ```
 
 Wait for user confirmation.
 
 ---
 
-## Step 4: Research the fix (MANDATORY before creating the issue)
+## Step 4: Research the fix (MANDATORY before handing off)
 
 Before writing the issue, read the affected source files to produce concrete code changes. Do NOT write vague suggestions like "fix the function" — write the exact before/after diff.
 
@@ -91,15 +101,24 @@ If the fix is unknown or too complex to determine, write a detailed analysis of 
 
 ---
 
-## Step 5: Create the GitHub issue
+## Step 5: Hand off to Clerk
 
-```bash
-gh issue create \
-  --repo etendosoftware/etendo_schema_forge \
-  --title "[title]" \
-  --label "bug" \
-  --assignee "valenvivaldi" \
-  --body "$(cat <<'EOF'
+sf-bug writes the content; Clerk (`subagent_type: "workflow"`) files it. Write the body below to a
+file and dispatch Clerk with the route, the title, the body file, the labels and the assignee.
+
+- **Public route.** Clerk follows the `etendo-roadmap` skill end to end: duplicate search, create
+  in `etendosoftware/etendo-ai` with label `bug` and assignee `valenvivaldi`, add to the Etendo
+  Roadmap with **Product = Etendo** (plus Team/Status when known), read title, labels and the
+  fields back.
+- **Internal-only route.** Clerk creates a Jira task inside the current epic with the same title
+  and body. The skill ends here.
+
+Name the code repo (`etendo_schema_forge` / `schema_forge_core`) under `Affected components`:
+the issue itself lives in `etendo-ai`, so the body is the only place that says where the code is.
+
+Body template:
+
+~~~markdown
 ## Description
 
 [Clear description of what fails and in what context. Mention it affects all windows, not just one.]
@@ -116,8 +135,8 @@ gh issue create \
 
 ## Affected components
 
-- `[file/component 1]` — [what is wrong]
-- `[file/component 2]` — [what is wrong]
+- `[repo] [file/component 1]` — [what is wrong]
+- `[repo] [file/component 2]` — [what is wrong]
 
 ## Proposed fix
 
@@ -127,17 +146,17 @@ gh issue create \
 - Fix unknown: include a root cause analysis instead.]
 
 **`path/to/file.js`** (line N)
-\`\`\`diff
+```diff
 - old code line
 + new code line
-\`\`\`
-EOF
-)"
 ```
+~~~
 
-Report to user:
+Relay Clerk's report to the user:
 ```
-GitHub: etendosoftware/etendo_schema_forge#N — [title]
+GitHub:  etendosoftware/etendo-ai#N — [title]
+Roadmap: added, Product = Etendo (read back)   ← or what is still pending
+Jira:    ETP-XXXX                               ← internal-only route
 ```
 
 ---
@@ -235,5 +254,6 @@ The pipeline ignores this field and always generates an **Add** button for every
 
 - Always verify the bug is not already in the Known Bug Patterns section before creating a new issue.
 - Bug titles must be in English, imperative form, max 80 chars (Git Police limit for commit messages).
-- The GitHub repo for this tool is `etendosoftware/etendo_schema_forge`.
+- Public bugs for this tool are filed by Clerk in `etendosoftware/etendo-ai` and added to the
+  Etendo Roadmap (`etendo-roadmap` skill); internal-only ones get a Jira task only.
 - Do NOT create issues for: wrong field classification in a specific window, user preference decisions, Etendo AD data gaps.
