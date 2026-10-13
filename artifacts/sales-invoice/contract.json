@@ -1,8 +1,8 @@
 {
   "version": "0.91.0",
   "generatedAt": "2026-09-17T15:12:05.781Z",
-  "updatedAt": "2026-10-09T15:19:12.034Z",
-  "checksum": "590546491145066c",
+  "updatedAt": "2026-10-13T13:49:29.304Z",
+  "checksum": "c28a95219dca050e",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -21,7 +21,8 @@
         "topbarExtra": "InvoiceDeliveryBadge",
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
-        "topbarRight": "InvoiceTopbarExtra"
+        "topbarRight": "InvoiceTopbarExtra",
+        "moreMenuContent": "SifSendMenuItem"
       },
       "menuActions": [
         {
@@ -2854,7 +2855,8 @@
         "topbarExtra": "InvoiceDeliveryBadge",
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
-        "topbarRight": "InvoiceTopbarExtra"
+        "topbarRight": "InvoiceTopbarExtra",
+        "moreMenuContent": "SifSendMenuItem"
       },
       "menuActions": [
         {
