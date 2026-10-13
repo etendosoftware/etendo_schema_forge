@@ -297,6 +297,22 @@ into `ConfirmWithCreditButtonBase.jsx`, and replacing both `window.location.relo
 sites (closing the result modal without navigating away, and confirming a draft without creating
 an invoice) with `onRefresh?.()`, mirroring `GoodsReceiptActions.jsx`'s exact pattern.
 
+## Document type default scoped to the tenant — ETP-5682
+
+`header.fields.documentType` (a hidden `system` field) carries a client-scoped `defaultExpr`:
+`DocBaseType='MMR'`, purchase (`IsSOTrx='N'`), return (`IsReturn='Y'`), active, organization
+included, own `AD_Client_ID`, `ORDER BY IsDefault DESC` then organization distance. It mirrors
+`NeoHandlerUtils.findReturnDocType`, which the create handler uses, so the `/defaults` preview
+(document type and DocumentNo `<…>` from the tenant's own sequence) matches what is saved.
+
+The previous `ETGO_SF_FIELD` default (written by hand in ETP-4034) had no client filter and ended in
+`LIMIT 1`, so the preview showed another tenant's document type and numbering; once the generic
+NEO tenant guard landed it resolved to nothing instead. Never add a `LIMIT` to an `@SQL=` default:
+it defeats the guard (`com.etendoerp.go` `docs/neo-headless.md` §4.3.6).
+
+Manual check: `GET /sws/neo/return-to-vendor-shipment/returnToVendorShipment/defaults` as a tenant
+user returns that tenant's "RTV Shipment" document type and a `<…>` DocumentNo from its sequence.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

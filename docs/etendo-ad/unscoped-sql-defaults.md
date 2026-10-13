@@ -32,14 +32,19 @@ that evaluates the SQL as-is (NEO, MCP) can resolve **another tenant's row**.
 - `FIN_Payment.C_DocType_ID` — equally unscoped. Latent: the payment flows set the document type
   explicitly.
 - `ETGO_SF_FIELD` default of `returnToVendorShipment.documentType` (`DocBaseType='MMR'`, Etendo GO's
-  own override) — no client filter either.
+  own override) — had no client filter either, and ended in `ORDER BY IsDefault DESC LIMIT 1`, which
+  hands the generic guard a single (foreign) row. Fixed in ETP-5682 with a client-scoped
+  `defaultExpr` in `artifacts/return-to-vendor-shipment/decisions.json`. Saving was never affected:
+  the create handler injects a client-scoped return document type.
 - Not affected: `C_BP_Group_ID`, `M_Product_Category_ID` (filter by `AD_Client_ID`),
   `M_InventoryLine.M_Locator_ID` (scoped by `M_Warehouse_ID`).
 
 ## How Etendo GO handles it
 
 - **Generic:** `com.etendoerp.go` `NeoDefaultTenantGuard` — an `@SQL=` default of a foreign-key
-  column to a client-enabled table keeps the first row owned by the context client or by client `0`.
+  column to a client-enabled table keeps the first row owned by the context client or by client `0`,
+  scanning every row of the query in batches of 200 (no cap: production has 800+ sales-order
+  document types across its tenants).
   See `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.3.6.
 - **Per window:** override the default with a client-scoped `defaultExpr` in `decisions.json` when
   the order matters (`simple-g-l-journal` → `header.fields.documentType`).
