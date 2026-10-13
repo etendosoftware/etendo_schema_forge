@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-09-22T13:50:52.147Z",
-  "updatedAt": "2026-10-13T12:07:58.894Z",
-  "checksum": "63cf13783e1514e3",
+  "updatedAt": "2026-10-13T14:10:22.754Z",
+  "checksum": "d34e33483966b93c",
   "frontendContract": {
     "window": {
       "id": "125",
@@ -726,46 +726,6 @@
             "section": "closing",
             "validation": {
               "maxLength": 32
-            }
-          },
-          {
-            "name": "suspenseErrorUse",
-            "apiKey": "suspenseErrorUse",
-            "column": "UseSuspenseError",
-            "label": "Suspense Error Use",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "section": "suspense",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          },
-          {
-            "name": "suspenseError",
-            "apiKey": "suspenseError",
-            "column": "SuspenseError_Acct",
-            "label": "Suspense Error",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "suspense",
-            "validation": {
-              "maxLength": 32
-            },
-            "displayLogic": {
-              "raw": "@UseSuspenseError@='Y'",
-              "evaluable": true
             }
           },
           {
@@ -2131,7 +2091,7 @@
             "apiKey": "suspenseErrorUse",
             "column": "UseSuspenseError",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -2139,7 +2099,7 @@
             "apiKey": "suspenseError",
             "column": "SuspenseError_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3232,14 +3192,6 @@
       },
       {
         "entity": "Cuentas generales",
-        "field": "suspenseError",
-        "column": "SuspenseError_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/suspenseError"
-      },
-      {
-        "entity": "Cuentas generales",
         "field": "incomeSummary",
         "column": "IncomeSummary_Acct",
         "reference": "ValidCombination",
@@ -3689,14 +3641,6 @@
         "description": "Display logic for 'suspenseBalancing' in Cuentas generales should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-Cuentas-generales-suspenseError",
-        "category": "displaylogic-evaluable",
-        "entity": "Cuentas generales",
-        "field": "suspenseError",
-        "runner": "node",
-        "description": "Display logic for 'suspenseError' in Cuentas generales should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-Dimensiones-accountElement",
         "category": "displaylogic-evaluable",
         "entity": "Dimensiones",
@@ -3807,14 +3751,6 @@
         "field": "suspenseBalancing",
         "runner": "node",
         "description": "Display logic for 'suspenseBalancing' in Cuentas generales should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-Cuentas-generales-suspenseError",
-        "category": "displaylogic-valid",
-        "entity": "Cuentas generales",
-        "field": "suspenseError",
-        "runner": "node",
-        "description": "Display logic for 'suspenseError' in Cuentas generales should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-Dimensiones-accountElement",
@@ -3975,22 +3911,6 @@
         "field": "suspenseBalancingUse",
         "runner": "node",
         "description": "Field 'suspenseBalancingUse' should be present in Cuentas generales"
-      },
-      {
-        "id": "t-field-presence-Cuentas-generales-suspenseError",
-        "category": "field-presence",
-        "entity": "Cuentas generales",
-        "field": "suspenseError",
-        "runner": "node",
-        "description": "Field 'suspenseError' should be present in Cuentas generales"
-      },
-      {
-        "id": "t-field-presence-Cuentas-generales-suspenseErrorUse",
-        "category": "field-presence",
-        "entity": "Cuentas generales",
-        "field": "suspenseErrorUse",
-        "runner": "node",
-        "description": "Field 'suspenseErrorUse' should be present in Cuentas generales"
       },
       {
         "id": "t-field-presence-Dimensiones-accountElement",
@@ -4535,22 +4455,6 @@
         "field": "suspenseBalancingUse",
         "runner": "node",
         "description": "Field 'suspenseBalancingUse' should have type 'boolean' in Cuentas generales"
-      },
-      {
-        "id": "t-field-type-Cuentas-generales-suspenseError",
-        "category": "field-type",
-        "entity": "Cuentas generales",
-        "field": "suspenseError",
-        "runner": "node",
-        "description": "Field 'suspenseError' should have type 'string' in Cuentas generales"
-      },
-      {
-        "id": "t-field-type-Cuentas-generales-suspenseErrorUse",
-        "category": "field-type",
-        "entity": "Cuentas generales",
-        "field": "suspenseErrorUse",
-        "runner": "node",
-        "description": "Field 'suspenseErrorUse' should have type 'boolean' in Cuentas generales"
       },
       {
         "id": "t-field-type-Dimensiones-accountElement",
@@ -5336,14 +5240,6 @@
         "description": "Selector endpoint for 'suspenseBalancing' in Cuentas generales should exist"
       },
       {
-        "id": "t-selector-endpoint-Cuentas-generales-suspenseError",
-        "category": "selector-endpoint",
-        "entity": "Cuentas generales",
-        "field": "suspenseError",
-        "runner": "node",
-        "description": "Selector endpoint for 'suspenseError' in Cuentas generales should exist"
-      },
-      {
         "id": "t-selector-endpoint-Dimensiones-accountElement",
         "category": "selector-endpoint",
         "entity": "Dimensiones",
@@ -5830,6 +5726,22 @@
         "field": "pPVOffset",
         "runner": "node",
         "description": "System field 'pPVOffset' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-suspenseError",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "suspenseError",
+        "runner": "node",
+        "description": "System field 'suspenseError' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-suspenseErrorUse",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "suspenseErrorUse",
+        "runner": "node",
+        "description": "System field 'suspenseErrorUse' should exist in backend but not frontend for Cuentas generales"
       },
       {
         "id": "t-system-field-Cuentas-generales-updated",
@@ -6485,24 +6397,24 @@
       }
     ],
     "summary": {
-      "total": 365,
+      "total": 360,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 4,
         "default-value-type": 4,
-        "displaylogic-evaluable": 15,
-        "displaylogic-valid": 15,
-        "field-presence": 70,
-        "field-type": 70,
+        "displaylogic-evaluable": 14,
+        "displaylogic-valid": 14,
+        "field-presence": 68,
+        "field-type": 68,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 33,
-        "selector-endpoint": 57,
-        "system-field": 88,
+        "selector-endpoint": 56,
+        "system-field": 90,
         "visibility": 4
       },
       "byRunner": {
-        "node": 365,
+        "node": 360,
         "junit": 0
       }
     }

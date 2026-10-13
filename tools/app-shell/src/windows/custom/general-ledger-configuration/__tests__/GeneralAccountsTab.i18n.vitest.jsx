@@ -37,7 +37,6 @@ const DICTIONARIES = { es_ES: esES, en_US: enUS };
 const ALL_TOGGLES_ON = {
   ...GENERAL_ACCOUNTS_SEED,
   suspenseBalancingUse: true,
-  suspenseErrorUse: true,
   currencyBalancingUse: true,
 };
 
@@ -87,9 +86,7 @@ describe('GeneralAccountsTab — real locale resolution (ETP-4452 follow-up)', (
 
     const RAW_KEYS = [
       'glc.toggle.suspenseBalancingUse',
-      'glc.toggle.suspenseErrorUse',
       'glc.acct.suspenseBalancing',
-      'glc.acct.suspenseError',
       'glc.toggle.currencyBalancingUse',
       'glc.acct.currencyBalancingAccount',
       'glc.acct.retainedEarning',
@@ -119,10 +116,9 @@ describe('GeneralAccountsTab — real locale resolution (ETP-4452 follow-up)', (
 });
 
 // ETP-5682: each account selector follows its own toggle (AD display logic
-// @UseSuspenseBalancing@ / @UseSuspenseError@ / @UseCurrencyBalancing@ = 'Y').
+// @UseSuspenseBalancing@ / @UseCurrencyBalancing@ = 'Y').
 const PAIRS = [
   ['glc-toggle-suspense-balancing-use', 'glc-acct-suspenseBalancing'],
-  ['glc-toggle-suspense-error-use', 'glc-acct-suspenseError'],
   ['glc-toggle-currency-balancing-use', 'glc-acct-currencyBalancingAcct'],
 ];
 
@@ -190,15 +186,21 @@ describe('GeneralAccountsTab — account selectors follow their toggles (ETP-568
     const accountId = ACCOUNT_OPTIONS[0].id;
     renderWithLocale(
       'es_ES',
-      <StatefulTab initial={{ ...ALL_TOGGLES_ON, suspenseError: accountId }} />,
+      <StatefulTab initial={{ ...ALL_TOGGLES_ON, suspenseBalancing: accountId }} />,
     );
-    const before = screen.getByTestId('glc-acct-suspenseError').textContent;
+    const before = screen.getByTestId('glc-acct-suspenseBalancing').textContent;
 
-    toggleSwitch('glc-toggle-suspense-error-use');
+    toggleSwitch('glc-toggle-suspense-balancing-use');
+    expect(screen.queryByTestId('glc-acct-suspenseBalancing')).toBeNull();
+    toggleSwitch('glc-toggle-suspense-balancing-use');
+
+    expect(screen.getByTestId('glc-acct-suspenseBalancing').textContent).toBe(before);
+  });
+
+  it('does not offer the suspense error switch or account, which posting never uses', () => {
+    renderWithLocale('es_ES', <StatefulTab initial={ALL_TOGGLES_ON} />);
+    expect(screen.queryByTestId('glc-toggle-suspense-error-use')).toBeNull();
     expect(screen.queryByTestId('glc-acct-suspenseError')).toBeNull();
-    toggleSwitch('glc-toggle-suspense-error-use');
-
-    expect(screen.getByTestId('glc-acct-suspenseError').textContent).toBe(before);
   });
 });
 

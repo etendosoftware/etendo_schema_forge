@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-09-22T13:50:52.147Z",
-  "updatedAt": "2026-10-13T12:07:58.894Z",
-  "contractChecksum": "63cf13783e1514e3",
+  "updatedAt": "2026-10-13T14:10:22.754Z",
+  "contractChecksum": "d34e33483966b93c",
   "apiPrediction": {
     "specName": "general-ledger-configuration",
     "baseUrl": "/sws/neo/general-ledger-configuration",
@@ -164,14 +164,6 @@
         "reference": "ValidCombination",
         "inputMode": "selector",
         "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/retainedEarning"
-      },
-      {
-        "entity": "Cuentas generales",
-        "field": "suspenseError",
-        "column": "SuspenseError_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/suspenseError"
       },
       {
         "entity": "Cuentas generales",
@@ -638,10 +630,6 @@
           },
           "suspenseBalancing": {},
           "retainedEarning": {},
-          "suspenseErrorUse": {
-            "required": true
-          },
-          "suspenseError": {},
           "incomeSummary": {
             "required": true
           },
@@ -759,7 +747,6 @@
         "balanced",
         "mandatory",
         "suspenseBalancingUse",
-        "suspenseErrorUse",
         "incomeSummary",
         "currencyBalancingUse",
         "createClosing",
@@ -814,5 +801,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "51584c6814e6a700"
+  "checksum": "ac2ee445cd0e0639"
 }

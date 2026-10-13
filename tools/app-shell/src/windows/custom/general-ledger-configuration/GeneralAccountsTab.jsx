@@ -7,8 +7,9 @@ import { ACCOUNT_OPTIONS } from './mockCatalogs.js';
  * Cuentas generales tab — the C_AcctSchema_GL row (AD window 125, tab 200
  * "General Accounts"). Three sections following the same section-shell
  * pattern as the other tabs:
- *  - Cuentas de suspenso: suspenseBalancingUse/suspenseBalancing and
- *    suspenseErrorUse/suspenseError toggle+account pairs.
+ *  - Cuentas de suspenso: suspenseBalancingUse/suspenseBalancing toggle+account
+ *    pair. The suspense error pair is not shown: Etendo core never uses it in
+ *    posting (ETP-5682).
  *  - Balanceo de moneda: currencyBalancingUse toggle + currencyBalancingAcct.
  *  - Cierre de ejercicio: retainedEarning, incomeSummary, cFSOrderAccount
  *    accounts plus the createClosing ("reverse permanent balances") toggle.
@@ -28,7 +29,6 @@ export default function GeneralAccountsTab({
 }) {
   const ui = useUI();
   const showSuspenseBalancing = Boolean(generalAccounts.suspenseBalancingUse);
-  const showSuspenseError = Boolean(generalAccounts.suspenseErrorUse);
   const showCurrencyBalancing = Boolean(generalAccounts.currencyBalancingUse);
 
   return (
@@ -46,35 +46,17 @@ export default function GeneralAccountsTab({
             onCheckedChange={(checked) => setGeneralAccountsField('suspenseBalancingUse', checked)}
             data-testid="glc-toggle-suspense-balancing-use"
           />
-          <ToggleRow
-            label={ui('glc.toggle.suspenseErrorUse')}
-            checked={showSuspenseError}
-            onCheckedChange={(checked) => setGeneralAccountsField('suspenseErrorUse', checked)}
-            data-testid="glc-toggle-suspense-error-use"
-          />
         </div>
-        {(showSuspenseBalancing || showSuspenseError) && (
+        {showSuspenseBalancing && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
-            {showSuspenseBalancing && (
-              <AccountBadgeSelect
-                label={ui('glc.acct.suspenseBalancing')}
-                value={generalAccounts.suspenseBalancing}
-                options={accountOptions}
-                onChange={(id) => setGeneralAccountsField('suspenseBalancing', id)}
-                error={errors.suspenseBalancing}
-                data-testid="glc-acct-suspenseBalancing"
-              />
-            )}
-            {showSuspenseError && (
-              <AccountBadgeSelect
-                label={ui('glc.acct.suspenseError')}
-                value={generalAccounts.suspenseError}
-                options={accountOptions}
-                onChange={(id) => setGeneralAccountsField('suspenseError', id)}
-                error={errors.suspenseError}
-                data-testid="glc-acct-suspenseError"
-              />
-            )}
+            <AccountBadgeSelect
+              label={ui('glc.acct.suspenseBalancing')}
+              value={generalAccounts.suspenseBalancing}
+              options={accountOptions}
+              onChange={(id) => setGeneralAccountsField('suspenseBalancing', id)}
+              error={errors.suspenseBalancing}
+              data-testid="glc-acct-suspenseBalancing"
+            />
           </div>
         )}
       </SectionShell>
