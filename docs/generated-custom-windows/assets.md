@@ -1079,3 +1079,14 @@ The pattern used here (`EntityPersistenceEventObserver`) is the same sibling pat
 5. **Verify translation in both locales:**
    - Switch the session locale to Spanish and repeat steps 2–3 — confirm the error message reads **"Ya existe un activo con este identificador en esta organización."**
    - Switch the session locale to English — confirm it reads **"There is already an asset with this identifier in this organization."**
+
+## Account selectors — ETP-5681
+
+Every account field of the **Accounting (`assetAcct`)** tab (`accumulatedDepreciation`, `depreciation`) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+

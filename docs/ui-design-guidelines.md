@@ -15,7 +15,7 @@ Use this scale for all z-index decisions. Do not use arbitrary values outside th
 | **Floating** | `z-20` | Small local floating elements | `UserAvatarButton` dropdown, inline tooltips |
 | **Sticky** | `z-30` | Sticky table headers, fixed section bars | Table headers in scroll containers |
 | **Navigation** | `z-40` | App-level navigation chrome | **Sidebar**, bottom navigation bar |
-| **Overlay** | `z-50` | Full-screen blocking overlays and modals | **Modals** (`NewPaymentModal`, `ReportViewerPage` modals), **Drawers** (`ProductSearchDrawer`, `ReportDrawer`) |
+| **Overlay** | `z-50` | Full-screen blocking overlays and modals | **Modals** (`NewPaymentModal`, `SearchPopup` — the shared report / account search popup), **Drawers** (`ProductSearchDrawer`, `ReportDrawer`) |
 | **Dropdown-in-modal** | `z-60` | Dropdowns or menus that appear inside a modal | `Select`, `Combobox`, popovers rendered inside a `z-50` modal |
 | **Global tools** | `z-70` | App-wide tools always accessible — one level above the max modal tier | `CommandPalette`, **Toasts (Sonner)**, `CopilotWidget` |
 
