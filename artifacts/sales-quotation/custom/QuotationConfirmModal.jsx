@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import ActionChoiceModal from '@/components/contract-ui/ActionChoiceModal.jsx';
+import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal.jsx';
 import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -168,17 +169,16 @@ export default function QuotationConfirmModal({
               } catch { /* best-effort */ }
             }
 
-            const status = finalStatus === 'DR' ? 'Draft' : 'Completed';
             setCreatedDoc({
               type: OPTION_ORDER, id: order.id,
               documentNo: order.documentNo,
-              total: formatCurrency(currency, order.grandTotalAmount ?? order.grandTotal),
-              status,
+              // ETP-5674 — the result popup badges off the real document status ('CO' = completed).
+              documentStatus: finalStatus === 'DR' ? 'DR' : 'CO',
             });
             return;
           }
         }
-        setCreatedDoc({ type: OPTION_ORDER, id: null, documentNo: '?', total: '', status: 'Draft' });
+        setCreatedDoc({ type: OPTION_ORDER, id: null, documentNo: '?', documentStatus: 'DR' });
 
       } else {
         const res = await apiFetch(
@@ -198,11 +198,10 @@ export default function QuotationConfirmModal({
           type: OPTION_INVOICE,
           id: doc?.id ?? null,
           documentNo: doc?.documentNo ?? '',
-          total: formatCurrency(currency, doc?.grandTotalAmount ?? grandTotal),
           // ETP-5381: the invoice is created AND confirmed in one step now, so this must read
-          // the real status instead of the hardcoded 'Draft' it used to assume — otherwise the
-          // badge below says "Borrador" over a confirmed invoice.
-          status: doc?.documentStatus === 'CO' ? 'Completed' : (doc?.documentStatus ?? 'Draft'),
+          // the real status instead of assuming a draft — otherwise the result popup badges a
+          // confirmed invoice as "Borrador".
+          documentStatus: doc?.documentStatus ?? 'DR',
         });
       }
     } catch (err) {
@@ -212,19 +211,19 @@ export default function QuotationConfirmModal({
     }
   };
 
-  const handleGoToDoc = () => {
-    if (!createdDoc?.id) { handleCloseAfterCreate(); return; }
-    // ETP-5378 — this modal now also opens from the LIST row kebab, whose path is
-    // bare `/sales-quotation` (no trailing record id), not just the form's
-    // `/sales-quotation/{recordId}`. The old regex required a `/` right after
-    // "sales-quotation" to strip anything, so from the list it matched nothing,
-    // basePath stayed `/sales-quotation`, and the built URL doubled up into
-    // `/sales-quotation/sales-order/{id}` — a dead route (reported live: "Ver
-    // pedido" from a list-confirmed quotation). The trailing segment is optional
-    // now, so both origins strip to the same, correct app-root basePath.
+  // ETP-5378 — this modal also opens from the LIST row kebab, whose path is bare
+  // `/sales-quotation` (no trailing record id), not just the form's
+  // `/sales-quotation/{recordId}`. The old regex required a `/` right after
+  // "sales-quotation" to strip anything, so from the list it matched nothing,
+  // basePath stayed `/sales-quotation`, and the built URL doubled up into
+  // `/sales-quotation/sales-order/{id}` — a dead route (reported live: "Ver
+  // pedido" from a list-confirmed quotation). The trailing segment is optional
+  // now, so both origins strip to the same, correct app-root basePath.
+  // ETP-5674 — the route handed to ConfirmResultModal is `/<spec>/<id>`; it is opened with a
+  // full navigation, exactly as the former compact result view did.
+  const goToRoute = (route) => {
     const basePath = window.location.pathname.replace(/\/sales-quotation(\/.*)?$/, '');
-    const target = createdDoc.type === OPTION_ORDER ? 'sales-order' : 'sales-invoice';
-    window.location.href = `${basePath}/${target}/${createdDoc.id}`;
+    window.location.href = `${basePath}${route}`;
   };
 
   // ETP-4779 — after creating a document, refresh the header state (badge,
@@ -237,60 +236,26 @@ export default function QuotationConfirmModal({
   };
 
   // ── Success state ──────────────────────────────────────────
+  // ETP-5674 — both branches («Crear pedido» and «Facturar directamente») show the shared
+  // generated-documents popup; the compact result view this modal used to draw is gone.
   if (createdDoc) {
-    const docLabel = createdDoc.type === OPTION_ORDER ? ui('sqOrderCreated') : ui('soInvoiceCreated');
-    const goLabel  = createdDoc.type === OPTION_ORDER ? ui('sqViewOrder')    : ui('soViewInvoice');
-    const isDraft = createdDoc.status === 'Draft';
-    const badgeColor = isDraft ? { bg: 'var(--status-warning-bg)', text: 'var(--status-warning-fg)' } : { bg: 'var(--status-success-bg)', text: 'var(--status-success-fg)' };
-    const badgeLabel = isDraft ? ui('statusDraft') : ui('statusCompleted');
-
+    const isOrder = createdDoc.type === OPTION_ORDER;
+    const target = isOrder ? 'sales-order' : 'sales-invoice';
+    const docs = [{
+      type: isOrder ? 'pedidoVenta' : 'facturaVenta',
+      num: createdDoc.documentNo,
+      documentStatus: createdDoc.documentStatus,
+      // No id (the created order could not be read back) → shown, but not navigable.
+      route: createdDoc.id ? `/${target}/${createdDoc.id}` : undefined,
+    }];
     return (
-      <div style={overlayStyle}>
-        <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 400 }}>
-          <div style={{ padding: '28px 24px', textAlign: 'center' }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: '50%', margin: '0 auto 14px',
-              background: 'var(--status-success-bg)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--status-success-fg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 500, color: 'hsl(var(--foreground))' }}>
-              {docLabel}
-            </div>
-            <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              {createdDoc.documentNo && (
-                <span>
-                  {ui(createdDoc.type === OPTION_INVOICE ? 'invoiceDoc' : 'orderDoc',
-                      { number: createdDoc.documentNo })}
-                </span>
-              )}
-              {createdDoc.total && <><span style={{ color: 'hsl(var(--foreground))' }}>·</span> <span>{createdDoc.total}</span></>}
-              <span style={{
-                fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-                background: badgeColor.bg, color: badgeColor.text,
-              }}>
-                {badgeLabel}
-              </span>
-            </div>
-          </div>
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
-            padding: '12px 16px', borderTop: '0.5px solid hsl(var(--card))',
-          }}>
-            <button type="button" onClick={handleCloseAfterCreate} style={btnSecondary}>
-              {ui('soClose')}
-            </button>
-            {createdDoc.id && (
-              <button type="button" onClick={handleGoToDoc} style={btnPrimary}>
-                {goLabel} →
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <ConfirmResultModal
+        docs={docs}
+        navigate={goToRoute}
+        // A full page navigation follows, so there is nothing to close or refresh first.
+        onNavigate={() => {}}
+        onClose={handleCloseAfterCreate}
+        data-testid="ConfirmResultModal__sq5674" />
     );
   }
 
@@ -340,27 +305,3 @@ export default function QuotationConfirmModal({
     />
   );
 }
-
-/* ── Shared styles ─────────────────────────────────────────────── */
-
-const overlayStyle = {
-  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  backgroundColor: 'hsl(var(--foreground) / 0.3)',
-};
-
-const cardStyle = {
-  width: 480, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
-};
-
-const btnSecondary = {
-  fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
-};
-
-const btnPrimary = {
-  fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer',
-};

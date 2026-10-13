@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.14.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-10-08T17:12:34.248Z",
-  "checksum": "8d494516a7bfee01",
+  "updatedAt": "2026-10-09T15:04:44.887Z",
+  "checksum": "f416cc0a65e0c48a",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -1127,6 +1127,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 1,
             "validation": {
               "maxLength": 32
@@ -1146,6 +1148,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 2,
             "grow": true,
             "validation": {
@@ -1167,6 +1171,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 3,
             "grow": true,
             "validation": {
@@ -1187,6 +1193,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 4,
             "grow": true,
             "validation": {
@@ -1206,6 +1214,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 5,
             "grow": true,
             "validation": {

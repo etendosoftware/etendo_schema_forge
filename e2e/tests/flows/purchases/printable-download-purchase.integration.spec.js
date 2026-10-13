@@ -1,8 +1,11 @@
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+// @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
+// @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
 import { test, expect } from '@playwright/test';
 import { navigateTo } from '../../helpers/auth.js';
 import {
   waitForDetailReady, ensureVendorSetup, selectVendorBP, saveDraft, addProductLine,
-  dismissSuccessModal, slow,
+  dismissSuccessModal, openGeneratedDocument, slow,
 } from '../../helpers/purchase-helpers.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
@@ -150,9 +153,7 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
       await modalConfirmBtn.click();
       await orderConfirmed;
 
-      const viewReceiptBtn = page.getByRole('button', { name: 'Ver albarán', exact: true });
-      await expect(viewReceiptBtn).toBeVisible({ timeout: 30_000 });
-      await viewReceiptBtn.click();
+      await openGeneratedDocument(page, { title: /^(Albarán creado|Receipt created)$/ });
       await expect(page).toHaveURL(/\/goods-receipt\/[a-zA-Z0-9]+/, { timeout: 15_000 });
       await waitForDetailReady(page);
       await slow(page);
@@ -205,9 +206,8 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
       await returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true }).click();
       await returnCreated;
 
-      const viewReturnBtn = page.getByRole('button', { name: 'Ver albarán', exact: true });
-      await expect(viewReturnBtn).toBeVisible({ timeout: 30_000 });
-      await viewReturnBtn.click();
+      // ETP-5674: a purchase return is announced as such («Ver devolución»).
+      await openGeneratedDocument(page, { title: /^(Devolución de compra creada|Purchase return created)$/ });
       await expect(page).toHaveURL(/\/return-to-vendor-shipment\/[a-zA-Z0-9]+/, { timeout: 15_000 });
       await waitForDetailReady(page);
       await slow(page);

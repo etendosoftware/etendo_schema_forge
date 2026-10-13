@@ -1,5 +1,5 @@
 import { useUI } from '@/i18n';
-import { ToggleRow, AccountBadgeSelect } from '@/components/contract-ui';
+import { ToggleRow, AccountSelect } from '@/components/contract-ui';
 import SectionShell from './SectionShell.jsx';
 import { ACCOUNT_OPTIONS } from './mockCatalogs.js';
 
@@ -47,7 +47,7 @@ export default function GeneralAccountsTab({
           />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
-          <AccountBadgeSelect
+          <AccountSelect
             label={ui('glc.acct.suspenseBalancing')}
             value={generalAccounts.suspenseBalancing}
             options={accountOptions}
@@ -71,7 +71,7 @@ export default function GeneralAccountsTab({
           />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <AccountBadgeSelect
+          <AccountSelect
             label={ui('glc.acct.currencyBalancingAccount')}
             value={generalAccounts.currencyBalancingAcct}
             options={accountOptions}
@@ -87,7 +87,7 @@ export default function GeneralAccountsTab({
         data-testid="glc-section-closing"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <AccountBadgeSelect
+          <AccountSelect
             label={ui('glc.acct.retainedEarning')}
             value={generalAccounts.retainedEarning}
             options={accountOptions}
@@ -95,7 +95,7 @@ export default function GeneralAccountsTab({
             error={errors.retainedEarning}
             data-testid="glc-acct-retainedEarning"
           />
-          <AccountBadgeSelect
+          <AccountSelect
             label={ui('glc.acct.incomeSummary')}
             value={generalAccounts.incomeSummary}
             options={accountOptions}
@@ -103,7 +103,7 @@ export default function GeneralAccountsTab({
             error={errors.incomeSummary}
             data-testid="glc-acct-incomeSummary"
           />
-          <AccountBadgeSelect
+          <AccountSelect
             label={ui('glc.acct.cfsOrderAccount')}
             value={generalAccounts.cFSOrderAccount}
             options={accountOptions}

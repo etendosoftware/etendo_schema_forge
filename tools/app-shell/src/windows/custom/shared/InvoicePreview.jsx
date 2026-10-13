@@ -38,7 +38,7 @@ function isCreditNote(invoice) {
  *   - sales invoice, completed: managed by GenericPreviewModal (cached as a marked Attachment)
  *   - purchase invoice:         managed by GenericPreviewModal (drop zone → persisted)
  */
-function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf, readOnly = false }) {
+function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, sifLabelKey = 'sendToSifLabelSii', onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf, readOnly = false }) {
   const ui = useUI();
   return (
     <>
@@ -60,7 +60,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
           onClick={onOpenSif}
           data-testid="Button__cf88e6">
           <FileText className="text-muted-foreground" data-testid="FileText__cf88e6" />
-          {ui('sendToSif')}
+          {ui(sifLabelKey)}
         </Button>
       )}
       {/* ETP-5205 — hidden (not just disabled) under the Solo-Lectura tier. */}
@@ -414,6 +414,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       onEmail={isSendable ? p.openEmailModal : undefined}
       canSendToSif={canSendToSif}
+      sifLabelKey={p.sifLabelKey}
       onOpenSif={() => p.setShowSifModal(true)}
       canAddPayment={canAddPayment}
       addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}

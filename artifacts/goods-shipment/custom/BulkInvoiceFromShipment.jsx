@@ -369,14 +369,12 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
 
       {invoiceResult?.invoice?.id && createPortal(
         <ConfirmResultModal
-          title={ui('soInvoiceCreated')}
           docs={[{
             type: 'facturaVenta',
             num: invoiceResult.invoice.documentNo,
             documentStatus: invoiceResult.invoice.documentStatus,
             route: `/sales-invoice/${invoiceResult.invoice.id}`,
           }]}
-          primary={ui('soViewInvoice')}
           navigate={(route) => navigate(route)}
           onClose={() => {
             setInvoiceResult(null);

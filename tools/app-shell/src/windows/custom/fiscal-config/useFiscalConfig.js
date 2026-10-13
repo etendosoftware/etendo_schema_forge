@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { detectProfile, activeOrNull, isActiveRecord } from './fiscalConfig.utils.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
+import { parseAdoptionDate } from '@/windows/custom/shared/fiscalTargets.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // Confirmed from artifacts/*/contract.json → backendContract.window.primaryEntity
@@ -69,19 +71,31 @@ function pickDisplayRecord(rows) {
  *
  * @param {Array<object>} rows all rows returned for the org+system (active or not)
  * @param {'sii'|'tbai'|'verifactu'} system
- * @returns {string|null} ISO timestamp, or null if no row carries the field
+ * @returns {string|null} the earliest row's raw value (a `yyyy-MM-dd` date for
+ *   SII/TBAI, a timestamp for VERI*FACTU), or null if no row carries the field
  */
 export function earliestCutoverDate(rows, system) {
   const field = CUTOVER_FIELD[system];
   let earliestMs = null;
+  let earliestRaw = null;
   for (const row of rows) {
     const raw = row?.[field];
-    if (!raw) continue;
-    const ms = new Date(raw).getTime();
-    if (Number.isNaN(ms)) continue;
-    if (earliestMs === null || ms < earliestMs) earliestMs = ms;
+    // ETP-5700 — parseAdoptionDate reads a date-only value (SII/TBAI cutovers are AD
+    // Date columns, serialised as `yyyy-MM-dd`) as a LOCAL calendar day instead of
+    // UTC midnight, so rows are ordered in the same calendar space the gates use.
+    const parsed = parseAdoptionDate(raw);
+    if (!parsed) continue;
+    const ms = parsed.getTime();
+    if (earliestMs === null || ms < earliestMs) {
+      earliestMs = ms;
+      earliestRaw = raw;
+    }
   }
-  return earliestMs === null ? null : new Date(earliestMs).toISOString();
+  // The winning row's value is returned AS-IS rather than re-serialised with
+  // toISOString(): a date-only `yyyy-MM-dd` turned into `...T00:00:00.000Z` would be
+  // read back as UTC midnight by every consumer, which east of UTC is already the
+  // next local hour — exactly the shift that hid the send action (ETP-5700).
+  return earliestRaw;
 }
 
 export function useFiscalConfig(orgId, apiBaseUrl) {
@@ -160,7 +174,9 @@ export function useFiscalConfig(orgId, apiBaseUrl) {
     // is fully operational from the start (ETP-4783: fix for "Añadir SII" button
     // when TBAI is already configured — the wizard path sets these, but the
     // complementary POST skipped them, leaving the record with empty/false defaults).
-    const today = new Date().toISOString().slice(0, 10);
+    // ETP-5700 — the LOCAL calendar day, not the UTC one (toISOString), which in
+    // Spain between 00:00 and 01:00/02:00 is still yesterday.
+    const today = todayCalendarISO();
     const body = system === 'sii'
       ? {
           adOrgId,
