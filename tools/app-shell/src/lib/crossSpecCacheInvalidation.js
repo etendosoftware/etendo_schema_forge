@@ -49,9 +49,16 @@ export const WRITE_INVALIDATES_SPECS = Object.freeze({
  * a selector entry does not say which table its options come from, and a stale mark costs at
  * most one extra GET the next time a selector is opened. Deliberately scoped to `contacts`;
  * other master-data specs are added here when a ticket needs them.
+ *
+ * ETP-5681 — the accounting dimensions: deactivating (or renaming) a cost center or a project
+ * left the document Cost Center / Project selectors listing it until the cache window ran out.
+ * `project` and `service-project` both write `C_Project`.
  */
 export const WRITE_INVALIDATES_ENTITIES = Object.freeze({
   contacts: Object.freeze(['selector']),
+  'cost-center': Object.freeze(['selector']),
+  project: Object.freeze(['selector']),
+  'service-project': Object.freeze(['selector']),
 });
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

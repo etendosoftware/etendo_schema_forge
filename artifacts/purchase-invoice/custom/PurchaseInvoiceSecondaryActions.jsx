@@ -35,7 +35,7 @@ import SendToSifButton from '@/windows/custom/shared/SendToSifButton.jsx';
  * mirroring how `SalesInvoiceTopbar` forwards them to `InvoiceTopbarExtra`.
  */
 export default function PurchaseInvoiceSecondaryActions(props) {
-  const { data, recordId, apiBaseUrl, onSave, isDirty, isDocumentReadOnly } = props;
+  const { data, recordId, apiBaseUrl, onSave, isDirty, windowReadOnly } = props;
 
   return (
     <DocumentSecondaryActions
@@ -50,7 +50,9 @@ export default function PurchaseInvoiceSecondaryActions(props) {
         status={data?.documentStatus}
         onSave={onSave}
         isDirty={isDirty}
-        isDocumentReadOnly={isDocumentReadOnly}
+        // ETP-5700: the Solo Lectura tier, NOT isDocumentReadOnly (true on every
+        // completed invoice through the processed lock) — see SendToSifButton.jsx.
+        windowReadOnly={windowReadOnly}
         data-testid="SendToSifButton__PurchaseInvoiceSecondaryActions" />
     </DocumentSecondaryActions>
   );

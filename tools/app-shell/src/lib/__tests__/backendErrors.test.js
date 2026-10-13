@@ -9,6 +9,8 @@ import {
   extractBackendMessageParams,
   translateBackendError,
   parseBackendErrorMessage,
+  parseBackendError,
+  translateBackendErrorResponse,
 } from '../backendErrors.js';
 
 /**
@@ -2950,3 +2952,147 @@ describe('user email correction messages (UserRoleAssignmentHandler)', () => {
   }
 });
 
+// ── ETP-5692: invoice post/unpost refusals, translated by identity ──
+//
+// com.etendoerp.go answers these in plain English plus a `messageKeys` identity that is NOT an
+// AD_MESSAGE record, so backendErrors.js is the only place they become Spanish. The SPA's own gates
+// keep them off the normal path; a stale screen (the invoice was posted, unposted or voided
+// elsewhere) is what surfaces them. Reads the REAL locale files so a missing entry fails here.
+describe('translateBackendError — invoice post/unpost refusals by identity (ETP-5692)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  // [messageKey, i18n key, the backend's English prose]
+  const CASES = [
+    ['ETGO_InvoiceFieldsLockedPosted', 'backendError.invoicePostedFieldsLocked',
+      'This invoice is posted, so accountingDate, costcenter cannot be changed. Unpost it first to correct its accounting.'],
+    ['ETGO_InvoiceExchangeRateLockedPosted', 'backendError.invoicePostedExchangeRateLocked',
+      'This invoice is posted, so its exchange rates cannot be changed. Unpost it first.'],
+    ['ETGO_InvoiceUnpostNotPosted', 'backendError.invoiceUnpostNotPosted',
+      'This invoice is not posted, so it has no accounting entries to remove.'],
+    ['ETGO_InvoiceUnpostNotCompleted', 'backendError.invoiceUnpostNotCompleted',
+      "Only a completed invoice can be unposted. This invoice's status is VO."],
+    ['ETGO_PostingDocumentNotProcessed', 'backendError.postingDocumentNotProcessed',
+      'Only processed (completed) documents can be posted. Complete the document first.'],
+    ['ETGO_CompletedInvoiceFieldsLocked', 'backendError.completedInvoiceFieldsLocked',
+      'This invoice is completed, so businessPartner can no longer be changed. Fields that can still be changed: accountingDate, project, costcenter, description.'],
+    ['ETGO_InvoiceFieldsLockedStatus', 'backendError.invoiceStatusDimensionsLocked',
+      'project cannot be changed on an invoice in status VO; only a completed invoice allows it.'],
+    ['ETGO_InvoiceFieldsLockedSiiSent', 'backendError.invoiceSiiSentReferenceLocked',
+      "This purchase invoice has already been sent to the SII, so orderReference (the supplier's invoice number) can no longer be changed."],
+    ['PostedDocument', 'backendError.documentAlreadyPosted', 'Document already Posted.'],
+  ];
+
+  for (const [messageKey, i18nKey, prose] of CASES) {
+    it(`renders ${messageKey} from its identity in es_ES and en_US, never the English prose`, () => {
+      const esText = translateBackendError(prose, es, { messageKeys: [messageKey] });
+      const enText = translateBackendError(prose, en, { messageKeys: [messageKey] });
+      assert.equal(esText, es(i18nKey));
+      assert.equal(enText, en(i18nKey));
+      assert.notEqual(esText, i18nKey, `es_ES.${i18nKey} is missing`);
+      assert.notEqual(enText, i18nKey, `en_US.${i18nKey} is missing`);
+      assert.notEqual(esText, prose);
+      assert.notEqual(esText, enText, `es_ES.${i18nKey} is still English`);
+    });
+  }
+
+  it('speaks the accountants’ Spanish: Descontabilizar / contabilizada / asientos', () => {
+    assert.match(es('backendError.invoicePostedFieldsLocked'), /contabilizada.*Descontabil/);
+    assert.match(es('backendError.invoicePostedExchangeRateLocked'), /contabilizada.*Descontabil/);
+    assert.match(es('backendError.invoiceUnpostNotPosted'), /asientos/);
+  });
+
+  it('keeps the backend prose when the locale has no entry (never the raw key)', () => {
+    const [messageKey, , prose] = CASES[0];
+    assert.equal(translateBackendError(prose, (k) => k, { messageKeys: [messageKey] }), prose);
+  });
+
+  it('ignores the fence messageParams (API property names, raw doc status) — the copy is generic', () => {
+    const text = translateBackendError('ignored', es, {
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    });
+    assert.equal(text, es('backendError.invoiceUnpostNotCompleted'));
+    assert.doesNotMatch(text, /VO|\{docStatus\}/);
+  });
+});
+
+describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
+  const es = localeTranslator('es_ES');
+  const jsonResponse = (body, status = 422) => ({ status, json: async () => body });
+  // CompletedInvoiceWriteFence.reject — the identity is nested under `error`.
+  const fenceBody = {
+    error: {
+      status: 422,
+      code: 'posted_invoice_fields_locked',
+      message: 'This invoice is posted, so accountingDate cannot be changed. Unpost it first to correct its accounting.',
+      fields: ['accountingDate'],
+      hint: "Run the invoice header action 'unpost' first, then retry this update; post the invoice again afterwards.",
+      messageKeys: ['ETGO_InvoiceFieldsLockedPosted'],
+      messageParams: { fields: ['accountingDate'] },
+    },
+  };
+
+  it('reads the message and the nested identity of the write-fence body in one pass', async () => {
+    assert.deepEqual(await parseBackendError(jsonResponse(fenceBody)), {
+      message: fenceBody.error.message,
+      messageKeys: ['ETGO_InvoiceFieldsLockedPosted'],
+      messageParams: { fields: ['accountingDate'] },
+    });
+  });
+
+  it('reads the flat InvoicePostingGate body (success:false, message, messageKeys, messageParams)', async () => {
+    const body = {
+      success: false,
+      message: "Only a completed invoice can be unposted. This invoice's status is VO.",
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    };
+    assert.deepEqual(await parseBackendError(jsonResponse(body)), {
+      message: body.message,
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    });
+  });
+
+  it('returns an empty result for a non-JSON body', async () => {
+    const res = { status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } };
+    assert.deepEqual(await parseBackendError(res), {});
+  });
+
+  it('translates the write-fence 422 by identity, not by its English prose (the inline line / tab save path)', async () => {
+    assert.equal(
+      await translateBackendErrorResponse(jsonResponse(fenceBody), es),
+      es('backendError.invoicePostedFieldsLocked'),
+    );
+  });
+
+  it('translates the exchange-rate refusal of a posted invoice', async () => {
+    const body = {
+      error: {
+        status: 422,
+        code: 'posted_invoice_exchange_rate_locked',
+        message: 'This invoice is posted, so its exchange rates cannot be changed. Unpost it first.',
+        fields: [],
+        messageKeys: ['ETGO_InvoiceExchangeRateLockedPosted'],
+        messageParams: { fields: [] },
+      },
+    };
+    assert.equal(
+      await translateBackendErrorResponse(jsonResponse(body), es),
+      es('backendError.invoicePostedExchangeRateLocked'),
+    );
+  });
+
+  it('still translates a body without identity by its text, and falls back to Error <status>', async () => {
+    const stale = 'This record was modified by someone else after you read it. Your changes were not saved.';
+    assert.equal(
+      await translateBackendErrorResponse(jsonResponse({ error: { message: stale } }, 409), es),
+      es('backendError.staleRecord'),
+    );
+    assert.equal(await translateBackendErrorResponse(jsonResponse({}, 500), es), 'Error 500');
+  });
+
+  it('keeps parseBackendErrorMessage returning only the message', async () => {
+    assert.equal(await parseBackendErrorMessage(jsonResponse(fenceBody)), fenceBody.error.message);
+  });
+});

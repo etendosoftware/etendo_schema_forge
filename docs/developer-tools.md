@@ -183,8 +183,9 @@ gh pr list
 # View PR checks
 gh pr checks 123
 
-# Create an issue
-gh issue create --title "Bug: description" --label bug
+# Create an issue — Etendo-product issues go to etendo-ai, then onto the Etendo Roadmap
+# (repo routing, Product field and IDs: .claude/skills/etendo-roadmap/SKILL.md)
+gh issue create -R etendosoftware/etendo-ai --title "Bug: description" --label bug
 
 # Query the GitHub API
 gh api repos/etendosoftware/etendo_schema_forge/pulls/123/comments
