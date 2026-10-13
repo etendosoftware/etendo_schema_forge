@@ -45,7 +45,10 @@ export function DetailMoreActionsMenu({
   // it read as "unknown" (null → probe mounts again) as soon as the record identity changes.
   const probeKey = data?.id || recordId;
   const [probeVerdict, setProbeVerdict] = useState({ key: probeKey, has: customMenuContent ? null : false });
-  const customMenuHasContent = probeVerdict.key === probeKey ? probeVerdict.has : (customMenuContent ? null : false);
+  // A verdict measured on another record is stale: unknown (null) when there is custom content to
+  // probe, nothing to show (false) when there is none.
+  const staleVerdict = customMenuContent ? null : false;
+  const customMenuHasContent = probeVerdict.key === probeKey ? probeVerdict.has : staleVerdict;
 
   useEffect(() => {
     if (!showMoreMenu) return;
