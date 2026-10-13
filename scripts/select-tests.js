@@ -56,7 +56,10 @@ export const TRIGGERS = [
     groups: ALL_GROUPS,
   },
   { re: /^scripts\/(?:select-tests\.js|test-changed\.sh|find-tests\.js|merge-lcov\.js|lib\/git-env\.js)$/, groups: ALL_GROUPS },
-  { re: /^tools\/app-shell\/(?:vite|vitest)\.config\.js$|^tools\/app-shell\/src\/test\/setup\.js$/, groups: ['vitest'] },
+  {
+    re: /^tools\/app-shell\/(?:vite|vitest)\.config\.js$|^tools\/app-shell\/src\/test\/(?:global-)?setup\.js$|^tools\/app-shell\/vite-plugins\/slice-labels\.js$/,
+    groups: ['vitest'],
+  },
 ];
 
 // Files no unit test depends on: docs, images, Playwright (its own pre-push step), agent config.
