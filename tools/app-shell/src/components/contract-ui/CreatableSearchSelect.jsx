@@ -326,6 +326,43 @@ function SearchSelectOptionsPanel({
   );
 }
 
+/** Narrows the pre-fetched (fetch-once/static) option list by the typed query: a caller-supplied
+ * `filterFn(opt, lowercasedQuery)` wins, otherwise a case-insensitive name substring match. */
+function filterOptionsByQuery(options, query, filterFn) {
+  const q = query.trim().toLowerCase();
+  if (!q) return options;
+  if (filterFn) return options.filter(o => filterFn(o, q));
+  return options.filter(o => o.name.toLowerCase().includes(q));
+}
+
+/** Chip label: a caller-supplied `chipLabel` formatter wins when the selected option is loaded
+ * (static/fetched list or the visible list); otherwise the caller's displayValue / the resolved
+ * label / the raw value. */
+function resolveChipText({ chipLabel, hasSelection, value, options, filteredOptions, displayValue, resolvedDisplay }) {
+  const selectedOption = chipLabel && hasSelection
+    ? (options.find(o => o.id === value) ?? filteredOptions.find(o => o.id === value))
+    : null;
+  return selectedOption ? chipLabel(selectedOption) : (displayValue || resolvedDisplay || value);
+}
+
+/** While the list is open, closes ONLY the list on Escape. Radix Dialog listens for Escape on
+ * `document` in the capture phase, which runs before any React onKeyDown, so a `window` capture
+ * listener (registered only while open) is the one that runs first. */
+function useCloseOnEscapeWhileOpen(open, onEscapeClose) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onEscape = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      onEscapeClose();
+    };
+    window.addEventListener('keydown', onEscape, { capture: true });
+    return () => window.removeEventListener('keydown', onEscape, { capture: true });
+  }, [open, onEscapeClose]);
+}
+
 export function CreatableSearchSelect({
   field,
   value,
@@ -695,10 +732,7 @@ export function CreatableSearchSelect({
   const filteredOptions = useMemo(() => {
     if (lookupMode) return lookupResults;
     if (serverSearch) return serverOptions ?? [];
-    const q = query.trim().toLowerCase();
-    if (!q) return options;
-    if (filterFn) return options.filter(o => filterFn(o, q));
-    return options.filter(o => o.name.toLowerCase().includes(q));
+    return filterOptionsByQuery(options, query, filterFn);
   }, [lookupMode, lookupResults, serverSearch, serverOptions, options, query, filterFn]);
   const panelLoading = lookupMode ? lookupLoading : loading;
 
@@ -723,12 +757,9 @@ export function CreatableSearchSelect({
       editingIntent, open, createLabel, onCreateRequest, loading: panelLoading, filteredOptions, query,
       resolvedLabel, ui, disabled,
     });
-  // Chip label: a caller-supplied formatter wins when the selected option is loaded (static or
-  // fetched list); otherwise fall back to the caller's displayValue / the resolved label.
-  const selectedOption = chipLabel && hasSelection
-    ? (options.find(o => o.id === value) ?? filteredOptions.find(o => o.id === value))
-    : null;
-  const chipText = selectedOption ? chipLabel(selectedOption) : (displayValue || resolvedDisplay || value);
+  const chipText = resolveChipText({
+    chipLabel, hasSelection, value, options, filteredOptions, displayValue, resolvedDisplay,
+  });
 
   const handleSelect = (opt) => {
     isEditingRef.current = false;
@@ -860,25 +891,14 @@ export function CreatableSearchSelect({
     }
   };
 
-  // Escape with the list open must close ONLY the list. Radix Dialog listens for Escape on
-  // `document` in the capture phase, which runs before any React onKeyDown, so stopping the
-  // event from the input handler is too late. A `window` capture listener runs before every
-  // document-level one; registered only while the list is open, so nothing changes otherwise.
-  useEffect(() => {
-    if (!open) return undefined;
-    const onEscape = (e) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      isEditingRef.current = false;
-      setOpen(false);
-      resetSearchState();
-      if (hasSelection) setEditingIntent(false);
-    };
-    window.addEventListener('keydown', onEscape, { capture: true });
-    return () => window.removeEventListener('keydown', onEscape, { capture: true });
-  }, [open, hasSelection, resetSearchState]);
+  // Escape with the list open must close ONLY the list (see useCloseOnEscapeWhileOpen).
+  const closeListOnEscape = useCallback(() => {
+    isEditingRef.current = false;
+    setOpen(false);
+    resetSearchState();
+    if (hasSelection) setEditingIntent(false);
+  }, [hasSelection, resetSearchState]);
+  useCloseOnEscapeWhileOpen(open, closeListOnEscape);
 
   const handleCreate = () => {
     isEditingRef.current = false;
