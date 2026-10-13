@@ -1,0 +1,66 @@
+name: Mini Pipeline
+
+# ETP-5695: the per-PR mini pipeline on GitHub Actions. It does the same work as the experimental
+# Jenkins job (etendo-go/experimental/ExperimentalSchemaForgeJenkinsfile in
+# com.etendoerp.jenkins.pipelines) so the two can be timed against each other: install the
+# dependencies and run the mocked Playwright suite. The unit tests already run on every PR in
+# test.yml; the mocked suite needs no backend.
+
+on:
+  pull_request:
+    branches: [develop]
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mini-pipeline-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mocked:
+    name: Mocked E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read   # npm install from npm.pkg.github.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp .env.example .env
+          make install
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # run-e2e-full.sh builds the no-PWA bundle, serves it, runs the mocked projects and then the
+      # quarantined tests without blocking (docs/testing/flaky-tests.md).
+      - name: Mocked E2E
+        env:
+          E2E_SUITE: mocked
+          PLAYWRIGHT_HTML_REPORT: ${{ github.workspace }}/e2e/playwright-report-mocked
+        run: make test-e2e-headless
+
+      - name: Upload the Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-mocked
+          path: e2e/playwright-report-mocked
+          retention-days: 7
+          if-no-files-found: ignore
