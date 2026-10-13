@@ -32,10 +32,10 @@ Backed by the real Etendo Classic AD_Window **`Organization`, ID `110`** — thi
 | `9F030341690C4BB3A3C15835AEC0FF39` | Warehouse | `AD_Org_Warehouse` | No |
 | `910CA3AD36CA47F2B92B7AB9484EF47B` | Actividades del IAE | `EPIAE_OrgInfo_Epigraph` | **Yes** (ETP-4975) — hand-built editable grid, see "Actividades del IAE (ETP-4975)" below |
 | `25301674D3CB4FCBBC285C5AAD232376` | Certificado Digital | `ETSG_Certificate` | No |
-| `53EEA7ADEBA24190A340084CC9A4119C` | Representante Legal | `OREP_Representative_Info` | No |
+| `53EEA7ADEBA24190A340084CC9A4119C` | Representante Legal | `OREP_Representative_Info` | **Yes** (ETP-5716) — curated as a `secondaryTabs` NEO entity for the Modelo 390, see "Representante Legal and Modelo 390 identity (ETP-5716)" below |
 | `A40755889D614B358959BBA14D9B669A` | Email Configuration | `C_POC_CONFIGURATION` | No |
 
-The other 9 tabs (Period Control ×3, General Ledgers, Intrastat, Data Sets, Warehouse, IAE, Certificado Digital, Representante Legal, Email Configuration) are entirely out of scope for this ticket — none of their fields are extracted, curated, or exposed anywhere in this window.
+The other 9 tabs (Period Control ×3, General Ledgers, Intrastat, Data Sets, Warehouse, IAE, Certificado Digital, Representante Legal, Email Configuration) were entirely out of scope for ETP-4749. Two of them were curated later: Actividades del IAE (ETP-4975) and Representante Legal (ETP-5716).
 
 ## Window-access gate (ETP-5395 Fix 3)
 
@@ -214,6 +214,53 @@ time) and were NOT included in the ETP-5432 severity correction above — they k
 `warning` severity.
 
 **A separate, unrelated missing-required-fields banner also converted to a toast (ETP-5432 pt.10) — stays `warning` severity.** `FmModel303Page.jsx`'s "missing required identification fields" banner (`fm.validation.missing_required_banner`, e.g. "Tipo de declaración" left blank) was a second, independent fixed inline banner on the same page — unrelated to the IAE guard. It was also converted to a toast (`showMissingRequiredFieldsReminder(t, missingFieldNames)`, fired from a mount effect), but — unlike the IAE guard above — it was deliberately left at the default `warning` severity; the user's error-severity correction named the IAE message specifically. Full write-up: `docs/generated-custom-windows/fiscal-models.md`.
+## Representante Legal and Modelo 390 identity (ETP-5716)
+
+The Modelo 390 (annual VAT summary, `org.openbravo.module.aeat390.es`) fills the declarant identity
+and its legal representative from two places, and both are now exposed through NEO so GO can
+replicate Classic:
+
+- **`AD_OrgInfo` "Modelo 390" field group** (Classic: Organization > Information, seq 140–190). If
+  `EM_AEAT390_ISPERSON = 'Y'` (natural person), the report reads the declarant's
+  `EM_AEAT390_FIRSTNAME`/`SURNAME1`/`SURNAME2` and the representative's `EM_AEAT390_REP_NIF`/`REP_NAME`.
+- **`OREP_Representative_Info`** (module `org.openbravo.module.organization.representative.es`,
+  Classic tab "Representante Legal", window 110, tab level 1). If the organization is NOT a natural
+  person, the report uses the **first 3 rows ordered by `LINE`** as its legal representatives
+  (name, NIF, power-of-attorney date, notary).
+
+### Data model
+
+`decisions.json` changes (configuration only; the UI section is a separate step):
+
+| Entity | Field | Visibility | Notes |
+|---|---|---|---|
+| `information` | `aeat390Isperson` | editable (boolean) | "Persona Física 390". AD-mandatory, default `N`. No display logic |
+| `information` | `aeat390Firstname`, `aeat390Surname1`, `aeat390Surname2` | editable (text, 60) | Declarant name/surnames. Optional. Display logic `@EM_Aeat390_Isperson@='Y'`, carried through from the raw AD (no override in `decisions.json`) |
+| `information` | `aeat390RepNif` (20), `aeat390RepName` (60) | editable (text) | Natural-person representative. Optional. Same display logic |
+| `representanteLegal` | `taxID` ("CIF/NIF", 20), `firstName` ("Nombre"), `lastname1` ("Primer Apellido"), `powerDate` ("Fecha Poder", date), `notaryName` ("Notaría") | editable, required | Matches the Classic AD mandatory flags |
+| `representanteLegal` | `lastname2` ("Segundo Apellido") | editable, optional | |
+| `representanteLegal` | `lineNo` | system | Same convention as `actividadesDelIae`. The AD default `@SQL=SELECT COALESCE(MAX(LINE),0)+10 ... WHERE AD_Org_ID=@AD_Org_ID@` is resolved by NEO both on `GET .../representanteLegal/defaults?parentId=<orgId>` and on create (`NeoMandatoryDefaultsService`): verified live, two consecutive creates got `lineNo` 10 and 20 |
+| `representanteLegal` | `organization`, `active` (`fromConfig` `Y`), `client`, `id`, audit columns | system | Same as `actividadesDelIae` |
+
+`representanteLegal` is declared under `window.secondaryTabs` (`tabOrder: 20`, after the IAE tab)
+with `addLineFields` `taxID, firstName, lastname1, lastname2, powerDate, notaryName`.
+`OrganizationPage.jsx` is hand-built and does not render the generated `secondaryTabs` scaffold, so
+the visible section is a hand-written component, as with the IAE grid.
+
+### NEO API
+
+Same contract as `actividadesDelIae` (spec segment `organization`, not `organizaci-n`):
+
+- List: `GET /sws/neo/organization/representanteLegal?parentId=<orgId>&_limit=100`. Rows are not
+  returned ordered by line, so sort by `lineNo` (with `_sortBy=lineNo` or on the client); the 390
+  reads the first 3.
+- Create: `POST /sws/neo/organization/representanteLegal` with
+  `{ taxID, firstName, lastname1, lastname2, powerDate: "yyyy-MM-dd", notaryName, parentId: <orgId> }`.
+  Leave `lineNo` out so the server assigns `MAX+10`.
+- Update / delete: `PATCH` / `DELETE /sws/neo/organization/representanteLegal/{id}`.
+- The `aeat390*` fields are read and written on the existing `information` entity
+  (`/sws/neo/organization/information`), the same record the page already loads.
+
 ## Field change: SII/TicketBAI/Verifactu config flags exposed as `system` fields (ETP-4784)
 
 Three `AD_OrgInfo` columns — `EM_Etsg_Has_Sii_Config`, `EM_Etsg_Has_Tbai_Config`,
@@ -324,7 +371,7 @@ case list, deliberately).
 
 ## Automated evidence
 
-- `artifacts/organization/decisions.json` — `layoutType: "custom"`, `organization` + `information` entities curated (UI-exposed); `actividadesDelIae` curated as `window.secondaryTabs` (ETP-4975 — see "Actividades del IAE" above); the remaining out-of-scope tabs stay excluded.
+- `artifacts/organization/decisions.json` — `layoutType: "custom"`, `organization` + `information` entities curated (UI-exposed); `actividadesDelIae` curated as `window.secondaryTabs` (ETP-4975 — see "Actividades del IAE" above); `representanteLegal` curated as `window.secondaryTabs` and the six `information.aeat390*` fields un-discarded (ETP-5716 — see "Representante Legal and Modelo 390 identity" above); the remaining out-of-scope tabs stay excluded.
 - `cli/config/regen-windows.json` — `organization` registered (`windowId: "110"`).
 - `tools/app-shell/src/menu.json` — `organization` entry under the Settings group.
 - `tools/app-shell/src/windows/registry.js` — `organization` in `customLoaders`.
