@@ -4137,7 +4137,8 @@ hid the "Modelos Fiscales" menu entry for a role without the grant, but:
   `'none'` tier renders the access-denied screen instead of `FiscalModelsPage`; `'read-only'` and
   `'full'` both render the page (this window is window-gated, not write-gated, on the frontend).
 - **Backend** (`com.etendoerp.go`) — two separate gates, both calling
-  `NeoAccessHelper.hasWindowAccess(NeoAttachmentAuthorizer.TAX_REPORT_WINDOW_ID, method)`:
+  `NeoAccessHelper.hasWindowAccess(RoleAccessMatrix.TAX_MODELS_PROXY_WINDOW_ID, method)` (the
+  single backend constant for this id since ETP-5540; the attachment authorizer reads it too):
   - `AbstractFiscalHandler.handle(entityName, method, request, response)` — the single entry point
     every `/fiscal303/*` and `/fiscal349/*` sub-route funnels through (declarations, incidents,
     boxes, submit, modified, validate-vies) — checks access first, before any entity routing,
