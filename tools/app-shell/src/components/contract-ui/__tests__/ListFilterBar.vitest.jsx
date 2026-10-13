@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ListFilterBar.jsx
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 // Not mocked: the real fixed-order catalog, so the expected order is derived
@@ -772,6 +773,24 @@ describe('ListFilterBar active status filter + handleStatusSelect', () => {
     expect(screen.getByTestId('filter-status')).toHaveTextContent('Complete');
   });
 
+  it('keeps the idle text color when a status filter is active; only the border changes', () => {
+    const { rerender } = render(<ListFilterBar columns={STATUS_COLUMNS} columnFilters={{}} onFilterChange={vi.fn()} />);
+    const idle = screen.getByTestId('filter-status');
+    expect(idle).toHaveClass('text-[#121217]');
+    expect(idle).not.toHaveClass('border-primary/40');
+
+    rerender(
+      <ListFilterBar
+        columns={STATUS_COLUMNS}
+        columnFilters={{ documentStatus: { mode: 'enumLabel', value: ['CO'], originalValue: 'CO' } }}
+        onFilterChange={vi.fn()}
+      />
+    );
+    const active = screen.getByTestId('filter-status');
+    expect(active).toHaveClass('text-[#121217]');
+    expect(active).toHaveClass('border-primary/40');
+  });
+
   it('mergedStatusCodes appends the active code when it is absent from rows and backend', async () => {
     render(
       <ListFilterBar
@@ -1165,5 +1184,33 @@ describe('ListFilterBar advanced filter builder wiring', () => {
     });
 
     expect(screen.getByTestId('filter-advanced')).toBeInTheDocument();
+  });
+});
+describe('ListFilterBar root — flowInParent', () => {
+  const renderBar = (props) => render(
+    <ListFilterBar columns={COLUMNS} columnFilters={{}} onFilterChange={vi.fn()} {...props} />,
+  );
+
+  it('keeps its own flex row by default', () => {
+    const { container } = renderBar();
+    const root = container.firstChild;
+    expect(root).toHaveClass('flex', 'items-center', 'gap-2');
+    expect(root).not.toHaveClass('contents');
+  });
+
+  it('keeps its own flex row when flowInParent is false', () => {
+    const { container } = renderBar({ flowInParent: false });
+    expect(container.firstChild).toHaveClass('flex', 'items-center', 'gap-2');
+  });
+
+  it('renders a display: contents root when flowInParent is true, so its controls flow in the parent row', () => {
+    const { container } = renderBar({ flowInParent: true });
+    const root = container.firstChild;
+    expect(root).toHaveClass('contents');
+    expect(root).not.toHaveClass('flex');
+    expect(root).not.toHaveClass('gap-2');
+    // The controls are still rendered, as direct children of the contents root.
+    expect(root).toContainElement(screen.getByTestId('filter-advanced'));
+    expect(screen.getByText('allStatuses')).toBeInTheDocument();
   });
 });

@@ -40,6 +40,15 @@ export const PUBLIC_API_KEYS = 'public-api-keys';
 export const UNIFIED_CALENDAR_POC = 'unified-calendar-poc';
 
 /**
+ * NUMERIC flag (ETP-5676): rows per `/batch` request in the generic import, overriding every
+ * window's `window.import.limit.batchSize`. `0` (the default), unset, negative or non-numeric means
+ * "no override" — the window's decisions value applies, else 1; the engine clamps to 1..50. One
+ * global flag by design, with no per-window variants. Read with `useNumberFlag`, resolved by
+ * `resolveImportBatchSize` (`lib/importBatchSize.js`).
+ */
+export const IMPORT_BATCH_SIZE = 'import-batch-size';
+
+/**
  * Telemetry kill switches (ETP-4578, D2). They are "kill" flags: `true` STOPS telemetry, so the
  * safe default is `false` (today's shipped behaviour: providers run as configured). They are
  * read by `observability/killSwitch.js`, never rendered by the UI, and are excluded from flag
@@ -67,13 +76,15 @@ export const FLAG_DEFAULTS = Object.freeze({
   [ACCT_PROCESS_MONITOR]: false,
   [PUBLIC_API_KEYS]: false,
   [UNIFIED_CALENDAR_POC]: false,
+  [IMPORT_BATCH_SIZE]: 0,
   [TELEMETRY_KILL_ALL]: false,
   ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
 });
 
 /**
  * Safe default for a key. Unknown keys resolve to `false` so a typo hides the
- * feature rather than revealing it.
+ * feature rather than revealing it. A declared numeric default (`0`) is returned
+ * as is — `??` only replaces a missing entry, never a falsy one.
  */
 export function defaultForFlag(key) {
   return FLAG_DEFAULTS[key] ?? false;

@@ -121,19 +121,22 @@ export function BPChartSVGContent({
         <>
           <line x1={hx} y1={PY} x2={hx} y2={PY + plotH}
             stroke="hsl(var(--muted-foreground))" strokeWidth="1" strokeDasharray="3 2" />
-          <rect x={tooltipX} y={tooltipY} width={TW} height={TH} rx={TR} fill="hsl(var(--foreground))" opacity="0.95" />
+          {/* ETP-5600 — Figma tooltip is near-black, not the navy `--foreground`. `--eg-ink`
+              (#121217) is the theme-invariant near-black ink; the text uses the theme-invariant
+              light pair of the dark floating toolbar so it stays readable in both themes. */}
+          <rect x={tooltipX} y={tooltipY} width={TW} height={TH} rx={TR} fill="var(--eg-ink)" opacity="0.95" />
           <text x={tooltipX + TW / 2} y={tooltipY + fontSize + 2}
-            textAnchor="middle" fontSize={fontSize} fill="hsl(var(--muted-foreground))">
+            textAnchor="middle" fontSize={fontSize} fill="hsl(var(--floating-toolbar-muted))">
             {labels[hoveredIdx]}
           </text>
           <circle cx={tooltipX + 8} cy={tooltipY + fontSize * 2.6} r={fontSize * 0.4} fill="var(--status-success-fg)" />
           <text x={tooltipX + 15} y={tooltipY + fontSize * 2.6 + fontSize * 0.38}
-            fontSize={fontSize} fontWeight="600" fill="hsl(var(--background))">
+            fontSize={fontSize} fontWeight="600" fill="hsl(var(--floating-toolbar-fg))">
             {formatCurrency(orgCurrency, revenue[hoveredIdx] ?? 0)}
           </text>
           <circle cx={tooltipX + 8} cy={tooltipY + fontSize * 4.2} r={fontSize * 0.4} fill="hsl(var(--destructive))" />
           <text x={tooltipX + 15} y={tooltipY + fontSize * 4.2 + fontSize * 0.38}
-            fontSize={fontSize} fontWeight="600" fill="hsl(var(--background))">
+            fontSize={fontSize} fontWeight="600" fill="hsl(var(--floating-toolbar-fg))">
             {formatCurrency(orgCurrency, expenses[hoveredIdx] ?? 0)}
           </text>
         </>

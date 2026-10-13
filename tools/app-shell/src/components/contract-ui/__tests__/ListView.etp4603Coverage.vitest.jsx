@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 /**
  * ETP-4603 coverage top-up for ListView.jsx.
  *
@@ -22,7 +23,7 @@
  *   - ReportDrawer close callback
  */
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', () => ({
@@ -492,7 +493,7 @@ describe('ListView — ETP-4603 coverage top-up', () => {
 
   it('opens the report drawer from the header print button', () => {
     renderListView();
-    fireEvent.click(screen.getByText('print').closest('button'));
+    fireEvent.click(screen.getByRole('button', { name: 'print' }));
     expect(screen.getByTestId('report-drawer')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('close-report'));
     expect(screen.queryByTestId('report-drawer')).not.toBeInTheDocument();

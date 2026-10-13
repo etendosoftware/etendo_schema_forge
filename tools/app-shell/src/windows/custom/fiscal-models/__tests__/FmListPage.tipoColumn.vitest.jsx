@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // "Tipo" column derivation regression coverage (ETP-5338).
 //
 // FmListPage.jsx's "Tipo" list column used to render `decl.type === 'ord' ? 'Ordinaria' :
@@ -52,7 +53,6 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: ({ title, message, cta }) =>
     React.createElement('div', { className: 'fm-empty-state' }, title || message || 'empty', cta ?? null),

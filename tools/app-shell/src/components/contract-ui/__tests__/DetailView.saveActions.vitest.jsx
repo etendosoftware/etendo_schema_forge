@@ -671,3 +671,39 @@ describe('renderSaveActions — Confirm runs draftMode.afterProcess', () => {
     expect(setup.navigate).not.toHaveBeenCalled();
   });
 });
+
+// `primarySave` — an existing record's Save keeps the primary (filled) Button variant
+// instead of the default secondary/outline look. The rendered variant is read from the
+// real core Button's classes: only the default (primary) variant keeps `bg-primary`.
+describe('renderSaveActions — existing-record Save look (primarySave)', () => {
+  const ui = (key) => key;
+
+  function existingParams(overrides = {}) {
+    return {
+      hook: { isSaving: false, handleSave: vi.fn(() => Promise.resolve({ id: '1' })), children: [] },
+      isDirty: true,
+      flushPendingLines: vi.fn(() => Promise.resolve(true)),
+      data: {},
+      isNew: false,
+      navigate: vi.fn(),
+      windowName: 'contacts',
+      ui,
+      token: 'tok',
+      apiBaseUrl: '/api',
+      saveBtnCls: '',
+      draftMode: null,
+      blockSaveForBalance: false,
+      saveGate: {},
+      ...overrides,
+    };
+  }
+
+  it.each([
+    ['default (primarySave absent)', {}, false],
+    ['primarySave: true', { primarySave: true }, true],
+  ])('%s renders the expected variant', (_label, overrides, primary) => {
+    render(<>{renderSaveActions(existingParams(overrides))}</>);
+    const save = screen.getByTestId('action-save');
+    expect(save.classList.contains('bg-primary')).toBe(primary);
+  });
+});

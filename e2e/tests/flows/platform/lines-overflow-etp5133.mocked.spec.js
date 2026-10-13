@@ -411,10 +411,10 @@ test.describe('ETP-5133 — Lines overflow scoped to avoid sidebar overlap (mock
         // `DetailSidePanel.jsx` does not forward its own JSX-level
         // `data-testid="DetailSidePanel__7c75ad"` prop to the rendered DOM
         // node (same gap as `SideMenu` above), so anchor on the one thing it
-        // DOES render literally into the DOM: `sidePanelStyle={{ width: 360 }}`
-        // (set by purchase-invoice's index.jsx) becomes a real inline
-        // `style="width: 360px"` on the panel's root div.
-        const sidePanel = page.locator('div[style*="360px"]').first();
+        // DOES render literally into the DOM: `sidePanelStyle={{ width: 320 }}`
+        // (set by purchase-invoice's index.jsx; 360 before ETP-5513) becomes a
+        // real inline `style="width: 320px"` on the panel's root div.
+        const sidePanel = page.locator('div[style*="320px"]').first();
         await expect(sidePanel).toBeVisible();
         const sidePanelBox = await sidePanel.boundingBox();
         expect(sidePanelBox).not.toBeNull();

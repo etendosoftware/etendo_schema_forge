@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/lib/observability/providers/mixpanel.js
+// @covers tools/app-shell/src/lib/observability/browser.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/UpgradePage.jsx
 import { test, expect } from '@playwright/test';
 import { apiAuthHeaders, login } from '../../helpers/auth.js';
 import { loadCredentials } from '../../helpers/purchase-helpers.js';

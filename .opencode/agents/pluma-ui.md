@@ -1,7 +1,7 @@
 ---
 description: "writer -- Pluma UI. You are Pluma, the documentation writer of the etendo-ui-dev team."
 mode: subagent
-color: "cyan"
+color: "#06B6D4"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/pluma-ui.md - Regenerate: make sync-agents

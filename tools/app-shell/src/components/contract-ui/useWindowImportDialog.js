@@ -3,6 +3,11 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLabel, useUI } from '@/i18n';
 import { simSearchEveryLanguage } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
+import { useNumberFlag } from '@/lib/flags/useFeatureFlag.js';
+import { IMPORT_BATCH_SIZE } from '@/lib/flags/flag-keys.js';
+import { resolveImportBatchSize } from '@/lib/importBatchSize.js';
+import { track } from '@/lib/observability.js';
+import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '@/lib/observability/events.js';
 
 /**
  * Accent- and case-insensitive label comparison, matching how `mapColumns.normalizeHeader`
@@ -41,6 +46,9 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   // base for the existing-record lookup below, and must be the SPEC's URL.
   const { runBatch } = useBatch({ token });
   const entity = importConfig?.entity;
+  // ETP-5676: core only receives the resolved number; the global flag, if set, beats the window.
+  const batchSizeFlag = useNumberFlag(IMPORT_BATCH_SIZE);
+  const batchSize = resolveImportBatchSize(batchSizeFlag, importConfig?.limit?.batchSize);
 
   // ETP-4696/ETP-4997 — `headerScope` appends a localized qualifier naming the tab a column
   // belongs to. A Contacts row is split across THREE records — the business partner, its
@@ -119,8 +127,17 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   // tooltips, bulkApply/{count}/{raw}/{value}) keep their {placeholders} — the child fills
   // them at render time; the (n) => string labels interpolate here. `save`/`cancel`/`retry`/
   // `close` reuse existing generic keys per the i18n guide's "reuse before adding" rule.
+  // ETP-5676: core hands over a summary of the run (quantities only); this is the one place that
+  // turns it into telemetry, so core never learns about Datadog. The event definition keeps only
+  // its declared properties, and the payload policy re-checks each value.
+  const onImportFinished = useCallback((summary) => {
+    const event = buildObservabilityEvent(OBSERVABILITY_EVENTS.IMPORT_COMPLETED, summary);
+    Promise.resolve(track(event.name, event.properties)).catch(() => {});
+  }, []);
+
   const labels = useMemo(() => ({
     title: ui('importDialogTitle'),
+    reading: ui('importReadingFile'),
     revalidating: ui('importRevalidating'),
     // `downloadTemplate` stays for back-compatibility (ImportDialog falls back to it for CSV
     // when the per-format key is absent); the two per-format captions are what actually render
@@ -138,6 +155,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     progress: {
       title: ui('importProgressTitle'),
       subtitle: ui('importProgressSubtitle'),
+      counter: ui('importProgressCounter'),
     },
     mapping: {
       notImported: ui('importNotImported'),
@@ -223,7 +241,9 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     translate: ui,
     fieldLabelFn,
     existingKeyFetchFn,
-  }), [token, runBatch, labels, ui, fieldLabelFn, existingKeyFetchFn]);
+    batchSize,
+    onImportFinished,
+  }), [token, runBatch, labels, ui, fieldLabelFn, existingKeyFetchFn, batchSize, onImportFinished]);
 }
 
 export default useWindowImportDialog;

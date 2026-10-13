@@ -85,11 +85,11 @@ export function AmountFilter({ value, onChange }) {
       <PopoverTrigger asChild data-testid="PopoverTrigger__c66309">
         <button
           type="button"
-          className="inline-flex h-10 items-center justify-between gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+          className="inline-flex h-10 items-center justify-between gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[#121217] hover:bg-[hsl(var(--muted))]"
         >
           <span className="truncate text-left">{triggerLabel}</span>
           <ChevronDown
-            className="h-5 w-5 shrink-0 text-[hsl(var(--text-disabled))]"
+            className="h-4 w-4 shrink-0 text-[#828FA3]"
             data-testid="ChevronDown__c66309" />
         </button>
       </PopoverTrigger>

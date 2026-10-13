@@ -18,6 +18,7 @@ export function buildReturnPreviewContent({
   // behavior (no card) stays unchanged for it.
   emailsCard,
   relatedDefinition,
+  relatedLoadsDetail,
 }) {
   const actionButtons = (
     <PreviewActionButtons
@@ -45,6 +46,7 @@ export function buildReturnPreviewContent({
           ui={ui}
           specs={specs}
           relatedDefinition={relatedDefinition}
+          relatedLoadsDetail={relatedLoadsDetail}
           emailsCard={emailsCard}
           data-testid="ReturnDocStatsPanel__634d79" />
       ),

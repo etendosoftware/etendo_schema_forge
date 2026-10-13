@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/copilot/ocr/OcrInlineUploader.jsx
 // Extended Vitest tests for OcrInlineUploader — covers file selection, status branches, error states
 
 let mockExtractionReturn = {
@@ -57,6 +58,7 @@ vi.mock('../buildOcrSchema', () => ({
 }));
 
 vi.mock('../useOcrExtraction', () => ({
+  OCR_NO_DATA_ERROR: 'ocr-no-data',
   useOcrExtraction: () => mockExtractionReturn,
 }));
 
@@ -225,6 +227,23 @@ describe('OcrInlineUploader', () => {
     fireEvent.click(extractBtn);
 
     expect(extractFn).toHaveBeenCalledWith(file);
+  });
+
+  it('shows the translated no-data message and dispatches no event when extraction yields nothing', async () => {
+    const listener = vi.fn();
+    window.addEventListener('copilot:ocr-prefill:purchase-invoice', listener);
+    mockExtractionReturn.extract = vi.fn().mockRejectedValue(new Error('Tool returned no extractable data'));
+    mockExtractionReturn.status = 'error';
+    mockExtractionReturn.error = 'ocr-no-data';
+
+    const { container } = render(<OcrInlineUploader {...defaultProps} />);
+    fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [createPdfFile()] } });
+    fireEvent.click(screen.getByText('ocrExtractFill'));
+
+    await waitFor(() => expect(mockExtractionReturn.extract).toHaveBeenCalled());
+    expect(screen.getByText('ocrNoDataExtracted')).toBeInTheDocument();
+    expect(listener).not.toHaveBeenCalled();
+    window.removeEventListener('copilot:ocr-prefill:purchase-invoice', listener);
   });
 
   it('shows uploading status', () => {

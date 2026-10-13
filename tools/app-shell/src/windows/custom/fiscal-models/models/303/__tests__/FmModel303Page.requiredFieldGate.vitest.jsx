@@ -25,6 +25,7 @@ const navigateMock = vi.fn();
 const tSpy = vi.hoisted(() => vi.fn((key) => key));
 
 vi.mock('@/i18n', () => ({
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useUI: () => tSpy,
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
@@ -46,7 +47,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -86,7 +86,11 @@ vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null,
   useAttachments: () => ({ upload: vi.fn() }),
 }));
+// ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
+vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
   CircleCheck: () => null, Calculator: () => null, Loader2: () => null,
   TrendingUp: () => null, TrendingDown: () => null, ClipboardCheck: () => null,

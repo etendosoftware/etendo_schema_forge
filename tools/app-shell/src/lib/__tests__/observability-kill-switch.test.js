@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/lib/observability/killSwitch.js
+// @covers tools/app-shell/src/lib/observability/browser.js
+// @covers tools/app-shell/src/lib/flags/flag-exposure.js
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { OpenFeature, TypedInMemoryProvider } from '@openfeature/web-sdk';

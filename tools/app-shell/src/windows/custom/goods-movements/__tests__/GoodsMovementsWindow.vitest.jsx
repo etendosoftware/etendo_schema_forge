@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/goods-movements/index.jsx
 let lastGeneratedAppProps = null;
 vi.mock('@generated/goods-movements/generated/web/goods-movements/index.jsx', () => ({
   default: (props) => {
@@ -19,11 +20,6 @@ vi.mock('@generated/goods-movements/generated/web/goods-movements/index.jsx', ()
       </div>
     );
   },
-}));
-
-vi.mock('@/components/ui/custom-icons', () => ({
-  SortIcon: () => null,
-  RefreshIcon: () => null,
 }));
 
 let bulkDocumentActionCalls = [];
@@ -65,11 +61,11 @@ describe('GoodsMovementsWindow', () => {
     lastGeneratedAppProps = null;
   });
 
-  it('renders the generated app with SortIconComponent/RefreshIconComponent', () => {
+  it('renders the generated app without custom sort/refresh icons (list falls back to the defaults)', () => {
     render(<GoodsMovementsWindow {...DEFAULT_PROPS} />);
     expect(screen.getByTestId('generated-app')).toBeInTheDocument();
-    expect(lastGeneratedAppProps.SortIconComponent).toBeDefined();
-    expect(lastGeneratedAppProps.RefreshIconComponent).toBeDefined();
+    expect(lastGeneratedAppProps.SortIconComponent).toBeUndefined();
+    expect(lastGeneratedAppProps.RefreshIconComponent).toBeUndefined();
   });
 
   it('passes bulkActions=GoodsMovementsBulkAction down to GeneratedApp', () => {

@@ -1,8 +1,8 @@
 {
   "version": "0.45.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-09-16T18:22:09.873Z",
-  "checksum": "e82283ff80b0689c",
+  "updatedAt": "2026-10-08T13:55:29.886Z",
+  "checksum": "8e1e693cce4ce2cc",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -91,7 +91,7 @@
       "hideFormCard": true,
       "sidebarAboveTabsOnly": true,
       "tabsSeparator": true,
-      "sidebarClassName": "w-[30%] shrink-0 border-l border-border-subtle p-2",
+      "sidebarClassName": "w-[320px] shrink-0 border-l border-border-subtle p-2",
       "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",
@@ -1185,7 +1185,7 @@
       "hideFormCard": true,
       "sidebarAboveTabsOnly": true,
       "tabsSeparator": true,
-      "sidebarClassName": "w-[30%] shrink-0 border-l border-border-subtle p-2",
+      "sidebarClassName": "w-[320px] shrink-0 border-l border-border-subtle p-2",
       "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",

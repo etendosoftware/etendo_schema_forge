@@ -641,3 +641,30 @@ const primaryBtnStyle = {
   fontFamily: FONT_FAMILY, fontSize: 14, fontWeight: 500, lineHeight: '24px',
   cursor: 'pointer',
 };
+
+/**
+ * ETP-5576 — the Figma "PopUps" primitives of this modal, exported read-only so a modal that
+ * follows it in the same flow (ConfirmResultModal's `variant="popup"`, the follow-up result)
+ * looks the same: shell, close icon, title, footer buttons, static card, icon box, badge tones
+ * and the keyboard focus outline. Consumers spread them, they never mutate them.
+ */
+export const POPUP_MODAL_STYLES = Object.freeze({
+  overlay: overlayStyle,
+  dialog: dialogStyle,
+  closeBtn: closeBtnStyle,
+  header: headerStyle,
+  title: titleStyle,
+  body: bodyStyle,
+  section: sectionStyle,
+  footer: footerStyle,
+  cancelBtn: cancelBtnStyle,
+  primaryBtn: primaryBtnStyle,
+  card: staticCardStyle,
+  cardText: staticCardTextStyle,
+  iconBox: iconBoxStyle,
+  labelRow: optionLabelRowStyle,
+  label: optionLabelStyle,
+  description: optionDescriptionStyle,
+  badgeTones: BADGE_TONES,
+  focusRingClassName: FOCUS_RING_CLS,
+});

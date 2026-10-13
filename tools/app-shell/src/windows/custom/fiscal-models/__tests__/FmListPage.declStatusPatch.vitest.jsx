@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 // ETP-5338 CRITICAL FIX — regression test.
 //
 // Root cause: `FmListPage` "stays mounted at all times" (see FiscalModelsPage.jsx) so
@@ -66,7 +67,6 @@ vi.mock('lucide-react', () => ({
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   EmptyState: ({ title, message }) =>
     React.createElement('div', { className: 'fm-empty-state' }, title || message || 'empty'),

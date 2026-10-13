@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/lib/rum.js
+// @covers tools/app-shell/src/lib/observability/sdk.js
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';

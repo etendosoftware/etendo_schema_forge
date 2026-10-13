@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 /**
  * Integration render test for DetailView.
  * Mounts the full component with minimal props to cover the main render paths,
@@ -525,19 +526,19 @@ describe('DetailView render integration', () => {
     expect(container).toBeTruthy();
   });
 
-  it('renders with toolbarButtonSize default', () => {
-    const { container } = renderDetailView({ toolbarButtonSize: 'default' });
-    expect(container).toBeTruthy();
-  });
-
-  it('renders with toolbarButtonSize sm', () => {
-    const { container } = renderDetailView({ toolbarButtonSize: 'sm' });
-    expect(container).toBeTruthy();
-  });
-
-  it('renders with toolbarBorderBottom={true}', () => {
-    const { container } = renderDetailView({ toolbarBorderBottom: true });
-    expect(container).toBeTruthy();
+  it('ignores the removed toolbar props: toolbar keeps the inset rule, no border-b', () => {
+    const { container } = renderDetailView({
+      toolbarButtonSize: 'sm',
+      toolbarBorderBottom: true,
+      toolbarPaddingX: 'px-8',
+    });
+    const toolbars = container.querySelectorAll('[class*="shadow-[inset_0_-1px_0_var(--status-neutral-border)]"]');
+    expect(toolbars.length).toBeGreaterThan(0);
+    toolbars.forEach((el) => {
+      expect(el.className).toContain('p-2');
+      expect(el.className).not.toContain('border-b');
+      expect(el.className).not.toContain('px-8');
+    });
   });
 
   it('renders with compactSidebarPadding={true}', () => {

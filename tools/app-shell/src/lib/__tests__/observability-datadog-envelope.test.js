@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/lib/observability/providers/datadog.js
+// @covers tools/app-shell/src/lib/observability/sdk.js
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';

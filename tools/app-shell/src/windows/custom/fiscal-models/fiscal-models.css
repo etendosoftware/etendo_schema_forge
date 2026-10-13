@@ -79,6 +79,18 @@
 .fm-page--freeflow .fm-tabs { border-bottom: none; margin-bottom: 0; }
 .fm-tabs-sticky { position: sticky; top: 0; z-index: 20; background: var(--fm-bg-card, hsl(var(--card))); }
 
+/* ─── ETP-5584 detail page — fixed header + scrolling body ───────────
+   `.fm-page--detail` (303/349 detail) is a non-scrolling flex column: the action bar
+   (`FmDetailHeader`, the first row — the title is in the app top bar) never scrolls, and `.fm-detail-scroll` is the ONE scrolling
+   ancestor of everything below it (banners, KPIs, tabs, tab content). The sticky tabs bar,
+   303's section nav and 349's filter row / totals keep their `top` offsets (0 / 49 / 97)
+   because they are now measured against `.fm-detail-scroll`, which starts under the header. */
+.fm-detail-header { flex-shrink: 0; background: hsl(var(--card)); padding: 12px 20px 8px; }
+.fm-detail-actionbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.fm-detail-actionbar__group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fm-detail-actionbar__group:empty { display: none; }
+.fm-detail-scroll { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
 /* ─── Toolbar ──────────────────────────────────────────────────────── */
 .fm-toolbar {
   padding: 8px 16px;
@@ -99,8 +111,7 @@
 }
 /* Overrides the generic .fm-toolbar__pill:hover (light background) — without this,
    hovering an active-dark pill left white text on a near-white background (invisible).
-   Matches .fm-toolbar__btn--primary:hover so every dark actionable pill/button in the
-   fiscal-models toolbar shares one hover treatment. */
+   Same accent-highlight hover as every other dark actionable button in this window. */
 .fm-toolbar__pill--active-dark:hover {
   background: hsl(var(--accent-highlight)); border-color: hsl(var(--accent-highlight));
   color: hsl(var(--accent-highlight-foreground));
@@ -111,27 +122,6 @@
 }
 .fm-toolbar__sep { width: 1px; height: 18px; background: var(--fm-border-1); flex-shrink: 0; margin: 0 2px; }
 .fm-toolbar__space { flex: 1; }
-.fm-toolbar__btn {
-  font: 500 12px/16px var(--fm-font-sans, system-ui, sans-serif);
-  padding: 5px 10px; border-radius: 8px;
-  border: 1px solid var(--fm-border-1); cursor: pointer;
-  background: var(--fm-bg-card, hsl(var(--card))); color: var(--fm-fg-2);
-  display: inline-flex; align-items: center; gap: 6px;
-  transition: background .1s, border-color .1s; white-space: nowrap;
-}
-.fm-toolbar__btn:hover { background: var(--fm-bg-subtle); border-color: var(--fm-border-2); }
-.fm-toolbar__btn--primary {
-  background: var(--fm-gray-900); color: hsl(var(--card));
-  border-color: var(--fm-gray-900); font-weight: 600;
-}
-.fm-toolbar__btn--primary:hover { background: hsl(var(--accent-highlight)); border-color: hsl(var(--accent-highlight)); color: hsl(var(--accent-highlight-foreground)); }
-/* ETP-5597 — e.g. 349 "Registrar/Presentar" while a substitutive declaration lacks its
-   former-declaration identifier. */
-.fm-toolbar__btn--primary:disabled,
-.fm-toolbar__btn--primary:disabled:hover {
-  background: hsl(var(--border-subtle)); border-color: hsl(var(--border-subtle));
-  color: hsl(var(--text-disabled)); cursor: not-allowed;
-}
 /* legacy modifier — base already sets 14px/400 */
 .fm-toolbar__count-badge {
   display: inline-flex; align-items: center; justify-content: center;
@@ -335,25 +325,6 @@
 .fm-row-action-btn--danger { color: hsl(var(--destructive)); }
 .fm-row-action-btn--danger:hover { background: var(--status-destructive-bg); color: hsl(var(--destructive)); }
 
-/* ─── Status Pills ─────────────────────────────────────────────────── */
-/* Aligned with .fm-pill from fiscal-monitor */
-.fm-status-pill {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px; border-radius: 999px;
-  font: 500 11px/14px var(--fm-font-sans, system-ui); white-space: nowrap;
-}
-.fm-status-pill--grey    { background: var(--fm-bg-subtle);   color: var(--fm-fg-3); }
-.fm-status-pill--orange  { background: var(--fm-pending-bg);  color: var(--fm-pending-fg); }
-.fm-status-pill--blue    { background: var(--fm-info-bg);     color: var(--fm-info-fg); }
-.fm-status-pill--green   { background: var(--fm-success-bg);  color: var(--fm-success-fg); }
-.fm-status-pill--teal    { background: var(--fm-success-bg);  color: var(--fm-success-fg); }
-.fm-status-pill--violet  { background: var(--status-info-bg); color: var(--status-info-fg); }
-.fm-status-pill--emerald { background: var(--fm-success-bg);  color: var(--fm-success-fg); }
-
-/* Status dropdown */
-.fm-status-pill-menu { position: relative; display: inline-block; }
-.fm-status-pill-menu__trigger { background: none; border: none; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 2px; }
-.fm-status-pill-menu__caret { font-size: 10px; color: var(--fm-fg-3); }
 .fm-status-menu {
   position: absolute; top: 100%; left: 0; z-index: 50;
   background: var(--fm-bg-card, hsl(var(--card)));
@@ -671,13 +642,17 @@
   background: var(--fm-bg-card, hsl(var(--card))); border-radius: 16px;
   box-shadow: 0 8px 40px hsl(var(--foreground) / .18); z-index: 51;
   width: 100%; max-width: 640px; margin: 16px;
-  display: flex; flex-direction: column; max-height: calc(100vh - 64px);
+  /* ETP-5584 P8 — the modal always fits the viewport (16px gutter top and
+     bottom, the same as its side margin): header and footer never shrink and
+     only the body scrolls, so the footer actions stay reachable on 1280×720. */
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
   animation: fm-modal-in .2s cubic-bezier(.4,0,.2,1);
 }
 @keyframes fm-modal-in { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .fm-config-modal__header {
   display: flex; justify-content: space-between; align-items: flex-start;
-  padding: 20px 20px 0; gap: 12px;
+  padding: 20px 20px 0; gap: 12px; flex-shrink: 0;
 }
 .fm-config-modal__titles { flex: 1; min-width: 0; }
 .fm-config-modal__title { font: 700 20px/28px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); }
@@ -691,7 +666,7 @@
 .fm-config-modal__body { flex: 1; overflow-y: auto; padding: 16px 20px; min-height: 360px; }
 .fm-config-modal__footer {
   padding: 14px 20px; border-top: 1px solid var(--fm-border-1);
-  display: flex; gap: 8px; justify-content: space-between;
+  display: flex; gap: 8px; justify-content: space-between; flex-shrink: 0;
 }
 /* ETP-5229 item #10 polish: PresentModal's footer sits right below its two-column
    card area, which already reads as visually distinct — drop the divider line so
@@ -742,15 +717,6 @@
    .fm-table td.strong, .fm-tabs__tab--active, etc.) rather than the heavier 700
    used for grand-total rows. */
 .fm-link-btn--bold { font-weight: 600 !important; }
-/* "More options" kebab trigger — list header + 303/349 detail headers (FmCommon.jsx MoreOptionsMenu) */
-.fm-more-options-trigger {
-  display: flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; padding: 2px; flex-shrink: 0;
-  background: transparent; border: none; border-radius: 8px; cursor: pointer;
-  color: hsl(var(--text-disabled));
-  transition: background .15s, color .15s;
-}
-.fm-more-options-trigger:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
 /* Pill buttons for config modal footer */
 .fm-btn--cancel-pill {
   font: 400 14px/20px var(--fm-font-sans, system-ui);
@@ -782,32 +748,6 @@
 
 /* ─── Modal ────────────────────────────────────────────────────────── */
 .fm-modal-overlay { position: fixed; inset: 0; background: hsl(var(--foreground) / .35); z-index: 100; display: flex; align-items: center; justify-content: center; }
-.fm-present-modal {
-  background: var(--fm-bg-card, hsl(var(--card))); border-radius: 16px;
-  padding: 22px 24px; min-width: 420px; max-width: 560px;
-  box-shadow: 0 8px 40px hsl(var(--foreground) / .16);
-  border: 1px solid var(--fm-border-1);
-}
-.fm-present-modal__title { font: 700 16px/22px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); margin-bottom: 16px; }
-.fm-present-modal__paths { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-.fm-present-modal__path {
-  border: 1.5px solid var(--fm-border-1); border-radius: 10px;
-  padding: 12px 14px; cursor: pointer; transition: border-color .15s;
-}
-.fm-present-modal__path:hover,
-.fm-present-modal__path--selected { border-color: var(--fm-gray-900); background: var(--fm-bg-subtle); }
-.fm-present-modal__path-title { font: 600 13px/18px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); }
-.fm-present-modal__path-desc  { font: 400 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); margin-top: 2px; }
-.fm-present-modal__upload { margin-top: 8px; }
-.fm-present-modal__actions { display: flex; justify-content: flex-end; gap: 8px; }
-.fm-present-modal__btn {
-  padding: 7px 16px; border-radius: 8px;
-  font: 600 13px/18px var(--fm-font-sans, system-ui); cursor: pointer;
-  border: 1px solid var(--fm-border-1);
-  background: var(--fm-bg-subtle); color: var(--fm-fg-2);
-}
-.fm-present-modal__btn--primary { background: var(--fm-gray-900); color: hsl(var(--card)); border-color: var(--fm-gray-900); }
-.fm-present-modal__btn:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ─── "Nueva declaración" modal (NewDeclModal) ─────────────────────── */
 .fm-newdecl-modal { max-width: 560px; }
@@ -1145,6 +1085,14 @@
   position: sticky;
   top: 97px;
 }
+
+/* ETP-5584 (P15) — the operators table's column header (NIF-IVA, Operador…) stays pinned
+   together with the filter row while the operators scroll: `top: 97px` = 49 (tabs bar) + 48
+   (filter row), the same stack `.fm-349-totals` docks under. Its wrapper must not be a scroll
+   box (`.fm-table-wrap` is `overflow: auto`), or the header would stick inside that never-
+   scrolling box instead of `.fm-detail-scroll`. */
+.fm-349-ops-wrap { overflow: visible; }
+.fm-349-ops-table thead th { position: sticky; top: 97px; z-index: 14; background: hsl(var(--card)); box-shadow: inset 0 -1px 0 hsl(var(--border-subtle)); }
 .fm-349-totals__card {
   background: hsl(var(--muted)); border-radius: 8px; padding: 12px;
 }
@@ -1473,8 +1421,9 @@
 .fm-aeat-ident-inline-field__error { flex-basis: 100%; grid-column: 1 / -1; margin-top: -4px; font: 400 12px/16px var(--fm-font-sans, system-ui); color: hsl(var(--destructive)); }
 .fm-aeat-ident-inline-field__input { background: hsl(var(--card)); border: 1px solid hsl(var(--border-control)); border-radius: 6px; padding: 5px 10px; font: 400 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); box-shadow: 0px 1px 2px hsl(var(--foreground) / 0.05); outline: none; }
 .fm-aeat-ident-inline-field__input:focus { border-color: hsl(var(--focus-ring)); box-shadow: 0 0 0 2px hsl(var(--focus-ring) / 0.15); }
-.fm-aeat-ident-inline-field__select { background: var(--fm-bg-subtle); border: 1px solid hsl(var(--border-control)); border-radius: 6px; padding: 5px 10px; font: 400 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); box-shadow: 0px 1px 2px hsl(var(--foreground) / 0.05); outline: none; min-width: 240px; cursor: pointer; }
-.fm-aeat-ident-inline-field__select:focus { border-color: hsl(var(--focus-ring)); box-shadow: 0 0 0 2px hsl(var(--focus-ring) / 0.15); }
+/* ETP-5584 — the trigger is the app's SelectTrigger (border, height, padding, focus ring come
+   from it); this class only sizes it inside the identification rows. */
+.fm-aeat-ident-inline-field__select { width: auto; min-width: 240px; color: hsl(var(--foreground)); background: hsl(var(--card)); }
 
 /* ── Spin animation for loading states ─────────────────────────────── */
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -1492,7 +1441,10 @@
 .fm-aeat-section--divided { border-top: 1px solid hsl(var(--border-subtle)); margin-top: 8px; padding-top: 24px; }
 
 /* ── Sub-section heading (criterio de caja, etc.) ───────────────────── */
-.fm-aeat-subheading { font: 700 18px/28px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); padding: 16px 0 8px; }
+/* ETP-5584 — a heading row is a long AEAT sentence ("Exclusivamente para aquellos sujetos
+   pasivos…"), so it uses the label typography of the column headers below it (600 14/20),
+   not a section-title size. */
+.fm-aeat-subheading { font: 600 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); padding: 16px 0 8px; }
 .fm-aeat-subheading--sep { border-top: 1px solid hsl(var(--border-subtle)); margin-top: 8px; padding-top: 16px; }
 
 /* ── Bicolumn layout (resultado info boxes) ─────────────────────────── */
@@ -1515,8 +1467,57 @@
 .fm-aeat-terrbox__unit { font: 400 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--muted-foreground)); }
 
 /* ── Compact casilla cells (liquidación sections) ───────────────────── */
-.fm-aeat-section--compact .fm-aeat-cell { width: 180px; height: 40px; }
-.fm-aeat-section--compact .fm-aeat-cell--empty { width: 180px; height: 40px; }
+/* ETP-5584 — the compact cell width is one variable so the label column can keep its room on
+   narrower screens (1280px with the app sidebar open): the cells shrink to 150px instead of the
+   row labels wrapping onto 3 lines, and the group bracket follows the same variable. */
+.fm-aeat-section--compact { --fm-aeat-cell-w: 180px; }
+@media (max-width: 1440px) { .fm-aeat-section--compact { --fm-aeat-cell-w: 150px; } }
+.fm-aeat-section--compact .fm-aeat-cell { width: var(--fm-aeat-cell-w); height: 40px; }
+.fm-aeat-section--compact .fm-aeat-cell--empty { width: var(--fm-aeat-cell-w); height: 40px; }
 .fm-aeat-section--compact .fm-aeat-cell__value { line-height: 40px; }
-.fm-aeat-section--compact .fm-aeat-col-headers__cell { width: 180px; }
-.fm-aeat-section--compact .fm-aeat-group-bracket::before { right: 568px; } /* 3×180 − same gap offsets = 808−240 */
+.fm-aeat-section--compact .fm-aeat-col-headers__cell { width: var(--fm-aeat-cell-w); }
+/* 3 cells + 2 inner gaps (12×2) + half the label-to-cell gap (4) — 568px at 180px cells */
+.fm-aeat-section--compact .fm-aeat-group-bracket::before { right: calc(3 * var(--fm-aeat-cell-w) + 28px); }
+.fm-aeat-section--compact .fm-aeat-row__label,
+.fm-aeat-section--compact .fm-aeat-col-headers__label { min-width: 200px; }
+
+/* ─── ETP-5584 popups — Registrar/Presentar + Presentación telemática AEAT ───
+   Both are `.fm-config-modal`s (standard header / body / footer, 20px gutters).
+   Two rules shared by both:
+   - their body drops the generic 360px min-height so it can shrink and scroll
+     on short viewports (1280×720) instead of pushing the footer off-screen;
+   - toggling an option never changes the modal's size: the space for the
+     content an option reveals is always reserved (see each block below). */
+
+/* Registrar/Presentar (PresentModal). Fixed width per variant: 760px with the
+   AEAT column (303), 500px single column (349). The two variables size the
+   "Subir justificante" row and its reserved slot (see below). */
+.fm-present-modal { max-width: 500px; --fm-acuse-upload-h: 32px; --fm-acuse-upload-gap: 12px; }
+.fm-present-modal--two-col { max-width: 760px; }
+.fm-present-modal .fm-config-modal__body { min-height: 0; }
+
+/* The "Subir justificante" row inside the "Con acuse de recibo" card, and the
+   empty slot PresentModalColumn renders in its place while it is hidden. Both
+   take their height from the same variable, so selecting the option swaps one
+   for the other with no change in height. The button never wraps (a long file
+   name is ellipsized) so the row cannot outgrow the reserved slot. The two
+   variables are declared on `.fm-present-modal` above. */
+.fm-present-acuse-upload {
+  margin-top: var(--fm-acuse-upload-gap); height: var(--fm-acuse-upload-h);
+  display: flex; align-items: center; min-width: 0;
+}
+.fm-present-acuse-upload__btn {
+  height: var(--fm-acuse-upload-h); max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; justify-content: flex-start;
+}
+.fm-present-acuse-slot { height: calc(var(--fm-acuse-upload-h) + var(--fm-acuse-upload-gap)); }
+
+/* Presentación telemática AEAT (AeatSubmitFlow) — full-width stacked fields. */
+.fm-aeat-modal .fm-config-modal__body { min-height: 0; }
+.fm-aeat-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.fm-aeat-field { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.fm-aeat-field__label { font: 400 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); }
+/* "Validar sin presentar" warning — always laid out, only its visibility
+   toggles, so the reserved space is exactly the banner's own height. */
+.fm-aeat-testmode-slot { visibility: hidden; }
+.fm-aeat-testmode-slot--visible { visibility: visible; }

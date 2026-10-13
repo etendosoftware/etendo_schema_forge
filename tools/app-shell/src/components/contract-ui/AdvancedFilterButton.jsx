@@ -41,11 +41,11 @@ export function AdvancedFilterButton({ columns, rows = [], value = null, onChang
           data-testid={testId}
           title={ui('advancedFilterTitle')}
           className={cn(
-            'relative inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-[hsl(var(--muted))]',
+            'relative inline-flex h-10 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm leading-6 font-medium text-[#121217] transition-colors hover:bg-[hsl(var(--muted))]',
             className,
           )}
         >
-          <Filter className="h-4 w-4 text-muted-foreground" data-testid="Filter__1026f3" />
+          <Filter className="h-5 w-5 text-[#828FA3]" data-testid="Filter__1026f3" />
           <span>{ui('filters')}</span>
           {activeConditions > 0 ? (
             <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[hsl(var(--foreground))] px-1 text-[10px] font-semibold leading-none text-primary-foreground">

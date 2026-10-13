@@ -1,69 +1,6 @@
 import React from 'react';
-import { MoreVertical, Star, HelpCircle } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { cn } from '@/lib/utils.js';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu.jsx';
-import { useFavorites } from '@/components/layout/FavoritesContext';
-import { useSupportChatSafe } from '@/components/support/SupportChatContext.jsx';
-import { STATUS_COLOR, STATUS_ICON } from './fiscalModelsUtils.js';
 import './fiscal-models.css';
-
-// ── "More options" kebab — list header + 303/349 detail headers ──────────
-// Mirrors the two working items the generic AD-window kebab (TopBar.jsx /
-// DetailView.jsx) offers: "Add to favorites" and page help. Both are wired
-// straight to the same shared, functioning mechanisms those use —
-// FavoritesContext (real, server-synced) and the SupportChatWidget's Ayuda
-// tab (the app's actual working help surface — TopBar's own onPageHelp prop
-// is never populated by any window today, so mirroring it verbatim would
-// just reproduce a dead button; see docs/feedback.md).
-export function MoreOptionsMenu({ favKey, favLabel }) {
-  const ui = useUI();
-  const { toggleFavorite, isFavorite } = useFavorites();
-  const { actions: supportActions } = useSupportChatSafe();
-  const favActive = favKey ? isFavorite(favKey) : false;
-
-  const handleHelp = () => {
-    supportActions.setTab('ayuda');
-    supportActions.open();
-  };
-
-  return (
-    <DropdownMenu data-testid="DropdownMenu__1775af">
-      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__1775af">
-        <button
-          type="button"
-          className="fm-more-options-trigger"
-          aria-label={ui('more')}
-          data-testid="fm-more-options-trigger"
-        >
-          <MoreVertical size={16} strokeWidth={1.75} data-testid="MoreVertical__fmcommon" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52" data-testid="fm-more-options-content">
-        {favKey && (
-          <DropdownMenuItem onClick={() => toggleFavorite(favKey, favLabel)} data-testid="fm-more-options-favorite">
-            <Star
-              className={cn(
-                'h-4 w-4 mr-2',
-                favActive ? 'fill-accent-highlight text-accent-highlight' : 'text-muted-foreground'
-              )}
-              data-testid="Star__fmcommon" />
-            {favActive ? ui('removeFromFavorites') : ui('addToFavorites')}
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem onClick={handleHelp} data-testid="fm-more-options-help">
-          <HelpCircle className="h-4 w-4 mr-2 text-muted-foreground" data-testid="HelpCircle__fmcommon" />
-          {ui('pageHelp')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 
 // ── KPI Widget — horizontal card (303 & 349) ──────────────────────
 // `onClick` + `active` (ETP-4755, KPI-cards-as-filters): opt-in click-to-filter variant.
@@ -114,10 +51,21 @@ export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, 
         <span style={{ color: iconColor ?? 'hsl(var(--text-disabled))', display: 'inline-flex' }}>{icon}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <span style={{ fontSize: 12, fontWeight: 400, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' }}>{label}</span>
+        {/* ETP-5584 (P15) — label and badge always stay on ONE line: at 1280px four cards leave
+            ~210px for both, and wrapping either one used to push the value out of the 68px card.
+            The badge never shrinks; a label that still does not fit is ellipsised (full text in
+            its title). */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 4, minWidth: 0 }}>
+          <span
+            title={typeof label === 'string' ? label : undefined}
+            style={{
+              fontSize: 12, fontWeight: 400, lineHeight: '16px', color: 'hsl(var(--muted-foreground))',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0,
+            }}
+          >{label}</span>
           {badge != null && (
             <span style={{
+              whiteSpace: 'nowrap', flexShrink: 0,
               padding: '4px 8px', borderRadius: 360,
               fontSize: 12, fontWeight: 400, lineHeight: '16px',
               background: badgeBg ?? 'hsl(var(--muted))',
@@ -136,23 +84,6 @@ export function KpiWidget({ icon, iconColor, label, badge, badgeBg, badgeColor, 
         </span>
       </div>
     </div>
-  );
-}
-
-// statusLabelKey (ETP-4755): `submitted_ack` shares `submitted`'s badge text — the "how"
-// (manual ack / no receipt / real AEAT ack) belongs only in the submissionMethod sub-label
-// shown alongside the pill, never inside the badge text itself.
-function statusLabelKey(status) {
-  return status === 'submitted_ack' ? 'submitted' : status;
-}
-
-export function StatusPill({ status }) {
-  const t = useUI();
-  const color = STATUS_COLOR[status] ?? 'grey';
-  return (
-    <span className={`fm-status-pill fm-status-pill--${color}`}>
-      {STATUS_ICON[status]} {t(`fm.status.${statusLabelKey(status)}`) ?? status}
-    </span>
   );
 }
 
@@ -252,24 +183,11 @@ export function SectionCard({ title, sub, right, children, flush }) {
   );
 }
 
-export function EmptyState({ message, icon, title, sub, cta }) {
-  const ui = useUI();
-  if (icon || title) {
-    return (
-      <div className="fm-empty-state">
-        {icon && <div className="fm-empty-state__icon">{icon}</div>}
-        <div className="fm-empty-state__title">{title || message || ui('fm.list.empty')}</div>
-        {sub && <div className="fm-empty-state__sub">{sub}</div>}
-        {cta && <div className="fm-empty-state__cta">{cta}</div>}
-      </div>
-    );
-  }
-  return (
-    <div className="fm-empty-state">
-      <p>{message ?? ui('fm.list.empty')}</p>
-    </div>
-  );
-}
+// ETP-5584 (P11) — the ONE empty state of the window (icon + title + text) lives in
+// FmDetailChrome.jsx as FmEmptyState, so the 303/349 detail pages can render it without going
+// through this module (their tests mock FmCommon.jsx with a fixed export list). Re-exported
+// here under its historical name for the list and the shared tab contents.
+export { FmEmptyState as EmptyState } from './FmDetailChrome.jsx';
 
 export function SidePanel({ title, sub, onClose, footer, children, wide }) {
   const ui = useUI();

@@ -1,3 +1,7 @@
+// @covers tools/app-shell/src/runtime-routes.jsx
+// @covers tools/app-shell/src/lib/observability/providers/datadog.js
+// @covers tools/app-shell/src/lib/observability/providers/mixpanel.js
+// @covers tools/app-shell/src/lib/rum.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
