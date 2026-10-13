@@ -92,6 +92,14 @@ test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
 	  --reporter=junit \
 	  --outputFile=../../test-results/vitest.xml
 
+.PHONY: test-changed
+test-changed: ## Inner loop: run only the unit tests your diff can affect (BASE=origin/develop, PLAN=1 prints the selection)
+	@./scripts/test-changed.sh
+
+.PHONY: test-changed-coverage
+test-changed-coverage: ## test-changed with LCOV coverage in coverage/, what the pre-push hands to Sonar (BASE=origin/develop)
+	@./scripts/test-changed.sh --coverage
+
 .PHONY: test-ci-coverage
 test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (CI mode, single pass)
 	@mkdir -p test-results coverage
