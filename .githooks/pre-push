@@ -551,7 +551,9 @@ check_go_module_push_sync() {
 }
 
 # ----------------------------------------------------------------------------
-# Playwright E2E tests (MANDATORY) — mocked + integration must pass before push.
+# Playwright E2E tests — mocked must pass before push. Integration specs need the local
+# Etendo backend and run for ~12 min, so they are left to CI's full pipeline (ETP-5695);
+# PRE_PUSH_INTEGRATION=1 runs them here too when they are relevant.
 # ----------------------------------------------------------------------------
 # Delegates to scripts/run-e2e-full.sh (ETP-4883): it owns the whole server
 # lifecycle itself (builds a dedicated no-PWA bundle, serves it with `vite
@@ -594,7 +596,7 @@ run_playwright() {
   local password="${E2E_PASSWORD:-12345}"
   local backend_url="${E2E_BACKEND_URL:-$(resolve_backend_url)}"
 
-  if [ "$RUN_PW_MOCKED" != "1" ] && [ "$RUN_PW_INTEGRATION" != "1" ]; then
+  if [ "$RUN_PW_MOCKED" != "1" ] && [ "$RUN_PW_INTEGRATION" != "1" ] && [ "$PW_INTEGRATION_DEFERRED" != "1" ]; then
     echo "==> Playwright E2E... SKIPPED ⏭️  (no UI/spec changes relevant to these tests)"
     record_summary_row "Playwright — mocked" "-" "SKIPPED" ""
     record_summary_row "Playwright — integration" "-" "SKIPPED" ""
@@ -610,6 +612,9 @@ run_playwright() {
 
   if [ "$RUN_PW_INTEGRATION" = "1" ]; then
     run_e2e_suite integration "integration specs" "$password" "$backend_url"
+  elif [ "$PW_INTEGRATION_DEFERRED" = "1" ]; then
+    echo "==> Playwright E2E — integration specs... SKIPPED ⏭️  (left to CI's full pipeline; PRE_PUSH_INTEGRATION=1 runs them here)"
+    record_summary_row "Playwright — integration" "-" "SKIPPED" "left to CI (PRE_PUSH_INTEGRATION=1 runs it here)"
   else
     echo "==> Playwright E2E — integration specs... SKIPPED ⏭️  (no integration-spec / UI changes)"
     record_summary_row "Playwright — integration" "-" "SKIPPED" ""
@@ -751,6 +756,13 @@ else
   echo "==> Relevance: no reliable change set (base='${BASE_REF:-none}') → running ALL checks."
 fi
 
+# Relevant integration specs are left to CI unless PRE_PUSH_INTEGRATION=1 (see run_playwright).
+PW_INTEGRATION_DEFERRED=0
+if [ "$RUN_PW_INTEGRATION" = "1" ] && [ "${PRE_PUSH_INTEGRATION:-0}" != "1" ]; then
+  RUN_PW_INTEGRATION=0
+  PW_INTEGRATION_DEFERRED=1
+fi
+
 # 0. Sync node_modules with package-lock.json (CI parity)
 #
 # CI's "Install dependencies" step runs `npm ci || npm install` against the
@@ -796,11 +808,14 @@ run_step_1() {
 # run_domain_boundary_check
 
 # 2. Run unit tests and SonarQube analysis
-# --fail-on-gate makes run-sonar.sh exit non-zero when the Quality Gate is in
-# ERROR, so this step (and the push) is blocked exactly when CI's gate would fail.
-# --compare-coverage additionally blocks when this branch's OVERALL coverage drops
-# below the base branch's — mirroring Jenkins' "Compare Coverage Results" stage,
-# which the new-code-only Quality Gate does not cover.
+# --coverage-changed runs only the unit tests this branch can affect (make
+# test-changed-coverage → scripts/select-tests.js, ETP-5695) and hands their
+# coverage to Sonar; CI runs the whole suite. --fail-on-gate makes run-sonar.sh
+# exit non-zero when the Quality Gate is in ERROR, so this step (and the push) is
+# blocked exactly when CI's gate would fail. The overall coverage comparison
+# (--compare-coverage) is not run here: with a selection the overall figure always
+# drops. The PR's required "Sonar Build" check runs it over the whole suite, as does
+# Jenkins' "Compare Coverage Results" stage (docs/coverage-gate.md).
 run_step_2() {
   if [ "$RUN_S2" != "1" ]; then
     echo "==> [2/5] Running unit tests and SonarQube analysis... SKIPPED ⏭️  (no source/test/sonar-config changes)"
@@ -809,9 +824,9 @@ run_step_2() {
   fi
   local sonar_cmd
   if [ -n "$BASE_REF" ]; then
-    sonar_cmd="./run-sonar.sh --base-ref \"$BASE_REF\" --coverage --fail-on-gate --compare-coverage"
+    sonar_cmd="./run-sonar.sh --base-ref \"$BASE_REF\" --coverage-changed --fail-on-gate"
   else
-    sonar_cmd="./run-sonar.sh --all-issues --coverage --fail-on-gate --compare-coverage"
+    sonar_cmd="./run-sonar.sh --all-issues --coverage --fail-on-gate"
   fi
   run_step "2" "Running unit tests and SonarQube analysis" "$REPO_DIR" "tmp/pre-push/sonar-and-tests.log" "$sonar_cmd"
 
@@ -822,6 +837,11 @@ run_step_2() {
   local abs_log="$REPO_DIR/tmp/pre-push/sonar-and-tests.log" counts
   counts="$(grep -E '^[[:space:]]*Tests[[:space:]]+[0-9]' "$abs_log" 2>/dev/null | tail -1 \
     | sed -E 's/^[[:space:]]*Tests[[:space:]]+//; s/ \| /, /g; s/\(([0-9]+)\)/(\1 total)/')"
+  # How much of the suite the selection ran, e.g. "314/1386 test files selected".
+  local selected
+  selected="$(grep -E '^select-tests: [0-9]+/[0-9]+ ' "$abs_log" 2>/dev/null | tail -1 \
+    | sed -E 's/^select-tests: ([0-9]+\/[0-9]+) .*/\1 test files selected/')"
+  [ -n "$selected" ] && counts="${selected}${counts:+; vitest: ${counts}}"
   if [ -n "$counts" ] && [ "${#SUMMARY_ROWS[@]}" -gt 0 ]; then
     local last_idx=$(( ${#SUMMARY_ROWS[@]} - 1 )) name dur row_status
     IFS='|' read -r name dur row_status _ <<< "${SUMMARY_ROWS[$last_idx]}"

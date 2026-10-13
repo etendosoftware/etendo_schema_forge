@@ -378,8 +378,8 @@ live in `.claude/hooks/`.
 | `check-detailview-growth.mjs` | `PreToolUse` / file edits | **Blocks** an edit that makes `DetailView.jsx` longer than its merge-base (override the base with `DETAILVIEW_BASE_REF`) |
 
 Why: `--no-verify` skips `.githooks/pre-push`, the only local gate that catches
-failing tests, coverage drops (`docs/coverage-gate.md`) and Sonar regressions
-before CI. Bypassing it converts a seconds-long local failure into a 1h+ Jenkins
+failing tests and Sonar regressions before CI (coverage drops are caught by the
+PR's `Sonar Build` check, `docs/coverage-gate.md`). Bypassing it converts a seconds-long local failure into a 1h+ Jenkins
 cycle. When the gate blocks a push, **fixing what it reports is the task** — do
 not route around it. If the gate itself is broken, say so and stop.
 
