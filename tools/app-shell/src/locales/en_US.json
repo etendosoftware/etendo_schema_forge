@@ -22624,6 +22624,7 @@
     "glc.toggle.suspenseBalancingUse": "Use suspense balancing account",
     "glc.toggle.suspenseErrorUse": "Use suspense error account",
     "glc.acct.suspenseBalancing": "Suspense balancing account",
+    "glc.acct.suspenseError": "Suspense error account",
     "glc.section.currencyBalancing.title": "Currency balancing",
     "glc.section.currencyBalancing.subtitle": "Account used to balance multi-currency differences.",
     "glc.toggle.currencyBalancingUse": "Use currency balancing account",

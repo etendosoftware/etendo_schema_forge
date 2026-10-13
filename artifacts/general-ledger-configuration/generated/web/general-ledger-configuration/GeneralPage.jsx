@@ -230,6 +230,14 @@ export const api = {
     },
     {
       "entity": "Cuentas generales",
+      "field": "suspenseError",
+      "column": "SuspenseError_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/suspenseError"
+    },
+    {
+      "entity": "Cuentas generales",
       "field": "incomeSummary",
       "column": "IncomeSummary_Acct",
       "reference": "ValidCombination",

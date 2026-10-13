@@ -279,6 +279,7 @@ export const GENERAL_ACCOUNTS_SEED = {
   suspenseBalancingUse: false,
   suspenseBalancing: null,
   suspenseErrorUse: false,
+  suspenseError: null,
   currencyBalancingUse: false,
   currencyBalancingAcct: null,
   retainedEarning: null,

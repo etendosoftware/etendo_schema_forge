@@ -22862,6 +22862,7 @@
     "glc.toggle.suspenseBalancingUse": "Usar cuenta de balanceo de suspenso",
     "glc.toggle.suspenseErrorUse": "Usar cuenta de error de suspenso",
     "glc.acct.suspenseBalancing": "Cuenta de balanceo de suspenso",
+    "glc.acct.suspenseError": "Cuenta de error de suspenso",
     "glc.section.currencyBalancing.title": "Balanceo de moneda",
     "glc.section.currencyBalancing.subtitle": "Cuenta usada para balancear diferencias multi-moneda.",
     "glc.toggle.currencyBalancingUse": "Usar cuenta de balanceo de moneda",

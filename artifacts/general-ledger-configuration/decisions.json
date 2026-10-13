@@ -305,7 +305,9 @@
           "section": "suspense"
         },
         "suspenseError": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "section": "suspense",
+          "reason": "ETP-5682 — the account paired with suspenseErrorUse (AD display logic @UseSuspenseError@='Y'); GeneralAccountsTab shows it only while the toggle is on."
         },
         "currencyBalancingUse": {
           "visibility": "editable",
