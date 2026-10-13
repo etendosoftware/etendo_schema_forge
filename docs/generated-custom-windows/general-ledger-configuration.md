@@ -122,6 +122,8 @@ The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added
 - No multi-entity save handler yet
 - No real selector/catalog reads yet
 - `Guardar cambios` is still a frontend stub over mock state
+- **Cuentas generales — a balancing switch can be saved on with no account (ETP-5682 QA, tracked in ETP-5724).** Classic parity: nothing requires `suspenseBalancing` / `currencyBalancingAcct` while its switch is on. Proposed: make the account required while its switch is on.
+- **Account ids are not checked against the tenant on save (pre-existing, tracked in ETP-5722).** `GeneralLedgerConfigurationHandler.resolveAccountingCombination` accepts a `C_ValidCombination` id of another client. Not reachable from the UI, only through a hand-written API request.
 
 After the backend wiring lands, remember the Etendo step:
 
