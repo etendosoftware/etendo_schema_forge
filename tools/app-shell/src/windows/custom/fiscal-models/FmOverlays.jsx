@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatPeriod, showIaeActivityReminder, RECEIPT_ATTACHMENT_CONFIG } from './fiscalModelsUtils.js';
 import { buildAcceptAttribute, buildTypesLabel, isFileTypeAllowed } from '@/components/attachments/attachmentPolicy.js';
 import { isValidFormerStatement } from './formerStatement.js';
+import { listModels, getModel, DEFAULT_MODEL_ID } from './modelRegistry.js';
 import './fiscal-models.css';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -641,12 +642,12 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
   const QUARTERLY_PERIODS = ['T1', 'T2', 'T3', 'T4'];
   const MONTHLY_PERIODS   = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
   // Only offer models the user activated in the catalog. When no `activeModels`
-  // map is provided (e.g. legacy callers), fall back to all known models.
+  // map is provided (e.g. legacy callers), fall back to all registered models.
   const availableModels = activeModels
     ? Object.keys(activeModels).filter(id => activeModels[id])
-    : ['303', '349'];
+    : listModels().map(m => m.id);
   const canCreate = availableModels.length > 0;
-  const [model, setModel] = useState(availableModels[0] ?? '303');
+  const [model, setModel] = useState(availableModels[0] ?? DEFAULT_MODEL_ID);
   const _cy = new Date().getFullYear();
   const [year, setYear] = useState(SELECTABLE_YEARS.includes(_cy) ? _cy : SELECTABLE_YEARS[SELECTABLE_YEARS.length - 1]);
   const [frequency, setFrequency] = useState('quarterly'); // 'quarterly' | 'monthly' — drives the Período grid below
@@ -840,11 +841,12 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                       // ETP-5187 (adjacent scope) — same IAE-activity reminder as
                       // FmCatalogPage's Modelo 303 activation toggle, fired here on
                       // selecting the last period of the year (T4 quarterly / 12
-                      // monthly) for Modelo 303 specifically — only that model's
+                      // monthly) for a model whose registry entry asks for it
+                      // (`iaeReminderOnYearEndPeriod`: 303 only) — only that model's
                       // year-end declaration hits the AEAT303 IAE requirement (see
                       // `showIaeActivityReminder`'s doc comment). Selection only,
                       // never on every render/period-list rebuild.
-                      if (model === '303' && (p === 'T4' || p === '12')) {
+                      if (getModel(model)?.iaeReminderOnYearEndPeriod && (p === 'T4' || p === '12')) {
                         showIaeActivityReminder(t, navigate);
                       }
                     }}
