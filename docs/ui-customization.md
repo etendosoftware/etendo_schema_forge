@@ -489,12 +489,19 @@ Adds a transversal **Attachments** tab to the detail view for uploading, listing
 | `POST` | `/sws/neo/attachments/{tableName}/{recordId}` (multipart/form-data) | Upload a new attachment |
 | `GET` | `/sws/neo/attachments/file/{attachmentId}` | Download a single attachment |
 | `GET` | `/sws/neo/attachments/{tableName}/{recordId}/zip` | Download all attachments as a ZIP archive |
+| `GET` | `/sws/neo/attachments/{tableName}/{recordId}/zip?ids=a,b` | Download only those attachments as a ZIP (ETP-5526). Every id must belong to `{recordId}` — a foreign or unknown id answers `404` and streams nothing; `ids` present but empty answers `400` |
 | `DELETE` | `/sws/neo/attachments/file/{attachmentId}` | Delete an attachment |
 | `PATCH` | `/sws/neo/attachments/file/{attachmentId}` body `{ "description": "..." }` | Update the attachment description |
 
 The handler delegates to the standard Etendo `AttachImplementationManager` and stores metadata in the `C_FILE` table — attachments uploaded through this tab are visible in Classic Etendo and vice versa.
 
-**Frontend behavior:** drag-and-drop drop zone + tabular listing with per-row actions (download, edit description, delete) and a global "Download all" action. The `tableName` is resolved from `frontendContract.entities.header.tableName` automatically — there is no manual wiring.
+**Frontend behavior:** drag-and-drop drop zone + tabular listing with per-row actions (download, edit description, delete). The `tableName` is resolved from `frontendContract.entities.header.tableName` automatically — there is no manual wiring.
+
+**Bulk actions live in the selection bar (ETP-5526).** Ticking rows raises the shared `SelectionToolbar` — the same floating pill Contactos, Cuentas financieras, Amortización, Activos and the list views use — carrying the selected count, a ZIP download of just those files, and a delete that asks for confirmation first. The old header-wide **Descargar todo (ZIP)** and **Eliminar todo** controls are gone from this tab; the table header is exactly the five Figma columns (file name, size, upload date, last update, uploaded by) plus the hover action cell.
+
+`AttachmentsTable` is shared, so selection there is an **opt-in, controlled** capability: a caller that passes `selectedIds` + `onToggleRow` + `onToggleAll` gets the checkbox column, and a caller that does not gets no checkbox column at all. `SifAttachmentsSection` (the SII/TBAI/Verifactu "Adjuntos" block) is the second caller: it opts out — which also removed the checkboxes it used to show and could not act on — and keeps its own header-wide "Download all (ZIP)" control, which is why `onDownloadAll` still exists on the table.
+
+**A processed/completed document no longer blocks attachment work (ETP-5526).** `isDocumentReadOnly` — the generic lock `DetailView` wires from the document's own state — used to hide delete and disable the dropzone; it now does neither. Attachments are evidence *about* a document, not part of it, and a closed invoice is exactly when the signed copy has to be filed. The separate `readOnly` prop is unchanged: it still hides every delete action (per-row and the bar's) while leaving upload and download alone, which is what blocks deleting a non-draft fiscal declaration's justificante (ETP-5432). Consequence, known and accepted: there is currently no way to express a fully read-only attachments view through `AttachmentsTab`.
 
 ---
 
