@@ -1,3 +1,5 @@
+// @covers artifacts/internal-consumption/decisions.json
+// @covers tools/app-shell/src/components/contract-ui/ProductStockSearchDrawer.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -129,16 +131,20 @@ test.describe('Internal Consumption — inline line entry (mocked)', () => {
     //    (lookupDrawer: 'internal-consumption-product').
     const productField = inlineAddRow.getByTestId('inline-add-field-product');
     await expect(productField).toBeVisible();
+    const fieldLabel = (await productField.textContent()).trim();
     await productField.click();
 
     // 4. Assert the IC drawer (not the default ProductSearchDrawer) is open.
     //    Distinctive markers from InternalConsumptionProductSearchDrawer.jsx:
     //      - "All" warehouse-filter pill
-    //      - "Product + Warehouse..." placeholder (from field.lookupTitle)
+    //      - search placeholder built from the field's translated label (ETP-5681: the
+    //        untranslated `lookupTitle: "Product + Warehouse"` was dropped, so it no longer
+    //        reads "Buscar Product + Warehouse..." in Spanish)
     //      - "1 location" / "locations" suffix in product groups
     const drawer = page.getByRole('dialog');
     await expect(drawer).toBeVisible();
-    await expect(drawer.getByPlaceholder(/Product \+ Warehouse/i)).toBeVisible();
+    const escaped = fieldLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    await expect(drawer.getByPlaceholder(new RegExp(`${escaped}\\.\\.\\.$`))).toBeVisible();
     await expect(drawer.getByRole('button', { name: 'All', exact: true })).toBeVisible();
     await expect(drawer.getByText('Widget Co. 10mm')).toBeVisible();
     await expect(drawer.getByText(/1 location/i)).toBeVisible();

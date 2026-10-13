@@ -644,9 +644,10 @@ const primaryBtnStyle = {
 
 /**
  * ETP-5576 — the Figma "PopUps" primitives of this modal, exported read-only so a modal that
- * follows it in the same flow (ConfirmResultModal's `variant="popup"`, the follow-up result)
- * looks the same: shell, close icon, title, footer buttons, static card, icon box, badge tones
- * and the keyboard focus outline. Consumers spread them, they never mutate them.
+ * follows it in the same flow can look the same: shell, close icon, title, footer buttons,
+ * static card, icon box, badge tones and the keyboard focus outline. Consumers spread them,
+ * they never mutate them. (ETP-5674: ConfirmResultModal no longer has a popup variant — it
+ * implements the same PopUps design on its own, so it does not consume these.)
  */
 export const POPUP_MODAL_STYLES = Object.freeze({
   overlay: overlayStyle,

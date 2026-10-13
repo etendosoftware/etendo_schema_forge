@@ -375,10 +375,28 @@ counting it as a write wiped every cached selector page on each open.
 | A write to | Marks stale |
 |---|---|
 | `contacts` (any entity: `businessPartner`, `basicDiscount`, …) | every `selector` entry |
+| `cost-center`, `project`, `service-project` (ETP-5681) | every `selector` entry |
 
 The invalidation is intentionally broad — a selector entry does not record which table its options
 come from, so all selector pages are marked, at the cost of one extra GET the next time each is
-opened. Only `contacts` is declared; other master-data specs are added when a ticket needs them.
+opened. Only the specs above are declared; other master-data specs are added when a ticket needs them.
+
+### Selector first pages are revalidated on open (ETP-5681)
+
+The invalidation above only sees writes made in **this** browser session. For everything else, the
+first page of a selector is revalidated on open (`tools/app-shell/src/lib/selectorRevalidation.js`):
+
+- a cached page younger than `SELECTOR_REVALIDATE_AFTER_MS` (30 s) is reused with no request — a
+  quick close/reopen still costs nothing (the ETP-4564 saving);
+- an older, invalidated or missing (cleared on a session change) page is shown at once, when there
+  is one, and refetched in the background (stale-while-revalidate) — a record activated or
+  deactivated by another user shows up on the next open;
+- a cached EMPTY page is never trusted: an empty first page hides the `CreatableSearchSelect`
+  dropdown entirely, so replaying one made the selector look broken until the user typed;
+- a failed request REJECTS instead of resolving `[]`/`null`, so it is never stored in the cache.
+
+`CreatableSearchSelect` applies it on every open gesture; `SelectorInput` (which stays mounted for
+a whole document, e.g. the GL journal line dimensions) applies it each time its dropdown reopens.
 
 Not covered: the Contacts CSV/XLSX import (`contactsImportDescriptor.js`) writes through the
 plain-module `apiFetch`, so selector pages still wait out `catalogStaleTime` after an import.

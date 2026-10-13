@@ -3,11 +3,11 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:accounting
 const columns = [
-  { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', required: true },
-  { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', label: 'Product Expense', required: true, grow: true },
-  { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', label: 'Product Revenue', required: true, grow: true },
-  { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', required: true, grow: true },
-  { key: 'invoicePriceVariance', column: 'P_InvoicePriceVariance_Acct', type: 'selector', label: 'Invoice Price Variance', grow: true },
+  { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', required: true, lookup: true, lookupDrawer: 'account' },
+  { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', label: 'Product Expense', required: true, lookup: true, lookupDrawer: 'account', grow: true },
+  { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', label: 'Product Revenue', required: true, lookup: true, lookupDrawer: 'account', grow: true },
+  { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', required: true, lookup: true, lookupDrawer: 'account', grow: true },
+  { key: 'invoicePriceVariance', column: 'P_InvoicePriceVariance_Acct', type: 'selector', label: 'Invoice Price Variance', lookup: true, lookupDrawer: 'account', grow: true },
 ];
 // @sf-generated-end columns:accounting
 

@@ -27,8 +27,7 @@ export default function ReturnWindowShell({
   // ConfirmWithCreditButtonBase shows in the form
   // (`return-{material-receipt,to-vendor-shipment}/ConfirmWithCreditButton.jsx`), so
   // confirming from the grid behaves identically to confirming from the form. Shape:
-  // { ConfirmModal, specName, entityName, confirmedTitleKey, invoiceResultTitleKey,
-  //   invoiceDocType, invoiceRoute }. Omitted, the row kebab has no Confirmar entry —
+  // { ConfirmModal, specName, entityName, confirmedTitleKey, invoiceDocType, invoiceRoute }. Omitted, the row kebab has no Confirmar entry —
   // unchanged for a hypothetical future shell consumer with no confirm flow of its own.
   confirmAction,
   ...pageProps
@@ -71,7 +70,6 @@ export default function ReturnWindowShell({
     token,
     ConfirmModal: confirmAction?.ConfirmModal,
     confirmedTitleKey: confirmAction?.confirmedTitleKey,
-    invoiceResultTitleKey: confirmAction?.invoiceResultTitleKey,
     invoiceDocType: confirmAction?.invoiceDocType,
     invoiceRoute: confirmAction?.invoiceRoute,
     skipPopupWhenFullyInvoiced: false,

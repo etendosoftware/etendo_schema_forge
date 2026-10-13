@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-07-01T17:11:14.893Z",
-  "updatedAt": "2026-07-30T16:59:23.380Z",
-  "checksum": "729a406f2943003b",
+  "updatedAt": "2026-10-09T15:04:44.625Z",
+  "checksum": "3bac0afbeb1c4d02",
   "frontendContract": {
     "window": {
       "id": "192",
@@ -137,6 +137,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 1,
             "grow": true,
             "validation": {
@@ -157,6 +159,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 2,
             "grow": true,
             "validation": {
@@ -177,6 +181,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 5,
             "grow": true,
             "validation": {
@@ -197,6 +203,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 6,
             "validation": {
               "maxLength": 32
@@ -216,6 +224,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 3,
             "grow": true,
             "validation": {
@@ -236,6 +246,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 4,
             "grow": true,
             "validation": {
@@ -255,6 +267,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 7,
             "validation": {
               "maxLength": 32
@@ -273,6 +287,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 8,
             "validation": {
               "maxLength": 32
@@ -291,6 +307,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 9,
             "validation": {
               "maxLength": 32
@@ -309,6 +327,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 10,
             "validation": {
               "maxLength": 32
@@ -327,6 +347,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 11,
             "validation": {
               "maxLength": 32
@@ -345,6 +367,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 19,
             "validation": {
               "maxLength": 32
@@ -363,6 +387,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 20,
             "validation": {
               "maxLength": 32
@@ -381,6 +407,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 16,
             "validation": {
               "maxLength": 32
@@ -399,6 +427,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 17,
             "validation": {
               "maxLength": 32
@@ -417,6 +447,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 18,
             "validation": {
               "maxLength": 32
@@ -435,6 +467,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 21,
             "validation": {
               "maxLength": 32
@@ -453,6 +487,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 12,
             "validation": {
               "maxLength": 32
@@ -471,6 +507,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 13,
             "validation": {
               "maxLength": 32
@@ -489,6 +527,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 14,
             "validation": {
               "maxLength": 32
@@ -507,6 +547,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "seq": 15,
             "validation": {
               "maxLength": 32
