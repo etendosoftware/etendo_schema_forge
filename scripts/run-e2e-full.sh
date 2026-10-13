@@ -185,6 +185,20 @@ if [ "$SUITE" != "integration" ]; then
   # See MOCKED_SERIAL_SPECS in playwright.config.js for why.
   ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=1 BASE_URL="$BASE_URL" \
       npx playwright test --project=mocked --project=mocked-serial )
+  # ETP-5695: the quarantined flaky tests (e2e/quarantine.json) were left out of the run above.
+  # Run them once more on their own, never blocking, so a fixed one shows up as passing and an
+  # expired entry is visible. Policy: docs/testing/flaky-tests.md.
+  node "$REPO_DIR/scripts/lib/playwright-quarantine.js" check || true
+  quarantined="$(node "$REPO_DIR/scripts/lib/playwright-quarantine.js" count 2>/dev/null || echo 0)"
+  if [ "$quarantined" -gt 0 ]; then
+    echo "==> Playwright E2E — ${quarantined} quarantined mocked test(s), not blocking..."
+    if ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=1 BASE_URL="$BASE_URL" E2E_QUARANTINE=only \
+        npx playwright test --project=mocked --project=mocked-serial ); then
+      echo "==> Quarantined tests passed. If they keep passing, take them out of e2e/quarantine.json."
+    else
+      echo "==> Quarantined tests failed (not blocking: they are in e2e/quarantine.json)."
+    fi
+  fi
 else
   echo "==> Playwright E2E — mocked specs... SKIPPED (E2E_SUITE=integration)"
 fi

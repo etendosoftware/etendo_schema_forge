@@ -1035,6 +1035,12 @@ make test-e2e-report    # Opens the report in browser
 
 Reports are saved to `artifacts/e2e-report/`. Screenshots from failed tests are in `e2e/test-results/`.
 
+## Flaky Mocked Tests
+
+A mocked test that fails and then passes with no change is a flake: log it, and quarantine it when it
+repeats, in `e2e/quarantine.json`. Gating runs leave quarantined tests out and `run-e2e-full.sh` runs
+them afterwards without blocking. The log and the rules are in `docs/testing/flaky-tests.md`.
+
 ## `data-testid` Convention
 
 Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit `data-testid` attributes automatically. Use `page.getByTestId()` in tests — it's language-independent and survives text changes.

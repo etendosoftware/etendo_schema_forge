@@ -15,7 +15,7 @@
 #   testid         ← tools/app-shell/src/**, the data-testid checker
 #   tests          ← app-shell src+test, cli/**, **/__tests__/**, sonar-project.properties
 #   regen / xml    ← artifacts/**, cli/**, package-lock.json
-#   pw-mocked      ← app-shell/src (UI), *.mocked.spec.js, shared e2e infra
+#   pw-mocked      ← app-shell/src (UI), *.mocked.spec.js, shared e2e infra, e2e/quarantine.json
 #   pw-integration ← app-shell/src (UI), any non-mocked spec, shared e2e infra
 #   RUN-ALL (.githooks/**, run-sonar.sh) or any UNRECOGNISED file → all of them.
 #   SAFE (docs, images, Makefile, .gitignore) → nothing.
@@ -63,6 +63,8 @@ relevance_checks() {
   # so we instead demand at least one line actually survive the inverse filter.
   printf '%s\n' "$files" | grep -E '^e2e/.*\.spec\.js$' | grep -vE '\.mocked\.spec\.js$' | grep -q . && integ=1
   printf '%s\n' "$files" | grep -qE '^e2e/(playwright\.config\.js|package\.json|tests/helpers/)' && { mocked=1; integ=1; }
+  # The quarantine list changes which mocked tests gate (docs/testing/flaky-tests.md).
+  printf '%s\n' "$files" | grep -qE '^e2e/quarantine\.json$' && mocked=1
   [ "$mocked" = 1 ] && out="$out pw-mocked"
   [ "$integ" = 1 ]  && out="$out pw-integration"
 

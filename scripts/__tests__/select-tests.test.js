@@ -145,6 +145,10 @@ describe('selectTests', () => {
     assert.deepEqual(whole(select(tree, ['tools/app-shell/vitest.config.js'])), ['vitest']);
   });
 
+  it('runs the scripts group, which validates the list, when the Playwright quarantine changes', () => {
+    assert.deepEqual(whole(select(tree, ['e2e/quarantine.json'])), ['scripts']);
+  });
+
   it('ignores docs, Playwright files and deleted files', () => {
     const s = select(tree, ['docs/guide.md', 'e2e/tests/login.mocked.spec.js', 'cli/src/removed.js']);
     assert.deepEqual(tests(s), []);
