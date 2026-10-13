@@ -109,9 +109,10 @@ reviewDecision,reviewRequests,latestReviews,statusCheckRollup,labels,additions,d
 ## Job B — prepare the day's cut ("armá el corte ETP-YYYY")
 
 1. **Refresh** develop and main in the 3 repos (`git -C <repo> fetch origin develop main`).
-2. **develop must already contain main.** `git -C <repo> rev-list --count origin/develop..origin/main`
-   counts what main has that develop lacks. Anything but 0 → 🔴: name the commits (hotfixes, a test fixed
-   or a task reverted on yesterday's cut) and stop until the human has brought them to develop.
+2. **develop must already contain main.** `git -C <repo> log --no-merges --oneline origin/develop..origin/main`
+   lists what main has that develop lacks (merge commits left out: yesterday's cut always leaves one).
+   Anything listed → 🔴: name the commits (hotfixes, a test fixed or a task reverted on yesterday's cut)
+   and stop until the human has merged a `main → develop` PR.
 3. **Inventory what the cut carries,** per repo, oldest first:
    ```bash
    git -C <repo> log --first-parent --merges --reverse --format='%h %s' origin/main..origin/develop
