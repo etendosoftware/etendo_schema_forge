@@ -272,3 +272,14 @@ no-id/no-data cases.
   `confirmKey` menuAction option through the generator in schema_forge_core), so it is out of
   scope for this reject cycle.
 
+
+## Design changes — ETP-5562
+
+- **"Create Inventory Count List" removed from the detail kebab** (`InventoryMenuContent.jsx`): it was
+  redundant with "Generate lines automatically" (`GenerateLinesModal` → `InventoryHandler`). The kebab keeps
+  "Update List System Count". `InventoryCreateListModal.jsx` is no longer used by the kebab (only by the
+  unused `InventoryTopbarActions.jsx`); the i18n key `createInventoryCountList` is kept for that file.
+- **System Count / Difference are strictly read-only in the lines grid**: `gridReadOnly: true` in
+  `decisions.json` → `readOnly: true` in `InventoryLineTable.jsx`, so `InlineLinesPanel` never renders an input.
+- **Kebab on a freshly created record** (`DetailMoreActionsMenu.jsx`): the hidden probe's verdict is now keyed
+  by record id, so the `false` measured on `/new` no longer sticks after the first save.
