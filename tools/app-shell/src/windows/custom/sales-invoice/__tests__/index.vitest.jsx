@@ -628,7 +628,7 @@ describe('SalesInvoiceWindow — SIF send entry points', () => {
     const keys = lastListViewProps.rowQuickActions.menuActions({ row }).map((a) => a.key);
 
     expect(sifMenuActions).toHaveBeenCalledWith(row);
-    expect(keys).toEqual(['reactivate', 'sendToSif']);
+    expect(keys).toEqual(['reactivate', 'unpost', 'sendToSif']);
   });
 
   it('mounts SifSendModalHost with the recordId in the form view', () => {
