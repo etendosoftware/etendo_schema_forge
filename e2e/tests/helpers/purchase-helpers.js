@@ -744,6 +744,46 @@ export async function reselectComboOption(page, fieldKey) {
 }
 
 /**
+ * Expand the header form's collapsed "Mostrar más datos" block, if there is one.
+ *
+ * Since ETP-5513 the header EntityForm renders only its first `initialRows` rows
+ * (required fields first) behind `data-testid="form-show-more-toggle"`; the fields
+ * of the collapsed block are NOT rendered at all, so a callout-derived field such as
+ * Purchase Invoice's `paymentTerms` is simply absent from the DOM until the block is
+ * opened (see `useInitialRowsCollapse` in formResponsiveLayout.js).
+ *
+ * Idempotent: it only clicks a toggle that reports `aria-expanded="false"`, so it
+ * never collapses a block that is already open — opened by a previous call, or
+ * latched open by the form itself (a hidden-field error or a blocked Save/Confirm).
+ * A form with no toggle (every field fits in the initial rows) is a no-op.
+ */
+export async function expandHeaderFields(page) {
+  const toggles = page.getByTestId('form-show-more-toggle');
+  const collapsed = page.locator(
+    '[data-testid="form-show-more-toggle"][aria-expanded="false"]:not([aria-disabled="true"])',
+  );
+  // Bounded so a toggle that never reacts fails the assertion below instead of looping.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    // Pin ONE toggle by position. `collapsed.first()` would be re-resolved after the
+    // click — once this toggle opens it no longer matches `collapsed`, so waiting on it
+    // would silently wait on a different toggle (or none).
+    // eslint-disable-next-line no-await-in-loop -- one toggle at a time, re-read after each click
+    const index = await toggles.evaluateAll((els) => els.findIndex(
+      (el) => el.getAttribute('aria-expanded') === 'false' && el.getAttribute('aria-disabled') !== 'true',
+    ));
+    if (index < 0) break;
+    const toggle = toggles.nth(index);
+    // eslint-disable-next-line no-await-in-loop -- see above
+    await toggle.click();
+    // Wait for THIS toggle to report itself open instead of assuming React flushed the
+    // click synchronously; only then re-read which toggles are still collapsed.
+    // eslint-disable-next-line no-await-in-loop -- see above
+    await expect(toggle).not.toHaveAttribute('aria-expanded', 'false');
+  }
+  await expect(collapsed, 'Header "Mostrar más datos" block should be expanded').toHaveCount(0);
+}
+
+/**
  * Locator for the current value of a chip-or-input FK/dependent field.
  *
  * CreatableSearchSelect (and its PartnerAddressPicker/DependentFkField wrappers
@@ -755,6 +795,51 @@ export async function reselectComboOption(page, fieldKey) {
  */
 export function derivedFieldLocator(page, fieldKey) {
   return page.getByTestId(`field-${fieldKey}-chip`).or(page.getByTestId(`field-${fieldKey}`));
+}
+
+/**
+ * Bound for `hasHeaderField`'s settle wait: how long to wait for EITHER the field or the
+ * "Mostrar más datos" toggle to be attached before deciding the field is absent. Only
+ * reached on a form that has neither (no collapsible block and no such field).
+ */
+const HEADER_PRESENCE_SETTLE_MS = 5_000;
+
+/**
+ * Lazily make a header field rendered: if it is already in the DOM, nothing is
+ * touched; otherwise the header's collapsed "Mostrar más datos" block is opened
+ * (`expandHeaderFields`, which never closes an open block). Resolves to whether
+ * the field is rendered afterwards — `false` means this form has no such field.
+ *
+ * Call it once the detail form is ready (after `waitForDetailReady`). As a guard
+ * against a form that is still rendering, it first waits (bounded by
+ * `HEADER_PRESENCE_SETTLE_MS`) until either the field or the show-more toggle is
+ * attached, so an instant "not there yet" is not mistaken for "not on this form".
+ */
+export async function hasHeaderField(page, fieldKey) {
+  const field = derivedFieldLocator(page, fieldKey);
+  await field.or(page.getByTestId('form-show-more-toggle')).first()
+    .waitFor({ state: 'attached', timeout: HEADER_PRESENCE_SETTLE_MS })
+    .catch(() => {}); // neither showed up: decided by the counts below
+  if (await field.count() > 0) return true;
+  await expandHeaderFields(page);
+  return await field.count() > 0;
+}
+
+/**
+ * Reveal a header field and assert it is visible, expanding the collapsed
+ * "Mostrar más datos" block only when the field is not already rendered (see
+ * `hasHeaderField`). Fails with a message that tells "not on this form" apart
+ * from a selector typo or a slow render.
+ *
+ * Call it once the detail form is ready (after `waitForDetailReady`).
+ */
+export async function revealHeaderField(page, fieldKey, { timeout = 30_000 } = {}) {
+  await hasHeaderField(page, fieldKey);
+  const field = derivedFieldLocator(page, fieldKey);
+  await expect(field,
+    `Header field "${fieldKey}" is not on this form, not even after expanding "Mostrar más datos"`,
+  ).toBeVisible({ timeout });
+  return field;
 }
 
 /**
@@ -775,8 +860,9 @@ export function derivedFieldLocator(page, fieldKey) {
  * Poll each shape with the accessor that actually holds its value instead.
  */
 export async function waitForDerivedFieldValue(page, fieldKey, { timeout = 30_000 } = {}) {
-  const field = derivedFieldLocator(page, fieldKey);
-  await expect(field).toBeVisible({ timeout });
+  // A derived field may live in the header's collapsed block (ETP-5513), where it is
+  // not rendered at all — reveal it (expanding only if needed) before reading it.
+  const field = await revealHeaderField(page, fieldKey, { timeout });
 
   const placeholderPattern = /^$|buscar|search|seleccionar|select/i;
   const chip = page.getByTestId(`field-${fieldKey}-chip`);
@@ -876,7 +962,11 @@ export async function selectVendorBP(page, { name } = {}) {
   // Conditional because `selectVendorBP` is shared with documents that HAVE no warehouse
   // (purchase invoice, the cash-close payment flow): absent field → nothing to settle. On a
   // document that does have one it is `required`, so waiting for it is never wrong there.
-  if (await derivedFieldLocator(page, 'warehouse').count() > 0) {
+  //
+  // The presence check goes through `hasHeaderField`, not a bare `count()`: a warehouse
+  // sitting in the header's collapsed "Mostrar más datos" block (ETP-5513) is not
+  // rendered, and must not be mistaken for "this document has no warehouse".
+  if (await hasHeaderField(page, 'warehouse')) {
     await waitForDerivedFieldValue(page, 'warehouse', { timeout: 30_000 });
   }
   await slow(page);
