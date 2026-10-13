@@ -260,6 +260,9 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
       const { ok, skipped, failed } = summarizePeriodsBulkResults(results);
       if (failed > 0) {
         setBulkResult({ action, results });
+      } else if (ok === 0) {
+        // Every selected period was already in the target state: nothing was posted.
+        toast.info(ui(action === 'O' ? 'periodsBulkNothingToOpen' : 'periodsBulkNothingToClose'));
       } else {
         const doneKey = action === 'O' ? 'periodsBulkOpenedToast' : 'periodsBulkClosedToast';
         const suffix = skipped > 0 ? countedLabel(ui, 'periodsBulkSkippedSuffix', skipped) : '';

@@ -219,7 +219,8 @@ ever changes, this needs revisiting.
    order** (Process 167 touches every `C_PeriodControl` row of the period; parallel calls would only
    risk lock contention). A period already in the target state is not posted and is reported as
    "already open/closed". A failure never stops the run. If everything succeeded, a toast reports
-   the count; if any period failed, a result dialog (`PeriodsBulkDialogs.jsx`) lists every period
+   the count (singular wording for one period); when every selected period was already in the
+   target state, nothing is posted and an info toast says so; if any period failed, a result dialog (`PeriodsBulkDialogs.jsx`) lists every period
    with ✓/✗/– and the translated backend error. The selection is cleared and the list reloaded
    afterwards. Backend unchanged; the MCP keeps the per-period `etendo_action`.
 - **Per-document-type open/close removed from the UI (ETP-4948).** Earlier versions of this

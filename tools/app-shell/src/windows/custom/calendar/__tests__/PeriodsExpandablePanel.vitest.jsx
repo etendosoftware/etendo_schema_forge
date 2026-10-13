@@ -35,7 +35,7 @@ function render(ui) {
   return rtlRender(<LocaleProvider locale={currentTestLocale} dictionaries={DICTIONARIES}>{ui}</LocaleProvider>);
 }
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
 
 // Real Tag renders a plain <span> with no data-testid passthrough (it only reads
 // variant/label/children/className) — mock it the same way DataTable.cellRenderers.vitest.jsx
@@ -632,6 +632,7 @@ describe('PeriodsExpandablePanel — bulk open/close (ETP-5682)', () => {
   beforeEach(() => {
     currentTestLocale = 'en_US';
     toast.success.mockClear();
+    toast.info.mockClear();
     posts = [];
     listCalls = 0;
     failingIds = new Set();
@@ -764,6 +765,22 @@ describe('PeriodsExpandablePanel — bulk open/close (ETP-5682)', () => {
 
     await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
     expect(toast.success).toHaveBeenCalledWith(enUS.genericLabels.periodsBulkOpenedToast.replace('{count}', '2'));
+  });
+
+  it('posts nothing and says so when every selected period is already in the target state', async () => {
+    await renderPanel();
+    tick('period-select-jan');
+    tick('period-select-feb');
+
+    fireEvent.click(screen.getByTestId('period-bulk-close'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('periods-bulk-confirm-ok'));
+    });
+
+    await waitFor(() => expect(toast.info).toHaveBeenCalledTimes(1));
+    expect(toast.info).toHaveBeenCalledWith(enUS.genericLabels.periodsBulkNothingToClose);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(posts).toHaveLength(0);
   });
 
   it('closes with the C action', async () => {

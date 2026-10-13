@@ -16768,6 +16768,8 @@
     "periodsBulkClosedToastOne": "1 period closed",
     "periodsBulkSkippedSuffix": " ({count} already were)",
     "periodsBulkSkippedSuffixOne": " (1 already was)",
+    "periodsBulkNothingToOpen": "The selected periods were already open",
+    "periodsBulkNothingToClose": "The selected periods were already closed",
     "periodsBulkResultTitle": "Result",
     "periodsBulkResultOpened": "Opened",
     "periodsBulkResultClosed": "Closed",

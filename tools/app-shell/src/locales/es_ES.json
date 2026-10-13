@@ -16999,6 +16999,8 @@
     "periodsBulkClosedToastOne": "1 periodo cerrado",
     "periodsBulkSkippedSuffix": " ({count} ya lo estaban)",
     "periodsBulkSkippedSuffixOne": " (1 ya lo estaba)",
+    "periodsBulkNothingToOpen": "Los periodos seleccionados ya estaban abiertos",
+    "periodsBulkNothingToClose": "Los periodos seleccionados ya estaban cerrados",
     "periodsBulkResultTitle": "Resultado",
     "periodsBulkResultOpened": "Abierto",
     "periodsBulkResultClosed": "Cerrado",
