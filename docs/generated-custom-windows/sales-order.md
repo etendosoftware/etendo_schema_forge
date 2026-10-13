@@ -627,14 +627,16 @@ at a draft order.
 `etendo_action` alike:
 
 - **Which requests**: a POST on the `DocAction` / `documentAction` button whose **effective**
-  value is `RE` — the value the DB procedure will actually run, resolved from the one place
-  `NeoProcessService` resolves it: the root `docAction` parameter when non-blank
-  (`NeoProcessService.requestedDocAction`), otherwise the order's stored `C_Order.DocAction`
-  (`NeoProcessService.storedDocAction`), which `C_Order_Post` then executes. `fieldValues` is not
-  read: the procedure never reads it either. QA cycle 1 found the two bypasses this closes — a body
-  with `fieldValues.documentAction: "CO"` plus `docAction: "RE"` passed as a CO and reactivated,
-  and an empty body ran a stored `DocAction = 'RE'` unchecked (4 booked orders in the local DB carry
-  one).
+  value is `RE` — the value the DB procedure will actually run, resolved next to the code that
+  writes it (`NeoProcessService.docActionToRun`): the root `docAction` parameter when the DAL would
+  accept writing it on the order (non-blank, an exact case-sensitive member of the DocAction list,
+  writable), otherwise the order's stored `C_Order.DocAction`, which `C_Order_Post` then executes —
+  `setDocAction` silently gives up on a value the DAL refuses. `fieldValues` is not read: the
+  procedure never reads it either. Bypasses closed along the way: QA cycle 1 — a body with
+  `fieldValues.documentAction: "CO"` plus `docAction: "RE"` passed as a CO and reactivated, and an
+  empty body ran a stored `DocAction = 'RE'` unchecked (4 booked orders in the local DB carry one);
+  review cycle 1 — `docAction: "re"` / `" RE"` / `"XX"` were taken verbatim as non-RE while the
+  procedure, unable to write them, ran the stored `RE`.
 - **"Linked"** is exactly the flag's own rule — `AbstractOrderHeaderHandler.hasLinkedDocuments`,
   the query behind `hasLinkedDocuments`: an active `C_Invoice` or `M_InOut` whose header
   `C_Order_ID` is the order, **in any status (VO and DR included)**. Documents linked only through
@@ -642,7 +644,7 @@ at a draft order.
 - **Refusal**: HTTP 400 with AD_Message `ETGO_OrderReactivateLinkedDocs` ("This order cannot be
   reactivated because it has linked shipments or invoices."). The SPA maps it in `backendErrors.js`
   to the bulk bar's existing `cannotReactivateLinkedDocs` key, so both refusals read the same.
-- **Fails closed**: if the stored DocAction or the linked documents cannot be read, the action is
+- **Fails closed**: if the order or its linked documents cannot be read, the action is
   refused with HTTP 500 and
   `ETGO_OrderLinkedDocsCheckFailed`, mapped to `backendError.orderLinkedDocsCheckFailed`.
 
