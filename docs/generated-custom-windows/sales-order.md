@@ -644,7 +644,8 @@ at a draft order.
 - **Refusal**: HTTP 400 with AD_Message `ETGO_OrderReactivateLinkedDocs` ("This order cannot be
   reactivated because it has linked shipments or invoices."). The SPA maps it in `backendErrors.js`
   to the bulk bar's existing `cannotReactivateLinkedDocs` key, so both refusals read the same.
-- **Fails closed**: if the order or its linked documents cannot be read, the action is
+- **Fails closed**: if the order cannot be loaded or resolved (so the action that will run is
+  unknown) or its linked documents cannot be read, the action is
   refused with HTTP 500 and
   `ETGO_OrderLinkedDocsCheckFailed`, mapped to `backendError.orderLinkedDocsCheckFailed`.
 
