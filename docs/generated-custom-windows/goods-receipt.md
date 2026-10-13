@@ -139,7 +139,7 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
   - `tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx` — shared result modal used after invoice creation from receipt
 - The generated `GoodsReceiptPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_InOut` AD table.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
-- **ETP-4032 — Receipt invoice preview modal**: `GoodsReceiptPreview.jsx` now exposes a "Create Invoice" action for completed receipts. `ConfirmResultModal` was extracted to `tools/app-shell/src/components/contract-ui/` and is now shared across goods-receipt, goods-shipment, purchase-order, and sales-order.
+- **ETP-4032 — Receipt invoice preview modal**: `GoodsReceiptPreview.jsx` now exposes a "Create Invoice" action for completed receipts. `ConfirmResultModal` was extracted to `tools/app-shell/src/components/contract-ui/` and is now shared across goods-receipt, goods-shipment, purchase-order, and sales-order (and, since ETP-5674, by every Sales and Purchases flow that creates documents — see the last section).
 - **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/goods-receipt/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`. **Since ETP-5260**, the detail-topbar Copy link button no longer lives in `GoodsReceiptActions.jsx` (`topbarRight`) — it moved to `GoodsReceiptSecondaryActions.jsx` (`topbarSecondary`), left of Save/Confirm, alongside Clone.
 - **ETP-4028 — Currency field**: same `EM_ETGO_CURRENCY_ID` column on `M_InOut` as goods-shipment (shared table). `NeoCommercialDocumentFactory.java` and `CreatePurchaseReturnHandler.java` set `.setEtgoCurrency(...)` on every receipt-creation path. `artifacts/goods-receipt/decisions.json` declares `etgoCurrency` (editable, `defaultExpr: "@C_Currency_ID@"`, locked on `Processed='Y'`) plus `window.labelOverrides`.
 - **ETP-4028 — Currency-filtered imports**: `artifacts/goods-receipt/custom/ImportFromPurchaseOrderModal.jsx` and `ImportFromPurchaseInvoiceModal.jsx` fetch the receipt header for `etgoCurrency` and filter candidate documents by matching currency, computing `statusAndBpCandidates` first and then narrowing by currency (so the "excluded by currency" empty state only fires when status/BP-eligible documents exist but none match the currency).
@@ -344,7 +344,7 @@ On a **completed** receipt with no invoice yet, "Crear Factura" opens the shared
 `CreateInvoiceConfirmModal.jsx` ("Gestionar documentos"). Before this fix, clicking "Crear →"
 closed the modal **synchronously** in `handleCreateInvoice` (`GoodsReceiptActions.jsx`) via
 `onConfirm={(priceListId) => { setShowInvoiceConfirm(false); handleCreateInvoice(priceListId); }}`
-— the request then ran with no visible UI, and the "Factura de compra creada" result modal only
+— the request then ran with no visible UI, and the "Factura creada" result modal only
 appeared once it resolved. `CreateInvoiceConfirmModal.jsx` already accepted a `loading` prop and
 rendered a spinner + "Procesando…" on its primary button (`loading={creatingInvoice}` was
 already passed here), but it was dead code: the modal unmounted before the loading state could
@@ -642,6 +642,33 @@ Under the runtime Solo-Lectura tier, the list row "Enviar" is hidden generically
 Backend: the email send contract and every attachment write answer 403 for this tier
 (`com.etendoerp.go` — `DefaultDocumentSendEmailContract.authorize`, `NeoAttachmentAuthorizer`).
 Print and Download PDF are deliberately NOT restricted (they only expose readable data).
+
+## Generated-documents popup — ETP-5674
+
+Both results of this window go through the shared `ConfirmResultModal`, which derives its whole
+copy from the doc `type` — the window passes no title, `primary` label, `currency` or amount
+(no `goodsReceipt.confirmModal.confirmedTitle` / `poInvoiceCreated` popup title; the
+`purchaseReturnCreatedTitle` i18n key and the `invoiceResultTitleKey` param were removed):
+
+- **Invoice** — detail **Confirmar** with the invoice toggle ON, post-completion «Crear Factura»
+  (`GoodsReceiptActions.jsx`), list bulk invoice (`BulkInvoiceFromReceipt.jsx`) and row
+  **Confirmar** (`useRowConfirmAction`, `invoiceDocType: 'facturaCompra'`): «Factura creada», one
+  card «Factura de compra · Completada · Nº …», «Cerrar» + «Ver factura».
+- **Purchase return** — the `PurchaseReturnWizard` success is now a `devolucionCompra` doc (it used
+  to be mislabelled `salida`, «Albarán de venta»): «Devolución de compra creada», card «Devolución de
+  compra · Borrador · Nº …», «Cerrar» + «Ver devolución» → `/return-to-vendor-shipment/{id}`.
+
+`onClose` still refreshes the header via `onRefresh` unless the user navigated (ETP-4779).
+`goodsReceipt.confirmModal.confirmedTitle` remains the toast of a confirm that created no
+invoice. Contract, type table and `data-testid`s: `docs/ui-customization.md` §21.
+
+**Manual verification.** Create a purchase return from a completed receipt and verify the popup
+reads «Devolución de compra creada» and «Ver devolución» opens the return-to-vendor shipment. Confirm
+a draft receipt with the invoice toggle ON and verify «Factura creada» with a «Completada» badge and
+no amount.
+
+**Automated evidence.** `tools/app-shell/src/windows/custom/goods-receipt/__tests__/GoodsReceiptActions.vitest.jsx`
+(`purchase return result`).
 
 ## Related documents — form and list preview share one definition — ETP-5539
 

@@ -405,10 +405,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
 
       {confirmedDocs?.invoice?.id && createPortal(
         <ConfirmResultModal
-          title={ui('goodsReceipt.confirmModal.confirmedTitle')}
-          docs={[{ type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` }]}
-          primary={ui('soViewInvoice')}
-          currency={data?.['currency$_identifier'] || ''}
+          docs={[{ type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` }]}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
           onClose={() => {
             setConfirmedDocs(null);
@@ -428,9 +425,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
 
       {returnedDoc && createPortal(
         <ConfirmResultModal
-          title={ui('purchaseReturnCreatedTitle')}
-          docs={[{ type: 'salida', num: returnedDoc.documentNo, route: `/return-to-vendor-shipment/${returnedDoc.id}` }]}
-          primary={ui('soViewShipment')}
+          docs={[{ type: 'devolucionCompra', num: returnedDoc.documentNo, route: `/return-to-vendor-shipment/${returnedDoc.id}` }]}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
           onClose={() => {
             setReturnedDoc(null);

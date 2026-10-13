@@ -25,7 +25,7 @@ import { useConfirmWithCredit } from './useConfirmWithCredit';
  */
 export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
-  entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
+  entitySegment, invoiceRoute, invoiceType,
   specName, entityName,
   confirmEventName,
   saveGate, onRefresh, isDocumentReadOnly,
@@ -40,13 +40,13 @@ export default function ConfirmWithCreditButtonBase({
   const navigate = useNavigate();
   const resultNavigatedRef = useRef(false);
   const {
-    ui, status, currency, hasReturnInvoice,
+    ui, status, hasReturnInvoice,
     headers, base, showModal, setShowModal,
     creatingInvoice, result, setResult,
     handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
   } = useConfirmWithCredit({
     data, recordId, token, apiBaseUrl,
-    entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
+    entitySegment, invoiceRoute, invoiceType,
   });
 
   // ETP-5408 — the generic draftMode Confirm button dispatches this event (see the doc
@@ -133,11 +133,8 @@ export default function ConfirmWithCreditButtonBase({
       )}
       {result && createPortal(
         <ConfirmResultModal
-          title={result.title}
           docs={result.docs}
-          currency={currency}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
-          primary={result.docs.length > 0 ? ui('soViewInvoice') : undefined}
           onClose={() => {
             setResult(null);
             setTimeout(() => {

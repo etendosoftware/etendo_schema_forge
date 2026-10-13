@@ -1,3 +1,5 @@
+// @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -368,12 +370,11 @@ async function runOrderToInvoiceJourney(page) {
   await confirmCard.getByRole('button', { name: /Confirmar \+ factura/ }).click();
 
   // The result modal opens with a clickable invoice card linking to the new
-  // invoice. Click it → navigates to /sales-invoice/{INVOICE_ID}.
-  const resultTitle = page.getByText(/Pedido confirmado|Documentos creados/);
-  await expect(resultTitle).toBeVisible({ timeout: 10_000 });
-  // The card label uses the invoiceDoc key, "Factura #{number}".
-  const invoiceCard = page.getByText(/Factura #?SI-ETP4015-001/);
-  await expect(invoiceCard).toBeVisible({ timeout: 10_000 });
+  // invoice. Click it → navigates to /sales-invoice/{INVOICE_ID}. Only the invoice
+  // was created, so the popup is titled after it.
+  await expect(page.getByTestId('confirm-result-title')).toHaveText(/Factura creada|Invoice created/, { timeout: 10_000 });
+  const invoiceCard = page.getByTestId('confirm-result-card-0');
+  await expect(invoiceCard).toContainText('SI-ETP4015-001', { timeout: 10_000 });
   await invoiceCard.click();
 
   await expect(page).toHaveURL(new RegExp(`/sales-invoice/${INVOICE_ID}`));

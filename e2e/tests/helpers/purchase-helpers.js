@@ -76,7 +76,10 @@ export async function safeReload(page) {
  * to dismiss here, so a modal that never shows up is not an error.
  */
 export async function dismissSuccessModal(page) {
-  const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
+  // ETP-5674: target the footer «Cerrar» by its test id only — every ConfirmResultModal
+  // carries `action-confirm-result-close` in both footer variants, and a name-based fallback
+  // would also match the X icon (first in DOM order).
+  const closeBtn = page.getByTestId('action-confirm-result-close');
   try {
     await closeBtn.waitFor({ state: 'visible', timeout: 8_000 });
   } catch {
