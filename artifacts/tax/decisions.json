@@ -47,12 +47,16 @@
           "addLineFromSibling": true
         },
         "taxDue": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,
           "seq": 1
         },
         "taxCredit": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "grow": true,

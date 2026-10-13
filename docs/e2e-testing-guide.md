@@ -1199,6 +1199,30 @@ it and silently resolves to some other button on the page.
 `page.getByTestId('row-<id>')` whenever the test already knows the record id —
 "the first Completed row" also matches leftovers from earlier runs.
 
+### Gotcha: header fields hidden behind "Mostrar más datos"
+
+Since ETP-5513 the header `EntityForm` renders only its first 2 rows (required
+fields first). The rest sit behind "Mostrar más datos"
+(`data-testid="form-show-more-toggle"`), and the collapsed fields are **not in
+the DOM** until that block is expanded. A bare `page.getByTestId('field-<key>')`
+on a header field can therefore fail with "element(s) not found" even though the
+field exists on the form.
+
+Reach header fields through the shared helpers in
+`e2e/tests/helpers/purchase-helpers.js`, called after the form is ready
+(`waitForDetailReady`):
+
+| Helper | Use when | Behavior |
+|--------|----------|----------|
+| `revealHeaderField(page, key, { timeout })` | The field must exist | Expands only if the field is not rendered yet, asserts it is visible and returns its locator (chip or input). Fails with a message that tells "not on this form" apart from a typo or a slow render |
+| `hasHeaderField(page, key)` | Some documents lack the field (e.g. `warehouse`) | Resolves to `true`/`false` after the same lazy expansion; waits briefly for the field or the toggle first, so "not rendered yet" is not read as "absent" |
+| `expandHeaderFields(page)` | You need every collapsed block open | Opens every collapsed toggle; idempotent, never closes an open block, no-op when there is no toggle |
+
+Never conclude that a field is absent because a bare `count()` returned 0 — on a
+collapsed form that is the expected result. Known follow-up: some sales specs
+(`e2e/tests/flows/sales/*`) still read `field-paymentTerms` directly and should
+move to these helpers.
+
 ## Toast selectors
 
 Sonner v2 renders `data-type` on each toast element. Use these selectors in E2E tests:

@@ -1,38 +1,24 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useUI } from '@/i18n';
-import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { useAuth } from '@/auth/AuthContext.jsx';
-import { getPendingSifTargets, getSifBodyKey } from './sifSending.js';
-import { resolveInvoiceOrgId } from './resolveInvoiceOrgId.js';
+import { useInvoiceSifSending } from './useInvoiceSifSending.js';
 import SifSendingModal from './SifSendingModal.jsx';
 
-export default function SendToSifButton({ data, recordId, apiBaseUrl, status, onSave, isDirty, isDocumentReadOnly }) {
+export default function SendToSifButton({ data, recordId, apiBaseUrl, status, onSave, isDirty, windowReadOnly }) {
   const ui = useUI();
   const [modalOpen, setModalOpen] = useState(false);
   const [sentSuccessfully, setSentSuccessfully] = useState(false);
-  const specName = apiBaseUrl?.split('/').filter(Boolean).pop() || 'sales-invoice';
+
+  // ETP-5087: fiscal config keyed by the INVOICE's own org — see useInvoiceSifSending.js.
+  const { specName, pendingTargets, hasPendingTargets, labelKey, bodyKey, base } =
+    useInvoiceSifSending({ data, apiBaseUrl });
   const updateEventName = `${specName}:invoice-updated`;
+  // ETP-5205 hides the button under the Solo Lectura tier — that is `windowReadOnly`.
+  // ETP-5700: it used to read `isDocumentReadOnly`, which DetailView ALSO sets for every
+  // processed document (lockWhenProcessed), i.e. for every completed invoice — the only
+  // state in which sending is possible — so the button never showed where it applies.
+  const canSend = status === 'CO' && hasPendingTargets && !windowReadOnly;
 
-  // ETP-5087: fiscal config must be keyed by the INVOICE's own org (data.adOrgId),
-  // not the top-nav org selector — the selector can point at a different org than
-  // the invoice being viewed, silently fetching the wrong TBAI/SII config (and
-  // territory) or none at all. See resolveInvoiceOrgId.js.
-  const { selectedOrg } = useAuth();
-  const orgId = resolveInvoiceOrgId(data, selectedOrg?.id);
-  const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-
-  const { profile, tbaiRecord, earliestSiiCutoverDate, earliestTbaiCutoverDate } = useFiscalConfig(orgId, apiBaseUrl);
-  const territory = tbaiRecord?.etsgSifTerritory ?? null;
-  // ETP-5432 #3: SII target must also be gated on the org's earliest SII cutover
-  // date, same as TBAI already is — see sifSending.js.
-  // ETP-5432 QA: TBAI must be gated on the earliest-ever cutover too, not just the
-  // active config row's own date — see sifSending.js.
-  const pendingTargets = getPendingSifTargets(
-    specName, profile, data, territory, tbaiRecord, earliestSiiCutoverDate, earliestTbaiCutoverDate,
-  );
-  const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
-
-  if (status !== 'CO' || !hasPendingTargets || isDocumentReadOnly) return null;
+  if (!canSend) return null;
 
   return (
     <>
@@ -41,13 +27,14 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status, on
         onClick={() => setModalOpen(true)}
         className="inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
         style={{ padding: '0 12px', borderRadius: '8px', border: '1px solid hsl(var(--border-subtle))', color: 'hsl(var(--foreground))', background: 'hsl(var(--card))' }}
+        data-testid="SendToSifButton__send"
       >
-        {ui('sendToSif')}
+        {ui(labelKey)}
       </button>
       {modalOpen && (
         <SifSendingModal
           pendingTargets={pendingTargets}
-          bodyKey={getSifBodyKey(specName, pendingTargets)}
+          bodyKey={bodyKey}
           base={base}
           specName={specName}
           recordId={recordId}

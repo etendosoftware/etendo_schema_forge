@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/useFiscalMonitor.js
 // ETP-5229 #17 — earliest-cutover-date gate for the Verifactu monitor.
 //
 // Mirrors useFiscalMonitor.cutoverDate.vitest.js (TBAI, #13), adapted to
@@ -78,7 +79,7 @@ describe('useFiscalMonitor — earliestVerifactuCutoverDate derivation (ETP-5229
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.profile).toBe('verifactu');
-    expect(result.current.earliestVerifactuCutoverDate).toBe(new Date('2025-01-15').toISOString());
+    expect(result.current.earliestVerifactuCutoverDate).toBe('2025-01-15'); // ETP-5700: the row's own value, never re-serialised to UTC
   });
 
   it('falls back to null when no verifactu config row carries a cutover date', async () => {
@@ -101,7 +102,7 @@ describe('useFiscalMonitor — earliestVerifactuCutoverDate derivation (ETP-5229
     const { result } = renderHook(() => useFiscalMonitor('org-1', '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.earliestVerifactuCutoverDate).toBe(new Date('2026-03-10').toISOString());
+    expect(result.current.earliestVerifactuCutoverDate).toBe('2026-03-10'); // ETP-5700: the row's own value, never re-serialised to UTC
   });
 
   it('no verifactu config rows at all: earliest is null and profile is unconfigured', async () => {

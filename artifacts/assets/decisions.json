@@ -345,9 +345,13 @@
           "grid": true
         },
         "accumulatedDepreciation": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "grid": true
         },
         "depreciation": {
+          "lookup": true,
+          "lookupDrawer": "account",
           "grid": true
         },
         "disposalGain": {

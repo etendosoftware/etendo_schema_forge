@@ -1,3 +1,4 @@
+// @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../../helpers/auth.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
@@ -161,10 +162,16 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
     });
 
     await test.step('Verify PO confirmation succeeded', async () => {
-      const successMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
-      await expect(successMsg,
-        'Success modal should show "Pedido de compra confirmado"',
-      ).toBeVisible({ timeout: 30_000 });
+      // ETP-5063/ETP-5674: confirming without a receipt or invoice creates no
+      // document, so there is no generated-documents popup — success is the
+      // "Pedido de compra confirmado" toast. Scope to the success toast: a loose
+      // page-text regex also matched the still-open ConfirmModal's own copy.
+      await expect(page.locator('[data-type="success"]').first(),
+        'Confirming with no generated document should show the success toast',
+      ).toContainText(/Pedido de compra confirmado|Purchase order confirmed/i, { timeout: 30_000 });
+      await expect(page.getByTestId('confirm-result-dialog'),
+        'No generated-documents popup when nothing was generated',
+      ).toHaveCount(0);
 
       await dismissSuccessModal(page);
     });
