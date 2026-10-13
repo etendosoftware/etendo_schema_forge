@@ -745,8 +745,9 @@ Amount:  49 EUR / month
 make test-stripe-local
 ```
 
-It loads `.env`, refuses a non-`sk_test_` key, starts `stripe listen`, captures the listener's
-signing secret, logs in with `ETENDO_TEST_EMAIL` / `ETENDO_TEST_PASSWORD` (or reuses
+It loads `.env`, refuses a non-`sk_test_` key, starts `stripe listen` with the event list from
+"Manual forwarding" below (`--events`, required by Stripe CLI 1.53 and later), captures the
+listener's signing secret, logs in with `ETENDO_TEST_EMAIL` / `ETENDO_TEST_PASSWORD` (or reuses
 `ETENDO_SESSION_TOKEN`), and calls the Checkout Session endpoint with `Origin: $ETGO_CHECKOUT_APP_ORIGIN`
 (default `http://localhost:3100`). It stops the listener on exit and never prints the secret or
 password.
@@ -755,11 +756,6 @@ password.
 configured with the *same* secret. Because `stripe listen` mints a new secret per session, either
 use `stripe listen` with a fixed endpoint secret from the Dashboard, or copy the printed value into
 `Openbravo.properties` and redeploy before the payment.
-
-**Stripe CLI 1.53 and later:** the listener this script starts runs `stripe listen` without
-`--events`, which those CLI versions refuse ("must specify events to forward using --events,
---all-snapshot, or --all-thin"). Until the script names its events, start the listener by hand as
-in "Manual forwarding" below.
 
 ### Manual forwarding
 
@@ -773,9 +769,11 @@ stripe listen \
 ```
 
 Without `--events` the CLI exits with "must specify events to forward using --events,
---all-snapshot, or --all-thin". `--all-snapshot` works too, but it forwards every event of the
-account, and each unhandled one lands in `etgo_billing_event` as an `IGNORED` /
-`unhandled event type` row.
+--all-snapshot, or --all-thin". `tools/stripe-local-smoke.sh` and
+`tools/stripe-subscription-past-due.sh` each carry this list as `STRIPE_LISTEN_EVENTS`; when the
+webhook starts handling a new event type, add it there and here. `--all-snapshot` works too, but
+it forwards every event of the account, and each unhandled one lands in `etgo_billing_event` as an
+`IGNORED` / `unhandled event type` row.
 
 Copy the printed `whsec_...` into `etendo.go.checkout.webhook.secret` and redeploy. To compare
 the listener's secret with the configured one later, `stripe listen --print-secret` prints it and

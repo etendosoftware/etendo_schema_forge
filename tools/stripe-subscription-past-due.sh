@@ -57,9 +57,10 @@ set -Eeuo pipefail
 #   -h, --help
 #
 # Requires: stripe CLI (test mode), psql, and jq or python3.
-# A `stripe listen --forward-to <base>/sws/go/checkout/webhook` must be
-# running for the webhooks to reach the backend -- the script warns (does
-# not block) when it cannot detect one.
+# A `stripe listen --events <STRIPE_LISTEN_EVENTS> --forward-to
+# <base>/sws/go/checkout/webhook` must be running for the webhooks to reach
+# the backend -- the script warns (does not block) when it cannot detect one.
+# Stripe CLI 1.53+ refuses `stripe listen` without --events.
 #
 # Env:
 #   STRIPE_ETENDO_ROOT   Etendo root containing gradle.properties.
@@ -83,6 +84,12 @@ fi
 usage() {
   sed -n '4,52p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
+
+# Stripe CLI 1.53+ refuses `stripe listen` without an event list. The events
+# the checkout webhook handles (docs/stripe-local-testing.md §1); keep this
+# list in sync with STRIPE_LISTEN_EVENTS in tools/stripe-local-smoke.sh.
+STRIPE_LISTEN_EVENTS="checkout.session.completed,checkout.session.async_payment_succeeded,invoice.paid,invoice.payment_failed,customer.subscription.updated,customer.subscription.deleted,charge.dispute.created"
+STRIPE_LISTEN_HINT="stripe listen --events ${STRIPE_LISTEN_EVENTS} --forward-to <base>/sws/go/checkout/webhook"
 
 log() {
   echo "==> $*"
@@ -311,7 +318,7 @@ check_stripe_listen_running() {
     log "Detected a running 'stripe listen' process."
   else
     echo "WARN: no 'stripe listen' process detected -- webhooks will not reach the backend." >&2
-    echo "      Start it first: stripe listen --forward-to localhost:8080/etendo/sws/go/checkout/webhook" >&2
+    echo "      Start it first: stripe listen --events ${STRIPE_LISTEN_EVENTS} --forward-to localhost:8080/etendo/sws/go/checkout/webhook" >&2
   fi
 }
 
@@ -760,7 +767,7 @@ cmd_fail() {
     log "billing event $ev_id: event_result=$ev_result failure_reason=${ev_reason:-<none>} received_at=$ev_received"
   else
     echo "WARN: no invoice.payment_failed billing event found for invoice $INVOICE_ID within 30s." >&2
-    echo "      Is 'stripe listen --forward-to <base>/sws/go/checkout/webhook' running and reachable?" >&2
+    echo "      Is '${STRIPE_LISTEN_HINT}' running and reachable?" >&2
   fi
 
   local status_val due_val store
@@ -853,7 +860,7 @@ cmd_recover() {
     log "billing event $ev_id: event_result=$ev_result failure_reason=${ev_reason:-<none>} received_at=$ev_received"
   else
     echo "WARN: no invoice.paid billing event found for invoice $INVOICE_ID within 30s." >&2
-    echo "      Is 'stripe listen --forward-to <base>/sws/go/checkout/webhook' running and reachable?" >&2
+    echo "      Is '${STRIPE_LISTEN_HINT}' running and reachable?" >&2
   fi
 
   local status_val due_val store
