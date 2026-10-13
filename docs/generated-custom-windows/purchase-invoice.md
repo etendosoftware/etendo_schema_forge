@@ -2447,3 +2447,12 @@ pressing the disabled button opens the block (and keeps it open until the user c
 the missing fields are on screen. The block does not open on load, so a new invoice still shows
 2 rows. **Verify:** at 1280x720 on a new invoice leave those fields empty, hover *Guardar* and
 check the block opens with them visible and *Mostrar menos datos* shown.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field was already gated (ETP-4520), but the list is rendered by `windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`, which re-declared `posted` without the gate. Its column now carries `visibleWhenCapability: ACCOUNTING_CAPABILITY`; `ListView` also drops it from the filter, sort and export.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

@@ -556,3 +556,12 @@ the list preview (`ReturnMaterialReceiptPreview.jsx` → `buildReturnPreviewCont
 extra request is made. Because every source is read from the record, there is nothing to refetch and
 the preview card no longer shows a refresh button. `return-to-vendor-shipment` does not pass
 `relatedDefinition` and keeps its `specs`. See `docs/ui-customization.md` §7.a for the shared definition (`SALES_RELATED_DOCS`), the `useRelatedDocuments` hook and the `RelatedDocumentsCard` `definition`/`record` props.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field was already gated (ETP-4520); `ListView` now also drops it from the filter, sort and export.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

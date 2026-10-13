@@ -469,3 +469,11 @@ acceptance line about the "New" button staying visible does not apply to this wi
 
 Manual verification: open `/payment-out` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
 runs under the toolbar, above both the sidebar and the grid, across the full width of the card.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

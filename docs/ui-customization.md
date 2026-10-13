@@ -316,6 +316,20 @@ Handler precedence: `documentAction` > `columnName` > `action` > `component` > e
 
 **Real examples:** `goods-shipment` (cancel), `payment-in` (reverse via `columnName`), `sales-invoice` (duplicate, cancel), `sales-order` (reactivate via `documentAction: "RE"`).
 
+#### Posting actions follow "Show Accounting Fields" (ETP-5684)
+
+Contabilizar / Descontabilizar are hidden from every role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins always have it). **You declare nothing for this.** The three action renderers drop any descriptor whose `neoAction` (form kebab, row kebab) or `value` (bulk toolbar) is `post` or `unpost`:
+
+| Renderer | Surface |
+|---|---|
+| `DetailMoreActionsMenu.jsx` | form kebab (`menuActions`) |
+| `RowQuickActions.jsx` | row kebab (`rowQuickActions` menu entries, incl. hand-rolled ones in a window's `index.jsx`) |
+| `BulkDocumentAction.jsx` | bulk toolbar, whichever builder produced the list (`buildPostActions`, a window's own builder) |
+
+All three call `filterPostingActions(actions, capabilities)` from `tools/app-shell/src/lib/capabilityVisibility.js`. It keys on the generic posting action that `DocumentPostingService` serves for every document — a structural contract, not an entity name — and ignores `key`, which is a free label. The gate fails closed, so a component test without an `AuthProvider` loses Post/Unpost: grant the capability with `src/test/capabilitiesSafeMock.js` (see its header). Reactivate's `preUnpost` calls `unpost` directly, not through a menu, so it is unaffected.
+
+The posting **status** (the `posted` field) is NOT automatic: declare `"visibleWhenCapability": "showAccountingFields"` on it in `decisions.json`, and on any hand-written `posted` list column (`visibleWhenCapability: ACCOUNTING_CAPABILITY`). `ListView` then also drops the column from the advanced filter, the sort popover and the export, and strips a restored filter or sort on it. `tools/app-shell/test/accounting-capability-guard.test.js` fails the build on an ungated `posted` in either place. Hand-rolled financial-account surfaces gate themselves (movements dot + sort segment + kebab, reconciliations column/filter/sort, reconciled-transactions modal, payment timeline "Asiento contabilizado"). Confirm-dialog warnings about removing the accounting entry are kept on purpose: they describe a consequence of an action the user is allowed to take.
+
 #### Dynamic process-button captions — `processOverrides.<proc>.labelToggle`
 
 A process button caption can switch based on a record field value. Add an optional `labelToggle: { field, equals, label }` to any `processOverrides` entry. When the current record's `field` strictly equals `equals`, the toolbar button shows `label`; otherwise it shows the entry's default `label`. Both go through `useMenuLabel`, so translations resolve automatically. It is fully opt-in: buttons without `labelToggle` render exactly as before.
