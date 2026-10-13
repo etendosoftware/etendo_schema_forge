@@ -390,6 +390,11 @@ async function readLinesByProduct(page, lines, { stage, qtyKey, grossKey }) {
   await expect(page.locator('[data-testid^="line-row-"]'),
     `${stage} should render exactly ${lines.length} line rows`,
   ).toHaveCount(lines.length, { timeout: 15_000 });
+  // A hovered line row swaps its trailing amount cell for the edit/delete action
+  // strip (InlineLinesPanel), so `grossKey` would not be in the DOM. Arriving via
+  // the result popup's «Ver …» button leaves the cursor over the first line row
+  // (ETP-5674 moved that button), so park it on the panel's header corner first.
+  await page.getByTestId('inline-lines-panel').hover({ position: { x: 2, y: 2 } });
   const byProduct = {};
   for (const { product } of lines) {
     const row = lineRowByProduct(page, product.name);

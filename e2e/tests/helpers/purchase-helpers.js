@@ -90,6 +90,31 @@ export async function dismissSuccessModal(page) {
 }
 
 /**
+ * Open the single document announced by the generated-documents popup
+ * (ConfirmResultModal) through its primary «Ver …» button.
+ *
+ * ETP-5674: the button copy now follows the document type («Ver albarán»,
+ * «Ver devolución», «Ver pedido», …) and the popup title names the created
+ * document instead of the source one («Albarán creado», not «Pedido de compra
+ * confirmado»). Target the popup by its test ids, and pass `title` to assert
+ * WHICH document was announced.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ title?: RegExp|string, timeout?: number }} [options]
+ */
+export async function openGeneratedDocument(page, { title, timeout = 30_000 } = {}) {
+  if (title) {
+    await expect(page.getByTestId('confirm-result-title'),
+      'The generated-documents popup should announce the created document',
+    ).toHaveText(title, { timeout });
+  }
+  const viewBtn = page.getByTestId('action-confirm-result-view');
+  await expect(viewBtn).toBeVisible({ timeout });
+  await viewBtn.click();
+  await slow(page);
+}
+
+/**
  * Wait for a NEO API POST response to complete after a confirmation action.
  */
 export async function waitForConfirmResponse(page) {
