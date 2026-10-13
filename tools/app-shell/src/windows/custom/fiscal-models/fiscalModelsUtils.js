@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 // authoritative consumer. One-directional dependency only (fm303Layouts.js imports nothing from
 // this file), so no import cycle.
 import { computeBox111 } from './models/303/fm303Layouts.js';
+import { getModelOrDefault, DEFAULT_MODEL_ID } from './modelRegistry.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
@@ -797,12 +798,12 @@ const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
  * Returns `{ blocking, warning, items }` on success, or the all-zero empty shape when
  * token/apiBaseUrl/id are missing or the request fails — safe to always destructure.
  *
- * `model` selects which route to hit (`303` by default). Per `AbstractFiscalHandler#handleIncidents`,
+ * `model` selects which route to hit (the registry's default model, `303`, by default). Per `AbstractFiscalHandler#handleIncidents`,
  * `/fiscal303/incidents` and `/fiscal349/incidents` are both backed by the same
  * `ETGO_Fiscal_Decl_Incident` table, so a 349 declaration can be queried the same way — it will
  * simply come back empty today, since only the 303 telematic submission flow writes rows there.
  */
-export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model = '303' } = {}) {
+export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model = DEFAULT_MODEL_ID } = {}) {
   if (!apiBaseUrl || !id) return EMPTY_INCIDENTS;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
@@ -1285,27 +1286,11 @@ function getQuarterlyDeadline(year, quarter) {
   return new Date(year, month - 1, 20);
 }
 
-// Monthly 349 deadline. July's 349 is consolidated with August → deadline is
-// Sept 20, not Aug 20. Every other month → day 20 of the following month.
-function getMonthly349Deadline(year, month) {
-  if (month === 7) return new Date(year, 8, 20);
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  return new Date(nextYear, nextMonth - 1, 20);
-}
+// The MONTHLY rule is per model and lives with the model: `monthlyDeadline` of its
+// `modelRegistry.js` entry (`models/303/deadline303.js`, `models/349/deadline349.js`). An
+// unknown model falls back to the default model's (303) rule, as it always did.
 
-// Monthly 303 deadline (and default fallback for any other/unspecified
-// monthly model): day 30 of the following month, except January which
-// extends to the last day of February. `new Date(year, 2, 0)` = "day 0 of
-// March" = the last day of February, automatically leap-year aware.
-function getMonthly303Deadline(year, month) {
-  if (month === 1) return new Date(year, 2, 0);
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  return new Date(nextYear, nextMonth - 1, 30);
-}
-
-// Dispatches to the quarterly/monthly-303/monthly-349 rule above based on
+// Dispatches to the quarterly rule above or to the model's own monthly rule based on
 // `period`'s shape and `model`. Split out of a single branch-heavy function
 // (SonarQube S3776) into these small, independently-testable helpers — same
 // dates, same logic, just decomposed.
@@ -1315,7 +1300,7 @@ function getDeadlineDate(model, year, period) {
   }
   if (/^\d{2}$/.test(period)) {
     const m = parseInt(period, 10);
-    return model === '349' ? getMonthly349Deadline(year, m) : getMonthly303Deadline(year, m);
+    return getModelOrDefault(model).monthlyDeadline(year, m);
   }
   return null;
 }
