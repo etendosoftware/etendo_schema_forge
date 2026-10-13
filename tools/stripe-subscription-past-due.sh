@@ -81,8 +81,10 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
+# Prints the header comment from line 4 up to the first non-comment line, so
+# the help text follows the header as it grows instead of a fixed line range.
 usage() {
-  sed -n '4,52p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  awk 'NR >= 4 { if (!/^#/) exit; print }' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 # Stripe CLI 1.53+ refuses `stripe listen` without an event list. The events
