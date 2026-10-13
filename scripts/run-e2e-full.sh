@@ -236,8 +236,9 @@ if [ "$SUITE" != "mocked" ]; then
   fi
   # ETP-5548: the paid provisioning-failure spec reserves a dedicated pool tenant through
   # POST /sws/go/dev/provisioning-failure-fixture, which provisions it synchronously on first
-  # run (minutes) and blows the 15s actionTimeout. Run it locally / in the pre-push gate only;
-  # skip it under Jenkins (JENKINS_URL). An explicit E2E_PROVISIONING_FAILURE always wins.
+  # run (minutes; the spec waits up to 4 for it). It runs in local integration runs and is
+  # skipped under Jenkins (JENKINS_URL) unless the job opts in, as the develop → main cut does
+  # (ETP-5695). An explicit E2E_PROVISIONING_FAILURE always wins.
   if [ -n "${E2E_PROVISIONING_FAILURE:-}" ]; then
     provisioning_failure="$E2E_PROVISIONING_FAILURE"
   elif [ -n "${JENKINS_URL:-}" ]; then

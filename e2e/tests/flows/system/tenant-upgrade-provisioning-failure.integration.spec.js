@@ -14,6 +14,12 @@ const RUN = process.env.E2E_PROVISIONING_FAILURE === '1';
 const BASE_URL = String(process.env.BASE_URL || 'http://localhost:3100').trim();
 const LOCAL_BASE_URL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(BASE_URL);
 const FIXTURE_PATH = '/sws/go/dev/provisioning-failure-fixture';
+// The first fixture call on a backend provisions a dedicated pool tenant synchronously, which
+// takes minutes; every request otherwise inherits the 15s actionTimeout. A client-side timeout
+// does not stop the backend: it finishes the reservation and nobody holds its cleanup token, so
+// the reservation is orphaned. Setup therefore waits as long as the test budget allows.
+const FIXTURE_SETUP_TIMEOUT_MS = 240_000;
+const FIXTURE_CLEANUP_TIMEOUT_MS = 60_000;
 const credentials = loadCredentials();
 
 async function authenticatedJson(page, path, options = {}) {
@@ -25,7 +31,8 @@ async function authenticatedJson(page, path, options = {}) {
 }
 
 test.describe('Paid pooled tenant provisioning failure — real backend', () => {
-  // First run may build the dedicated pool client before the browser starts provisioning.
+  // First run may build the dedicated pool client before the browser starts provisioning:
+  // up to FIXTURE_SETUP_TIMEOUT_MS of setup, then about a minute of browser flow.
   test.describe.configure({ timeout: 360_000 });
   test.skip(!RUN, 'The local backend fixture is not configured (E2E_PROVISIONING_FAILURE=1).');
 
@@ -47,6 +54,7 @@ test.describe('Paid pooled tenant provisioning failure — real backend', () => 
     const setup = await authenticatedJson(page, FIXTURE_PATH, {
       method: 'POST',
       data: { clientName: `E2E Pool Failure ${Date.now()}` },
+      timeout: FIXTURE_SETUP_TIMEOUT_MS,
     });
     expect(setup.ok(), `Fixture setup failed (${setup.status()}): ${await setup.text()}`)
       .toBe(true);
@@ -114,7 +122,8 @@ test.describe('Paid pooled tenant provisioning failure — real backend', () => 
       expect(purchase.status).toBe('PROVISIONING');
     } finally {
       const cleanup = await authenticatedJson(
-        page, `${FIXTURE_PATH}/${encodeURIComponent(fixture.cleanupToken)}`, { method: 'DELETE' },
+        page, `${FIXTURE_PATH}/${encodeURIComponent(fixture.cleanupToken)}`,
+        { method: 'DELETE', timeout: FIXTURE_CLEANUP_TIMEOUT_MS },
       );
       expect(cleanup.ok(), `Fixture cleanup failed (${cleanup.status()}): ${await cleanup.text()}`)
         .toBe(true);

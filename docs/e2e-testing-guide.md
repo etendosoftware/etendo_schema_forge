@@ -153,14 +153,17 @@ Like the contextual-selector smoke above, they get a bearer JWT through
 ## Paid Provisioning Failure Integration (ETP-5548)
 
 `e2e/tests/flows/system/tenant-upgrade-provisioning-failure.integration.spec.js` runs in the
-ordinary integration project through `scripts/run-e2e-full.sh`, including the local
-`make test-e2e-headless` run and the pre-push E2E gate, where the runner sets
-`E2E_PROVISIONING_FAILURE=1`. Under Jenkins (detected by a non-empty `JENKINS_URL`) the
-runner sets `E2E_PROVISIONING_FAILURE=0` and the spec self-skips: on first run the backend
-fixture (`POST /sws/go/dev/provisioning-failure-fixture`) provisions a whole dedicated pool
-tenant synchronously, which takes minutes and exceeds the 15 s `actionTimeout`. An explicit
-`E2E_PROVISIONING_FAILURE` value always wins — export `E2E_PROVISIONING_FAILURE=1` to force
-the spec on (including under Jenkins), or `0` to skip it locally.
+ordinary integration project through `scripts/run-e2e-full.sh`: the local
+`make test-e2e-headless` run, and the pre-push only with `PRE_PUSH_INTEGRATION=1` (the pre-push
+leaves integration specs to CI since ETP-5695). There the runner sets
+`E2E_PROVISIONING_FAILURE=1`. Under Jenkins (detected by a non-empty `JENKINS_URL`) the runner
+sets `E2E_PROVISIONING_FAILURE=0` and the spec self-skips, unless the job opts in with
+`E2E_PROVISIONING_FAILURE=1`, as the develop → main cut does. On first run the backend fixture
+(`POST /sws/go/dev/provisioning-failure-fixture`) provisions a whole dedicated pool tenant
+synchronously, which takes minutes: the spec gives that request 240 s instead of the 15 s
+`actionTimeout`, because a request the client abandons still completes on the backend and
+leaves a reservation nobody can clean up. An explicit `E2E_PROVISIONING_FAILURE` value always
+wins — export `E2E_PROVISIONING_FAILURE=1` to force the spec on, or `0` to skip it locally.
 The spec creates a paid checkout through a local backend fixture, follows the real
 `/upgrade?checkout=success` browser path, checks that the UI sends onboarding with the
 same request ID, verifies the durable `provisioning_failed` state and visible recovery
