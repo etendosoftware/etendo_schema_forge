@@ -51,8 +51,8 @@ const requiredHeaderFields = ['name', 'validFrom', 'taxCategory', 'rate', 'appli
 // @sf-generated-start addLineFields:accounting
 const addLineFields = {
   entry: [
-    { key: 'taxDue', column: 'T_Due_Acct', type: 'selector', required: true, label: 'Tax Due', reference: 'ValidCombination', inputMode: 'selector' },
-    { key: 'taxCredit', column: 'T_Credit_Acct', type: 'selector', required: true, label: 'Tax Credit', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'taxDue', column: 'T_Due_Acct', type: 'selector', required: true, label: 'Tax Due', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
+    { key: 'taxCredit', column: 'T_Credit_Acct', type: 'selector', required: true, label: 'Tax Credit', reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
   ],
   derived: [
 

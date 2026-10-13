@@ -12,6 +12,7 @@ import {
   computeUpcomingDeadlines,
   applyBoxParams,
   withDerivedBoxFlags,
+  resolveTipoDeclaracionRestriction,
   isRectificationAdjustmentActive,
   RECTIFICATION_ONLY_BOXES,
 } from '../fiscalModelsUtils.js';
@@ -1160,23 +1161,90 @@ describe('isRectificationAdjustmentActive (ETP-5597)', () => {
   });
 });
 
-describe('withDerivedBoxFlags (ETP-5597)', () => {
-  it('sets _box69Positive only for a strictly positive box 69', () => {
-    assert.equal(withDerivedBoxFlags({}, [{ num: 69, value: 0.01 }])._box69Positive, true);
-    assert.equal(withDerivedBoxFlags({}, [{ num: 69, value: 0 }])._box69Positive, false);
-    assert.equal(withDerivedBoxFlags({}, [{ num: 69, value: -10 }])._box69Positive, false);
+describe('resolveTipoDeclaracionRestriction / withDerivedBoxFlags (ETP-5597)', () => {
+  const restrictionOf = (b69, b71) => withDerivedBoxFlags({}, [
+    ...(b69 === undefined ? [] : [{ num: 69, value: b69 }]),
+    ...(b71 === undefined ? [] : [{ num: 71, value: b71 }]),
+  ])._tipoDeclRestriction;
+
+  it('a strictly positive box 71 restricts to positive_result, whatever box 69 is', () => {
+    assert.equal(restrictionOf(-50, 0.01), 'positive_result');
+    assert.equal(restrictionOf(100, 100), 'positive_result');
+    assert.equal(restrictionOf(undefined, 5), 'positive_result');
   });
 
-  it('treats a missing box 69 (nothing computed) as not positive', () => {
-    assert.equal(withDerivedBoxFlags({}, null)._box69Positive, false);
-    assert.equal(withDerivedBoxFlags({}, [])._box69Positive, false);
+  it('box 69 > 0 with box 71 < 0 restricts to zero_only', () => {
+    assert.equal(restrictionOf(100, -20), 'zero_only');
+  });
+
+  it('no restriction otherwise (71 zero, 71 negative with 69 not positive)', () => {
+    assert.equal(restrictionOf(100, 0), null);
+    assert.equal(restrictionOf(0, -20), null);
+    assert.equal(restrictionOf(-10, -20), null);
+  });
+
+  it('no restriction before the first calculation (69/71 missing)', () => {
+    assert.equal(withDerivedBoxFlags({}, null)._tipoDeclRestriction, null);
+    assert.equal(withDerivedBoxFlags({}, [])._tipoDeclRestriction, null);
+    assert.equal(restrictionOf(100, undefined), null);
+    assert.equal(resolveTipoDeclaracionRestriction(null, null), null);
+  });
+
+  describe('boundaries, called directly', () => {
+    it('box 71 exactly 0 never restricts, whatever box 69 holds', () => {
+      assert.equal(resolveTipoDeclaracionRestriction(0, 0), null);
+      assert.equal(resolveTipoDeclaracionRestriction(100, 0), null);
+      assert.equal(resolveTipoDeclaracionRestriction(-100, 0), null);
+      assert.equal(resolveTipoDeclaracionRestriction(null, 0), null);
+    });
+
+    it('box 69 exactly 0 with a negative box 71 does not restrict to zero_only', () => {
+      assert.equal(resolveTipoDeclaracionRestriction(0, -20), null);
+      assert.equal(resolveTipoDeclaracionRestriction('0', '-20'), null);
+      assert.equal(resolveTipoDeclaracionRestriction(-0, -0.01), null);
+    });
+
+    it('the smallest positive box 69 with the smallest negative box 71 is zero_only', () => {
+      assert.equal(resolveTipoDeclaracionRestriction(0.01, -0.01), 'zero_only');
+    });
+
+    it('a non-numeric or NaN box 71 yields no restriction', () => {
+      assert.equal(resolveTipoDeclaracionRestriction(100, 'abc'), null);
+      assert.equal(resolveTipoDeclaracionRestriction(100, Number.NaN), null);
+      assert.equal(resolveTipoDeclaracionRestriction(100, '12x'), null);
+    });
+
+    it('a "-0" box 71 (string or number) is zero, so it never restricts', () => {
+      assert.equal(resolveTipoDeclaracionRestriction(100, '-0'), null);
+      assert.equal(resolveTipoDeclaracionRestriction(100, -0), null);
+      assert.equal(resolveTipoDeclaracionRestriction('-0', -20), null);
+    });
+
+    it('null or undefined on either side yields no zero_only restriction', () => {
+      assert.equal(resolveTipoDeclaracionRestriction(undefined, undefined), null);
+      assert.equal(resolveTipoDeclaracionRestriction(100, undefined), null);
+      assert.equal(resolveTipoDeclaracionRestriction(100, null), null);
+      assert.equal(resolveTipoDeclaracionRestriction(null, -20), null);
+      assert.equal(resolveTipoDeclaracionRestriction(undefined, -20), null);
+    });
+
+    it('a missing box 69 does not hide a positive box 71', () => {
+      assert.equal(resolveTipoDeclaracionRestriction(null, 5), 'positive_result');
+      assert.equal(resolveTipoDeclaracionRestriction(undefined, 5), 'positive_result');
+    });
+
+    it('numeric strings are read as numbers on both sides', () => {
+      assert.equal(resolveTipoDeclaracionRestriction('100', '-20'), 'zero_only');
+      assert.equal(resolveTipoDeclaracionRestriction('0', '0.01'), 'positive_result');
+      assert.equal(resolveTipoDeclaracionRestriction('abc', '-20'), null);
+    });
   });
 
   it('also carries _box111NonZero and keeps the original identification keys', () => {
-    const out = withDerivedBoxFlags({ tipo_declaracion: 'C' }, [{ num: 69, value: 5 }, { num: 111, value: 2 }]);
+    const out = withDerivedBoxFlags({ tipo_declaracion: 'C' }, [{ num: 71, value: 5 }, { num: 111, value: 2 }]);
     assert.equal(out.tipo_declaracion, 'C');
     assert.equal(out._box111NonZero, true);
-    assert.equal(out._box69Positive, true);
+    assert.equal(out._tipoDeclRestriction, 'positive_result');
   });
 });
 

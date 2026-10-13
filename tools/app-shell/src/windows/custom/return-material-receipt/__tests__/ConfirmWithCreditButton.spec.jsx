@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen, act } from '@testing-library/react';
+// @covers tools/app-shell/src/windows/custom/return-material-receipt/ConfirmWithCreditButton.jsx
+import { render, screen, act, fireEvent } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -16,12 +17,19 @@ vi.mock('sonner', () => ({
 // Probe exposing the forwarded spec/entity names and confirm label (shared helper).
 vi.mock('@/components/contract-ui/ConfirmInOutModal', () => import('../../shared/__tests__/confirmInOutModalProbe.jsx'));
 
+// Exposes the doc this window hands the result popup: the popup derives its whole copy from `type`.
 vi.mock('@/components/contract-ui/ConfirmResultModal', () => ({
-  ConfirmResultModal: () => <div data-testid="confirm-result-modal" />,
+  ConfirmResultModal: ({ docs }) => (
+    <div data-testid="confirm-result-modal" data-doc-type={docs?.[0]?.type} data-route={docs?.[0]?.route} />
+  ),
 }));
 
 vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
-  default: () => <div data-testid="create-invoice-confirm-modal" />,
+  default: ({ onConfirm }) => (
+    <div data-testid="create-invoice-confirm-modal">
+      <button type="button" data-testid="create-invoice-confirm" onClick={() => onConfirm()} />
+    </div>
+  ),
 }));
 
 import ConfirmWithCreditButton, { CONFIRM_EVENT } from '../ConfirmWithCreditButton.jsx';
@@ -161,5 +169,15 @@ describe('ConfirmWithCreditButton', () => {
     );
     const btn = screen.getByTestId('action-create-return-invoice');
     expect(btn).toHaveTextContent('returnReceipt.createRectificativeInvoice');
+  });
+
+  it('announces the created invoice as a facturaRectificativa in the result popup', async () => {
+    render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ id: BASE_PROPS.recordId, documentStatus: 'CO', hasReturnInvoice: false }} />);
+    fireEvent.click(screen.getByTestId('action-create-return-invoice'));
+    fireEvent.click(screen.getByTestId('create-invoice-confirm'));
+
+    const result = await screen.findByTestId('confirm-result-modal');
+    expect(result).toHaveAttribute('data-doc-type', 'facturaRectificativa');
+    expect(result).toHaveAttribute('data-route', '/sales-invoice/INV-1');
   });
 });
