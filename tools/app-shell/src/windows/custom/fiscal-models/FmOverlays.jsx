@@ -6,11 +6,12 @@ import { SELECTABLE_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { FileText, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatPeriod, showIaeActivityReminder, RECEIPT_ATTACHMENT_CONFIG } from './fiscalModelsUtils.js';
 import { buildAcceptAttribute, buildTypesLabel, isFileTypeAllowed } from '@/components/attachments/attachmentPolicy.js';
 import { isValidFormerStatement } from './formerStatement.js';
-import { listModels, getModel, DEFAULT_MODEL_ID } from './modelRegistry.js';
+import { listModels, getModel, DEFAULT_MODEL_ID, modelTitleKey } from './modelRegistry.js';
+import { getConfigSection } from './modelRegistryConfig.js';
+import { CfgField, INPUT_ST } from './FmConfigFields.jsx';
 import './fiscal-models.css';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -909,117 +910,29 @@ export function IncidentTray({ incidents, onClose }) {
   );
 }
 
-function CfgSection({ title, children }) {
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ fontWeight: 600, fontSize: 14, color: 'hsl(var(--foreground))', marginBottom: 12 }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function CfgField({ label, children, style }) {
-  return (
-    <div style={{ marginBottom: 12, ...style }}>
-      <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>{label}</div>
-      {children}
-    </div>
-  );
-}
-
-const INPUT_ST = {
-  width: '100%', fontSize: 14, padding: '8px 12px',
-  border: '1px solid hsl(var(--border-control))', borderRadius: 8, height: 40,
-  boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none',
-  background: 'hsl(var(--card))',
-};
-
-// CfgSelect — the app's shared Select (Radix) for the config modal's option
-// pickers. Replaces the former browser-native select elements (ETP-5584: no
-// browser-styled selects in this window). Uncontrolled, like the native ones
-// were: these options are not persisted yet, so only the initial value matters.
-// The content is lifted above `.fm-modal-overlay` (z-index 100) so the list is
-// never painted behind the modal that opened it.
-function CfgSelect({ options, defaultValue, ariaLabel, testId }) {
-  return (
-    <Select defaultValue={defaultValue ?? options[0]?.value} data-testid={`${testId}__select`}>
-      <SelectTrigger aria-label={ariaLabel} data-testid={testId}>
-        <SelectValue data-testid={`${testId}__value`} />
-      </SelectTrigger>
-      <SelectContent className="z-[110]" data-testid={`${testId}__content`}>
-        {options.map(o => (
-          <SelectItem key={o.value} value={o.value} data-testid={`${testId}__item`}>{o.label}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function CfgSection349({ t }) {
-  return (
-    <CfgSection title={t('fm.config.m349.title')} data-testid="CfgSection__cda0bb">
-      <div style={{ display: 'flex', gap: 8 }}>
-        <CfgField
-          label={t('fm.config.m349.periodicity')}
-          style={{ flex: 1 }}
-          data-testid="CfgField__cda0bb">
-          <CfgSelect
-            ariaLabel={t('fm.config.m349.periodicity')}
-            testId="ConfigDrawer__periodicity"
-            options={[
-              { value: 'monthly',   label: t('fm.config.m349.periodicity_monthly') },
-              { value: 'quarterly', label: t('fm.config.m349.periodicity_quarterly') },
-              { value: 'annual',    label: t('fm.config.m349.periodicity_annual') },
-            ]}
-            data-testid="CfgSelect__cda0bb" />
-        </CfgField>
-        <CfgField
-          label={t('fm.config.m349.threshold')}
-          style={{ flex: 1 }}
-          data-testid="CfgField__cda0bb">
-          <input type="text" defaultValue="50.000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
-        </CfgField>
-      </div>
-      <CfgField label={t('fm.config.m349.viespref')} data-testid="CfgField__cda0bb">
-        <CfgSelect
-          ariaLabel={t('fm.config.m349.viespref')}
-          testId="ConfigDrawer__viesPref"
-          options={[
-            { value: 'auto',   label: t('fm.config.m349.viespref_auto') },
-            { value: 'manual', label: t('fm.config.m349.viespref_manual') },
-          ]}
-          data-testid="CfgSelect__cda0bb" />
-      </CfgField>
-      <CfgField label={t('fm.config.m349.keys')} data-testid="CfgField__cda0bb">
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {['E', 'A', 'T', 'S', 'I'].map(k => (
-            <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: '1px solid hsl(var(--border-subtle))', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
-              <input type="checkbox" defaultChecked />
-              <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{k}</span>
-            </label>
-          ))}
-        </div>
-      </CfgField>
-    </CfgSection>
-  );
-}
-
-// model: '303' | '349' | undefined — when provided, opens with that model's tab active;
-// undefined shows both tabs starting with Declarante.
+// model: a registered model id (modelRegistry.js) | undefined — the model tab shows that model's
+// own config section (modelRegistryConfig.js); undefined falls back to the default model (303).
+// The drawer always opens on the Declarante tab.
 export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
   const apiFetch = useApiFetch(apiBaseUrl);
 
   // Available tabs: always Declarante, then per-model tabs for active models
-  const modelTab = model ?? '303';
+  const modelTab = model ?? DEFAULT_MODEL_ID;
+  const ModelConfigSection = getConfigSection(modelTab);
   const [activeTab, setActiveTab] = useState('declarante');
 
   const [form, setForm] = useState({ nif: '', name: '', phone: '', address: '', postal: '', city: '', province: '' });
-  const [redeme, setRedeme] = useState(true);
-  const [recc, setRecc] = useState(false);
-  const [iban, setIban] = useState('');
+  // The model section's controlled values, per model id, owned here (not by the section) so they
+  // survive tab switches. A model's section declares its starting values as `initialValues`.
+  const [modelValuesById, setModelValuesById] = useState({});
   const [isDirty, setIsDirty] = useState(false);
+  const modelValues = { ...ModelConfigSection?.initialValues, ...modelValuesById[modelTab] };
+  const setModelValue = (key, value) => {
+    setModelValuesById(prev => ({ ...prev, [modelTab]: { ...prev[modelTab], [key]: value } }));
+    setIsDirty(true);
+  };
 
   useEffect(() => {
     if (!apiBaseUrl) return;
@@ -1050,7 +963,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
 
   const TABS = [
     { id: 'declarante', label: t('fm.config.declarant.title') ?? 'Declarante' },
-    { id: 'model',      label: t(`fm.config.m${modelTab}.title`) ?? `Modelo ${modelTab}` },
+    { id: 'model',      label: t(modelTitleKey(modelTab)) ?? `Modelo ${modelTab}` },
   ];
 
   // Tab button style — segmented control (same as fiscal-config TabBar)
@@ -1141,61 +1054,12 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
             </>
           )}
 
-          {activeTab === 'model' && modelTab === '303' && (
-            <>
-              {/* Regímenes fiscales */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', marginBottom: 12 }}>
-                  {t('fm.config.m303.regimes') ?? 'Regímenes fiscales'}
-                </div>
-                <div style={{ display: 'flex', gap: 20 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' }}>
-                    <CheckboxField
-                      checked={redeme}
-                      onToggle={val => { setRedeme(val); setIsDirty(true); }}
-                      data-testid="CheckboxField__cda0bb" />
-                    {t('fm.config.m303.redeme') ?? 'Inscrito en REDEME'}
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' }}>
-                    <CheckboxField
-                      checked={recc}
-                      onToggle={val => { setRecc(val); setIsDirty(true); }}
-                      data-testid="CheckboxField__cda0bb" />
-                    {t('fm.config.m303.recc') ?? 'Régimen RECC'}
-                  </label>
-                </div>
-              </div>
-              {/* Prorrata + IBAN */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <CfgField
-                  label={t('fm.config.m303.prorata') ?? 'Prorrata'}
-                  data-testid="CfgField__cda0bb">
-                  <CfgSelect
-                    ariaLabel={t('fm.config.m303.prorata') ?? 'Prorrata'}
-                    testId="ConfigDrawer__prorata"
-                    options={[
-                      { value: 'general',  label: t('fm.config.m303.prorata_general') ?? 'General' },
-                      { value: 'especial', label: t('fm.config.m303.prorata_especial') ?? 'Especial' },
-                    ]}
-                    data-testid="CfgSelect__cda0bb" />
-                </CfgField>
-                <CfgField
-                  label={t('fm.config.m303.iban') ?? 'IBAN Domiciliación'}
-                  data-testid="CfgField__cda0bb">
-                  <input
-                    type="text"
-                    value={iban}
-                    onChange={e => { setIban(e.target.value); setIsDirty(true); }}
-                    placeholder="ES00 0000 0000 0000 0000 0000"
-                    style={{ ...INPUT_ST, fontFamily: 'monospace' }}
-                  />
-                </CfgField>
-              </div>
-            </>
-          )}
-
-          {activeTab === 'model' && modelTab === '349' && (
-            <CfgSection349 t={t} data-testid="CfgSection349__cda0bb" />
+          {activeTab === 'model' && ModelConfigSection && (
+            <ModelConfigSection
+              t={t}
+              values={modelValues}
+              onChange={setModelValue}
+              data-testid="ModelConfigSection__cda0bb" />
           )}
         </div>
 
