@@ -4,17 +4,11 @@ import { useUI } from '@/i18n';
 import { X } from 'lucide-react';
 import { ConfigDrawer } from './FmOverlays.jsx';
 import { showIaeActivityReminder } from './fiscalModelsUtils.js';
+import { listModels, getModel } from './modelRegistry.js';
 
-const CATALOG = [
-  { id: '303', cat: 'iva', periodicities: ['monthly', 'quarterly'], defaultActive: true, locked: false },
-  { id: '349', cat: 'iva', periodicities: ['monthly', 'quarterly'], defaultActive: true, locked: false },
-];
-
-// Only 303 and 349 support per-model configuration
-const CONFIGURABLE = new Set(['303', '349']);
-
-// Badge variant per model id
-const BADGE_VARIANT = { '303': '303', '349': '349' };
+// The catalog lists every registered model (id, periodicities, default state, lock, badge
+// variant) — see modelRegistry.js.
+const CATALOG = listModels();
 
 // Toggle switch component
 function ToggleSwitch({ checked, onChange, disabled }) {
@@ -55,11 +49,11 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
 
   // ETP-5187 (adjacent scope) — Modelo 303 needs a default IAE activity configured for its
   // year-end declaration (see `showIaeActivityReminder`'s own doc comment in
-  // `fiscalModelsUtils.js`). Only fires on the inactive → active transition of 303 itself —
-  // never on deactivation, never for any other model.
+  // `fiscalModelsUtils.js`). Only fires on the inactive → active transition of a model whose
+  // registry entry asks for it (`iaeReminderOnActivate`: 303 only) — never on deactivation.
   const toggleModel = (id) => setActive(prev => {
     const next = { ...prev, [id]: !prev[id] };
-    if (id === '303' && !prev[id] && next[id]) showIaeActivityReminder(t, navigate);
+    if (getModel(id)?.iaeReminderOnActivate && !prev[id] && next[id]) showIaeActivityReminder(t, navigate);
     return next;
   });
   const lockedIds = new Set(CATALOG.filter(m => m.locked).map(m => m.id));
@@ -110,7 +104,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
             {sortedCatalog.map(model => {
               const isActive = active[model.id];
               const isLocked = model.locked;
-              const badgeVariant = BADGE_VARIANT[model.id] ?? 'muted';
+              const badgeVariant = model.badgeVariant ?? 'muted';
               return (
                 <div
                   key={model.id}
