@@ -1459,7 +1459,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                 onChange={handleIdentChange}
                 isSubmitted={isSubmitted}
                 isBusy={actionBusy}
-                lockNormalOption={Boolean(decl._duplicatePeriodPresented) && !isSubmitted}
+                // ETP-5725 (review B1) — only lock "Normal" while Sustitutiva is CURRENTLY
+                // checked, mirroring 303's `lockRectificativaChecked` guard
+                // (FmModel303Page.jsx). Without `isSustitutivaChecked(identChecks)` here, a
+                // legacy declaration saved with `sustitutiva: false` while a sibling is
+                // presented would have "Normal" disabled from the start; if the user then
+                // clicked Sustitutiva (even by accident) they could never click back to Normal,
+                // since the lock doesn't depend on the current value. This way the lock only
+                // ever reinforces an already-true value — it never traps a false one.
+                lockNormalOption={Boolean(decl._duplicatePeriodPresented) && !isSubmitted && isSustitutivaChecked(identChecks)}
                 t={t}
                 data-testid="DeclarationTypeControl__346dd5" />
             </>
