@@ -10,6 +10,14 @@ const OK_LABEL_KEYS = { O: 'periodsBulkResultOpened', C: 'periodsBulkResultClose
 const SKIPPED_LABEL_KEYS = { O: 'periodsBulkResultAlreadyOpen', C: 'periodsBulkResultAlreadyClosed' };
 
 /**
+ * A counted label: `<key>One` when `count` is 1 ("Open 1 period?"), otherwise `<key>` with
+ * `{count}` filled in ("Open 3 periods?").
+ */
+export function countedLabel(ui, key, count) {
+  return count === 1 ? ui(`${key}One`) : ui(key).replace('{count}', String(count));
+}
+
+/**
  * Confirmation before a bulk open/close (ETP-5682): names every selected period, so the user
  * sees exactly what the action will touch before anything is posted.
  */
@@ -22,7 +30,7 @@ export function PeriodsBulkConfirmDialog({ action, periodNames, onConfirm, onCan
         <DialogContent className="max-w-md" data-testid="periods-bulk-confirm">
           <DialogHeader data-testid="DialogHeader__periodsBulkConfirm">
             <DialogTitle data-testid="DialogTitle__periodsBulkConfirm">
-              {ui(CONFIRM_TITLE_KEYS[action]).replace('{count}', String(periodNames.length))}
+              {countedLabel(ui, CONFIRM_TITLE_KEYS[action], periodNames.length)}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground" data-testid="periods-bulk-confirm-body">

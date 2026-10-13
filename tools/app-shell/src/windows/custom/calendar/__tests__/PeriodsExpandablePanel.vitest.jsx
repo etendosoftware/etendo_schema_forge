@@ -741,11 +741,29 @@ describe('PeriodsExpandablePanel — bulk open/close (ETP-5682)', () => {
 
     await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
     expect(posts.map((p) => p.id)).toEqual(['jan']);
+    // One opened and one skipped: both counts read in the singular.
     expect(toast.success).toHaveBeenCalledWith(
-      enUS.genericLabels.periodsBulkOpenedToast.replace('{count}', '1')
-        + enUS.genericLabels.periodsBulkSkippedSuffix.replace('{count}', '1'),
+      enUS.genericLabels.periodsBulkOpenedToastOne + enUS.genericLabels.periodsBulkSkippedSuffixOne,
     );
     expect(screen.queryByTestId('periods-bulk-result-list')).not.toBeInTheDocument();
+  });
+
+  it('words the confirmation and the toast in the singular for one period and in the plural for several', async () => {
+    await renderPanel();
+    tick('period-select-jan');
+    fireEvent.click(screen.getByTestId('period-bulk-open'));
+    expect(screen.getByText(enUS.genericLabels.periodsBulkConfirmOpenTitleOne)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('periods-bulk-confirm-cancel'));
+
+    tick('period-select-feb');
+    fireEvent.click(screen.getByTestId('period-bulk-open'));
+    expect(screen.getByText(enUS.genericLabels.periodsBulkConfirmOpenTitle.replace('{count}', '2'))).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('periods-bulk-confirm-ok'));
+    });
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    expect(toast.success).toHaveBeenCalledWith(enUS.genericLabels.periodsBulkOpenedToast.replace('{count}', '2'));
   });
 
   it('closes with the C action', async () => {

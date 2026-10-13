@@ -16,7 +16,7 @@ import {
   runPeriodsBulkOpenClose,
   summarizePeriodsBulkResults,
 } from './periodsBulkOpenClose.js';
-import { PeriodsBulkConfirmDialog, PeriodsBulkResultDialog } from './PeriodsBulkDialogs.jsx';
+import { PeriodsBulkConfirmDialog, PeriodsBulkResultDialog, countedLabel } from './PeriodsBulkDialogs.jsx';
 
 // Same color mapping as artifacts/open-close-period-control/decisions.json's
 // periodControl.status enumVariants — kept in sync manually since this is a custom component,
@@ -262,8 +262,8 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
         setBulkResult({ action, results });
       } else {
         const doneKey = action === 'O' ? 'periodsBulkOpenedToast' : 'periodsBulkClosedToast';
-        const suffix = skipped > 0 ? ui('periodsBulkSkippedSuffix').replace('{count}', String(skipped)) : '';
-        toast.success(ui(doneKey).replace('{count}', String(ok)) + suffix);
+        const suffix = skipped > 0 ? countedLabel(ui, 'periodsBulkSkippedSuffix', skipped) : '';
+        toast.success(countedLabel(ui, doneKey, ok) + suffix);
       }
       setSelectedIds(new Set());
       await loadPeriods();
