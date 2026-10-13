@@ -859,6 +859,10 @@ Etendo root, on the command line or in `.env`:
 STRIPE_ETENDO_ROOT="$(cd .. && pwd)" make stripe-past-due ID=<etgo_checkout_request_id>
 ```
 
+`$(cd .. && pwd)` is the Etendo root only from the main `schema_forge` checkout. From a worktree
+(`schema_forge/.worktrees/<name>`) `..` is `.worktrees`, so give the Etendo root as an absolute
+path instead (`STRIPE_ETENDO_ROOT=/path/to/etendo_core`). The commands in §10 follow the same rule.
+
 - **`fail`** attaches the well-known test payment method `pm_card_chargeCustomerFail` as the
   subscription's default, creates and finalizes a manual invoice for the subscription's own price
   (`--amount` overrides the cents), then pays it — a decline is the *expected* outcome, not a
@@ -1286,9 +1290,11 @@ Expect, in the ledger and on the purchase:
   `stripe_subscription_id`, `stripe_price_id` and `etgo_plan_id` filled in (§1 "Payment state is
   durable").
 - The first `invoice.paid` → `IGNORED`, `failure_reason = unresolved subscription`. This is the
-  expected timing gap: it arrives before the new tenant exists (§1 "Correlation is different from
-  the checkout path"). If it lands after the purchase is linked to its client but before the row
-  opens, the reason reads `no open subscription row` instead; both are harmless.
+  expected timing gap: it arrives before provisioning has committed, so the purchase names no
+  client yet (§1 "Correlation is different from the checkout path"). It is harmless. If it arrives
+  after provisioning committed, the new open row takes it (matched by `stripe_subscription_id`)
+  and it reads `APPLIED` instead. The onboarding opens the row in the same transaction that
+  provisions the tenant, so there is no window in which this event finds the client but no row.
 
 Expect, on the environments:
 
@@ -1314,7 +1320,8 @@ ignored first events could not write (§1 "Where the outcome is stored").
 
   ```bash
   stripe subscriptions retrieve <sub_id> | jq '.items.data[0] | {current_period_start, current_period_end}'
-  date -d @<epoch>      # the row stores the same instant in the server's local time
+  date -d @<epoch>      # GNU/Linux; on macOS: date -r <epoch>
+                        # the row stores the same instant in the server's local time
   ```
 
 **Step 5 — A renewal fails.** Force a real declined charge with the script from §5 ("Forcing a
@@ -1356,7 +1363,8 @@ STRIPE_ETENDO_ROOT="$(cd .. && pwd)" make stripe-past-due ID=<etgo_checkout_requ
 
 - Expect `invoice.paid` → `APPLIED`.
 - Expect the row back to `status = active` with `grace_anchor` null.
-- Expect access restored without a restart (SF-STRIPE-LOCAL-26 covers steps 5 to 7).
+- Expect access restored without a restart (SF-STRIPE-LOCAL-26 covers steps 5 and 7, SF-STRIPE-LOCAL-24
+  step 6).
 
 **Step 8 — The customer cancels (do this last).**
 
