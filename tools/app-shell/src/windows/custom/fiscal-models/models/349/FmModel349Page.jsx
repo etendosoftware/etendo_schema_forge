@@ -714,7 +714,11 @@ function isSustitutivaChecked(identChecks) {
 
 // ETP-5597 (W4) — `isBusy` also locks it while a manual-data save / generate / present is in
 // flight, so no Tipo edit can land mid-save.
-function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = false, t }) {
+// ETP-5725 — `lockNormalOption`: true while the period's latest sibling declaration is already
+// presented (`decl._duplicatePeriodPresented`). "Normal" becomes unselectable (the AEAT rule
+// this period now requires is Sustitutiva) — only that option is disabled, "Sustitutiva" stays
+// clickable, mirroring how 303 only locks its single "rectificativa" checkbox.
+function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = false, lockNormalOption = false, t }) {
   const sustitutiva = isSustitutivaChecked(identChecks);
   const options = [
     { value: false, labelKey: 'fm.m349.type.normal', fallback: 'Normal', testId: 'normal' },
@@ -733,15 +737,16 @@ function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = f
       >
         {options.map(o => {
           const active = sustitutiva === o.value;
+          const optionDisabled = isSubmitted || isBusy || (lockNormalOption && o.value === false);
           return (
             <button
               key={o.testId}
               type="button"
               role="radio"
               aria-checked={active}
-              disabled={isSubmitted || isBusy}
+              disabled={optionDisabled}
               className={`fm-newdecl-segmented__btn${active ? ' fm-newdecl-segmented__btn--active' : ''}`}
-              onClick={() => { if (!active) onChange('sustitutiva', o.value); }}
+              onClick={() => { if (!active && !optionDisabled) onChange('sustitutiva', o.value); }}
               data-testid={`FmModel349Page__type_${o.testId}`}
             >
               {t(o.labelKey) ?? o.fallback}
@@ -897,7 +902,18 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // `manualData.identification`, hydrated once from `decl.manualData` and flushed explicitly by
   // "Guardar" — no debounce/autosave, see `handleSave` below). 349 has no box-override state to
   // race against, so this skips 303's `useRecordWriteQueue` machinery entirely.
-  const [identChecks, setIdentChecks] = useState(decl.manualData?.identification ?? {});
+  // ETP-5725 — same auto-default rule as 303's `rectificativa`: a brand-new declaration (no
+  // persisted `sustitutiva` either way) opened for a period whose latest sibling is already
+  // presented (`decl._duplicatePeriodPresented`, set by FmListPage.jsx) defaults to "Sustitutiva"
+  // instead of "Normal". A period with no prior declaration keeps the untouched default (Normal)
+  // — `_duplicatePeriodPresented` is false there. An explicit persisted value always wins.
+  const [identChecks, setIdentChecks] = useState(() => {
+    const persisted = decl.manualData?.identification ?? {};
+    if (persisted.sustitutiva === undefined && Boolean(decl._duplicatePeriodPresented)) {
+      return { ...persisted, sustitutiva: true };
+    }
+    return persisted;
+  });
   const hasPendingEditRef = useRef(false);
   // ETP-5597 (W4) — bumped on every edit. A save only clears `hasPendingEditRef` when no edit
   // happened after it started (same version on success), so an edit racing an in-flight save
@@ -1443,6 +1459,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                 onChange={handleIdentChange}
                 isSubmitted={isSubmitted}
                 isBusy={actionBusy}
+                lockNormalOption={Boolean(decl._duplicatePeriodPresented) && !isSubmitted}
                 t={t}
                 data-testid="DeclarationTypeControl__346dd5" />
             </>
