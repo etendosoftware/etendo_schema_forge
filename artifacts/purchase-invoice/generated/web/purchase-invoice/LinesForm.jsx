@@ -9,8 +9,8 @@ const fields = [
   { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', section: 'principal', defaultValue: '0', min: 0, readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', section: 'principal', reference: 'Tax', inputMode: 'selector', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'grossAmount', column: 'Line_Gross_Amount', type: 'number', label: 'Line Gross Amount', readOnly: true, section: 'principal', defaultValue: '0' },
-  { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'principal', reference: 'Project', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') },
-  { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', section: 'principal', reference: 'CostCenter', inputMode: 'selector', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') },
+  { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'principal', reference: 'Project', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO') },
+  { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', section: 'principal', reference: 'CostCenter', inputMode: 'selector', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO') },
 ];
 // @sf-generated-end fields:lines
 

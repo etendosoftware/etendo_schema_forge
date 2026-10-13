@@ -297,12 +297,12 @@ describe('InvoicePreviewModal', () => {
 
   it('shows Send to SIF in the preview actions when the fiscal profile enables it', () => {
     renderPreview({ specName: 'sales-invoice' });
-    expect(screen.getByText('sendToSif')).toBeInTheDocument();
+    expect(screen.getByText(/^sendToSifLabel/)).toBeInTheDocument();
   });
 
   it('opens the SIF confirmation modal from the preview action', () => {
     renderPreview({ specName: 'sales-invoice' });
-    fireEvent.click(screen.getByText('sendToSif'));
+    fireEvent.click(screen.getByText(/^sendToSifLabel/));
     expect(screen.getByText('sendToSifTitle')).toBeInTheDocument();
     expect(screen.getByText('sendToSifBodyTbai')).toBeInTheDocument();
   });
@@ -317,7 +317,7 @@ describe('InvoicePreviewModal', () => {
     });
 
     renderPreview({ specName: 'sales-invoice' });
-    fireEvent.click(screen.getByText('sendToSif'));
+    fireEvent.click(screen.getByText(/^sendToSifLabel/));
     fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
 
     // SifSendingModal renders a '%' percentage during the sending phase
@@ -354,7 +354,7 @@ describe('InvoicePreviewModal', () => {
       });
 
     renderPreview({ specName: 'sales-invoice' });
-    fireEvent.click(screen.getByText('sendToSif'));
+    fireEvent.click(screen.getByText(/^sendToSifLabel/));
     fireEvent.click(screen.getByText('sendToSifConfirm'));
 
     await screen.findByRole('button', { name: 'close' });

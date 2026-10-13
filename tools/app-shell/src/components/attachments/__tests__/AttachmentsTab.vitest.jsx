@@ -4,8 +4,15 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock i18n hooks.
+// The translator returns the key itself, so no hardcoded English leaks into an
+// assertion. `count` is the one interpolation that is appended, so the selection
+// bar's counter can be asserted for real instead of only for its key; every other
+// param (e.g. `{max}` on attachmentsFileTooLarge) is ignored, leaving the existing
+// exact-key assertions untouched.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => (
+    params && params.count !== undefined ? `${key}:${params.count}` : key
+  ),
 }));
 
 // Mock sonner toasts (used by UploadDropzone on validation errors).
@@ -30,8 +37,10 @@ const hookState = {
   upload: vi.fn(),
   download: vi.fn(),
   downloadAll: vi.fn(),
+  downloadSelection: vi.fn(),
   remove: vi.fn(),
   removeAll: vi.fn(),
+  removeMany: vi.fn(),
   updateDescription: vi.fn(),
   formatBytes: (n) => `${n} B`,
 };
@@ -119,15 +128,19 @@ describe('AttachmentsTab', () => {
     expect(hookState.remove).toHaveBeenCalledWith('1');
   });
 
-  it('shows the Download all button only when there is at least one item', () => {
-    // Empty list — no button.
+  // ETP-5526 — the two header-wide controls were removed from this tab: the
+  // selection bar replaces both, and the Figma header has only the five data
+  // columns. (`onDownloadAll` itself survives on AttachmentsTable for
+  // SifAttachmentsSection — covered in AttachmentsTable.vitest.jsx.)
+  it('renders neither header-wide bulk control, with or without items', () => {
     const { rerender } = render(<AttachmentsTab {...baseProps} />);
-    expect(screen.queryByText('attachmentsDownloadAll')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-download-all')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
 
-    // With items — button is visible.
     hookState.items = [{ id: '1', name: 'a.pdf' }];
     rerender(<AttachmentsTab {...baseProps} />);
-    expect(screen.getByText('attachmentsDownloadAll')).toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-download-all')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
   });
 
   it('rejects a dropped file larger than maxSizeMB with a toast.error', () => {
@@ -315,71 +328,154 @@ describe('AttachmentsTab — onCountChange reports the hook count (ETP-5526)', (
   });
 });
 
-describe('AttachmentsTab — respects isDocumentReadOnly (ETP-5205)', () => {
+// ETP-5526 — the one intentional behaviour change of this ticket: a processed /
+// completed document no longer blocks attachment work. `isDocumentReadOnly` (the
+// generic lock DetailView wires from the document's own state) used to suppress
+// delete AND disable the dropzone; it now does neither. These cases are the
+// product decision, not an accident — if they start failing because delete or
+// upload is blocked again, someone re-wired that flag and reverted it.
+describe('AttachmentsTab — a processed document allows attachment work (ETP-5526)', () => {
   beforeEach(() => {
     hookState.items = [{ id: '1', name: 'first.pdf', size: 100 }];
   });
 
-  it('disables the upload dropzone when isDocumentReadOnly is true', () => {
+  it('leaves the upload dropzone enabled when isDocumentReadOnly is true', () => {
     render(<AttachmentsTab {...baseProps} isDocumentReadOnly />);
+    expect(screen.getByTestId('attachments-dropzone').querySelector('[disabled]')).toBeFalsy();
+  });
+
+  it('keeps the per-row delete when isDocumentReadOnly is true', () => {
+    render(<AttachmentsTab {...baseProps} isDocumentReadOnly />);
+    expect(screen.getByTestId('attachment-delete-1')).toBeInTheDocument();
+  });
+
+  it('keeps the selection bar delete when isDocumentReadOnly is true', () => {
+    render(<AttachmentsTab {...baseProps} isDocumentReadOnly />);
+
+    fireEvent.click(within(screen.getByTestId('attachment-row-1')).getByRole('checkbox'));
+
+    expect(screen.getByTestId('attachments-delete-selected')).toBeInTheDocument();
+  });
+
+  it('still disables the dropzone while the header is being force-saved or has no id', () => {
+    // The two mechanical blockers that survive: they are not read-only rules.
+    render(<AttachmentsTab {...baseProps} recordId={null} />);
     expect(screen.getByTestId('attachments-dropzone').querySelector('[disabled]')).toBeTruthy();
   });
-
-  it('does NOT disable the upload dropzone when isDocumentReadOnly is false/absent', () => {
-    render(<AttachmentsTab {...baseProps} />);
-    expect(screen.getByTestId('attachments-dropzone').querySelector('[disabled]')).toBeFalsy();
-  });
-
-  it('hides per-row delete and delete-all when isDocumentReadOnly is true, but download stays available', () => {
-    render(<AttachmentsTab {...baseProps} isDocumentReadOnly />);
-    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
-  });
-
-  it('regression: shows per-row delete and delete-all when isDocumentReadOnly is false/absent', () => {
-    render(<AttachmentsTab {...baseProps} />);
-    expect(screen.getByTestId('attachment-delete-1')).toBeInTheDocument();
-    expect(screen.getByTestId('attachments-delete-all')).toBeInTheDocument();
-  });
 });
 
-// ETP-5432/ETP-5205 merge fix — `effectiveReadOnly = !!isDocumentReadOnly || !!readOnly`.
-// A develop merge had dropped the bespoke `readOnly` prop (kept only
-// `isDocumentReadOnly`), silently reopening delete for FmModel303Page/FmModel349Page's
-// own `readOnly={status !== 'draft'}` usage. These cases pin the OR gate itself —
-// each flag alone must hide delete, and upload stays gated by isDocumentReadOnly only.
-describe('AttachmentsTab — effectiveReadOnly OR gate (readOnly + isDocumentReadOnly, ETP-5432)', () => {
+// ETP-5432 — the bespoke `readOnly` prop, passed by FmModel303Page/FmModel349Page as
+// `readOnly={status !== 'draft'}`, is UNCHANGED by ETP-5526 and must stay so. It hides
+// every delete affordance and deliberately does not touch upload. This regression
+// already shipped once (a develop merge dropped the prop and both fiscal pages silently
+// stopped blocking anything), which is why it is pinned from both directions.
+describe('AttachmentsTab — the fiscal readOnly prop still blocks delete (ETP-5432)', () => {
   beforeEach(() => {
     hookState.items = [{ id: '1', name: 'first.pdf', size: 100 }];
   });
 
-  it('hides per-row delete and delete-all when readOnly=true but isDocumentReadOnly=false', () => {
-    render(<AttachmentsTab {...baseProps} readOnly isDocumentReadOnly={false} />);
+  it('hides the per-row delete when readOnly=true', () => {
+    render(<AttachmentsTab {...baseProps} readOnly />);
     expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
   });
 
-  it('does NOT disable the upload dropzone when only readOnly=true (upload is gated by isDocumentReadOnly alone)', () => {
+  it('hides the selection bar delete when readOnly=true, but keeps its download', () => {
+    render(<AttachmentsTab {...baseProps} readOnly />);
+
+    fireEvent.click(within(screen.getByTestId('attachment-row-1')).getByRole('checkbox'));
+
+    expect(screen.getByTestId('attachments-selection-bar')).toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-delete-selected')).not.toBeInTheDocument();
+    expect(screen.getByTestId('attachments-download-selected')).toBeInTheDocument();
+  });
+
+  it('keeps blocking delete when readOnly=true even though isDocumentReadOnly is false', () => {
     render(<AttachmentsTab {...baseProps} readOnly isDocumentReadOnly={false} />);
+    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
+  });
+
+  it('does NOT disable the upload dropzone when readOnly=true (delete-only by contract)', () => {
+    render(<AttachmentsTab {...baseProps} readOnly />);
     expect(screen.getByTestId('attachments-dropzone').querySelector('[disabled]')).toBeFalsy();
   });
 
-  it('hides per-row delete and delete-all when isDocumentReadOnly=true but readOnly=false', () => {
-    render(<AttachmentsTab {...baseProps} readOnly={false} isDocumentReadOnly />);
-    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
-  });
-
-  it('hides per-row delete and delete-all when BOTH readOnly and isDocumentReadOnly are true', () => {
-    render(<AttachmentsTab {...baseProps} readOnly isDocumentReadOnly />);
-    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
-  });
-
-  it('regression: shows per-row delete and delete-all when BOTH flags are false/absent', () => {
-    render(<AttachmentsTab {...baseProps} readOnly={false} isDocumentReadOnly={false} />);
+  it('regression: shows the per-row delete when readOnly is false/absent', () => {
+    render(<AttachmentsTab {...baseProps} readOnly={false} />);
     expect(screen.getByTestId('attachment-delete-1')).toBeInTheDocument();
-    expect(screen.getByTestId('attachments-delete-all')).toBeInTheDocument();
   });
 });
 
+// ETP-5526 — the selection bar is the whole point of the ticket: the checkboxes
+// used to be inert (they tinted the row and nothing consumed the state).
+describe('AttachmentsTab — selection bar (ETP-5526)', () => {
+  beforeEach(() => {
+    hookState.items = [
+      { id: '1', name: 'first.pdf', size: 100 },
+      { id: '2', name: 'second.pdf', size: 200 },
+    ];
+  });
+
+  const tickRow = (id) =>
+    fireEvent.click(within(screen.getByTestId(`attachment-row-${id}`)).getByRole('checkbox'));
+
+  it('stays hidden until something is selected, and reports the count', () => {
+    render(<AttachmentsTab {...baseProps} />);
+    expect(screen.queryByTestId('attachments-selection-bar')).not.toBeInTheDocument();
+
+    tickRow('1');
+
+    expect(screen.getByTestId('attachments-selection-bar')).toBeInTheDocument();
+    // Reuses the app-wide `selected` key ("{count} Seleccionados"), not a new one.
+    expect(screen.getByTestId('attachments-selection-count')).toHaveTextContent('selected:1');
+
+    tickRow('2');
+    expect(screen.getByTestId('attachments-selection-count')).toHaveTextContent('selected:2');
+  });
+
+  it('zips only the ticked rows', () => {
+    render(<AttachmentsTab {...baseProps} />);
+
+    tickRow('2');
+    fireEvent.click(screen.getByTestId('attachments-download-selected'));
+
+    expect(hookState.downloadSelection).toHaveBeenCalledWith(['2']);
+  });
+
+  it('confirms before deleting, then removes exactly the selection', async () => {
+    const user = userEvent.setup();
+    render(<AttachmentsTab {...baseProps} />);
+
+    tickRow('1');
+    tickRow('2');
+    await user.click(screen.getByTestId('attachments-delete-selected'));
+
+    // The bar never deletes directly — the confirmation the old "Eliminar todo"
+    // control had is still in the way.
+    expect(hookState.removeMany).not.toHaveBeenCalled();
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByTestId('confirm-delete-confirm'));
+
+    expect(hookState.removeMany).toHaveBeenCalledWith(['1', '2']);
+  });
+
+  it('dismisses itself when the selection is cleared from the bar', () => {
+    render(<AttachmentsTab {...baseProps} />);
+
+    tickRow('1');
+    fireEvent.click(screen.getByTestId('SelectionToolbar__close'));
+
+    expect(screen.queryByTestId('attachments-selection-bar')).not.toBeInTheDocument();
+  });
+
+  it('drops the selection when the tab moves to another record', () => {
+    const { rerender } = render(<AttachmentsTab {...baseProps} />);
+
+    tickRow('1');
+    expect(screen.getByTestId('attachments-selection-bar')).toBeInTheDocument();
+
+    rerender(<AttachmentsTab {...baseProps} recordId="REC-2" />);
+
+    expect(screen.queryByTestId('attachments-selection-bar')).not.toBeInTheDocument();
+  });
+});

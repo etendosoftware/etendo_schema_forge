@@ -134,11 +134,54 @@ export function isSifEligibleByDate(referenceDateRaw, adoptionDateRaw) {
   // `parseWallClockInstant`, never `new Date(...)`: the adoption timestamp's `Z` is
   // not a truthful UTC marker, and honouring it would put this operand in a different
   // reference frame from `referenceDay` above, flipping the inclusive boundary with
-  // the host timezone — see the ETP-5046 note above. The time-of-day IS kept.
+  // the host timezone — see the ETP-5046 note above. The time-of-day IS kept. A bare
+  // `yyyy-MM-dd` (ETP-5700: SII/TBAI adoption dates are AD Date columns) reads as local
+  // midnight, exactly as `parseAdoptionDate` below reads it.
   const adoptionInstant = parseWallClockInstant(adoptionDateRaw);
   if (!adoptionInstant) return false;
 
   return referenceDay.getTime() >= adoptionInstant.getTime();
+}
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Whether a raw value is a bare calendar date (`yyyy-MM-dd`, no time part).
+ *
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
+export function isDateOnlyValue(raw) {
+  return typeof raw === 'string' && DATE_ONLY_RE.test(raw.trim());
+}
+
+/**
+ * Parses a fiscal system's adoption date into a comparable `Date`.
+ *
+ * ETP-5700 — `fechaAcogidaSII` (`aeatsii_config.insiisystemdate`) and
+ * `tbaisystemdate` are AD **Date** columns, which NEO serialises as a bare
+ * `yyyy-MM-dd`. `new Date('2026-10-09')` reads that as UTC midnight, which EAST
+ * of UTC is already 01:00/02:00 local time (Europe/Madrid, Atlantic/Canary): the
+ * reference day (local midnight) then compared as "before" the adoption, so an
+ * invoice dated on the very day the fiscal config was created was never
+ * eligible — no "Send" action and a dash instead of its status, from the moment
+ * the config existed. West of UTC (Argentina) the same parse lands on the
+ * previous evening, which is why it never reproduced there.
+ *
+ * A date-only value is therefore parsed as a LOCAL calendar day
+ * (`parseCalendarDate`). A full timestamp (VERI*FACTU's `inVfactuSystem`, or any
+ * value carrying a time-of-day) keeps being compared as the exact instant it
+ * names, so a config with a real time-of-day still excludes earlier documents of
+ * that same day, exactly like Classic.
+ *
+ * @param {string|Date|null|undefined} raw
+ * @returns {Date|null} `null` when missing or unparsable
+ */
+export function parseAdoptionDate(raw) {
+  if (!raw) return null;
+  if (isDateOnlyValue(raw)) return parseCalendarDate(raw.trim());
+  const instant = raw instanceof Date ? raw : new Date(raw);
+  return Number.isNaN(instant.getTime()) ? null : instant;
 }
 
 /**

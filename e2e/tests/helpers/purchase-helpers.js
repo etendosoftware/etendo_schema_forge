@@ -78,13 +78,41 @@ export async function safeReload(page) {
  * to dismiss here, so a modal that never shows up is not an error.
  */
 export async function dismissSuccessModal(page) {
-  const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
+  // ETP-5674: target the footer «Cerrar» by its test id only — every ConfirmResultModal
+  // carries `action-confirm-result-close` in both footer variants, and a name-based fallback
+  // would also match the X icon (first in DOM order).
+  const closeBtn = page.getByTestId('action-confirm-result-close');
   try {
     await closeBtn.waitFor({ state: 'visible', timeout: 8_000 });
   } catch {
     return; // ETP-5063: toast-only path, no modal to dismiss.
   }
   await closeBtn.click();
+  await slow(page);
+}
+
+/**
+ * Open the single document announced by the generated-documents popup
+ * (ConfirmResultModal) through its primary «Ver …» button.
+ *
+ * ETP-5674: the button copy now follows the document type («Ver albarán»,
+ * «Ver devolución», «Ver pedido», …) and the popup title names the created
+ * document instead of the source one («Albarán creado», not «Pedido de compra
+ * confirmado»). Target the popup by its test ids, and pass `title` to assert
+ * WHICH document was announced.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ title?: RegExp|string, timeout?: number }} [options]
+ */
+export async function openGeneratedDocument(page, { title, timeout = 30_000 } = {}) {
+  if (title) {
+    await expect(page.getByTestId('confirm-result-title'),
+      'The generated-documents popup should announce the created document',
+    ).toHaveText(title, { timeout });
+  }
+  const viewBtn = page.getByTestId('action-confirm-result-view');
+  await expect(viewBtn).toBeVisible({ timeout });
+  await viewBtn.click();
   await slow(page);
 }
 

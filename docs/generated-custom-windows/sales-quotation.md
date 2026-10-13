@@ -75,10 +75,11 @@ invoice through `InvoiceCompletionService`, so it reaches the user in `CO`
 but no longer leaves a draft behind. See "Invoice is created and confirmed in
 one step — ETP-5381" below.
 
-The success state of `QuotationConfirmModal` displays the invoice doc number
-followed by the formatted grand total and the quotation's currency identifier
-(e.g. `Factura #10000083 · 48.40 EUR`). The order branch already rendered the
-currency; the invoice branch was previously dropping the suffix.
+After the invoice is created, `QuotationConfirmModal` shows the shared
+`ConfirmResultModal` with one `facturaVenta` card («Factura de venta · Completada ·
+Nº 10000083»). No amount or currency is shown since ETP-5674 (the former compact
+success view printed `Factura #10000083 · 48.40 EUR`) — see "Generated-documents
+popup — ETP-5674" below.
 
 After the invoice is **completed** (ETP-5381 moved this write to after the
 completion, not merely after the insert), the source quotation's DocStatus is
@@ -157,7 +158,7 @@ the discount. The earlier client-side factor double-applied it.
 10. On a draft quotation with a business partner already chosen, change `Payment Terms` to a different value than the BP default and save. Reopen the record and confirm the chosen value persisted (regression: it used to revert to the BP default).
 11. Open the Send Email modal from the topbar and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language. Also confirm the `Asunto` and `Mensaje` fields are editable (not greyed-out/read-only), that they pre-fill with the auto-derived subject and an empty message, and that sending without touching either still succeeds normally.
 12. Open an existing draft quotation without touching any field and confirm the "Guardar" (Save Draft) button is **disabled**. Change any header field and confirm it becomes enabled. Save and confirm it disables again. Revert the changed field to its original value without saving and confirm the button disables once more. Add a line: once the add-row is submitted, the button should disable again if no header changes remain pending. Confirm the "Confirmar" button stays enabled throughout all these states.
-13. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+13. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 14. In the list, select 0, then 1, then 2+ quotations and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/sales-quotation/<id>`. Open a saved quotation and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
 
 ## Validation & Error Handling — ETP-4005
@@ -291,8 +292,8 @@ The backend action response body is
 (`QuotationConfirmModal.jsx`) does not read either field from this response.
 Instead it fires a follow-up
 `GET {baseNeoUrl}/sales-order/header?criteria=[{fieldName:'quotation',operator:'equals',value:quotationId}]`
-to resolve the created order and display its document number and total in the
-success state. The modal still issues its best-effort
+to resolve the created order and show its document number (and real
+`documentStatus`) in the result popup. The modal still issues its best-effort
 `POST DocAction { docAction: 'RE' }` (ETP-3570) only when the fetched order is
 `documentStatus === 'CO'`. Now that the backend returns it in Draft, that guard
 is false and the call does not fire. It only acts as a fallback if the backend
@@ -477,11 +478,11 @@ on: `ETGO_CI` is only written once a confirmed invoice exists.
 `artifacts/sales-invoice/contract.json:26-34`), which is now the only route back
 to `DR`. Editing before confirming is no longer an option on this path.
 
-**Frontend.** `QuotationConfirmModal.jsx` no longer hardcodes `status: 'Draft'` on
-the result card — it reads the real `documentStatus` from the response
-(`status: doc?.documentStatus === 'CO' ? 'Completed' : (doc?.documentStatus ?? 'Draft')`),
-so the badge renders "Completado" / "Completed" in success green instead of a
-false "Borrador". `backendErrors.js` maps the new 409 literal to
+**Frontend.** `QuotationConfirmModal.jsx` no longer hardcodes a draft status on
+the result card — it passes the real `documentStatus` from the response
+(`documentStatus: doc?.documentStatus ?? 'DR'`) to `ConfirmResultModal`, so the
+badge renders "Completada" / "Completed" in success green instead of a
+false "Borrador" (gendered label since ETP-5674). `backendErrors.js` maps the new 409 literal to
 `backendError.quotationAlreadyInvoiced` ("Ya se ha generado una factura para este
 presupuesto." / "An invoice has already been generated for this quotation.").
 
@@ -496,7 +497,7 @@ reworded in this ticket; the invoice they describe is now confirmed on creation.
 
 1. On a quotation in `UE`, confirm with "Facturar directamente" and verify the
    generated invoice opens in **Confirmado**, not Borrador, and that the result
-   card's badge reads "Completado" in success green.
+   card's badge reads "Completada" in success green.
 2. Verify the quotation moved to `ETGO_CI` and that the invoice's document number
    is the one shown in the result card.
 3. Trigger the same action again on that quotation and verify it is rejected with
@@ -557,3 +558,35 @@ same documents:
 
 The preview loads the detail record itself. Each preview row is one line: number and amount are never
 cut; a long status tag is truncated with the full text on hover. See `docs/ui-customization.md` §7.a for the shared definition (`SALES_RELATED_DOCS`), the `useRelatedDocuments` hook and the `RelatedDocumentsCard` `definition`/`record` props.
+
+## Generated-documents popup — ETP-5674
+
+The compact success view `QuotationConfirmModal` used to draw (green check, «Pedido creado» /
+«Factura creada», doc number · total, «Ver pedido» / «Ver factura») is gone. Both branches of the
+confirm modal now end in the shared `ConfirmResultModal`, the same popup the rest of Sales and
+Purchases uses:
+
+| Branch | `docs[0].type` | Title | Card | Buttons |
+|---|---|---|---|---|
+| «Crear pedido» | `pedidoVenta` | «Pedido creado» | «Pedido de venta · Borrador · Nº …» (the order is returned in `DR`) | «Cerrar» + «Ver pedido» |
+| «Facturar directamente» | `facturaVenta` | «Factura creada» | «Factura de venta · Completada · Nº …» (ETP-5381) | «Cerrar» + «Ver factura» |
+
+- The route is `/sales-order/{id}` or `/sales-invoice/{id}`; `goToRoute` prefixes the app base path
+  (ETP-5378 regex, list and form origins alike) and does a full `window.location.href` navigation,
+  so `onNavigate` is a no-op. «Cerrar», the X and Esc run `handleCloseAfterCreate` (refresh via
+  `onRefresh`, ETP-4779).
+- When the created order cannot be read back (no id), the card is still shown with `num: '?'` but
+  is not clickable and no «Ver pedido» is offered — only «Cerrar».
+- No amount or currency is shown; the `sqOrderCreated` key was removed.
+
+Contract, type table and `data-testid`s: `docs/ui-customization.md` §21.
+
+**Manual verification.** On a `UE` quotation, run «Crear pedido» and verify «Pedido creado» with a
+«Borrador» card and «Ver pedido» opening `/sales-order/{id}` — from both the form and the list row
+kebab. Repeat on another quotation with «Facturar directamente» and verify «Factura creada» with a
+«Completada» card.
+
+**Automated evidence.** `tools/app-shell/src/windows/custom/sales-quotation/__tests__/QuotationConfirmModal.goToDoc.vitest.jsx`,
+`tools/app-shell/src/windows/custom/sales-quotation/__tests__/QuotationActionModals.etp5398.vitest.jsx`,
+`e2e/tests/flows/sales/sales-quotation-happy-path.integration.spec.js`,
+`e2e/tests/flows/sales/sales-quotation-full-flow.integration.spec.js`.

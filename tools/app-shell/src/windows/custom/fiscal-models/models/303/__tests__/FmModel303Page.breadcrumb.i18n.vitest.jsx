@@ -12,7 +12,9 @@
 // the real locale dictionary instead of its identity mock.
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
+import { act } from '@testing-library/react';
 import { PageMetaProvider } from '@/components/layout/PageMetaContext';
+import { breadcrumbToText, normalizeBreadcrumb } from '@/components/layout/TopBar/breadcrumb.js';
 import { lastMeta, MetaProbe, renderWithMeta, describeTopBarKebab } from '../../../__tests__/testUtils/topBarMetaTestUtils.jsx';
 import { loadLocaleDictionary, makeRealUI } from '../../../../shared/__tests__/testUtils/realLocaleUI.js';
 
@@ -97,7 +99,7 @@ describe('FmModel303Page — breadcrumb against the real locale dictionary (ETP-
     activeUi = realUiEs;
     renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
 
-    expect(lastMeta.breadcrumb).toBe('Finanzas / Modelos Fiscales / Modelo 303 - 2026/T2');
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Finanzas / Modelos Fiscales / Modelo 303 - 2026/T2');
     expect(lastMeta.title).toBe('Modelo 303 - 2026/T2');
   });
 
@@ -112,8 +114,21 @@ describe('FmModel303Page — breadcrumb against the real locale dictionary (ETP-
     renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
     activeLocale = 'es_ES';
 
-    expect(lastMeta.breadcrumb).toBe('Finance / Fiscal Models / Form 303 - 2026/T2');
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Finance / Fiscal Models / Form 303 - 2026/T2');
     expect(lastMeta.title).toBe('Form 303 - 2026/T2');
+  });
+
+  // ETP-5597 — like the parent crumb of a generated window's detail, the "Modelos Fiscales" level
+  // of the TopBar breadcrumb is a link back to the declarations list: the published item carries an
+  // `onClick` (the TopBar renders it as a button); "Finanzas" and the current page stay plain text.
+  it('the "Modelos Fiscales" crumb is a link back to the list (onBack); the others are not', () => {
+    activeUi = realUiEs;
+    const onBack = vi.fn();
+    renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} onBack={onBack} />);
+    const items = normalizeBreadcrumb(lastMeta.breadcrumb);
+    expect(items.filter(item => item.onClick).map(item => item.label)).toEqual(['Modelos Fiscales']);
+    act(() => { items[1].onClick(); });
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });
 

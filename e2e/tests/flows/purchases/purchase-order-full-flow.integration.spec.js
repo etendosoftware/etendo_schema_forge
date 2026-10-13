@@ -2,6 +2,7 @@
 // @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/DocumentTotalsPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { apiAuthHeaders, login, navigateTo } from '../../helpers/auth.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
@@ -396,10 +397,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     });
 
     await test.step('Verify success modal shows the created receipt', async () => {
-      const successMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
-      await expect(successMsg,
+      // ETP-5674: the result popup is titled after the created receipt, not the PO.
+      await expect(page.getByTestId('confirm-result-title'),
         '[Plan 6.2] Success modal should confirm PO was completed and receipt was created',
-      ).toBeVisible({ timeout: 30_000 });
+      ).toHaveText(/^(Albarán creado|Receipt created)$/, { timeout: 30_000 });
 
       await expect(page.getByText(/entrada|recibo|receipt/i).first(),
         '[Plan 6.2] Success modal should show a link to the created goods receipt',
@@ -791,8 +792,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {});
     await slow(page);
 
-    const successMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
-    await expect(successMsg).toBeVisible({ timeout: 30_000 });
+    // ETP-5674: the result popup is titled after the created receipt, not the PO.
+    await expect(page.getByTestId('confirm-result-title'),
+      '[ETP-4567] Confirming the PO should announce the created receipt',
+    ).toHaveText(/^(Albarán creado|Receipt created)$/, { timeout: 30_000 });
     await dismissSuccessModal(page);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1300,10 +1303,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       'Creating the goods receipt from a fully-negative PO');
     expect(receipt?.id, '[ETP-4567] createGoodsReceipt should return the new receipt id').toBeTruthy();
 
-    const successMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
-    await expect(successMsg,
+    // ETP-5674: the result popup is titled after the created receipt, not the PO.
+    await expect(page.getByTestId('confirm-result-title'),
       '[ETP-4567] PO with a fully-negative total should confirm successfully',
-    ).toBeVisible({ timeout: 30_000 });
+    ).toHaveText(/^(Albarán creado|Receipt created)$/, { timeout: 30_000 });
     await expect(page.getByText(/no pending lines|no hay líneas pendientes/i),
       '[ETP-4567] The PO result must not show "No pending lines to invoice"',
     ).toHaveCount(0);

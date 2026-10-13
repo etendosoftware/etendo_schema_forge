@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/sales-invoice/SalesInvoiceTopbar.jsx
 // ETP-5027 — regression guard for the duplicated "Enviar a SIF" button.
 //
 // SalesInvoiceTopbar NESTS InvoiceTopbarExtra, and both used to render their
@@ -150,7 +151,7 @@ describe('SalesInvoiceTopbar — SIF button ownership (ETP-5027)', () => {
       expect(screen.getByTestId('payment-status-badge')).toBeInTheDocument();
     });
 
-    const sifButtons = screen.getAllByRole('button', { name: 'sendToSif' });
+    const sifButtons = screen.getAllByRole('button', { name: /^sendToSifLabel/ });
     expect(sifButtons).toHaveLength(1);
   });
 
@@ -174,7 +175,7 @@ describe('SalesInvoiceTopbar — SIF button ownership (ETP-5027)', () => {
     // by DocumentSecondaryActions.vitest.jsx ("renders Copy link, Clone and
     // Send in that DOM order").
     const badge = screen.getByTestId('payment-status-badge');
-    const sif = screen.getByRole('button', { name: 'sendToSif' });
+    const sif = screen.getByRole('button', { name: /^sendToSifLabel/ });
 
     expect(
       badge.compareDocumentPosition(sif) & Node.DOCUMENT_POSITION_FOLLOWING,

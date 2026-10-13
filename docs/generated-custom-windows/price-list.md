@@ -46,7 +46,7 @@ On `origin/develop`, the generated contract was expanded to model `priceListVers
 5. Click `+ Add Product` and confirm the add row captures `Product`, `Unit Price`, and `List Price` only.
 6. Select an existing row and confirm the `Price Detail` side panel shows read-only `Product` plus editable `Unit Price` and `List Price`, with save and delete actions.
 7. Confirm there is no version switcher in the GO UI. If extra versions exist (e.g., created via Classic), the GO page transparently uses the first one returned by `PriceListVersionResolver` and the server logs a warning.
-8. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+8. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 
 ## Automated evidence
 - `origin/develop` commit `19f31dd4` regenerated the price-list window to add generated `priceListVersion` / `productPrice` entities and version-level actions.
