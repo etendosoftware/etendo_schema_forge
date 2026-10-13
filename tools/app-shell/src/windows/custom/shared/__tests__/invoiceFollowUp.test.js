@@ -15,7 +15,7 @@ import esAR from '../../../../locales/es_AR.json' with { type: 'json' };
 const LOCALES = { en_US: enUS, es_ES: esES, es_AR: esAR };
 const CONFIGS = { 'sales-invoice': SALES_INVOICE_FOLLOW_UP, 'purchase-invoice': PURCHASE_INVOICE_FOLLOW_UP };
 
-const OPTION_KEY_FIELDS = ['titleKey', 'buttonLabelKey', 'labelKey', 'descriptionKey', 'descriptionOneKey', 'actionLabelKey', 'badgeKey', 'resultTitleKey'];
+const OPTION_KEY_FIELDS = ['titleKey', 'buttonLabelKey', 'labelKey', 'descriptionKey', 'descriptionOneKey', 'actionLabelKey', 'badgeKey'];
 
 function renderedKeys(config) {
   const keys = [config.questionKey, config.summary.documentLabelKey, config.summary.dateLabelKey];

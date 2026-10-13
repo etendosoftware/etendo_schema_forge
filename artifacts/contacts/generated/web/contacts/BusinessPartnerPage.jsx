@@ -712,12 +712,12 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
           ], derived: [], hidden: [] }, requireSavedRecord: true, tabOrder: 2 },
           { key: 'locationAddress', label: 'Location', Table: LocationAddressTable, customAddModal: LocationEditorModal, requireSavedRecord: true, tabOrder: 3, addLineLabelKey: 'addAddress' },
           { key: 'customerAccounting', label: 'Customer Accounting', Table: CustomerAccountingTable, Form: CustomerAccountingForm, addLineFields: { entry: [
-          { key: 'customerReceivablesNo', column: 'C_Receivable_Acct', type: 'selector', required: true, label: 'Customer Receivables No.', labels: {"en_US":"Receivables Account","es_ES":"Cuenta a Cobrar"}, reference: 'ValidCombination', inputMode: 'selector' },
-          { key: 'customerPrepayment', column: 'C_Prepayment_Acct', type: 'selector', label: 'Customer Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'customerReceivablesNo', column: 'C_Receivable_Acct', type: 'selector', required: true, label: 'Customer Receivables No.', labels: {"en_US":"Receivables Account","es_ES":"Cuenta a Cobrar"}, reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
+          { key: 'customerPrepayment', column: 'C_Prepayment_Acct', type: 'selector', label: 'Customer Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
           ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 4, visibleWhenCapability: 'showAccountingFields' },
           { key: 'vendorAccounting', label: 'Vendor Accounting', Table: VendorAccountingTable, Form: VendorAccountingForm, addLineFields: { entry: [
-          { key: 'vendorLiability', column: 'V_Liability_Acct', type: 'selector', required: true, label: 'Vendor Liability', labels: {"en_US":"Liability Account","es_ES":"Cuenta a Pagar"}, reference: 'ValidCombination', inputMode: 'selector' },
-          { key: 'vendorPrepayment', column: 'V_Prepayment_Acct', type: 'selector', label: 'Vendor Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'vendorLiability', column: 'V_Liability_Acct', type: 'selector', required: true, label: 'Vendor Liability', labels: {"en_US":"Liability Account","es_ES":"Cuenta a Pagar"}, reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
+          { key: 'vendorPrepayment', column: 'V_Prepayment_Acct', type: 'selector', label: 'Vendor Prepayment', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, reference: 'ValidCombination', inputMode: 'selector', lookupDrawer: 'account' },
           ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 5, visibleWhenCapability: 'showAccountingFields' },
         ]}
         primaryTabs={[

@@ -13,7 +13,9 @@
 // real locale dictionary instead of its identity mock.
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
+import { act } from '@testing-library/react';
 import { PageMetaProvider } from '@/components/layout/PageMetaContext';
+import { breadcrumbToText, normalizeBreadcrumb } from '@/components/layout/TopBar/breadcrumb.js';
 import { lastMeta, MetaProbe, renderWithMeta, describeTopBarKebab } from '../../../__tests__/testUtils/topBarMetaTestUtils.jsx';
 import { loadLocaleDictionary, makeRealUI } from '../../../../shared/__tests__/testUtils/realLocaleUI.js';
 
@@ -119,7 +121,7 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
     activeLocale = 'es_ES';
     const { container } = renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
-    expect(lastMeta.breadcrumb).toBe('Finanzas / Modelos Fiscales / Modelo 349 - 2026/T1');
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Finanzas / Modelos Fiscales / Modelo 349 - 2026/T1');
     expect(lastMeta.title).toBe('Modelo 349 - 2026/T1');
     expect(lastMeta.titleExtra.props.className).toBe('fm-model-badge fm-model-badge--349');
     expect(typeof lastMeta.onAddToFavorites).toBe('function');
@@ -138,7 +140,7 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
     activeLocale = 'en_US';
     renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
-    expect(lastMeta.breadcrumb).toBe('Finance / Fiscal Models / Form 349 - 2026/T1');
+    expect(breadcrumbToText(lastMeta.breadcrumb)).toBe('Finance / Fiscal Models / Form 349 - 2026/T1');
     expect(lastMeta.title).toBe('Form 349 - 2026/T1');
   });
 
@@ -163,6 +165,19 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
     renderWithMeta(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
 
     expect(lastMeta.title).toBe('Form 349 - 2026/October');
+  });
+
+  // ETP-5597 — like the parent crumb of a generated window's detail, the "Modelos Fiscales" level
+  // of the TopBar breadcrumb is a link back to the declarations list: the published item carries an
+  // `onClick` (the TopBar renders it as a button); "Finanzas" and the current page stay plain text.
+  it('the "Modelos Fiscales" crumb is a link back to the list (onBack); the others are not', () => {
+    activeUi = realUiEs;
+    const onBack = vi.fn();
+    renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} onBack={onBack} />);
+    const items = normalizeBreadcrumb(lastMeta.breadcrumb);
+    expect(items.filter(item => item.onClick).map(item => item.label)).toEqual(['Modelos Fiscales']);
+    act(() => { items[1].onClick(); });
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });
 

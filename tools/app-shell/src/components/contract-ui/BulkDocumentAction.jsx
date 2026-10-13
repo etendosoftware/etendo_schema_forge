@@ -8,7 +8,7 @@ import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
-import { runPreUnpost } from '@/lib/preUnpost.js';
+import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 
 export const buildInOutActions = (rows) => {
@@ -42,10 +42,16 @@ export const buildPostActions = (rows) =>
 // previous render").
 // ETP-5302 — the mirror of buildPostActions/postRowFilter, for the bulk "Descontabilizar"
 // button. Kept as a SEPARATE pair rather than teaching the post ones to also emit 'unpost':
-// sales-invoice and purchase-invoice mount the post pair too, and they must NOT offer a
-// standalone unpost — for an invoice, reversing the accounting is part of Reactivate
-// (`preUnpost`), never a user-facing action of its own. Only goods-receipt and
-// goods-shipment, whose detail kebab already exposes "Descontabilizar", mount this pair.
+// a window opts into the unpost button explicitly (its own `BulkDocumentAction` with
+// `labelKey="unpost"`), and only a window whose detail kebab also exposes a standalone
+// "Descontabilizar" should — a window that declares no `unpost` in its decisions.json must
+// not grow one in the bulk bar only. It is also why "Descontabilizar" is never offered as
+// a second option under the "Contabilizar" button.
+// ETP-5692 — sales-invoice and purchase-invoice now offer a standalone bulk unpost too,
+// reversing the ETP-5302 decision that kept invoice unposting inside Reactivate only. They
+// mount their OWN pair (`buildInvoiceUnpostActions` / `invoiceUnpostRowFilter` in
+// windows/custom/shared/useInvoiceWindow.js), which also requires status CO, so this
+// posted-only default stays exactly as the albarán windows rely on it.
 export const buildUnpostActions = (rows) =>
   (rows.some(isRowPosted) ? [{ value: 'unpost', labelKey: 'unpost' }] : []);
 
@@ -213,7 +219,7 @@ export default function BulkDocumentAction({
         execute: neoAction.execute,
       });
       if (!pre.success) {
-        throw new Error(translateBackendError(pre.message, ui) || ui('actionFailed'));
+        throw new Error(translateBackendError(pre.message, ui, preUnpostErrorIdentity(pre)) || ui('actionFailed'));
       }
       // Arity kept at two when there is no body, so every existing call is unchanged.
       await (wireActionBody === undefined

@@ -2,11 +2,11 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:accounting
 const fields = [
-  { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
-  { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', label: 'Product Expense', required: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
-  { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', label: 'Product Revenue', required: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
-  { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
-  { key: 'invoicePriceVariance', column: 'P_InvoicePriceVariance_Acct', type: 'selector', label: 'Invoice Price Variance', section: 'other', reference: 'ValidCombination', inputMode: 'selector' },
+  { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', lookup: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
+  { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', label: 'Product Expense', required: true, lookup: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
+  { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', label: 'Product Revenue', required: true, lookup: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
+  { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', lookup: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
+  { key: 'invoicePriceVariance', column: 'P_InvoicePriceVariance_Acct', type: 'selector', label: 'Invoice Price Variance', lookup: true, section: 'other', reference: 'ValidCombination', inputMode: 'selector' },
 ];
 // @sf-generated-end fields:accounting
 
