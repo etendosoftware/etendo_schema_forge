@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "updatedAt": "2026-10-07T14:31:25.639Z",
-  "checksum": "8bb0681ba2b2550c",
+  "updatedAt": "2026-10-13T15:55:33.799Z",
+  "checksum": "8ac7458ad93ad57f",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -124,7 +124,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -5405,7 +5405,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },

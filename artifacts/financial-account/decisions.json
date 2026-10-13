@@ -86,6 +86,7 @@
         "depositAmount": { "visibility": "readOnly", "grid": false },
         "paymentAmount": { "visibility": "readOnly", "grid": false },
         "posted": {
+          "visibleWhenCapability": "showAccountingFields",
           "visibility": "readOnly",
           "type": "boolean",
           "form": false,
@@ -208,6 +209,7 @@
         "endingBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 4 },
         "documentStatus": { "visibility": "readOnly", "grid": true, "gridOrder": 5 },
         "posted": {
+          "visibleWhenCapability": "showAccountingFields",
           "visibility": "readOnly",
           "type": "string",
           "form": false,

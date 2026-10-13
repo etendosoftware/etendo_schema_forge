@@ -25,7 +25,7 @@ const statusField = 'processed';
 
 // @sf-generated-start extraBadges:movement
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', hintKeys: {"D":"goodsMovementsPostedDisabledHint"} },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields', hintKeys: {"D":"goodsMovementsPostedDisabledHint"} },
 ];
 // @sf-generated-end extraBadges:movement
 
