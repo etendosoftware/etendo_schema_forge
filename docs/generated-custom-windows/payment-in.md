@@ -214,7 +214,7 @@ both sides plus the rate that was actually booked:
 
 ```
 Importe del cobro
-+ 21,34 $
+21,34 $
   (0,680272)  14,52 €
 ```
 
@@ -394,3 +394,12 @@ the same `FieldItem`) and is **not** changed here.
 payment whose customer or deposit account has a long name. The date shows in full, for example
 `23/09/2026`, and the long values end in "…". Hovering a cut value shows the full text, and hovering
 a value that fits shows no tooltip.
+
+## Amount sign and colour — ETP-5728
+
+For Payment In the amount carries no `+` prefix and is always rendered in success green
+(`var(--status-success-fg)`), whether or not the receipt is deposited: the list Amount column
+(`PaymentHeaderTableBase.buildColumns`), the list sidebar hero ("Cobrado este mes") and the detail
+sidebar hero (`PaymentDetailSidebarBase`). Payment Out is the mirror image (no sign, always red). The
+direction is conveyed by the colour and the window, not by a sign. `formatCurrency` still prints its
+own `-` for genuinely negative values; nothing is prefixed on top of it.

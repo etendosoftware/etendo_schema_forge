@@ -6,7 +6,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { DataTable } from '@/components/contract-ui';
 import PaymentLifecycleConfirmModal from './PaymentLifecycleConfirmModal';
 import PaymentEditModalLauncher from './PaymentEditModalLauncher';
-import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST, PAYMENT_STATUS_ERROR, STATUS_PAYMENT_MADE, paymentDisplayState } from './paymentStatuses';
+import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST, PAYMENT_STATUS_ERROR, STATUS_PAYMENT_MADE } from './paymentStatuses';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const ENTITY_BY_SPEC = { 'payment-in': 'finPayment', 'payment-out': 'header' };
@@ -54,18 +54,11 @@ function buildColumns(dir, ui, locale) {
       // otherwise resolves to "Importe cobrado/pagado".
       labels: { [locale]: ui('amount') },
       render: (row) => {
-        const isDeposited = isOut
-          ? paymentDisplayState(row) === 'deposited'
-          : DEPOSITED_STATUSES.has(row.status || '');
         const amt = parseFloat(row.amount ?? 0);
         const curr = row['currency$_identifier'] || 'EUR';
-        let sign = '';
-        if (amt > 0) {
-          sign = dir === 'in' ? '+ ' : '− ';
-        }
         return (
-          <span className="tabular-nums" style={{ color: isDeposited ? 'var(--status-success-fg)' : 'hsl(var(--foreground))', fontWeight: 600, whiteSpace: 'nowrap' }}>
-            {sign}{fmtAmt(amt, curr)}
+          <span className="tabular-nums" style={{ color: isOut ? 'hsl(var(--destructive))' : 'var(--status-success-fg)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {fmtAmt(amt, curr)}
           </span>
         );
       },
@@ -272,10 +265,8 @@ function PaymentSidebar({ dir, data, ui }) {
     [data]
   );
 
-  const heroColor = isIn ? 'var(--status-success-fg)' : 'hsl(var(--foreground))';
+  const heroColor = isIn ? 'var(--status-success-fg)' : 'hsl(var(--destructive))';
   const heroLabel = isIn ? ui('cobradoEsteMes') : ui('pagadoEsteMes');
-  const heroSign = isIn ? '+' : '−';
-
   return (
     <aside
       style={{
@@ -319,7 +310,7 @@ function PaymentSidebar({ dir, data, ui }) {
           <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
         ) : (
           <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 30, lineHeight: '32px', color: heroColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-            {thisMonth > 0 ? `${heroSign} ` : ''}{fmtAmt(thisMonth, currency)}
+            {fmtAmt(thisMonth, currency)}
           </span>
         )}
       </div>

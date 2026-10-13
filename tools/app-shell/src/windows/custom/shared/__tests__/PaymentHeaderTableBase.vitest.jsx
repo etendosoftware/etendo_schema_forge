@@ -140,6 +140,15 @@ afterEach(() => {
 
 // --- Tests ---
 
+// Scopes to the hero amount (the 30px figure) so a same-text match elsewhere in the sidebar
+// (breakdown rows, pending widget) can never satisfy a hero assertion.
+const findHero = (sidebar, text) => {
+  const hero = sidebar.getAllByText(text).find((el) => el.style.fontSize === '30px');
+  expect(hero).toBeDefined();
+  return hero;
+};
+
+
 describe('PaymentHeaderTableBase — sidebar', () => {
   // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
   // so a test that expects an Authorization header has to declare the scheme first.
@@ -170,7 +179,9 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
 
     // Hero: only p1 counts towards "this month" (p2's date is out of range).
-    expect(sidebar.getByText(`+ ${fmtAmtNorm(120.5, 'EUR')}`)).toBeInTheDocument();
+    const hero = findHero(sidebar, fmtAmtNorm(120.5, 'EUR'));
+    expect(hero).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(hero.textContent).not.toContain('+');
 
     // Pending bucket = every non-deposited row (p3 + p4) = 85.
     expect(sidebar.getByText(`2 porVencer`)).toBeInTheDocument();
@@ -190,8 +201,11 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     // Hardcoded literal — the local fmtAmt() test helper above shares the SAME
     // missing-useGrouping bug as production, so it can never catch this regression.
-    expect(sidebar.getByText('+ 1.500,50 €')).toBeInTheDocument();
-    expect(sidebar.queryByText('+ 1500,50 €')).not.toBeInTheDocument();
+    const hero = findHero(sidebar, '1.500,50 €');
+    expect(hero).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(hero.textContent).not.toContain('+');
+    // Ungrouped text would never match the exact string above; assert no ungrouped figure exists anywhere.
+    expect(sidebar.queryByText(/1500,50/)).not.toBeInTheDocument();
   });
 
   it('uses the "pagado" hero label and no method breakdown for dir="out" with no deposited rows (zero amount renders without a sign)', () => {
@@ -205,13 +219,16 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     expect(sidebar.queryByText('porMetodo')).not.toBeInTheDocument();
   });
 
-  it('shows the minus sign for dir="out" when this month\'s deposited total is nonzero', () => {
+  it('shows the hero amount without a sign and in destructive red for dir="out" when this month\'s deposited total is nonzero', () => {
     const rows = [
       { id: 'p1', status: 'RPR', amount: '40', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
     ];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    expect(sidebar.getByText(`− ${fmtAmtNorm(40, 'EUR')}`)).toBeInTheDocument();
+    const hero = sidebar.getAllByText(fmtAmtNorm(40, 'EUR')).find((el) => el.style.fontSize === '30px');
+    expect(hero).toBeDefined();
+    expect(hero).toHaveStyle({ color: 'hsl(var(--destructive))' });
+    expect(sidebar.queryByText(`− ${fmtAmtNorm(40, 'EUR')}`)).not.toBeInTheDocument();
   });
 
   it('renders the hero amount with a single sign (not a doubled "− -") when this month\'s deposited total is negative (dir="out")', () => {
@@ -234,7 +251,9 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     ];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    expect(sidebar.getAllByText(fmtAmtNorm(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
+    const hero = findHero(sidebar, fmtAmtNorm(-40, 'EUR'));
+    expect(hero).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(hero.textContent).not.toContain('+');
     expect(sidebar.queryByText(`+ ${fmtAmtNorm(-40, 'EUR')}`)).not.toBeInTheDocument();
   });
 
@@ -254,7 +273,7 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     // formatCurrency()'s catch branch (Intl throws on an invalid ISO code) falls
     // back to a plain es-ES grouped number — no raw-code suffix, matching the
     // same contract every other formatCurrency() call site in the app relies on.
-    expect(sidebar.getByText(fmtAmtNorm(10, '1'))).toBeInTheDocument();
+    expect(sidebar.getAllByText(fmtAmtNorm(10, '1')).length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders zeroed widgets for an empty data array', () => {
@@ -334,34 +353,53 @@ describe('PaymentHeaderTableBase — columns', () => {
     const rows = [{ id: 'p13', status: 'PPM', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p13');
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--destructive))' });
+    expect(cell.querySelector('span')).not.toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 
-  it('renders the amount column with a + sign and semantic success color for a deposited row (dir="in")', () => {
+  it('renders a deposited row amount in destructive red (dir="out")', () => {
+    const rows = [{ id: 'p14', status: 'RPR', amount: '50', 'currency$_identifier': 'EUR' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
+    const cell = screen.getByTestId('col-amount-p14');
+    expect(cell).toHaveTextContent(fmtAmtNorm(50, 'EUR'));
+    expect(cell.textContent).not.toContain('−');
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--destructive))' });
+  });
+
+  it('renders the amount column without a sign and in semantic success color for a deposited row (dir="in")', () => {
     const rows = [{ id: 'p1', status: 'RPR', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p1');
-    expect(cell).toHaveTextContent(`+ ${fmtAmtNorm(50, 'EUR')}`);
+    expect(cell).toHaveTextContent(fmtAmtNorm(50, 'EUR'));
     expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 
-  it('renders the amount column with a + sign and semantic success color for an RPAE (Awaiting Execution) row (dir="in")', () => {
+  it('renders the amount column without a sign and in semantic success color for an RPAE (Awaiting Execution) row (dir="in")', () => {
     // Regression test: RPAE was previously treated as NOT deposited (amber),
     // creating an inconsistency with the "Cobro depositado" DB label. It must
     // now render exactly like RPR — semantic success amount, deposited status.
     const rows = [{ id: 'p12', status: 'RPAE', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p12');
-    expect(cell).toHaveTextContent(`+ ${fmtAmtNorm(50, 'EUR')}`);
+    expect(cell).toHaveTextContent(fmtAmtNorm(50, 'EUR'));
     expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 
-  it('renders the amount column with a − sign and semantic foreground color for a non-deposited row (dir="out")', () => {
+  it('renders a non-deposited row amount in success green, never the default foreground (dir="in")', () => {
+    const rows = [{ id: 'p20', status: 'RPAP', amount: '20', 'currency$_identifier': 'EUR' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    const cell = screen.getByTestId('col-amount-p20');
+    expect(cell.textContent).toBe(fmtAmt(20, 'EUR'));
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
+  });
+
+  it('renders the amount column without a sign and in destructive red for a non-deposited row (dir="out")', () => {
     const rows = [{ id: 'p2', status: 'RPAP', amount: '20', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p2');
-    expect(cell).toHaveTextContent(`− ${fmtAmtNorm(20, 'EUR')}`);
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
+    expect(cell).toHaveTextContent(fmtAmtNorm(20, 'EUR'));
+    expect(cell.textContent).not.toContain('−');
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--destructive))' });
   });
 
   it('renders the amount column with a single sign (not a doubled "− -") for a negative amount (dir="out")', () => {
@@ -383,11 +421,13 @@ describe('PaymentHeaderTableBase — columns', () => {
     expect(cell.textContent).not.toContain('+ -');
   });
 
-  it('renders the amount column with the directional sign preserved for a positive amount, guarding against future regressions in either direction', () => {
+  it('renders the amount column without a sign for a positive amount (dir="in")', () => {
     const rows = [{ id: 'p11', status: 'RPR', amount: '5', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p11');
-    expect(cell.textContent).toBe(`+ ${fmtAmt(5, 'EUR')}`);
+    expect(cell.textContent).toBe(fmtAmt(5, 'EUR'));
+    expect(cell.textContent).not.toContain('+');
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 });
 

@@ -187,7 +187,7 @@ test.describe('Financial Account — Nuevo movimiento (mocked)', () => {
     // Default direction is "Salida" (BPW). Save starts disabled.
     await expect(page.getByTestId('tx-new-save')).toBeDisabled();
 
-    // Pick a GL item via the searchable lookup (LookupPicker exposes only a
+    // Pick a GL item via the searchable lookup (the lookup exposes only a
     // placeholder input, so locate it by placeholder then click the result).
     const glInput = page.getByPlaceholder(GL_PLACEHOLDER);
     await glInput.click();

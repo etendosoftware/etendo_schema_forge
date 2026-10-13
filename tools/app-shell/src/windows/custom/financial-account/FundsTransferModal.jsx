@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  ArrowLeftRight, ArrowRight, Landmark, ChevronDown,
+  ArrowLeftRight, ArrowRight, Landmark,
 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
+import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { useUI } from '@/i18n';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
-import { MaskedAmountInput } from '@/components/forms/fields.jsx';
+import { MaskedAmountInput, ChipSelect } from '@/components/forms/fields.jsx';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
 import { useFundsTransfer } from '@/hooks/useCreateMovement';
@@ -68,24 +68,6 @@ function CurrencyBadge({ iso }) {
 }
 
 /**
- * Field wrapper that doubles as the chip host and the search-input box.
- *
- * Same shell `CreatableSearchSelect` draws for the FK pickers of every generated window (and that
- * `forms/fields.jsx`'s ChipSelect now draws too): shared FIELD_HEIGHT, rounded-lg, hover fill and a
- * ring-2/ring-primary focus state. It used to hardcode `h-10 rounded-md` with its own focus
- * treatment, which made both pickers of this modal 4px taller and differently rounded than the
- * amount input sitting between them.
- *
- * `group` is load-bearing, not decoration: SelectorChip's clear (X) is `opacity-0
- * group-hover:opacity-100 group-focus-within:opacity-100`, so without a `.group` ancestor it stays
- * permanently invisible — the X was in the DOM here but never shown, so a chosen destination
- * account or accounting concept could not be cleared at all.
- */
-const FIELD_WRAPPER_CLS = `group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--field-hover))] focus-within:ring-2 focus-within:ring-primary`;
-/** Borderless input used inside FIELD_WRAPPER_CLS. */
-const FIELD_INPUT_CLS = 'h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--text-disabled))]';
-
-/**
  * Shell for this modal's own plain inputs (amount, conversion rate, description). Carries the same
  * height, radius and focus tokens as FIELD_WRAPPER_CLS, so the vertical stack of pickers and inputs
  * lines up instead of mixing 36px and 40px rows — aligning only the pickers would just move the
@@ -94,159 +76,67 @@ const FIELD_INPUT_CLS = 'h-full min-w-0 flex-1 border-0 bg-transparent px-1 text
 const PLAIN_FIELD_CLS = `${FIELD_HEIGHT} rounded-lg border border-[hsl(var(--border-control))] focus:outline-none focus:ring-2 focus:ring-primary`;
 
 /**
- * Floating list panel rendered inline (NOT portaled) so it scrolls with wheel/touchpad inside the
- * RemoveScroll-locked Dialog (a portaled popover would block wheel events outside the modal).
+ * Row of the destination-account dropdown: bank tile, name + IBAN/PAN, currency badge, balance.
+ * Rendered inside CreatableSearchSelect's panel through its `renderOption` extension point.
  */
-const DROPDOWN_PANEL_CLS = 'absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-64 overflow-auto rounded-xl border border-[hsl(var(--border-subtle))] bg-card p-1.5 shadow-lg';
-
-/** Closes the dropdown when a pointer-down lands outside the given ref. */
-function useCloseOnOutside(ref, open, close) {
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) close(); };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [ref, open, close]);
+function renderAccountOption(a) {
+  return (
+    <span className="flex w-full items-center gap-2.5">
+      <BankTile size={34} />
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate text-sm font-medium leading-[18px] text-[hsl(var(--foreground))]">{a.name}</span>
+        <span className="truncate text-xs leading-4 tabular-nums text-[hsl(var(--muted-foreground))]">
+          {a.iban || a.maskedPan || ''}
+        </span>
+      </span>
+      <CurrencyBadge iso={a.currencyIso} />
+      <span className="ml-auto text-[13px] font-medium leading-4 tabular-nums text-[hsl(var(--muted-foreground))]">
+        {formatCurrency(a.currencyIso, a.currentBalance)}
+      </span>
+    </span>
+  );
 }
 
+const ACCOUNT_FIELD = { key: 'transfer-dest', id: 'transfer-dest', clearable: true };
+const accountChipLabel = (a) => `${a.name} · ${a.currencyIso}`;
+const accountFilter = (a, q) => (a.name || '').toLowerCase().includes(q)
+  || (a.iban || '').toLowerCase().includes(q);
+
 /**
- * Destination account dropdown — searchable, with the rules-modal chip selector: once chosen, the
- * account shows as a removable chip ("name · currency") inside the field; clicking the chip returns
- * to typing mode and the × clears it. Inline (not portaled) so the list scrolls with wheel/touchpad
- * inside the RemoveScroll-locked Dialog.
+ * Destination account dropdown (ETP-5728): the shared {@link CreatableSearchSelect} (same selector
+ * as "País" in the account editor) fed with the loaded accounts as `staticOptions`; the row layout,
+ * the name/IBAN filter and the "name · currency" chip label are its extension points. Value is the
+ * account id ('' when empty).
  */
 function AccountSelect({ accounts, value, onChange, placeholder }) {
-  const ui = useUI();
-  const ref = useRef(null);
-  const inputRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [query, setQuery] = useState('');
+  const options = useMemo(() => accounts.map((a) => ({ ...a, id: a.id, name: a.name || '' })), [accounts]);
   const sel = accounts.find((a) => a.id === value) || null;
-  const showChip = !!sel && !editing;
-  const close = () => { setOpen(false); setEditing(false); setQuery(''); };
-  useCloseOnOutside(ref, open, close);
-  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
-  const startEditing = () => { setEditing(true); setOpen(true); setQuery(''); };
-  const q = query.trim().toLowerCase();
-  const filtered = q
-    ? accounts.filter((a) => (a.name || '').toLowerCase().includes(q)
-        || (a.iban || '').toLowerCase().includes(q))
-    : accounts;
   return (
-    <div className="relative" ref={ref}>
-      <div className={FIELD_WRAPPER_CLS} onClick={showChip ? startEditing : undefined}>
-        {showChip ? (
-          <SelectorChip
-            label={`${sel.name} · ${sel.currencyIso}`}
-            onClick={startEditing}
-            onClear={() => { onChange(''); close(); }}
-            clearAriaLabel={ui('clear')}
-            testId="transfer-dest-chip"
-            data-testid="SelectorChip__7ff08b" />
-        ) : (
-          <input
-            ref={inputRef}
-            className={FIELD_INPUT_CLS}
-            value={query}
-            placeholder={placeholder}
-            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-            onFocus={() => setOpen(true)}
-            data-testid="transfer-dest-search" />
-        )}
-        <ChevronDown className="ml-auto h-4 w-4 flex-none text-[hsl(var(--muted-foreground))]" data-testid="ChevronDown__tf-dest" />
-      </div>
-      {open ? (
-        <div className={DROPDOWN_PANEL_CLS} data-testid="transfer-dest-popover">
-          {filtered.length === 0 ? (
-            <div className="px-2.5 py-3 text-sm text-[hsl(var(--text-disabled))]">—</div>
-          ) : null}
-          {filtered.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => { onChange(a.id); close(); }}
-              data-testid={`transfer-dest-option-${a.id}`}
-              className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-[hsl(var(--muted))] ${a.id === value ? 'bg-[hsl(var(--muted))]' : ''}`}
-            >
-              <BankTile size={34} data-testid="BankTile__7ff08b" />
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-medium leading-[18px] text-[hsl(var(--foreground))]">{a.name}</span>
-                <span className="truncate text-xs leading-4 tabular-nums text-[hsl(var(--muted-foreground))]">
-                  {a.iban || a.maskedPan || ''}
-                </span>
-              </span>
-              <CurrencyBadge iso={a.currencyIso} data-testid="CurrencyBadge__7ff08b" />
-              <span className="ml-auto text-[13px] font-medium leading-4 tabular-nums text-[hsl(var(--muted-foreground))]">
-                {formatCurrency(a.currencyIso, a.currentBalance)}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    <CreatableSearchSelect
+      field={ACCOUNT_FIELD}
+      value={value}
+      displayValue={sel ? accountChipLabel(sel) : ''}
+      onChange={(id) => onChange(id || '')}
+      staticOptions={options}
+      renderOption={renderAccountOption}
+      filterFn={accountFilter}
+      chipLabel={accountChipLabel}
+      placeholderOverride={placeholder} />
   );
 }
 
 /**
- * Accounting-item (GL) dropdown — searchable, with the same chip selector as {@link AccountSelect}
- * (chosen item shows as a removable chip). Required, so the list has no "none" option.
+ * Accounting-item (GL) dropdown: the shared ChipSelect (a thin wrapper over CreatableSearchSelect)
+ * over the GL-item lookup. Required, so the list has no "none" option.
  */
 function GlSelect({ value, onChange, placeholder }) {
-  const ui = useUI();
-  const ref = useRef(null);
-  const inputRef = useRef(null);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [query, setQuery] = useState('');
-  const { results } = useGLItemLookup(query);
-  const showChip = !!value && !editing;
-  const close = () => { setOpen(false); setEditing(false); setQuery(''); };
-  useCloseOnOutside(ref, open, close);
-  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
-  const startEditing = () => { setEditing(true); setOpen(true); setQuery(''); };
   return (
-    <div className="relative" ref={ref}>
-      <div className={FIELD_WRAPPER_CLS} onClick={showChip ? startEditing : undefined}>
-        {showChip ? (
-          <SelectorChip
-            label={value.name}
-            onClick={startEditing}
-            onClear={() => { onChange(null); close(); }}
-            clearAriaLabel={ui('clear')}
-            testId="transfer-gl-chip"
-            data-testid="SelectorChip__7ff08b" />
-        ) : (
-          <input
-            ref={inputRef}
-            className={FIELD_INPUT_CLS}
-            value={query}
-            placeholder={placeholder}
-            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-            onFocus={() => setOpen(true)}
-            data-testid="transfer-gl-search" />
-        )}
-        <ChevronDown className="ml-auto h-4 w-4 flex-none text-[hsl(var(--muted-foreground))]" data-testid="ChevronDown__tf-gl" />
-      </div>
-      {open ? (
-        <div className={DROPDOWN_PANEL_CLS} data-testid="transfer-gl-popover">
-          {results.length === 0 ? (
-            <div className="px-2.5 py-3 text-sm text-[hsl(var(--text-disabled))]">—</div>
-          ) : null}
-          {results.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              onClick={() => { onChange(g); close(); }}
-              data-testid={`transfer-gl-option-${g.id}`}
-              className={`flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] ${value?.id === g.id ? 'bg-[hsl(var(--muted))]' : ''}`}
-            >
-              {g.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    <ChipSelect
+      value={value}
+      onChange={onChange}
+      useLookup={useGLItemLookup}
+      placeholder={placeholder}
+      testId="transfer-gl" />
   );
 }
 

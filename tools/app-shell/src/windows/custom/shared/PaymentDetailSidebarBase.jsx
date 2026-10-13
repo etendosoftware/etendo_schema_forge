@@ -325,7 +325,6 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const paymentDate = data?.paymentDate;
   const createdDate = data?.creationDate || data?.created || paymentDate;
 
-  const sign = isIn ? '+ ' : '− ';
   const titleKey = isIn ? 'amountLabelIn' : 'amountLabelOut';
 
   const hasConfirmedEvent = events.some(ev => ev.type === 'confirmed');
@@ -405,12 +404,12 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       {/* Datos: amount, padding 4px 12px 8px */}
       <div style={{ padding: '4px 12px 8px' }}>
         {(() => {
-          const formatted = sign + fmtAmt(Math.abs(totalAmount), currency);
+          const formatted = fmtAmt(Math.abs(totalAmount), currency);
           const len = formatted.length;
           const fs = len <= 13 ? 30 : 26;
           const lh = fs === 30 ? '32px' : '30px';
           return (
-            <span className="tabular-nums" style={{ font: `500 ${fs}px/${lh} Inter`, color: 'hsl(var(--foreground))' }}>
+            <span className="tabular-nums" style={{ font: `500 ${fs}px/${lh} Inter`, color: isIn ? 'var(--status-success-fg)' : 'hsl(var(--destructive))' }}>
               {formatted}
             </span>
           );

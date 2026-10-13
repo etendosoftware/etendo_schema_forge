@@ -146,7 +146,7 @@ both sides plus the rate that was actually booked:
 
 ```
 Importe del pago
-− 21,34 $
+21,34 $   (red, no sign)
   (0,680272)  14,52 €
 ```
 
@@ -469,3 +469,13 @@ acceptance line about the "New" button staying visible does not apply to this wi
 
 Manual verification: open `/payment-out` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
 runs under the toolbar, above both the sidebar and the grid, across the full width of the card.
+
+## Amount sign and colour — ETP-5728
+
+For Payment Out the amount carries no minus sign and is always rendered in destructive red
+(`hsl(var(--destructive))`): the list Amount column (`PaymentHeaderTableBase.buildColumns`, including
+deposited/reconciled rows, which are no longer green), the list sidebar hero ("Pagado este mes") and
+the detail sidebar hero (`PaymentDetailSidebarBase`). The direction is conveyed by the colour and the
+window, not by a sign. `formatCurrency` still prints its own `-` for genuinely negative values; the
+direction is never prefixed on top of it. Payment In follows the same rule in the other colour: no `+` prefix, always success green
+(`var(--status-success-fg)`) — see `payment-in.md`.
