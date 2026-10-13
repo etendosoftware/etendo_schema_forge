@@ -648,6 +648,9 @@ at a draft order.
   unknown) or its linked documents cannot be read, the action is
   refused with HTTP 500 and
   `ETGO_OrderLinkedDocsCheckFailed`, mapped to `backendError.orderLinkedDocsCheckFailed`.
+- **Unknown order id**: a DocAction on an order id that does not exist answers HTTP 404
+  `Record not found` — the same answer an unknown id gets from `NeoActionRecordGuard` — not the
+  fail-closed "could not be checked… not reactivated" 500 (QA round 5, BUG-3).
 
 No visible change in the normal flow — the SPA still hides the action. A user only meets the
 refusal on a stale screen (a shipment created from another tab after the list loaded), where it

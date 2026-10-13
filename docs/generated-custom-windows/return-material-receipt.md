@@ -581,3 +581,30 @@ No visible UI change (`etgoCurrency` appears in no generated page or custom comp
 window); `contract.json` and the generated JSX are unchanged by the regen. Existing returns with a
 NULL currency were deliberately left as they are. `return-to-vendor-shipment` has the same gap and
 is out of scope.
+
+## Return actions discoverable through MCP — ETP-5704
+
+The window's own actions (served by `ReturnMaterialReceiptHeaderHandler` in com.etendoerp.go) worked
+through `etendo_action` but were invisible to agents: `etendo_schema` `view:"actions"` listed only
+the AD buttons and `etendo_discover` named none of them, so the customer-return flow was unreachable
+unless the caller already knew the action names. The handler now declares them through
+`NeoHandler#actionContracts()` — the same mechanism `SalesQuotationHeaderHandler` uses for
+`rejectQuotation` / `createRejectReason` — so `etendo_schema` publishes each one with its parameter
+schema, `etendo_discover` lists it, and `etendo_action` validates a call against it (422 naming the
+wrong key) before the handler runs. The REST action endpoint the SPA calls is not judged by the
+declarations, so the UI is unaffected.
+
+| Action | id | Parameters |
+|---|---|---|
+| `availableShipments` | not used — pass `"_"` | `businessPartner` (required) |
+| `availableShipmentLines` | not used — pass `"_"` | `shipmentId` (required) |
+| `importShipmentLines` | the draft return receipt | `lines` (required): `[{sourceLineId, returnQuantity}]` |
+| `rectifiableInvoices` | the completed return receipt | `startRow`, `pageSize` (default 80), `search` (all optional) |
+| `createReturnInvoice` | the completed return receipt | `originInvoices` (optional; default: the auto-detected invoice) |
+
+Each description ends with the flow, and the spec carries it too as its agent prompt
+(`decisions.json` → `window.agentPrompt` → `agent-prompts/return-material-receipt/spec.md`, pushed
+to `ETGO_SF_SPEC.AGENT_PROMPT`): create the header → `availableShipments` →
+`availableShipmentLines` → `importShipmentLines` → DocAction `CO` → `rectifiableInvoices` →
+`createReturnInvoice`. The regen only added `agentPrompt` to `contract.json` / `contract.mcp.json`;
+the generated JSX is unchanged.

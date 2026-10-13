@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Return Material Receipt",
+    "agentPrompt": "#REF#agent-prompts/return-material-receipt/spec.md",
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
