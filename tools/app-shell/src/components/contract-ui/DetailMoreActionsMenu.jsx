@@ -114,7 +114,11 @@ export function DetailMoreActionsMenu({
       hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } catch (err) {
-      toast.error(err.message);
+      // ETP-5704 — translated like every other action failure of this menu (preUnpost above,
+      // runNeoMenuAction below): useDocumentAction carries the backend's English text and its
+      // AD_MESSAGE keys, and the toast must read in the UI locale.
+      toast.error(translateBackendError(err.message, ui, { messageKeys: err.messageKeys })
+        || ui('actionFailed'));
     }
     return true;
   };
