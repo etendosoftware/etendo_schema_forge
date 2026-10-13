@@ -27,6 +27,8 @@
 -- `+` of its own in the local part (`jane+test@acme.com+acme`) keeps it — the same split
 -- GoAccountResolver makes. An owner with no matching ETGO_ACCOUNT is skipped: that is an unclaimed
 -- pool tenant (`pool-<hex>` username, renamed when claimed) or a seed/test user, not a signup.
+-- Only active accounts (`isactive = 'Y'`) count, as in the runtime resolver
+-- (EtendoGoJwtDalHelper.ACTIVE_ACCOUNT_FILTER): a deactivated account is not renamed from.
 --
 -- NEW NAME: ETGO_ACCOUNT.NAME, else the account email; trimmed and capped at 60 (AD_User.Name).
 --
@@ -46,6 +48,7 @@ JOIN etgo_account a
 WHERE u.ad_client_id = :client_id
   AND u.em_etgo_is_owner = 'Y'
   AND u.name = u.username
+  AND a.isactive = 'Y'
   AND left(coalesce(nullif(trim(a.name), ''), lower(a.email)), 60) <> u.name;
 
 -- @apply
@@ -59,4 +62,5 @@ WHERE u.ad_client_id = :client_id
   AND u.name = u.username
   AND lower(a.email) = lower(coalesce(nullif(trim(u.email), ''),
                                       regexp_replace(u.username, '^(.*@[^+]*)\+[a-z0-9]+$', '\1')))
+  AND a.isactive = 'Y'
   AND left(coalesce(nullif(trim(a.name), ''), lower(a.email)), 60) <> u.name;
