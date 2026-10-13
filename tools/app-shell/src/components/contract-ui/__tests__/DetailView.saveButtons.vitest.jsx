@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/saveActions.jsx
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // Mirror DetailView.vitest.jsx mock setup so the component mounts in isolation.
@@ -98,6 +100,8 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.f
 
 import { toast } from 'sonner';
 import { DetailView } from '../DetailView.jsx';
+import salesInvoiceDecisions from '@generated/sales-invoice/decisions.json';
+import purchaseInvoiceDecisions from '@generated/purchase-invoice/decisions.json';
 
 const BASE_PROPS = {
   entity: 'sales-order',
@@ -592,6 +596,56 @@ describe('DetailView draftMode.keepSaveWhenCompletedFields (ETP-4839)', () => {
     render(<DetailView {...BASE_PROPS} />);
     expect(screen.getByTestId('action-save')).toBeInTheDocument();
     expect(screen.queryByTestId('action-save-draft')).toBeNull();
+  });
+});
+
+// The invoices' accounting dimensions on a Completed invoice that was unposted (Unpost, then
+// correct). Each invoice index.jsx hand-builds its draftMode with the SAME allowlist as
+// decisions.json — pinned by the 'passes the decisions.json completed-document allowlists through
+// the draftMode override' test in windows/custom/<window>/__tests__/index.vitest.jsx — so the
+// declared draftMode is what reaches DetailView. Here: a dirty project / cost center enables
+// Save on a CO, unposted invoice; anything outside the list still blocks it.
+//
+// Posted or voided (VO) invoices are protected one step earlier, by the header fields' own
+// readOnlyLogic (the field cannot become dirty at all): see
+// windows/custom/shared/__tests__/invoiceDimensionEditability.test.js.
+describe.each([
+  ['sales-invoice', salesInvoiceDecisions],
+  ['purchase-invoice', purchaseInvoiceDecisions],
+])('DetailView Save on a Completed, unposted %s (header accounting dimensions)', (windowName, decisions) => {
+  beforeEach(resetHook);
+
+  const draftMode = () => ({ ...decisions.window.draftMode });
+  const completedUnposted = () => ({
+    id: '123', documentNo: 'INV-001', documentStatus: 'CO', processed: true, posted: 'N',
+  });
+  function renderInvoice(dirtyHeaderFieldKeys) {
+    mockHook.selected = completedUnposted();
+    mockHook.editing = mockHook.selected;
+    mockHook.dirtyHeaderFieldKeys = dirtyHeaderFieldKeys;
+    render(<DetailView {...BASE_PROPS} entity={windowName} windowName={windowName} draftMode={draftMode()} />);
+    return screen.getByTestId('action-save-draft');
+  }
+
+  it.each([['project'], ['costcenter'], ['project', 'costcenter']])('dirty %s → Save is enabled', (...dirty) => {
+    const saveBtn = renderInvoice(dirty);
+    expect(saveBtn).not.toBeDisabled();
+    expect(saveBtn.getAttribute('data-missing-required')).toBeFalsy();
+    // Confirm never comes back on a completed document.
+    expect(screen.queryByTestId('action-save')).toBeNull();
+  });
+
+  it('clicking the enabled Save persists the header', async () => {
+    const saveBtn = renderInvoice(['project']);
+    fireEvent.click(saveBtn);
+    await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalled());
+    expect(mockHook.handleSaveAndProcess).not.toHaveBeenCalled();
+  });
+
+  it('a dirty dimension next to a field outside the list still blocks Save', () => {
+    const saveBtn = renderInvoice(['project', 'priceList']);
+    expect(saveBtn).toBeDisabled();
+    expect(saveBtn.getAttribute('data-missing-required')).toBe('priceList');
   });
 });
 

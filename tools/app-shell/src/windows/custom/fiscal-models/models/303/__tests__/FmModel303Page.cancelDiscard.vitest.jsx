@@ -20,6 +20,7 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import { lastMeta, renderWithMeta } from '../../../__tests__/testUtils/topBarMetaTestUtils.jsx';
 import { toast } from 'sonner';
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
@@ -289,5 +290,60 @@ describe('FmModel303Page — Cancelar discards unsaved edits (ETP-5338 Bug B fix
 
     expect(putCalls()).toHaveLength(1);
     expect(server.openPutCount).toBe(0);
+  });
+
+  // ETP-5597 — the "Modelos Fiscales" level of the TopBar breadcrumb (published through
+  // useFmDetailPageMeta, ETP-5584) is wired to the same `handleCancel` as the Cancelar button, so
+  // leaving through it must discard pending edits exactly like Cancelar does. The TopBar calls the
+  // item's `onClick`; these tests call it the same way, off the published page meta.
+  describe('the "Modelos Fiscales" breadcrumb crumb', () => {
+    function clickSectionCrumb() {
+      lastMeta.breadcrumb[1].onClick();
+    }
+
+    it('is the section level of the breadcrumb, published as a navigable item', () => {
+      installImmediateServer();
+      renderWithMeta(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+      const crumb = lastMeta.breadcrumb[1];
+      expect(crumb.label).toBe('fm.breadcrumb.section');
+      expect(typeof crumb.onClick).toBe('function');
+    });
+
+    it('discards an identification edit and a box edit with ZERO PUT requests, then goes back once', async () => {
+      installImmediateServer();
+      const onBack = vi.fn();
+      renderWithMeta(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={onBack} onStatusChange={vi.fn()} />);
+
+      editNif('DISCARDED-VIA-CRUMB');
+      editBox46('4321');
+      await act(async () => { clickSectionCrumb(); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+
+      expect(putCalls()).toHaveLength(0);
+      expect(onBack).toHaveBeenCalledTimes(1);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('leaves the same observable trace as Cancelar for the same edits', async () => {
+      async function leaveAfterEdits(leave) {
+        installImmediateServer();
+        const onBack = vi.fn();
+        const { unmount } = renderWithMeta(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={onBack} onStatusChange={vi.fn()} />);
+        editNif('SAME-EDIT');
+        editBox46('77');
+        await act(async () => { leave(); });
+        await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+        const trace = { puts: putCalls().length, backs: onBack.mock.calls.length, backArgs: onBack.mock.calls[0] };
+        unmount();
+        return trace;
+      }
+
+      const viaCancelar = await leaveAfterEdits(clickCancelar);
+      const viaCrumb = await leaveAfterEdits(clickSectionCrumb);
+      expect(viaCrumb).toEqual(viaCancelar);
+      expect(viaCrumb.puts).toBe(0);
+      expect(viaCrumb.backs).toBe(1);
+    });
   });
 });

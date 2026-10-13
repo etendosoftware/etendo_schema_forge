@@ -1,3 +1,5 @@
+// @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { navigateTo } from '../../helpers/auth.js';
 import {
@@ -246,13 +248,14 @@ test.describe('Printable downloads — sales flow (integration)', () => {
       // it — so neither that button nor "Ver factura →" is ever shown here, even
       // though both documents were created. Worth reporting separately; from a
       // test's point of view the document number is the reliable handle.
-      const shipmentPill = page.getByRole('button', { name: /env[íi]o\s*#|albar[áa]n\s*#/i }).first();
+      // ETP-5674: the result popup's shipment card ("Albarán de venta · Nº 1000123").
+      const shipmentPill = page.getByTestId('confirm-result-modal').locator('[data-doc-type="salida"]').first();
       await expect(shipmentPill, 'The success modal should list the created shipment')
         .toBeVisible({ timeout: 30_000 });
       shipmentDocNo = ((await shipmentPill.textContent()) || '').match(/#?\s*(\d{4,})/)?.[1] || '';
       expect(shipmentDocNo, 'Should have read the shipment document number').toBeTruthy();
 
-      const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
+      const closeBtn = page.getByTestId('action-confirm-result-close');
       await expect(closeBtn).toBeVisible({ timeout: 15_000 });
       await closeBtn.click();
       await slow(page);
@@ -339,7 +342,7 @@ test.describe('Printable downloads — sales flow (integration)', () => {
           await shipmentModal.getByTestId('confirm-modal-confirm-btn').click();
           await waitForConfirmResponse(page);
 
-          const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
+          const closeBtn = page.getByTestId('action-confirm-result-close');
           if (await closeBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
             await closeBtn.click();
           }

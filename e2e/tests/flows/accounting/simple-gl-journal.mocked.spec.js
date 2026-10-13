@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/AccountLookupPopup.jsx
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 // @covers artifacts/simple-g-l-journal/decisions.json
 // @covers artifacts/simple-g-l-journal/custom/SimpleGLJournalBottomPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
@@ -255,5 +257,90 @@ test.describe('Simple G/L Journal — detail view (ETP-5611)', () => {
     await row.hover();
     await expect(row.getByTestId('line-actions')).toBeVisible();
     await expect(row.locator('[data-cell-key="foreignCurrencyCredit"]')).toBeVisible();
+  });
+});
+
+// ETP-5681 — the line Account column (`"lookupDrawer": "account"`) opens the shared search popup
+// over the field's server selector, both in the add row and when editing a saved line, and shows
+// each "code - name" in full instead of cutting it off.
+const ACCOUNT_SELECTOR = 'C_ValidCombination_ID';
+const ACCOUNTS = [
+  { id: 'acc-572', label: '57200001 - Bancos e instituciones de crédito c/c vista, euros, cuenta principal de tesorería' },
+  { id: 'acc-430', label: '43000000 - Clientes' },
+];
+const LINES_WITH_ACCOUNT = BALANCED_LINES.map((line) => ({
+  ...line,
+  accountingCombination: 'acc-430',
+  'accountingCombination$_identifier': ACCOUNTS[1].label,
+}));
+
+/**
+ * Account selector mock — filters by `q` like the server — plus a recorder for line writes.
+ * Must run AFTER installJournalMock().
+ */
+async function installAccountSelectorMock(page) {
+  const queries = [];
+  const lineWrites = [];
+  await page.route(`**/sws/neo/${SPEC}/${LINE_ENTITY}/**`, async (route) => {
+    if (route.request().method() === 'GET') return route.fallback();
+    lineWrites.push(route.request().postData() || '');
+    return route.fallback();
+  });
+  await page.route(`**/sws/neo/${SPEC}/${LINE_ENTITY}/selectors/${ACCOUNT_SELECTOR}**`, async (route) => {
+    const q = new URL(route.request().url()).searchParams.get('q') || '';
+    queries.push(q);
+    const items = ACCOUNTS.filter((a) => a.label.toLowerCase().includes(q.toLowerCase()));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items, hasMore: false }),
+    });
+  });
+  return { queries, lineWrites };
+}
+
+test.describe('Simple G/L Journal — account popup', () => {
+  test('add row: the Account field opens the popup, searches the selector and fills the pick', async ({ page }) => {
+    await openJournalWith(page, BALANCED_LINES, DRAFT);
+    const selector = await installAccountSelectorMock(page);
+
+    await page.getByTestId('action-add-line').click();
+    const field = page.getByTestId('inline-add-field-accountingCombination');
+    await field.click();
+
+    const popup = page.getByTestId('account-lookup-popup');
+    await expect(popup).toBeVisible();
+    // Titled with the column's resolved label — the same string the field shows as placeholder.
+    await expect(popup.getByRole('heading')).toHaveText((await field.textContent()).trim());
+    // Long names are shown in full, not truncated.
+    await expect(popup.getByTestId('account-lookup-popup-option-acc-572')).toHaveText(ACCOUNTS[0].label);
+
+    await popup.getByTestId('account-lookup-popup-input').fill('4300');
+    await expect.poll(() => selector.queries).toContain('4300');
+    await expect(popup.getByTestId('account-lookup-popup-option-acc-572')).toHaveCount(0);
+
+    await popup.getByTestId('account-lookup-popup-option-acc-430').click();
+    await expect(popup).toHaveCount(0);
+    await expect(field).toContainText(ACCOUNTS[1].label);
+  });
+
+  test('editing a saved line: the Account cell opens the popup and replaces the account', async ({ page }) => {
+    await openJournalWith(page, LINES_WITH_ACCOUNT, DRAFT);
+    const selector = await installAccountSelectorMock(page);
+
+    const row = page.getByTestId('line-row-line-1');
+    await row.locator('[data-cell-key="accountingCombination"]').click();
+    const trigger = row.getByTestId('field-accountingCombination');
+    await expect(trigger).toContainText(ACCOUNTS[1].label);
+    await trigger.click();
+
+    const popup = page.getByTestId('account-lookup-popup');
+    await expect(popup).toBeVisible();
+    await popup.getByTestId('account-lookup-popup-option-acc-572').click();
+
+    await expect(popup).toHaveCount(0);
+    // The pick is saved for that line (the mock answers with the old rows, so the saved request,
+    // not the re-rendered cell, is what proves the new account).
+    await expect.poll(() => selector.lineWrites.join('\n')).toContain('acc-572');
   });
 });

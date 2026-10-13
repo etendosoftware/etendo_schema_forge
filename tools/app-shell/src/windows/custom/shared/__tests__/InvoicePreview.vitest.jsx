@@ -1131,7 +1131,7 @@ describe('InvoicePreview — Solo-Lectura tier (ETP-5205)', () => {
     renderInvoicePreview(salesProps);
 
     expect(screen.queryByText('invoicePreviewSend')).not.toBeInTheDocument();
-    expect(screen.queryByText('sendToSif')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^sendToSifLabel/)).not.toBeInTheDocument();
     expect(screen.queryByText('invoicePreviewAddCollection')).not.toBeInTheDocument();
     expect(screen.getByText('invoicePreviewDownloadPdf').closest('button')).toBeEnabled();
     expect(lastAttachmentConfig().readOnly).toBe(true);

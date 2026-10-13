@@ -14,7 +14,7 @@ import { SALES_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
 // ETP-5576 — also hosts the generic "Gestionar envío" follow-up button + modal (primary
 // document-flow action, so topbarRight). The modal is opened either by the button or by
 // draftMode.afterProcess right after Confirm (see index.jsx).
-export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, api, onProcess, onRefresh, onSave, isDirty, isDocumentReadOnly, windowReadOnly }) {
+export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, api, onProcess, onRefresh, onSave, isDirty, windowReadOnly }) {
   useInvoiceUpdatedListener('sales-invoice', recordId, onRefresh);
 
   if (!data || !recordId) return null;
@@ -40,7 +40,7 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
       onProcess={onProcess}
       onSave={onSave}
       isDirty={isDirty}
-      isDocumentReadOnly={isDocumentReadOnly}
+      windowReadOnly={windowReadOnly}
       data-testid="InvoiceTopbarExtra__5c4da7" />
     </>
   );

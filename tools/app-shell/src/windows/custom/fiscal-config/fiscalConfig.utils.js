@@ -1,3 +1,5 @@
+import { todayCalendarISO } from '../../../lib/dateOnly.js';
+
 /**
  * Resolves the fiscal system for the 'siiver' regime — split out of `resolveSystem`
  * (SonarQube S3776) so the territory veto and the volume/lowChoice branching are each
@@ -241,8 +243,16 @@ export function getCertificateContext(system) {
   return null;
 }
 
+/**
+ * Today as `yyyy-MM-dd` in the LOCAL calendar — the value the onboarding writes into the
+ * fiscal systems' date-only adoption fields (`fechaAcogidaSII`, `monitordate`,
+ * `tbaisystemdate`). ETP-5700: this used to be `toISOString().slice(0, 10)`, the UTC day,
+ * which in Spain between 00:00 and 01:00/02:00 is still yesterday.
+ *
+ * @returns {string}
+ */
 export function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
+  return todayCalendarISO();
 }
 
 export function buildOnboardingPayloads(system, territory) {

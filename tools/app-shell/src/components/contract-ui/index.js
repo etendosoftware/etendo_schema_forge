@@ -18,6 +18,6 @@ export { SummaryBar } from './SummaryBar';
 export { CompactHeader } from './CompactHeader';
 export { default as DocumentStatusPill } from './DocumentStatusPill';
 export { ConfirmResultModal } from './ConfirmResultModal';
-export { AccountBadgeSelect, AccountBadge } from './AccountBadgeSelect';
+export { AccountSelect, accountOptionLabel } from './AccountSelect';
 export { ToggleRow } from './ToggleRow';
 export { default as RecordUnavailable } from './RecordUnavailable';
