@@ -17,6 +17,7 @@ import ReversedInvoicesPanel from '@/windows/custom/sales-invoice/ReversedInvoic
 import InvoiceBottomPanel from '../../../custom/InvoiceBottomPanel';
 import InvoiceTopbarExtra from '../../../custom/InvoiceTopbarExtra';
 import InvoiceDeliveryBadge from '../../../custom/InvoiceDeliveryBadge';
+import SifSendMenuItem from '../../../custom/SifSendMenuItem';
 import catalogs from './mockCatalogs';
 
 
@@ -683,6 +684,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         bottomSection={InvoiceBottomPanel}
         topbarRight={InvoiceTopbarExtra}
         topbarExtra={InvoiceDeliveryBadge}
+        customMenuContent={SifSendMenuItem}
         menuActions={({ data, status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },

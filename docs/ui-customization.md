@@ -323,6 +323,21 @@ Handler precedence: `documentAction` > `columnName` > `action` > `component` > e
 
 **Save-before-action guard (ETP-4940).** Before invoking a `documentAction` entry, `DetailMoreActionsMenu.jsx`'s `runDocumentAction` now calls `maybeSaveBeforeConfirm` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`) to persist any pending header edit first — otherwise an edit made without clicking Save first was silently discarded, the action running against the last-persisted value. On save failure the action does not run (the existing `handleSave` error toast surfaces the failure). **Known gap:** unlike the draftMode Confirm button (which guards on the fuller `isDirty` — header OR line-edit/add-row state), this guard is scoped to `hook.isDirtyHeader` only, so a pending line-row edit with a clean header is not saved before a kebab `documentAction` fires. This is currently unreachable via any shipped generated window — the only kebab `documentAction` is `reactivate` (RE), which only appears once a document is already Completed, where lines are normally read-only — but it is pinned by an explicit regression test (`DetailMoreActionsMenu.saveBeforeConfirm.vitest.jsx`, look for "KNOWN GAP W1") so it does not silently widen if a future window wires a kebab action for a non-completed status.
 
+**Dynamic kebab entries — `customComponents.moreMenuContent`.** When an entry's caption or visibility depends on more than the document status or a record field (e.g. the org's fiscal configuration), declare a component instead: `"customComponents": { "moreMenuContent": "<Component>" }`. It is rendered inside the menu after the `menuActions` items and receives `data`, `recordId`, `token`, `apiBaseUrl`, `onClose`, `onRefresh`; returning `null` hides it. The menu unmounts it on close (a click inside a modal closes the menu too), so an entry that opens a modal must delegate the modal to a host that the window mounts **unconditionally** — not to a sibling that may itself be hidden, such as a topbar button.
+
+Example (ETP-5700): `SifSendMenuItem` (`tools/app-shell/src/windows/custom/shared/`, re-exported from `artifacts/{sales,purchase}-invoice/custom/`) computes the pending fiscal targets with `useInvoiceSifSending` (the same hook as the topbar `SendToSifButton`), closes the menu and calls `requestSifSendModal(specName, recordId, pendingTargets)` from `sifSending.js`. That dispatches the `sif:open-send-modal` window event; `SifSendModalHost`, which the invoice window wrapper (`index.jsx`) renders next to the form for as long as a record is open, filters it with `isSifSendRequestFor` (same spec, same record id) and portals the shared `SifSendingModal`. After a successful send it fires `${specName}:invoice-updated` so the topbar refreshes the record.
+
+```json
+"customComponents": { "moreMenuContent": "SifSendMenuItem" }
+```
+
+```jsx
+// tools/app-shell/src/windows/custom/sales-invoice/index.jsx — detail branch
+<SifSendModalHost apiBaseUrl={apiBaseUrl} recordId={recordId} />
+```
+
+Known limitation of this pattern: the kebab entry has no save handle, so it does not flush pending header edits before sending (the topbar button does). Field reference: `docs/decisions-reference.md` → Custom Components.
+
 **The ⋮ button auto-hides when empty.** `DetailView` only renders the "more" button when, for the current record state, there is at least one visible `menuActions` entry **or** a `customComponents.moreMenuContent` is set. If every action is gated out (e.g. all `visibleWhenStatus: "CO"` while the document is in Draft), the button is not shown at all — it never renders as an empty, clickable dropdown.
 
 **Real examples:** `goods-shipment` (cancel), `payment-in` (reverse via `columnName`), `sales-invoice` (duplicate, cancel), `sales-order` (reactivate via `documentAction: "RE"`).

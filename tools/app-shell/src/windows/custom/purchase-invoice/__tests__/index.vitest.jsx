@@ -137,6 +137,29 @@ vi.mock('../../shared/OcrSidePanel.jsx', () => ({
   default: () => <div data-testid="ocr-side-panel" />,
 }));
 
+// ETP-5700 — the row-kebab SIF send hook is wrapped (not replaced) so the real wiring
+// keeps running while the test records its arguments and can override its result.
+let sifHookCalls = [];
+let sifHookOverride = null;
+vi.mock('../../shared/useSifRowSendAction.jsx', async () => {
+  const actual = await vi.importActual('../../shared/useSifRowSendAction.jsx');
+  return {
+    ...actual,
+    useSifRowSendAction: (args) => {
+      const out = actual.useSifRowSendAction(args);
+      const result = sifHookOverride ? { ...out, ...sifHookOverride } : out;
+      sifHookCalls.push({ args, result });
+      return result;
+    },
+  };
+});
+
+vi.mock('../../shared/SifSendModalHost.jsx', () => ({
+  default: ({ apiBaseUrl, recordId }) => (
+    <div data-testid="sif-send-modal-host" data-record-id={recordId} data-api-base-url={apiBaseUrl} />
+  ),
+}));
+
 vi.mock('../../shared/useInvoiceWindow.js', async () => {
   const actual = await vi.importActual('../../shared/useInvoiceWindow.js');
   return actual;
@@ -617,5 +640,64 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
 
       expectInvoiceBulkUnpostWiring(callFor);
     });
+  });
+});
+
+describe('PurchaseInvoiceWindow — SIF send entry points', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    searchParams = new URLSearchParams();
+    locationState = {};
+    lastListViewProps = null;
+    lastHeaderPageProps = null;
+    fiscalProfile = null;
+    currentWindowAccessTier = 'full';
+    sifHookCalls = [];
+    sifHookOverride = null;
+  });
+
+  it('enables the row send action under the full access tier', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(sifHookCalls[sifHookCalls.length - 1].args).toMatchObject({ specName: 'purchase-invoice', apiBaseUrl: '/api', enabled: true });
+  });
+
+  it('disables the row send action under the read-only tier', () => {
+    currentWindowAccessTier = 'read-only';
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(sifHookCalls[sifHookCalls.length - 1].args.enabled).toBe(false);
+  });
+
+  it('hands sifMenuActions to the row quick actions as extra menu entries', () => {
+    const sifMenuActions = vi.fn(() => ({ key: 'sendToSif', labelKey: 'sendToSifLabelSii' }));
+    sifHookOverride = { sifMenuActions };
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    const row = { id: 'inv-1', documentStatus: 'CO', processed: 'Y', posted: 'Y' };
+    const keys = lastListViewProps.rowQuickActions.menuActions({ row }).map((a) => a.key);
+
+    expect(sifMenuActions).toHaveBeenCalledWith(row);
+    expect(keys).toEqual(['reactivate', 'sendToSif']);
+  });
+
+  it('mounts SifSendModalHost with the recordId in the form view', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    const host = screen.getByTestId('sif-send-modal-host');
+    expect(host).toHaveAttribute('data-record-id', 'inv-1');
+    expect(host).toHaveAttribute('data-api-base-url', '/api');
+  });
+
+  it('does not mount SifSendModalHost in the list view', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(screen.queryByTestId('sif-send-modal-host')).not.toBeInTheDocument();
+  });
+
+  it('skips the fiscal-config load in the form view (recordId present)', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    expect(sifHookCalls[sifHookCalls.length - 1].args.loadConfig).toBe(false);
+  });
+
+  it('loads the fiscal config in the list view', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(sifHookCalls[sifHookCalls.length - 1].args.loadConfig).toBe(true);
   });
 });

@@ -53,7 +53,10 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
   // (not a hook itself): calling useUI() here would violate the Rules of Hooks the moment
   // this factory's call graph changes, the same production bug postRowFilter's own
   // `(row, action, ui)` signature was written to avoid (see BulkDocumentAction.jsx).
-  const { showEmail = true, onRefresh, ui } = options;
+  // ETP-5700 — `extraMenuActions(row)` appends window-specific row-kebab entries after
+  // the document actions (the fiscal "send to SII/TBAI" entry). It may return one
+  // descriptor, an array of them, or nothing.
+  const { showEmail = true, onRefresh, ui, extraMenuActions = null } = options;
   return {
     enabled: true,
     editMode: 'navigate',
@@ -135,6 +138,7 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
             destructive: true,
           }]
           : []),
+        ...normalizeExtraMenuActions(extraMenuActions, row),
       ];
     },
     // ETP-5209 follow-up — RowQuickActions deliberately never shows a toast itself
@@ -177,4 +181,12 @@ export function useClearSavedRecord(setSavedRecord, location, navigate) {
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [setSavedRecord, location, navigate]);
+}
+
+/** Accepts a descriptor, an array of them, or nothing, and always yields an array. */
+function normalizeExtraMenuActions(extraMenuActions, row) {
+  if (typeof extraMenuActions !== 'function') return [];
+  const extra = extraMenuActions(row);
+  if (!extra) return [];
+  return Array.isArray(extra) ? extra : [extra];
 }

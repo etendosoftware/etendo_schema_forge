@@ -62,7 +62,7 @@ Global semantic search opts this window in through `go.purchase-invoice`. It ind
 - Topbar clone button: icon-only (no text label), styled as Secondary Outline (`#D1D4DB` border, `#FFFFFF` background, `#64748B` icon color, `0px 1px 2px 0px #1212170D` shadow). Hover shifts background to `#F1F5F9`. Implemented via the shared `DocumentSecondaryActions.jsx`'s `CloneButton` (see below), the same one `SalesInvoiceSecondaryActions.jsx` uses.
 - **Button order (ETP-5260):** Copy link → Clone render to the LEFT of Save/Confirm via `PurchaseInvoiceSecondaryActions.jsx` (wired as the `topbarRight`-slot replacement from `index.jsx`, a thin adapter around the shared `DocumentSecondaryActions`, since this window is on the prop-hardcoded "Camino B" path — see the ETP-5260 plan doc); `PurchaseInvoiceTopbar.jsx` keeps only the payment-status pill (a primary/status indicator), to the RIGHT of Save/Confirm. Clone reuses the `cloneInvoiceError`/`invoiceProcessing` i18n keys the inline call used before ETP-5260. No generic `showSend` — instead, `SendToSifButton` (send invoice to SII/TBAI) renders as a `children` extension of `DocumentSecondaryActions`, after Clone, matching the DF's "Enviar" position in the secondary group while staying a window-specific fiscal concern (its own `status === 'CO'` + pending SII/TBAI-target gating, unrelated to `DocumentSecondaryActions.showSend`). See `docs/ui-customization.md` §3b for the general slot-classification rule.
 - **Clone result verification (ETP-5547):** clone results are verified per row by the shared `CloneOrderModal` — a clone that cannot be found is shown as a failed row instead of a link. See `docs/ui-customization.md` §3b, "Clone result verification".
-- When the fiscal profile enables a manual fiscal target for purchase invoices, completed purchase invoices expose `Enviar a SIF` in both the detail topbar and the preview modal. The matrix is spec-specific: `sii` and `sii-navarra` show SII; `tbai` shows TicketBAI **only when the active TBAI config's territory is Bizkaia** (see "TBAI territory gating for purchase invoices (Batuz) — ETP-5087" below), and shows nothing for purchases on any other territory; `sii+tbai` shows SII always, plus TicketBAI too when the territory is Bizkaia; `verifactu` shows no manual send button because Verifactu is sent automatically on completion.
+- When the fiscal profile enables a manual fiscal target for purchase invoices, completed purchase invoices expose a send action captioned with the pending system (`Envío SII`, `Envío Batuz` or `Envío SII+Batuz`) in the preview, the form topbar, the form kebab and the grid row kebab — see "Fiscal sending … — ETP-5700" below. The matrix is spec-specific: `sii` and `sii-navarra` show SII; `tbai` shows TicketBAI **only when the active TBAI config's territory is Bizkaia** (see "TBAI territory gating for purchase invoices (Batuz) — ETP-5087" below), and shows nothing for purchases on any other territory; `sii+tbai` shows SII always, plus TicketBAI too when the territory is Bizkaia; `verifactu` shows no manual send button because Verifactu is sent automatically on completion.
 - The detail bottom panel also includes the same SIF status block used by sales invoices, rendered below Related Documents and Notes. It shows SII/TBAI tabs depending on the org fiscal profile (and, for TBAI, the territory — see below), exposes the current send status badges, and allows inline editing of the SII metadata fields that remain editable for the current document state.
 - **Verifactu does not apply to purchase invoices.** The SIF bottom-panel block for purchases shows only SII and TBAI tabs according to the fiscal matrix; the `verifactu` profile shows no bottom-panel block for purchases because Verifactu is a sales-only fiscal system in Etendo.
 
@@ -77,7 +77,7 @@ Before this change, a purchase invoice offered TBAI/Batuz sending (button, popup
 The territory value comes from `tbaiRecord?.etsgSifTerritory` (via `useFiscalConfig(orgId, apiBaseUrl)`, the same hook that already returns `profile`) and is threaded through every consumer of `getInvoiceFiscalTargets`/`getPendingSifTargets`:
 
 - `PurchaseInvoiceHeaderTable.jsx` — list-level SII/TBAI badge gating.
-- `SendToSifButton.jsx` — detail-topbar and preview-modal `Enviar a SIF` button (via `getPendingSifTargets(specName, profile, data, territory)`).
+- `SendToSifButton.jsx` — form-topbar send button (gate: `useInvoiceSifSending` → `getPendingSifTargets`; caption: `getSifButtonLabelKey`). The form kebab entry (`SifSendMenuItem.jsx` + `SifSendModalHost.jsx`) and the grid row kebab entry (`useSifRowSendAction.jsx`) share the same gate — ETP-5700.
 - `sifSending.js` (`getPendingSifTargets`) — now accepts `territory` as a fourth argument, defaulting to `null`, and forwards it to `getInvoiceFiscalTargets`.
 - `useInvoicePreview.js` — computes `territory` and returns it alongside `profile` for `InvoicePreview.jsx` to consume.
 - `InvoicePreview.jsx` (`InvoiceGeneralTab`) — passes `territory` into both `getInvoiceFiscalTargets` and `useFiscalStatus`.
@@ -228,6 +228,61 @@ generated document differ) — see `docs/ui-customization.md` §20.
   invoice shows the new receipt status and linked receipts without a manual reload.
 - Config: `PURCHASE_INVOICE_FOLLOW_UP` in `tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js`.
 
+## Fiscal sending: same-day eligibility, system-specific caption and new entry points — ETP-5700
+
+**Symptom.** With SII (or Batuz) active in Configuración fiscal, the purchase invoice offered no way to
+send the invoice: no button in the detail preview, nothing in the form view kebab (only "Reactivar"),
+nothing on the grid row hover, and the fiscal status column showed "—". The SIF tab still showed the
+fiscal data, because it only depends on the fiscal profile, not on the date gate.
+
+**Root cause and fix (shared with `sales-invoice`).** The SII/TBAI adoption dates (`fechaAcogidaSII`,
+`tbaisystemdate`) are AD Date columns served as a bare `yyyy-MM-dd`; `isSifEligibleByDate` parsed them
+with `new Date(raw)` (UTC midnight, i.e. 01:00/02:00 local in Spain), so an invoice dated on the
+adoption day compared as "before" it and was never eligible. Fixed in the shared code: adoption dates
+go through `parseAdoptionDate()` / `parseCalendarDate` (`shared/fiscalTargets.js`),
+`earliestCutoverDate()` returns the raw row value, and the fiscal-config flows write "today" with
+`todayCalendarISO()`. Full analysis: `sales-invoice.md` → "Fiscal sending: same-day eligibility,
+system-specific caption and new entry points — ETP-5700".
+
+**System-specific caption.** Every send entry point now names the system the invoice is pending for,
+via `getSifButtonLabelKey(specName, pendingTargets)` (`shared/sifSending.js`, next to
+`getSifBodyKey`). The generic `sendToSif` ("Enviar a SIF") is no longer used by these entry points.
+
+**Entry points.** All of them gate on the same `getPendingSifTargets()` and open the same
+`SifSendingModal`:
+
+| Surface | Where | Notes |
+|---|---|---|
+| Detail preview (list side panel) | `InvoicePreview.jsx` (`useInvoicePreview`) | Unchanged except the caption. |
+| Form view topbar | `SendToSifButton.jsx` | Caption, plus a gate fix: ETP-5205 hid it with `isDocumentReadOnly`, which `DetailView` also sets for every processed document (`lockWhenProcessed`), i.e. for every completed invoice — so the button never showed where sending applies. It now hides only under the Solo Lectura tier (`windowReadOnly`). |
+| Form view kebab (⋮) | `SifSendMenuItem.jsx`, declared as `decisions.json → window.customComponents.moreMenuContent` | NEW. A `menuActions` entry cannot express it: its caption is a fixed `labelKey` and its visibility can only test the status or a record field, while this action depends on the org's fiscal configuration. The kebab unmounts its content when the menu closes, so the item hands the request (with the targets it computed through `useInvoiceSifSending`, the hook the topbar button also uses) to `SifSendModalHost`, which the window wrapper (`index.jsx`) mounts next to the form unconditionally (window event `sif:open-send-modal`). |
+| Grid row hover kebab | `useSifRowSendAction.jsx`, appended through `buildInvoiceRowQuickActions(..., { extraMenuActions })` | NEW. Gated per row with the same rules. Uses the fiscal config of the top-nav selected org, the same one the list's fiscal status columns use (per-row org resolution is ETP-5248). Hidden under the Solo Lectura tier. A successful send refreshes the list when the modal closes. |
+
+VERI*FACTU has no manual send path (Classic sends it automatically on completion), so no entry point
+offers it.
+
+**Known limitation — the kebab send does not flush unsaved header edits.** The kebab entry has no
+save handle, so it sends the last-persisted invoice. The topbar button still saves pending header
+edits first (ETP-5272, below). On a completed purchase invoice only the fields kept editable after
+completion (`orderReference`, `accountingDate`) can be pending.
+
+**Captions on a purchase invoice.** TicketBAI reaches a purchase invoice only under the BIZKAIA
+territory, where it is always Batuz (ETP-5087). By user decision the caption mirrors Classic and
+`getSifBodyKey`'s purchase split, naming Batuz rather than TBAI:
+
+| Pending for | es_ES | en_US | Key |
+|---|---|---|---|
+| SII only (every territory) | Envío SII | Send to SII | `sendToSifLabelSii` |
+| Batuz only (BIZKAIA) | Envío Batuz | Send to Batuz | `sendToSifLabelTbaiPurchase` |
+| SII and Batuz (BIZKAIA) | Envío SII+Batuz | Send to SII+Batuz | `sendToSifLabelBothPurchase` |
+
+**Manual verification (Europe/Madrid browser timezone).**
+1. Configure SII for an org today, create and confirm a purchase invoice whose accounting date is
+   today: the preview, the form topbar, the form kebab and the grid row kebab all offer "Envío SII".
+2. Under a non-BIZKAIA TicketBAI configuration with SII, only "Envío SII" is offered.
+3. Under BIZKAIA with SII, "Envío SII+Batuz"; after sending one of them, the caption names the other.
+4. Under the Solo Lectura tier, none of the four entry points is offered.
+
 ## Gap assessment
 
 - The UI clearly presents payable amounts and payment registration entry points, but the exact accounting consequences of adding or updating payments are not documented in this window evidence. Treat downstream posting semantics as backend behavior, not confirmed UI behavior here.
@@ -251,9 +306,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
 5. Open a draft invoice detail and confirm adding a line is blocked until a business partner is selected.
 6. On the detail page, confirm the custom lines table shows product, description, invoiced quantity, net unit price (`listPrice`), % discount (`etgoDiscount`), tax, and line gross amount in that exact column order, and that the footer shows subtotal, inferred tax, and total. Open a line for edit and confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured purchase taxes (filtered by `IsSOTrx=N` and validity against the invoice date), not a free-text search that returns "Sin resultados". Confirm that selecting a product populates the net unit price field (`listPrice`, the PriceList value from the document's price list) and resets the discount to 0, and that typing a new quantity, price, or discount immediately updates the gross amount without a server round-trip. The net unit price field must be editable in the add-line row.
 7. Open a completed invoice with pending balance and confirm the topbar payment-status pill appears, opens the payment modal, and reflects the invoice as pending or paid based on outstanding amount.
-8. Under an org configured for `sii`, `sii-navarra`, `tbai`, or `sii+tbai`, open a completed purchase invoice and confirm `Enviar a SIF` appears in both the detail topbar and the preview modal only for the purchase-side target defined by the fiscal matrix: SII for `sii` / `sii-navarra`; TicketBAI for `tbai` **only when the active TBAI config's territory is Bizkaia** (hidden entirely for Álava/Gipuzkoa); SII plus TicketBAI-on-Bizkaia for `sii+tbai`. Trigger it and verify the confirmation text matches the pending target and successful sends refresh the invoice state.
+8. Under an org configured for `sii`, `sii-navarra`, `tbai`, or `sii+tbai`, open a completed purchase invoice and confirm the send action (`Envío SII` / `Envío Batuz` / `Envío SII+Batuz`) appears in the preview, the form topbar, the form kebab and the grid row kebab only for the purchase-side target defined by the fiscal matrix: SII for `sii` / `sii-navarra`; TicketBAI for `tbai` **only when the active TBAI config's territory is Bizkaia** (hidden entirely for Álava/Gipuzkoa); SII plus TicketBAI-on-Bizkaia for `sii+tbai`. Trigger it and verify the confirmation text matches the pending target and successful sends refresh the invoice state.
 9. From the detail footer or related-documents tab, confirm links are available to the source purchase order, related goods receipts, and downstream payment-out records when those relationships exist. The purchase order chip must show the formatted label (`Order #<documentNo>`), the grand total with currency symbol, and the document status pill — not the raw `_identifier` string (`documentNo - date - amount`).
-10. Open a completed purchase invoice detail and confirm the kebab menu exposes `Reactivate` and `Post` (gated on `processed && !posted`) — or, once the invoice is posted, `Reactivate` and `Unpost`/"Descontabilizar" (gated on status `CO` AND `posted`, ETP-5692) — see `window.menuActions` in `decisions.json`. SII sending is a separate detail-topbar action (`Enviar a SIF`), not a kebab entry — see "Send to SII from the detail topbar" below.
+10. Open a completed purchase invoice detail and confirm the kebab menu exposes `Reactivate` and `Post` (gated on `processed && !posted`) — or, once the invoice is posted, `Reactivate` and `Unpost`/"Descontabilizar" (gated on status `CO` AND `posted`, ETP-5692) — see `window.menuActions` in `decisions.json`. When a fiscal target is pending, the kebab also offers the send action (`Envío SII` / `Envío Batuz` / `Envío SII+Batuz`, `customComponents.moreMenuContent` → `SifSendMenuItem`, ETP-5700), alongside the topbar button.
 11. From the list, select multiple draft invoices and confirm the bulk action bar shows a `Procesar (N)` button whose dropdown offers **Confirmar** (`CO`); then select multiple completed invoices and confirm the same button offers **Reactivar** (`RE`). Confirm the dialog's confirm button reads **Aceptar** / **Accept** (not "Completado"). Verify the expected status transition and a result toast.
 11b. **ETP-5302 — bulk reactivate of a posted invoice.** Complete an invoice, post it ("Contabilizar"), then select it in the list and run `Procesar` → **Reactivar**. It must return to draft and the toast must report it as successful. Before this fix the row failed with `{"status":"error","message":"Factura contabilizada"}` while reactivating the very same invoice from its form kebab succeeded. Also confirm the page does **not** reload: scroll down a long list, apply a filter, run the bulk action, and verify the filter and scroll position survive and only the rows refetch.
 11c. **ETP-5692 — Descontabilizar without reactivating.** On a completed, posted invoice confirm **Descontabilizar** is offered in the detail kebab, in the row-hover kebab and — after selecting it — as a `Descontabilizar` button in the selection bar; on a not-posted invoice confirm none of the three offers it (Contabilizar is offered instead). Run it from the row kebab on a **paid** invoice and verify the invoice stays **Completada** and paid, its posted badge flips to *Sin contabilizar*, a `Documento descontabilizado correctamente` toast appears, and the payment's own accounting entries are unchanged. Confirm a posted invoice in any other status (e.g. voided) does not offer it either. Correct a rate in the **Exchange rates** tab, post again, and verify the new entries use it. On another unposted invoice, change the header **Proyecto** / **Centro de costos**, confirm **Guardar** is enabled and saves, post again, and verify the new entries carry the dimension — without having reactivated. Confirm both fields are read-only again once the invoice is posted. Then, on an unposted Completed invoice, expand a line's **Dimensiones contables** panel (Layers icon or chevron): confirm **Proyecto** / **Centro de costos** are editable while every other line value stays read-only and no add/edit/delete line affordance appears; change one, confirm the `Registro guardado` toast and that the value survives a reload, then post again and verify the new line entries carry it. Once posted, confirm the line dimensions are read-only again. Finally, on a **voided** invoice that is not posted, confirm Descontabilizar is not offered and both the header and the line **Proyecto** / **Centro de costos** are read-only (not editable, no Save offered for them), while the accounting date behaves exactly as before. In the bulk run, mix Completed+posted, not-posted and posted-but-not-Completed invoices and confirm only the first are unposted and the others are left unchanged; the result toast only counts them ("N procesados, M omitidos (no elegibles), K con error") — it does not say why a row was skipped (ETP-5316). On an invoice whose entries fall in a closed period, confirm the translated closed-period error appears and the invoice is unchanged. Finally confirm **Reactivar** still unposts and returns the invoice to draft.
@@ -2198,6 +2253,12 @@ was initially missed** — its sibling on sales-invoice (`InvoiceTopbarExtra`) f
 `{ data, recordId, apiBaseUrl, onSave, isDirty }` from its props and silently dropped the prop, so
 the button stayed visible/clickable for a completed invoice with pending SII/TBAI targets even
 under read-only. Found and fixed during the ticket's full v1-v6 review pass (commit `d134ecb82`).
+
+**Corrected by ETP-5700.** `isDocumentReadOnly` was the wrong prop: `DetailView` also sets it for
+every processed document, i.e. for every completed invoice — the only state in which sending
+applies — so the button never showed. `SendToSifButton` now hides only on `windowReadOnly` (the
+Solo Lectura tier), which `PurchaseInvoiceSecondaryActions` forwards. The ETP-5700 form kebab and
+grid row kebab entries are hidden under the same tier.
 
 ## OCR flow under the cookie session — ETP-5289
 

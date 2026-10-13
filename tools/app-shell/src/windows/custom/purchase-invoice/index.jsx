@@ -23,6 +23,8 @@ import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord, 
 import { PURCHASE_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
 import { createFollowUpAfterProcess } from '@/components/follow-up-documents/followUpDocuments.js';
 import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
+import { useSifRowSendAction } from '../shared/useSifRowSendAction.jsx';
+import SifSendModalHost from '../shared/SifSendModalHost.jsx';
 
 /* eslint-disable react/prop-types */
 
@@ -170,6 +172,19 @@ export default function PurchaseInvoiceWindow(props) {
   const [savedRecord, setSavedRecord] = useState(null);
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  const windowAccessTier = useWindowAccess('183');
+  // ETP-5700 — grid row-kebab "Envío SII" (or "Envío Batuz" under Bizkaia).
+  const { sifMenuActions, sifModal } = useSifRowSendAction({
+    specName: 'purchase-invoice',
+    apiBaseUrl,
+    enabled: windowAccessTier !== 'read-only',
+    onRefresh: () => setRefreshKey(k => k + 1),
+    // The form view (recordId) mounts no grid; it has its own SendToSifButton.
+    loadConfig: !recordId,
+  });
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
   const breadcrumb = 'Purchases / Purchase Invoice';
@@ -190,8 +205,9 @@ export default function PurchaseInvoiceWindow(props) {
       showEmail: false,
       onRefresh: () => setRefreshKey(k => k + 1),
       ui,
+      extraMenuActions: sifMenuActions,
     }),
-    [navigate, windowName, requestDelete, ui],
+    [navigate, windowName, requestDelete, ui, sifMenuActions],
   );
 
   const summary = [
@@ -217,10 +233,6 @@ export default function PurchaseInvoiceWindow(props) {
   // is posted (matching core C_INVOICE_TRG) or in any processed status other than CO.
   const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate', 'project', 'costcenter'], editableLineFieldsWhenCompleted: ['project', 'costcenter'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
 
-  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
-  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
-  // Checked once here, before either branch, so both list and detail are covered.
-  const windowAccessTier = useWindowAccess('183');
   // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
   // ListView below never picked up the read-only tier either, unlike GeneratedApp
   // (which already forces window.readOnly internally for the detail branch).
@@ -253,6 +265,13 @@ export default function PurchaseInvoiceWindow(props) {
           data-testid="HeaderPage__c20e53" />
         {contactPortal}
         {taxSifModal}
+        {/* ETP-5700 — hosts the send modal for the form kebab entry (SifSendMenuItem). Mounted
+            unconditionally: the kebab unmounts its own content on close, and the topbar
+            button is not always rendered. */}
+        <SifSendModalHost
+          apiBaseUrl={apiBaseUrl}
+          recordId={recordId}
+          data-testid="SifSendModalHost__c20e53" />
       </CreateContactContext.Provider>
     );
   }
@@ -341,6 +360,7 @@ export default function PurchaseInvoiceWindow(props) {
         window={effectiveWindow}
         data-testid="ListView__c20e53" />
       {deleteDialog}
+      {sifModal}
       {cloneTargets && createPortal(
         <CloneOrderModal
           records={cloneTargets}

@@ -270,6 +270,77 @@ Confirm navigated to the list anyway, so the dialog was unreachable. The sibling
 limitation (it only reacts to a `DocAction` process run through `hook.handleProcess`, which this
 window does not expose), so its behaviour is unchanged.
 
+## Fiscal sending: same-day eligibility, system-specific caption and new entry points — ETP-5700
+
+**Symptom.** With a fiscal system active in Configuración fiscal, the sales invoice offered no way to
+send the invoice to SII / TicketBAI: no button in the detail preview, nothing in the form view kebab
+(only "Reactivar"), nothing on the grid row hover, and the fiscal status column showed "—". The SIF
+tab still showed the fiscal data, because it only depends on the fiscal profile, not on the date gate.
+
+**Root cause — the date gate, east of UTC.** `fechaAcogidaSII` (`aeatsii_config.insiisystemdate`)
+and `tbaisystemdate` are AD **Date** columns, which NEO serialises as a bare `yyyy-MM-dd`.
+`isSifEligibleByDate` (`tools/app-shell/src/windows/custom/shared/fiscalTargets.js`) parsed it with
+`new Date(raw)`, i.e. UTC midnight, which in Europe/Madrid is already 02:00 local (01:00 in winter,
+and the same in Atlantic/Canary). The invoice's own day is compared at local midnight, so an invoice
+dated on the day the fiscal configuration was created always compared as "before" the adoption: no
+send action and a dash instead of its fiscal status, from the moment the configuration existed. West
+of UTC (Argentina) the same parse lands on the previous evening, which is why it never reproduced
+there. `useFiscalConfig.js`'s `earliestCutoverDate()` made it worse by re-serialising the earliest
+value with `toISOString()`.
+
+**Fix.**
+- `parseAdoptionDate()` (new, `fiscalTargets.js`) reads a date-only adoption date as a LOCAL calendar
+  day (`parseCalendarDate`); a full timestamp (VERI*FACTU's `inVfactuSystem`, or any value with a
+  time-of-day) is still compared as the instant it names, exactly like Classic.
+- `earliestCutoverDate()` orders rows with the same parser and returns the winning row's value as-is
+  (a `yyyy-MM-dd` for SII/TBAI), never a UTC-re-serialised timestamp.
+- Every "today" the fiscal-config flows write into those date fields (onboarding wizard payloads,
+  `createComplementary`, the SII and TBAI configuration sections) is the local calendar day
+  (`todayCalendarISO`), not `toISOString().slice(0, 10)`, which in Spain right after midnight is
+  still yesterday.
+
+**System-specific caption.** Every send entry point now names the system the invoice is pending for,
+via `getSifButtonLabelKey(specName, pendingTargets)` (`shared/sifSending.js`, next to
+`getSifBodyKey`). The generic `sendToSif` ("Enviar a SIF") is no longer used by these entry points.
+
+**Entry points.** All of them gate on the same `getPendingSifTargets()` and open the same
+`SifSendingModal`:
+
+| Surface | Where | Notes |
+|---|---|---|
+| Detail preview (list side panel) | `InvoicePreview.jsx` (`useInvoicePreview`) | Unchanged except the caption. |
+| Form view topbar | `SendToSifButton.jsx` | Caption, plus a gate fix: ETP-5205 hid it with `isDocumentReadOnly`, which `DetailView` also sets for every processed document (`lockWhenProcessed`), i.e. for every completed invoice — so the button never showed where sending applies. It now hides only under the Solo Lectura tier (`windowReadOnly`). |
+| Form view kebab (⋮) | `SifSendMenuItem.jsx`, declared as `decisions.json → window.customComponents.moreMenuContent` | NEW. A `menuActions` entry cannot express it: its caption is a fixed `labelKey` and its visibility can only test the status or a record field, while this action depends on the org's fiscal configuration. The kebab unmounts its content when the menu closes, so the item hands the request (with the targets it computed through `useInvoiceSifSending`, the hook the topbar button also uses) to `SifSendModalHost`, which the window wrapper (`index.jsx`) mounts next to the form unconditionally (window event `sif:open-send-modal`). |
+| Grid row hover kebab | `useSifRowSendAction.jsx`, appended through `buildInvoiceRowQuickActions(..., { extraMenuActions })` | NEW. Gated per row with the same rules. Uses the fiscal config of the top-nav selected org, the same one the list's fiscal status columns use (per-row org resolution is ETP-5248). Hidden under the Solo Lectura tier. A successful send refreshes the list when the modal closes. |
+
+VERI*FACTU has no manual send path (Classic sends it automatically on completion), so no entry point
+offers it.
+
+**Known limitation — the kebab send does not flush unsaved header edits.** The kebab entry has no
+save handle, so it sends the last-persisted invoice. The topbar button still saves pending header
+edits first (ETP-5272, below). On a completed invoice the header is normally locked, so this only
+matters for the few fields that stay editable after completion (e.g. `accountingDate`).
+
+**Captions on a sales invoice.**
+
+| Pending for | es_ES | en_US | Key |
+|---|---|---|---|
+| SII only | Envío SII | Send to SII | `sendToSifLabelSii` |
+| TicketBAI only | Envío TBAI | Send to TBAI | `sendToSifLabelTbai` |
+| SII and TicketBAI | Envío SII+TBAI | Send to SII+TBAI | `sendToSifLabelBoth` |
+
+**Manual verification (Europe/Madrid browser timezone).**
+1. Configure SII for an org today (Configuración fiscal), create and confirm an invoice dated today:
+   the preview, the form topbar, the form kebab and the grid row kebab all offer "Envío SII", and the
+   SII status column shows "Pendiente", not "—".
+2. Same with TicketBAI only: "Envío TBAI" everywhere.
+3. With SII + TicketBAI: "Envío SII+TBAI"; after sending only one of them (partial failure) the
+   caption names the remaining one.
+4. From the form kebab entry, the confirmation modal opens and stays open while you click inside it.
+5. From the grid row kebab, a successful send refreshes the row's status when the modal closes.
+6. Under the Solo Lectura tier, none of the four entry points is offered.
+7. An invoice dated before the org's adoption date still offers nothing and shows "—".
+
 ## Known issues / Open bugs
 
 | ID | Severity | Window | Description | Status |
@@ -537,7 +608,7 @@ backend change is deployed.
 12c. **ETP-5692 — Descontabilizar without reactivating.** On a completed, posted invoice confirm **Descontabilizar** is offered in the detail kebab, in the row-hover kebab and — after selecting it — as a `Descontabilizar` button in the selection bar; on a not-posted invoice confirm none of the three offers it (Contabilizar is offered instead). Run it from each place and verify the invoice stays **Completada**, the posted badge flips to *Sin contabilizar*, a `Documento descontabilizado correctamente` toast appears, and Contabilizar is offered again. Confirm a posted invoice in any other status (e.g. voided) does not offer it either. Correct a rate in the **Exchange rates** tab (editable again once unposted), post again, and verify the new entries use the corrected rate. On another unposted invoice, change the header **Proyecto** / **Centro de costos**, confirm **Guardar** is enabled and saves, post again, and verify the new entries carry the dimension — without having reactivated. Confirm both fields are read-only again once the invoice is posted. Then, on an unposted Completed invoice, expand a line's **Dimensiones contables** panel (Layers icon or chevron): confirm **Proyecto** / **Centro de costos** are editable while every other line value stays read-only and no add/edit/delete line affordance appears; change one, confirm the `Registro guardado` toast and that the value survives a reload, then post again and verify the new line entries carry it. Once posted, confirm the line dimensions are read-only again. Finally, on a **voided** invoice that is not posted, confirm Descontabilizar is not offered and both the header and the line **Proyecto** / **Centro de costos** are read-only (not editable, no Save offered for them), while the accounting date behaves exactly as before. In the bulk run, mix Completed+posted, not-posted and posted-but-not-Completed invoices and confirm only the first are unposted and the others are left unchanged; the result toast only counts them ("N procesados, M omitidos (no elegibles), K con error") — it does not say why a row was skipped (ETP-5316). On an invoice whose entries fall in a closed period, confirm the translated closed-period error appears and the invoice is unchanged. Finally confirm **Reactivar** still unposts and returns the invoice to draft.
 13. Open a draft invoice and confirm the Send/"Enviar" action is **not** shown, neither in the topbar nor as a row quick action in the list. Confirm the invoice, then open the Send Email modal from the topbar and from the invoice preview and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language. Also confirm the `Asunto` and `Mensaje` fields are editable (not greyed-out/read-only), that they pre-fill with the auto-derived subject and an empty message, and that sending without touching either still succeeds normally.
 14. Open an existing draft invoice without touching any field and confirm the "Save Draft" button is **disabled**. Change any header field and confirm it becomes enabled. Save and confirm it disables again. Revert the changed field to its original value without saving and confirm the button disables once more. Add a line: once the add-row is submitted, the button should disable again if no header changes remain pending. Confirm the "Confirm" button stays enabled throughout all these states.
-15. Under an org configured for `sii+tbai`, open a completed sales invoice and confirm `Enviar a SIF` still appears after a partial send until both targets are sent. The confirmation copy must indicate both targets, and the result modal must attempt both `Em_aeatsii_send` and `Em_Tbai_Xmlgenerator` independently.
+15. Under an org configured for `sii+tbai`, open a completed sales invoice and confirm the send action still appears after a partial send until both targets are sent, captioned with the remaining target (`Envío SII` or `Envío TBAI`; `Envío SII+TBAI` while both are pending — see the ETP-5700 section). The confirmation copy must indicate both targets, and the result modal must attempt both `Em_aeatsii_send` and `Em_Tbai_Xmlgenerator` independently.
 16. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 17. On a draft invoice tied to a customer that has at least one completed (not fully invoiced) sales order, open `Import from Sales Order` and confirm: only that customer's completed-and-not-fully-invoiced orders appear; expanding an order lists its lines with already-imported lines marked and disabled; submitting creates invoice lines that reference the source order (`salesOrderLine`). If every imported order carried the same non-zero `etgoTotalDiscount`, confirm the invoice header now shows that same total discount; if the imported orders carry different discounts (or none), the header discount is left untouched.
 18. In the list, select 0, then 1, then 2+ invoices and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/sales-invoice/<id>`. Open a saved invoice and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
@@ -2120,13 +2191,18 @@ concurrently would report whichever failed first while the others had already la
 
 Etendo GO's per-role window-access tier (`useWindowAccess('167')` → `'none' | 'read-only' |
 'full'`) must hide every mutating control in a window the Solo Lectura role can see. For this
-window: "Enviar a SII/TBAI" (`SendToSifButton`, rendered inside `InvoiceTopbarExtra`, gated on its
-own `isDocumentReadOnly` prop), the secondary-actions bar's Clone/Send (shared
+window: the fiscal send button (`SendToSifButton`, rendered inside `InvoiceTopbarExtra`), the secondary-actions bar's Clone/Send (shared
 `DocumentSecondaryActions` via `topbarSecondary`), the bulk-selection toolbar's document actions,
 and the notes field / total-discount input (shared `DetailView`/`LinesBottomSection` fix). Not
 live-testable in this session — this role has `full`, not `read-only`, access to Sales Invoice, and
 `lockWhenProcessed` is `null` in `decisions.json`, so no completed-invoice state can be reached
 either way; relies on unit-test coverage.
+
+**Corrected by ETP-5700.** This ticket gated `SendToSifButton` on `isDocumentReadOnly`, but
+`DetailView` also sets that prop for every processed document, i.e. for every completed invoice —
+the only state in which sending applies — so the button never showed. It now reads
+`windowReadOnly` (the Solo Lectura tier only). The ETP-5700 form kebab and grid row kebab entries
+are hidden under the same tier.
 
 ### QA reject pasada 1 — Send and attachment writes (ETP-5205, 2026-09-29)
 
@@ -2147,7 +2223,7 @@ does not trigger any of this):
   → "No tenés autorización para enviar este documento") and every attachment write
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
-- Preview also hides **Añadir cobro** and **Enviar a SIF** under the tier (both write).
+- Preview also hides **Añadir cobro** and the fiscal send button (`Envío SII/TBAI`, ETP-5700) under the tier (both write).
 
 ## Payment ids scoped to the invoice and the tenant — ETP-5558
 

@@ -431,6 +431,26 @@ Each fiscal system stores the environment in its own column, and VERI*FACTU stor
 
 For `sii+tbai` both records must report production for the row to read "Producción". Any missing or unknown flag falls back to the sandbox label and the `text-status-warning-foreground` token; production uses `text-status-success-foreground`. Labelling a test setup as production is the more dangerous error, so the fallback is deliberately never "Producción".
 
+## Adoption dates are local calendar days — ETP-5700
+
+The SII and TicketBAI adoption dates (`fechaAcogidaSII` / `monitordate` on `aeatsii_config`,
+`tbaisystemdate` on the TBAI config) are AD **Date** columns. Two things in this window treated them
+as UTC, which in Spain hid every invoice dated on the adoption day from the fiscal send gate
+(`sales-invoice.md` → "Fiscal sending … — ETP-5700"):
+
+- **Writing "today".** The onboarding payloads (`todayIsoDate()` in `fiscalConfig.utils.js`),
+  `createComplementary` (`useFiscalConfig.js`) and the save handlers of `SiiSection.jsx` /
+  `TbaiSection.jsx` now use `todayCalendarISO()` (`@/lib/dateOnly.js`). The previous
+  `new Date().toISOString().slice(0, 10)` is the UTC day, still yesterday in Spain between local
+  midnight and 01:00/02:00.
+- **Reading the earliest cutover.** `earliestCutoverDate(rows, system)` orders rows with
+  `parseAdoptionDate()` (`shared/fiscalTargets.js`: a `yyyy-MM-dd` is a local calendar day, a full
+  timestamp such as VERI*FACTU's stays an instant) and returns the winning row's value **as-is** —
+  a `yyyy-MM-dd` for SII/TBAI — instead of re-serialising it with `toISOString()`. Consumers:
+  `useFiscalConfig()` (`earliestSiiCutoverDate`, `earliestTbaiCutoverDate`), the invoice send gate,
+  and `fiscal-monitor`'s `buildCutoverCriteria`, which already sliced the first 10 characters and is
+  unaffected.
+
 ## Manual verification
 
 1. Delete any existing SII/TBAI/Verifactu records for the test org, open `/fiscal-config`, and confirm the wizard territory screen appears.
@@ -475,7 +495,7 @@ For `sii+tbai` both records must report production for the row to read "Producci
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/FiscalConfigPage.vitest.jsx` — ETP-5272 follow-up: `forceTestMode` is forwarded to `OnboardingWizard` as a prop (both `true` and `false`); the page's own `FiscalConfigPage__testModeBanner` correctly does NOT render in the `'unconfigured'` branch (that banner belongs to the configured-profile branch — the wizard renders its own).
 - DB triggers (com.etendoerp.go SIF modules) — `AEATSII_ONE_ACTIVE_CONFIG_TRG`, `TBAI_ONE_ACTIVE_CONFIG_TRG`, `ETVFAC_ONE_ACTIVE_CONFIG_TRG` enforce one *active* config per org (relaxed from one config per org).
 - `cli/test/fiscal-config.utils.test.js` — 92 regression tests covering profile detection, onboarding payloads, contract-specific ids, Verifactu save guards, SII field mapping, CertModal upload flow, and confirmNif flow (all passing).
-- `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js` — parallel fetcher hook for the 3 config records; filters inactive trace rows (`activeOrNull`) before `detectProfile` so a "Change SIF" leftover never masks the live config. `fetchAllRows` and `earliestCutoverDate` (previously private) are now **exported** so other fiscal windows reuse the same "all config rows, earliest-ever cutover" mechanism instead of duplicating it — first reused by `fiscal-monitor/useFiscalMonitor.js` for the TBAI monitor's earliest-cutover gate (ETP-5229, item #13; see `fiscal-monitor.md`).
+- `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js` — parallel fetcher hook for the 3 config records; filters inactive trace rows (`activeOrNull`) before `detectProfile` so a "Change SIF" leftover never masks the live config. `fetchAllRows` and `earliestCutoverDate` (previously private; the latter returns the earliest row's raw value since ETP-5700) are now **exported** so other fiscal windows reuse the same "all config rows, earliest-ever cutover" mechanism instead of duplicating it — first reused by `fiscal-monitor/useFiscalMonitor.js` for the TBAI monitor's earliest-cutover gate (ETP-5229, item #13; see `fiscal-monitor.md`).
 - `cli/test/useFiscalConfig.test.js` — 16 tests covering source guards (named export, Promise.all, entity constants, detectProfile wiring), `fetchRecord` URL construction via `useApiFetch` (no manual Authorization header), response parsing (empty/missing data), and error handling.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/SiiSection.test.js` — 17 component source-guard tests: forwardRef/`useImperativeHandle`, navarra badge, form fields, PUT endpoint contract, hideSave/hideCert.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/TbaiSection.test.js` — 17 component source-guard tests: enroll date + invoice description validation, PUT endpoint, boolean serialization. Note: `TbaiSection` deliberately excludes `productionEnv`, `uSEAsproductDesc`, and `validatePreviousInvoice` from the PUT body — overriding those fields would silently revert any change the operator made in Etendo Classic (e.g. `productionEnv='N'` for testing). Only the fields owned by the Etendo GO form (enroll date and invoice description) are sent.

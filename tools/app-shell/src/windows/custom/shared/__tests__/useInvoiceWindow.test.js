@@ -369,6 +369,48 @@ describe('useInvoiceWindow', () => {
       });
     });
 
+    describe('menuActions — extraMenuActions option', () => {
+      const COMPLETED_UNPOSTED = { id: 'r1', documentStatus: 'CO', processed: 'Y', posted: 'N' };
+      const SEND = { key: 'sendToSif', labelKey: 'sendToSifLabelSii', onClick: () => ({ success: true }) };
+      const build = (extraMenuActions) => buildInvoiceRowQuickActions(
+        () => {}, 'x', () => {}, () => {}, () => {}, { extraMenuActions },
+      );
+      const keysFor = (extraMenuActions, row = COMPLETED_UNPOSTED) => build(extraMenuActions)
+        .menuActions({ row }).map((a) => a.key);
+
+      it('appends a single descriptor after reactivate and post', () => {
+        assert.deepEqual(keysFor(() => SEND), ['reactivate', 'post', 'sendToSif']);
+      });
+
+      it('passes the row to the extraMenuActions callback', () => {
+        const seen = [];
+        build((row) => { seen.push(row); return null; }).menuActions({ row: COMPLETED_UNPOSTED });
+        assert.deepEqual(seen, [COMPLETED_UNPOSTED]);
+      });
+
+      it('appends every entry of an array, in order', () => {
+        const other = { key: 'other', labelKey: 'other' };
+        assert.deepEqual(keysFor(() => [SEND, other]), ['reactivate', 'post', 'sendToSif', 'other']);
+      });
+
+      it('appends nothing when the callback returns null', () => {
+        assert.deepEqual(keysFor(() => null), ['reactivate', 'post']);
+      });
+
+      it('appends nothing when the callback returns undefined', () => {
+        assert.deepEqual(keysFor(() => undefined), ['reactivate', 'post']);
+      });
+
+      it('appends nothing when the option is absent or not a function', () => {
+        assert.deepEqual(keysFor(undefined), ['reactivate', 'post']);
+        assert.deepEqual(keysFor(SEND), ['reactivate', 'post']);
+      });
+
+      it('keeps the document actions untouched for a draft row', () => {
+        assert.deepEqual(keysFor(() => SEND, { id: 'd1', documentStatus: 'DR' }), ['confirm', 'sendToSif']);
+      });
+    });
+
     describe('onMenuActionExecuted / onRefresh (ETP-5209)', () => {
       it('calls the onRefresh option when a neoAction menu action completes', () => {
         let refreshCalls = 0;
