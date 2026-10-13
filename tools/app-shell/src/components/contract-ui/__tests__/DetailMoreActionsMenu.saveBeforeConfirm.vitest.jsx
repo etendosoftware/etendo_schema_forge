@@ -17,11 +17,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DetailMoreActionsMenu } from '../DetailMoreActionsMenu.jsx';
+import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
 
 vi.mock('../DetailView.jsx', () => ({
   resolveHideMoreMenu: (hideMoreMenu, data) =>
     (typeof hideMoreMenu === 'function' ? hideMoreMenu({ data }) : hideMoreMenu),
 }));
+
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/backendErrors.js', () => ({ translateBackendError: (m) => m }));
@@ -170,5 +174,35 @@ describe('DetailMoreActionsMenu — save-before-confirm guard (ETP-4940)', () =>
     // be silently lost exactly like the original ETP-4940 bug.
     expect(hook.handleSave).not.toHaveBeenCalled();
     expect(docAction.execute).toHaveBeenCalledWith('rec-1', 'RE');
+  });
+});
+
+// ETP-5684 — "Show Accounting Fields" off hides Contabilizar / Descontabilizar from the
+// form kebab, whatever the window declared. Keyed on the generic `neoAction`, so the
+// generated menuActions of every postable window are covered without a decisions change.
+describe('DetailMoreActionsMenu — accounting capability gate (ETP-5684)', () => {
+  const POST_ACTION = { key: 'post', label: 'Post', labelKey: 'post', neoAction: 'post' };
+  const UNPOST_ACTION = { key: 'unpost', label: 'Unpost', labelKey: 'unpost', neoAction: 'unpost' };
+
+  it('shows post and unpost when the role can see accounting', () => {
+    renderMenu({ hook: makeHook(), docAction: makeDocAction(), menuActions: [REACTIVATE_ACTION, POST_ACTION, UNPOST_ACTION] });
+    fireEvent.click(screen.getByTestId('action-more'));
+    expect(screen.getByTestId('menu-action-post')).toBeInTheDocument();
+    expect(screen.getByTestId('menu-action-unpost')).toBeInTheDocument();
+  });
+
+  it('drops post and unpost but keeps the other actions when the capability is off', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    renderMenu({ hook: makeHook(), docAction: makeDocAction(), menuActions: [REACTIVATE_ACTION, POST_ACTION, UNPOST_ACTION] });
+    fireEvent.click(screen.getByTestId('action-more'));
+    expect(screen.getByTestId('menu-action-reactivate')).toBeInTheDocument();
+    expect(screen.queryByTestId('menu-action-post')).toBeNull();
+    expect(screen.queryByTestId('menu-action-unpost')).toBeNull();
+  });
+
+  it('renders no kebab at all when posting was the only action', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    renderMenu({ hook: makeHook(), docAction: makeDocAction(), menuActions: [POST_ACTION] });
+    expect(screen.queryByTestId('action-more')).toBeNull();
   });
 });

@@ -8,6 +8,8 @@ import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
 import { runPreUnpost } from '@/lib/preUnpost.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { filterPostingActions } from '@/lib/capabilityVisibility.js';
 
 // Resolves whether an action should render, given its actionsConfig entry
 // (decisions.json → window.rowQuickActions.actions.<key>) and an optional fallback
@@ -128,6 +130,7 @@ export default function RowQuickActions({
 }) {
   const ui = useUI();
   const [showMenu, setShowMenu] = useState(false);
+  const capabilities = useCapabilitiesSafe();
   const [menuPos, setMenuPos] = useState(null);
   const [inFlight, setInFlight] = useState({});
   const moreRef = useRef(null);
@@ -210,7 +213,8 @@ export default function RowQuickActions({
   const resolvedMenuActions = typeof menuActions === 'function'
     ? menuActions({ row, data: row, status: statusField ? row?.[statusField] : undefined })
     : menuActions;
-  const visibleMenuActions = (Array.isArray(resolvedMenuActions) ? resolvedMenuActions : [])
+  // ETP-5684: a role without "Show Accounting Fields" sees no post/unpost action.
+  const visibleMenuActions = filterPostingActions(Array.isArray(resolvedMenuActions) ? resolvedMenuActions : [], capabilities)
     .filter(a => a && a.visible !== false)
     // Prefer the per-key override in actionsConfig (decisions.json) — including its
     // `show: false` hide — fall back to the visibleWhen possibly attached to the
