@@ -139,7 +139,8 @@
         },
         "documentType": {
           "visibility": "system",
-          "reason": "Hidden from the form but still defaulted under the hood (DocBaseType='GLJ') — needed for posting/sequencing later."
+          "defaultExpr": "@SQL=SELECT C_DocType_ID FROM C_DocType WHERE C_DocType.DocBaseType='GLJ' AND C_DocType.AD_Client_ID=@#AD_Client_ID@ AND C_DocType.IsActive='Y' AND AD_ISORGINCLUDED(@AD_Org_ID@, C_DocType.AD_Org_ID, @#AD_Client_ID@) <> -1 ORDER BY C_DocType.IsDefault DESC, AD_ISORGINCLUDED(@AD_Org_ID@, C_DocType.AD_Org_ID, @#AD_Client_ID@) ASC",
+          "reason": "Hidden from the form but still defaulted under the hood (DocBaseType='GLJ') — needed for posting/sequencing later. ETP-5682: overrides the core AD default, which has no AD_Client_ID filter and resolved another tenant's GLJ doctype (and so that tenant's sequence), ending in DocumentNo collisions on gl_journal_docno."
         },
         "documentDate": {
           "visibility": "system",

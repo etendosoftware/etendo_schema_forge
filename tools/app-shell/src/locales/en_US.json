@@ -14243,7 +14243,7 @@
       "label": "Reserved Goods Movement"
     },
     "Simple G/L Journal": {
-      "label": "Simple G/L Journal"
+      "label": "Manual Journals"
     },
     "Color Palette": {
       "label": "Color Palette"
@@ -26122,7 +26122,7 @@
       "label": "Applications"
     },
     "Simple G/L Journal": {
-      "label": "Simple G/L Journal"
+      "label": "Manual Journals"
     },
     "System Info": {
       "label": "System Info"

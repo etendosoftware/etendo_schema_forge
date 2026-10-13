@@ -14407,7 +14407,7 @@
       "label": "Movimiento entre almacenes reservado"
     },
     "Simple G/L Journal": {
-      "label": "Asientos Manuales Simplificados"
+      "label": "Asientos Manuales"
     },
     "Color Palette": {
       "label": "Paleta de Color"
@@ -26674,7 +26674,7 @@
       "label": "Cierre de año"
     },
     "Simple G/L Journal": {
-      "label": "Asientos Manuales Simplificados"
+      "label": "Asientos Manuales"
     },
     "Cluster Services": {
       "label": "Servicios Cluster"
