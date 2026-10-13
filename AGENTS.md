@@ -46,7 +46,7 @@ Agent definitions live in `.claude/agents/` — each agent wrote their own file 
 | tenant-fixer.md | Remedy | TENANT REMEDIATION — closes Etendo GO provisioning gaps on both fronts (preventive onboarding fixes for new tenants + corrective data-fixes for existing ones) | Diagnostic |
 | tester-functional.md | Tester (functional) | TESTS — writes and extends Node / Vitest / Playwright tests in `etendo_schema_forge`, reuse-first | Methodical |
 | tester-go.md | Tester (go) | TESTS — writes and extends JUnit tests in `com.etendoerp.go` (Mockito by default), reuse-first | Methodical |
-| merge-block-helper.md | Blockie | MERGE BLOCK PRE-FLIGHT — given a dev task (ETP-XXXX), checks its `feature/ETP-XXXX` branch + PR across the 3 repos, verifies CI/review/mergeability/target/code-owner gate, reports a traffic-light readiness table. Merges (plain local `git merge`) ONLY the branches the human explicitly authorizes, and always **into the current merge-block branch, NEVER `develop`** (the block hits `develop` once later → one Jenkins run); never touches the PRs, never pushes | Diagnostic |
+| merge-block-helper.md | Blockie | DAILY CUT (ETP-5695 flow) — (A) given a dev task (ETP-XXXX), pre-flights its PRs into `develop` across the 3 repos (CI incl. mini pipeline, review, code-owner gate, conflicts, target) and reports a traffic light; (B) prepares the day's cut: `mergeblock/ETP-YYYY` cut from `develop` + `origin/main` merged, on explicit OK; (C) when the cut's pipeline fails, walks the ladder (re-run, cut earlier, fix tests only, revert in reverse merge order). Never merges into `develop` or `main`, never pushes, never touches the PRs | Diagnostic |
 
 When spawning agents, pass the agent's frontmatter `name` as `subagent_type` (`workflow`, `schema-forge-developer`, `window-agent`, `alex`, `qa`, `documentarian`, `tenant-fixer`, `merge-block-helper`, `tester-functional`, `tester-go`); the definition file supplies the identity and rules, so the prompt only carries the task.
 Pass `name="developer-1"` (or 2/3/4) to address each slot independently via `SendMessage`.
@@ -66,8 +66,8 @@ Pass `name="developer-1"` (or 2/3/4) to address each slot independently via `Sen
 | "Add a new custom component slot for sidebars" | **Schema Forge Developer** | New extension point in generator + docs |
 | "Build a generic component for document preview" | **Schema Forge Developer** | New shared UI component in `tools/app-shell/` |
 | "Create the feature branch and PR" | **Clerk** | Workflow operations |
-| "Check ETP-4321 for the merge block" / "is it ready to merge?" | **Blockie** | Pre-flight PR verification across the 3 repos for a merge block |
-| "Merge the ones I told you into my block branch" | **Blockie** | Human-authorized local `git merge` into the current merge-block branch (never `develop` directly) |
+| "Check ETP-4321" / "is it ready to merge into develop?" | **Blockie** | Pre-flight PR verification across the 3 repos |
+| "Prepare today's cut" / "the cut failed" | **Blockie** | Cut `mergeblock/ETP-YYYY` from `develop` (on explicit OK), or walk the failure ladder |
 | "Remediate accounting/period/org-tree gaps for an existing client" | **Remedy** | Corrective data-fix (`cli/src/data-fixes/`) scoped by `ad_client_id` |
 | "Fix the onboarding so new clients get a chart of accounts" | **Remedy** | Preventive onboarding-gap fix (root cause) |
 | "Write a tenant data-fix / migration SQL" | **Remedy** | Owns the data-fixes framework + SQL-first criterion |
