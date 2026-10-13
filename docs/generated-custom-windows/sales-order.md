@@ -628,7 +628,7 @@ at a draft order.
 
 - **Which requests**: a POST on the `DocAction` / `documentAction` button whose **effective**
   value is `RE` — the value the DB procedure will actually run, resolved next to the code that
-  writes it (`NeoProcessService.docActionToRun`): the root `docAction` parameter when the DAL would
+  writes it (`DocActionResolution.docActionToRun`): the root `docAction` parameter when the DAL would
   accept writing it on the order (non-blank, an exact case-sensitive member of the DocAction list,
   writable), otherwise the order's stored `C_Order.DocAction`, which `C_Order_Post` then executes —
   `setDocAction` silently gives up on a value the DAL refuses. `fieldValues` is not read: the
