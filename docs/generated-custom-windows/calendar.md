@@ -107,6 +107,9 @@ keep every spec single-window, and let the custom frontend do the aggregation.
     it affects every document type at once (AD Process 167 opens/closes every `C_PeriodControl`
     row for the period in one transaction); there is no per-document-type breakdown or action in
     the UI (removed in ETP-4948 — see the `documents` entity note under Field reference).
+    **Bulk open/close (ETP-5682):** each row has a checkbox (plus select-all in the header); a
+    floating selection bar offers **Abrir** / **Cerrar** for every selected period at once — see
+    "Bulk open/close periods" under Reactive behavior.
    - **Accounting** (the second detail tab) — a read-only, year-scoped Fact_Acct grid (account, debit, credit,
     description) for reviewing the year's accounting entries.
 - Trigger **Cerrar Año** (Close Year) from the kebab ("more") menu once every period is
@@ -207,6 +210,18 @@ ever changes, this needs revisiting.
    in one transaction — already the global mechanism — so `PeriodsExpandablePanel.jsx`'s
    `handleDialogConfirm` only needs to refresh `loadPeriods()` (the aggregate badge) after a
    successful action.
+- **Bulk open/close periods (ETP-5682).** Ticking periods (or select-all) shows the shared
+   floating `SelectionToolbar` (`period-bulk-bar`) with **Abrir** and **Cerrar**. Permanently closed
+   periods cannot be selected, and permanent close is not offered in bulk: it is irreversible, so it
+   stays a per-period decision through **Abrir/Cerrar Periodo**. After a confirmation that names the
+   selected periods, `runPeriodsBulkOpenClose` (`periodsBulkOpenClose.js`) posts the same
+   `/periodControl/{id}/action/openClose` as the row button, **one period at a time in start-date
+   order** (Process 167 touches every `C_PeriodControl` row of the period; parallel calls would only
+   risk lock contention). A period already in the target state is not posted and is reported as
+   "already open/closed". A failure never stops the run. If everything succeeded, a toast reports
+   the count; if any period failed, a result dialog (`PeriodsBulkDialogs.jsx`) lists every period
+   with ✓/✗/– and the translated backend error. The selection is cleared and the list reloaded
+   afterwards. Backend unchanged; the MCP keeps the per-period `etendo_action`.
 - **Per-document-type open/close removed from the UI (ETP-4948).** Earlier versions of this
   window exposed an expandable per-document-type breakdown under each period row, with its own
   **Abrir/Cerrar Documento** action (`documents.openClose`, AD Process `168`
@@ -452,6 +467,11 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 9. Click **Abrir/Cerrar Periodo** on a period and confirm the process dialog / status update.
    Confirm there is no expand affordance and no per-document-type breakdown anywhere in the row
    (removed in ETP-4948 — Abrir/Cerrar Periodo is already global to every document type).
+9b. Bulk (ETP-5682): tick three closed periods out of date order and click **Abrir** in the floating
+   bar. Confirm the dialog lists them in date order, confirm, and check the network tab: one POST
+   per period, sequential, in date order. Include an already-open period: it is not posted and the
+   toast says it already was. A permanently closed period's checkbox is disabled. Make one period
+   fail (e.g. a closed year) and confirm the result dialog lists every period with its outcome.
 10. Switch to the **Accounting** tab and confirm the year's Fact_Acct rows render (account, debit,
    credit, description).
 11. Open the kebab menu with at least one period still Open and confirm **Cerrar Año** is present
@@ -555,6 +575,10 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
   mocked action endpoint, Cerrar Año stays disabled until all periods are closed. The earlier
   "expanding a period reveals its documents" test and its `installDocumentsMock` helper were
   removed (ETP-4948 — per-document-type breakdown retired from the UI).
+  ETP-5682 adds a "bulk open periods" flow (select-all, one POST per period in date order, the
+  already-open period is not posted).
+- `tools/app-shell/src/windows/custom/calendar/__tests__/PeriodsExpandablePanel.vitest.jsx`
+  (bulk open/close describe) and `__tests__/periodsBulkOpenClose.vitest.js` (ETP-5682).
 - `com.etendoerp.go/src/com/etendoerp/go/schemaforge/YearCloseHandler.java` (`year-close`) and
   `.../handlers/YearAccountingHandler.java` (`year-accounting`), each with a Mockito-only JUnit
   suite (no `OBBaseTest`/real DB — see each class's test file javadoc for why). Neither class

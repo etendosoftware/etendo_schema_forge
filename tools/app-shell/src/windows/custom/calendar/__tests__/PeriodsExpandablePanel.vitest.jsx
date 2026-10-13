@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/windows/custom/calendar/PeriodsExpandablePanel.jsx
+// @covers tools/app-shell/src/windows/custom/calendar/PeriodsBulkDialogs.jsx
+// @covers tools/app-shell/src/windows/custom/calendar/periodsBulkOpenClose.js
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
@@ -32,7 +35,7 @@ function render(ui) {
   return rtlRender(<LocaleProvider locale={currentTestLocale} dictionaries={DICTIONARIES}>{ui}</LocaleProvider>);
 }
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 // Real Tag renders a plain <span> with no data-testid passthrough (it only reads
 // variant/label/children/className) — mock it the same way DataTable.cellRenderers.vitest.jsx
@@ -447,7 +450,9 @@ describe('PeriodsExpandablePanel — shared table styling', () => {
     return screen.getByTestId(`period-name-${periodId}`).closest('tr');
   }
 
-  it('renders the established table headers and three-cell layout for period rows', async () => {
+  // ETP-5682 added a leading selection column (bulk open/close), so the header row starts with
+  // the select-all checkbox (no text) and every period row has four cells.
+  it('renders the established table headers and cell layout for period rows', async () => {
     render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" />);
     await waitFor(() => screen.getByText('February 27'));
 
@@ -456,12 +461,13 @@ describe('PeriodsExpandablePanel — shared table styling', () => {
     expect(panel.querySelector('thead')).toBeInTheDocument();
     expect(panel.querySelector('tbody')).toBeInTheDocument();
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      '',
       'Period',
       'Status',
       'Actions',
     ]);
-    expect(periodRowFor('p1').querySelectorAll(':scope > td')).toHaveLength(3);
-    expect(periodRowFor('p2').querySelectorAll(':scope > td')).toHaveLength(3);
+    expect(periodRowFor('p1').querySelectorAll(':scope > td')).toHaveLength(4);
+    expect(periodRowFor('p2').querySelectorAll(':scope > td')).toHaveLength(4);
   });
 });
 
@@ -610,5 +616,148 @@ describe('PeriodsExpandablePanel — Accept-Language header + real localization 
 
     const periodBadge = screen.getByTestId('period-status-p1').querySelector('[data-testid="tag"]');
     expect(periodBadge).toHaveTextContent('ZZZ');
+  });
+});
+
+describe('PeriodsExpandablePanel — bulk open/close (ETP-5682)', () => {
+  const JAN = { id: 'jan', name: 'Jan-27', startingDate: '2027-01-01', status: 'C' };
+  const FEB = { id: 'feb', name: 'Feb-27', startingDate: '2027-02-01', status: 'C' };
+  const MAR = { id: 'mar', name: 'Mar-27', startingDate: '2027-03-01', status: 'N' };
+  const APR = { id: 'apr', name: 'Apr-27', startingDate: '2027-04-01', status: 'O' };
+  const MAY = { id: 'may', name: 'May-27', startingDate: '2027-05-01', status: 'P' };
+  let posts;
+  let listCalls;
+  let failingIds;
+
+  beforeEach(() => {
+    currentTestLocale = 'en_US';
+    toast.success.mockClear();
+    posts = [];
+    listCalls = 0;
+    failingIds = new Set();
+    global.fetch = vi.fn((url, options = {}) => {
+      if (options.method === 'POST') {
+        const id = url.match(/periodControl\/([^/]+)\/action\/openClose/)[1];
+        posts.push({ id, body: JSON.parse(options.body) });
+        if (failingIds.has(id)) {
+          return Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ status: 'error', message: `Boom ${id}` }) });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: 'success' }) });
+      }
+      if (url.includes('/periodControl')) {
+        listCalls += 1;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [JAN, FEB, MAR, APR, MAY] } }) });
+      }
+      return Promise.reject(new Error('unexpected url ' + url));
+    });
+  });
+
+  function tick(testId) {
+    fireEvent.click(screen.getByTestId(testId).querySelector('input[type="checkbox"]'));
+  }
+
+  function checkbox(testId) {
+    return screen.getByTestId(testId).querySelector('input[type="checkbox"]');
+  }
+
+  async function renderPanel() {
+    render(<PeriodsExpandablePanel parentId="year1" apiBaseUrl="https://api.test" data-testid="bulk" />);
+    await waitFor(() => screen.getByText('January 27'));
+  }
+
+  it('shows no bulk bar until a period is selected, and never lets a permanently closed period be selected', async () => {
+    await renderPanel();
+
+    expect(screen.queryByTestId('period-bulk-open')).not.toBeInTheDocument();
+    expect(checkbox('period-select-may')).toBeDisabled();
+    expect(checkbox('period-select-jan')).not.toBeDisabled();
+
+    tick('period-select-jan');
+    expect(screen.getByTestId('period-bulk-open')).toBeInTheDocument();
+    expect(screen.getByTestId('period-selection-count')).toHaveTextContent('1');
+  });
+
+  it('select-all selects every period except the permanently closed one', async () => {
+    await renderPanel();
+
+    tick('period-select-all');
+
+    for (const id of ['jan', 'feb', 'mar', 'apr']) expect(checkbox(`period-select-${id}`)).toBeChecked();
+    expect(checkbox('period-select-may')).not.toBeChecked();
+    expect(screen.getByTestId('period-selection-count')).toHaveTextContent('4');
+  });
+
+  it('posts nothing when the confirmation is cancelled', async () => {
+    await renderPanel();
+    tick('period-select-jan');
+
+    fireEvent.click(screen.getByTestId('period-bulk-open'));
+    expect(screen.getByTestId('periods-bulk-confirm-names')).toHaveTextContent('January 27');
+    fireEvent.click(screen.getByTestId('periods-bulk-confirm-cancel'));
+
+    expect(screen.queryByTestId('periods-bulk-confirm-names')).not.toBeInTheDocument();
+    expect(posts).toHaveLength(0);
+  });
+
+  it('opens the selected periods one by one in date order and lists every period when one fails', async () => {
+    failingIds.add('feb');
+    await renderPanel();
+    // Ticked out of date order on purpose.
+    tick('period-select-mar');
+    tick('period-select-jan');
+    tick('period-select-feb');
+
+    fireEvent.click(screen.getByTestId('period-bulk-open'));
+    expect(screen.getByTestId('periods-bulk-confirm-names')).toHaveTextContent('January 27, February 27, March 27');
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('periods-bulk-confirm-ok'));
+    });
+
+    await waitFor(() => screen.getByTestId('periods-bulk-result-list'));
+    expect(posts.map((p) => p.id)).toEqual(['jan', 'feb', 'mar']);
+    expect(posts.every((p) => p.body.fieldValues.openClose === 'O')).toBe(true);
+
+    expect(screen.getByTestId('periods-bulk-result-jan')).toHaveAttribute('data-outcome', 'ok');
+    expect(screen.getByTestId('periods-bulk-result-feb')).toHaveAttribute('data-outcome', 'failed');
+    expect(screen.getByTestId('periods-bulk-result-feb')).toHaveTextContent('February 27');
+    expect(screen.getByTestId('periods-bulk-result-feb')).toHaveTextContent('Boom feb');
+    expect(screen.getByTestId('periods-bulk-result-mar')).toHaveAttribute('data-outcome', 'ok');
+    expect(toast.success).not.toHaveBeenCalled();
+
+    // Selection cleared and the list reloaded once after the run.
+    expect(screen.queryByTestId('period-bulk-open')).not.toBeInTheDocument();
+    expect(listCalls).toBe(2);
+  });
+
+  it('skips periods already in the target state and shows a success toast when nothing failed', async () => {
+    await renderPanel();
+    tick('period-select-jan');
+    tick('period-select-apr');
+
+    fireEvent.click(screen.getByTestId('period-bulk-open'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('periods-bulk-confirm-ok'));
+    });
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    expect(posts.map((p) => p.id)).toEqual(['jan']);
+    expect(toast.success).toHaveBeenCalledWith(
+      enUS.genericLabels.periodsBulkOpenedToast.replace('{count}', '1')
+        + enUS.genericLabels.periodsBulkSkippedSuffix.replace('{count}', '1'),
+    );
+    expect(screen.queryByTestId('periods-bulk-result-list')).not.toBeInTheDocument();
+  });
+
+  it('closes with the C action', async () => {
+    await renderPanel();
+    tick('period-select-apr');
+
+    fireEvent.click(screen.getByTestId('period-bulk-close'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('periods-bulk-confirm-ok'));
+    });
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(posts).toEqual([{ id: 'apr', body: { fieldValues: { openClose: 'C' } } }]);
   });
 });

@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { DoorOpen, Lock } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { formatCalendarMonthYear, parseCalendarDate } from '@/lib/dateOnly.js';
@@ -7,6 +8,15 @@ import { Tag } from '@/components/ui/tag';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ProcessParamDialog } from '@/components/contract-ui/ProcessParamDialog';
+import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
+import { Checkbox } from '@/components/ui/checkbox';
+import { parseBackendErrorMessage } from '@/lib/backendErrors.js';
+import {
+  isPeriodBulkSelectable,
+  runPeriodsBulkOpenClose,
+  summarizePeriodsBulkResults,
+} from './periodsBulkOpenClose.js';
+import { PeriodsBulkConfirmDialog, PeriodsBulkResultDialog } from './PeriodsBulkDialogs.jsx';
 
 // Same color mapping as artifacts/open-close-period-control/decisions.json's
 // periodControl.status enumVariants — kept in sync manually since this is a custom component,
@@ -125,6 +135,13 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
   // Periodo" no longer fires the POST directly — openClose is a required 3-state choice, not a
   // toggle, so the choice must be collected first.
   const [dialogPeriodId, setDialogPeriodId] = useState(null);
+  // Bulk open/close (ETP-5682): selected period ids, the action awaiting confirmation
+  // ('O' | 'C' | null), whether a run is in flight, and the last run's per-period results
+  // (shown only when something failed).
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkAction, setBulkAction] = useState(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
 
   // Fetches (or re-fetches) the periods list without touching the loading/error state — used
   // both by the mount effect (which resets to `undefined` itself first, below) and, silently,
@@ -143,6 +160,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
   useEffect(() => {
     if (!parentId) return;
     setPeriods(undefined);
+    setSelectedIds(new Set());
     loadPeriods();
   }, [parentId, loadPeriods]);
 
@@ -198,6 +216,62 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
     runAction(`period-${id}`, `/periodControl/${id}/action/openClose`, paramValues, loadPeriods);
   }, [dialogPeriodId, runAction, loadPeriods]);
 
+  const selectablePeriods = useMemo(
+    () => (Array.isArray(periods) ? periods.filter(isPeriodBulkSelectable) : []),
+    [periods],
+  );
+  // Keeps the query's start-date order, whatever order the boxes were ticked in.
+  const selectedPeriods = useMemo(
+    () => selectablePeriods.filter((p) => selectedIds.has(p.id)),
+    [selectablePeriods, selectedIds],
+  );
+  const allSelected = selectablePeriods.length > 0 && selectedPeriods.length === selectablePeriods.length;
+
+  const togglePeriodSelection = useCallback((periodId) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(periodId)) next.delete(periodId);
+      else next.add(periodId);
+      return next;
+    });
+  }, []);
+
+  const toggleAllPeriods = useCallback(() => {
+    setSelectedIds(allSelected ? new Set() : new Set(selectablePeriods.map((p) => p.id)));
+  }, [allSelected, selectablePeriods]);
+
+  const postOpenClose = useCallback(async (periodId, openClose) => {
+    const res = await apiFetch(`/periodControl/${periodId}/action/openClose`, {
+      method: 'POST',
+      body: JSON.stringify({ fieldValues: { openClose } }),
+    });
+    if (res.ok) return { ok: true };
+    return { ok: false, message: await parseBackendErrorMessage(res) };
+  }, [apiFetch]);
+
+  const handleBulkConfirm = useCallback(async () => {
+    const action = bulkAction;
+    const targets = selectedPeriods;
+    setBulkAction(null);
+    if (!action || targets.length === 0) return;
+    setBulkRunning(true);
+    try {
+      const results = await runPeriodsBulkOpenClose(targets, action, postOpenClose);
+      const { ok, skipped, failed } = summarizePeriodsBulkResults(results);
+      if (failed > 0) {
+        setBulkResult({ action, results });
+      } else {
+        const doneKey = action === 'O' ? 'periodsBulkOpenedToast' : 'periodsBulkClosedToast';
+        const suffix = skipped > 0 ? ui('periodsBulkSkippedSuffix').replace('{count}', String(skipped)) : '';
+        toast.success(ui(doneKey).replace('{count}', String(ok)) + suffix);
+      }
+      setSelectedIds(new Set());
+      await loadPeriods();
+    } finally {
+      setBulkRunning(false);
+    }
+  }, [bulkAction, selectedPeriods, postOpenClose, loadPeriods, ui]);
+
   if (periods === undefined) {
     return <div data-testid="periods-expandable-panel-loading" className="p-4 text-sm text-muted-foreground">{ui('loading')}</div>;
   }
@@ -210,6 +284,16 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
       <Table data-testid="Table__711967">
         <TableHeader data-testid="TableHeader__711967">
           <TableRow data-testid="TableRow__711967">
+            <TableHead className="w-10" data-testid="TableHead__711967">
+              <Checkbox
+                checked={allSelected}
+                indeterminate={selectedPeriods.length > 0 && !allSelected}
+                disabled={bulkRunning || selectablePeriods.length === 0}
+                onChange={toggleAllPeriods}
+                aria-label={ui('periodsSelectAll')}
+                data-testid="period-select-all"
+              />
+            </TableHead>
             <TableHead data-testid="TableHead__711967">{ui('calendarPeriod')}</TableHead>
             <TableHead className="w-44" data-testid="TableHead__711967">{ui('calendarStatus')}</TableHead>
             <TableHead className="w-44 text-right" data-testid="TableHead__711967">{ui('calendarActions')}</TableHead>
@@ -217,9 +301,24 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
         </TableHeader>
         <TableBody data-testid="TableBody__711967">
           {periods.map((period) => {
-            const periodPending = !!pendingActions[`period-${period.id}`];
+            const periodPending = !!pendingActions[`period-${period.id}`] || bulkRunning;
+            const selectable = isPeriodBulkSelectable(period);
+            const selected = selectedIds.has(period.id);
             return (
-              <TableRow key={period.id} data-testid="TableRow__711967">
+              <TableRow
+                key={period.id}
+                className={selected ? 'bg-primary/5' : undefined}
+                data-testid="TableRow__711967"
+              >
+                <TableCell className="w-10" data-testid={`period-select-cell-${period.id}`}>
+                  <Checkbox
+                    checked={selected}
+                    disabled={!selectable || bulkRunning}
+                    onChange={() => togglePeriodSelection(period.id)}
+                    aria-label={ui('periodsSelectPeriod').replace('{name}', formatPeriodName(period, locale))}
+                    data-testid={`period-select-${period.id}`}
+                  />
+                </TableCell>
                 <TableCell className="font-medium" data-testid={`period-name-${period.id}`}>
                   {formatPeriodName(period, locale)}
                   {period.periodType === 'A' && (
@@ -254,6 +353,54 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
           })}
         </TableBody>
       </Table>
+      {/* Floating bulk bar, same component as every other checkbox list (ETP-4972). Portaled,
+          so it renders no table markup and sits here as a plain sibling of the Table. */}
+      <SelectionToolbar
+        visible={selectedPeriods.length > 0}
+        onClose={() => setSelectedIds(new Set())}
+        closeTitle={ui('close')}
+        data-testid="period-bulk-bar"
+      >
+        <span role="status" className="text-sm font-medium" data-testid="period-selection-count">
+          {ui('selected').replace('{count}', String(selectedPeriods.length))}
+        </span>
+        <span className="inline-flex items-center gap-1" data-testid="period-bulk-actions">
+          <button
+            type="button"
+            data-testid="period-bulk-open"
+            onClick={() => setBulkAction('O')}
+            disabled={bulkRunning}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:opacity-50"
+          >
+            <DoorOpen className="h-3.5 w-3.5" data-testid="DoorOpen__periodsBulkBar" />
+            {ui('periodsBulkOpen')}
+          </button>
+          <button
+            type="button"
+            data-testid="period-bulk-close"
+            onClick={() => setBulkAction('C')}
+            disabled={bulkRunning}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)] disabled:opacity-50"
+          >
+            <Lock className="h-3.5 w-3.5" data-testid="Lock__periodsBulkBar" />
+            {ui('periodsBulkClose')}
+          </button>
+        </span>
+      </SelectionToolbar>
+      <PeriodsBulkConfirmDialog
+        action={bulkAction}
+        periodNames={selectedPeriods.map((p) => formatPeriodName(p, locale))}
+        onConfirm={handleBulkConfirm}
+        onCancel={() => setBulkAction(null)}
+        data-testid="PeriodsBulkConfirmDialog__711967"
+      />
+      <PeriodsBulkResultDialog
+        action={bulkResult?.action}
+        results={bulkResult?.results ?? null}
+        periodName={(p) => formatPeriodName(p, locale)}
+        onClose={() => setBulkResult(null)}
+        data-testid="PeriodsBulkResultDialog__711967"
+      />
       <ProcessParamDialog
         open={!!dialogPeriodId}
         onOpenChange={(next) => { if (!next) setDialogPeriodId(null); }}
