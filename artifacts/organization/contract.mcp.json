@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "generatedAt": "2026-08-01T00:36:50.964Z",
-  "updatedAt": "2026-08-24T17:57:19.569Z",
-  "contractChecksum": "d4411669d7459cef",
+  "updatedAt": "2026-10-13T17:42:32.321Z",
+  "contractChecksum": "48ead94e57756637",
   "apiPrediction": {
     "specName": "organizaci-n",
     "baseUrl": "/sws/neo/organizaci-n",
@@ -38,6 +38,17 @@
         "delete": true,
         "listUrl": "/sws/neo/organizaci-n/actividadesDelIae",
         "detailUrl": "/sws/neo/organizaci-n/actividadesDelIae/{id}",
+        "supportedFilters": []
+      },
+      "representanteLegal": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/organizaci-n/representanteLegal",
+        "detailUrl": "/sws/neo/organizaci-n/representanteLegal/{id}",
         "supportedFilters": []
       }
     },
@@ -174,6 +185,15 @@
             "required": true
           },
           "yourCompanyDocumentImage": {},
+          "aeat390Isperson": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "aeat390Firstname": {},
+          "aeat390Surname1": {},
+          "aeat390Surname2": {},
+          "aeat390RepNif": {},
+          "aeat390RepName": {},
           "etgoEmail": {},
           "etgoPhone": {},
           "etgoWeb": {}
@@ -187,6 +207,26 @@
           },
           "epiaeType": {},
           "epiaeCode": {}
+        }
+      },
+      "representanteLegal": {
+        "fields": {
+          "taxID": {
+            "required": true
+          },
+          "firstName": {
+            "required": true
+          },
+          "lastname1": {
+            "required": true
+          },
+          "lastname2": {},
+          "powerDate": {
+            "required": true
+          },
+          "notaryName": {
+            "required": true
+          }
         }
       }
     },
@@ -207,7 +247,13 @@
       "lineFields": [
         "locationAddress",
         "taxID",
-        "default"
+        "aeat390Isperson",
+        "default",
+        "taxID",
+        "firstName",
+        "lastname1",
+        "powerDate",
+        "notaryName"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -237,5 +283,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "2e05c7d4533c400c"
+  "checksum": "93b91040afe22400"
 }
