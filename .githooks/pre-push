@@ -126,6 +126,16 @@ if [ "$NODE_MAJOR" -lt 22 ]; then
   exit 1
 fi
 
+# Local parallelism (ETP-5695). Vitest defaults to one jsdom fork per CPU but one, and the mocked
+# Playwright suite to 4 browsers; next to each other they kept 8-thread laptops at 99% CPU for the
+# whole push. The pre-push gives vitest half the logical CPUs (TEST_WORKERS, read by
+# scripts/test-changed.sh) and the mocked suite at most that many workers. PRE_PUSH_WORKERS sets
+# the share; an exported TEST_WORKERS or E2E_WORKERS still wins. Integration keeps its own default.
+CPUS="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+PRE_PUSH_WORKERS="${PRE_PUSH_WORKERS:-$(( CPUS / 2 > 1 ? CPUS / 2 : 1 ))}"
+export TEST_WORKERS="${TEST_WORKERS:-$PRE_PUSH_WORKERS}"
+MOCKED_E2E_WORKERS="${E2E_WORKERS:-$(( PRE_PUSH_WORKERS < 4 ? PRE_PUSH_WORKERS : 4 ))}"
+
 # Path where run-sonar.sh writes a copy-pasteable handoff prompt when the
 # Quality Gate fails. Cleared up-front so a stale file is never shown.
 HANDOFF_FILE="$REPO_DIR/sonar-reports/sonar-handoff-prompt.md"
@@ -680,7 +690,12 @@ run_e2e_suite() {
   echo "==> Playwright E2E — ${label}..."
   start=$SECONDS
   set +e
-  ( cd "$REPO_DIR" && E2E_SUITE="$suite" E2E_PASSWORD="$password" \
+  # Only the mocked suite gets the local worker cap: integration specs share one admin and one
+  # tenant, so more workers there mean data races (see playwright.config.js).
+  local workers_env=""
+  [ "$suite" = "mocked" ] && workers_env="E2E_WORKERS=$MOCKED_E2E_WORKERS"
+  # shellcheck disable=SC2086 # workers_env is empty or a single NAME=value word
+  ( cd "$REPO_DIR" && env $workers_env E2E_SUITE="$suite" E2E_PASSWORD="$password" \
       E2E_BACKEND_URL="$backend_url" ETENDO_URL="$backend_url" \
       E2E_RETRIES="${retries:-0}" \
       ./scripts/run-e2e-full.sh ) 2>&1 | tee "$log"

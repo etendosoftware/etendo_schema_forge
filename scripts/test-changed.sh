@@ -6,11 +6,13 @@
 #   BASE=<ref>   what the change is measured against (three-dot diff: from the merge-base)
 #   HEAD_REF=<ref>  the other end of that diff (default HEAD; the tests run from the checkout)
 #   PLAN=1       print the selection and stop
+#   TEST_WORKERS=<n>  vitest worker processes (default: half the logical CPUs, at least 1)
 #   --coverage   write coverage/<group>-lcov.info and coverage/merged-lcov.info, like
 #                `make test-all-coverage` does for the whole suite
 #
-# The groups run one after another, not in parallel like `make test-all-coverage`: a selection is
-# usually small, and running five Node test processes next to vitest saturates a laptop's CPU.
+# The groups run one after another, not in parallel like `make test-all-coverage`, and vitest gets
+# half the CPUs instead of its default of all but one: five Node test processes next to a vitest
+# fork per CPU, each with its own jsdom, kept laptops at 99% CPU for the whole run.
 # Every selected group runs even when an earlier one fails; the exit status reports any failure.
 set -uo pipefail
 
@@ -18,6 +20,9 @@ cd "$(dirname "$0")/.."
 BASE="${BASE:-origin/develop}"
 COVERAGE=0
 [ "${1:-}" = "--coverage" ] && COVERAGE=1
+
+CPUS="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+TEST_WORKERS="${TEST_WORKERS:-$(( CPUS / 2 > 1 ? CPUS / 2 : 1 ))}"
 
 WORK_DIR="tmp/test-changed"
 PLAN_FILE="$WORK_DIR/plan.tsv"
@@ -74,15 +79,15 @@ run_vitest() {
   local -a filters=()
   # vitest filters match path substrings relative to tools/app-shell; none means the whole suite.
   [ "$files" != "*" ] && while IFS= read -r f; do filters+=("${f#tools/app-shell/}"); done <<< "$files"
-  echo "=== Vitest ($([ "$files" = "*" ] && echo all || echo "${#filters[@]}") file(s)) ==="
+  echo "=== Vitest ($([ "$files" = "*" ] && echo all || echo "${#filters[@]}") file(s), $TEST_WORKERS workers) ==="
   if [ "$COVERAGE" = "1" ]; then
-    if ( cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov ${filters[@]+"${filters[@]}"} ); then
+    if ( cd tools/app-shell && npx vitest run --maxWorkers="$TEST_WORKERS" --coverage --coverage.reporter=lcov ${filters[@]+"${filters[@]}"} ); then
       sed 's|^SF:src/|SF:tools/app-shell/src/|' tools/app-shell/coverage/vitest/lcov.info > coverage/vitest-lcov.info
     else
       FAILED="$FAILED vitest"
     fi
   else
-    ( cd tools/app-shell && npx vitest run ${filters[@]+"${filters[@]}"} ) || FAILED="$FAILED vitest"
+    ( cd tools/app-shell && npx vitest run --maxWorkers="$TEST_WORKERS" ${filters[@]+"${filters[@]}"} ) || FAILED="$FAILED vitest"
   fi
 }
 
