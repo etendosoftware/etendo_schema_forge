@@ -315,6 +315,7 @@ function renderRowActionStrip({
 function renderDimensionsSubRow({
   isRowExpanded, row, dimRowData, visibleDimensionFields, labelOverrides, ui,
   apiBaseUrl, token, isDocumentReadOnly, entity, onDimensionChange, onDimensionFieldSave,
+  isFieldEditableWhenReadOnly,
 }) {
   if (!isRowExpanded) return null;
   return (
@@ -346,6 +347,10 @@ function renderDimensionsSubRow({
         apiBaseUrl={apiBaseUrl}
         token={token}
         readOnly={isDocumentReadOnly}
+        // ETP-5692 — per-field override only while locked, and only when the host opted in.
+        isFieldReadOnly={isDocumentReadOnly && isFieldEditableWhenReadOnly
+          ? (f) => !isFieldEditableWhenReadOnly(row, f.key)
+          : undefined}
         isCompleted={isDocumentReadOnly}
         labelOverrides={labelOverrides}
         entityName={entity}
@@ -543,7 +548,10 @@ function renderLineCell({
  * `EntityForm.jsx` but rendered compactly inside a row cell — clicking the button opens
  * the same `ProductSearchDrawer` modal the side-panel form used.
  */
-function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
+function LookupTrigger({ field, label, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
+  // `label` is the locale-resolved column label (resolveColumnLabel); `field.label` is the raw
+  // English AD name and must never reach the user (ETP-5681: the popup title read "Account").
+  const resolvedLabel = label || field.label || '';
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const Drawer = resolveLookupDrawer(field.lookupDrawer);
@@ -569,7 +577,7 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
           data-testid={"Search__" + field.id} />
         {displayLabel
           ? <span className={`${labelClassName} text-foreground`}>{displayLabel}</span>
-          : <span className={`${labelClassName} text-muted-foreground`}>{field.label || ui('search')}</span>}
+          : <span className={`${labelClassName} text-muted-foreground`}>{resolvedLabel || ui('search')}</span>}
       </button>
       <Drawer
         open={open}
@@ -587,7 +595,7 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
         token={token}
-        title={field.lookupTitle || field.label || ''}
+        title={field.lookupTitle || resolvedLabel}
         data-testid={"ProductSearchDrawer__" + field.id} />
     </>
   );
@@ -841,6 +849,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
       return (
         <LookupTrigger
           field={col}
+          label={resolveColumnLabel(col, locale, t)}
           displayLabel={displayLabel}
           selectorUrl={selectorUrl}
           selectorContext={selectorContext}
@@ -1005,6 +1014,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // Pairs with `onEditRow` for modal-style flows.
   onRowClick,
   labelOverrides,
+  // ETP-5692 — optional `(row, fieldKey) => boolean`: while `isDocumentReadOnly` (the document
+  // is locked by completion), the fields it accepts stay editable — today only in the
+  // dimensions sub-row. Built from `draftMode.editableLineFieldsWhenCompleted` by DetailView
+  // (lib/completedLineEdits.js); absent → everything stays read-only, exactly as before.
+  isFieldEditableWhenReadOnly,
   // ETP-4610 — generic per-row hover-action extension slot. Additional actions
   // rendered in the hover strip ahead of the built-in Edit/Delete icons (see
   // `renderRowActionStrip`'s `extraActions`). Each entry:
@@ -1309,7 +1323,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // --- Save / autosave plumbing -------------------------------------------------
 
   const commitField = useCallback(async (row, col, value, extras = {}) => {
-    if (isDocumentReadOnly) return;
+    if (isDocumentReadOnly && !isFieldEditableWhenReadOnly?.(row, col.key)) return;
     if (cancelingEditRef.current) return;
     hasValidationErrorRef.current = false;
     setInvalidCell(null);
@@ -1370,7 +1384,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     } finally {
       pendingEditRef.current = null;
     }
-  }, [isDocumentReadOnly, onUpdateRow, ui, specName]);
+  }, [isDocumentReadOnly, isFieldEditableWhenReadOnly, onUpdateRow, ui, specName]);
 
   // Imperative API for parent's global "Guardar". Closing the row implicitly blurs
   // the focused input (if any), which triggers its onBlur autosave. Awaiting any
@@ -1631,7 +1645,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               persist through the same `commitField` every other inline edit uses. */}
           {renderDimensionsSubRow({
             isRowExpanded, row, dimRowData, visibleDimensionFields, labelOverrides, ui,
-            apiBaseUrl, token, isDocumentReadOnly, entity,
+            apiBaseUrl, token, isDocumentReadOnly, entity, isFieldEditableWhenReadOnly,
             onDimensionChange: (key, value) => handleDimensionFieldChange(row.id, key, value),
             onDimensionFieldSave: (key, value) => {
               const field = dimensionFieldByKey[key];

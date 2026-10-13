@@ -318,6 +318,14 @@ reliable:
 
 - `ConfirmResultModal` was brought back from `zIndex: 9999` to the `50` modal
   tier. Nothing about a result notice justifies sitting above every global tool.
+  Since ETP-5674 its panel is a real `role="dialog"` (`confirm-result-dialog`).
+  That does not suspend the scrim on `create-sales-order`'s last step
+  (`confirmed-ack`): its target, `action-confirm-result-close` («Cerrar»), is
+  INSIDE that dialog, so the dialog is not foreign and the button keeps its
+  spotlight. The testid stays on «Cerrar» in both footer variants (secondary
+  next to «Ver …» for one created document, the only — primary — button for
+  two or more), so the step resolves whichever documents the confirm created.
+  Do not rename it.
 - The overlay itself moved from `z-70` to `OVERLAY_Z_INDEX = 600`
   (`WalkthroughOverlay.jsx`). The nominal tier for global tools is 70, but the
   app grew a set of ad-hoc elevations well above the `z-50` modal tier — 100

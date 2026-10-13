@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/shared/useRowConfirmAction.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 import { buildRectifiableInvoicesPayload } from '../helpers/rectifiable-invoices-mock.js';
@@ -116,6 +118,8 @@ const WINDOWS = {
     // puts the COMPLETED invoice's status in the response. Dropping it from this fixture would
     // make the badge assertion below vacuous.
     createdInvoice: { id: 'inv-new', documentNo: 'FC/00100', grandTotalAmount: -150, documentStatus: 'CO' },
+    // ETP-5674 — the result popup is titled after the doc type this window passes.
+    resultTitle: /^(Factura rectificativa creada|Rectificative invoice created)$/,
   },
   'return-to-vendor-shipment': {
     entity: 'returnToVendorShipment',
@@ -182,6 +186,7 @@ const WINDOWS = {
     pickInvoiceDocNo: 'FC-RTV-OLD-002',
     // See the sales-side note: the real endpoint returns the COMPLETED status.
     createdInvoice: { id: 'inv-new-001', documentNo: 'FC-RTV-NEW-001', grandTotalAmount: -250, documentStatus: 'CO' },
+    resultTitle: /^(Factura rectificativa de compra creada|Purchase rectificative invoice created)$/,
   },
 };
 
@@ -447,6 +452,7 @@ for (const spec of Object.keys(WINDOWS)) {
       const resultModal = page.getByTestId('confirm-result-modal');
       await expect(resultModal).toBeVisible({ timeout: 15_000 });
       await expect(resultModal).toContainText(cfg.createdInvoice.documentNo);
+      await expect(page.getByTestId('confirm-result-title')).toHaveText(cfg.resultTitle);
 
       // ── The status badge (second ETP-5378 QA defect, same file) ──────────────
       // ConfirmResultModal badges each doc via `doc.documentStatus === 'CO'` and otherwise
@@ -456,9 +462,10 @@ for (const spec of Object.keys(WINDOWS)) {
       // REC-1000015 read "Borrador" here and "Completado" on its own detail page. The negative
       // half is the one that actually pins the regression: the completed badge could also be
       // satisfied by a `doc.status` override, but "Borrador" reappearing is unambiguous.
-      // Scoped to the modal (title/subtitle/footer carry no status wording) and locale-tolerant
-      // because mock mode defaults to es_ES while a live run may be en_US.
-      await expect(resultModal).toContainText(/completado|completed/i);
+      // Scoped to the modal (title/banner/footer carry no status wording) and locale-tolerant
+      // because mock mode defaults to es_ES while a live run may be en_US. An invoice takes
+      // the feminine "Completada" (ETP-5674).
+      await expect(resultModal).toContainText(/completada|completed/i);
       await expect(resultModal).not.toContainText(/borrador|draft/i);
 
       // The payload is the point: `buildInvoiceBody()` only adds `originInvoices` when
