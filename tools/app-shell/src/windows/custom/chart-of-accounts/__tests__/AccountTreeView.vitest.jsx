@@ -45,7 +45,7 @@ vi.mock('@generated/chart-of-accounts/custom/NewAccountModal', () => ({
 
 import { useState } from 'react';
 import { render, screen, within, fireEvent, waitFor, act } from '@testing-library/react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from 'sonner';
 import AccountTreeView from '@generated/chart-of-accounts/custom/AccountTreeView.jsx';
@@ -82,9 +82,9 @@ function TreeHarness({ children }) {
   );
 }
 
-function renderTree(ui, { entry = '/chart-of-accounts' } = {}) {
+function renderTree(ui, { entry = '/chart-of-accounts', entries = [entry] } = {}) {
   const wrap = (node) => (
-    <MemoryRouter initialEntries={[entry]}>
+    <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
       <TreeHarness>{node}</TreeHarness>
     </MemoryRouter>
   );
@@ -281,14 +281,136 @@ describe('AccountTreeView', () => {
     expect(screen.getByTestId('account-tree-row-group-4000')).toHaveAttribute('aria-selected', 'false');
   });
 
-  it('clicking a leaf row selects it and calls onNavigate with the item', () => {
+  // ETP-5733 — a click only selects; opening a leaf is its name link, a double-click or Enter.
+  it('clicking a leaf row selects it without calling onNavigate', () => {
     const onNavigate = vi.fn();
     renderTree(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     fireEvent.click(screen.getByTestId('account-tree-row-acc-40000000'));
 
-    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-40000000' }));
+    expect(onNavigate).not.toHaveBeenCalled();
     expect(screen.getByTestId('account-tree-row-acc-40000000')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  describe('opening a leaf (ETP-5733)', () => {
+    function renderExpanded(onNavigate) {
+      renderTree(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+    }
+
+    it('the account name opens the record once, without a second open from the row', () => {
+      const onNavigate = vi.fn();
+      renderExpanded(onNavigate);
+      fireEvent.click(screen.getByTestId('account-tree-open-acc-40000000'));
+
+      expect(onNavigate).toHaveBeenCalledTimes(1);
+      expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-40000000' }));
+    });
+
+    it('labels the name link for assistive technology', () => {
+      renderExpanded(vi.fn());
+      expect(screen.getByTestId('account-tree-open-acc-40000000')).toHaveAttribute('aria-label', 'accountTreeOpenAccount');
+    });
+
+    it('folder names are plain text, not a link', () => {
+      renderExpanded(vi.fn());
+      expect(screen.queryByTestId('account-tree-open-group-4000')).not.toBeInTheDocument();
+    });
+
+    it('a double-click on a leaf row opens it', () => {
+      const onNavigate = vi.fn();
+      renderExpanded(onNavigate);
+      fireEvent.doubleClick(screen.getByTestId('account-tree-row-acc-40000000'));
+
+      expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-40000000' }));
+    });
+
+    it('a double-click on a folder row does not open anything', () => {
+      const onNavigate = vi.fn();
+      renderExpanded(onNavigate);
+      fireEvent.doubleClick(screen.getByTestId('account-tree-row-group-4000'));
+
+      expect(onNavigate).not.toHaveBeenCalled();
+    });
+
+    it('a double-click on the status switch does not open the record', () => {
+      const onNavigate = vi.fn();
+      renderExpanded(onNavigate);
+      fireEvent.doubleClick(screen.getByTestId('account-tree-active-toggle-acc-40000000'));
+
+      expect(onNavigate).not.toHaveBeenCalled();
+    });
+
+    it('a double-click on the name link opens the record only once', () => {
+      const onNavigate = vi.fn();
+      renderExpanded(onNavigate);
+      const link = screen.getByTestId('account-tree-open-acc-40000000');
+      fireEvent.click(link);
+      fireEvent.doubleClick(link);
+
+      expect(onNavigate).toHaveBeenCalledTimes(1);
+    });
+
+    it('Enter on a focused leaf row opens it; Space only selects it', () => {
+      const onNavigate = vi.fn();
+      renderExpanded(onNavigate);
+      const row = screen.getByTestId('account-tree-row-acc-40000000');
+      expect(row).toHaveAttribute('tabindex', '0');
+
+      fireEvent.keyDown(row, { key: ' ' });
+      expect(onNavigate).not.toHaveBeenCalled();
+      expect(row).toHaveAttribute('aria-selected', 'true');
+
+      fireEvent.keyDown(row, { key: 'Enter' });
+      expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-40000000' }));
+    });
+
+    it('Enter on a focused folder row selects it', () => {
+      const onNavigate = vi.fn();
+      renderExpanded(onNavigate);
+      const row = screen.getByTestId('account-tree-row-group-4000');
+      fireEvent.keyDown(row, { key: 'Enter' });
+
+      expect(onNavigate).not.toHaveBeenCalled();
+      expect(row).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('Enter on a control inside the row is left to that control', () => {
+      const onNavigate = vi.fn();
+      renderExpanded(onNavigate);
+      fireEvent.keyDown(screen.getByTestId('account-tree-active-toggle-acc-40000000'), { key: 'Enter' });
+
+      expect(onNavigate).not.toHaveBeenCalled();
+    });
+
+    // Copilot review on #1752: a spy onNavigate hid the bug. The real page unmounts the list
+    // when it navigates, and the unmount clears the selection — so this harness does too.
+    function NavigatingTree() {
+      const [open, setOpen] = useState(null);
+      return open
+        ? <span data-testid="record-page">{open.id}</span>
+        : <AccountTreeView {...defaultProps} onNavigate={setOpen} />;
+    }
+
+    it('a selected leaf seeds "Nueva subcuenta" on a page that navigates', () => {
+      renderTree(<NavigatingTree />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      fireEvent.click(screen.getByTestId('account-tree-row-acc-40000000'));
+      expect(screen.queryByTestId('record-page')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('open-create'));
+      expect(screen.getByTestId('modal-current-record-id')).toHaveTextContent('acc-40000000');
+    });
+
+    it('opening a leaf on a page that navigates leaves no selection behind', () => {
+      renderTree(<NavigatingTree />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      fireEvent.click(screen.getByTestId('account-tree-open-acc-40000000'));
+      expect(screen.getByTestId('record-page')).toHaveTextContent('acc-40000000');
+
+      fireEvent.click(screen.getByTestId('open-create'));
+      expect(screen.getByTestId('modal-current-record-id')).toHaveTextContent('none');
+    });
   });
 
   it('clicking a virtual group row selects it but does not call onNavigate', () => {
@@ -497,6 +619,23 @@ describe('AccountTreeView', () => {
       // Root folder "A" is visible without expanding; its ancestor entry carries elementLevel: 'E'.
       const row = screen.getByTestId('account-tree-row-group-A');
       expect(within(row).getByText('elementLevelHeading')).toBeInTheDocument();
+    });
+
+    // ETP-5733 — the folder's empty status cell used to swallow the click.
+    it('clicking a folder row\'s empty status cell selects the folder', () => {
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      const placeholder = screen.getByTestId('account-tree-active-placeholder-group-A');
+      fireEvent.click(placeholder.closest('td'));
+      expect(screen.getByTestId('account-tree-row-group-A')).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('clicking a leaf\'s status cell neither selects nor opens the leaf', () => {
+      const onNavigate = vi.fn();
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} onNavigate={onNavigate} />);
+      expandFullAncestorChain();
+      fireEvent.click(screen.getByTestId('account-tree-active-toggle-acc-20000001').closest('td'));
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toHaveAttribute('aria-selected', 'false');
+      expect(onNavigate).not.toHaveBeenCalled();
     });
 
     it('keeps folder rows on the same column grid as leaf rows (empty active cell)', () => {
@@ -855,11 +994,11 @@ describe('AccountTreeView', () => {
       expect(screen.getByTestId('account-tree-locked-acc-20000000')).toBeInTheDocument();
     });
 
-    it('a protected leaf remains clickable/navigable — only editing is blocked server-side', () => {
+    it('a protected leaf remains openable — only editing is blocked server-side', () => {
       const onNavigate = vi.fn();
       renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} onNavigate={onNavigate} />);
       expandFullAncestorChain();
-      fireEvent.click(screen.getByTestId('account-tree-row-acc-20000000'));
+      fireEvent.click(screen.getByTestId('account-tree-open-acc-20000000'));
       expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-20000000' }));
     });
   });
@@ -1267,6 +1406,50 @@ describe('AccountTreeView', () => {
         fireEvent.click(within(screen.getByTestId('PopoverContent__cd3aa9')).getByText('accountTypeRevenue'));
         act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
         expect(screen.getByTestId('location-search').textContent).toContain('accountType=R');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // ETP-5733 (Copilot review on #1752) — Back within the pause used to be undone when the
+    // pending timer fired and wrote the typed text over the URL the user went back to.
+    function BackButton() {
+      const navigate = useNavigate();
+      return <button type="button" data-testid="go-back" onClick={() => navigate(-1)}>back</button>;
+    }
+
+    it('Back during the pause wins over the pending search', () => {
+      renderTree(
+        <><AccountTreeView {...defaultProps} /><BackButton /></>,
+        { entries: ['/chart-of-accounts?q=Purchases', '/chart-of-accounts'] },
+      );
+      vi.useFakeTimers();
+      try {
+        fireEvent.change(screen.getByTestId('coa-search-input'), { target: { value: 'Sales' } });
+        fireEvent.click(screen.getByTestId('go-back'));
+        act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
+
+        expect(screen.getByTestId('location-search')).toHaveTextContent('?q=Purchases');
+        expect(screen.getByTestId('coa-search-input')).toHaveValue('Purchases');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('typing on after the URL caught up keeps every key', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      vi.useFakeTimers();
+      try {
+        const input = screen.getByTestId('coa-search-input');
+        fireEvent.change(input, { target: { value: 'Sa' } });
+        act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
+        expect(screen.getByTestId('location-search')).toHaveTextContent('?q=Sa');
+
+        fireEvent.change(input, { target: { value: 'Sal' } });
+        expect(input).toHaveValue('Sal');
+        act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
+        expect(screen.getByTestId('location-search')).toHaveTextContent('?q=Sal');
+        expect(input).toHaveValue('Sal');
       } finally {
         vi.useRealTimers();
       }

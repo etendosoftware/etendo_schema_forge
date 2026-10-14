@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/lib/backendErrors.js
 // @covers tools/app-shell/src/locales/en_US.json
 // @covers tools/app-shell/src/locales/es_ES.json
+// @covers tools/app-shell/src/locales/es_AR.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -274,6 +275,37 @@ describe('translateBackendError', () => {
           if (locale !== 'en_US') assert.notEqual(translated, raw, `${locale}.${key} is untranslated`);
         }
       });
+    }
+  });
+
+  // Sales order Reactivate refusals (com.etendoerp.go OrderReactivationGuard). The backend
+  // sends them in English only, so the SPA must map each one to a locale key.
+  describe('sales order reactivation refusals', () => {
+    const KNOWN = [
+      {
+        raw: 'This order cannot be reactivated because it has linked shipments or invoices.',
+        key: 'cannotReactivateLinkedDocs',
+      },
+      {
+        raw: 'The documents linked to this order could not be checked, so it has not been reactivated. Try again.',
+        key: 'backendError.orderLinkedDocsCheckFailed',
+      },
+    ];
+
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const json = JSON.parse(
+        readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+      for (const { raw, key } of KNOWN) {
+        it(`resolves "${raw.slice(0, 40)}..." through ${key} to the ${locale} text`, () => {
+          const asked = [];
+          const t = (k) => { asked.push(k); return json.genericLabels[k] ?? k; };
+          const translated = translateBackendError(raw, t);
+          assert.ok(asked.includes(key), `${raw} is not mapped to ${key}`);
+          assert.equal(translated, json.genericLabels[key], `${locale}.${key}`);
+          assert.ok(translated.trim(), `${locale}.${key} is blank`);
+          if (locale !== 'en_US') assert.notEqual(translated, raw, `${locale}.${key} is untranslated`);
+        });
+      }
     }
   });
 

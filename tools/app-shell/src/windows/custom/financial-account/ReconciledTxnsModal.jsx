@@ -10,6 +10,8 @@ import { MoneyAmount } from '@/components/ui/money-amount';
 import { cn } from '@/lib/utils';
 import { formatDate, formatSigned } from '@/lib/formatSigned';
 import { PostingStatusDot } from './PostingStatusDot';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { ACCOUNTING_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 
 // Columns of the movements table — mirrors the Movimientos tab:
 //   Fecha · Pago · Contacto · Descripción · Tipo(+estado) · Importe · (ir →)
@@ -48,6 +50,8 @@ function WidgetField({ label, value, children }) {
  */
 export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
   const ui = useUI();
+  // ETP-5684 — the posting dot only for a role with "Show Accounting Fields".
+  const showAccounting = isCapabilityVisible(useCapabilitiesSafe(), ACCOUNTING_CAPABILITY);
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const navigate = useNavigate();
@@ -184,7 +188,7 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
                 {/* NOTE: BankStatementsSupport#buildLineTxns does not return a `posted`
                     field yet, so this always renders "not posted" here. Tracked as a
                     known backend gap (see ETP-4452 follow-up) — not fixed in this change. */}
-                <PostingStatusDot posted={t.posted} data-testid="PostingStatusDot__2dbb84" />
+                {showAccounting && <PostingStatusDot posted={t.posted} data-testid="PostingStatusDot__2dbb84" />}
               </span>
               <MoneyAmount
                 value={t.amount}

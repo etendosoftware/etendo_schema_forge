@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 import { test, expect } from '@playwright/test';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
 import { login } from '../../helpers/auth.js';
@@ -18,7 +19,9 @@ import { fileURLToPath } from 'node:url';
  *
  * Fix (738af8395): the header and body are now two independently-scrolled
  * wrapper divs, synced via `scrollLeft`. The body rows live in
- * `<div ref={bodyScrollRef} className="overflow-x-auto pb-6" ...>`; the
+ * `<div ref={bodyScrollRef} className="overflow-x-auto" ...>` (plus
+ * `pb-4` room for the last line's hover shadow, see
+ * `computeBodyScrollClassName`); the
  * header's own outer wrapper keeps `sticky top-0` with NO overflow of its
  * own (an `overflow-x` ancestor between the sticky header and its real
  * scrolling ancestor would silence `position: sticky`), while an INNER

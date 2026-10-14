@@ -191,7 +191,7 @@ const CASILLAS_SECTIONS = [
   { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final', 'sin_actividad', 'rectificativa'] },
 ];
 
-function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, onBoxChange, t, isSubmitted }) {
+function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, onBoxChange, t, isSubmitted, lockRectificativaChecked }) {
   const [activeSection, setActiveSection] = useState('identificacion');
   const section = CASILLAS_SECTIONS.find(s => s.id === activeSection) ?? CASILLAS_SECTIONS[0];
 
@@ -260,6 +260,7 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
             onIdentChange={onIdentChange}
             onBoxChange={onBoxChange}
             readOnly={isSubmitted}
+            lockRectificativaChecked={lockRectificativaChecked}
             data-testid="FmBoxes303__4f6c0d" />
         </div>
       </div>
@@ -384,7 +385,19 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   const [orgIdent, setOrgIdent] = useState({ nif: '', nombre: '' });
   // Hydrate from persisted decl.manualData when present, falling back to the old
   // non-persisted decl.identification only for fixtures/demo declarations that predate it.
-  const [identChecks, setIdentChecks] = useState(decl.manualData?.identification ?? decl.identification ?? {});
+  // ETP-5725 — when this is a brand-new declaration (no persisted `rectificativa` either way)
+  // opened for a period whose latest sibling is already presented (`decl._duplicatePeriodPresented`,
+  // set by FmListPage.jsx), default "Autoliquidación rectificativa" to checked instead of letting
+  // the user land on "Normal". A period with no prior declaration keeps the untouched default
+  // (unchecked) — `_duplicatePeriodPresented` is false there. An explicit persisted value (user
+  // already saved this declaration at least once) always wins over the auto-default.
+  const [identChecks, setIdentChecks] = useState(() => {
+    const persisted = decl.manualData?.identification ?? decl.identification ?? {};
+    if (persisted.rectificativa === undefined && Boolean(decl._duplicatePeriodPresented)) {
+      return { ...persisted, rectificativa: true };
+    }
+    return persisted;
+  });
   /**
    * ETP-5338 (architecture change) — `identChecks`/`manualOverrides` are now purely LOCAL,
    * in-memory state until the user explicitly clicks "Guardar". There is no more debounced
@@ -1700,6 +1713,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
             onBoxChange={handleBoxChange}
             t={t}
             isSubmitted={isSubmitted}
+            // ETP-5725 — only lock the checkbox while it is CURRENTLY checked: this prevents
+            // undoing the auto-default without ever being able to strand a declaration whose
+            // rectificativa happens to be false (e.g. a legacy save from before this lock
+            // existed) in an unchecked-but-disabled state with no way to fix it. The required-
+            // field/duplicate-period warning gate above still blocks "Presentar" for that case
+            // exactly as it always has.
+            lockRectificativaChecked={Boolean(decl._duplicatePeriodPresented) && !isSubmitted && Boolean(identChecks.rectificativa)}
             data-testid="CasillasTab__4f6c0d" />
         )}
         {activeTab !== 'boxes' && (

@@ -26,7 +26,7 @@ const statusField = 'status';
 
 // @sf-generated-start extraBadges:internalConsumption
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:internalConsumption
 

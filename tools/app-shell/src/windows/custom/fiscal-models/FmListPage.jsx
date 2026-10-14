@@ -528,11 +528,27 @@ function fmListRowClassName({ selected, current }) {
 // ETP-5456 — extracted to avoid a nested ternary (javascript:S3358). Mirrors the
 // mutually-exclusive rectificativa (303) / sustitutiva (349) precedence documented
 // at the `declTypeLabel` call site below.
-function resolveDeclTypeLabel(decl, t) {
-  if (decl.manualData?.identification?.rectificativa) return t('fm.type.rectificative');
-  const isSustitutiva = decl.manualData?.identification?.sustitutiva === true
-    || decl.manualData?.identification?.sustitutiva === 'Y';
-  if (isSustitutiva) return t('fm.type.substitutive');
+//
+// ETP-5725 — `duplicatePeriodPresented` is a FALLBACK for a never-saved draft only. The 303/349
+// detail pages auto-default `identChecks.rectificativa`/`.sustitutiva` to true in LOCAL
+// component state the instant they're opened for a period whose latest sibling is already
+// presented (see FmModel303Page.jsx/FmModel349Page.jsx's `identChecks` lazy initializers), but
+// that state is invisible to this list until the user clicks "Guardar" and `decl.manualData`
+// is actually persisted — until then `rectificativa`/`sustitutiva` are both `undefined` here,
+// and the grid used to always show "Ordinaria" for that window. Once EITHER flag is persisted
+// (even explicitly set to false/'N' by a user override), that persisted value is trusted as
+// before and this fallback no longer applies.
+function resolveDeclTypeLabel(decl, t, duplicatePeriodPresented = false) {
+  const ident = decl.manualData?.identification;
+  const rectificativaPersisted = ident?.rectificativa;
+  const sustitutivaPersisted = ident?.sustitutiva === true || ident?.sustitutiva === 'Y';
+  const neverSaved = rectificativaPersisted === undefined && ident?.sustitutiva === undefined;
+  if (rectificativaPersisted || (neverSaved && duplicatePeriodPresented && decl.model === '303')) {
+    return t('fm.type.rectificative');
+  }
+  if (sustitutivaPersisted || (neverSaved && duplicatePeriodPresented && decl.model === '349')) {
+    return t('fm.type.substitutive');
+  }
   return t('fm.type.ordinary');
 }
 
@@ -1057,13 +1073,28 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             const hasDuplicatePeriod = decls.some(d => d.id !== decl.id
               && d.model === decl.model && d.year === decl.year && d.period === decl.period);
 
-            const declTypeLabel = resolveDeclTypeLabel(decl, t);
+            // ETP-5725 — narrower than `hasDuplicatePeriod` above: true only when a SIBLING
+            // declaration for this (model, year, period) is already in the submitted family
+            // (SUBMITTED_STATUSES). The type selector (349's Sustitutiva segmented control,
+            // 303's "Autoliquidación rectificativa" checkbox) uses this to auto-default to the
+            // corrected type and lock "Normal" out — unlike `hasDuplicatePeriod`, which also
+            // fires for a sibling that is still a draft/ready and merely WARNS at submit time.
+            // `decls` has no exposed DECL_SEQ ordinal (see FiscalDeclCrudHandler#findLatestDeclaration
+            // on the Go side), so this doesn't single out the highest-seq sibling — but the
+            // existing one-draft-per-period guard (ETP-5272) means at most one sibling can be in
+            // a non-terminal state at a time, so "any submitted sibling exists" and "the latest
+            // sibling is submitted" coincide in practice.
+            const duplicatePeriodPresented = decls.some(d => d.id !== decl.id
+              && d.model === decl.model && d.year === decl.year && d.period === decl.period
+              && SUBMITTED_STATUSES.has(d.status));
+
+            const declTypeLabel = resolveDeclTypeLabel(decl, t, duplicatePeriodPresented);
 
             return (
               <tr
                 key={decl.id}
                 className={fmListRowClassName({ selected: selected.has(decl.id), current: decl.current })}
-                onClick={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod })}
+                onClick={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod, _duplicatePeriodPresented: duplicatePeriodPresented })}
               >
                 <td onClick={e => e.stopPropagation()}>
                   <CheckboxField
@@ -1111,7 +1142,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                 <td style={{ position: 'relative' }}>
                   {isDraft && (
                     <FmRowActions
-                      onEdit={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod })}
+                      onEdit={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod, _duplicatePeriodPresented: duplicatePeriodPresented })}
                       onDelete={() => setDeleteTarget(decl)}
                       deleting={deletingId === decl.id}
                       data-testid="FmRowActions__cb728e" />

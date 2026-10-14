@@ -160,7 +160,13 @@ vi.mock('@/components/ui/dropdown-menu.jsx', () => ({
   DropdownMenuTrigger: ({ children }) => children,
 }));
 
+// ETP-5684 — capability-gated columns must also leave the filter, the sort and the export.
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 import { ListView } from '../ListView.jsx';
+import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
+import { listStateKey } from '@/lib/listViewSession.js';
 
 // `column` and `label` differ on purpose: the sort popover and the report drawer
 // must prefer the AD label (t(col.column)) over the raw column label.
@@ -1375,5 +1381,73 @@ describe('ListView — page meta and new actions', () => {
 
     expect(trackWindowOpenedMock).not.toHaveBeenCalled();
     expect(screen.getByTestId('list-view')).toBeInTheDocument();
+  });
+});
+
+// ─── Capability-gated columns (ETP-5684) ────────────────────────────────────
+
+// DataTable already drops a `visibleWhenCapability` column from the grid. ListView feeds
+// the same columns to the advanced filter, the sort popover, the report/export drawer and
+// useEntity's columnDefs, so a role without the capability must lose the column there too,
+// and any restored filter or sort on it must be dropped instead of reaching the backend.
+describe('ListView — capability-gated columns (ETP-5684)', () => {
+  const POSTED = { key: 'posted', column: 'AD_Posted', label: 'Posted', visibleWhenCapability: 'showAccountingFields' };
+
+  beforeEach(() => {
+    mockColumns = [...MOCK_COLUMNS, POSTED];
+  });
+
+  function keysOf(columns) {
+    return columns.map((c) => c.key);
+  }
+
+  it('keeps the gated column everywhere when the role holds the capability', async () => {
+    const user = userEvent.setup();
+    render(<ListView {...defaultProps} />);
+    expect(keysOf(filterBarProps.columns)).toContain('posted');
+    expect(keysOf(reportDrawerProps.columns)).toContain('posted');
+    expect(Object.keys(capturedEntityOptions.columnDefs)).toContain('posted');
+    await openSortPopover(user);
+    expect(screen.getByText('AD_Posted')).toBeInTheDocument();
+  });
+
+  it('drops the gated column from the filter, the sort and the export when the capability is off', async () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    const user = userEvent.setup();
+    render(<ListView {...defaultProps} />);
+    expect(keysOf(filterBarProps.columns)).not.toContain('posted');
+    expect(keysOf(reportDrawerProps.columns)).not.toContain('posted');
+    expect(Object.keys(capturedEntityOptions.columnDefs)).not.toContain('posted');
+    await openSortPopover(user);
+    expect(screen.getByText('AD_Name')).toBeInTheDocument();
+    expect(screen.queryByText('AD_Posted')).not.toBeInTheDocument();
+  });
+
+  it('drops a restored column filter, funnel condition and sort on the gated column', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    window.sessionStorage.setItem(listStateKey(defaultProps.windowName), JSON.stringify({
+      v: 1,
+      columnFilters: { posted: { operator: 'equals', value: 'Y' }, name: { operator: 'contains', value: 'x' } },
+      advancedFilter: { rowOperator: 'and', conditions: [{ field: 'posted', operator: 'equals', value: 'Y' }, { field: 'name', operator: 'contains', value: 'x' }] },
+      sortColumn: 'posted',
+      sortDirection: 'asc',
+    }));
+    render(<ListView {...defaultProps} />);
+    expect(capturedEntityOptions.columnFilters).toEqual({ name: { operator: 'contains', value: 'x' } });
+    expect(filterBarProps.advancedFilter.conditions.map((c) => c.field)).toEqual(['name']);
+    expect(tableProps.sortColumn).toBe('creationDate');
+    expect(tableProps.sortDirection).toBe('desc');
+  });
+
+  it('keeps a restored filter and sort on the gated column when the role holds the capability', () => {
+    window.sessionStorage.setItem(listStateKey(defaultProps.windowName), JSON.stringify({
+      v: 1,
+      columnFilters: { posted: { operator: 'equals', value: 'Y' } },
+      sortColumn: 'posted',
+      sortDirection: 'asc',
+    }));
+    render(<ListView {...defaultProps} />);
+    expect(capturedEntityOptions.columnFilters).toEqual({ posted: { operator: 'equals', value: 'Y' } });
+    expect(tableProps.sortColumn).toBe('posted');
   });
 });
