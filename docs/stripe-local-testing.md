@@ -175,7 +175,9 @@ re-test for replay protection.
 **Where the outcome is stored depends on the tenant (ETP-5046).**
 
 - **Tenant with an open `ETGO_SUBSCRIPTION` row** — every tenant paid since ETP-5046, and every
-  older one once the R37 backfill has run: the event writes the row. `CURRENT` → `STATUS = active`,
+  older one once the R37 backfill has run (R37 is opt-in: an environment runs it with
+  `make data-fixes FIX=R37-tenant-subscription-backfill` when it switches to the subscription
+  model — a plain `make data-fixes` never does): the event writes the row. `CURRENT` → `STATUS = active`,
   `PAST_DUE` → `past_due`, `EXPIRED` → `canceled` (the row stays open, `END_DATE` null, and the
   tenant reads as `free` immediately), and the due date goes to `CURRENT_PERIOD_END` (cleared → null).
   Query it directly:
@@ -186,7 +188,8 @@ re-test for replay protection.
    where environment_client_id = '<clientId>' and isactive = 'Y' and end_date is null;
   ```
 
-- **Tenant with no open row** (a pre-ETP-5046 tenant R37 has not reached): the
+- **Tenant with no open row** (a pre-ETP-5046 tenant R37 has not reached — on an environment that
+  has not switched yet, that is every pre-ETP-5046 tenant): the
   `AD_Preference` projection, as ETP-5443 shipped it — `ETGO_SubscriptionStatus` and
   `ETGO_SubscriptionDueAt`, scoped to the tenant's `Client`.
 

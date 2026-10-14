@@ -13,6 +13,7 @@ import {
   formatOptInCell,
   applyChain,
   cmdTargetedFix,
+  loadCatalogWithRetirement,
 } from '../src/data-fixes/run.js';
 import { parseFix, parseFixTimestamp } from '../src/data-fixes/parse-fix.js';
 
@@ -372,5 +373,20 @@ describe('opt-in fixes — runner behavior (fake pool)', () => {
     const failed = await cmdTargetedFix(pool, CATALOG, { client: CLIENT, fix: B.fixId, dryRun: true });
     assert.equal(failed, 0);
     assert.deepEqual(pool.calls.checks, ['B-chain']);
+  });
+});
+
+describe('opt-in fixes — the real catalog', () => {
+  // Every opt-in fix, by fix_id. Adding one is a deliberate act: update this list with it.
+  const OPT_IN_FIXES = ['20261005T180000Z__R37-tenant-subscription-backfill'];
+
+  it('flags exactly the expected fixes as opt-in', async () => {
+    const catalog = await loadCatalogWithRetirement();
+    assert.deepEqual(catalog.filter(f => f.optIn).map(f => f.fixId).sort(), [...OPT_IN_FIXES].sort());
+  });
+
+  it('never marks a fix both retired and opt-in', async () => {
+    const catalog = await loadCatalogWithRetirement();
+    assert.deepEqual(catalog.filter(f => f.optIn && f.retired).map(f => f.fixId), []);
   });
 });

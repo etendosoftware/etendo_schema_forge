@@ -2,7 +2,39 @@
 -- @gap: S1
 -- @risk: medium
 -- @type: sql
+-- @optIn: true
 -- @description: Backfill one open ETGO_SUBSCRIPTION row on the grandfathered legacy-productive plan for every tenant carrying the AD_Preference ETGO_TenantPlan='productive' marker but no open subscription, copying Stripe ids from its ETGO_CHECKOUT_REQUEST when one exists, and retire the ETGO_TenantPlan preference of every tenant that has any ETGO_SUBSCRIPTION row (backfilled here or not, open or closed) in the SAME transaction (ETP-5046)
+
+-- OPT-IN -- a full run NEVER applies this fix (READ BEFORE RUNNING IT)
+-- --------------------------------------------------------------------------------------------
+-- `@optIn: true` (decided 2026-10-14, ETP-5046): `make data-fixes` without FIX= skips this file
+-- entirely -- no @check, no @apply, no ledger row -- and its ledger rows never move a tenant's
+-- watermark. Moving an environment from the ETGO_TenantPlan preference to the subscription model is
+-- a switch the operator makes ONCE, at a moment of their choosing, in two steps that belong
+-- together:
+--   1. run this fix explicitly (dry-run first; CLIENT=<id> narrows it to one tenant):
+--        make data-fixes FIX=R37-tenant-subscription-backfill DRY_RUN=1
+--        make data-fixes FIX=R37-tenant-subscription-backfill
+--   2. set the system preference ETGO_SubscriptionModel (com.etendoerp.go), so that new purchases
+--      open subscription rows instead of writing the ETGO_TenantPlan marker.
+-- Until step 1 has run, an environment keeps answering from the preference exactly as before.
+--
+-- Precondition the runner enforces: FIX= on an opt-in fix runs only for a tenant whose chain is
+-- current up to this file's date (its watermark >= 2026-10-05T18:00:00Z). A tenant behind it is
+-- reported BLOCKED_CHAIN_BEHIND, gets no ledger row and makes the run exit non-zero: run the full
+-- `make data-fixes` first, then repeat step 1. This is what keeps the ORDERING INVARIANT below true
+-- now that this fix is no longer visited in chain order.
+--
+-- Verification after step 1:
+--   select remediated_client_id, status, rows_affected, detail
+--     from etgo_data_fix_history
+--    where fix_id = '20261005T180000Z__R37-tenant-subscription-backfill'
+--    order by status;
+--     -- every tenant APPLIED or SKIPPED_NOT_NEEDED; FAILED => the legacy-productive plan row is
+--     -- missing (see "Why @apply ABORTS" below), fix it and run step 1 again.
+--   select count(*) from ad_preference
+--    where attribute = 'ETGO_TenantPlan' and isactive = 'Y' and upper(trim(value)) = 'PRODUCTIVE';
+--     -- must be 0: every active productive marker has become an open subscription row.
 
 -- Why this file is dated 2026-10-05 (READ BEFORE RE-DATING IT)
 -- --------------------------------------------------------------------------------------------
@@ -16,6 +48,9 @@
 -- the preference. It was renamed before it reached any shared environment (sql/README.md rule 3
 -- forbids renaming an APPLIED fix, not an unapplied one). Keep it strictly newer than every fix
 -- already merged when it lands.
+-- Since the file became opt-in (above) the watermark no longer skips it -- a full run never visits
+-- it at all -- but the date still matters: it is the point the tenant's chain must have reached
+-- before FIX= is allowed to apply it.
 
 -- Context (ETP-5046, gap S1 "Tenant subscription")
 -- --------------------------------------------------------------------------------------------
@@ -92,6 +127,9 @@
 --   plan row exists. Inserting zero rows would instead record APPLIED, advance the watermark past
 --   R37 forever, and silently leave a PAYING customer with no subscription -- i.e. flipped to free.
 --   A fix that can lose a paying customer by succeeding must fail instead.
+--   (Opt-in since 2026-10-14: "the very next run" is the next explicit FIX= run, and the opt-in
+--   ledger row no longer moves the watermark at all; FAILED remains the only safe outcome -- an
+--   APPLIED row would make every later FIX= run report the tenant as done.)
 --
 -- Stripe ids
 -- --------------------------------------------------------------------------------------------
@@ -202,23 +240,30 @@
 -- What makes it safe is the runner, and it is worth stating exactly: run.js sorts the catalog by
 -- file name (the UTC timestamp prefix makes lexical order == chronological order) and applies, per
 -- tenant, only fixes strictly newer than that tenant's watermark -- the newest timestamp among its
--- PROCESSED ledger rows. So for any single tenant:
---   * within one run, R31 (2026-09-01) is always visited before R37 (2026-10-05);
---   * once R37 is PROCESSED the watermark is >= 2026-10-05T18:00:00Z, so R31 is skipped on every
---     later run -- including the case where R31 itself FAILED, because the watermark is a date,
---     not a per-fix flag.
+-- PROCESSED ledger rows -- and, because this fix is opt-in, applies THIS fix only through FIX= and
+-- only once that watermark is already >= 2026-10-05T18:00:00Z (run.js optInChainGate). So for any
+-- single tenant:
+--   * R31 (2026-09-01) is at or below the watermark before this fix can run at all, so R31 is
+--     skipped on every later run -- including the case where R31 itself FAILED, because the
+--     watermark is a date, not a per-fix flag;
+--   * a tenant whose chain has not reached that date is refused (BLOCKED_CHAIN_BEHIND), never
+--     applied out of order.
 -- R31 can therefore never execute against a tenant whose preference this fix has already retired.
 -- Neither R31 nor R32 is edited here: an applied data-fix is immutable (sql/README.md rule 3) and
 -- is superseded by a new dated file, never edited in place.
 --
 -- The same argument covers develop's R42 (20260929T190000Z__R42-paid-provisioning-commercial-
 -- metadata.sql), the THIRD fix that keys on ETGO_TenantPlan -- on its ABSENCE, to INSERT it. R42
--- sorts before this file, so for any single tenant the chain visits R42 and then R37 in the same
--- run, and branch (B) of @check retires whatever marker R42 just wrote; once R37 is PROCESSED, R42
--- is below the watermark and never runs again. A failed R42 halts the tenant's chain before R37,
--- and the next run resumes at R42 -- still R42 first. The ONE way to run R42 after R37 for a tenant
--- is an operator forcing it with `run.js --fix <R42>`, which ignores chain order and the
--- watermark: whoever does that must follow it with `run.js --fix <R37> --client <same tenant>`.
+-- sorts before this file, so the gate above guarantees R42 is already at or below the tenant's
+-- watermark when this fix runs for it, branch (B) of @check retires whatever marker R42 wrote, and
+-- R42 never runs again for that tenant. The ONE way to run R42 after R37 for a tenant is an
+-- operator forcing it with `run.js --fix <R42>`, which ignores chain order and the watermark:
+-- whoever does that must follow it with `run.js --fix <R37> --client <same tenant>`.
+-- OPEN since R37 became opt-in: a tenant that first reaches R42 AFTER the environment switched
+-- (onboarded later, baseline 2026-09-02 below R42) runs R42 in its normal chain, and R37 no longer
+-- follows it there. If R42 matches that tenant it re-inserts a marker next to the tenant's
+-- subscription row, which the count(*) end condition then shows. Until a subscription-aware
+-- successor of R42 ships, re-run step 1 for such a tenant (`FIX=... CLIENT=<id>`).
 -- Residual (accepted, see the map doc's S1 row): R42 is gated on a PROVISIONED paid checkout and
 -- excludes REFUNDED/CANCELED/EXPIRED checkouts, NOT on etgo_subscription. A tenant whose ONLY
 -- subscription row is already closed when its first post-ETP-5046 chain runs would get an R42

@@ -3458,3 +3458,32 @@ restart — but it argues for running this fix close to a restart.
   subscription row; one `etgo_subscription` row, `canceled` with `end_date` set (E2E tenant
   `769A5DE5…`, no marker) — so a closed-only row DOES exist locally even though no product code
   writes `END_DATE` yet (test fixture). R37 dry-run: 6 `WOULD_APPLY`, all branch (A).
+
+## ETP-5046 — S1 R37 made opt-in: a full run never applies it (2026-10-14)
+
+- **Decision (user, 2026-10-14):** `R37-tenant-subscription-backfill` must never run in a full
+  `make data-fixes`; each environment switches to the subscription model once, when the operator
+  chooses: `make data-fixes FIX=R37-tenant-subscription-backfill`, then the system preference
+  `ETGO_SubscriptionModel`. Delivered as a generic header `-- @optIn: true` (parse-fix.js;
+  `true`/`false` only, anything else throws).
+- **Trap the naive version falls into — watermark.** A `--fix` run's `APPLIED` row used to count
+  toward the tenant's watermark like any other. Applying R37 (2026-10-05T18:00Z) to a tenant still
+  behind would have pushed its watermark past every unprocessed earlier chain fix (e.g. R47,
+  2026-10-05T16:04Z), skipping them forever with no row and no error. **Apply:** `computeWatermark`
+  now ignores opt-in fixes.
+- **Second trap — ordering invariant.** Excluding opt-in from the watermark alone would let R31
+  (forces test mode on a marker-less tenant — fiscal endpoints) and R42 (re-inserts the marker) run
+  AFTER R37 retired a tenant's marker, for any tenant whose chain was behind. **Apply:**
+  `optInChainGate` — `--fix` on an opt-in fix runs only where watermark >= the fix's timestamp;
+  else `BLOCKED_CHAIN_BEHIND`, no ledger row, exit 1. Then R31/R32/R42 are already at or below the
+  watermark and never run again for that tenant.
+- **Residual opened by opt-in (not fixed here):** before, R37 ran right after R42 in every chain, so
+  R37 branch (B) removed the marker R42 re-inserts for a paid tenant that already has a subscription
+  row. Out of the chain, a tenant that first reaches R42 AFTER its environment switched (onboarded
+  later; baseline 2026-09-02 < R42) keeps that marker until R37 is re-run for it with `CLIENT=`.
+  Real fix: a subscription-aware successor of R42 (`AND NOT EXISTS etgo_subscription row`) + retire
+  R42 via `retired.json`.
+- **Local DB (etendo_core3) 2026-10-14:** zero R37 rows in `etgo_data_fix_history` (the ledger holds
+  only `__baseline__` / `__costing-cadence-30s__` rows), so editing R37's header changed nothing
+  applied; R37 is not in `retired.json`, so no recorded checksum moved. `--fix R37 --dry-run`
+  reports every local tenant `BLOCKED_CHAIN_BEHIND` (watermark none or the 2026-09-02 BASELINE).

@@ -149,6 +149,29 @@ describe('R37 data-fix — header metadata', () => {
     assert.match(rawText, /visibleat_client_id/);
   });
 
+  it('is opt-in: a full run never applies it, only an explicit FIX= run does', () => {
+    assert.equal(fix.optIn, true);
+  });
+
+  it('documents how an operator switches an environment: run it with FIX=, then set the preference', () => {
+    assert.match(rawText, /OPT-IN -- a full run NEVER applies this fix/);
+    assert.match(rawText, /make data-fixes FIX=R37-tenant-subscription-backfill DRY_RUN=1/);
+    assert.match(rawText, /set the system preference ETGO_SubscriptionModel/);
+    // The runner refuses a tenant whose chain has not reached this file's date; the header says so.
+    assert.match(rawText, /BLOCKED_CHAIN_BEHIND/);
+    assert.match(rawText, /optInChainGate/);
+  });
+
+  it('documents the two verification queries: its ledger rows and the productive-marker count', () => {
+    assert.match(rawText, /where fix_id = '20261005T180000Z__R37-tenant-subscription-backfill'/);
+    assert.match(rawText, /where attribute = 'ETGO_TenantPlan' and isactive = 'Y' and upper\(trim\(value\)\) = 'PRODUCTIVE';/);
+    assert.match(rawText, /must be 0/);
+  });
+
+  it('records the R42 residual that opt-in opens for tenants reaching R42 after the switch', () => {
+    assert.match(rawText, /OPEN since R37 became opt-in/);
+  });
+
   it('documents that ONBOARDING_PROVISIONED_THROUGH is deliberately not bumped', () => {
     assert.match(rawText, /ONBOARDING_PROVISIONED_THROUGH is deliberately NOT bumped/);
   });
