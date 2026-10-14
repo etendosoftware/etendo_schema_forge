@@ -1148,6 +1148,7 @@ describe('AppLayout — environment access gate (ETP-5443 follow-up)', () => {
     ['/upgrade/checkout', 'an /upgrade sub-route'],
     ['/account', 'the exact /account path'],
     ['/account/subscription', 'an /account sub-route'],
+    ['/companies', 'the My companies page (ETP-5734)'],
   ])('renders the normal Outlet/SideMenu tree instead of any blocking screen on %s (%s)', (pathname) => {
     // Both guards must be skipped, not just the blocked screen: the 402 that sets
     // environmentAccessDecision also folds useRoleMenu()'s allowedIds into a confirmed empty

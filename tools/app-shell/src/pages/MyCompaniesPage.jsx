@@ -16,7 +16,8 @@ import {
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { detectBasePath } from '@/lib/neoBaseUrl.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { createPortalSession } from '@/lib/upgrade/api.js';
+import { createPortalSession, getSubscription } from '@/lib/upgrade/api.js';
+import { RENEWING_STATUSES } from '@/lib/upgrade/subscriptionStatus.js';
 import {
   environmentCommercialLabel,
   environmentPlanLabelKey,
@@ -48,19 +49,28 @@ function roleLabel(env, ui) {
 }
 
 /**
- * The renewal cell of an owned company: the stored renewal date for a productive environment,
- * the trial countdown for a demo, plus the commercial warning (payment grace, suspended) when the
- * backend reports one. No amount: there is one subscription per account, read live from the
- * provider, and it is not per company.
+ * The renewal cell of an owned company: the live renewal date of the subscription for the
+ * productive environment it pays for, the trial countdown for a demo, plus the commercial warning
+ * (payment grace, suspended) when the backend reports one. No amount: there is one subscription
+ * per account and it is not per company.
+ *
+ * Never the environment's `renewalDueAt`: that is the payment-grace anchor, empty while the
+ * subscription is current and the end of the last paid period once it is past due. And only for a
+ * subscription that is actually renewing, the rule of the Subscription page: a past-due
+ * `renewalAt` is a retry date and a scheduled cancellation does not renew.
  */
-function renewalLabel(env, ui, locale) {
+function renewalLabel(env, subscription, ui, locale) {
   if (!isProductiveEnvironment(env)) return environmentTrialLabel(env, ui) || '—';
-  return env.renewalDueAt ? formatCalendarDate(env.renewalDueAt, locale, SHORT_DATE) : '—';
+  const renews = subscription?.clientId === env.clientId
+    && subscription.renewalAt
+    && subscription.cancelAtPeriodEnd !== true
+    && RENEWING_STATUSES.has(subscription.status);
+  return renews ? formatCalendarDate(subscription.renewalAt, locale, SHORT_DATE) : '—';
 }
 
-function RenewalCell({ env, ui, locale }) {
+function RenewalCell({ env, subscription, ui, locale }) {
   const commercial = environmentCommercialLabel(env, ui);
-  const primary = renewalLabel(env, ui, locale);
+  const primary = renewalLabel(env, subscription, ui, locale);
   return (
     <div className="flex flex-col">
       <span>{primary}</span>
@@ -104,7 +114,9 @@ function CompanyName({ env, isCurrent, ui }) {
   );
 }
 
-function OwnedCompaniesTable({ companies, currentClientId, switching, onEnter, onManage, managing, ui, locale }) {
+function OwnedCompaniesTable({
+  companies, subscription, currentClientId, switching, onEnter, onManage, managing, ui, locale,
+}) {
   return (
     <Table data-testid="my-companies-owned-table">
       <TableHeader data-testid="TableHeader__44c7f5">
@@ -126,7 +138,7 @@ function OwnedCompaniesTable({ companies, currentClientId, switching, onEnter, o
             <TableRow key={env.clientId} data-testid={`my-companies-owned-${env.clientId}`}>
               <TableCell data-testid="TableCell__44c7f5"><CompanyName env={env} isCurrent={isCurrent} ui={ui} data-testid="CompanyName__44c7f5" /></TableCell>
               <TableCell data-testid="TableCell__44c7f5">{ui(environmentPlanLabelKey(env))}</TableCell>
-              <TableCell data-testid="TableCell__44c7f5"><RenewalCell env={env} ui={ui} locale={locale} data-testid="RenewalCell__44c7f5" /></TableCell>
+              <TableCell data-testid="TableCell__44c7f5"><RenewalCell env={env} subscription={subscription} ui={ui} locale={locale} data-testid="RenewalCell__44c7f5" /></TableCell>
               <TableCell data-testid="TableCell__44c7f5">{Number.isInteger(env.userCount) ? env.userCount : '—'}</TableCell>
               <TableCell className="text-right" data-testid="TableCell__44c7f5">
                 <EnterButton
@@ -262,6 +274,7 @@ export default function MyCompaniesPage() {
   // 'loading' | 'loaded' | 'error'
   const [status, setStatus] = useState('loading');
   const [groups, setGroups] = useState({ owned: [], invited: [], pendingInvitations: [] });
+  const [subscription, setSubscription] = useState(null);
   const [managing, setManaging] = useState(false);
   // One view per visit: a retry after a load error must not count the visit twice.
   const viewTracked = useRef(false);
@@ -270,13 +283,16 @@ export default function MyCompaniesPage() {
     const { apiBase } = detectBasePath();
     setStatus('loading');
     try {
-      const [environments, invitations] = await Promise.all([
+      const [environments, invitations, liveSubscription] = await Promise.all([
         fetchCompanyEnvironments(apiBase),
-        // Invitations are secondary: a failure to read them must not hide the companies.
+        // Invitations and the renewal date are secondary: failing to read them must not hide
+        // the companies.
         fetchMyInvitations(apiBase).catch(() => []),
+        getSubscription(apiBase).catch(() => null),
       ]);
       const grouped = groupCompanies(environments, invitations);
       setGroups(grouped);
+      setSubscription(liveSubscription?.hasSubscription ? liveSubscription : null);
       setStatus('loaded');
       if (!viewTracked.current) {
         viewTracked.current = true;
@@ -369,6 +385,7 @@ export default function MyCompaniesPage() {
                 <CardContent className="p-0" data-testid="CardContent__44c7f5">
                   <OwnedCompaniesTable
                     companies={owned}
+                    subscription={subscription}
                     currentClientId={currentClientId}
                     switching={switching}
                     onEnter={handleEnter}

@@ -37,12 +37,33 @@ export function isOpenInvitation(invitation, now = Date.now()) {
 }
 
 /**
+ * Companies the account was invited to but never joined: every invitation for the company is
+ * closed (expired, revoked, undeliverable) and none was accepted. Their `AD_User` is active from
+ * before the invitation, so `/environments` lists them anyway.
+ */
+function unjoinedClientIds(invitations, now) {
+  const accepted = new Set();
+  const closed = new Set();
+  for (const invitation of invitations) {
+    if (!invitation?.clientId) continue;
+    if (String(invitation.status || '').toUpperCase() === 'ACCEPTED') {
+      accepted.add(invitation.clientId);
+    } else if (!isOpenInvitation(invitation, now)) {
+      closed.add(invitation.clientId);
+    }
+  }
+  return new Set([...closed].filter((clientId) => !accepted.has(clientId)));
+}
+
+/**
  * Splits the account's companies into the page's sections.
  *
  * An invited company whose invitation is still open is shown only in the pending-invitation
  * notice: an invitee's `AD_User` exists from the moment the invitation is created, so the company
  * is already in `/environments` before the invitation has been answered, and listing it twice
- * would read as two different things.
+ * would read as two different things. For the same reason, an invited company whose invitations
+ * all closed without being accepted is not listed at all: the invitation lapsing must not turn it
+ * into a membership. A company the account reached without any invitation is listed as before.
  *
  * @param {object[]} environments `/environments?details=true` entries
  * @param {object[]} invitations `/company-invitations/mine` entries
@@ -50,16 +71,17 @@ export function isOpenInvitation(invitation, now = Date.now()) {
  * @returns {{ owned: object[], invited: object[], pendingInvitations: object[] }}
  */
 export function groupCompanies(environments, invitations, now = Date.now()) {
-  const pendingInvitations = (Array.isArray(invitations) ? invitations : [])
-    .filter((invitation) => isOpenInvitation(invitation, now));
-  const pendingClientIds = new Set(
-    pendingInvitations.map((invitation) => invitation.clientId).filter(Boolean)
-  );
+  const allInvitations = Array.isArray(invitations) ? invitations : [];
+  const pendingInvitations = allInvitations.filter((invitation) => isOpenInvitation(invitation, now));
+  const hiddenClientIds = new Set([
+    ...pendingInvitations.map((invitation) => invitation.clientId).filter(Boolean),
+    ...unjoinedClientIds(allInvitations, now),
+  ]);
   const companies = uniqueCompanies(environments);
   return {
     owned: companies.filter((env) => env.relationship === 'OWNER'),
     invited: companies.filter(
-      (env) => env.relationship !== 'OWNER' && !pendingClientIds.has(env.clientId)
+      (env) => env.relationship !== 'OWNER' && !hiddenClientIds.has(env.clientId)
     ),
     pendingInvitations,
   };

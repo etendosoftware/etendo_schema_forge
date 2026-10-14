@@ -104,6 +104,38 @@ describe('groupCompanies', () => {
     expect(invited).toHaveLength(2);
   });
 
+  it.each(['EXPIRED', 'REVOKED', 'DELIVERY_FAILED'])(
+    'does not list an invited company whose only invitation closed as %s without being accepted',
+    (status) => {
+      const invitations = [{ id: 'i-1', clientId: 'inv-1', status }];
+
+      const { invited, pendingInvitations } = groupCompanies(environments, invitations, NOW);
+
+      expect(invited.map((env) => env.clientId)).toEqual(['inv-2']);
+      expect(pendingInvitations).toEqual([]);
+    },
+  );
+
+  it('does not list an invited company whose open invitation lapsed past its expiry', () => {
+    const invitations = [{ id: 'i-1', clientId: 'inv-1', status: 'SENT', expiresAt: '2026-10-12T00:00:00Z' }];
+
+    const { invited, pendingInvitations } = groupCompanies(environments, invitations, NOW);
+
+    expect(invited.map((env) => env.clientId)).toEqual(['inv-2']);
+    expect(pendingInvitations).toEqual([]);
+  });
+
+  it('lists a company joined through a later invitation although an earlier one expired', () => {
+    const invitations = [
+      { id: 'i-1', clientId: 'inv-1', status: 'EXPIRED' },
+      { id: 'i-2', clientId: 'inv-1', status: 'ACCEPTED' },
+    ];
+
+    const { invited } = groupCompanies(environments, invitations, NOW);
+
+    expect(invited.map((env) => env.clientId)).toEqual(['inv-1', 'inv-2']);
+  });
+
   it('tolerates a missing invitation list', () => {
     expect(groupCompanies(environments, null, NOW).pendingInvitations).toEqual([]);
   });

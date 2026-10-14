@@ -21,7 +21,7 @@
 | Logout / reanudar onboarding | `/logout` → `LogoutRoute` (`runtime-routes.jsx:52`) | Cuenta con sesión activa |
 | Upgrade / checkout de pago | `/upgrade` → `UpgradePage.jsx` | Cuenta con ≥1 tenant, flag `tenant-upgrade` |
 | Selector de entorno + badge Demo/Productive | `SideMenu.jsx` (header + dropdown "switch company") | Cualquier cuenta con ≥1 tenant, flag `tenant-upgrade` |
-| Mis empresas (propias e invitadas, invitaciones pendientes, acceso y portal de suscripción) | `/companies` → `MyCompaniesPage.jsx`, entrada en el menú de usuario (`UserAvatarButton.jsx`) | Cualquier cuenta con ≥1 tenant, flag `my-companies-page` (ETP-5734; la ruta existe siempre, la flag solo oculta la entrada) |
+| Mis empresas (propias e invitadas, invitaciones pendientes, acceso y portal de suscripción) | `/companies` → `MyCompaniesPage.jsx`, entrada en el menú de usuario (`UserAvatarButton.jsx`) | Cualquier cuenta con ≥1 tenant, flag `my-companies-page` (ETP-5734; la ruta existe siempre, la flag solo oculta la entrada; sigue accesible con el tenant bloqueado, como `/account` y `/upgrade`) |
 | Resumen de roles del tenant | `/roles` → `RolesOverviewPage.jsx` | Admin / client-admin |
 | Asignación de roles a un usuario | Ventana `User` (`Configuración > Usuarios`) → `AssignTemplateRolesControl.jsx` (`headerExtra.customForm`) + tab "Roles del usuario" (`UserRolesTab.jsx`) | Quien tenga acceso de escritura a la ventana `User` (AD_Window_Access) |
 | Menú de navegación filtrado por rol | `AppLayout.jsx` + `useRoleMenu.js` + `registry.js` | Todo usuario autenticado |

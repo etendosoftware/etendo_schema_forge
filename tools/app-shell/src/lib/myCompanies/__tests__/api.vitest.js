@@ -30,16 +30,22 @@ describe('fetchCompanyEnvironments', () => {
     expect(apiFetchMock).toHaveBeenCalledWith('/sws/go/environments?details=true', { baseUrl: '/etendo' });
   });
 
-  it('returns an empty list when the body carries no environments array', async () => {
-    apiFetchMock.mockResolvedValue(jsonResponse(200, { environments: null }));
+  it('returns an empty list when the backend answers one', async () => {
+    apiFetchMock.mockResolvedValue(jsonResponse(200, { environments: [] }));
 
     await expect(fetchCompanyEnvironments('')).resolves.toEqual([]);
   });
 
-  it('returns an empty list when the body is not JSON', async () => {
+  it('rejects, instead of reading "no companies", when the body carries no environments array', async () => {
+    apiFetchMock.mockResolvedValue(jsonResponse(200, { environments: null }));
+
+    await expect(fetchCompanyEnvironments('')).rejects.toThrow(/Malformed response/);
+  });
+
+  it('rejects when the body is not JSON', async () => {
     apiFetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => { throw new SyntaxError('bad'); } });
 
-    await expect(fetchCompanyEnvironments('')).resolves.toEqual([]);
+    await expect(fetchCompanyEnvironments('')).rejects.toMatchObject({ status: 200 });
   });
 
   it('rejects with the HTTP status on a failed request', async () => {
@@ -59,10 +65,10 @@ describe('fetchMyInvitations', () => {
     expect(apiFetchMock).toHaveBeenCalledWith('/sws/go/company-invitations/mine', { baseUrl: '/etendo' });
   });
 
-  it('returns an empty list when the body carries no invitations array', async () => {
+  it('rejects when the body carries no invitations array', async () => {
     apiFetchMock.mockResolvedValue(jsonResponse(200, {}));
 
-    await expect(fetchMyInvitations('')).resolves.toEqual([]);
+    await expect(fetchMyInvitations('')).rejects.toThrow(/Malformed response/);
   });
 
   it('rejects with the HTTP status on a failed request', async () => {

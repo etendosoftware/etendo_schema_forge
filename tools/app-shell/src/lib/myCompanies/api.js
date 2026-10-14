@@ -27,6 +27,22 @@ function requestError(response) {
 }
 
 /**
+ * The list under `key`, or a rejection when a successful answer does not carry one. A 200 with an
+ * HTML body (an SPA fallback or a proxy page) or without the array is not "no companies": reading
+ * it as empty would show the empty state to an account that has companies, with no way to retry.
+ */
+async function readList(response, key) {
+  if (!response.ok) throw requestError(response);
+  const data = await readJson(response);
+  if (!Array.isArray(data?.[key])) {
+    const error = new Error(`Malformed response: missing ${key} array`);
+    error.status = response.status;
+    throw error;
+  }
+  return data[key];
+}
+
+/**
  * Lists the account's environments WITH the per-company details only this page needs
  * (`userCount`, `ownerName`, role fields). `details=true` is opt-in on the backend so the
  * environment list every app load reads stays cheap.
@@ -36,9 +52,7 @@ function requestError(response) {
  */
 export async function fetchCompanyEnvironments(baseUrl) {
   const response = await apiFetch('/sws/go/environments?details=true', { baseUrl });
-  if (!response.ok) throw requestError(response);
-  const data = await readJson(response);
-  return Array.isArray(data?.environments) ? data.environments : [];
+  return readList(response, 'environments');
 }
 
 /**
@@ -49,7 +63,5 @@ export async function fetchCompanyEnvironments(baseUrl) {
  */
 export async function fetchMyInvitations(baseUrl) {
   const response = await apiFetch('/sws/go/company-invitations/mine', { baseUrl });
-  if (!response.ok) throw requestError(response);
-  const data = await readJson(response);
-  return Array.isArray(data?.invitations) ? data.invitations : [];
+  return readList(response, 'invitations');
 }

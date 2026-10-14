@@ -2,6 +2,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import MyCompaniesPage from '../MyCompaniesPage.jsx';
 
 const navigateMock = vi.fn();
@@ -9,6 +10,7 @@ const switchToMock = vi.fn();
 const fetchCompanyEnvironmentsMock = vi.fn();
 const fetchMyInvitationsMock = vi.fn();
 const createPortalSessionMock = vi.fn();
+const getSubscriptionMock = vi.fn();
 const toastErrorMock = vi.fn();
 const trackViewedMock = vi.fn();
 const trackEnterClickedMock = vi.fn();
@@ -51,6 +53,7 @@ vi.mock('@/lib/myCompanies/telemetry.js', () => ({
 
 vi.mock('@/lib/upgrade/api.js', () => ({
   createPortalSession: (...args) => createPortalSessionMock(...args),
+  getSubscription: (...args) => getSubscriptionMock(...args),
 }));
 
 vi.mock('sonner', () => ({
@@ -75,7 +78,6 @@ const OWNED_PRODUCTIVE = {
   relationship: 'OWNER',
   plan: 'productive',
   subscriptionStatus: 'CURRENT',
-  renewalDueAt: '2026-11-01T00:00:00Z',
   userCount: 4,
 };
 const OWNED_DEMO = {
@@ -99,11 +101,22 @@ const INVITED = {
   roleTemplateNames: ['Finance'],
 };
 
+const RENEWAL_AT = '2026-12-15T00:00:00Z';
+const RENEWAL_LABEL = formatCalendarDate(RENEWAL_AT, 'es_ES', { day: 'numeric', month: 'short', year: 'numeric' });
+const SUBSCRIPTION = {
+  hasSubscription: true,
+  clientId: 'own-1',
+  status: 'active',
+  renewalAt: RENEWAL_AT,
+  cancelAtPeriodEnd: false,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   environmentSwitch = {};
   fetchCompanyEnvironmentsMock.mockResolvedValue([OWNED_PRODUCTIVE, OWNED_DEMO, INVITED]);
   fetchMyInvitationsMock.mockResolvedValue([]);
+  getSubscriptionMock.mockResolvedValue(SUBSCRIPTION);
 });
 
 describe('MyCompaniesPage', () => {
@@ -121,12 +134,46 @@ describe('MyCompaniesPage', () => {
     expect(productive).toHaveTextContent('GOClient');
     expect(productive).toHaveTextContent('environmentProductive');
     expect(productive).toHaveTextContent('4');
-    expect(productive).toHaveTextContent('2026');
+    expect(productive).toHaveTextContent(RENEWAL_LABEL);
 
     const demo = screen.getByTestId('my-companies-owned-own-2');
     expect(demo).toHaveTextContent('environmentDemo');
     expect(demo).toHaveTextContent('environmentTrialDaysRemaining');
     expect(screen.getByText(/myCompaniesOwnedSection · 2/)).toBeInTheDocument();
+  });
+
+  it('dates the renewal from the live subscription, never from the stored grace anchor', async () => {
+    fetchCompanyEnvironmentsMock.mockResolvedValue([
+      { ...OWNED_PRODUCTIVE, subscriptionStatus: 'PAST_DUE', renewalDueAt: '2026-09-01T00:00:00Z' },
+    ]);
+    getSubscriptionMock.mockResolvedValue(null);
+
+    render(<MyCompaniesPage />);
+
+    const productive = await screen.findByTestId('my-companies-owned-own-1');
+    expect(productive).not.toHaveTextContent(formatCalendarDate('2026-09-01T00:00:00Z', 'es_ES', { day: 'numeric', month: 'short', year: 'numeric' }));
+    expect(productive).toHaveTextContent('—');
+    expect(screen.getByTestId('my-companies-commercial-own-1')).toHaveTextContent('environmentPaymentGrace');
+  });
+
+  it.each([
+    ['another company', { clientId: 'own-9' }],
+    ['a past-due subscription', { status: 'past_due' }],
+    ['a scheduled cancellation', { cancelAtPeriodEnd: true }],
+  ])('shows no renewal date for %s', async (_case, override) => {
+    getSubscriptionMock.mockResolvedValue({ ...SUBSCRIPTION, ...override });
+
+    render(<MyCompaniesPage />);
+
+    expect(await screen.findByTestId('my-companies-owned-own-1')).not.toHaveTextContent(RENEWAL_LABEL);
+  });
+
+  it('still lists the companies when the subscription cannot be read', async () => {
+    getSubscriptionMock.mockRejectedValue(new Error('provider down'));
+
+    render(<MyCompaniesPage />);
+
+    expect(await screen.findByTestId('my-companies-owned-own-1')).toHaveTextContent('—');
   });
 
   it('marks the current company and disables entering it', async () => {
