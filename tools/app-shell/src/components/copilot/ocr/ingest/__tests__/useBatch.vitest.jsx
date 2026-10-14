@@ -152,6 +152,20 @@ describe('useBatch — runBatch', () => {
     expect(JSON.parse(globalThis.fetch.mock.calls[1][1].body)).toEqual({ operations: ops });
   });
 
+  it('ETP-5676: returns an ids-only response as-is when the caller asks for ids only', async () => {
+    const idsOnly = { committed: true, operations: [{ id: 'r0.product', recordId: 'P-1', ok: true }] };
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify(idsOnly) });
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+
+    let response;
+    await act(async () => {
+      response = await result.current.runBatch([{ id: 'r0.product', spec: 'product' }], { onlyReturnIds: true });
+    });
+
+    expect(response).toEqual(idsOnly);
+    expect(result.current.error).toBeNull();
+  });
+
   it('returns json on a non-ok response that still carries a body', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,

@@ -4,6 +4,7 @@ import { describe, it, vi, afterEach } from 'vitest';
 import assert from 'node:assert/strict';
 import { buildOperations } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
 import { resetImportRun } from '@etendosoftware/app-shell-core/lib/import/importRunState.js';
+import { runImport } from '@etendosoftware/app-shell-core/lib/import/importEngine.js';
 import '../productFkResolvers.js'; // registers the 'product-uom' resolver the send path looks up
 import '../productImportDescriptor.js'; // side-effecting import: registers the 'product' descriptor on load
 
@@ -257,6 +258,59 @@ describe('product import descriptor', () => {
       assert.equal(salesOnly[0].body._skipPricesSeed, undefined);
       const none = await buildOperations({ ...baseRow }, productConfig('tok-seed-none'));
       assert.equal(none[0].body._skipPricesSeed, undefined);
+    });
+
+    it('keeps the price seed for a purchase-only row, so the sales tariff still gets its zero price', async () => {
+      stubFetch(SALES_ITEMS);
+      const purchaseOnly = await buildOperations({ ...baseRow, purchasePrice: '42' }, productConfig('tok-seed-purchase'));
+      assert.equal(purchaseOnly[0].id, 'product');
+      assert.equal(Object.hasOwn(purchaseOnly[0].body, '_skipPricesSeed'), false);
+    });
+
+    // ETP-5676 — with batchSize > 1 the core engine namespaces every op id of a row as
+    // `r<index>.<id>` and rewrites its references; the descriptor's directive must survive that
+    // rewrite on each row's own product op, and each row's prices must still point at it.
+    it('keeps _skipPricesSeed and the parentRef wiring on every row of a multi-row chunk', async () => {
+      stubFetch(SALES_ITEMS);
+      const config = productConfig('tok-seed-chunk');
+      const rows = [
+        { searchKey: 'P-0', name: 'A', salesPrice: '10', purchasePrice: '5' },
+        { searchKey: 'P-1', name: 'B', salesPrice: '20' },
+        { searchKey: 'P-2', name: 'C', salesPrice: '30', purchasePrice: '15' },
+      ];
+      const postBatch = vi.fn(async (ops) => ({
+        committed: true,
+        // Ids only — what `_onlyReturnIds` makes the backend answer.
+        operations: ops.map((op) => ({ id: op.id, recordId: `REC-${op.id}`, ok: true })),
+      }));
+
+      const { results } = await runImport(rows, {
+        buildRowOperations: (row) => buildOperations(row, config),
+        postBatch,
+        batchSize: 3,
+      });
+
+      assert.equal(postBatch.mock.calls.length, 1);
+      const sent = postBatch.mock.calls[0][0];
+      const byId = Object.fromEntries(sent.map((op) => [op.id, op]));
+      assert.deepEqual(Object.keys(byId).sort(), [
+        'r0.product', 'r0.purchasePrice', 'r0.salesPrice',
+        'r1.product', 'r1.salesPrice',
+        'r2.product', 'r2.purchasePrice', 'r2.salesPrice',
+      ]);
+      assert.equal(byId['r0.product'].body._skipPricesSeed, true);
+      assert.equal(byId['r2.product'].body._skipPricesSeed, true);
+      assert.equal(Object.hasOwn(byId['r1.product'].body, '_skipPricesSeed'), false);
+      for (const op of sent.filter((o) => !o.id.endsWith('.product'))) {
+        const prefix = op.id.slice(0, op.id.indexOf('.') + 1);
+        assert.equal(op.parentRef, `${prefix}product`, `${op.id} must reference its own row's product`);
+      }
+      // No op body still carries a reference to an un-prefixed sibling id.
+      assert.doesNotMatch(JSON.stringify(sent.map((op) => op.body)), /"\$ref:(product|salesPrice|purchasePrice)"/);
+      // Each row's record id is read from its own prefixed product op of the ids-only response.
+      assert.deepEqual(results.map((r) => [r.status, r.recordId]), [
+        ['ok', 'REC-r0.product'], ['ok', 'REC-r1.product'], ['ok', 'REC-r2.product'],
+      ]);
     });
 
     it('imports a purchase price on its own, without a sales price', async () => {
