@@ -14,8 +14,14 @@ import {
   applyChain,
   cmdTargetedFix,
   loadCatalogWithRetirement,
+  runMain,
 } from '../src/data-fixes/run.js';
-import { parseFix, parseFixTimestamp } from '../src/data-fixes/parse-fix.js';
+import { parseFix, parseFixTimestamp, inlineParams } from '../src/data-fixes/parse-fix.js';
+import { setCacheMode } from '../src/db.js';
+import pg from 'pg';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 describe('parseArgs', () => {
   it('returns the default shape for no arguments', () => {
@@ -250,6 +256,16 @@ describe('opt-in fixes — pure helpers', () => {
     assert.equal(computeWatermark(CATALOG, ledger), new Date('2026-09-01T00:00:00Z').getTime());
   });
 
+  it('computeWatermark ignores an opt-in fix marked MANUALLY_FIXED (--mark-fixed)', () => {
+    const ledger = ledgerOf([['__baseline__', 'BASELINE', '2026-09-01T00:00:00Z'], [OPT.fixId, 'MANUALLY_FIXED']]);
+    assert.equal(computeWatermark(CATALOG, ledger), new Date('2026-09-01T00:00:00Z').getTime());
+  });
+
+  it('optInChainGate is not opened by marking the opt-in fix itself MANUALLY_FIXED', () => {
+    const ledger = ledgerOf([['__baseline__', 'BASELINE', '2026-09-01T00:00:00Z'], [OPT.fixId, 'MANUALLY_FIXED']]);
+    assert.equal(optInChainGate(CATALOG, ledger, OPT).allowed, false);
+  });
+
   it('optInChainGate refuses a tenant whose chain has not reached the opt-in date', () => {
     const ledger = ledgerOf([['__baseline__', 'BASELINE', '2026-09-01T00:00:00Z'], [A.fixId, 'APPLIED']]);
     const gate = optInChainGate(CATALOG, ledger, OPT);
@@ -327,6 +343,13 @@ describe('opt-in fixes — runner behavior (fake pool)', () => {
     assert.deepEqual(pool.calls.checks, ['A-chain', 'B-chain']);
   });
 
+  it('a full run still applies a chain fix dated before an opt-in fix marked MANUALLY_FIXED', async () => {
+    const pool = fakePool({ ledgerRows: [['__baseline__', 'DETECTED', '2026-01-01'], [OPT.fixId, 'MANUALLY_FIXED']] });
+    await applyChain(pool, CATALOG, CLIENT, new Map(), { dryRun: false });
+    assert.deepEqual(pool.calls.checks, ['A-chain', 'B-chain']);
+    assert.ok(!pool.calls.ledgerWrites.some(w => w.fixId === OPT.fixId), 'the MANUALLY_FIXED opt-in row is left alone');
+  });
+
   it('--fix applies an opt-in fix for a tenant whose chain is current, whatever the watermark', async () => {
     const pool = fakePool({ ledgerRows: [[A.fixId, 'APPLIED'], [B.fixId, 'APPLIED']] });
     const failed = await cmdTargetedFix(pool, CATALOG, { client: CLIENT, fix: 'OPT-switch', dryRun: false });
@@ -388,5 +411,221 @@ describe('opt-in fixes — the real catalog', () => {
   it('never marks a fix both retired and opt-in', async () => {
     const catalog = await loadCatalogWithRetirement();
     assert.deepEqual(catalog.filter(f => f.optIn && f.retired).map(f => f.fixId), []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runMain — the CLI entry point (--list-clients, --fix, --mark-fixed, full run)
+// against the REAL catalog, with pg.Pool swapped for a stateful in-memory pool.
+// ---------------------------------------------------------------------------
+
+const R37_ID = 'R37-tenant-subscription-backfill';
+const R37_FIX_ID = '20261005T180000Z__R37-tenant-subscription-backfill';
+const R47_FIX_ID = '20261005T160407Z__R47-gl-journal-draft-datedoc-sync';
+const FAKE_DB = { host: 'fake-db', port: 5432, user: 'tester', database: 'fake' };
+
+const CAUGHT_UP = { id: 'A'.repeat(32), name: 'Acme', ledger: [['__baseline__', 'BASELINE', '2026-10-06T00:00:00Z']] };
+const BEHIND = { id: 'B'.repeat(32), name: 'Globex', ledger: [['__baseline__', 'DETECTED', '2026-01-01']] };
+
+/**
+ * A pg-pool stand-in that answers the runner's own queries from per-tenant
+ * in-memory ledgers (updated by every ledger write) and records every fix body
+ * (@check / @apply / @report — always sent without bind params) it is asked to run.
+ */
+function tenantDbPool(tenants, { checkMatches = 0 } = {}) {
+  const ledgers = new Map(tenants.map(t => [t.id, new Map((t.ledger || []).map(
+    ([fixId, status, appliedUtc = '2026-10-10T00:00:00Z']) => [fixId, { status, appliedUtc }]))]));
+  const byName = [...tenants].sort((a, b) => a.name.localeCompare(b.name));
+  const scoped = params => tenants.filter(t => !params[0] || t.id === params[0]);
+  const calls = { ledgerWrites: [], fixBodies: [], tx: [], ended: false };
+  const query = async (sql, params) => {
+    if (/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql)) { calls.tx.push(sql); return {}; }
+    if (sql.startsWith("SELECT ad_client_id, name FROM ad_client WHERE ad_client_id <> '0'")) {
+      return { rows: byName.map(t => ({ ad_client_id: t.id, name: t.name })) };
+    }
+    if (params === undefined) { calls.fixBodies.push(sql); return { rowCount: checkMatches, rows: [] }; }
+    if (sql.includes('FROM etgo_data_fix_history WHERE remediated_client_id')) {
+      return { rows: [...(ledgers.get(params[0]) ?? [])].map(([fix_id, r]) => ({ fix_id, status: r.status, applied_utc: r.appliedUtc })) };
+    }
+    if (sql.includes('INSERT INTO etgo_data_fix_history')) {
+      const [, , clientId, fixId, status, appliedUtc] = params;
+      calls.ledgerWrites.push({ clientId, fixId, status });
+      ledgers.get(clientId).set(fixId, { status, appliedUtc });
+      return { rowCount: 1 };
+    }
+    if (sql.includes('NOT EXISTS (SELECT 1 FROM etgo_data_fix_history')) {
+      return { rows: scoped(params).filter(t => ledgers.get(t.id).size === 0).map(t => ({ ad_client_id: t.id })) };
+    }
+    if (sql.includes('SELECT ad_client_id FROM ad_client')) return { rows: scoped(params).map(t => ({ ad_client_id: t.id })) };
+    if (sql.includes('SELECT ad_org_id FROM ad_org')) return { rows: [{ ad_org_id: 'O'.repeat(32) }] };
+    if (sql.includes('SELECT name FROM ad_client WHERE ad_client_id = $1')) {
+      return { rows: [{ name: tenants.find(t => t.id === params[0])?.name }] };
+    }
+    throw new Error(`tenantDbPool: unexpected SQL ${sql.slice(0, 80)}`);
+  };
+  return {
+    calls,
+    ledgers,
+    query,
+    connect: async () => ({ query, release() {} }),
+    end: async () => { calls.ended = true; },
+  };
+}
+
+describe('runMain — opt-in fixes through the CLI entry point', () => {
+  let logDir;
+  let priorLogDir;
+  let lines;
+  let catalog;
+  let r37;
+
+  beforeEach(async () => {
+    setCacheMode({ mode: 'off' });
+    catalog = await loadCatalogWithRetirement();
+    r37 = catalog.find(f => f.fixId === R37_FIX_ID);
+    priorLogDir = process.env.SF_DATA_FIX_LOG_DIR;
+    logDir = mkdtempSync(join(tmpdir(), 'data-fixes-run-test-'));
+    process.env.SF_DATA_FIX_LOG_DIR = logDir;
+    lines = [];
+    mock.method(console, 'log', (...args) => lines.push(args.join(' ')));
+  });
+
+  afterEach(() => {
+    mock.restoreAll();
+    if (priorLogDir === undefined) delete process.env.SF_DATA_FIX_LOG_DIR;
+    else process.env.SF_DATA_FIX_LOG_DIR = priorLogDir;
+    rmSync(logDir, { recursive: true, force: true });
+  });
+
+  /** Run the CLI with every `new pg.Pool(...)` answered by `pool`. */
+  function runCli(pool, argv) {
+    mock.method(pg, 'Pool', function FakePgPool() { return pool; });
+    return runMain({ dbConfig: FAKE_DB, argv });
+  }
+
+  /** Text of the execution logs written so far (one file per run second). */
+  function executionLog() {
+    return readdirSync(logDir).map(f => readFileSync(join(logDir, f), 'utf-8')).join('\n');
+  }
+
+  /** The R37 @check body as the runner sends it for a tenant. */
+  const r37Check = clientId => inlineParams(r37.check, { client_id: clientId });
+
+  describe('--list-clients', () => {
+    const TENANTS = [
+      { id: 'C'.repeat(32), name: 'Initech', ledger: [] },
+      { id: 'A'.repeat(32), name: 'Acme', ledger: [['__baseline__', 'BASELINE', '2026-10-06T00:00:00Z'], [R37_FIX_ID, 'APPLIED']] },
+      { id: 'E'.repeat(32), name: 'Globex International Holdings', ledger: [[R37_FIX_ID, 'FAILED']] },
+    ];
+
+    it('lists the opt-in fixes under their own header line, before the table', async () => {
+      const pool = tenantDbPool(TENANTS);
+      const code = await runCli(pool, ['--list-clients']);
+      assert.equal(code, 0);
+      assert.equal(lines[0], `Catalog: ${catalog.length} fix(es). Tenants: 3.`);
+      assert.equal(lines[1],
+        'Opt-in fixes (never run by a full run; apply with --fix <id>, counted under OPT-IN, never PENDING):');
+      assert.equal(lines[2], `  - ${R37_FIX_ID}`);
+      assert.equal(lines[3], '');
+      assert.ok(lines[4].startsWith('TENANT'), 'the table header follows the opt-in list');
+    });
+
+    it('aligns every row of the table, OPT-IN column included, under the header', async () => {
+      const pool = tenantDbPool(TENANTS);
+      await runCli(pool, ['--list-clients']);
+      const header = lines.find(l => l.startsWith('TENANT'));
+      const at = lines.indexOf(header);
+      const separator = lines[at + 1];
+      const rows = lines.slice(at + 2);
+
+      assert.match(separator, /^-+$/);
+      assert.equal(separator.length, header.length);
+      assert.equal(rows.length, 3);
+      for (const row of rows) assert.equal(row.length, header.length, `row "${row}" is as wide as the header`);
+
+      const cell = (row, name, next) => row.slice(header.indexOf(name), next ? header.indexOf(next) : undefined).trim();
+      const chainCount = catalog.filter(f => !f.retired && !f.optIn).length;
+      const table = rows.map(row => ({
+        tenant: cell(row, 'TENANT', 'CLIENT_ID'),
+        clientId: cell(row, 'CLIENT_ID', 'LAST APPLIED'),
+        lastApplied: cell(row, 'LAST APPLIED', 'PENDING'),
+        pending: cell(row, 'PENDING', 'FAILED'),
+        failed: cell(row, 'FAILED', 'OPT-IN'),
+        optIn: cell(row, 'OPT-IN'),
+      }));
+      assert.deepEqual(table, [
+        { tenant: 'Acme', clientId: 'A'.repeat(32), lastApplied: R37_ID, pending: String(chainCount), failed: '0', optIn: '1/1' },
+        { tenant: 'Globex International Holdings', clientId: 'E'.repeat(32), lastApplied: '—', pending: String(chainCount), failed: '0', optIn: '0/1 (1 FAILED)' },
+        { tenant: 'Initech', clientId: 'C'.repeat(32), lastApplied: '—', pending: String(chainCount), failed: '0', optIn: '0/1' },
+      ]);
+      // The widest OPT-IN cell sets the column width: the header label is padded to it.
+      assert.ok(header.endsWith(`OPT-IN${' '.repeat('0/1 (1 FAILED)'.length - 'OPT-IN'.length)}`));
+    });
+
+    it('is read-only: no ledger write, no fix body, no execution log', async () => {
+      const pool = tenantDbPool(TENANTS);
+      await runCli(pool, ['--list-clients']);
+      assert.deepEqual(pool.calls.ledgerWrites, []);
+      assert.deepEqual(pool.calls.fixBodies, []);
+      assert.deepEqual(readdirSync(logDir), []);
+      assert.equal(pool.calls.ended, true);
+    });
+  });
+
+  describe('--fix <opt-in>', () => {
+    it('exits 1 and logs FAILED when some tenants are blocked behind the opt-in date', async () => {
+      const pool = tenantDbPool([CAUGHT_UP, BEHIND]);
+      const code = await runCli(pool, ['--fix', R37_ID, '--dry-run']);
+      assert.equal(code, 1);
+      assert.match(executionLog(), new RegExp(`SUMMARY: targeted fix ${R37_ID} — FAILED\\.`));
+      // The blocked tenant is reported, and only the caught-up one reaches @check.
+      assert.ok(lines.some(l => l.includes(`Globex (${BEHIND.id}): BLOCKED_CHAIN_BEHIND`)), 'Globex is reported as blocked');
+      assert.deepEqual(pool.calls.fixBodies, [r37Check(CAUGHT_UP.id)]);
+      assert.deepEqual(pool.calls.ledgerWrites, []);
+    });
+
+    it('exits 0 and logs ok when every tenant is caught up', async () => {
+      const pool = tenantDbPool([CAUGHT_UP]);
+      const code = await runCli(pool, ['--fix', R37_ID, '--dry-run']);
+      assert.equal(code, 0);
+      assert.match(executionLog(), new RegExp(`SUMMARY: targeted fix ${R37_ID} — ok\\.`));
+    });
+
+    it('applies R37 for a caught-up tenant, and the next full run leaves it untouched', async () => {
+      const pool = tenantDbPool([CAUGHT_UP], { checkMatches: 1 });
+      assert.equal(await runCli(pool, ['--fix', R37_ID, '--client', CAUGHT_UP.id]), 0);
+      assert.deepEqual(pool.calls.ledgerWrites, [{ clientId: CAUGHT_UP.id, fixId: R37_FIX_ID, status: 'APPLIED' }]);
+      assert.deepEqual(pool.calls.tx, ['BEGIN', 'COMMIT']);
+
+      pool.calls.fixBodies.length = 0;
+      pool.calls.ledgerWrites.length = 0;
+      lines.length = 0;
+      assert.equal(await runCli(pool, ['--client', CAUGHT_UP.id]), 0);
+
+      assert.ok(!pool.calls.fixBodies.includes(r37Check(CAUGHT_UP.id)), 'R37 @check is not run again');
+      assert.ok(!pool.calls.ledgerWrites.some(w => w.fixId === R37_FIX_ID), 'no R37 ledger write');
+      assert.equal(pool.ledgers.get(CAUGHT_UP.id).get(R37_FIX_ID).status, 'APPLIED');
+      assert.ok(lines.some(l => l.includes(`${R37_FIX_ID}: OPT-IN — skipped by a full run (ledger: APPLIED)`)));
+      // Applying R37 did not move the watermark: it still sits on the baseline.
+      assert.ok(lines.some(l => l.includes('(watermark: 2026-10-06T00:00:00.000Z)')));
+    });
+  });
+
+  describe('--mark-fixed on an opt-in fix', () => {
+    it('records MANUALLY_FIXED without moving the watermark past an earlier pending chain fix', async () => {
+      // Chain current up to just before R47 (16:04), which is dated before R37 (18:00).
+      const tenant = { id: 'D'.repeat(32), name: 'Marked', ledger: [['__baseline__', 'BASELINE', '2026-10-05T15:00:00Z']] };
+      const pool = tenantDbPool([tenant]);
+      assert.equal(await runCli(pool,
+        ['--mark-fixed', '--client', tenant.id, '--fix', R37_FIX_ID, '--reason', 'switched by hand']), 0);
+      assert.deepEqual(pool.calls.ledgerWrites, [{ clientId: tenant.id, fixId: R37_FIX_ID, status: 'MANUALLY_FIXED' }]);
+
+      pool.calls.ledgerWrites.length = 0;
+      assert.equal(await runCli(pool, ['--client', tenant.id]), 0);
+      const written = pool.calls.ledgerWrites.map(w => w.fixId);
+      assert.ok(written.includes(R47_FIX_ID), 'R47, dated before R37, is still evaluated');
+      assert.ok(!written.includes(R37_FIX_ID), 'the MANUALLY_FIXED R37 row is left alone');
+      assert.ok(lines.some(l => l.includes('(watermark: 2026-10-05T15:00:00.000Z)')));
+    });
   });
 });
