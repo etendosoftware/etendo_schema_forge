@@ -1057,6 +1057,75 @@ and the resulting tenant/payment state in Etendo.
 | SF-STRIPE-LOCAL-24 | Blocked tenant: structured 402 on NEO and MCP (ETP-5047) | a tenant past its grace (e.g. SF-STRIPE-LOCAL-10 with an old `period_end`); call any `/sws/neo/...` and `POST /sws/mcp` | 402 with `error.code=ENVIRONMENT_ACCESS_DENIED`, `error.decision=SUBSCRIPTION_REQUIRED`, `error.message` unchanged; `/account` and `/upgrade` still load; the SPA shows the blocked screen | P0 |
 | SF-STRIPE-LOCAL-25 | Kill switch on (ETP-5047) | SF-STRIPE-LOCAL-24 with `etendo.go.flags.environment-access-enforcement-off=true`, Tomcat restarted | 200 on NEO and MCP; INFO `Environment access enforcement is switched off: ... would have refused tenant` in the log; `GET /sws/go/environments` shows that tenant's `accessState` as `ALLOWED` (subscription status and trial fields unchanged); remove the property → 402 again and `accessState` back to the refusal | P0 |
 | SF-STRIPE-LOCAL-26 | Period and grace anchor are separate columns (ETP-5047) | Test Mode `tools/stripe-subscription-past-due.sh fail` then `recover` (§5), on a tenant with a row | after `fail`: `STATUS=past_due`, `GRACE_ANCHOR` = the failed invoice's `period_end` (the script's manual invoice: the moment it was created; a real renewal: the end of the paid period), `CURRENT_PERIOD_START/END` = Stripe's current period (unchanged by the failure); after `recover`: `STATUS=active`, `GRACE_ANCHOR` NULL, period advanced; `LAST_EVENT_AT` moves forward with each applied event | P0 |
+| SF-STRIPE-LOCAL-27 | Canceled customer buys again → clean new environment (ETP-5047) | after SF-STRIPE-LOCAL-14 on productive tenant P (row closed), with a fresh demo D on the same account: from P's session, buy again on `/upgrade` (Test Mode `4242`, §5), then the API negatives — full steps in *SF-STRIPE-LOCAL-27 step by step* below | `/upgrade` offers no source picker and a blank name; a new client C is provisioned with no source, transfer or association on P, C or D; P stays closed/`canceled` and blocked (402); `demoClientId=P` from a D session → 400 `INVALID_DEMO_SELECTION`; `demoClientId=D` + `dataTransfer` from a P session → 201 with no source recorded; same with the switch OFF and with the kill switch on | P0 |
+
+### SF-STRIPE-LOCAL-27 step by step
+
+**Canceled customer buys again → clean new environment (ETP-5047).** A productive tenant whose
+subscription was canceled reads plan `free`, but it is not a demo: it is never offered as, nor
+accepted as, the source of a purchase. Buying again from it provisions a clean new environment,
+exactly like any productive-origin purchase. (Re-subscribing the *same* environment is ETP-5742,
+SF-STRIPE-LOCAL-22, deferred.) Background: `com.etendoerp.go`
+`docs/feature-flags-and-tenant-upgrade.md` §2, *A productive environment is never a source*, and
+`docs/paid-tenant-infrastructure.md` step 8. Use the §10.2 queries for the checks below.
+
+1. **Precondition.** SF-STRIPE-LOCAL-14 has run on productive tenant **P**, which has a
+   subscription row: the row is closed (`end_date` set) and reads `canceled`. The same account also
+   owns a fresh demo **D** that has not originated a productive environment (no
+   `ETGO_AssociatedProductiveClientId` on D).
+2. **The environment list.** `GET /sws/go/environments` reports P with `plan: "free"`,
+   `environmentType: "PRODUCTIVE"` and `subscriptionStatus: "EXPIRED"`. In the company switcher P
+   is badged "Productive" on the grey (muted) chip — intended: productive, but not paying.
+3. **The upgrade page from P.** Log into P (it shows the blocked screen) and open `/upgrade`.
+   - No `upgrade-source-demo-field`: P is not a source, and a productive origin is not asked for one.
+   - `upgrade-tenant-name-input` is empty (a productive-origin purchase starts with a blank name).
+   - The add-ons step (`upgrade-data-transfer`) shows the "No data will be transferred" copy
+     (`upgradeNoDataTransferTitle`), with no transfer controls.
+4. **Buy.** Type a company name that no client has yet (see §10.3 step 3) and pay with
+   `4242 4242 4242 4242` (§5 "Test cards"). Expect a new client **C** (`created_client_id` on the
+   purchase), and:
+
+   ```sql
+   -- the purchase: no source, no transfer intent
+   select request_id, checkout_status, client_name, demo_client_id, created_client_id,
+          transfer_products, transfer_contacts
+     from etgo_checkout_request where client_name = '<new name>' order by created desc limit 1;
+   -- expect: checkout_status = PROVISIONED, demo_client_id NULL,
+   --         transfer_products = 'N', transfer_contacts = 'N'
+   ```
+
+   - On P (§10.2 preference query, `<CLIENT>` = P): **no** `ETGO_AssociatedProductiveClientId`.
+   - On C: **no** `ETGO_AssociatedDemoClientId` and **no** `ETGO_DemoDataTransferSource`.
+   - P's row stays closed and `canceled` (§1 query), and NEO still answers P with 402.
+   - C has an open row (§1 query: `end_date` null, `status = active`) when
+     `ETGO_SubscriptionModel` is ON, or the `ETGO_TenantPlan = PRODUCTIVE` marker when it is OFF
+     (§1 "Where the outcome is stored").
+   - D is untouched: its `ETGO_%` preferences are the same as before the purchase.
+5. **API negatives.** Send each from a session in the named environment (copy its bearer token
+   from the browser's DevTools, any `/sws/go` request), with a `clientName` no client and no open
+   purchase uses yet:
+
+   ```bash
+   # from a D session: P is not an acceptable source -> 400 INVALID_DEMO_SELECTION
+   curl -i -X POST "$ETENDO_BASE_URL/sws/go/billing/purchases" \
+     -H "Authorization: Bearer $D_SESSION_TOKEN" -H 'Content-Type: application/json' \
+     -d '{"clientName":"SF27 negative A","demoClientId":"<P>"}'
+
+   # from a P session: a productive origin ignores the source -> 201, no source recorded
+   curl -i -X POST "$ETENDO_BASE_URL/sws/go/billing/purchases" \
+     -H "Authorization: Bearer $P_SESSION_TOKEN" -H 'Content-Type: application/json' \
+     -d '{"clientName":"SF27 negative B","demoClientId":"<D>",
+          "dataTransfer":{"products":true,"contacts":true}}'
+   ```
+
+   For the 201, the purchase row for `SF27 negative B` has `demo_client_id` NULL and
+   `transfer_products` / `transfer_contacts` = `N`. It is an unpaid purchase; leave it, or abandon
+   the hosted Checkout page.
+6. **Repeat step 5 in two more configurations**, with the same results:
+   - `ETGO_SubscriptionModel` **OFF**, with a rowless productive tenant that has only the
+     `ETGO_TenantPlan` marker in the place of P (bought while the switch was OFF);
+   - `etendo.go.flags.environment-access-enforcement-off=true` (Tomcat restarted, as in
+     SF-STRIPE-LOCAL-25). The kill switch changes access, never source eligibility.
 
 ## 8. Troubleshooting
 
@@ -1178,6 +1247,9 @@ Confirm the Dashboard is in Test Mode, the session was created with the `sk_test
 - For the access scenarios (SF-STRIPE-LOCAL-24/25): the raw 402 response body from NEO and from
   `POST /sws/mcp`, the `accessState` of the tenant in `GET /sws/go/environments`, and the INFO log
   line with the kill switch on.
+- For SF-STRIPE-LOCAL-27: P's entry in `GET /sws/go/environments`, a screenshot of `/upgrade` from
+  P (add-ons and payment steps), the purchase row, the `ETGO_%` preference rows of P, C and D
+  before and after, and the raw responses of the two API negatives.
 
 ## 10. Happy flow walkthrough (ETP-5046 + ETP-5047)
 
@@ -1394,8 +1466,9 @@ STRIPE_ETENDO_ROOT="$(cd .. && pwd)" make stripe-past-due ID=<etgo_checkout_requ
 
   Expect `customer.subscription.deleted` → `APPLIED`; the row `status = canceled` and closed
   (`end_date` set), with no grace; NEO answering `402` with `error.decision =
-  SUBSCRIPTION_REQUIRED` (SF-STRIPE-LOCAL-14). The way back is a new purchase, which opens a fresh
-  row (SF-STRIPE-LOCAL-22).
+  SUBSCRIPTION_REQUIRED` (SF-STRIPE-LOCAL-14). The way back today is a new purchase, which gives a
+  clean new environment, without a source or data transfer (SF-STRIPE-LOCAL-27). Re-subscribing
+  the same environment is ETP-5742 (SF-STRIPE-LOCAL-22, deferred until then).
 
 ### 10.4 Local problems met on the way
 

@@ -268,6 +268,7 @@ function CompanyOption({ env, isCurrent, switching, onSwitch, logoSrc, ui }) {
           {name}
         </span>
         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          {/* Intended (ETP-5047): a canceled productive environment gets the muted chip with the "Productive" label — productive, but not paying. */}
           <span className={cn(
             'rounded-full px-1.5 py-0.5 text-[11px] font-medium',
             isProductiveEnvironment(env)

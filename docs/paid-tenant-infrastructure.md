@@ -98,7 +98,9 @@ Two consequences follow, and neither is hypothetical:
    `isPurchaseSourceDemo` (`lib/environmentPresentation.js`) keys on that type as well. Such an
    environment is left out of the picker, a purchase made from it is a productive-origin purchase
    (blank name, no self-preselect, no source or transfer), its badge stays "Productive", and the
-   backend refuses it as `demoClientId` (ETP-5047). An environment with no reported type (it
+   backend refuses it as `demoClientId` (ETP-5047). The badge is the grey (muted) chip with the
+   "Productive" label, not the green one: that is intended (decided 2026-10-14, Martin Taal) and
+   means productive but not paying; the green chip keys on `plan`, the label on the type. An environment with no reported type (it
    predates the lifecycle metadata) is still a demo.
 9. **The browser creates a durable billing purchase** through the account-scoped
    `POST /sws/go/billing/purchases` endpoint. The request describes the action, target name,
