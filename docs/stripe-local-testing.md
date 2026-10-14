@@ -214,8 +214,10 @@ enforcement" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`.
   never overwriting a period an event already wrote) and `LAST_EVENT_AT` the ordering watermark.
   Since ETP-5047 a cancellation also **closes** the row (`END_DATE` = Stripe's
   `ended_at`, else `canceled_at`, else now); a closed row reads as `canceled` whatever `STATUS`
-  says, so the tenant is `free` and `EXPIRED`, and a new checkout for the same tenant opens a
-  **fresh** row. Query the tenant's rows, newest first:
+  says, so the tenant is `free` and `EXPIRED`, and a new purchase for the same tenant opens a
+  **fresh** row (a tenant can be re-opened and buy again; today's checkout, though, still
+  provisions a new environment for every purchase — `com.etendoerp.go`
+  `docs/feature-flags-and-tenant-upgrade.md` §3). Query the tenant's rows, newest first:
 
   ```sql
   select status, start_date, end_date, grace_anchor, current_period_start, current_period_end,
@@ -226,10 +228,12 @@ enforcement" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`.
    order by end_date desc nulls first, created desc;
   ```
 
-- **Tenant with no row at all** (a pre-ETP-5046 tenant R37 has not reached — on an environment that
-  has not switched yet, that is every pre-ETP-5046 tenant): the
-  `AD_Preference` projection, as ETP-5443 shipped it — `ETGO_SubscriptionStatus` and
-  `ETGO_SubscriptionDueAt`, scoped to the tenant's `Client`.
+- **Tenant with no row at all**: the `AD_Preference` projection, as ETP-5443 shipped it —
+  `ETGO_SubscriptionStatus` and `ETGO_SubscriptionDueAt`, scoped to the tenant's `Client`. On an
+  environment that has not switched `ETGO_SubscriptionModel` ON yet that is every paying tenant —
+  the pre-ETP-5046 ones and every tenant paid since ETP-5046 alike, because with the switch OFF a
+  first purchase writes the marker and opens no row. On a switched environment it is only a tenant
+  R37 has not reached.
 
 The out-of-order-delivery watermark (see below) is `LAST_EVENT_AT` on the row for a tenant with a
 row (ETP-5047), and the `ETGO_SubscriptionEventAt` `AD_Preference` only for a tenant without one —

@@ -48,7 +48,9 @@
 --     -- missing (see "Why @apply ABORTS" below), fix it and run step 1 again.
 --   select count(*) from ad_preference
 --    where attribute = 'ETGO_TenantPlan' and isactive = 'Y' and upper(trim(value)) = 'PRODUCTIVE';
---     -- must be 0: every active productive marker has become an open subscription row.
+--     -- must be 0: no active productive marker is left. A tenant with NO subscription row at all
+--     -- got an open legacy-productive row in its place; a tenant with any row (closed or inactive
+--     -- included, since ETP-5047's BACKFILL GUARD) only had its marker retired, and got no open row.
 --   select ad_preference_id, value, created, updated from ad_preference
 --    where property = 'ETGO_SubscriptionModel' and ispropertylist = 'Y' and isactive = 'Y'
 --      and ad_client_id = '0' and coalesce(visibleat_client_id, '0') = '0'
@@ -319,8 +321,9 @@
 -- R42 is gated on a PROVISIONED paid checkout and excludes REFUNDED/CANCELED/EXPIRED checkouts,
 -- NOT on etgo_subscription, and a cancel on the row route changes neither the checkout request nor
 -- the ETGO_SubscriptionStatus preference R42 also reads. So a tenant whose ONLY subscription row
--- was closed by ETP-5047's close-on-cancel before its first post-ETP-5046 chain runs DOES get an
--- R42 marker. Until ETP-5047 that was an accepted residual (branch (A) then backfilled a fresh open
+-- has been closed by ETP-5047's close-on-cancel by the time R37 is run for it -- opt-in, so that is
+-- the operator's explicit FIX= run, not the tenant's chain -- DOES carry an R42 marker next to that
+-- closed row. Until ETP-5047 that was an accepted residual (branch (A) then backfilled a fresh open
 -- 'legacy-productive' row); the "BACKFILL GUARD" above closes it: the tenant has a row, so it
 -- takes branch (B) only and its marker is retired without an insert.
 --
