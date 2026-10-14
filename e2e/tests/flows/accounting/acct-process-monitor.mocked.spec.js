@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from '../../helpers/auth.js';
+import { login, installNonAdminCapabilities } from '../../helpers/auth.js';
 
 /**
  * Accounting process monitor — Configuración > Accounting Process (ETP-5269, mocked).
@@ -144,26 +144,6 @@ async function installMonitorMock(page, { readOverrides = {}, triggered } = {}) 
   return requests;
 }
 
-/** Downgrades SFWindowAccessMap to a non-admin shape — see roles-overview.mocked.spec.js. */
-async function installNonAdminCapabilities(page) {
-  await page.addInitScript(() => {
-    const adminFetch = window.fetch.bind(window);
-    window.fetch = (input, init) => {
-      const url = typeof input === 'string' ? input : input?.url;
-      if (url && url.includes('/sws/neo/windowaccessmap')) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve({
-            windowAccess: new Proxy({}, { get: () => 'full' }),
-            capabilities: { showAccountingFields: false, isAdminOrClientAdmin: false },
-          }),
-        });
-      }
-      return adminFetch(input, init);
-    };
-  });
-}
 
 async function openMonitor(page) {
   await page.goto('/acct-process-monitor');

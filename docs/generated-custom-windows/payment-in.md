@@ -403,3 +403,11 @@ the list sidebar hero ("Cobrado este mes") and the detail sidebar hero (`Payment
 Payment Out is identical (no sign, default colour). Neither direction is green or red; the direction is
 conveyed by the window itself (Receipts vs Payments). `formatCurrency` still prints its own `-` for
 genuinely negative values; nothing is prefixed on top of it.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

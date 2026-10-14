@@ -478,3 +478,11 @@ deposited/reconciled rows), the list sidebar hero ("Pagado este mes") and the de
 (`PaymentDetailSidebarBase`). Neither direction is green or red; the direction is conveyed by the
 window itself (Receipts vs Payments), not by a sign or a colour. `formatCurrency` still prints its own
 `-` for genuinely negative values; nothing is prefixed on top of it. See also `payment-in.md`.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

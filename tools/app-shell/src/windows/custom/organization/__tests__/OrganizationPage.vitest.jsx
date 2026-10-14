@@ -543,7 +543,10 @@ describe('OrganizationPage', () => {
 
     const editAndSave = async (value) => {
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
-      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toBeInTheDocument());
+      // Wait for the loaded NIF, not just the input: header and info arrive in separate requests,
+      // so an edit made before info lands is overwritten by the re-seed, the form is clean again
+      // and Save is never rendered (flaky under a loaded full-suite run).
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B1234567D'));
       fireEvent.change(screen.getByTestId('OrganizationPage__taxid'), { target: { value } });
       fireEvent.click(screen.getByTestId('OrganizationPage__save'));
     };

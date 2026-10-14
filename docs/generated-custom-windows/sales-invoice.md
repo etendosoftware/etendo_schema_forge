@@ -2350,3 +2350,11 @@ until it no longer fits and confirm only the tabs drop to a second row, with no 
 between "Filtros" and the actions; widen it again and confirm they come back. Switching tab
 filters the grid from either row.
 
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field was already gated (ETP-4520), but the list is rendered by the custom `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`, which re-declared `posted` without the gate. Its column now carries `visibleWhenCapability: ACCOUNTING_CAPABILITY`; `ListView` also drops it from the filter, sort and export.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

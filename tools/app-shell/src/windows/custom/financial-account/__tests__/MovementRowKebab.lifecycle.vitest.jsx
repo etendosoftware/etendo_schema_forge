@@ -14,6 +14,9 @@
 // absence observable: if params ever came back, every reason assertion below would see a
 // `:{"…"}` suffix and fail instead of quietly passing on the key alone. Every other ui() call in
 // this component is param-less, so the pre-existing bare-key assertions are unaffected.
+// ETP-5684 — Post/Unpost need showAccountingFields (fail closed); this suite asserts on them.
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => {
     const base = key.startsWith('backendError.') ? `translated:${key}` : key;

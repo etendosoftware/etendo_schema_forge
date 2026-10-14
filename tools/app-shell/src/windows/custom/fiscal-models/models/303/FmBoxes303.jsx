@@ -75,7 +75,7 @@ function computeDerivedValueBlankOnMissing(dv, valueMap) {
 }
 
 
-export default function FmBoxes303({ boxes, year, period, sectionIds, identification, onIdentChange, onBoxChange, readOnly }) {
+export default function FmBoxes303({ boxes, year, period, sectionIds, identification, onIdentChange, onBoxChange, readOnly, lockRectificativaChecked }) {
   const ui = useUI();
   const t = ui;
   const layout = getLayout303(year, period);
@@ -481,12 +481,19 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                         });
                       }
                     };
+                    // ETP-5725 — "Autoliquidación rectificativa" is locked CHECKED (not editable
+                    // to uncheck) while a sibling declaration for this period is already
+                    // presented; see `lockRectificativaChecked` (FmModel303Page.jsx, derived from
+                    // `decl._duplicatePeriodPresented`). Every other checkbox in this section is
+                    // unaffected — `readOnly` alone still gates them.
+                    const fieldDisabled = readOnly
+                      || (f.id === 'rectificativa' && Boolean(lockRectificativaChecked));
                     return (
                       <div key={f.id} className="fm-aeat-ident-cb">
                         <CheckboxField
                           checked={identification?.[f.id] ?? false}
                           onToggle={handleChange}
-                          disabled={readOnly}
+                          disabled={fieldDisabled}
                           data-testid="CheckboxField__49d327" />
                         <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                       </div>

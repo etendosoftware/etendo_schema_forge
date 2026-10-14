@@ -5,11 +5,16 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
+// ETP-5684 — the "Asiento contabilizado" entry is gated on showAccountingFields (fail closed).
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 // --- Import under test ---
 
 import { render, screen, within, act } from '@testing-library/react';
 import PaymentDetailSidebarBase from '../PaymentDetailSidebarBase.jsx';
 import { notifyRecordUpdated } from '../useRecordRefreshSignal';
+import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
 
 function baseData(overrides = {}) {
   return {
@@ -338,5 +343,24 @@ describe('PaymentDetailSidebarBase — activity history', () => {
     const label = await screen.findByText('cobroConfirmado');
     const dateLine = label.parentElement.nextSibling;
     expect(dateLine.textContent).toContain('15:42');
+  });
+});
+
+// ETP-5684 — the accounting entry is a posting status: a role without "Show Accounting
+// Fields" does not see "Asiento contabilizado" in the activity history.
+describe('PaymentDetailSidebarBase — accounting capability gate (ETP-5684)', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ response: { data: [] } }) });
+  });
+
+  it('lists the posted entry when the role can see accounting', () => {
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={baseData({ status: 'RPR', processed: true, posted: 'Y' })} token="t" apiBaseUrl="http://x" />);
+    expect(screen.getByText('asientoContabilizado')).toBeInTheDocument();
+  });
+
+  it('leaves the posted entry out when the capability is off', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={baseData({ status: 'RPR', processed: true, posted: 'Y' })} token="t" apiBaseUrl="http://x" />);
+    expect(screen.queryByText('asientoContabilizado')).not.toBeInTheDocument();
   });
 });
