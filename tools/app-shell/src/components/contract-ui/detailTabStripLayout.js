@@ -50,7 +50,7 @@ export const MIN_VISIBLE_TABS = 2;
  * @param {number} p.moreWidth - measured width of the "More" trigger
  */
 export function computeFittingTabCount({ widths, moreWidth, available, tabs, activeKey, max = MAX_VISIBLE_TABS }) {
-  if (!(available > 0) || widths.length !== tabs.length || widths.every((w) => !w)) return max;
+  if (!Number.isFinite(available) || available <= 0 || widths.length !== tabs.length || widths.every((w) => !w)) return max;
   const floor = Math.min(MIN_VISIBLE_TABS, max);
   for (let n = max; n > floor; n -= 1) {
     const { visible, hidden } = resolveTabStripLayout(tabs, activeKey, n);
