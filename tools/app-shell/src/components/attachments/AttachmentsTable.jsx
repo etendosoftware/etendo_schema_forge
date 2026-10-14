@@ -15,7 +15,9 @@ const DATE_PARTS = new Set(['weekday', 'day', 'month']);
 
 /**
  * Figma date of an attachment row: abbreviated weekday (capitalized), day and abbreviated
- * month, never a year, no abbreviation dots — "Jue 30 abr" (es_ES), "Thu Apr 30" (en_US).
+ * month, no abbreviation dots — "Jue 30 abr" (es_ES), "Thu Apr 30" (en_US). When the date
+ * is not in the current year (local time) the year is appended at the end after a single
+ * space: "Jue 30 abr 2024", "Thu Apr 30 2024".
  * The parts keep the locale's own order (formatToParts); the locale's separators are
  * replaced by single spaces, which drops the ", " after the weekday.
  *
@@ -25,9 +27,10 @@ const DATE_PARTS = new Set(['weekday', 'day', 'month']);
  *
  * @param {string|Date|null|undefined} value ISO-8601 instant
  * @param {string} locale UI locale, e.g. "es_ES"
+ * @param {Date} [now] reference "today" for the current-year check (injectable for tests)
  * @returns {string} the formatted date, or "—" when missing or invalid
  */
-export function formatAttachmentDate(value, locale) {
+export function formatAttachmentDate(value, locale, now = new Date()) {
   if (!value) return '—';
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
@@ -41,6 +44,7 @@ export function formatAttachmentDate(value, locale) {
         ? text.charAt(0).toLocaleUpperCase(tag) + text.slice(1)
         : text;
     });
+  if (date.getFullYear() !== now.getFullYear()) parts.push(String(date.getFullYear()));
   return parts.join(' ');
 }
 
