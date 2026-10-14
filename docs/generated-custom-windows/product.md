@@ -1542,12 +1542,15 @@ concurrency used, mapped columns, foreign keys resolved/created; never row conte
 Measured in production: about 800 ms of server time per imported row (product, two prices, cost).
 Four backend cuts, in `com.etendoerp.go` (`docs/neo-headless.md` §4.3.6):
 
-- **No double price write.** A row that prices **both** directions sends `_skipPricesSeed: true`
-  on the product op (`productImportDescriptor.js`). The backend then does not seed the zero rows
-  on the default sales and purchase tariffs that `ProductPriceHandler` used to overwrite right
-  after. A row with one price or none still gets the seed, so the side it does not price stays
-  visible to sales/purchase at 0, as before. The import picks the same default tariff as the seed
-  (`resolvePlv`), so a both-prices row ends up with the same rows either way.
+- **No double price write.** A priced row sends `_skipPricesSeed: [<versions it prices>]` on the
+  product op (`productImportDescriptor.js`). The backend skips the zero-price seed for a direction
+  only when the version **it** would seed (`PriceListVersionResolver`) is in that list, so
+  `ProductPriceHandler` no longer overwrites a row seeded a moment earlier. The import's own tariff
+  choice (`resolvePlv`: selector order, and for sales an unflagged list is accepted) can differ
+  from the server's (default flag, org before `*`, newest `ValidFromDate`) when no list is flagged
+  default or the default list has several versions; in that case the server's default tariff is
+  still seeded at 0 and the imported price lands on the import's choice, exactly as before. An
+  unpriced row sends nothing and is seeded as before.
 - **`_onlyReturnIds: true`** on every import `/batch` request (`useWindowImportDialog` wraps
   `useBatch.runBatch`; OCR does not send it). The backend skips locator-identifier enrichment and
   the `etgoHasCost` flag on each create. The response is unchanged — the import engine reads only

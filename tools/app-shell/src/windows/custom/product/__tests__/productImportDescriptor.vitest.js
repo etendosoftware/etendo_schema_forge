@@ -57,10 +57,13 @@ describe('product import descriptor', () => {
     const ops = await buildOperations({ ...baseRow, salesPrice: '1234.50' }, productConfig('tok-valid'));
     assert.equal(ops.length, 2);
     const [product, price] = ops;
-    // Product op carries the copied columns plus the AD-defaulted product type.
+    // Product op carries the copied columns plus the AD-defaulted product type, and names the
+    // version its price op writes so the backend does not seed a zero row there first (ETP-5676).
     assert.equal(product.id, 'product');
     assert.equal(product.entity, 'product');
-    assert.deepEqual(product.body, { searchKey: 'P-001', name: 'Widget', description: 'A widget', productType: 'I' });
+    assert.deepEqual(product.body, {
+      searchKey: 'P-001', name: 'Widget', description: 'A widget', productType: 'I', _skipPricesSeed: ['PLV-SALES-1'],
+    });
     // Price op mirrors ProductPriceBar's add flow: standard/list/limit all set to the price,
     // linked to the not-yet-committed product op via parentRef.
     assert.equal(price.id, 'salesPrice');
@@ -244,27 +247,27 @@ describe('product import descriptor', () => {
       assert.equal(purchase.parentRef, 'product');
     });
 
-    // ETP-5676 — a row that prices both directions writes both default tariffs itself, so the
-    // backend's zero-price seed (later overwritten by these very ops) is skipped. With one
-    // direction the seed still covers the other, so the directive is not sent.
-    it('asks the backend to skip the price seed only when the row prices both directions', async () => {
+    // ETP-5676 — the product op names the versions its own price ops write, so the backend skips
+    // the zero-price seed only where the version it would seed is one of them (review W2: client
+    // and server choose "the default tariff" by different rules).
+    it('names the priced versions in _skipPricesSeed, and sends nothing for an unpriced row', async () => {
       stubFetch(SALES_ITEMS);
       const both = await buildOperations(
         { ...baseRow, salesPrice: '150', purchasePrice: '100' },
         productConfig('tok-seed-both'),
       );
-      assert.equal(both[0].body._skipPricesSeed, true);
+      assert.deepEqual(both[0].body._skipPricesSeed, ['PLV-SALES-1', 'PLV-PURCHASE-1']);
       const salesOnly = await buildOperations({ ...baseRow, salesPrice: '150' }, productConfig('tok-seed-sales'));
-      assert.equal(salesOnly[0].body._skipPricesSeed, undefined);
+      assert.deepEqual(salesOnly[0].body._skipPricesSeed, ['PLV-SALES-1']);
       const none = await buildOperations({ ...baseRow }, productConfig('tok-seed-none'));
       assert.equal(none[0].body._skipPricesSeed, undefined);
     });
 
-    it('keeps the price seed for a purchase-only row, so the sales tariff still gets its zero price', async () => {
+    it('names only the purchase version for a purchase-only row, so the sales tariff is still seeded', async () => {
       stubFetch(SALES_ITEMS);
       const purchaseOnly = await buildOperations({ ...baseRow, purchasePrice: '42' }, productConfig('tok-seed-purchase'));
       assert.equal(purchaseOnly[0].id, 'product');
-      assert.equal(Object.hasOwn(purchaseOnly[0].body, '_skipPricesSeed'), false);
+      assert.deepEqual(purchaseOnly[0].body._skipPricesSeed, ['PLV-PURCHASE-1']);
     });
 
     // ETP-5676 — with batchSize > 1 the core engine namespaces every op id of a row as
@@ -298,9 +301,9 @@ describe('product import descriptor', () => {
         'r1.product', 'r1.salesPrice',
         'r2.product', 'r2.purchasePrice', 'r2.salesPrice',
       ]);
-      assert.equal(byId['r0.product'].body._skipPricesSeed, true);
-      assert.equal(byId['r2.product'].body._skipPricesSeed, true);
-      assert.equal(Object.hasOwn(byId['r1.product'].body, '_skipPricesSeed'), false);
+      assert.deepEqual(byId['r0.product'].body._skipPricesSeed, ['PLV-SALES-1', 'PLV-PURCHASE-1']);
+      assert.deepEqual(byId['r2.product'].body._skipPricesSeed, ['PLV-SALES-1', 'PLV-PURCHASE-1']);
+      assert.deepEqual(byId['r1.product'].body._skipPricesSeed, ['PLV-SALES-1']);
       for (const op of sent.filter((o) => !o.id.endsWith('.product'))) {
         const prefix = op.id.slice(0, op.id.indexOf('.') + 1);
         assert.equal(op.parentRef, `${prefix}product`, `${op.id} must reference its own row's product`);
