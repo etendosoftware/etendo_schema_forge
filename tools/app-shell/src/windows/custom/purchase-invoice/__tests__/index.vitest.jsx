@@ -122,8 +122,8 @@ vi.mock('../PurchaseInvoiceHeaderTable.jsx', () => ({
 }));
 
 vi.mock('../../shared/InvoicePreview.jsx', () => ({
-  default: ({ invoice, specName, windowName, onInvoiceUpdated }) => (
-    <div data-testid="invoice-preview" data-invoice-id={invoice.id} data-spec-name={specName} data-window-name={windowName}>
+  default: ({ invoice, specName, windowName, onInvoiceUpdated, relatedDocs }) => (
+    <div data-testid="invoice-preview" data-invoice-id={invoice.id} data-spec-name={specName} data-window-name={windowName} data-related-spec={relatedDocs?.spec}>
       <button type="button" onClick={onInvoiceUpdated}>invoice updated</button>
     </div>
   ),
@@ -135,6 +135,29 @@ vi.mock('../PurchaseInvoiceTopbar.jsx', () => ({
 
 vi.mock('../../shared/OcrSidePanel.jsx', () => ({
   default: () => <div data-testid="ocr-side-panel" />,
+}));
+
+// ETP-5700 — the row-kebab SIF send hook is wrapped (not replaced) so the real wiring
+// keeps running while the test records its arguments and can override its result.
+let sifHookCalls = [];
+let sifHookOverride = null;
+vi.mock('../../shared/useSifRowSendAction.jsx', async () => {
+  const actual = await vi.importActual('../../shared/useSifRowSendAction.jsx');
+  return {
+    ...actual,
+    useSifRowSendAction: (args) => {
+      const out = actual.useSifRowSendAction(args);
+      const result = sifHookOverride ? { ...out, ...sifHookOverride } : out;
+      sifHookCalls.push({ args, result });
+      return result;
+    },
+  };
+});
+
+vi.mock('../../shared/SifSendModalHost.jsx', () => ({
+  default: ({ apiBaseUrl, recordId }) => (
+    <div data-testid="sif-send-modal-host" data-record-id={recordId} data-api-base-url={apiBaseUrl} />
+  ),
 }));
 
 vi.mock('../../shared/useInvoiceWindow.js', async () => {
@@ -160,6 +183,7 @@ import { fileURLToPath } from 'node:url';
 import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
 import PurchaseInvoiceWindow from '../index.jsx';
 import { consumeFollowUpPrompt } from '@/components/follow-up-documents/followUpDocuments.js';
+import { expectInvoiceBulkUnpostWiring } from '../../shared/__tests__/testUtils/invoiceBulkUnpostAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -207,6 +231,13 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
     expect(rowDeleteConfig).toMatchObject({ apiBaseUrl: '/api', entity: 'header', token: 'tkn' });
   });
 
+  // ETP-5539 — the preview shows the same related documents as the form section.
+  it('passes the purchase-invoice related-documents definition to the invoice preview', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    expect(screen.getByTestId('invoice-preview')).toHaveAttribute('data-related-spec', 'purchase-invoice');
+  });
+
   it('renders HeaderPage (detail view) when a recordId is present', () => {
     render(<PurchaseInvoiceWindow windowName="purchase-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
 
@@ -220,9 +251,25 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
       refetchAfterSave: true,
     });
     expect(lastHeaderPageProps.draftMode).toMatchObject({ enabled: true, processValue: 'CO' });
+    // ETP-5513 — fixed 320 px side panel (was 360), so the header keeps 3 columns at 1280x720.
+    expect(lastHeaderPageProps.sidePanelStyle).toEqual({ width: 320 });
     expect(lastHeaderPageProps.summary.map((s) => s.key)).toEqual([
       'summedLineAmount', 'grandTotalAmount', 'totalPaid', 'outstandingAmount',
     ]);
+  });
+
+  // index.jsx hand-builds draftMode (shadowing the generated one), so both completed-document
+  // allowlists are declared twice — here and in decisions.json — and must not drift apart.
+  it('passes the decisions.json completed-document allowlists through the draftMode override', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    const decisions = JSON.parse(
+      readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'purchase-invoice', 'decisions.json'), 'utf8'),
+    );
+    const declared = decisions.window.draftMode;
+    expect(lastHeaderPageProps.draftMode.keepSaveWhenCompletedFields).toEqual(declared.keepSaveWhenCompletedFields);
+    expect(lastHeaderPageProps.draftMode.editableLineFieldsWhenCompleted).toEqual(declared.editableLineFieldsWhenCompleted);
+    expect(lastHeaderPageProps.draftMode.keepSaveWhenCompletedFields).toEqual(expect.arrayContaining(['project', 'costcenter']));
+    expect(lastHeaderPageProps.draftMode.editableLineFieldsWhenCompleted).toEqual(['project', 'costcenter']);
   });
 
   // Confirm → draftMode.afterProcess: this window stays on the invoice (and queues the
@@ -504,11 +551,12 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
       expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
     });
 
-    it('does not offer the post menu action for an already-posted row', () => {
+    // ETP-5692 — an already-posted Completed row offers Unpost instead of Post.
+    it('offers unpost instead of post for an already-posted row', () => {
       render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
 
-      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
-      expect(actions).toEqual([]);
+      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { documentStatus: 'CO', processed: 'Y', posted: 'Y' } });
+      expect(actions.map((a) => a.key)).toEqual(['reactivate', 'unpost']);
     });
 
     it('bumps refreshKey when a neoAction menu action (post) completes', () => {
@@ -583,14 +631,73 @@ describe('PurchaseInvoiceWindow — render smoke tests', () => {
       expect(callFor('post').preUnpostActions).toBeUndefined();
     });
 
-    // PRODUCT RULE: on an invoice the accounting reversal is a step INSIDE
-    // Reactivar, never a standalone bulk action of its own (unlike goods-receipt /
-    // goods-shipment, which do mount a "Descontabilizar" button).
-    it('mounts NO standalone bulk unpost button', () => {
+    // ETP-5692 — reverses the ETP-5302 product rule: an invoice now mounts a standalone
+    // bulk "Descontabilizar" button that removes the accounting and leaves the invoice
+    // Completed, wired to the invoice pair (Completed + posted) rather than the albaranes'
+    // posted-only one. Reactivar keeps its own pre-unpost.
+    it('mounts a standalone bulk unpost button wired to the invoice unpost pair', () => {
       render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
 
-      expect(screen.queryByTestId('bulk-document-action-unpost')).not.toBeInTheDocument();
-      expect(bulkDocumentActionCalls.map((p) => p.labelKey)).not.toContain('unpost');
+      expectInvoiceBulkUnpostWiring(callFor);
     });
+  });
+});
+
+describe('PurchaseInvoiceWindow — SIF send entry points', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    searchParams = new URLSearchParams();
+    locationState = {};
+    lastListViewProps = null;
+    lastHeaderPageProps = null;
+    fiscalProfile = null;
+    currentWindowAccessTier = 'full';
+    sifHookCalls = [];
+    sifHookOverride = null;
+  });
+
+  it('enables the row send action under the full access tier', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(sifHookCalls[sifHookCalls.length - 1].args).toMatchObject({ specName: 'purchase-invoice', apiBaseUrl: '/api', enabled: true });
+  });
+
+  it('disables the row send action under the read-only tier', () => {
+    currentWindowAccessTier = 'read-only';
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(sifHookCalls[sifHookCalls.length - 1].args.enabled).toBe(false);
+  });
+
+  it('hands sifMenuActions to the row quick actions as extra menu entries', () => {
+    const sifMenuActions = vi.fn(() => ({ key: 'sendToSif', labelKey: 'sendToSifLabelSii' }));
+    sifHookOverride = { sifMenuActions };
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+
+    const row = { id: 'inv-1', documentStatus: 'CO', processed: 'Y', posted: 'Y' };
+    const keys = lastListViewProps.rowQuickActions.menuActions({ row }).map((a) => a.key);
+
+    expect(sifMenuActions).toHaveBeenCalledWith(row);
+    expect(keys).toEqual(['reactivate', 'unpost', 'sendToSif']);
+  });
+
+  it('mounts SifSendModalHost with the recordId in the form view', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    const host = screen.getByTestId('sif-send-modal-host');
+    expect(host).toHaveAttribute('data-record-id', 'inv-1');
+    expect(host).toHaveAttribute('data-api-base-url', '/api');
+  });
+
+  it('does not mount SifSendModalHost in the list view', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(screen.queryByTestId('sif-send-modal-host')).not.toBeInTheDocument();
+  });
+
+  it('skips the fiscal-config load in the form view (recordId present)', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    expect(sifHookCalls[sifHookCalls.length - 1].args.loadConfig).toBe(false);
+  });
+
+  it('loads the fiscal config in the list view', () => {
+    render(<PurchaseInvoiceWindow windowName="purchase-invoice" apiBaseUrl="/api" token="tkn" />);
+    expect(sifHookCalls[sifHookCalls.length - 1].args.loadConfig).toBe(true);
   });
 });

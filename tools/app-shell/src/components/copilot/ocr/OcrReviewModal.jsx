@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, X } from 'lucide-react';
+import { getRouterBase } from '@/lib/deploymentBasePath.js';
 import { useUI } from '@/i18n';
 import KindRenderer from './kinds/KindRenderer.jsx';
 import { CREATE_COMPONENTS } from './strategies.js';
-import { checkBpHasLocation } from './ingest/purchaseInvoiceDescriptor.js';
+import { checkBpHasLocation, findDuplicatePurchaseInvoices } from './ingest/purchaseInvoiceDescriptor.js';
+import { getOcrDocType } from './ocrDocTypes.js';
 
 /* eslint-disable react/prop-types */
 
@@ -120,6 +122,87 @@ function VendorAddressNotice({ status, onRecheck }) {
   );
 }
 
+/**
+ * Looks up existing purchase invoices of the chosen vendor with the same supplier document
+ * number, so uploading the same PDF twice is flagged (ETP-5654). Advisory only: the result
+ * never feeds `canSubmit`, and a failed lookup ('unknown') shows nothing.
+ */
+function useDuplicateInvoice({ vendorId, documentNo, token, apiBaseUrl }) {
+  const [state, setState] = useState({ key: null, invoices: [] });
+  const wanted = String(documentNo ?? '').trim();
+  const key = vendorId && wanted ? `${vendorId}\u0000${wanted.toLowerCase()}` : null;
+
+  useEffect(() => {
+    if (!key) return undefined;
+    let cancelled = false;
+    findDuplicatePurchaseInvoices({ token, apiBaseUrl, bpId: vendorId, documentNo: wanted })
+      .then((result) => {
+        if (!cancelled) setState({ key, invoices: result.status === 'duplicate' ? result.invoices : [] });
+      });
+    return () => { cancelled = true; };
+  }, [key, vendorId, wanted, token, apiBaseUrl]);
+
+  return { invoices: key && state.key === key ? state.invoices : [], documentNo: wanted };
+}
+
+// Placeholder substituted for the invoice link inside the translated duplicate-invoice message.
+const DUPLICATE_LINK_TOKEN = '\u0001';
+
+function DuplicateInvoiceNotice({ invoices, documentNo }) {
+  const ui = useUI();
+  if (!invoices.length) return null;
+  const first = invoices[0];
+  const prefix = getOcrDocType('purchase-invoice')?.routePrefix || '/purchase-invoice/';
+  const label = first.documentNo || first.id;
+  // The link text is the one dynamic part of the sentence; split the resolved message around a
+  // placeholder token so the translation keeps full control of the word order.
+  const [before, after = ''] = ui('ocrReviewDuplicateInvoice', { documentNo, invoice: DUPLICATE_LINK_TOKEN }).split(DUPLICATE_LINK_TOKEN);
+  return (
+    // InfoBanner always draws an accent border and cannot drop it through props, so this is a
+    // plain div with InfoBanner's tone="warning" colour tokens minus the border and icon.
+    <div
+      className="mb-2 rounded-lg bg-status-warning px-3 py-2 text-xs font-medium leading-5 text-status-warning-foreground"
+      data-testid="ocr-review-duplicate-invoice"
+    >
+      {before}
+      <a
+        href={`${getRouterBase()}${prefix}${first.id}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium underline underline-offset-2"
+        data-testid="ocr-review-duplicate-invoice-link"
+      >
+        {label}
+      </a>
+      {after}
+    </div>
+  );
+}
+
+/**
+ * The notice shown under a review field, if any: the vendor's missing-address warning under the
+ * vendor row, the duplicate-invoice warning under the document number row.
+ */
+function renderFieldNotice(fieldKey, { vendorAddress, duplicate }) {
+  if (fieldKey === 'vendor') {
+    return (
+      <VendorAddressNotice
+        status={vendorAddress.status}
+        onRecheck={vendorAddress.recheck}
+        data-testid="VendorAddressNotice__80a87a" />
+    );
+  }
+  if (fieldKey === 'documentNo') {
+    return (
+      <DuplicateInvoiceNotice
+        invoices={duplicate.invoices}
+        documentNo={duplicate.documentNo}
+        data-testid="DuplicateInvoiceNotice__80a87a" />
+    );
+  }
+  return null;
+}
+
 function formatValue(value) {
   if (!value) return '';
   if (typeof value === 'object') return value.label || value.name || '';
@@ -159,6 +242,9 @@ export default function OcrReviewModal({
   const vendorEntry = state.vendor;
   const vendorId = vendorEntry?.enabled ? vendorEntry?.value?.id || null : null;
   const vendorAddress = useVendorAddressStatus({ vendorId, token, apiBaseUrl });
+  const documentNoEntry = state.documentNo;
+  const documentNoValue = documentNoEntry?.enabled ? documentNoEntry?.value : null;
+  const duplicate = useDuplicateInvoice({ vendorId, documentNo: documentNoValue, token, apiBaseUrl });
   const vendorAddressBlocks = vendorAddress.status === 'checking' || vendorAddress.status === 'missing';
 
   const handleSubmit = () => {
@@ -211,14 +297,7 @@ export default function OcrReviewModal({
                 onToggle={(checked) => updateField(field.key, { enabled: checked, editing: checked ? state[field.key]?.editing : false })}
                 toggleDisabled={(field.key === 'vendor' && resolving) || !hasResolvedValue}
                 expanded={!entry.enabled || !hasResolvedValue || entry.editing}
-                notice={field.key === 'vendor'
-                  ? (
-                    <VendorAddressNotice
-                      status={vendorAddress.status}
-                      onRecheck={vendorAddress.recheck}
-                      data-testid="VendorAddressNotice__80a87a" />
-                  )
-                  : null}
+                notice={renderFieldNotice(field.key, { vendorAddress, duplicate })}
                 data-testid={"FieldRow__" + field.id}>
                 <KindRenderer
                   mode="field"

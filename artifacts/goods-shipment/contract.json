@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.4.0",
   "generatedAt": "2026-08-13T11:56:58.444Z",
-  "updatedAt": "2026-09-24T10:36:51.214Z",
-  "checksum": "5e615d6fa62ce551",
+  "updatedAt": "2026-10-13T15:55:25.386Z",
+  "checksum": "7be35fd65d57fcee",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -73,7 +73,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -368,6 +368,7 @@
             "defaultValue": "N",
             "explicitType": true,
             "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
             "badgeLabels": {
               "true": {
                 "en_US": "Posted",
@@ -377,10 +378,6 @@
                 "en_US": "Not posted",
                 "es_ES": "Sin contabilizar"
               }
-            },
-            "badgeVariants": {
-              "true": "green",
-              "false": "orange"
             },
             "validation": {
               "required": true,
@@ -1044,7 +1041,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },

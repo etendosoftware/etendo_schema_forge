@@ -5,7 +5,11 @@ import {
   LayoutGrid, ArrowUpDown,
   ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
 } from 'lucide-react';
-import { EmptyState, KpiWidget, MoreOptionsMenu } from './FmCommon.jsx';
+import { EmptyState, KpiWidget } from './FmCommon.jsx';
+import { FmStatusChip } from './FmDetailChrome.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { useFavorites } from '@/components/layout/FavoritesContext';
+import { useSupportChatSafe } from '@/components/support/SupportChatContext.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
@@ -109,7 +113,14 @@ function FilterDropdown({ label, value, options, onChange }) {
     <div className="fm-filter-select" ref={ref} style={{ position: 'relative' }}>
       <button
         className={`fm-toolbar__pill${active ? ' fm-toolbar__pill--active-dark' : ''}`}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        // ETP-5584 — sized like the app's standard list filter trigger (ListFilterBar.jsx:
+        // outline `Button size="sm"`, h-9 / px-3 / 12px / normal weight, muted text when idle)
+        // instead of the larger 14px `.fm-toolbar__pill` default.
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          height: 36, padding: '0 12px', fontSize: 12, lineHeight: '16px',
+          ...(active ? null : { color: 'hsl(var(--muted-foreground))' }),
+        }}
         onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -170,21 +181,6 @@ function FilterDropdown({ label, value, options, onChange }) {
   );
 }
 
-const STATUS_PLAIN_LABEL = {
-  submitted_ext: 'Presentado en otra plataforma',
-};
-
-// statusLabelKey (ETP-4755): the status BADGE text must always read the plain
-// "Presentado"/"Submitted" for BOTH `submitted` and `submitted_ack` — `submitted_ack`
-// collapses onto `submitted`'s i18n key here. HOW it was submitted (manual ack, no
-// receipt, real AEAT telematic ack) is shown exclusively via the `submissionMethod`
-// sub-label rendered underneath, never inside the badge text itself. `submitted_ext`
-// is untouched — a distinct legacy status, not part of this unification.
-function statusLabelKey(status) {
-  return status === 'submitted_ack' ? 'submitted' : status;
-}
-
-const STATUS_GREEN = new Set(['ready', 'submitted', 'submitted_ext', 'submitted_ack']);
 
 // Fixed status filter options (consolidated)
 const STATUS_FILTER_OPTIONS = [
@@ -238,41 +234,6 @@ function sortDeclarations(list, sortColumn, sortDirection) {
     return sortDirection === 'asc' ? cmp : -cmp;
   });
   return sorted;
-}
-
-// SUBMISSION_METHOD_STATUSES (ETP-4755) — only these two statuses can carry a
-// submissionMethod (the two manual "Presentado" paths persist it themselves via
-// handlePresent; a real AEAT telematic success also lands on submitted_ack, set
-// server-side). submitted_ext (the removed "otra plataforma" path) never carries one.
-const SUBMISSION_METHOD_STATUSES = new Set(['submitted', 'submitted_ack']);
-
-// submissionMethod (ETP-4755, optional) — shown as a compact sub-label under the status
-// badge, only for the statuses that can actually carry one, and only when present (a
-// declaration that predates this feature simply shows the bare status badge, unchanged).
-function StatusText({ status, submissionMethod, t }) {
-  const label = STATUS_PLAIN_LABEL[status] ?? (t(`fm.status.${statusLabelKey(status)}`) ?? status);
-  const isGreen = STATUS_GREEN.has(status);
-  const methodLabel = submissionMethod && SUBMISSION_METHOD_STATUSES.has(status)
-    ? t(`fm.present.method.${submissionMethod}`)
-    : null;
-  return (
-    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
-      <span style={{
-        display: 'inline-flex', alignItems: 'center',
-        padding: '2px 8px', borderRadius: 6,
-        fontSize: 12, fontWeight: 400, lineHeight: '16px',
-        background: isGreen ? 'var(--status-success-bg)' : 'hsl(var(--muted))',
-        color: isGreen ? 'var(--status-success-fg)' : 'hsl(var(--muted-foreground))',
-      }}>
-        {label}
-      </span>
-      {methodLabel && (
-        <span style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', paddingLeft: 2 }}>
-          {methodLabel}
-        </span>
-      )}
-    </span>
-  );
 }
 
 const RESULT_BADGE_STYLE = {
@@ -341,8 +302,11 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
   );
 
   return (
-    <div style={{ display: 'flex', gap: 12, padding: '0 16px 8px', background: 'hsl(var(--card))', flexShrink: 0 }}>
-      <div style={{ width: 360, flexShrink: 0 }}>
+    // ETP-5584 — the three cards share the row (`flex: 1 1 0%`) instead of a fixed 360px each, and
+    // the row carries its own vertical padding: it no longer sits under the filters toolbar, so a
+    // zero top padding glued it to the row above.
+    <div data-testid="fm-list-kpi-row" style={{ display: 'flex', gap: 12, padding: '8px 16px 12px', background: 'hsl(var(--card))', flexShrink: 0 }}>
+      <div style={{ flex: '1 1 0%', minWidth: 0 }}>
         <KpiWidget
           icon={<Calendar size={20} strokeWidth={1.75} data-testid="Calendar__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
@@ -355,7 +319,7 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
           active={kpiFilter === 'upcoming'}
           data-testid="KpiWidget__cb728e" />
       </div>
-      <div style={{ width: 360, flexShrink: 0 }}>
+      <div style={{ flex: '1 1 0%', minWidth: 0 }}>
         <KpiWidget
           icon={<Clock size={20} strokeWidth={1.75} data-testid="Clock__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
@@ -368,7 +332,7 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
           active={kpiFilter === 'pending'}
           data-testid="KpiWidget__cb728e" />
       </div>
-      <div style={{ width: 360, flexShrink: 0 }}>
+      <div style={{ flex: '1 1 0%', minWidth: 0 }}>
         <KpiWidget
           icon={<TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
@@ -564,15 +528,49 @@ function fmListRowClassName({ selected, current }) {
 // ETP-5456 — extracted to avoid a nested ternary (javascript:S3358). Mirrors the
 // mutually-exclusive rectificativa (303) / sustitutiva (349) precedence documented
 // at the `declTypeLabel` call site below.
-function resolveDeclTypeLabel(decl, t) {
-  if (decl.manualData?.identification?.rectificativa) return t('fm.type.rectificative');
-  const isSustitutiva = decl.manualData?.identification?.sustitutiva === true
-    || decl.manualData?.identification?.sustitutiva === 'Y';
-  if (isSustitutiva) return t('fm.type.substitutive');
+//
+// ETP-5725 — `duplicatePeriodPresented` is a FALLBACK for a never-saved draft only. The 303/349
+// detail pages auto-default `identChecks.rectificativa`/`.sustitutiva` to true in LOCAL
+// component state the instant they're opened for a period whose latest sibling is already
+// presented (see FmModel303Page.jsx/FmModel349Page.jsx's `identChecks` lazy initializers), but
+// that state is invisible to this list until the user clicks "Guardar" and `decl.manualData`
+// is actually persisted — until then `rectificativa`/`sustitutiva` are both `undefined` here,
+// and the grid used to always show "Ordinaria" for that window. Once EITHER flag is persisted
+// (even explicitly set to false/'N' by a user override), that persisted value is trusted as
+// before and this fallback no longer applies.
+function resolveDeclTypeLabel(decl, t, duplicatePeriodPresented = false) {
+  const ident = decl.manualData?.identification;
+  const rectificativaPersisted = ident?.rectificativa;
+  const sustitutivaPersisted = ident?.sustitutiva === true || ident?.sustitutiva === 'Y';
+  const neverSaved = rectificativaPersisted === undefined && ident?.sustitutiva === undefined;
+  if (rectificativaPersisted || (neverSaved && duplicatePeriodPresented && decl.model === '303')) {
+    return t('fm.type.rectificative');
+  }
+  if (sustitutivaPersisted || (neverSaved && duplicatePeriodPresented && decl.model === '349')) {
+    return t('fm.type.substitutive');
+  }
   return t('fm.type.ordinary');
 }
 
-export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl }) {
+// Publishes the list's TopBar meta (ETP-5584). Rendered by FmListPage only while it is the
+// visible page, so mounting/unmounting it is what hands the TopBar over to and back from the
+// 303/349 detail pages — see the "Top-bar page meta" comment inside FmListPage.
+function ListPageMeta({ title, breadcrumb, recordCount }) {
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const { actions: supportActions } = useSupportChatSafe();
+  const favActive = isFavorite('fiscal-models');
+  useSetPageMeta({
+    title,
+    breadcrumb,
+    recordCount,
+    onAddToFavorites: () => toggleFavorite('fiscal-models', title),
+    isFavorite: favActive,
+    onPageHelp: () => { supportActions.setTab('ayuda'); supportActions.open(); },
+  }, [favActive, recordCount]);
+  return null;
+}
+
+export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl, active = true }) {
   const ui = useUI();
   const t  = ui;
   const { locale: appLocale } = useLocaleSwitch();
@@ -1075,13 +1073,28 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             const hasDuplicatePeriod = decls.some(d => d.id !== decl.id
               && d.model === decl.model && d.year === decl.year && d.period === decl.period);
 
-            const declTypeLabel = resolveDeclTypeLabel(decl, t);
+            // ETP-5725 — narrower than `hasDuplicatePeriod` above: true only when a SIBLING
+            // declaration for this (model, year, period) is already in the submitted family
+            // (SUBMITTED_STATUSES). The type selector (349's Sustitutiva segmented control,
+            // 303's "Autoliquidación rectificativa" checkbox) uses this to auto-default to the
+            // corrected type and lock "Normal" out — unlike `hasDuplicatePeriod`, which also
+            // fires for a sibling that is still a draft/ready and merely WARNS at submit time.
+            // `decls` has no exposed DECL_SEQ ordinal (see FiscalDeclCrudHandler#findLatestDeclaration
+            // on the Go side), so this doesn't single out the highest-seq sibling — but the
+            // existing one-draft-per-period guard (ETP-5272) means at most one sibling can be in
+            // a non-terminal state at a time, so "any submitted sibling exists" and "the latest
+            // sibling is submitted" coincide in practice.
+            const duplicatePeriodPresented = decls.some(d => d.id !== decl.id
+              && d.model === decl.model && d.year === decl.year && d.period === decl.period
+              && SUBMITTED_STATUSES.has(d.status));
+
+            const declTypeLabel = resolveDeclTypeLabel(decl, t, duplicatePeriodPresented);
 
             return (
               <tr
                 key={decl.id}
                 className={fmListRowClassName({ selected: selected.has(decl.id), current: decl.current })}
-                onClick={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod })}
+                onClick={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod, _duplicatePeriodPresented: duplicatePeriodPresented })}
               >
                 <td onClick={e => e.stopPropagation()}>
                   <CheckboxField
@@ -1108,7 +1121,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                     is safe without a `decl.model` guard. */}
                 <td>{declTypeLabel}</td>
                 <td>
-                  <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
+                  <FmStatusChip status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
                 </td>
                 <td style={{ textAlign: 'right' }}>
                   <ResultText
@@ -1129,7 +1142,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                 <td style={{ position: 'relative' }}>
                   {isDraft && (
                     <FmRowActions
-                      onEdit={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod })}
+                      onEdit={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod, _duplicatePeriodPresented: duplicatePeriodPresented })}
                       onDelete={() => setDeleteTarget(decl)}
                       deleting={deletingId === decl.id}
                       data-testid="FmRowActions__cb728e" />
@@ -1149,31 +1162,69 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     );
   }
 
+  // ── Top-bar page meta (ETP-5584) ─────────────────────────────────────────
+  // Same mechanism every generated list window uses (ListView.jsx): the app TopBar renders the
+  // title, the record-count badge, the breadcrumb subtitle and the kebab (favorites + page help).
+  // Published by <ListPageMeta> (rendered below) ONLY while `active`. This component stays
+  // mounted (hidden) while FiscalModelsPage shows a 303/349 detail page, for auto-compute
+  // polling. Publishing an empty meta from here instead would be wrong: useSetPageMeta's cleanup
+  // resets the TopBar on every dep change, so a poll that changed `decls.length` while a detail
+  // page is open would wipe the detail's title. Unmounting <ListPageMeta> withdraws the list
+  // meta exactly once, when the detail opens; remounting it re-publishes on the way back.
+  const windowTitle = ui('fm.breadcrumb.section');
+
   return (
     <div className="fm-page">
-      {/* ── Title bar ────────────────────────────────────────────── */}
-      <div style={{ padding: '10px 20px', background: 'hsl(var(--card))', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 20, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {t('fm.list.title') ?? 'Declaraciones'}
-          </span>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center',
-            padding: '4px 8px', borderRadius: 8,
-            background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
-            fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
-          }}>{decls.length}</span>
-          <MoreOptionsMenu
-            favKey="fiscal-models"
-            favLabel={t('fm.list.title') ?? 'Declaraciones'}
-            data-testid="MoreOptionsMenu__cb728e" />
-        </div>
-        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
-          {ui('finance')} / {ui('fm.breadcrumb.section')}
-        </div>
+      {active && (
+        <ListPageMeta
+          title={windowTitle}
+          breadcrumb={`${ui('finance')} / ${windowTitle}`}
+          recordCount={decls.length}
+          data-testid="ListPageMeta__cb728e" />
+      )}
+      {/* ── Content row 1 — page actions, right-aligned (ETP-5584). Mirrors the first content
+          row of a generated ListView under the TopBar: outline secondary, then the dark
+          primary "New" button right-most (Button classes copied from ListView.jsx). ── */}
+      <div
+        data-testid="fm-list-actions-row"
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
+          padding: '12px 16px 4px', background: 'hsl(var(--card))', flexShrink: 0,
+        }}
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
+          onClick={() => setShowCatalog(true)}
+          data-testid="fm-list-catalog-button"
+        >
+          <LayoutGrid className="h-3.5 w-3.5" data-testid="LayoutGrid__cb728e" />
+          {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
+        </Button>
+        {catalogLoaded && activeCount > 0 && (
+          <Button
+            className="ml-3 rounded-lg shadow-sm gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+            onClick={() => setShowNewDecl(true)}
+            data-testid="fm-list-new-declaration-button"
+          >
+            + {t('fm.action.new_declaration') ?? 'Nueva declaración'}
+          </Button>
+        )}
       </div>
-      {/* ── Toolbar ──────────────────────────────────────────────── */}
+      {/* ── Content row 2 — KPI cards, full width ── */}
+      {catalogLoaded && (
+        <KpiCardsRow
+          decls={modelYearFiltered}
+          t={t}
+          kpiFilter={kpiFilter}
+          onFilterClick={handleKpiFilterClick}
+          data-testid="KpiCardsRow__cb728e" />
+      )}
+      {/* ── Content row 3 — filters + sort, right-aligned (no section heading, ETP-5584) ── */}
       <div className="fm-toolbar">
+        <div className="fm-toolbar__space" />
+
         <FilterDropdown
           label={t('fm.filter.all_years') ?? 'Todos los años'}
           value={yearFilter}
@@ -1195,8 +1246,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onChange={setStatusFilter}
           data-testid="FilterDropdown__cb728e" />
 
-        <div className="fm-toolbar__space" />
-
         {/* "Ordenar" — field-selector popover (same mechanism as ListView.jsx's
             column sort used by the generated/Factura windows), not a bare toggle. */}
         <div className="fm-filter-select" ref={sortBtnRef} style={{ position: 'relative' }}>
@@ -1213,7 +1262,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             <ArrowUpDown size={16} strokeWidth={1.75} data-testid="ArrowUpDown__cb728e" />
           </button>
           {showSortMenu && (
-            <div className="fm-status-select__menu" role="listbox" style={{ minWidth: 200 }}>
+            // Right-anchored: the sort button is the last item of the toolbar row (ETP-5584).
+            <div className="fm-status-select__menu" role="listbox" style={{ minWidth: 200, left: 'auto', right: 0 }}>
               <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
                 {t('sortBy')}
               </div>
@@ -1252,35 +1302,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             </div>
           )}
         </div>
-
-        <button
-          className="fm-toolbar__btn"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
-          onClick={() => setShowCatalog(true)}
-        >
-          <LayoutGrid size={14} strokeWidth={1.75} data-testid="LayoutGrid__cb728e" />
-          {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
-        </button>
-
-        {catalogLoaded && activeCount > 0 && (
-          <button
-            className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
-            onClick={() => setShowNewDecl(true)}
-          >
-            + {t('fm.action.new_declaration') ?? 'Nueva declaración'}
-          </button>
-        )}
       </div>
-      {/* ── KPI cards row ─────────────────────────────────────── */}
-      {catalogLoaded && (
-        <KpiCardsRow
-          decls={modelYearFiltered}
-          t={t}
-          kpiFilter={kpiFilter}
-          onFilterClick={handleKpiFilterClick}
-          data-testid="KpiCardsRow__cb728e" />
-      )}
       {/* ── Table ──────────────────────────────────────────────── */}
       <div className="fm-table-wrap">
         {tableSection}

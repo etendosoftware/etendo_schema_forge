@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmBoxes303.jsx
 // Vitest render-level test for ETP-5391's CASILLAS_SECTIONS registration
 // (FmModel303Page.jsx). Unlike FmModel303Page.vitest.jsx, FmBoxes303.jsx is
 // intentionally NOT mocked here — this file renders the real component so a
@@ -15,11 +17,15 @@ import { render, fireEvent } from '@testing-library/react';
 const navigateMock = vi.fn();
 
 vi.mock('@/i18n', () => ({
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useUI: () => (key) => key,
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
+  // ETP-5725 — `warning` is required too: the ETP-5725 lock tests auto-default rectificativa
+  // to true, which makes `motivo_rectificacion` a newly-missing required field, and the
+  // mount-time `showMissingRequiredFieldsReminder` effect calls `toast.warning` for that.
+  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
@@ -37,7 +43,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
@@ -72,7 +77,11 @@ vi.mock('@/components/ui/checkbox', () => ({
 // lucide-react — includes Pencil (used by the real FmBoxes303's edit button),
 // unlike FmModel303Page.vitest.jsx's own mock which never needed it since that
 // file mocks FmBoxes303.jsx away entirely.
+// ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
+vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip renders lucide's Check for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
@@ -175,5 +184,87 @@ describe('FmModel303Page — CasillasTab / info_adicional nav section (ETP-5391 
     const { container } = render(<FmModel303Page decl={declFor('T2')} {...defaultProps} />);
     openInfoAdicionalNav(container);
     expect(document.body.textContent).toContain('fm.box.row.entregas_intracom');
+  });
+});
+
+// ETP-5725 — "Autoliquidación rectificativa" auto-default + lock, end-to-end against the REAL
+// FmBoxes303/CheckboxField (a bare `<button role="checkbox">`, see CheckboxField.jsx — this is
+// why this file, not FmModel303Page.duplicatePeriodGate.vitest.jsx (which stubs FmBoxes303 out
+// entirely and can only assert on the warning banner/toast), is where the actual checkbox
+// checked/disabled DOM state is verified).
+function openResultadoFinalNav(container) {
+  const navBtn = Array.from(container.querySelectorAll('button'))
+    .find(b => b.textContent.trim() === 'fm.page.resultado_final');
+  expect(navBtn).toBeTruthy();
+  fireEvent.click(navBtn);
+  return navBtn;
+}
+
+function rectificativaCheckboxBtn(container) {
+  const label = Array.from(container.querySelectorAll('.fm-aeat-ident-cb__label'))
+    .find(l => l.textContent === 'fm.ident.rectificativa');
+  expect(label).toBeTruthy();
+  return label.closest('.fm-aeat-ident-cb').querySelector('button[role="checkbox"]');
+}
+
+describe('FmModel303Page — ETP-5725 rectificativa auto-default + lock (real FmBoxes303)', () => {
+  it('auto-checks and locks the checkbox for a fresh (never-saved) draft on a duplicate-presented period', () => {
+    const decl = { ...declFor('T2'), _duplicatePeriodPresented: true };
+    const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+    openResultadoFinalNav(container);
+    const btn = rectificativaCheckboxBtn(container);
+    expect(btn.getAttribute('aria-checked')).toBe('true');
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('leaves the checkbox unchecked and editable when there is no duplicate-presented period', () => {
+    const { container } = render(<FmModel303Page decl={declFor('T2')} {...defaultProps} />);
+    openResultadoFinalNav(container);
+    const btn = rectificativaCheckboxBtn(container);
+    expect(btn.getAttribute('aria-checked')).toBe('false');
+    expect(btn.disabled).toBe(false);
+  });
+
+  it('does not strand an already-persisted rectificativa=false: stays editable so the user can still check it', () => {
+    const decl = {
+      ...declFor('T2'),
+      _duplicatePeriodPresented: true,
+      identification: { tipo_declaracion: 'I', rectificativa: false },
+    };
+    const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+    openResultadoFinalNav(container);
+    const btn = rectificativaCheckboxBtn(container);
+    expect(btn.getAttribute('aria-checked')).toBe('false');
+    expect(btn.disabled).toBe(false);
+  });
+
+  it('once the user checks it while duplicatePeriodPresented, it locks and can no longer be unchecked', () => {
+    const decl = {
+      ...declFor('T2'),
+      _duplicatePeriodPresented: true,
+      identification: { tipo_declaracion: 'I', rectificativa: false },
+    };
+    const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+    openResultadoFinalNav(container);
+    fireEvent.click(rectificativaCheckboxBtn(container));
+    const btn = rectificativaCheckboxBtn(container);
+    expect(btn.getAttribute('aria-checked')).toBe('true');
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('is never locked once the declaration is submitted (isSubmitted gates the lock too)', () => {
+    const decl = {
+      ...declFor('T2'),
+      status: 'submitted',
+      _duplicatePeriodPresented: true,
+      identification: { tipo_declaracion: 'I', rectificativa: true },
+    };
+    const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+    openResultadoFinalNav(container);
+    const btn = rectificativaCheckboxBtn(container);
+    // Already disabled by `readOnly` (isSubmitted) regardless of the lock — same outcome,
+    // different gate; no assertion needed beyond "still disabled" since this is the pre-existing
+    // readOnly behavior, unchanged by ETP-5725.
+    expect(btn.disabled).toBe(true);
   });
 });

@@ -1,5 +1,11 @@
+// @covers tools/app-shell/src/components/contract-ui/evalTabReadOnly.js
+// @covers artifacts/sales-invoice/decisions.json
+// @covers artifacts/purchase-invoice/decisions.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { convertLogicToJs } from '@etendosoftware/schema-forge-cli/src/generate-contract.js';
+import { buildHeaderLogicMaps } from '@etendosoftware/schema-forge-cli/src/generate-frontend.js';
 import { evalTabReadOnly } from '../src/components/contract-ui/evalTabReadOnly.js';
 
 describe('evalTabReadOnly', () => {
@@ -55,3 +61,51 @@ describe('evalTabReadOnly', () => {
     assert.equal(evalTabReadOnly(tab, undefined), false);
   });
 });
+
+// ETP-5657 — the invoices' Exchange rates tab no longer locks on @Processed@: a completed but
+// unposted invoice keeps its rates editable; posting (or a reversal) locks them. The rule under
+// test is the REAL one — read from each window's decisions.json and compiled with the published
+// generator's own `convertLogicToJs` (what the generated HeaderPage embeds) — not a hand copy.
+for (const windowName of ['sales-invoice', 'purchase-invoice']) {
+  describe(`${windowName} — Exchange rates tab readOnlyLogic`, () => {
+    const read = (file) => JSON.parse(readFileSync(
+      new URL(`../../../artifacts/${windowName}/${file}`, import.meta.url), 'utf8'));
+    const decisions = read('decisions.json');
+    const contract = read('contract.json');
+    const rule = decisions.window.secondaryTabs.exchangeRates.readOnlyLogic;
+    const { headerColumnMap, headerBooleanFields } = buildHeaderLogicMaps(contract, 'header');
+    // eslint-disable-next-line no-new-func -- compiling the generator's own output, as HeaderPage does
+    const readOnlyLogic = new Function('record', `return ${convertLogicToJs(rule, headerColumnMap, headerBooleanFields)};`);
+    const tab = { readOnlyLogic };
+
+    it('no longer mentions @Processed@, and the contract carries the same rule', () => {
+      assert.doesNotMatch(rule, /@Processed@/);
+      assert.equal(contract.frontendContract.window.secondaryTabs.exchangeRates.readOnlyLogic, rule);
+    });
+
+    it('keeps the tab EDITABLE on a completed but unposted invoice', () => {
+      assert.equal(evalTabReadOnly(tab, { processed: 'Y', posted: 'N' }), false);
+      assert.equal(evalTabReadOnly(tab, { processed: true, posted: false }), false);
+    });
+
+    it('keeps the tab editable on a draft', () => {
+      assert.equal(evalTabReadOnly(tab, { processed: 'N', posted: 'N' }), false);
+    });
+
+    it('locks the tab once the invoice is posted', () => {
+      assert.equal(evalTabReadOnly(tab, { processed: 'Y', posted: 'Y' }), true);
+      assert.equal(evalTabReadOnly(tab, { processed: true, posted: true }), true);
+    });
+
+    it('locks the tab on a reversed invoice, sales or purchase side', () => {
+      assert.equal(evalTabReadOnly(tab, { processed: 'Y', posted: 'N', hASREVERSEDINVOICESO: 'Y' }), true);
+      assert.equal(evalTabReadOnly(tab, { processed: 'Y', posted: 'N', hASREVERSEDINVOICEPO: 'Y' }), true);
+    });
+
+    it('unlocks again after an unpost (posted back to N)', () => {
+      const posted = { processed: 'Y', posted: 'Y' };
+      assert.equal(evalTabReadOnly(tab, posted), true);
+      assert.equal(evalTabReadOnly(tab, { ...posted, posted: 'N' }), false);
+    });
+  });
+}

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/sales-order/index.jsx
 // Coverage-recovery suite (ETP-4692): the existing index.test.js /
 // SalesOrderNoLegacyFilter.test.js suites are source-reading (regex-only,
 // per this project's convention for thin wrappers) and never import/render
@@ -126,6 +127,8 @@ vi.mock('@generated/sales-order/generated/web/sales-order/index.jsx', () => ({
 
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { MemoryRouter } from 'react-router-dom';
 import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
 import SalesOrderWindow from '../index.jsx';
@@ -189,5 +192,32 @@ describe('SalesOrderWindow — render smoke tests (ETP-4520 window-access wiring
     renderWithRouter(<SalesOrderWindow windowName="sales-order" apiBaseUrl="/api" token="tkn" />);
 
     expect(lastUseOrderWindowArgs).toMatchObject({ specName: 'sales-order', documentType: 'Sales Order' });
+  });
+});
+
+// ETP-5632 — the drill-down condition must target a visible grid column. A field that is
+// not a grid column (e.g. the core virtual column) is silently dropped by the advanced
+// filter, so the list would show every completed order instead of the pending ones.
+describe('SalesOrderWindow — ?filter=pendingDelivery initial advanced filter (ETP-5632)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    lastListViewProps = null;
+    currentWindowAccessTier = 'full';
+  });
+
+  it('filters on the eTGODeliveryStatus stored column, which is a grid column of the window', () => {
+    render(
+      <MemoryRouter initialEntries={['/sales-order?filter=pendingDelivery']}>
+        <SalesOrderWindow windowName="sales-order" apiBaseUrl="/api" token="tkn" />
+      </MemoryRouter>,
+    );
+
+    const conditions = lastListViewProps.initialAdvancedFilter.conditions;
+    expect(conditions).toHaveLength(2);
+    const decisions = JSON.parse(
+      readFileSync(resolve(process.cwd(), '../../artifacts/sales-order/decisions.json'), 'utf8'),
+    );
+    expect(conditions[1]).toMatchObject({ field: 'eTGODeliveryStatus', operator: 'lessThan', value: 100 });
+    expect(decisions.entities.header.fields['eTGODeliveryStatus'].grid).toBe(true);
   });
 });

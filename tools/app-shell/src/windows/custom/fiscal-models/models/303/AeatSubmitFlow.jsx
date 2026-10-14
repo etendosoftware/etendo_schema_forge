@@ -8,6 +8,7 @@ import { Loader2, TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark }
 import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, applyBoxParams, isBankIbanRequired, withBox111NonZeroFlag, DECLARATION_TYPE_INGRESO, showIaeActivityReminder } from '../../fiscalModelsUtils.js';
 import { isLastPeriodOfYear } from './fm303Layouts.js';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
+import { Input } from '@/components/ui/input';
 
 // ── Pure helpers (exported for unit testing — no DOM/React involved) ──────────
 
@@ -153,18 +154,16 @@ function resolveDeclTypeLabel(declarationType, t) {
   return declarationType;
 }
 
-const INPUT_ST = {
-  width: 376, height: 40, fontSize: 14, padding: '8px 12px',
-  border: '1px solid hsl(var(--border-control))', borderRadius: 8,
-  boxSizing: 'border-box', color: 'hsl(var(--foreground))', outline: 'none', background: 'hsl(var(--card))',
-};
-
-function Field({ label, children, required }) {
+// ETP-5584 P7 — full-width field (label above, input spanning the modal body),
+// matching the app's standard form layout. The inputs themselves are the shared
+// `Input` component, so text and placeholder use the app's standard typography
+// (the NRC placeholder used to be monospace).
+function Field({ label, children, required, htmlFor }) {
   return (
-    <div style={{ width: 376 }}>
-      <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
+    <div className="fm-aeat-field">
+      <label className="fm-aeat-field__label" htmlFor={htmlFor}>
         {label}{required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
-      </div>
+      </label>
       {children}
     </div>
   );
@@ -345,7 +344,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
 
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="fm-config-modal" onClick={e => e.stopPropagation()}>
+      <div className="fm-config-modal fm-aeat-modal" onClick={e => e.stopPropagation()} data-testid="AeatSubmitFlow__dialog">
 
         {/* Header */}
         <div className="fm-config-modal__header">
@@ -394,57 +393,70 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
               <div style={{ fontWeight: 600, fontSize: 14, color: 'hsl(var(--foreground))', marginBottom: 12 }}>
                 {t('fm.aeat.presenter.title') ?? 'Presenter (certificate holder)'}
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+              <div className="fm-aeat-fields">
                 <Field
                   label={t('fm.aeat.presenter.nif') ?? 'Presenter NIF'}
+                  htmlFor="fm-aeat-presenter-nif"
                   data-testid="Field__fc2aac">
-                  <input
+                  <Input
+                    id="fm-aeat-presenter-nif"
                     type="text"
                     value={presenterNif}
                     onChange={e => setPresenterNif(e.target.value)}
-                    style={INPUT_ST}
                     data-testid="AeatSubmitFlow__presenterNif" />
                 </Field>
                 <Field
                   label={t('fm.aeat.presenter.name') ?? 'Presenter name'}
+                  htmlFor="fm-aeat-presenter-name"
                   data-testid="Field__fc2aac">
-                  <input
+                  <Input
+                    id="fm-aeat-presenter-name"
                     type="text"
                     value={presenterName}
                     onChange={e => setPresenterName(e.target.value)}
-                    style={INPUT_ST}
                     data-testid="AeatSubmitFlow__presenterName" />
                 </Field>
                 {localData.declarationType === DECLARATION_TYPE_INGRESO && (
                   <Field
                     label={t('fm.aeat.nrc.label') ?? 'NRC'}
                     required={nrcRequired}
+                    htmlFor="fm-aeat-nrc"
                     data-testid="Field__fc2aac">
-                    <input
+                    <Input
+                      id="fm-aeat-nrc"
                       type="text"
                       value={nrc}
                       onChange={e => setNrc(e.target.value)}
                       placeholder={t('fm.aeat.nrc.placeholder') ?? 'Complete Reference Number'}
-                      style={{ ...INPUT_ST, fontFamily: 'monospace' }}
                       data-testid="AeatSubmitFlow__nrc" />
                   </Field>
                 )}
               </div>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: testMode ? 12 : 0 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: 12 }}>
                 <CheckboxField
                   checked={testMode}
                   onToggle={val => setTestMode(val)}
                   data-testid="AeatSubmitFlow__testMode" />
                 {t('fm.aeat.test_mode.label') ?? 'Validate without filing'}
               </label>
-              {testMode && (
+              {/* ETP-5584 P7 — the warning is ALWAYS laid out and only toggled
+                  visible, so checking "Validar sin presentar" never changes the
+                  modal's height. `visibility: hidden` (not `display: none`) keeps
+                  its exact box — the reserved space always matches the real
+                  banner, whatever the locale/wrapping. Hidden from assistive tech
+                  while unchecked so screen readers never announce it. */}
+              <div
+                className={`fm-aeat-testmode-slot${testMode ? ' fm-aeat-testmode-slot--visible' : ''}`}
+                aria-hidden={!testMode}
+                data-testid="AeatSubmitFlow__testModeSlot"
+              >
                 <Banner
                   tone="warning"
                   icon={<TriangleAlert size={16} data-testid="TriangleAlert__aeat" />}
                   title={t('fm.aeat.test_mode.warning') ?? 'This option only validates the file with the AEAT. The declaration is not filed.'}
                   data-testid="Banner__aeatTestWarning" />
-              )}
+              </div>
 
               {connError && (
                 <div style={{ marginTop: 12 }}>

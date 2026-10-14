@@ -234,6 +234,18 @@ if [ "$SUITE" != "mocked" ]; then
     integration_test_args+=("integration.spec")
     selection_note=""
   fi
+  # ETP-5548: the paid provisioning-failure spec reserves a dedicated pool tenant through
+  # POST /sws/go/dev/provisioning-failure-fixture, which provisions it synchronously on first
+  # run (minutes) and blows the 15s actionTimeout. Run it locally / in the pre-push gate only;
+  # skip it under Jenkins (JENKINS_URL). An explicit E2E_PROVISIONING_FAILURE always wins.
+  if [ -n "${E2E_PROVISIONING_FAILURE:-}" ]; then
+    provisioning_failure="$E2E_PROVISIONING_FAILURE"
+  elif [ -n "${JENKINS_URL:-}" ]; then
+    provisioning_failure=0
+    echo "==> Note: provisioning-failure integration spec skipped under Jenkins (set E2E_PROVISIONING_FAILURE=1 to force)"
+  else
+    provisioning_failure=1
+  fi
   echo "==> Playwright E2E — integration specs (${integration_workers} workers${integration_note}${selection_note})..."
   # ETP-4798: the email sink is on by default for the integration suite. Registration now stops at
   # the confirm-your-email wall, and the only way past it is to read the link out of the mail the
@@ -243,7 +255,7 @@ if [ "$SUITE" != "mocked" ]; then
   ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$PASSWORD" BASE_URL="$BASE_URL" \
       E2E_EMAIL_SINK="${E2E_EMAIL_SINK:-1}" \
       E2E_ONBOARDING_INTEGRATION=1 E2E_SALES_INTEGRATION=1 E2E_FINANCE_INTEGRATION=1 \
-      E2E_PROVISIONING_FAILURE=1 \
+      E2E_PROVISIONING_FAILURE="$provisioning_failure" \
       "${integration_test_args[@]}" )
 else
   echo "==> Playwright E2E — integration specs... SKIPPED (E2E_SUITE=mocked)"

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/useFiscalStatus.js
 // Mocks must come before imports (Vitest hoisting)
 
 // ETP-5229 — useFiscalStatus.js now calls isSifEligibleByDate/isVerifactuEligibleByDate
@@ -155,8 +156,10 @@ describe('useFiscalStatus', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
       const invoice = { aeatsiiEstado: 'CO', accountingDate: '2026-06-01' };
 
+      // ETP-5700 — fechaAcogidaSII is an AD Date column, so it reaches the client as a bare
+      // `yyyy-MM-dd`; the former UTC-midnight fixture only passed west of UTC.
       const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, {
-        sii: '2026-06-01T00:00:00.000Z',
+        sii: '2026-06-01',
       }));
 
       expect(result.current.sii).toBe('CO');

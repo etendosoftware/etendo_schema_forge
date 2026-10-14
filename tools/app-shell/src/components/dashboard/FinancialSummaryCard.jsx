@@ -3,6 +3,7 @@ import { Check, ArrowUp, ArrowDown, X, Plus, Minus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { formatDashboardCompact, localeFromUi } from '@/lib/dashboardNumberFormat.js';
+import { getDashboardValueTypography } from '@/lib/dashboardValueTypography.js';
 import { formatTrendPct, trendDirection } from '@/lib/dashboardTrendPct.js';
 import { resolveRangeCopySuffix } from '@/lib/dashboardRangeCopy.js';
 
@@ -63,20 +64,6 @@ export function FinancialSummaryCard({
   const navigate = useNavigate();
   const { locale } = useLocaleSwitch();
   const numberLocale = localeFromUi(locale);
-
-  function getMetricValueTypography(value) {
-    const length = String(value ?? '').replace(/^-/, '').length;
-
-    if (length >= 12) {
-      return { fontSize: '20px', lineHeight: '24px' };
-    }
-
-    if (length >= 10) {
-      return { fontSize: '24px', lineHeight: '28px' };
-    }
-
-    return { fontSize: '30px', lineHeight: '32px' };
-  }
 
   const rangeSuffix = resolveRangeCopySuffix(range);
   const periodText = ui(`financialSummaryPeriod${rangeSuffix}`);
@@ -262,7 +249,7 @@ export function FinancialSummaryCard({
               .replace(/^[↑↓]\s*/, '');
             const TrendIcon = trendPositive ? ArrowUp : ArrowDown;
             const formattedValue = kpi ? formatDashboardCompact(kpi.value, { currencyLabel, locale: numberLocale }) : '—';
-            const valueTypography = getMetricValueTypography(formattedValue);
+            const valueTypography = getDashboardValueTypography(formattedValue);
             const badgeStyle = toneGood
               ? { backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }
               : { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))' };

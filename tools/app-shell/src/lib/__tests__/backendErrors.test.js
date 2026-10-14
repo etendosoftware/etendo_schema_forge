@@ -1,3 +1,7 @@
+// @covers tools/app-shell/src/lib/backendErrors.js
+// @covers tools/app-shell/src/locales/en_US.json
+// @covers tools/app-shell/src/locales/es_ES.json
+// @covers tools/app-shell/src/locales/es_AR.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -6,6 +10,8 @@ import {
   extractBackendMessageParams,
   translateBackendError,
   parseBackendErrorMessage,
+  parseBackendError,
+  translateBackendErrorResponse,
 } from '../backendErrors.js';
 
 /**
@@ -162,6 +168,145 @@ describe('translateBackendError', () => {
       assert.equal(required, 'translated:backendError.conversionRateRequired');
       assert.equal(notOne, 'translated:backendError.conversionRateMustDifferFromOne');
     });
+  });
+
+  // reconcileGroup with the bank-rate conversion fields (`actualPayment` / `conversionRate` /
+  // `convertedAmount`), refused by com.etendoerp.go ReconciliationConversionSupport. The English
+  // literals ARE the wire contract (no AD_MESSAGE), so they are pinned byte for byte here.
+  // Exchange Rates tab of an invoice (ConversionRateDocDeleteGuardObserver,
+  // com.smf.currency.conversionrate — AD_MESSAGE SMFCR_CannotDeleteRateCompleted, no es_ES TRL):
+  // a completed invoice's rate may be edited but not deleted.
+  describe('invoice exchange-rate delete refusal (ETP-5657)', () => {
+    const RAW = 'The exchange rate of a completed invoice cannot be deleted. Edit it instead.';
+    const KEY = 'backendError.conversionRateDeleteCompleted';
+    const REMOVED = 'Cannot modify document conversion rate when the invoice is not in draft status.';
+
+    it(`maps "${RAW.slice(0, 40)}..." to key ${KEY}`, () => {
+      const t = (k) => (k === KEY ? `translated:${KEY}` : k);
+      assert.equal(translateBackendError(RAW, t), `translated:${KEY}`);
+    });
+
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      it(`resolves to a non-empty ${locale} translation`, () => {
+        const json = JSON.parse(
+          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+        const translated = translateBackendError(RAW, (k) => json.genericLabels[k] ?? k);
+        assert.equal(translated, json.genericLabels[KEY], `${locale}.${KEY}`);
+        assert.ok(translated.trim());
+        if (locale !== 'en_US') assert.notEqual(translated, RAW, `${locale}.${KEY} is untranslated`);
+      });
+    }
+
+    it('no longer translates the retired "not in draft status" message: it passes through as is', () => {
+      const t = (k) => `translated:${k}`;
+      assert.equal(translateBackendError(REMOVED, t), REMOVED);
+    });
+
+    it('dropped the retired backendError.conversionRateNotDraft key from every locale', () => {
+      for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+        const json = JSON.parse(
+          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+        assert.equal(json.genericLabels['backendError.conversionRateNotDraft'], undefined, locale);
+      }
+    });
+  });
+
+  describe('bank-rate conversion refusals of reconcileGroup (ETP-5657)', () => {
+    const KNOWN = [
+      {
+        // Reachable from an MCP/REST caller only — the modal always sends actualPayment.
+        raw: 'actualPayment is required when conversionRate or convertedAmount is sent',
+        key: 'backendError.reconcileConversionActualRequired',
+      },
+      {
+        raw: 'Conversion fields require all selected invoices to share one currency different from the account currency',
+        key: 'backendError.reconcileConversionCurrencyMismatch',
+      },
+      {
+        raw: 'Conversion fields cannot be combined with existing transactions or a write-off',
+        key: 'backendError.reconcileConversionNotCombinable',
+      },
+      {
+        raw: 'The amount to pay must be greater than zero and not exceed the outstanding amount of the selected invoices',
+        key: 'backendError.reconcileConversionActualOutOfRange',
+      },
+      {
+        raw: 'The converted amount must be greater than zero and not exceed the statement line amount',
+        key: 'backendError.reconcileConversionConvertedOutOfRange',
+      },
+      {
+        raw: 'The converted amount is too small to allocate across the selected invoices',
+        key: 'backendError.reconcileConversionTooSmall',
+      },
+    ];
+
+    for (const { raw, key } of KNOWN) {
+      it(`maps "${raw.slice(0, 40)}..." to key ${key}`, () => {
+        const t = (k) => (k === key ? `translated:${key}` : k);
+        assert.equal(translateBackendError(raw, t), `translated:${key}`);
+      });
+    }
+
+    it('routes each refusal to its own key', () => {
+      const t = (k) => k;
+      const keys = KNOWN.map(({ raw }) => translateBackendError(raw, (k) => `translated:${k}`));
+      assert.equal(new Set(keys).size, KNOWN.length);
+      // With no translation the original English is kept (the t(key) === key guard).
+      for (const { raw } of KNOWN) assert.equal(translateBackendError(raw, t), raw);
+    });
+
+    it('does not match a refusal truncated or extended by a period', () => {
+      const t = (k) => `translated:${k}`;
+      for (const { raw } of KNOWN) {
+        assert.equal(translateBackendError(`${raw}.`, t), `${raw}.`);
+        assert.equal(translateBackendError(raw.slice(0, -1), t), raw.slice(0, -1));
+      }
+    });
+
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      it(`resolves every refusal to a non-empty ${locale} translation`, () => {
+        const json = JSON.parse(
+          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+        const t = (k) => json.genericLabels[k] ?? k;
+        for (const { raw, key } of KNOWN) {
+          const translated = translateBackendError(raw, t);
+          assert.equal(translated, json.genericLabels[key], `${locale}.${key}`);
+          assert.ok(translated.trim(), `${locale}.${key} is blank`);
+          if (locale !== 'en_US') assert.notEqual(translated, raw, `${locale}.${key} is untranslated`);
+        }
+      });
+    }
+  });
+
+  // Sales order Reactivate refusals (com.etendoerp.go OrderReactivationGuard). The backend
+  // sends them in English only, so the SPA must map each one to a locale key.
+  describe('sales order reactivation refusals', () => {
+    const KNOWN = [
+      {
+        raw: 'This order cannot be reactivated because it has linked shipments or invoices.',
+        key: 'cannotReactivateLinkedDocs',
+      },
+      {
+        raw: 'The documents linked to this order could not be checked, so it has not been reactivated. Try again.',
+        key: 'backendError.orderLinkedDocsCheckFailed',
+      },
+    ];
+
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const json = JSON.parse(
+        readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+      for (const { raw, key } of KNOWN) {
+        it(`resolves "${raw.slice(0, 40)}..." through ${key} to the ${locale} text`, () => {
+          const asked = [];
+          const t = (k) => { asked.push(k); return json.genericLabels[k] ?? k; };
+          const translated = translateBackendError(raw, t);
+          assert.ok(asked.includes(key), `${raw} is not mapped to ${key}`);
+          assert.equal(translated, json.genericLabels[key], `${locale}.${key}`);
+          assert.ok(translated.trim(), `${locale}.${key} is blank`);
+          if (locale !== 'en_US') assert.notEqual(translated, raw, `${locale}.${key} is untranslated`);
+        });
+      }
+    }
   });
 
   describe('known access-control messages (ETP-5205)', () => {
@@ -2610,6 +2755,37 @@ describe('translateBackendError — NotCalculatedCost (ETP-5360)', () => {
   });
 });
 
+// ── ETP-5529: core `OtherPostingProcessActive` on a locked document ──
+//
+// DocumentPostingService names STATUS_DocumentLocked as `messageKeys: ['OtherPostingProcessActive']`
+// so the SPA renders it in its own locale, whatever language the backend resolved the prose in.
+// Reads the REAL en_US / es_ES files so a missing locale entry fails here, not on a user's screen.
+describe('translateBackendError — OtherPostingProcessActive (ETP-5529)', () => {
+  const RAW_EN = 'This record is being posted by another process';
+
+  it('renders the es_ES copy from the identity, not the English prose', () => {
+    assert.equal(
+      translateBackendError(RAW_EN, localeTranslator('es_ES'), { messageKeys: ['OtherPostingProcessActive'] }),
+      'Este registro está siendo contabilizado por otro proceso. Si el problema persiste, actualice el registro; puede que ya esté contabilizado.',
+    );
+  });
+
+  it('renders the en_US copy from the identity', () => {
+    assert.equal(
+      translateBackendError(RAW_EN, localeTranslator('en_US'), { messageKeys: ['OtherPostingProcessActive'] }),
+      'This record is being posted by another process. If the problem persists, refresh the record; it may already be posted.',
+    );
+  });
+
+  it('falls back to the backend prose when the locale has no entry (never the raw key)', () => {
+    const echo = (k) => k;
+    assert.equal(
+      translateBackendError(RAW_EN, echo, { messageKeys: ['OtherPostingProcessActive'] }),
+      RAW_EN,
+    );
+  });
+});
+
 // ── ETP-5445: core `NotCalculatedCost` (document-level) on Internal Consumption posting ──
 //
 // Posting an Internal Consumption whose products have no calculated cost yet makes the core
@@ -2770,5 +2946,185 @@ describe('translateBackendError — draft reconciliation holds the line (ETP-547
 
   it('returns the original message unchanged when the translation key is missing (guard)', () => {
     assert.equal(translateBackendError(HOLDS_RAW, (k) => k), HOLDS_RAW);
+  });
+});
+
+// ETP-5194 — UserRoleAssignmentHandler#rejectEmailChange (com.etendoerp.go): the refusal outside
+// the email-correction window and the two rejections of a correction that is blank or malformed.
+describe('user email correction messages (UserRoleAssignmentHandler)', () => {
+  const CASES = [
+    {
+      raw: "Field 'email' can only be changed while the user's invitation has expired or could not be delivered",
+      key: 'backendError.userEmailLocked',
+    },
+    { raw: "Field 'email' is required", key: 'backendError.userEmailRequired' },
+    {
+      raw: "This user was never invited to Etendo (for example, a business partner contact person): edit its email through spec 'contacts', entity 'contact'",
+      key: 'backendError.userEmailNotAGoUser',
+    },
+    {
+      raw: "This contact is an Etendo user: change its email through spec 'user', entity 'user'",
+      key: 'backendError.contactEmailIsGoUser',
+    },
+    { raw: 'Invalid email format', key: 'backendError.userEmailInvalid' },
+  ];
+  const en = JSON.parse(readFileSync(new URL('../../locales/en_US.json', import.meta.url), 'utf8'));
+  const es = JSON.parse(readFileSync(new URL('../../locales/es_ES.json', import.meta.url), 'utf8'));
+  const lookup = (dict) => (k) => dict.genericLabels[k] ?? k;
+
+  for (const { raw, key } of CASES) {
+    it(`maps "${raw}" to ${key}`, () => {
+      assert.equal(translateBackendError(raw, (k) => (k === key ? 'translated' : k)), 'translated');
+    });
+
+    it(`has en_US and es_ES text for ${key}`, () => {
+      assert.notEqual(translateBackendError(raw, lookup(en)), raw);
+      assert.notEqual(translateBackendError(raw, lookup(es)), raw);
+    });
+  }
+});
+
+// ── ETP-5692: invoice post/unpost refusals, translated by identity ──
+//
+// com.etendoerp.go answers these in plain English plus a `messageKeys` identity that is NOT an
+// AD_MESSAGE record, so backendErrors.js is the only place they become Spanish. The SPA's own gates
+// keep them off the normal path; a stale screen (the invoice was posted, unposted or voided
+// elsewhere) is what surfaces them. Reads the REAL locale files so a missing entry fails here.
+describe('translateBackendError — invoice post/unpost refusals by identity (ETP-5692)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  // [messageKey, i18n key, the backend's English prose]
+  const CASES = [
+    ['ETGO_InvoiceFieldsLockedPosted', 'backendError.invoicePostedFieldsLocked',
+      'This invoice is posted, so accountingDate, costcenter cannot be changed. Unpost it first to correct its accounting.'],
+    ['ETGO_InvoiceExchangeRateLockedPosted', 'backendError.invoicePostedExchangeRateLocked',
+      'This invoice is posted, so its exchange rates cannot be changed. Unpost it first.'],
+    ['ETGO_InvoiceUnpostNotPosted', 'backendError.invoiceUnpostNotPosted',
+      'This invoice is not posted, so it has no accounting entries to remove.'],
+    ['ETGO_InvoiceUnpostNotCompleted', 'backendError.invoiceUnpostNotCompleted',
+      "Only a completed invoice can be unposted. This invoice's status is VO."],
+    ['ETGO_PostingDocumentNotProcessed', 'backendError.postingDocumentNotProcessed',
+      'Only processed (completed) documents can be posted. Complete the document first.'],
+    ['ETGO_CompletedInvoiceFieldsLocked', 'backendError.completedInvoiceFieldsLocked',
+      'This invoice is completed, so businessPartner can no longer be changed. Fields that can still be changed: accountingDate, project, costcenter, description.'],
+    ['ETGO_InvoiceFieldsLockedStatus', 'backendError.invoiceStatusDimensionsLocked',
+      'project cannot be changed on an invoice in status VO; only a completed invoice allows it.'],
+    ['ETGO_InvoiceFieldsLockedSiiSent', 'backendError.invoiceSiiSentReferenceLocked',
+      "This purchase invoice has already been sent to the SII, so orderReference (the supplier's invoice number) can no longer be changed."],
+    ['PostedDocument', 'backendError.documentAlreadyPosted', 'Document already Posted.'],
+  ];
+
+  for (const [messageKey, i18nKey, prose] of CASES) {
+    it(`renders ${messageKey} from its identity in es_ES and en_US, never the English prose`, () => {
+      const esText = translateBackendError(prose, es, { messageKeys: [messageKey] });
+      const enText = translateBackendError(prose, en, { messageKeys: [messageKey] });
+      assert.equal(esText, es(i18nKey));
+      assert.equal(enText, en(i18nKey));
+      assert.notEqual(esText, i18nKey, `es_ES.${i18nKey} is missing`);
+      assert.notEqual(enText, i18nKey, `en_US.${i18nKey} is missing`);
+      assert.notEqual(esText, prose);
+      assert.notEqual(esText, enText, `es_ES.${i18nKey} is still English`);
+    });
+  }
+
+  it('speaks the accountants’ Spanish: Descontabilizar / contabilizada / asientos', () => {
+    assert.match(es('backendError.invoicePostedFieldsLocked'), /contabilizada.*Descontabil/);
+    assert.match(es('backendError.invoicePostedExchangeRateLocked'), /contabilizada.*Descontabil/);
+    assert.match(es('backendError.invoiceUnpostNotPosted'), /asientos/);
+  });
+
+  it('keeps the backend prose when the locale has no entry (never the raw key)', () => {
+    const [messageKey, , prose] = CASES[0];
+    assert.equal(translateBackendError(prose, (k) => k, { messageKeys: [messageKey] }), prose);
+  });
+
+  it('ignores the fence messageParams (API property names, raw doc status) — the copy is generic', () => {
+    const text = translateBackendError('ignored', es, {
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    });
+    assert.equal(text, es('backendError.invoiceUnpostNotCompleted'));
+    assert.doesNotMatch(text, /VO|\{docStatus\}/);
+  });
+});
+
+describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
+  const es = localeTranslator('es_ES');
+  const jsonResponse = (body, status = 422) => ({ status, json: async () => body });
+  // CompletedInvoiceWriteFence.reject — the identity is nested under `error`.
+  const fenceBody = {
+    error: {
+      status: 422,
+      code: 'posted_invoice_fields_locked',
+      message: 'This invoice is posted, so accountingDate cannot be changed. Unpost it first to correct its accounting.',
+      fields: ['accountingDate'],
+      hint: "Run the invoice header action 'unpost' first, then retry this update; post the invoice again afterwards.",
+      messageKeys: ['ETGO_InvoiceFieldsLockedPosted'],
+      messageParams: { fields: ['accountingDate'] },
+    },
+  };
+
+  it('reads the message and the nested identity of the write-fence body in one pass', async () => {
+    assert.deepEqual(await parseBackendError(jsonResponse(fenceBody)), {
+      message: fenceBody.error.message,
+      messageKeys: ['ETGO_InvoiceFieldsLockedPosted'],
+      messageParams: { fields: ['accountingDate'] },
+    });
+  });
+
+  it('reads the flat InvoicePostingGate body (success:false, message, messageKeys, messageParams)', async () => {
+    const body = {
+      success: false,
+      message: "Only a completed invoice can be unposted. This invoice's status is VO.",
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    };
+    assert.deepEqual(await parseBackendError(jsonResponse(body)), {
+      message: body.message,
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    });
+  });
+
+  it('returns an empty result for a non-JSON body', async () => {
+    const res = { status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } };
+    assert.deepEqual(await parseBackendError(res), {});
+  });
+
+  it('translates the write-fence 422 by identity, not by its English prose (the inline line / tab save path)', async () => {
+    assert.equal(
+      await translateBackendErrorResponse(jsonResponse(fenceBody), es),
+      es('backendError.invoicePostedFieldsLocked'),
+    );
+  });
+
+  it('translates the exchange-rate refusal of a posted invoice', async () => {
+    const body = {
+      error: {
+        status: 422,
+        code: 'posted_invoice_exchange_rate_locked',
+        message: 'This invoice is posted, so its exchange rates cannot be changed. Unpost it first.',
+        fields: [],
+        messageKeys: ['ETGO_InvoiceExchangeRateLockedPosted'],
+        messageParams: { fields: [] },
+      },
+    };
+    assert.equal(
+      await translateBackendErrorResponse(jsonResponse(body), es),
+      es('backendError.invoicePostedExchangeRateLocked'),
+    );
+  });
+
+  it('still translates a body without identity by its text, and falls back to Error <status>', async () => {
+    const stale = 'This record was modified by someone else after you read it. Your changes were not saved.';
+    assert.equal(
+      await translateBackendErrorResponse(jsonResponse({ error: { message: stale } }, 409), es),
+      es('backendError.staleRecord'),
+    );
+    assert.equal(await translateBackendErrorResponse(jsonResponse({}, 500), es), 'Error 500');
+  });
+
+  it('keeps parseBackendErrorMessage returning only the message', async () => {
+    assert.equal(await parseBackendErrorMessage(jsonResponse(fenceBody)), fenceBody.error.message);
   });
 });

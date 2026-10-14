@@ -7,6 +7,8 @@
  * that call `onSubmit`/`onCancel`, so every downstream branch (pre-resolvers,
  * line resolution, product resolver popup, batch commit, batch failure, throw)
  * actually runs and can be asserted on.
+ *
+ * @covers tools/app-shell/src/components/copilot/ocr/useOcrFlow.jsx
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -23,10 +25,21 @@ const H = vi.hoisted(() => ({
   reviewSubmitValue: { vendor: 'reviewed-vendor' },
   linesSubmitValue: [{ description: 'reviewed-line' }],
   popupSubmitValue: [{ picked: 'p1' }],
+  apiFetch: vi.fn(),
+  toastError: vi.fn(),
+  toastWarning: vi.fn(),
+}));
+
+vi.mock('sonner', () => ({
+  toast: { error: (...a) => H.toastError(...a), warning: (...a) => H.toastWarning(...a) },
+}));
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => H.apiFetch,
 }));
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, vars) => (vars ? `${key}|${JSON.stringify(vars)}` : key),
   useLabel: () => (key) => key,
   useMenuLabel: () => (key) => key,
 }));
@@ -165,6 +178,12 @@ describe('useOcrFlow — full flow', () => {
     H.popupSubmitValue = [{ picked: 'p1' }];
     for (const key of Object.keys(H.preResolvers)) delete H.preResolvers[key];
     H.showResult.mockReset();
+    H.toastError.mockReset();
+    H.toastWarning.mockReset();
+    H.apiFetch.mockReset().mockResolvedValue({
+      ok: true,
+      json: async () => ({ organization: { taxId: 'B12345674' } }),
+    });
     H.runBatch.mockReset().mockResolvedValue({ committed: true, operations: [] });
     H.buildBatch.mockReset().mockResolvedValue({ ops: [{ id: 'inv' }], unmatched: [] });
   });
@@ -289,6 +308,93 @@ describe('useOcrFlow — full flow', () => {
 
       await screen.findByTestId('review-modal');
       expect(JSON.parse(screen.getByTestId('review-pre-resolved').textContent)).toEqual({});
+    });
+  });
+
+  describe('receiver tax id validation (ETP-5585)', () => {
+    beforeEach(() => {
+      H.docType = docType({ validateExtraction: 'receiverTaxId' });
+    });
+
+    it('blocks the flow when the receiver tax id differs from the organization', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'A99999999' }, issuer: { tax_id_raw: 'C11111111' } });
+
+      await waitFor(() => expect(readResult()?.committed).toBe(false));
+      expect(readResult().error).toContain('ocrReceiverTaxIdMismatch');
+      expect(readResult().error).toContain('A99999999');
+      // ETP-5654 — the organization's own tax id is no longer shown in the message.
+      expect(readResult().error).not.toContain('B12345674');
+      expect(H.toastError).toHaveBeenCalledWith(readResult().error);
+      expect(screen.queryByTestId('review-modal')).toBeNull();
+      expect(H.buildBatch).not.toHaveBeenCalled();
+      expect(H.showResult).not.toHaveBeenCalled();
+      expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    });
+
+    it('continues to the review when the ids match despite the country prefix', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'ES B-12345674' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.toastError).not.toHaveBeenCalled();
+      expect(H.toastWarning).not.toHaveBeenCalled();
+    });
+
+    it('continues silently, without reading the session, when no receiver id is printed', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: null } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.apiFetch).not.toHaveBeenCalled();
+      expect(H.toastError).not.toHaveBeenCalled();
+    });
+
+    it('continues with a warning when the organization has no tax id', async () => {
+      H.apiFetch.mockResolvedValue({ ok: true, json: async () => ({ organization: { taxId: '?' } }) });
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.toastWarning).toHaveBeenCalledWith('ocrOrgTaxIdMissing');
+      expect(H.toastError).not.toHaveBeenCalled();
+    });
+
+    it('warns "unverified" (not "org tax id missing") when the session call rejects, and continues', async () => {
+      H.apiFetch.mockRejectedValue(new Error('network'));
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.toastWarning).toHaveBeenCalledWith('ocrReceiverTaxIdUnverified');
+      expect(H.toastWarning).not.toHaveBeenCalledWith('ocrOrgTaxIdMissing');
+      expect(H.toastError).not.toHaveBeenCalled();
+    });
+
+    it('warns "unverified" on a non-ok session response (401/5xx) and continues', async () => {
+      H.apiFetch.mockResolvedValue({ ok: false, json: async () => ({}) });
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.toastWarning).toHaveBeenCalledWith('ocrReceiverTaxIdUnverified');
+      expect(H.toastError).not.toHaveBeenCalled();
+    });
+
+    it('does not block when the receiver id equals the issuer id (OCR confusion)', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'ESA99999999' }, issuer: { tax_id_raw: 'A99999999' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.toastError).not.toHaveBeenCalled();
+    });
+
+    it('reads the session through apiFetch with baseUrl empty', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.apiFetch).toHaveBeenCalledWith(expect.stringMatching(/\/session$/), { baseUrl: '' });
     });
   });
 

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/fiscalTargets.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -24,7 +25,9 @@ describe('isTbaiEligibleByDate', () => {
   });
 
   it('is eligible when the invoice date exactly equals the adoption date (inclusive)', () => {
-    assert.equal(isTbaiEligibleByDate('2026-01-01', '2026-01-01T00:00:00.000Z'), true);
+    // ETP-5700 — the adoption date is an AD Date column, so it reaches the client as a
+    // bare `yyyy-MM-dd` (the UTC-midnight form used here before only passed west of UTC).
+    assert.equal(isTbaiEligibleByDate('2026-01-01', '2026-01-01'), true);
   });
 
   it('is NOT eligible when the invoice date is before the adoption date', () => {
@@ -75,7 +78,9 @@ describe('isSifEligibleByDate — SII (accounting date vs. fechaAcogidaSII)', ()
   });
 
   it('is eligible when the accounting date exactly equals the adoption date (inclusive)', () => {
-    assert.equal(isSifEligibleByDate('2026-01-01', '2026-01-01T00:00:00.000Z'), true);
+    // ETP-5700 — the adoption date is an AD Date column, so it reaches the client as a
+    // bare `yyyy-MM-dd` (the UTC-midnight form used here before only passed west of UTC).
+    assert.equal(isSifEligibleByDate('2026-01-01', '2026-01-01'), true);
   });
 
   it('is NOT eligible when the accounting date is before the adoption date', () => {
@@ -90,6 +95,56 @@ describe('isSifEligibleByDate — SII (accounting date vs. fechaAcogidaSII)', ()
   it('fails safe (false) when the accounting date is missing or unparsable', () => {
     assert.equal(isSifEligibleByDate(null, '2026-01-01T00:00:00.000Z'), false);
     assert.equal(isSifEligibleByDate('not-a-date', '2026-01-01T00:00:00.000Z'), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5700 — `fechaAcogidaSII` and `tbaisystemdate` are AD *Date* columns, so
+// NEO serialises them as a bare `yyyy-MM-dd`. Parsing that with `new Date()`
+// reads it as UTC midnight, which EAST of UTC (Europe/Madrid, +01/+02) is 01:00
+// or 02:00 local — so an invoice dated on the adoption day (local midnight)
+// compared as "before" the adoption and the send action disappeared from the
+// very moment the fiscal config was created. Date-only values must be compared
+// as calendar days in the local timezone, whatever the host's offset.
+// ---------------------------------------------------------------------------
+function withTimezone(tz, fn) {
+  const previous = process.env.TZ;
+  process.env.TZ = tz;
+  try {
+    fn();
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+}
+
+describe('isSifEligibleByDate — date-only adoption dates are calendar days (ETP-5700)', () => {
+  for (const tz of ['Europe/Madrid', 'Atlantic/Canary', 'UTC', 'America/Argentina/Buenos_Aires']) {
+    it(`is eligible on the adoption day itself in ${tz}`, () => {
+      withTimezone(tz, () => {
+        assert.equal(isSifEligibleByDate('2026-10-09', '2026-10-09'), true);
+      });
+    });
+
+    it(`is NOT eligible the day before the adoption day in ${tz}`, () => {
+      withTimezone(tz, () => {
+        assert.equal(isSifEligibleByDate('2026-10-08', '2026-10-09'), false);
+      });
+    });
+  }
+
+  it('treats a date-only adoption date as a calendar day in winter time too (Madrid, +01)', () => {
+    withTimezone('Europe/Madrid', () => {
+      assert.equal(isSifEligibleByDate('2026-01-15', '2026-01-15'), true);
+      assert.equal(isSifEligibleByDate('2026-01-14', '2026-01-15'), false);
+    });
+  });
+
+  it('keeps comparing a full adoption timestamp as an instant (a time-of-day still excludes that day)', () => {
+    withTimezone('Europe/Madrid', () => {
+      assert.equal(isSifEligibleByDate('2026-10-09', '2026-10-09T10:30:00+02:00'), false);
+      assert.equal(isSifEligibleByDate('2026-10-10', '2026-10-09T10:30:00+02:00'), true);
+    });
   });
 });
 

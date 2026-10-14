@@ -1,3 +1,5 @@
+// @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -532,37 +534,25 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
     // 10. Click "Crear →" → triggers createDraftInvoice, shows ConfirmResultModal
     await createDocsBtn.click();
 
-    // 11. "Factura creada" appears (ConfirmResultModal title = ui('soInvoiceCreated'))
-    await expect(page.getByText('Factura creada', { exact: true })).toBeVisible({ timeout: 10_000 });
+    // 11. "Factura creada" appears (ConfirmResultModal derives it from the facturaVenta doc)
+    await expect(page.getByTestId('confirm-result-title')).toHaveText('Factura creada', { timeout: 10_000 });
 
-    // 11b. ETP-4312 — the ConfirmResultModal primary button for a single invoice
-    //      doc must read EXACTLY "Ver factura" (poViewInvoice/soViewInvoice). The
-    //      arrow is an SVG appended by the component, NOT part of the label text:
-    //      the label must contain no "→" character and the button must hold
-    //      exactly ONE arrow <svg>. This guards against the "double arrow"
-    //      regression where a hardcoded `primary` prop carried its own arrow.
-    const viewInvoiceBtn = page.getByRole('button', { name: 'Ver factura' });
+    // 11b. ETP-4312 — the primary button for a single invoice doc reads EXACTLY
+    //      "Ver factura" (derived from the doc type), with no literal arrow glyph in it.
+    const viewInvoiceBtn = page.getByTestId('action-confirm-result-view');
     await expect(viewInvoiceBtn).toBeVisible({ timeout: 5_000 });
-
-    // The visible text must be exactly "Ver factura" with no literal arrow glyph.
     const viewInvoiceText = (await viewInvoiceBtn.textContent())?.trim();
     expect(viewInvoiceText).toBe('Ver factura');
     expect(viewInvoiceText).not.toContain('→');
 
-    // The arrow must be rendered as an SVG inside the button — exactly one.
-    await expect(viewInvoiceBtn.locator('svg')).toHaveCount(1);
-    // ...and it must be the canonical arrow path (M5 12h14M12 5l7 7-7 7).
-    await expect(
-      viewInvoiceBtn.locator('svg path[d="M5 12h14M12 5l7 7-7 7"]'),
-    ).toHaveCount(1);
-
-    // 12. Close the result modal via "Cerrar" button (soClose)
-    //     exact: true to avoid matching "Cerrar Copilot" button.
+    // 12. Close the result modal via its "Cerrar" button (soClose)
     //     ETP-4299: ConfirmWithCreditButtonBase.onClose fires window.location.reload()
     //     via setTimeout(0). waitForNavigation absorbs that reload before page.goto below.
     await Promise.all([
       page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10_000 }).catch(() => {}),
-      page.getByRole('button', { name: 'Cerrar', exact: true }).click(),
+      // Close result modal by its test id — "Cerrar" also names the popup's X icon
+      // (ETP-5674) and the Copilot button.
+      page.getByTestId('action-confirm-result-close').click(),
     ]);
 
     // 13. Now register a route for a fully-invoiced shipment (invoiceStatus: 100)

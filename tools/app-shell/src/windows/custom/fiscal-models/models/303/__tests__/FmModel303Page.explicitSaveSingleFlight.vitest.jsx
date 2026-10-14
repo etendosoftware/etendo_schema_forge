@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
 // ETP-5255 / ETP-5338 — the Modelo 303 explicit-save write path must save SINGLE-FLIGHT.
 //
 // ETP-5338 removed the debounced autosave of `identChecks`/`manualOverrides` entirely
@@ -65,7 +66,7 @@ import { toast } from 'sonner';
 
 const navigateMock = vi.fn();
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
@@ -89,7 +90,6 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   ResultPill: () => null,
   SummaryCard: () => null,
   Tabs: () => null,
@@ -143,6 +143,8 @@ vi.mock('../AeatSubmitFlow.jsx', () => ({
   isMissingDefaultIaeActivity: () => false,
 }));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
+  Check: () => null,
   Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
@@ -445,13 +447,14 @@ describe('FmModel303Page — single-flight explicit-save write path (ETP-5255 / 
     const onManualDataSaved = vi.fn();
     // Checking 'rectificativa' makes the 'datos_bancarios' section visible (fm303Layouts.js),
     // whose 'bank_iban' is itself `required: true` — seeded here so the ETP-5187 pre-flight
-    // gate this test is not exercising doesn't block `submitDeclaration()` below.
+    // gate this test is not exercising doesn't block `submitDeclaration()` below. Same for
+    // 'motivo_rectificacion' (ETP-5597: required while the rectificativa check is set).
     renderPage({
       onStatusChange,
       onManualDataSaved,
       decl: {
         ...BASE_DECL,
-        manualData: { identification: { tipo_declaracion: 'N', bank_iban: 'ES0000000000000000000000' } },
+        manualData: { identification: { tipo_declaracion: 'N', bank_iban: 'ES0000000000000000000000', motivo_rectificacion: 'R' } },
       },
     });
 

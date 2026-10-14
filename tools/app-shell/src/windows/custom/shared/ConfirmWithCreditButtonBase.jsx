@@ -25,7 +25,7 @@ import { useConfirmWithCredit } from './useConfirmWithCredit';
  */
 export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
-  entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
+  entitySegment, invoiceRoute, invoiceType,
   specName, entityName,
   confirmEventName,
   saveGate, onRefresh, isDocumentReadOnly,
@@ -40,13 +40,13 @@ export default function ConfirmWithCreditButtonBase({
   const navigate = useNavigate();
   const resultNavigatedRef = useRef(false);
   const {
-    ui, status, currency, hasReturnInvoice,
+    ui, status, hasReturnInvoice,
     headers, base, showModal, setShowModal,
     creatingInvoice, result, setResult,
     handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
   } = useConfirmWithCredit({
     data, recordId, token, apiBaseUrl,
-    entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
+    entitySegment, invoiceRoute, invoiceType,
   });
 
   // ETP-5408 — the generic draftMode Confirm button dispatches this event (see the doc
@@ -78,8 +78,10 @@ export default function ConfirmWithCreditButtonBase({
   return (
     <>
       {status === 'CO' && !hasReturnInvoice && (
+        // ETP-5601 — record-toolbar primary button (Figma): 40px, 8px radius, text-sm/leading-6,
+        // #121217 fill with white text. Was the `--status-info-fg` badge token (saturated blue).
         <button type="button" data-testid="action-create-return-invoice" onClick={() => setShowModal(true)}
-          style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg bg-[#121217] text-white text-sm leading-6 font-medium hover:bg-[#121217]/90 transition-colors">
           {postConfirmButtonLabel ?? ui('createReturnInvoice')}
         </button>
       )}
@@ -131,11 +133,8 @@ export default function ConfirmWithCreditButtonBase({
       )}
       {result && createPortal(
         <ConfirmResultModal
-          title={result.title}
           docs={result.docs}
-          currency={currency}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
-          primary={result.docs.length > 0 ? ui('soViewInvoice') : undefined}
           onClose={() => {
             setResult(null);
             setTimeout(() => {

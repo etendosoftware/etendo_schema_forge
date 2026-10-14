@@ -21,7 +21,8 @@ import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { useLabel, useMenuLabel, useUI } from '@/i18n';
 import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver } from './saveActions.jsx';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { DetailDeleteButton } from './DetailDeleteButton.jsx';
+import { translateBackendError, translateBackendErrorResponse } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { SummaryBar } from './SummaryBar.jsx';
@@ -77,12 +78,14 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 // reuse the SAME conflict dialog the header uses, so a concurrent edit is reported identically
 // wherever it happens.
 import { useLineSaveConflict } from './useLineSaveConflict.js';
+import { buildLineRowUpdateHandler, resolveCompletedLineFieldGate } from './inlineLineUpdateHandlers.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, buildCustomAddModalOnSaved, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, normalizePatchFieldValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, refreshHeaderCurrencyRate, withExchangeRateHeaderSync, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
 // Only the definition site moved (R1: no test was edited).
+export { buildInlineRowUpdateHandler } from './inlineLineUpdateHandlers.js';
 export {
   SecondaryPanelTab, applyCalloutFieldUpdates, applyLocalChildRowUpdate, buildHeaderFormData, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, maybeSaveBeforeConfirm, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar,
 } from './detailViewHelpers.jsx';
@@ -228,28 +231,9 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
       // NEO wraps the saved record in {response:{data:[...]}}.
       const serverRow = updated?.response?.data?.[0] ?? null;
       if (serverRow) secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, serverRow);
-      // ETP-4029: editing rate/foreignAmount here also updates the invoice
-      // header's hidden eTGOCurrencyRate on the backend (reverse sync — see
-      // InvoiceExchangeRateHandler). Without this, the header's currency-rate
-      // picker keeps showing the stale value until a manual reload.
-      // refreshHeaderTotals is the same lightweight, non-disruptive header
-      // refresh already used after primary-line edits — it re-GETs the header
-      // and merges in only the fields the user hasn't touched, so any of the
-      // user's own in-progress unsaved header edits survive untouched.
-      //
-      // clearUserChangedKey('eTGOCurrencyRate') runs first, and ONLY for this
-      // one field: if the user had earlier edited the rate via the header's
-      // own CurrencyRatePicker in this same visit (already saved), that edit
-      // permanently marks eTGOCurrencyRate as "user changed" for the rest of
-      // the session (see useEntity.handleChange) — refreshHeaderTotals would
-      // then refuse to overwrite it, leaving the header stuck on the old
-      // value even though the tab's edit just persisted a newer one. This is
-      // a narrow, deliberate exception for this specific cross-surface sync;
-      // see the full rationale on clearUserChangedKey's definition.
-      if (st.key === 'exchangeRates' && hook?.selected?.id) {
-        hook.clearUserChangedKey('eTGOCurrencyRate');
-        hook.refreshHeaderTotals(hook.selected.id);
-      }
+      // ETP-4029: a rate edit here also moves the header's eTGOCurrencyRate on the backend;
+      // re-read it (rationale on refreshHeaderCurrencyRate). Add/delete: withExchangeRateHeaderSync.
+      if (st.key === EXCHANGE_RATES_TAB_KEY) refreshHeaderCurrencyRate(hook);
     } else {
       secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
       const msg = await extractErrorMessage(res);
@@ -355,14 +339,14 @@ export function buildSecondaryLineHandlers(deps) {
       // Accounts/Movements/Statements bulk delete already use (see batchDelete.js).
       // Replaces the old two-independent-if (`recordsDeleted` + `recordsCouldNotBeDeleted`)
       // stacked-toast pattern this function predates.
-      const { succeeded, failed } = await runBatchDelete(rows, (row) => {
+      const { succeeded, failed, errors } = await runBatchDelete(rows, (row) => {
         const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
             || `${apiBaseUrl}/${st.key}/${row.id}`;
         return apiFetch(childUrl, {
           method: 'DELETE',
           token, baseUrl: '',
-        }).then(res => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        }).then(async res => { // reason + 4xx status travel for the toast (as useBulkRowDelete)
+          if (!res.ok) throw Object.assign(new Error(await extractErrorMessage(res)), { status: res.status });
           return row;
         });
       });
@@ -377,7 +361,7 @@ export function buildSecondaryLineHandlers(deps) {
       secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
       setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
 
-      toastBatchDeleteOutcome(ui, { succeeded, failed, total: rows.length });
+      toastBatchDeleteOutcome(ui, { succeeded, failed, errors, total: rows.length });
     } catch (err) {
       toast.error(err.message || ui('networkError'));
     } finally {
@@ -684,110 +668,6 @@ export function resolveCanAddSecondaryLines(st, childrenCount) {
   return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
-export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields, lineFields, raiseRowSaveConflict }) {
-  return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
-    // Inline autosave with callout chain. NEO Headless expects API keys (camelCase), an unwrapped body,
-    // and numeric strings coerced for BigDecimal — mirrors the side-panel save at line ~1750. `coerce`
-    // (ETP-4886) skips `_ID` columns via buildRowValueCoercer: they're always strings even when
-    // numeric-looking (e.g. attributeSetValue's "0" sentinel), so PATCHing them as a Number 400s.
-    // Trigger fields (e.g. product) populate `derivedUpdates` with callout-driven fields (price, tax,
-    // description) PATCHed in one shot via `handleLineFieldChange`.
-    const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id) || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-    const coerce = buildRowValueCoercer(fields);
-    const payloadValue = coerce(value, fieldKey);
-
-    // Build the row snapshot the callout sees: existing row (minus the parent's null/empty
-    // inherited keys — see pruneInheritedParentKeys) + the change.
-    const headerSnapshot = hook.editing || hook.selected || {};
-    const cleanRow = pruneInheritedParentKeys(row, headerSnapshot);
-    const snapshot = {...cleanRow, [fieldKey]: payloadValue};
-    if (opts?.identifier !== undefined) {
-      snapshot[fieldKey + '$_identifier'] = opts.identifier;
-    }
-    // Mirror DataTable's selector-aux merge (lines 468–512). The
-    // selector item carries `_aux` (product_PSTD, _PLIM, _UOM, _CURR)
-    // and top-level fields (standardPrice, isTaxIncluded, currency)
-    // that the callout needs to compute the price. Without this, the
-    // callout has no access to the price-list metadata and returns 0.
-    const selectedItem = opts?.selectedItem;
-    if (selectedItem && typeof selectedItem === 'object') {
-      mergeSelectorAuxFields(selectedItem, snapshot, fieldKey);
-      mergeSelectorContextFields(selectedItem, snapshot, fieldKey);
-    }
-
-    // Run callout (no-op for fields without one). Captures derived fields
-    // through the applyUpdates callback so we can fold them into the PATCH.
-    let derivedUpdates = {};
-    try {
-      await handleLineFieldChange(fieldKey, payloadValue, snapshot, (updates) => {
-        derivedUpdates = {...updates};
-      });
-    } catch {
-      // Callout is best-effort; PATCH continues with the user-typed value only.
-    }
-
-    // PATCH body: send the full row + derived + change. NEO Headless
-    // doesn't reliably recompute derived fields (lineGrossAmount,
-    // standardPrice) when only a partial body arrives — observed
-    // when changing product to one with a different price. The
-    // side-panel save (line ~1750) sends the whole row for the same
-    // reason, so we mirror that here for parity.
-    const fieldValues = {};
-    // 1. Start from the cleaned row (skips already-null inherited keys).
-    collectRowFieldValues(cleanRow, fieldValues, coerce);
-    // 2. Overlay derived fields from the callout (incl. lineGrossAmount,
-    //    standardPrice, unitPrice, listPrice).
-    for (const [k, v] of Object.entries(derivedUpdates)) {
-      if (k.endsWith('$_identifier')) continue;
-      fieldValues[k] = coerce(v, k);
-    }
-    // 3. The user-changed field always wins (last-write).
-    fieldValues[fieldKey] = payloadValue;
-    // 4. Declarative onSelectMappings for the field just picked (ETP-5037) — see
-    // applySelectedItemMappings in detailViewHelpers.jsx.
-    applySelectedItemMappings(fieldKey, selectedItem, fields, fieldValues, derivedUpdates, coerce);
-
-    // Derive unitPrice (PriceActual) = listPrice × (1 - discount/100).
-    // Without this the backend keeps the pre-discount PriceActual and
-    // confirmed totals don't match the discounted lineNetAmount we just
-    // computed — matches the side-panel save flow.
-    prepareLineForPost(fieldValues);
-
-    const res = await apiFetch(childUrl, {
-      method: 'PATCH',
-      body: JSON.stringify(fieldValues),
-      token, baseUrl: '',
-    });
-    if (res.ok) {
-      applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue, fieldValues, opts, hook, row);
-      // Server response wins over the optimistic cache when present —
-      // picks up trigger-computed fields (e.g. etgoQtydiff) that only
-      // exist after the DB flush, mirroring the secondary-tab handler
-      // above (line ~425). NEO wraps the saved record in
-      // {response:{data:[...]}}.
-      const updated = await res.json().catch(() => null);
-      const serverRow = preserveGridReadOnlyValues(row, updated?.response?.data?.[0] ?? null, lineFields ?? fields); // ETP-5319: don't let this null a readOnly grid column — see the helper's doc.
-      // ETP-4751 — pass the raw response ROOT (`updated`) as the exemption-cause signal source:
-      // InvoiceLineHandler stamps exemptionCauseWarning/exemptionCauseAutoFilled at the response
-      // root, not on the nested line row (`serverRow`), so a line EDIT that turns a line exempt
-      // still surfaces the SIF warning toast.
-      if (serverRow) hook.handleUpdateChild?.(row.id, serverRow, undefined, updated);
-    } else {
-      // ETP-5073 / DOC-04: a concurrency conflict gets the shared dialog, with the same
-      // "discard and refresh" button the sidebar and the header offer — the inline grid used to
-      // report it as a plain toast, which said what happened but left the user to find the reload.
-      // Asked first so it reads the CLONED body before extractErrorMessage consumes the original.
-      const raised = await raiseRowSaveConflict?.(res, row.id);
-      const msg = await extractErrorMessage(res);
-      if (!raised) toast.error(msg || ui('networkError'));
-      // The throw is what stops InlineLinesPanel from claiming the row was saved, but its catch
-      // also toasts — so every inline failure used to surface TWICE (identical text, two stacked
-      // toasts). `userNotified` tells it the user has already been told, here by the toast above
-      // or by the conflict dialog.
-      throw Object.assign(new Error(msg || 'PATCH failed'), { userNotified: true });
-    }
-  } : undefined;
-}
 
 export function buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage }) {
   return (api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly ? async (row) => {
@@ -1021,7 +901,7 @@ export function DetailCancelButton({ chromeless, label, onCancel }) {
   if (chromeless) return null;
   return (
     <Button
-      className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
+      className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[#121217] text-sm leading-6 font-medium hover:bg-[hsl(var(--muted))] transition-colors"
       data-testid="action-cancel"
       onClick={onCancel}
     >
@@ -1111,7 +991,6 @@ export function DetailView({
   hideMoreMenu = false,
   hideMoreDetails = false,
   noHeaderBorder = false,
-  toolbarBorderBottom = false,
   compactSidebarPadding = false,
   whiteFormBackground = false,
   hideFormCard = false,
@@ -1134,7 +1013,7 @@ export function DetailView({
   // ETP-4933: opt-in for windows that render their own primary action next to Save
   // (the return windows put a Confirm button in the topbarRight slot). Save then takes
   // the secondary/outline look instead of competing as a second primary button.
-  hasExternalPrimaryAction = false,
+  hasExternalPrimaryAction = false, primarySave = false, // ETP-5600 primarySave: existing-record Save keeps the primary look (saveActions.jsx)
   statusFieldLabel = null,
   statusEnumLabels = null,
   salesTheme = false,
@@ -1155,12 +1034,10 @@ export function DetailView({
   sidebarClassName = 'w-96 shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5',
   linesLayout = 'inlineEditable',
   autoSaveOnBlur = false,
-  toolbarPaddingX = 'px-6',
   tabsBarPaddingX = 'px-6',
   formScrollPaddingX = null,
   contentOverflow = 'auto',
   formCardPadding = 'p-6',
-  toolbarButtonSize = 'sm',
   primaryTabsVariant = 'default',
   refetchAfterSave = false,
   secondaryTabsPaddingY = 'py-2.5',
@@ -1192,7 +1069,7 @@ export function DetailView({
   // `displayLogic`) are willing to trust as config-driven dimension-macro
   // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
   // above for why the global allowlist itself must never include 'product'.
-  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, initialData = null, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md). ETP-5332: initialData seeds a new record — see useEntity.
+  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, initialData = null, initialChildData = null, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md). ETP-5332: initialData seeds a new record — see useEntity. ETP-5654: initialChildData[tabKey] seeds a customAddModal.
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -1264,7 +1141,7 @@ export function DetailView({
   const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHooks = withHeaderRefreshOnChildWrite([secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4], hook);
+  const secondaryHooks = withExchangeRateHeaderSync(withHeaderRefreshOnChildWrite([secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4], hook), secondaryTabs, hook);
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
   // "From" currency for secondary-tab inline add-rows. The parent document's
   // currency is a read-only column on those tabs (e.g. exchange rates), so the
@@ -1536,6 +1413,7 @@ export function DetailView({
   // them. Everything else above keeps using the combined `windowReadOnly`.
   const menuActionsReadOnly = windowProp?.readOnly === true;
   const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData) || windowReadOnly;
+  const completedLineFieldGate = resolveCompletedLineFieldGate({ draftMode, lockWhenProcessed, headerRecord: _headerData, windowReadOnly, lineFields: DetailForm?.fields }); // ETP-5692 — draftMode.editableLineFieldsWhenCompleted
   const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   // When draftMode declares an explicit completedStatuses array, only those documentStatus
   // values hide the Save/Confirm pair. This lets windows like sales-quotation keep the
@@ -1547,8 +1425,8 @@ export function DetailView({
     () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui, draftMode, isDraftModeCompleted, dirtyFieldKeys: hook.dirtyHeaderFieldKeys, gateFields }),
     [hook.isValid, hook.missingRequiredFields, tField, ui, draftMode, isDraftModeCompleted, hook.dirtyHeaderFieldKeys, gateFields],
   );
-  const sqBtnSize = getSqBtnSize(toolbarButtonSize);
-  const saveBtnCls = getSaveBtnCls(toolbarButtonSize);
+  const sqBtnSize = getSqBtnSize();
+  const saveBtnCls = getSaveBtnCls();
   const [showPrint, setShowPrint] = useState(false);
   const [confirmProcess, setConfirmProcess] = useState(null);
   // ETP-4779: bumped whenever a menu action generates a derived document
@@ -1788,10 +1666,8 @@ export function DetailView({
   const [isClosingSecondaryLine, setIsClosingSecondaryLine] = useState(false);
   const [secondaryDeleteConfirm, setSecondaryDeleteConfirm] = useState(null);
 
-  const extractErrorMessage = useCallback(async (res) => {
-    let raw = await parseBackendErrorMessage(res);
-    return translateBackendError(raw ?? `Error ${res.status}`, ui);
-  }, [ui]);
+  // ETP-5692 — keeps the body's messageKeys, the only translatable part of the invoice write fence.
+  const extractErrorMessage = useCallback((res) => translateBackendErrorResponse(res, ui), [ui]);
 
   const closeSecondaryLineTimeoutRef = useRef(null);
   const closeSecondaryLine = useCallback(() => {
@@ -2150,7 +2026,7 @@ export function DetailView({
       // One-shot: clear the marker so a manual reload of /:id still fetches.
       navigate(location.pathname, {
         replace: true,
-        state: { ...location.state, justSaved: undefined },
+        state: buildPostCreateState({ locationState: location.state, initialChildData, secondaryTabs }),
       });
       return;
     }
@@ -2199,7 +2075,7 @@ export function DetailView({
   // — so this tab needs the same refetch whenever that total changes.
   useEffect(() => {
     if (!hook.selected?.id) return;
-    const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === 'exchangeRates');
+    const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === EXCHANGE_RATES_TAB_KEY);
     if (exchangeRatesIdx < 0) return;
     secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2836,7 +2712,7 @@ export function DetailView({
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, saveBusy,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-    setShowProcessingModal, saveGate, hasExternalPrimaryAction, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
+    setShowProcessingModal, saveGate, hasExternalPrimaryAction, primarySave, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
@@ -2865,7 +2741,7 @@ export function DetailView({
       <div className={`flex-1 flex flex-col ${contentBg} rounded-tl-2xl overflow-hidden min-h-0`}>
         {/* Action bar: Cancel + status | actions + save */}
         {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels) : (
-        <div className={getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom)}>
+        <div className={getLinesToolbarClassName()}>
           <div className="flex items-center gap-2">
             <DetailCancelButton
               chromeless={chromeless}
@@ -2906,22 +2782,22 @@ export function DetailView({
               {documentPreview && !isNew && recordId && (
                 <button
                   onClick={() => setShowPrint(true)}
-                  className="flex items-center justify-center p-[7px] rounded-md bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-muted-foreground hover:bg-[hsl(var(--muted))] hover:text-foreground transition-colors"
+                  className={`${sqBtnSize} flex items-center justify-center rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_0px_hsl(var(--foreground))0D] text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors`}
                   title={ui('sendPreview')}
                   data-testid="action-document-preview"
                 >
-                  <Mail className="h-[15px] w-[15px]" data-testid="Mail__fa3275" />
+                  <Mail className="h-5 w-5" data-testid="Mail__fa3275" />
                 </button>
               )}
               {/* Print document — shown when documentPreview is not provided */}
               {!documentPreview && !hidePrint && !isNew && recordId && !evaluateFieldCondition(hidePrintWhen, data) && (
                 <button
                   onClick={() => setShowPrint(true)}
-                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors`}
+                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-border text-[#828FA3] hover:bg-[hsl(var(--muted))] transition-colors`}
                   title={ui('print')}
                   data-testid="action-document-print"
                 >
-                  <Printer className="h-4 w-4" data-testid="Printer__fa3275" />
+                  <Printer className="h-5 w-5" data-testid="Printer__fa3275" />
                 </button>
               )}
               {/* Delete record — hidden unconditionally when hideDeleteButton is set; otherwise shown for a deleteAction-backed delete at any lifecycle stage (except RPVOID), or when hideDeleteWhenComplete/isProcessed rules allow it */}
@@ -2938,14 +2814,10 @@ export function DetailView({
                 // processed-document delete behavior changes.
                 hideDeleteButton: hideDeleteButton || windowReadOnly,
               }) && (
-                <button
+                <DetailDeleteButton
                   onClick={() => setShowDeleteConfirm(true)}
-                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors`}
                   title={ui('delete')}
-                  data-testid="action-delete"
-                >
-                  <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
-                </button>
+                  data-testid="DetailDeleteButton__fa3275" />
               )}
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
@@ -3266,7 +3138,7 @@ export function DetailView({
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
                               layout="horizontal"
-                              section="principal"
+                              section="principal" initialRows={2}
                               readOnly={windowReadOnly} navigate={navigate}
                               displayLogic={displayLogic}
                               api={api}
@@ -3434,7 +3306,8 @@ export function DetailView({
                                   showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                                   selectorContext={selectorContextByEntity[detailEntity]}
                                   hiddenColumns={lineHiddenColumns} rowActions={lineRowActions} cellBadges={lineCellBadges} balanceFooter={buildBalanceFooterGridTotals(balanceFooter, balanceState, data['currency$_identifier'])} lineFormActive={addingLine} /* ETP-5210 followup: un-stripped addRow.active twin — see lineFormActive doc on InlineLinesPanel.jsx */
-                                  onUpdateRow={buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields: allEntryFields, lineFields: DetailForm?.fields, raiseRowSaveConflict })}
+                                  onUpdateRow={buildLineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields: allEntryFields, lineFields: DetailForm?.fields, raiseRowSaveConflict, completedLineFieldGate })}
+                                  isFieldEditableWhenReadOnly={completedLineFieldGate}
                                   onDeleteRow={buildDeleteRowHandler({ api, detailEntity, isDocumentReadOnly, confirmDelete, apiBaseUrl, token, hook, selectedLine, setSelectedLine, ui, extractErrorMessage })}
                                   addRow={{
                                     ref: primaryAddRowRef,
@@ -4290,13 +4163,9 @@ export function DetailView({
             open={customModalState.key === st.key}
             onClose={() => setCustomModalState({ key: null, rowId: null })}
             onSaved={buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCustomModalState })}
-            onParentRefresh={() => {
-              if (!parentRecordId) return;
-              // ETP-5378 — the modal just wrote the parent; the cached list holds the old row.
-              hook.invalidateEntityCache?.();
-              hook.fetchById(parentRecordId, { force: true });
-            }}
+            onParentRefresh={buildCustomAddModalOnParentRefresh({ hook, parentRecordId })}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
+            initialValues={buildCustomAddModalSeed({ initialChildData, st, customModalState, secondaryHooks, idx })}
             bpId={parentRecordId}
             apiBase={apiBaseUrl}
             token={token}

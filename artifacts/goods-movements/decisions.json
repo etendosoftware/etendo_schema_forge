@@ -87,7 +87,7 @@
         "hintKeys": {
           "D": "goodsMovementsPostedDisabledHint"
         },
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
+        "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
       }
     ]
   },
@@ -142,6 +142,7 @@
           "visibility": "system"
         },
         "posted": {
+          "visibleWhenCapability": "showAccountingFields",
           "visibility": "readOnly",
           "form": false,
           "grid": true,
@@ -150,10 +151,6 @@
           "badgeLabels": {
             "true": { "en_US": "Posted", "es_ES": "Contabilizado" },
             "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
-          },
-          "badgeVariants": {
-            "true": "green",
-            "false": "orange"
           },
           "reason": "ETP-5436 — declared as a field (not left as an implicit AD button action) so the post/unpost menuActions and the statusPills entry below have a real value to read; mirrors goods-receipt/goods-shipment."
         },
@@ -202,7 +199,6 @@
           "searchable": true,
           "lookup": true,
           "lookupDrawer": "product-stock",
-          "lookupTitle": "Product",
           "onSelectMappings": [
             {
               "from": "_aux._LOC",

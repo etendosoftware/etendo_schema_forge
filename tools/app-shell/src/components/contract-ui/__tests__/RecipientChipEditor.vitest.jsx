@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/RecipientChipEditor.jsx
+
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -136,5 +138,30 @@ describe('RecipientChipEditor (ETP-4226)', () => {
     render(<Harness initial={['a@x.com']} disabled />);
     expect(screen.getByTestId('recipient-input')).toBeDisabled();
     expect(screen.getByTestId('recipient-remove-a@x.com')).toBeDisabled();
+  });
+
+  // The chip box border is the field's validity signal. Read from the raw style attribute:
+  // jsdom's CSSOM does not keep `hsl(var(...))` values on the parsed declaration.
+  const chipBoxStyle = () => screen.getByTestId('recipient-input').parentElement.getAttribute('style');
+
+  it('draws the chip box with the control border while the draft is valid', () => {
+    render(<Harness initial={['a@x.com']} />);
+    expect(chipBoxStyle()).toContain('--sf-border-input');
+    expect(chipBoxStyle()).not.toContain('--destructive');
+  });
+
+  it('switches the chip box border to destructive for an invalid draft, and back once it is fixed', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const input = screen.getByTestId('recipient-input');
+
+    await user.type(input, 'not-an-email{Enter}');
+    expect(chipBoxStyle()).toContain('--destructive');
+    expect(chipBoxStyle()).not.toContain('--sf-border-input');
+
+    await user.clear(input);
+    await user.type(input, 'fixed@x.com{Enter}');
+    expect(chipBoxStyle()).toContain('--sf-border-input');
+    expect(chipBoxStyle()).not.toContain('--destructive');
   });
 });

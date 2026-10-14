@@ -99,9 +99,11 @@ Editable toggle list over `C_AcctSchema_Element` rows.
 
 The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added in ETP-4452. Three sections:
 
-1. **Cuentas de suspenso** — `suspenseBalancingUse` toggle + `suspenseBalancing` account, plus the standalone `suspenseErrorUse` toggle.
+1. **Cuentas de suspenso** — `suspenseBalancingUse` toggle + `suspenseBalancing` account. The suspense error pair (`suspenseErrorUse` / `suspenseError`, `C_AcctSchema_GL.UseSuspenseError` / `SuspenseError_Acct`) is **not exposed** (ETP-5682): Etendo core loads it in `AcctSchema.java` but posting never uses it, so the switch and its account have no effect. Both are `discarded` in `decisions.json`; the columns stay in core.
 2. **Balanceo de moneda** — `currencyBalancingUse` toggle + `currencyBalancingAcct` account.
 3. **Cierre de ejercicio** — `retainedEarning`, `incomeSummary`, `cFSOrderAccount` accounts, plus the `createClosing` ("Revertir saldos de cuentas permanentes al cierre") toggle.
+
+**Each account selector follows its own toggle (ETP-5682)**, matching the AD display logic (`@UseSuspenseBalancing@='Y'`, `@UseCurrencyBalancing@='Y'`): the selector is shown only while its toggle is on, immediately, without saving. Turning a toggle off only **hides** the selector — the stored account is kept (Classic behavior) and posting reads it only while the flag is on.
 
 `Active` (`IsActive` on `C_AcctSchema_GL`) is not surfaced in this tab — it mirrors the window-level `Active` flag and is marked `system` in `decisions.json`.
 
@@ -111,7 +113,7 @@ The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added
 - Artifact: `artifacts/general-ledger-configuration/`
 - Registration already present in `menu.json`, `registry.js`, and `cli/config/regen-windows.json`
 - Generic components promoted from this work:
-  - `AccountBadgeSelect`
+  - `AccountSelect` (was `AccountBadgeSelect` until ETP-5681)
   - `ToggleRow`
 
 ## Known Gaps
@@ -120,6 +122,8 @@ The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added
 - No multi-entity save handler yet
 - No real selector/catalog reads yet
 - `Guardar cambios` is still a frontend stub over mock state
+- **Cuentas generales — a balancing switch can be saved on with no account (ETP-5682 QA, tracked in ETP-5724).** Classic parity: nothing requires `suspenseBalancing` / `currencyBalancingAcct` while its switch is on. Proposed: make the account required while its switch is on.
+- **Account ids are not checked against the tenant on save (pre-existing, tracked in ETP-5722).** `GeneralLedgerConfigurationHandler.resolveAccountingCombination` accepts a `C_ValidCombination` id of another client. Not reachable from the UI, only through a hand-written API request.
 
 After the backend wiring lands, remember the Etendo step:
 
@@ -137,7 +141,7 @@ After the backend wiring lands, remember the Etendo step:
 6. Clear a required field (`Nombre del esquema` or `Moneda principal`) and confirm inline required validation appears on save.
 7. On **Valores por defecto**, confirm all 9 groups render (`Banco`, `Diario`, `Contactos`, `Impuestos`, `Producto`, `Activos`, `Proyecto`, `Almacén`, `Otras cuentas` — 39 fields total) and required account selectors show the required marker (20 fields, up from the previous 6). Confirm `paymentSelection` no longer renders at all, `disposalGain`/`disposalLoss` render under `Otras cuentas` (not `Activos`, and with no info-icon hint — that mechanism was retired), and that none of the 10 AD-inactive fields (see list above) render at all.
 8. On **Dimensiones**, confirm optional rows can be toggled and mandatory rows stay enabled/read-only (cannot be turned off). Deactivate an optional dimension, save, and reload the window — the row must still be present and shown as inactive, not disappear. Confirm the list never shows a row for Organización (`OO`), Cuenta (`AC`), Contacto (`BP`) or Producto (`PR`) — the first two are Etendo's built-in mandatory dimensions, and Contacto/Producto are locked always-on per ETP-4879 (same as `U1`/`U2`) — while Proyecto (`PJ`) and Centro de coste (`CC`) remain visible and toggleable.
-9. On **Cuentas generales**, confirm the three sections render and both toggle+account pairs (suspense balancing, currency balancing) behave independently.
+9. On **Cuentas generales**, confirm the three sections render and the two toggle+account pairs (suspense balancing, currency balancing) behave independently, and that no suspense error switch or account is shown: with a toggle off its account selector is hidden; turning it on shows it at once; turning it off again hides it, and turning it back on shows the same account (ETP-5682).
 
 ## Test Design
 
@@ -168,3 +172,27 @@ Recommended next automated additions once backend/save work starts:
 1. Mocked behavioral Playwright coverage for validation and dirty-state save.
 2. Component-level tests for `Field` and the inverted `AutoPeriodControl` toggle binding.
 3. Integration coverage for the real multi-entity save contract once the NEO handler exists.
+
+## Account selectors — ETP-5681
+
+Account names were cut off in **Valores por defecto** ("Socios por desembols...",
+"Partidas pendi..."): every account field used `AccountBadgeSelect`, a hand-built popover exactly
+as wide as its ~330 px grid cell that truncated each option. Both account tabs now use
+`AccountSelect` (`tools/app-shell/src/components/contract-ui/AccountSelect.jsx`): the field is a
+button showing the selected account, and clicking it opens the shared centered **search popup**
+(`SearchPopup.jsx`, the same one the report filters use for "Desde la cuenta"):
+
+- options read `"<code> - <name>"` (`accountOptionLabel`), the same string the generic
+  ValidCombination selector returns, so an account reads identically here and in every generated
+  accounting tab; search matches code or name;
+- the popup is wide and long names wrap instead of being cut off;
+- required fields cannot be cleared; optional ones show an ✕ that clears to `null`.
+
+The catalog (`catalogs.accounts` of `GET /general-ledger-configuration/General`) now lists
+**posting accounts only**: `GeneralLedgerConfigurationHandler` builds it through
+`PostingAccountCombinations.forSchema()` (`com.etendoerp.go`), which drops combinations whose
+account is a summary (heading) account or inactive — a default account must be one that can be
+posted to. Local check: 662 → 661 accounts (the `640` heading gone, `64000000` kept).
+
+Manual check: open **Valores por defecto**, click any account field → a centered popup with full
+names; typing a code (`572`) or a word (`puente`) filters; no summary heading (e.g. `640`) is offered.

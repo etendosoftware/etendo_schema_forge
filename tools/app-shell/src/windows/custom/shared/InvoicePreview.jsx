@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
@@ -17,7 +17,6 @@ import SummaryCard, { InfoRow } from './preview-cards/SummaryCard.jsx';
 import PaymentsCard from './preview-cards/PaymentsCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
-import { fetchByCriteria, fetchById } from '@/components/related-documents';
 import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 
@@ -39,7 +38,7 @@ function isCreditNote(invoice) {
  *   - sales invoice, completed: managed by GenericPreviewModal (cached as a marked Attachment)
  *   - purchase invoice:         managed by GenericPreviewModal (drop zone → persisted)
  */
-function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf, readOnly = false }) {
+function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, sifLabelKey = 'sendToSifLabelSii', onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf, readOnly = false }) {
   const ui = useUI();
   return (
     <>
@@ -61,7 +60,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
           onClick={onOpenSif}
           data-testid="Button__cf88e6">
           <FileText className="text-muted-foreground" data-testid="FileText__cf88e6" />
-          {ui('sendToSif')}
+          {ui(sifLabelKey)}
         </Button>
       )}
       {/* ETP-5205 — hidden (not just disabled) under the Solo-Lectura tier. */}
@@ -123,17 +122,6 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
     invoice, specName, profile, territory,
     { sii: earliestSiiCutoverDate, tbai: earliestTbaiCutoverDate, verifactu: earliestVerifactuCutoverDate },
   );
-  // Legacy specs, used only when no `relatedDocs` definition is passed (purchase
-  // invoices). Sales invoices pass SALES_RELATED_DOCS['sales-invoice'] (ETP-5527).
-  const invoiceRelatedSpecs = useMemo(() => {
-    const orderId = invoice?.salesOrder;
-    if (relatedDocs || !orderId) return [];
-    return [
-      { key: 'sales-order', type: 'sales-order', fetch: (_id, tok, base) => fetchById('sales-order', 'header', orderId, tok, base).then(r => r ? [r] : []) },
-      { key: 'shipment',    type: 'shipment',     fetch: (_id, tok, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', orderId, tok, base) },
-    ];
-  }, [invoice?.salesOrder, relatedDocs]);
-
 
   const latestDueDate = getLatestInstallmentDueDate(installments);
   const currencyCode = installments[0]?.['currency$_identifier'] || invoice?.['currency$_identifier'] || '';
@@ -221,7 +209,7 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
           refreshSignal={emailsRefreshSignal}
           data-testid="EmailsCard__cf88e6" />
       )}
-      {relatedDocs ? (
+      {relatedDocs && (
         <RelatedDocumentsCard
           documentId={invoice?.id}
           token={token}
@@ -229,13 +217,6 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
           definition={relatedDocs}
           // The detail record is reloaded when the invoice changes (payment, SIF send...).
           docsRefreshSignal={invoice?.updated}
-          data-testid="RelatedDocumentsCard__cf88e6" />
-      ) : (
-        <RelatedDocumentsCard
-          documentId={invoice?.id}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          specs={invoiceRelatedSpecs}
           data-testid="RelatedDocumentsCard__cf88e6" />
       )}
     </div>
@@ -342,6 +323,8 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     storeCondition: true,
     readOnly,
     autoFetch: false,
+    // ETP-5518 — Replace / Delete menu and lightbox on the supplier's document.
+    fileActions: true,
     token,
     apiBaseUrl,
     onFileChange: setCachedAttachment,
@@ -431,6 +414,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       onEmail={isSendable ? p.openEmailModal : undefined}
       canSendToSif={canSendToSif}
+      sifLabelKey={p.sifLabelKey}
       onOpenSif={() => p.setShowSifModal(true)}
       canAddPayment={canAddPayment}
       addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}

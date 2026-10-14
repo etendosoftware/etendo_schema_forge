@@ -2,6 +2,10 @@
 
 CLI tools used by the team to streamline development workflows.
 
+## Pre-push E2E backend URL
+
+The integration E2E suite resolves its backend as `E2E_BACKEND_URL`, then the `PORT` in `<env root>/build/local-env/env` (a local-env worktree, keeping the host and context path of `context.url`), then `context.url` from `config/Openbravo.properties`, then `http://localhost:8080/etendo`. `E2E_PASSWORD` keeps its `12345` default; the specs use onboarding credentials or `E2E_USER`/`E2E_PASSWORD`, not the `admin` login.
+
 ## Optional Kubernetes Pre-push Runner
 
 The normal pre-push hook runs locally. Set `PREPUSH_EXECUTION=cloud` in the
@@ -179,8 +183,9 @@ gh pr list
 # View PR checks
 gh pr checks 123
 
-# Create an issue
-gh issue create --title "Bug: description" --label bug
+# Create an issue — Etendo-product issues go to etendo-ai, then onto the Etendo Roadmap
+# (repo routing, Product field and IDs: .claude/skills/etendo-roadmap/SKILL.md)
+gh issue create -R etendosoftware/etendo-ai --title "Bug: description" --label bug
 
 # Query the GitHub API
 gh api repos/etendosoftware/etendo_schema_forge/pulls/123/comments

@@ -5,6 +5,7 @@ import { TruncatedText } from '@/components/ui/truncated-text';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatCalendarDate } from '@/lib/dateOnly';
+import { ACCOUNTING_CAPABILITY } from '@/lib/capabilityVisibility.js';
 import {
   getDueDateState,
   getDueDateDotStyle,
@@ -255,7 +256,8 @@ export default function PurchaseInvoiceHeaderTable(props) {
       },
       { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
       { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn'), required: true },
-      { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+      // ETP-5684 — DataTable drops it for a role without "Show Accounting Fields".
+      { key: 'posted', column: 'Posted', type: 'boolean', required: true, visibleWhenCapability: ACCOUNTING_CAPABILITY, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } } },
       ...fiscalCols,
       // ETP-4841: this column used to sign-flip rectificativas (`-Math.abs(...)`),
       // which rendered a POSITIVE Factura Rectificativa as negative. The stored

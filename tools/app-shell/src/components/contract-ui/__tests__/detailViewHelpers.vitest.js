@@ -35,6 +35,8 @@ import {
   getSecondaryLinesTableRef,
   getSecondaryEditRowHandler,
   getLinesToolbarClassName,
+  getSqBtnSize,
+  getSaveBtnCls,
   getLineMenuActionsRef,
   getAddLineMenuActions,
   getSidebarSlideClassName,
@@ -53,6 +55,10 @@ import {
   maybeSaveBeforeConfirm,
   buildHeaderFormData,
   buildCustomAddModalOnSaved,
+  resolveCustomAddModalSeed,
+  buildCustomAddModalSeed,
+  buildCustomAddModalOnParentRefresh,
+  buildPostCreateState,
   getButtonClass,
   getProcessButtonVariant,
   getDangerIconClass,
@@ -412,11 +418,22 @@ describe('class-name and small value helpers', () => {
     expect(getAddLineWrapperClassName('table')).toBe('relative');
     expect(getInlineEditableShrinkClassName('inlineEditable')).toBe('shrink-0');
     expect(getInlineEditableShrinkClassName('table')).toBe('');
-    expect(getLinesToolbarClassName('inlineEditable', 'px-4', false)).toContain('p-2');
-    expect(getLinesToolbarClassName('inlineEditable', 'px-4', false)).toContain('border-b');
-    expect(getLinesToolbarClassName('table', 'px-4', false)).toContain('px-4 py-2');
-    expect(getLinesToolbarClassName('table', 'px-4', false)).not.toContain('border-b');
-    expect(getLinesToolbarClassName('table', 'px-4', true)).toContain('border-b');
+  });
+
+  it('uses one constant record-toolbar class: p-2 plus the inset bottom rule, no border-b', () => {
+    const cls = getLinesToolbarClassName();
+    expect(cls).toContain('p-2');
+    expect(cls).toContain('shadow-[inset_0_-1px_0_var(--status-neutral-border)]');
+    expect(cls).not.toContain('border-b');
+    expect(getLinesToolbarClassName('table', 'px-4', true)).toBe(cls);
+  });
+
+  it('always sizes square buttons h-10 w-10 and the save button h-10', () => {
+    expect(getSqBtnSize()).toBe('h-10 w-10');
+    expect(getSqBtnSize('default')).toBe('h-10 w-10');
+    expect(getSqBtnSize('sm')).toBe('h-10 w-10');
+    expect(getSaveBtnCls()).toContain('h-10');
+    expect(getSaveBtnCls('sm')).toContain('h-10');
   });
 
   it('stacks the side panel below the content until lg', () => {
@@ -1082,6 +1099,73 @@ describe('buildCustomAddModalOnSaved (ETP-5366)', () => {
   });
 });
 
+describe('resolveCustomAddModalSeed (ETP-5654)', () => {
+  const seed = { address: 'Gran Via 45' };
+  const initialChildData = { locationAddress: seed };
+
+  it('passes the seed for a new first row', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'locationAddress', rowId: null, rows: [] })).toBe(seed);
+  });
+
+  it('passes the seed while the rows are not loaded as an array yet', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'locationAddress', rowId: null, rows: undefined })).toBe(seed);
+  });
+
+  it('does not seed when editing a row', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'locationAddress', rowId: 'row-1', rows: [] })).toBeNull();
+  });
+
+  it('does not seed when the tab already has rows', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'locationAddress', rowId: null, rows: [{ id: 'a' }] })).toBeNull();
+  });
+
+  it('returns null for another tab or without initialChildData', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'contact', rowId: null, rows: [] })).toBeNull();
+    expect(resolveCustomAddModalSeed({ initialChildData: null, tabKey: 'locationAddress', rowId: null, rows: [] })).toBeNull();
+  });
+});
+
+describe('buildPostCreateState (ETP-5654 auto-open after first save)', () => {
+  const Modal = () => null;
+  const secondaryTabs = [{ key: 'contact' }, { key: 'locationAddress', customAddModal: Modal }];
+  const initialChildData = { locationAddress: { address: 'Gran Via 45' } };
+  const justSaved = { id: 'bp-1' };
+
+  it('asks to open the seeded tab\'s add modal on the first save of a new record', () => {
+    expect(buildPostCreateState({ locationState: { justSaved }, initialChildData, secondaryTabs }))
+      .toEqual({ justSaved: undefined, openSecondaryTab: 'locationAddress', openAddSecondaryLine: true });
+  });
+
+  it('only clears the marker without initialChildData (behaviour unchanged)', () => {
+    expect(buildPostCreateState({ locationState: { justSaved }, initialChildData: null, secondaryTabs }))
+      .toEqual({ justSaved: undefined });
+  });
+
+  it('does nothing when the tab has no customAddModal or no seed', () => {
+    expect(buildPostCreateState({ locationState: { justSaved }, initialChildData, secondaryTabs: [{ key: 'locationAddress' }] }))
+      .toEqual({ justSaved: undefined });
+    expect(buildPostCreateState({ locationState: { justSaved }, initialChildData: { other: {} }, secondaryTabs }))
+      .toEqual({ justSaved: undefined });
+  });
+
+  it('does not reopen after a cancel: the follow-up state carries no justSaved', () => {
+    const first = buildPostCreateState({ locationState: { justSaved }, initialChildData, secondaryTabs });
+    // the open-modal effect then clears the state; later navigations carry no marker
+    expect(buildPostCreateState({ locationState: {}, initialChildData, secondaryTabs })).toEqual({ justSaved: undefined });
+    expect(first.openSecondaryTab).toBe('locationAddress');
+  });
+
+  it('keeps an explicit openSecondaryTab request', () => {
+    const locationState = { justSaved, openSecondaryTab: 'contact', openAddSecondaryLine: true };
+    expect(buildPostCreateState({ locationState, initialChildData, secondaryTabs }).openSecondaryTab).toBe('contact');
+  });
+
+  it('the auto-opened modal receives the seed (create mode, no rows)', () => {
+    expect(resolveCustomAddModalSeed({ initialChildData, tabKey: 'locationAddress', rowId: null, rows: [] }))
+      .toBe(initialChildData.locationAddress);
+  });
+});
+
 describe('header process button styles (primary-danger / ghost-danger)', () => {
   it('maps primary-danger to the design-system destructive variant', () => {
     expect(getProcessButtonVariant({ style: 'primary-danger' })).toBe('destructive');
@@ -1123,5 +1207,26 @@ describe('header process button styles (primary-danger / ghost-danger)', () => {
     expect(isDangerProcess({ style: 'primary-danger' })).toBe(true);
     expect(isDangerProcess({ style: 'destructive' })).toBe(false);
     expect(isDangerProcess(null)).toBe(false);
+  });
+});
+
+describe('buildCustomAddModalSeed / buildCustomAddModalOnParentRefresh (ETP-5654)', () => {
+  const seed = { address: 'Gran Via 45' };
+
+  it('seeds a new first row of the tab from the modal state and loaded rows', () => {
+    const args = { initialChildData: { locationAddress: seed }, st: { key: 'locationAddress' }, customModalState: { rowId: null }, secondaryHooks: [{ children: [] }], idx: 0 };
+    expect(buildCustomAddModalSeed(args)).toBe(seed);
+    expect(buildCustomAddModalSeed({ ...args, customModalState: { rowId: 'r1' } })).toBeNull();
+    expect(buildCustomAddModalSeed({ ...args, secondaryHooks: [{ children: [{ id: 'a' }] }] })).toBeNull();
+    expect(buildCustomAddModalSeed({ ...args, secondaryHooks: [] })).toBe(seed);
+  });
+
+  it('refreshes the parent forcing a refetch, and is a no-op without a parent id', () => {
+    const hook = { invalidateEntityCache: vi.fn(), fetchById: vi.fn() };
+    buildCustomAddModalOnParentRefresh({ hook, parentRecordId: null })();
+    expect(hook.fetchById).not.toHaveBeenCalled();
+    buildCustomAddModalOnParentRefresh({ hook, parentRecordId: 'p1' })();
+    expect(hook.invalidateEntityCache).toHaveBeenCalled();
+    expect(hook.fetchById).toHaveBeenCalledWith('p1', { force: true });
   });
 });

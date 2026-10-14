@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-02T11:19:26.533Z",
-  "checksum": "b50ab64e2e2cbdcd",
+  "updatedAt": "2026-10-09T15:04:44.751Z",
+  "checksum": "f8ed5ca0ca57c7f9",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -156,7 +156,8 @@
         ],
         "limit": {
           "maxRows": 5000,
-          "concurrency": 4
+          "concurrency": 4,
+          "batchSize": 10
         },
         "dedupe": {
           "scope": "database",
@@ -2382,6 +2383,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "section": "principal",
             "labels": {
               "en_US": "Receivables Account",
@@ -2405,6 +2408,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "section": "principal",
             "labels": {
               "en_US": "Prepayment Account",
@@ -3435,6 +3440,8 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "section": "principal",
             "labels": {
               "en_US": "Liability Account",
@@ -3458,6 +3465,8 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
+            "lookup": true,
+            "lookupDrawer": "account",
             "section": "principal",
             "labels": {
               "en_US": "Prepayment Account",
@@ -5489,7 +5498,8 @@
         ],
         "limit": {
           "maxRows": 5000,
-          "concurrency": 4
+          "concurrency": 4,
+          "batchSize": 10
         },
         "dedupe": {
           "scope": "database",

@@ -1,8 +1,8 @@
 {
-  "version": "0.89.0",
+  "version": "0.91.0",
   "generatedAt": "2026-09-17T15:12:05.781Z",
-  "updatedAt": "2026-09-30T15:58:10.269Z",
-  "checksum": "4e6a4880354b022b",
+  "updatedAt": "2026-10-13T17:27:55.472Z",
+  "checksum": "a549e7b1542f1747",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -21,7 +21,8 @@
         "topbarExtra": "InvoiceDeliveryBadge",
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
-        "topbarRight": "InvoiceTopbarExtra"
+        "topbarRight": "InvoiceTopbarExtra",
+        "moreMenuContent": "SifSendMenuItem"
       },
       "menuActions": [
         {
@@ -41,6 +42,16 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenStatus": "CO",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {},
@@ -49,8 +60,8 @@
           "label": "Exchange rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
-          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags. ETP-5657: @Processed@='Y' was deliberately dropped from this rule, reversing the ETP-4030 completion lock for the tab only — exchange rates stay editable on a completed-but-unposted invoice and lock once it is posted (editable again after unpost) or reversed. Core's C_CONVERSION_RATE_DOCUMENT_TRG still rejects writes on posted invoices server-side. The header currency/rate picker keeps its own @Processed@='Y' lock."
         }
       },
       "salesTheme": true,
@@ -129,7 +140,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -681,10 +692,6 @@
                 "es_ES": "Sin contabilizar"
               }
             },
-            "badgeVariants": {
-              "true": "green",
-              "false": "orange"
-            },
             "gridOrder": 5,
             "validation": {
               "required": true,
@@ -829,9 +836,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           },
           {
@@ -858,9 +865,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           },
           {
@@ -1835,7 +1842,13 @@
           "processValue": "CO",
           "label": "Confirm",
           "keepSaveWhenCompletedFields": [
-            "accountingDate"
+            "accountingDate",
+            "project",
+            "costcenter"
+          ],
+          "editableLineFieldsWhenCompleted": [
+            "project",
+            "costcenter"
           ]
         }
       },
@@ -2130,9 +2143,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           },
           {
@@ -2159,9 +2172,9 @@
               "js": null
             },
             "readOnlyLogic": {
-              "raw": "@Posted@='Y'",
+              "raw": "@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')",
               "evaluable": true,
-              "js": "(record['posted'] === true || record['posted'] === 'Y')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || ((record['processed'] === true || record['processed'] === 'Y') && record['documentStatus'] !== 'CO')"
             }
           }
         ],
@@ -2759,12 +2772,13 @@
             "apiKey": "rate",
             "column": "Rate",
             "label": "Rate",
-            "type": "string",
-            "tsType": "string",
+            "type": "number",
+            "tsType": "number",
             "visibility": "editable",
             "required": false,
             "grid": true,
             "form": true,
+            "explicitType": true,
             "validation": {
               "maxLength": 10
             },
@@ -2841,7 +2855,8 @@
         "topbarExtra": "InvoiceDeliveryBadge",
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "InvoiceBottomPanel",
-        "topbarRight": "InvoiceTopbarExtra"
+        "topbarRight": "InvoiceTopbarExtra",
+        "moreMenuContent": "SifSendMenuItem"
       },
       "menuActions": [
         {
@@ -2861,6 +2876,16 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenStatus": "CO",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {},
@@ -2869,8 +2894,8 @@
           "label": "Exchange rates",
           "tabOrder": 50,
           "requireSavedRecord": true,
-          "readOnlyLogic": "@Processed@='Y' | @Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
-          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Processed@/@Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags."
+          "readOnlyLogic": "@Posted@='Y' | @HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y'",
+          "_note": "ETP-4837 follow-up: this TAB-level readOnlyLogic (evaluated against the HEADER record via evalTabReadOnly/DetailView.jsx) is the correct place for header-derived flags. A field-level readOnlyLogic on rate/exchangeRates fields is evaluated against the LINE record instead (see DetailView.jsx ~L3799), so @Posted@/@HASREVERSEDINVOICE*@ never resolve there — C_Conversion_Rate_Document rows carry no such columns. Do not re-add per-field readOnlyLogic here for header flags. ETP-5657: @Processed@='Y' was deliberately dropped from this rule, reversing the ETP-4030 completion lock for the tab only — exchange rates stay editable on a completed-but-unposted invoice and lock once it is posted (editable again after unpost) or reversed. Core's C_CONVERSION_RATE_DOCUMENT_TRG still rejects writes on posted invoices server-side. The header currency/rate picker keeps its own @Processed@='Y' lock."
         }
       },
       "salesTheme": true,
@@ -2948,7 +2973,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -4296,13 +4321,19 @@
             "name": "pending",
             "where": "e.paymentComplete = false and abs(e.outstandingAmount) >= abs(e.grandTotalAmount)",
             "label": "Unpaid",
-            "description": "Unpaid invoices with nothing collected yet (outstanding equals the total)."
+            "description": "Unpaid invoices with nothing collected yet (outstanding equals the total). Excludes partially paid invoices; use 'outstanding' for every invoice that still owes a balance."
           },
           {
             "name": "partial",
             "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0 and abs(e.outstandingAmount) < abs(e.grandTotalAmount)",
             "label": "Partially paid",
             "description": "Invoices with a partial payment: some amount collected but a balance remains."
+          },
+          {
+            "name": "outstanding",
+            "where": "e.paymentComplete = false and abs(e.outstandingAmount) > 0",
+            "label": "Pending payment",
+            "description": "Every invoice that still owes a balance: unpaid plus partially paid. Use this for 'what is still owed'; 'pending' alone excludes partially paid invoices."
           }
         ]
       },
@@ -5215,7 +5246,7 @@
             "name": "rate",
             "apiKey": "rate",
             "column": "Rate",
-            "type": "string",
+            "type": "number",
             "visibility": "editable",
             "required": false
           },
@@ -7626,7 +7657,7 @@
         "entity": "exchangeRates",
         "field": "rate",
         "runner": "node",
-        "description": "Field 'rate' should have type 'string' in exchangeRates"
+        "description": "Field 'rate' should have type 'number' in exchangeRates"
       },
       {
         "id": "t-field-type-exchangeRates-toCurrency",

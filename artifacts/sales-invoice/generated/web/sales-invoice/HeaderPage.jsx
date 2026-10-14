@@ -17,6 +17,7 @@ import ReversedInvoicesPanel from '@/windows/custom/sales-invoice/ReversedInvoic
 import InvoiceBottomPanel from '../../../custom/InvoiceBottomPanel';
 import InvoiceTopbarExtra from '../../../custom/InvoiceTopbarExtra';
 import InvoiceDeliveryBadge from '../../../custom/InvoiceDeliveryBadge';
+import SifSendMenuItem from '../../../custom/SifSendMenuItem';
 import catalogs from './mockCatalogs';
 
 
@@ -52,7 +53,13 @@ const draftMode = {
   "processValue": "CO",
   "label": "Confirm",
   "keepSaveWhenCompletedFields": [
-    "accountingDate"
+    "accountingDate",
+    "project",
+    "costcenter"
+  ],
+  "editableLineFieldsWhenCompleted": [
+    "project",
+    "costcenter"
   ]
 };
 // @sf-generated-end draftMode:header
@@ -666,7 +673,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
-          { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') || (record['posted'] === true || record['posted'] === 'Y') || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
+          { key: 'exchangeRates', label: 'Exchange rates', Table: ExchangeRatesTable, Form: ExchangeRatesForm, requireSavedRecord: true, readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') || record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y', tabOrder: 50 },
         ]}
         hideDeleteWhenComplete
         hidePrintWhen={{"documentStatus":{"notEquals":"CO"}}}
@@ -677,9 +684,11 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         bottomSection={InvoiceBottomPanel}
         topbarRight={InvoiceTopbarExtra}
         topbarExtra={InvoiceDeliveryBadge}
+        customMenuContent={SifSendMenuItem}
         menuActions={({ data, status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },
-          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'unpost', label: 'Unpost', destructive: true, visible: status === 'CO' && (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}

@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import InventoryTable from '@generated/physical-inventory/generated/web/physical-inventory/InventoryTable';
 import GeneratedApp from '@generated/physical-inventory/generated/web/physical-inventory/index.jsx';
-import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import BulkDocumentAction, { buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { useUI } from '@/i18n';
 import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
+import { ACCOUNTING_CAPABILITY } from '@/lib/capabilityVisibility.js';
 
 const COLUMNS = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false, required: true },
@@ -25,7 +25,7 @@ const COLUMNS = [
     },
   },
   { key: 'processed', column: 'Processed', type: 'status', required: true, enumLabels: { 'true': 'statusProcessed', 'false': 'statusDraft' } },
-  { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+  { key: 'posted', column: 'Posted', type: 'boolean', required: true, visibleWhenCapability: ACCOUNTING_CAPABILITY, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } } },
 ];
 
 function CustomInventoryTable(props) {
@@ -85,8 +85,6 @@ export default function PhysicalInventoryWindow(props) {
       {...props}
       Table={CustomInventoryTable}
       hideMoreMenu={hideMenuActions}
-      SortIconComponent={SortIcon}
-      RefreshIconComponent={RefreshIcon}
       bulkActions={InventoryBulkActions}
       rowQuickActions={rowQuickActions}
       refreshTrigger={refreshKey}

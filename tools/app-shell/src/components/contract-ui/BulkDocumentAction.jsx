@@ -8,8 +8,10 @@ import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
-import { runPreUnpost } from '@/lib/preUnpost.js';
+import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { filterPostingActions } from '@/lib/capabilityVisibility.js';
 
 export const buildInOutActions = (rows) => {
   const hasDraft = rows.some((r) => (r.documentStatus || r.docStatus) === 'DR');
@@ -42,10 +44,16 @@ export const buildPostActions = (rows) =>
 // previous render").
 // ETP-5302 — the mirror of buildPostActions/postRowFilter, for the bulk "Descontabilizar"
 // button. Kept as a SEPARATE pair rather than teaching the post ones to also emit 'unpost':
-// sales-invoice and purchase-invoice mount the post pair too, and they must NOT offer a
-// standalone unpost — for an invoice, reversing the accounting is part of Reactivate
-// (`preUnpost`), never a user-facing action of its own. Only goods-receipt and
-// goods-shipment, whose detail kebab already exposes "Descontabilizar", mount this pair.
+// a window opts into the unpost button explicitly (its own `BulkDocumentAction` with
+// `labelKey="unpost"`), and only a window whose detail kebab also exposes a standalone
+// "Descontabilizar" should — a window that declares no `unpost` in its decisions.json must
+// not grow one in the bulk bar only. It is also why "Descontabilizar" is never offered as
+// a second option under the "Contabilizar" button.
+// ETP-5692 — sales-invoice and purchase-invoice now offer a standalone bulk unpost too,
+// reversing the ETP-5302 decision that kept invoice unposting inside Reactivate only. They
+// mount their OWN pair (`buildInvoiceUnpostActions` / `invoiceUnpostRowFilter` in
+// windows/custom/shared/useInvoiceWindow.js), which also requires status CO, so this
+// posted-only default stays exactly as the albarán windows rely on it.
 export const buildUnpostActions = (rows) =>
   (rows.some(isRowPosted) ? [{ value: 'unpost', labelKey: 'unpost' }] : []);
 
@@ -61,6 +69,18 @@ export const postRowFilter = (row, action, ui) => {
   if (!isRowProcessed(row)) return ui('bulkRowNotCompleted');
   return true;
 };
+
+// Built-in action list (no `buildActions` prop): Confirm for drafts, Reactivate for completed.
+function buildBulkActions(selectedRows, buildActions) {
+  if (buildActions) return buildActions(selectedRows);
+  const statusOf = (r) => r.documentStatus || r.docStatus;
+  const hasDraft = selectedRows.some((r) => statusOf(r) === 'DR');
+  const hasCompleted = selectedRows.some((r) => statusOf(r) === 'CO');
+  const out = [];
+  if (hasDraft) out.push({ value: 'CO', labelKey: 'confirm' });
+  if (hasCompleted) out.push({ value: 'RE', labelKey: 'reactivate' });
+  return out;
+}
 
 export default function BulkDocumentAction({
   selectedRows, clearSelection, token, apiBaseUrl, windowName,
@@ -89,6 +109,7 @@ export default function BulkDocumentAction({
   windowReadOnly = false,
 }) {
   const ui = useUI();
+  const capabilities = useCapabilitiesSafe();
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
   // ETP-5075 — `actionMode: 'neoAction'` retargets the per-row call from the DocAction
@@ -122,16 +143,11 @@ export default function BulkDocumentAction({
   const [running, setRunning] = useState(false);
   const [selectedAction, setSelectedAction] = useState(null);
 
-  const actions = useMemo(() => {
-    if (buildActions) return buildActions(selectedRows);
-    const statusOf = (r) => r.documentStatus || r.docStatus;
-    const hasDraft = selectedRows.some((r) => statusOf(r) === 'DR');
-    const hasCompleted = selectedRows.some((r) => statusOf(r) === 'CO');
-    const out = [];
-    if (hasDraft) out.push({ value: 'CO', labelKey: 'confirm' });
-    if (hasCompleted) out.push({ value: 'RE', labelKey: 'reactivate' });
-    return out;
-  }, [selectedRows, buildActions]);
+  // ETP-5684 — a role without "Show Accounting Fields" gets no bulk post/unpost. Filtered
+  // here, not in each caller's builder, so a window's own builder is covered too; an empty
+  // list then renders nothing (see the early return below).
+  const actions = useMemo(() => filterPostingActions(buildBulkActions(selectedRows, buildActions), capabilities),
+    [selectedRows, buildActions, capabilities]);
 
   if (selectedRows.length === 0 || actions.length === 0 || windowReadOnly) return null;
 
@@ -213,7 +229,7 @@ export default function BulkDocumentAction({
         execute: neoAction.execute,
       });
       if (!pre.success) {
-        throw new Error(translateBackendError(pre.message, ui) || ui('actionFailed'));
+        throw new Error(translateBackendError(pre.message, ui, preUnpostErrorIdentity(pre)) || ui('actionFailed'));
       }
       // Arity kept at two when there is no body, so every existing call is unchanged.
       await (wireActionBody === undefined

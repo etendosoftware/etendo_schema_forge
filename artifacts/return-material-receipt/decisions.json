@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Return Material Receipt",
+    "agentPrompt": "#REF#agent-prompts/return-material-receipt/spec.md",
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -211,6 +212,10 @@
         "freightCurrency": {
           "visibility": "discarded"
         },
+        "etgoCurrency": {
+          "visibility": "system",
+          "defaultExpr": "@C_Currency_ID@"
+        },
         "freightCostRule": {
           "visibility": "discarded"
         },
@@ -321,10 +326,6 @@
           "badgeLabels": {
             "true": { "en_US": "Posted", "es_ES": "Contabilizado" },
             "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
-          },
-          "badgeVariants": {
-            "true": "green",
-            "false": "orange"
           },
           "type": "boolean"
         },

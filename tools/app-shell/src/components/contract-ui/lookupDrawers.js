@@ -1,5 +1,6 @@
 import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import ProductStockSearchDrawer from './ProductStockSearchDrawer.jsx';
+import AccountLookupPopup from './AccountLookupPopup.jsx';
 
 /**
  * Lookup drawer registry. Each entry is a drawer component keyed by the value of a
@@ -13,6 +14,10 @@ import ProductStockSearchDrawer from './ProductStockSearchDrawer.jsx';
  * `product` field needs to resolve a storage bin / warehouse on selection (goods-movements,
  * internal-consumption, and future stock-aware windows).
  *
+ * `account` is the centered search popup for account fields (ETP-5681 — the G/L journal line
+ * Account column): the same popup the report filters use for "Desde la cuenta", over the field's
+ * own server selector.
+ *
  * `internal-consumption-product` / `goods-movements-product` are kept as aliases pointing
  * at the same shared component, in case any older decisions.json or external reference
  * still uses the legacy per-window key.
@@ -22,6 +27,7 @@ export const LOOKUP_DRAWERS = {
   'product-stock': ProductStockSearchDrawer,
   'internal-consumption-product': ProductStockSearchDrawer,
   'goods-movements-product': ProductStockSearchDrawer,
+  account: AccountLookupPopup,
 };
 
 export function resolveLookupDrawer(lookupDrawer) {

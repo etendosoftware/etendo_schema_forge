@@ -52,7 +52,7 @@ posted/not-posted. Every other code is the REASON a posting attempt failed:
 | Code | Meaning | Shown as |
 |---|---|---|
 | `Y` | Posted | green "Contabilizado" |
-| `N` | Not posted | orange "Sin contabilizar" |
+| `N` | Not posted | yellow "Sin contabilizar" (was orange until ETP-5647) |
 | `i` | Invalid account | red "Cuenta inválida" |
 | `E` / `C` | Posting error / error, no cost | red |
 | `p` | Period closed | red |
@@ -64,8 +64,9 @@ Those states are the majority of real data, not an edge case (in one dev tenant:
 `'Y'`/`'N'` allowlist and disagreed: the grid printed a bare `—` while the detail pill
 claimed "Sin contabilizar", so a record whose posting had FAILED read as one that was never
 attempted. `tools/app-shell/src/lib/postedStatus.js` is now the single registry both use —
-keyed by AD column name, failing closed, `Y`/`N` untouched so the other windows are
-unaffected.
+keyed by AD column name, failing closed, `Y`/`N` labels untouched so the other windows are
+unaffected. Since ETP-5647 it is also the only colour source for every code, `Y`/`N` included
+(`postedStatusTone`), so the grid and the detail pill can no longer differ in colour either.
 
 **Real case that surfaced this:** a match whose invoice price differs from the receipt cost
 (e.g. 15.00 invoiced vs 19.80 received) needs the *Invoice Price Variance* account, which
@@ -440,3 +441,12 @@ name goes through the same `DOC_TYPE_LABEL_KEYS` as the filter option and
 code map the filter already uses, so `DOCUMENT_TYPE_TO_TABLE_ID` is gone too. A new document
 type now needs one label → code entry; see `not-posted-documents.md` ("One label → code map").
 The same page's "Abrir documento" opens these rows at `/matched-purchase-invoices/{id}`.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed). That includes `MatchedInvoiceBulkActions`, which builds its own `post`/`unpost` bulk entries.
+- The `posted` field was already gated (ETP-4520); `ListView` now also drops it from the filter, sort and export.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

@@ -8,7 +8,6 @@
     "noHeaderBorder": true,
     "hidePrint": true,
     "hideLink": true,
-    "customListIcons": true,
     "secondaryTabs": {
       "accounting": {
         "tabOrder": 1,
@@ -94,6 +93,7 @@
       "hideDelete": true,
       "fields": {
         "accumulatedDepreciation": {
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "gridOrder": 1,
@@ -103,6 +103,7 @@
           "grow": true
         },
         "depreciation": {
+          "lookupDrawer": "account",
           "visibility": "editable",
           "grid": true,
           "gridOrder": 2,

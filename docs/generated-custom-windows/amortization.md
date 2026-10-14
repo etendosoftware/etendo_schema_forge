@@ -119,16 +119,18 @@ Records are typically created from the **Assets** window via the **Create Amorti
 
 Changes landed in `feature/ETP-4103`. Covers visual polish, sidebar simplification, custom lines table, and a Java process bug fix for the Amortization window.
 
+> ETP-5601: the record (form view) toolbar is now standardized on every window (56px, 40px controls). The `toolbarBorderBottom`, `toolbarButtonSize` and `toolbarPaddingX` keys listed below no longer have any effect; see `docs/list-filters.md` (Visual parity).
+
 ### Visual polish
 
-- `toolbarBorderBottom: true` in `decisions.json` — adds a horizontal divider line below the toolbar buttons row.
-- `toolbarButtonSize: "default"` in `decisions.json` — toolbar buttons (including the kebab menu) are now `h-10 w-10`, matching the Contacts window. Previously `sm` (`h-9`).
+- `toolbarBorderBottom: true` in `decisions.json` — added a horizontal divider line below the toolbar buttons row. No effect since ETP-5601 (the record toolbar is standardized; the divider is part of the standard toolbar).
+- `toolbarButtonSize: "default"` in `decisions.json` — toolbar buttons (including the kebab menu) are now `h-10 w-10`, matching the Contacts window. Previously `sm` (`h-9`). No effect since ETP-5601 (all record-toolbar buttons are standardized at 40px).
 - `listbarPaddingX: "px-2"` and `tablePaddingX: "px-2"` in `decisions.json` — list-view toolbar and table horizontal padding reduced from 24 px to 8 px.
 - `whiteFormBackground: true` in `decisions.json` — forces white background on form inputs and textareas, overriding the `bg-[#F5F7F9]` default on inputs and `bg-background` on textareas. Disabled textareas use `opacity-50` instead of `bg-muted/50` for visual consistency.
 - `noHeaderBorder: true` in `decisions.json` — removes the rounded card border around the header form fields, matching the Contacts window layout.
 - `primaryTabsVariant: "pill"` in `decisions.json` — tab strip uses pill style, matching Contacts.
 - `tabsBarPaddingX: "px-2"` in `decisions.json` — tabs bar horizontal padding set to 8 px.
-- `toolbarPaddingX: "px-2"` in `decisions.json` — toolbar horizontal padding set to 8 px.
+- `toolbarPaddingX: "px-2"` in `decisions.json` — toolbar horizontal padding set to 8 px. No effect since ETP-5601 (the record toolbar is standardized).
 
 ### Status pill + total footer (replaces sidebar)
 
@@ -668,3 +670,12 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed). That includes the hand-rolled row-kebab Contabilizar in `windows/custom/amortization/index.jsx` and `AmortizationBulkActions`.
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped).
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

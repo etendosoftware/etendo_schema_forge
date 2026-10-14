@@ -130,10 +130,6 @@
             "true": { "en_US": "Posted", "es_ES": "Contabilizado" },
             "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
           },
-          "badgeVariants": {
-            "true": "green",
-            "false": "orange"
-          },
           "type": "boolean"
         },
         "etblkpBulkposting": {

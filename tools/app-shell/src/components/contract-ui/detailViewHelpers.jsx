@@ -100,6 +100,69 @@ export function withHeaderRefreshOnChildWrite(secondaryHooks, hook) {
   });
 }
 
+/** The invoice "Exchange rates" secondary tab, whose writes also move the header's rate. */
+export const EXCHANGE_RATES_TAB_KEY = 'exchangeRates';
+
+/**
+ * Re-read the header after a write to the Exchange rates tab (ETP-4029, ETP-5657).
+ *
+ * Adding or editing a row there also updates the invoice header's hidden `eTGOCurrencyRate` on
+ * the backend (`InvoiceExchangeRateHandler` reverse sync), so without this the header's
+ * currency-rate picker keeps the stale value until a manual reload. `refreshHeaderTotals` is the
+ * same non-disruptive refresh used after primary-line edits: it re-GETs the header and merges in
+ * only the fields the user hasn't touched, so in-progress unsaved header edits survive.
+ *
+ * `clearUserChangedKey('eTGOCurrencyRate')` runs first, and only for this one field: a rate the
+ * user already saved through the header's own CurrencyRatePicker in this visit permanently marks
+ * the key "user changed" for the session (see `useEntity.handleChange`), and the merge would then
+ * refuse to overwrite it with the newer value the tab just persisted. A narrow, deliberate
+ * exception for this cross-surface sync — see the rationale on `clearUserChangedKey`.
+ *
+ * @param {object} hook the window's main `useEntity` hook
+ */
+export function refreshHeaderCurrencyRate(hook) {
+  const id = hook?.selected?.id;
+  if (!id) return;
+  hook.clearUserChangedKey?.('eTGOCurrencyRate');
+  hook.refreshHeaderTotals?.(id);
+}
+
+/**
+ * Wrap the Exchange rates tab's secondary hook so a successful ADD or DELETE of a rate row also
+ * runs {@link refreshHeaderCurrencyRate} — the PATCH path calls it directly. Every add/delete
+ * flow of a secondary tab ends in these two handlers, and only after the server accepted the
+ * write (a refused DELETE — e.g. a completed invoice's rate — never reaches `handleDeleteChild`),
+ * so wrapping them covers the inline add row, the bulk delete and the single-row delete at once.
+ *
+ * Returns the array unchanged (same identity) when the window has no Exchange rates tab.
+ *
+ * @param {Array<object|null>} secondaryHooks per-tab hooks, same order as `secondaryTabs`
+ * @param {Array<{key: string}>} secondaryTabs
+ * @param {object} hook the window's main `useEntity` hook
+ * @returns {Array<object|null>}
+ */
+export function withExchangeRateHeaderSync(secondaryHooks, secondaryTabs, hook) {
+  const idx = (secondaryTabs || []).findIndex(st => st.key === EXCHANGE_RATES_TAB_KEY);
+  const sh = idx < 0 ? null : secondaryHooks[idx];
+  if (!sh) return secondaryHooks;
+  const wrapped = [...secondaryHooks];
+  wrapped[idx] = {
+    ...sh,
+    handleAddChild: async (...args) => {
+      const result = await sh.handleAddChild?.(...args);
+      // Only on success — a refused POST changed nothing on the server.
+      if (result) refreshHeaderCurrencyRate(hook);
+      return result;
+    },
+    handleDeleteChild: (...args) => {
+      const result = sh.handleDeleteChild?.(...args);
+      refreshHeaderCurrencyRate(hook);
+      return result;
+    },
+  };
+  return wrapped;
+}
+
 /**
  * `onSaved` for a secondary tab's `customAddModal` (e.g. Contacts' address form).
  *
@@ -122,6 +185,68 @@ export function buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCusto
     secondaryHooks[idx]?.handleSelect(parent);
     setCustomModalState({ key: null, rowId: null });
   };
+}
+
+/**
+ * `initialValues` for a secondary tab's `customAddModal`, taken from the window's
+ * `initialChildData` prop (keyed by the tab key; ETP-5654, e.g. the address read from an
+ * OCR'd invoice). Only a brand-new first row is seeded: editing a row (`rowId`) or adding a
+ * further row to a tab that already has some must open with real / empty data, never with
+ * the one-off seed. Returns `null` when nothing applies.
+ */
+export function resolveCustomAddModalSeed({ initialChildData, tabKey, rowId, rows }) {
+  if (rowId) return null;
+  if (Array.isArray(rows) && rows.length > 0) return null;
+  return initialChildData?.[tabKey] ?? null;
+}
+
+/**
+ * `initialValues` for the `customAddModal` of secondary tab `st`: resolves the seed from the
+ * modal state and the tab's loaded rows (see `resolveCustomAddModalSeed`).
+ */
+export function buildCustomAddModalSeed({ initialChildData, st, customModalState, secondaryHooks, idx }) {
+  return resolveCustomAddModalSeed({
+    initialChildData,
+    tabKey: st.key,
+    rowId: customModalState.rowId,
+    rows: secondaryHooks[idx]?.children,
+  });
+}
+
+/**
+ * `onParentRefresh` for a `customAddModal`: the modal just wrote the parent record, so the
+ * cached list holds the old row (ETP-5378). No-op until the parent has an id.
+ */
+export function buildCustomAddModalOnParentRefresh({ hook, parentRecordId }) {
+  return () => {
+    if (!parentRecordId) return;
+    hook.invalidateEntityCache?.();
+    hook.fetchById(parentRecordId, { force: true });
+  };
+}
+
+/**
+ * Router state for the one-shot cleanup that follows the FIRST save of a new record (ETP-5654).
+ *
+ * The save handlers navigate `/new` -> `/:id` with `state.justSaved`; DetailView consumes that
+ * marker exactly once and rewrites the state. This helper builds the rewritten state: the marker
+ * is cleared and, when the window was given an `initialChildData` seed for a secondary tab that
+ * has a `customAddModal`, the SAME `openSecondaryTab` + `openAddSecondaryLine` state that
+ * `runSecondaryAddLineFlow` uses is added, so the existing open-modal effect switches to that
+ * tab and opens the modal in create mode (where `resolveCustomAddModalSeed` applies the seed).
+ *
+ * Once-only by construction: `justSaved` exists only on the navigation that follows a create,
+ * and the open-modal effect clears the state after acting. A cancelled modal, later saves and
+ * re-renders never see it again. A record that was just created has no child rows yet.
+ * A state that already asks for a tab (e.g. an explicit "add line" save) is left untouched.
+ * Without `initialChildData` the result is exactly `{ ...locationState, justSaved: undefined }`.
+ */
+export function buildPostCreateState({ locationState, initialChildData, secondaryTabs }) {
+  const cleared = { ...locationState, justSaved: undefined };
+  if (!initialChildData || !locationState?.justSaved?.id || locationState.openSecondaryTab) return cleared;
+  const target = (secondaryTabs ?? []).find(st => st?.customAddModal && initialChildData[st.key]);
+  if (!target) return cleared;
+  return { ...cleared, openSecondaryTab: target.key, openAddSecondaryLine: true };
 }
 
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
@@ -746,8 +871,12 @@ export function getSidebarSlideClassName(isClosingLine) {
   return isClosingLine ? 'sidebar-slide-out' : 'sidebar-slide-in';
 }
 
-export function getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom) {
-  return `flex items-center justify-between ${linesLayout === 'inlineEditable' ? 'p-2' : toolbarPaddingX + ' py-2'}${toolbarBorderBottom || linesLayout === 'inlineEditable' ? ' border-b border-[hsl(var(--border-subtle))]' : ''}`;
+// ETP-5601 — the record (form view) toolbar follows Figma on every window: 8px padding on all
+// sides around 40px controls (56px), with a 1px #E8EAEF bottom rule. The rule is an inset shadow,
+// not a border, so it is painted inside those 56px instead of adding a 57th pixel. It used to
+// vary per window (`toolbarPaddingX`, `toolbarBorderBottom`, `linesLayout`); it no longer does.
+export function getLinesToolbarClassName() {
+  return 'flex items-center justify-between p-2 shadow-[inset_0_-1px_0_var(--status-neutral-border)]';
 }
 
 export function getLineMenuActionsRef(getLineMenuActions, extraActionsRef) {
@@ -915,12 +1044,16 @@ export function buildLineRowClickHandler(DetailForm, linesLayout, setSelectedLin
   } : undefined;
 }
 
-export function getSqBtnSize(toolbarButtonSize) {
-  return toolbarButtonSize === 'default' ? 'h-10 w-10' : 'h-9 w-9';
+// ETP-5601 — every record-toolbar control is 40px (Figma), so the old per-window
+// `toolbarButtonSize` switch ('sm' = 36px, 'default' = 40px) is gone.
+export function getSqBtnSize() {
+  return 'h-10 w-10';
 }
 
-export function getSaveBtnCls(toolbarButtonSize) {
-  return toolbarButtonSize === 'default' ? 'h-10 gap-2' : 'gap-1.5';
+// Save, process and extra-action buttons: 40px, Figma's text-sm/leading-6 line, 20px icons
+// (`[&_svg]:size-5` beats the core Button's `[&_svg]:size-4`).
+export function getSaveBtnCls() {
+  return 'h-10 gap-2 leading-6 [&_svg]:size-5';
 }
 
 export function getDocumentReadOnly(lockWhenProcessed, _headerData) {
@@ -1269,7 +1402,10 @@ export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActi
                 onClick={() => setActivePrimaryTab(tab.key)}
                 className={activePrimaryTab === tab.key
                   ? 'h-8 px-4 text-sm font-medium rounded-lg transition-all bg-card text-text-primary shadow-sm'
-                  : 'h-8 px-4 text-sm font-medium rounded-lg transition-all text-text-secondary'}
+                  // ETP-5600 — Figma `_Base Tab Button` (Fill) hover: a light grey fill on the
+                  // inactive tab. `--card` at 60% over the pill's `--muted` track reads as a
+                  // lighter grey in both themes without competing with the active (solid card) tab.
+                  : 'h-8 px-4 text-sm font-medium rounded-lg transition-all text-text-secondary hover:bg-card/60 hover:text-text-primary'}
             >
               {tMenu(tab.label)}
             </button>

@@ -1,8 +1,8 @@
 {
-  "version": "0.37.0",
+  "version": "0.39.0",
   "generatedAt": "2026-07-29T14:51:09.380Z",
-  "updatedAt": "2026-09-24T10:36:52.142Z",
-  "checksum": "4526a1e213fef7b4",
+  "updatedAt": "2026-10-14T13:04:20.490Z",
+  "checksum": "2e0df0826fbbf27e",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -73,7 +73,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -199,6 +199,7 @@
             "defaultValue": "N",
             "explicitType": true,
             "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
             "badgeLabels": {
               "true": {
                 "en_US": "Posted",
@@ -208,10 +209,6 @@
                 "en_US": "Not posted",
                 "es_ES": "Sin contabilizar"
               }
-            },
-            "badgeVariants": {
-              "true": "green",
-              "false": "orange"
             },
             "gridOrder": 5,
             "validation": {
@@ -623,6 +620,7 @@
             "gridOrder": 3,
             "grow": true,
             "columnWidth": 192,
+            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 10
@@ -668,6 +666,7 @@
             "gridOrder": 5,
             "grow": true,
             "columnWidth": 192,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 10
             }
@@ -777,7 +776,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },

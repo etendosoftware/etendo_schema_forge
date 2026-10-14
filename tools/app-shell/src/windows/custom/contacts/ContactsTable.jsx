@@ -9,8 +9,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import { extractApiErrorMessage } from '@/lib/apiError';
+import { Link2 } from 'lucide-react';
 import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { stripUrlScheme, toWebsiteHref } from './contactsWebUrl.js';
+import ContactsEmptyState from './ContactsEmptyState.jsx';
 
 const filters = ['searchKey', 'name', 'etgoFirstname', 'etgoLastname'];
 
@@ -42,12 +45,50 @@ function TypeBadge({ row, t }) {
 // generic `renderDefaultCell` gives every column, but these columns opt out of
 // it by defining their own `render` (needed for inline editing), which bypasses
 // CELL_RENDERERS entirely (see DataTable.jsx's `renderCellValue`).
-function TextCell({ value }) {
+function TextCell({ value, className = '' }) {
   return (
     <TruncatedText
       text={value ?? '—'}
-      className="max-w-[200px]"
+      className={`max-w-[200px] ${className}`.trim()}
       data-testid="TruncatedText__5c74a8" />
+  );
+}
+
+/**
+ * The website as a link tag (Figma): grey `Tag` look, a link icon, the address without its
+ * scheme. Opens in a new tab and stops the click so the row does not navigate to the record.
+ * An empty value falls back to the plain text cell, exactly as before.
+ *
+ * ETP-5600 (Figma "Página web" chip): radius md (not the Tag's pill), 16px #828FA3 link icon,
+ * and on hover the #121217 @ 5% overlay (≈ #EAECEE) over the unchanged #F5F7F9, 300ms ease-out.
+ * The Tag paints its colours through an inline `background` shorthand, so the overlay is an
+ * inset box-shadow (drawn above the background, below the content) instead of a second
+ * background layer the inline style would reset; `!rounded-md` likewise has to beat the
+ * inline `borderRadius`.
+ */
+function WebsiteCell({ value }) {
+  const href = toWebsiteHref(value);
+  if (!href) return <TextCell value={value} data-testid="TextCell__5c74a8" />;
+  const label = stripUrlScheme(String(value).trim());
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      title={label}
+      className="group/web inline-flex max-w-[200px] cursor-pointer rounded-md no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+      data-testid="ContactsTable__websiteLink"
+    >
+      <Tag
+        variant="neutral"
+        className="gap-1 max-w-full !rounded-md transition-shadow duration-300 ease-out group-hover/web:shadow-[inset_0_0_0_999px_rgba(18,18,23,0.05)]"
+        data-testid="Tag__5c74a8">
+        <Link2 className="h-4 w-4 shrink-0 text-[#828FA3]" aria-hidden="true" data-testid="Link2__5c74a8" />
+        <span className="min-w-0 truncate">{label}</span>
+      </Tag>
+    </a>
   );
 }
 
@@ -63,7 +104,7 @@ function EditableCell({ value, onChange, onKeyDown }) {
   );
 }
 
-export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMutated, ...rest }) {
+export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMutated, emptyListContext = null, ...rest }) {
   const { invalidateBusinessPartner } = useContactsCacheInvalidation();
   const dictionary = useLocale();
   const ui = useUI();
@@ -126,7 +167,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('name', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : <TextCell value={row.name} data-testid="TextCell__5c74a8" />,
+          : <TextCell value={row.name} className="font-semibold" data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoFirstname', column: 'EM_Etgo_Firstname', type: 'string', label: t('firstNameColumn'),
@@ -186,7 +227,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoWeb', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : <TextCell value={row.etgoWeb} data-testid="TextCell__5c74a8" />,
+          : <WebsiteCell value={row.etgoWeb} data-testid="WebsiteCell__5c74a8" />,
       },
       {
         key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'string', label: t('emailColumn'),
@@ -280,6 +321,13 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     () => [...HIDDEN_COLS, ...(rest.hiddenColumns ?? [])],
     [rest.hiddenColumns]
   );
+
+  // ListView hands `emptyListContext` only when the user has NO contacts at all (successful
+  // fetch, zero rows, no search/filter narrowing it). A filtered or subset-empty list keeps the
+  // grid (and its hidden empty row) exactly as before.
+  if (emptyListContext) {
+    return <ContactsEmptyState context={emptyListContext} data-testid="ContactsEmptyState__5c74a8" />;
+  }
 
   return (
     <>

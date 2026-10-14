@@ -329,11 +329,30 @@ Final response written to client
 | `sfEntity` | SFEntity | The ETGO_SF_Entity config record |
 | `obContext` | OBContext | Current user/role/org/client |
 | `previousResult` | NeoResponse | Set before afterHandle() is called |
+| attributes (`getAttribute(key)` / `setAttribute(key, value)`) | Object per String key | Per-request state the pre-hook hands to its own post-hook (ETP-5194). See "Carrying state from `handle()` to `afterHandle()`" below |
 
 | `token` | String | Auth Bearer token |
 | `apiBaseUrl` | String | Base URL for outbound API calls |
 
 **Note:** For sub-endpoints (selector, callout, etc.), `requestBody`, `recordId`, and `queryParams` are not populated in the hook context. The handler receives `endpointType` and `fieldName` for routing; the underlying service handles request parsing.
+
+**Carrying state from `handle()` to `afterHandle()` (ETP-5194).** Every channel — REST single (`/sws/neo/*`), REST batch (`/sws/neo/batch`, per operation) and MCP — passes the **same** `NeoContext` instance to both phases of one operation. A handler instance may be shared across requests, so never keep per-request state in a handler field: another request's `afterHandle()` could read it. Put it on the context instead. Values live as long as that context; `setAttribute(key, null)` removes the key. Namespace keys by the owning class so two customizations on one context cannot collide:
+
+```java
+private static final String ATTR_EMAIL_CHANGE =
+    UserRoleAssignmentHandler.class.getName() + ".emailChange";
+
+// handle(): the pre-hook allowed the change, remember it
+context.setAttribute(ATTR_EMAIL_CHANGE, new EmailChange(currentEmail));
+
+// afterHandle(): act only when this same request marked it
+Object marker = context.getAttribute(ATTR_EMAIL_CHANGE);
+if (!(marker instanceof EmailChange)) {
+  return null;
+}
+```
+
+Reference use: `UserRoleAssignmentHandler` (`com.etendoerp.go`) — `UserEmailCorrection#rejectEmailChange` marks an allowed email correction, `reinviteAfterEmailChange` re-invites only when the marker is there. Full write-up: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §5.3, "Handler behavior".
 
 ### 2.5 NeoResponse: Building Responses
 

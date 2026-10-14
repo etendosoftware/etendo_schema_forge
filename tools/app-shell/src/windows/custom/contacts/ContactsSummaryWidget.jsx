@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react';
-import { ArrowUp, ArrowDown, LineChart } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { LineChart } from 'lucide-react';
+import { IconicArrowUpIcon, IconicArrowDownIcon } from '@/components/ui/custom-icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { StatusTag } from '@/components/ui/status-tag';
 import { BPChartSVGContent } from './BPChartSVGContent';
+import ContactsPeriodButton from './ContactsPeriodButton';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
 import { formatCurrency } from '@/lib/formatCurrency';
-import { useContactsFinance, useSyncFinanceRecordId } from './ContactsFinanceContext';
+import { useContactsFinance, useSyncFinanceRecordId, PERIOD_MONTHS } from './ContactsFinanceContext';
 
 /* eslint-disable react/prop-types */
-
-const PERIOD_MONTHS = { '3M': 3, '6M': 6 };
 
 // ─── KPI derivation ─────────────────────────────────────────────────────────
 
@@ -17,63 +18,89 @@ function findKpi(stats, key) {
   return Array.isArray(stats) ? stats.find(k => k.key === key) : null;
 }
 
-// Period-aware trend: % change of the last month vs the first month of the
-// selected window (e.g. 3M → Jun vs Apr). Computed from the bp-trend series so
-// it stays consistent with the chart and actually changes with the period.
-// Returns null when the window has fewer than 2 points or the base month is
-// zero / non-finite (no badge is shown in that case).
-function windowTrend(arr, months) {
-  if (!Array.isArray(arr)) return null;
-  const w = arr.slice(-months);
-  if (w.length < 2) return null;
-  const first = w[0];
-  const last = w[w.length - 1];
-  if (!Number.isFinite(first) || first === 0 || !Number.isFinite(last)) return null;
-  const t = ((last - first) / Math.abs(first)) * 100;
+function finiteOr(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// ETP-5600: the variation of a period block comes from bp-stats (`months`-aware):
+// current window = last N calendar months, previous = the N months before. It is
+// shown only when the backend reports a previous window (`hasPrevious`) and the
+// trend is a finite number — never a "0%" / "∞" placeholder.
+function blockTrend(block) {
+  if (!block?.hasPrevious) return null;
+  const t = Number(block.trend);
   return Number.isFinite(t) ? t : null;
 }
 
-function buildKpis(stats, trend, period) {
-  const revenue = findKpi(stats, 'revenueThisMonth');
-  const expenses = findKpi(stats, 'expensesThisMonth');
-  const revVal = revenue?.value ?? 0;
-  const expVal = expenses?.value ?? 0;
-  const months = PERIOD_MONTHS[period] ?? 3;
-  const revArr = trend?.revenue ?? [];
-  const expArr = trend?.expenses ?? [];
-  const netArr = revArr.map((r, i) => (r ?? 0) - (expArr[i] ?? 0));
+// Net balance variation, computed client-side from the two blocks:
+// (revCur − expCur) vs (revPrev − expPrev). Hidden when the previous net is 0
+// (no base to compare to); the base uses Math.abs so a negative previous net
+// still yields the real direction of the change.
+function netTrend(revenue, expenses) {
+  if (!revenue?.hasPrevious && !expenses?.hasPrevious) return null;
+  const cur = finiteOr(revenue?.value) - finiteOr(expenses?.value);
+  const prev = finiteOr(revenue?.previousValue) - finiteOr(expenses?.previousValue);
+  if (prev === 0) return null;
+  const t = ((cur - prev) / Math.abs(prev)) * 100;
+  return Number.isFinite(t) ? t : null;
+}
+
+// Amounts are the selected period's totals (bp-stats `revenue` / `expenses`,
+// net of VAT), so they follow the period selector. `goodWhenUp` drives the chip
+// colour: a rise is good for revenue and net balance, bad for expenses.
+function buildKpis(stats) {
+  const revenue = findKpi(stats, 'revenue');
+  const expenses = findKpi(stats, 'expenses');
+  const revVal = finiteOr(revenue?.value);
+  const expVal = finiteOr(expenses?.value);
   const netVal = revVal - expVal;
   return [
     { key: 'netBalance', labelKey: 'bpNetBalance', value: netVal,
-      trend: netVal === 0 ? null : windowTrend(netArr, months), positiveTone: netVal >= 0 },
+      trend: netTrend(revenue, expenses), positiveTone: netVal >= 0, goodWhenUp: true },
     { key: 'income', labelKey: 'bpRevenue', value: revVal,
-      trend: revVal === 0 ? null : windowTrend(revArr, months), positiveTone: true },
+      trend: blockTrend(revenue), positiveTone: true, goodWhenUp: true },
     { key: 'expenses', labelKey: 'bpExpenses', value: expVal,
-      trend: expVal === 0 ? null : windowTrend(expArr, months), positiveTone: false },
+      trend: blockTrend(expenses), positiveTone: false, goodWhenUp: false },
   ];
 }
 
 // ─── Trend badge ────────────────────────────────────────────────────────────
 
-function TrendBadge({ trend, period, ui }) {
+// Direction icons: the Figma "Iconic" arrows (24-grid, filled, currentColor), so the
+// arrow takes the chip's text colour (#17663A / #D50B3E).
+const TREND_ICONS = { up: IconicArrowUpIcon, down: IconicArrowDownIcon };
+
+/**
+ * Variation chip (Figma "Badge sm", pill, no border): 24px high, 4px/8px padding,
+ * gap 0, 16px icon then Inter 400 12/16 text. The ARROW follows the real
+ * direction of the change; the COLOUR follows whether that change is good or
+ * bad for the KPI (`goodWhenUp`), via the shared StatusTag success/destructive
+ * tones (#EEFBF4/#17663A, #FEF0F4/#D50B3E). A change that rounds to 0% is hidden
+ * like a missing one: a "0%" chip carries no information (ETP-5600).
+ */
+function TrendBadge({ trend, goodWhenUp, period, ui }) {
   if (trend == null) return null;
-  const up = trend >= 0;
-  const vsLabel = period === '3M' ? ui('bpVsLast3Months') : ui('bpVsLast6Months');
-  const Arrow = up ? ArrowUp : ArrowDown;
-  const pct = `${up ? '+' : '−'}${Math.abs(Math.round(trend))}%`;
+  const rounded = Math.abs(Math.round(trend));
+  if (rounded === 0) return null;
+  const up = trend > 0;
+  const sign = up ? '+' : '\u2212';
+  const vsLabel = period === '6M' ? ui('bpVsLast6Months') : ui('bpVsLast3Months');
+  const Arrow = up ? TREND_ICONS.up : TREND_ICONS.down;
+  const good = up === goodWhenUp;
+  // StatusTag (core) does not spread extra props, so the testid lives on a wrapper.
   return (
-    <span
-      className="flex items-center gap-0.5 px-2 py-1 rounded-full text-xs font-normal whitespace-nowrap"
-      style={{
-        background: up ? 'var(--status-success-bg)' : 'var(--status-destructive-bg)',
-        color: up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))',
-      }}
-    >
-      <Arrow
-        className="h-4 w-4 shrink-0"
-        style={{ color: up ? 'var(--status-success-fg)' : 'hsl(var(--destructive))' }}
-        data-testid="Arrow__22ed51" />
-      {`${pct} ${vsLabel}`}
+    <span className="inline-flex shrink-0" data-testid="StatusTag__22ed51">
+      <StatusTag
+        tone={good ? 'success' : 'destructive'}
+        className="h-6 shrink-0 tracking-[-0.005em]"
+        label={(
+          <>
+            <Arrow className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="Arrow__22ed51" />
+            <span>{`${sign}${rounded}% ${vsLabel}`}</span>
+          </>
+        )}
+        data-testid="StatusTag__22ed51" />
     </span>
   );
 }
@@ -89,6 +116,7 @@ function KpiBlock({ kpi, period, currencyCode, ui }) {
         </span>
         <TrendBadge
           trend={kpi.trend}
+          goodWhenUp={kpi.goodWhenUp}
           period={period}
           ui={ui}
           data-testid="TrendBadge__22ed51" />
@@ -98,11 +126,6 @@ function KpiBlock({ kpi, period, currencyCode, ui }) {
 }
 
 // ─── Chart modal ────────────────────────────────────────────────────────────
-
-const PERIOD_TOGGLE = [
-  { value: '3M', labelKey: 'bpLast3Months' },
-  { value: '6M', labelKey: 'bpLast6Months' },
-];
 
 function ChartLegend({ ui }) {
   return (
@@ -119,10 +142,16 @@ function ChartLegend({ ui }) {
   );
 }
 
+/**
+ * "Ventas y compras" dialog (Figma node "Dialog", 720 wide, radius md). ETP-5600: the dialog no
+ * longer has its own 3/6-month toggle — the period is chosen only with the summary's period
+ * selector and the chart follows that same `period` from ContactsFinanceContext. Order is
+ * title, legend, chart. `bg-popover` (the overlay surface token: white in light theme) replaces
+ * the core DialogContent default `bg-background`, which is the grey page colour.
+ */
 function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
   const { locale } = useLocaleSwitch();
-  const [chartPeriod, setChartPeriod] = useState(period);
-  useEffect(() => { setChartPeriod(period); }, [period, open]);
+  const contentRef = useRef(null);
 
   const labels = trend?.labels ?? [];
   const revenue = trend?.revenue ?? [];
@@ -136,41 +165,32 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
     const s = fmt.format(d);
     return s.charAt(0).toUpperCase() + s.slice(1).replace('.', '');
   });
-  const n = PERIOD_MONTHS[chartPeriod] ?? 3;
+  const n = PERIOD_MONTHS[period] ?? 3;
   const sl = (arr) => arr.slice(-n);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange} data-testid="Dialog__22ed51">
-      <DialogContent className="max-w-2xl w-full" data-testid="DialogContent__22ed51">
+      <DialogContent
+        className="max-w-[720px] w-full bg-popover text-popover-foreground sm:rounded-md focus:outline-none"
+        // ETP-5600 (CP-5): opening the dialog must not land focus on the close X, which
+        // drew a focus ring before any keyboard interaction. Focus moves to the content
+        // itself instead (Radix sets tabIndex=-1) so screen readers land inside the dialog;
+        // `focus:outline-none` keeps the content from drawing a ring of its own.
+        ref={contentRef}
+        onOpenAutoFocus={(e) => { e.preventDefault(); contentRef.current?.focus(); }}
+        data-testid="DialogContent__22ed51">
         <DialogHeader data-testid="DialogHeader__22ed51">
           <DialogTitle data-testid="DialogTitle__22ed51">
-            <div className="flex items-center justify-between gap-4 pr-8">
-              <span>{ui('bpSalesPurchases')}</span>
-              <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-                {PERIOD_TOGGLE.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setChartPeriod(opt.value)}
-                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                      chartPeriod === opt.value
-                        ? 'bg-card text-status-info-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {ui(opt.labelKey)}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <span className="block pr-8">{ui('bpSalesPurchases')}</span>
           </DialogTitle>
         </DialogHeader>
+        <ChartLegend ui={ui} data-testid="ChartLegend__22ed51" />
         <BPChartSVGContent
           labels={sl(localizedLabels)}
           revenue={sl(revenue)}
           expenses={sl(expenses)}
-          CW={580}
-          CH={280}
+          CW={672}
+          CH={400}
           PX={48}
           PY={16}
           PB={28}
@@ -178,7 +198,6 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
           chartId="contacts-summary-chart"
           orgCurrency={currencyCode ?? 'USD'}
           data-testid="BPChartSVGContent__22ed51" />
-        <ChartLegend ui={ui} data-testid="ChartLegend__22ed51" />
       </DialogContent>
     </Dialog>
   );
@@ -188,9 +207,10 @@ function ChartDialog({ open, onOpenChange, trend, period, currencyCode, ui }) {
 
 /**
  * Horizontal financial summary rendered in the DetailView `headerContent` slot,
- * above the General form. Replaces the former right-side sidebar: three KPIs
- * (Net Balance / Income / Expenses) with trend badges, plus a "View chart"
- * button that opens the trend chart in a dialog.
+ * above the General form (and at the top of ContactsFinancialPanel). Replaces the
+ * former right-side sidebar: three KPIs (Net Balance / Income / Expenses) with
+ * trend badges, the period selector (ContactsPeriodButton, ETP-5600 — formerly in
+ * the tabs bar) and a "View chart" button that opens the trend chart in a dialog.
  */
 export default function ContactsSummaryWidget({ data, optionalProvider = false }) {
   const ui = useUI();
@@ -208,10 +228,12 @@ export default function ContactsSummaryWidget({ data, optionalProvider = false }
   if (!data?.id) return null;
 
   const loading = stats === null;
-  const kpis = buildKpis(stats, trend, period);
+  const kpis = buildKpis(stats);
 
   return (
-    <div className="px-2 pt-2">
+    // ETP-5600 spacing: no top padding (the tabs bar above already has 8px below it) and
+    // pb-3 so, with the form card's own 8px padding, the summary sits 20px above the inputs.
+    <div className="px-2 pb-3">
       <div className="flex flex-row items-center justify-between gap-5 border border-[hsl(var(--border-subtle))] rounded-lg px-3 py-2 min-h-14">
         {loading ? (
           <>
@@ -230,14 +252,17 @@ export default function ContactsSummaryWidget({ data, optionalProvider = false }
               data-testid="KpiBlock__22ed51" />
           ))
         )}
-        <button
-          type="button"
-          onClick={() => setChartOpen(true)}
-          className="shrink-0 flex items-center gap-1 px-2 py-1 h-8 bg-[hsl(var(--muted))] rounded-lg text-sm font-medium text-[hsl(var(--foreground))] hover:brightness-95 transition-all"
-        >
-          <LineChart className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="LineChart__22ed51" />
-          {ui('bpViewChart')}
-        </button>
+        <div className="shrink-0 flex items-center gap-2">
+          <ContactsPeriodButton data-testid="ContactsPeriodButton__22ed51" />
+          <button
+            type="button"
+            onClick={() => setChartOpen(true)}
+            className="shrink-0 flex items-center gap-1 px-2 py-1 h-8 bg-[hsl(var(--muted))] rounded-lg text-sm font-medium text-[hsl(var(--foreground))] hover:brightness-95 transition-all"
+          >
+            <LineChart className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="LineChart__22ed51" />
+            {ui('bpViewChart')}
+          </button>
+        </div>
       </div>
       <ChartDialog
         open={chartOpen}

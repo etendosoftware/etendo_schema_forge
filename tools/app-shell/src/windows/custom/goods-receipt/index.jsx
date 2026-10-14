@@ -22,12 +22,13 @@ import { useRowConfirmAction } from '../shared/useRowConfirmAction.jsx';
 import ConfirmGoodsReceiptModal from '@generated/goods-receipt/custom/ConfirmGoodsReceiptModal';
 
 import { buildHeaders } from '@/auth/api.js';
+import { ACCOUNTING_CAPABILITY } from '@/lib/capabilityVisibility.js';
 const HEADER_COLUMNS = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false, required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
-  { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
+  { key: 'posted', column: 'Posted', type: 'boolean', required: true, visibleWhenCapability: ACCOUNTING_CAPABILITY, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } } },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', required: true },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent' },
 ];
@@ -145,7 +146,6 @@ export default function GoodsReceiptWindow(props) {
     token,
     ConfirmModal: ConfirmGoodsReceiptModal,
     confirmedTitleKey: 'goodsReceipt.confirmModal.confirmedTitle',
-    invoiceResultTitleKey: 'goodsReceipt.confirmModal.confirmedTitle',
     invoiceDocType: 'facturaCompra',
     invoiceRoute: '/purchase-invoice',
     onRefresh: () => setRefreshKey(k => k + 1),

@@ -124,6 +124,21 @@ export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
 // never be paired with a required/blocking validation.
 export const DECLARATION_TYPE_INGRESO = 'I';
 
+// ETP-5584 P13 — the one list of file formats accepted for a declaration's justificante
+// (AEAT receipt). Every place that mentions or enforces them derives from this:
+//   - the "Justificante" tab of 303 and 349 (`AttachmentsTab config=`), whose dropzone
+//     filter and "Formatos compatibles: …" text come from it;
+//   - PresentModal's "Subir justificante (…)" button label (`buildTypesLabel`) and its file
+//     input's `accept` (`buildAcceptAttribute`), both in FmOverlays.jsx.
+// PDF only: the AEAT receipt is a PDF (the telematic flow stores AEAT's own `pdfBase64`), and
+// the tab was restricted to PDF on purpose in ETP-4456. The backend attachment policy
+// (`NeoAttachmentPolicy`) also accepts XML for attachments in general, so adding a format here
+// is a product decision, not a backend change — the backend already enforces its own list.
+export const RECEIPT_ATTACHMENT_CONFIG = Object.freeze({
+  allowedMimeTypes: Object.freeze(['application/pdf']),
+  allowedExtensions: Object.freeze(['pdf']),
+});
+
 // ETP-5393 Bug C [W1 re-review] — boxes 111 (Rectificación – Importe) and 77 (IVA a la
 // importación liquidado por la Aduana pendiente de ingreso) are editable boxes the
 // classic AEAT303Report engine hard-rejects when negative (AEAT303Report2024.java:276-278 for
@@ -1049,17 +1064,34 @@ export function withBox111NonZeroFlag(identification, liveBoxes) {
   return { ...identification, _box111NonZero: box111 != null && Number(box111) !== 0 };
 }
 
-// ETP-5597 pt.1 — superset of `withBox111NonZeroFlag`: also merges `_box69Positive` (casilla 69,
-// "Resultado de la autoliquidación", strictly > 0 — an amount to pay), which fm303Layouts.js's
-// tipo_declaracion options read through `disabledWhen` to lock Compensación/Devolución types.
-// A missing box 69 (nothing computed yet) is `false`, so nothing is locked before the first
-// calculation. Use this wherever the identification object feeds the layout engine (rendering
-// and pre-flight gates); `withBox111NonZeroFlag` stays for callers that only need box 111.
+/**
+ * ETP-5597 — the single place where the result boxes decide which `tipo_declaracion` options are
+ * allowed (consumed through `_tipoDeclRestriction` by fm303Layouts.js's option `disabledWhen`):
+ *   - casilla 71 > 0 (amount to pay)            → 'positive_result' (C/D/V/X disabled)
+ *   - casilla 69 > 0 AND casilla 71 < 0          → 'zero_only' (only N allowed)
+ *   - anything else, incl. 69/71 not computed yet → null (no restriction)
+ * Mutually exclusive by the sign of casilla 71, so the order of the checks is not significant.
+ */
+export function resolveTipoDeclaracionRestriction(box69, box71) {
+  const r71 = box71 == null ? null : Number(box71);
+  if (r71 == null || Number.isNaN(r71)) return null;
+  if (r71 > 0) return 'positive_result';
+  const r69 = box69 == null ? null : Number(box69);
+  if (r71 < 0 && r69 != null && r69 > 0) return 'zero_only';
+  return null;
+}
+
+// ETP-5597 pt.1 — superset of `withBox111NonZeroFlag`: also merges `_tipoDeclRestriction` (see
+// `resolveTipoDeclaracionRestriction`), which fm303Layouts.js's tipo_declaracion options read
+// through `disabledWhen`. A missing box 69/71 (nothing computed yet) yields no restriction, so
+// nothing is locked before the first calculation. Use this wherever the identification object
+// feeds the layout engine (rendering and pre-flight gates); `withBox111NonZeroFlag` stays for
+// callers that only need box 111.
 export function withDerivedBoxFlags(identification, liveBoxes) {
-  const box69 = getBoxValue(liveBoxes, 69);
   return {
     ...withBox111NonZeroFlag(identification, liveBoxes),
-    _box69Positive: box69 != null && Number(box69) > 0,
+    _tipoDeclRestriction: resolveTipoDeclaracionRestriction(
+      getBoxValue(liveBoxes, 69), getBoxValue(liveBoxes, 71)),
   };
 }
 

@@ -50,7 +50,7 @@
         "field": "posted",
         "trueKey": "postedStatus",
         "falseKey": "notPostedStatus",
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
       }
     ],
     "labelOverrides": {
@@ -197,6 +197,7 @@
           "displayLogic": null
         },
         "posted": {
+          "visibleWhenCapability": "showAccountingFields",
           "visibility": "readOnly",
           "form": false,
           "grid": true,
@@ -210,10 +211,6 @@
               "en_US": "Not posted",
               "es_ES": "Sin contabilizar"
             }
-          },
-          "badgeVariants": {
-            "true": "green",
-            "false": "orange"
           },
           "type": "boolean"
         }

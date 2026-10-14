@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/FiscalMonitorPage.jsx
 // Vitest render test: FiscalMonitorPage must thread tbaiValidationResults from
 // useFiscalMonitor through to TbaiMonitorSection as the `validationResults` prop
 // (standalone tbai profile), so the section can join error reasons.
@@ -11,7 +12,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
-vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
+vi.mock('@/components/related-documents/helpers.js', async (importOriginal) => ({ ...(await importOriginal()), neoBase: (u) => u }));
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: vi.fn() }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('../../fiscal-config/useCertExpiry.js', () => ({

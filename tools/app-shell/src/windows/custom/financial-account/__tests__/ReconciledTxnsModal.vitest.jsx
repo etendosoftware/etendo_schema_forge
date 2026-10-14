@@ -20,7 +20,12 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogTitle: ({ children, ...props }) => <h2 {...props}>{children}</h2>,
 }));
 
+// ETP-5684 — the posting dot is gated on showAccountingFields (fail closed).
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 import { ReconciledTxnsModal } from '../ReconciledTxnsModal.jsx';
+import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
 
 const TXN = {
   documentNo: '1000034', date: '2026-01-26T00:00:00Z', contact: 'Laura Morat',
@@ -127,5 +132,23 @@ describe('ReconciledTxnsModal', () => {
     // BF resolves to its i18n key; an unknown code is rendered verbatim.
     expect(screen.getByText('financeAccountMovementsTypeBF')).toBeInTheDocument();
     expect(screen.getByText('OTHER')).toBeInTheDocument();
+  });
+});
+
+// ETP-5684 — the posting dot under each transaction's type is an accounting status: a role
+// without "Show Accounting Fields" does not see it.
+describe('ReconciledTxnsModal — accounting capability gate (ETP-5684)', () => {
+  const dots = () => document.querySelectorAll('[data-tone]');
+
+  it('shows the posting dot when the role can see accounting', () => {
+    render(<ReconciledTxnsModal line={line()} currency="EUR" onClose={vi.fn()} />);
+    expect(dots().length).toBe(1);
+  });
+
+  it('hides the posting dot when the capability is off', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    render(<ReconciledTxnsModal line={line()} currency="EUR" onClose={vi.fn()} />);
+    expect(screen.getByText('financeAccountMovementsTypeBPW')).toBeInTheDocument();
+    expect(dots().length).toBe(0);
   });
 });

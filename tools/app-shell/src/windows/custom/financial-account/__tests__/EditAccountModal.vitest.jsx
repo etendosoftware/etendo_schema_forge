@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/EditAccountModal.jsx
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -194,6 +195,12 @@ async function openConnectedModal(props = {}) {
   return result;
 }
 
+/** Picks an account in an AccountSelect field: opens its popup, clicks the option (ETP-5681). */
+async function pickAccount(user, key, id) {
+  await user.click(screen.getByTestId(`field-${key}`));
+  await user.click(await screen.findByTestId(`${key}-popup-option-${id}`));
+}
+
 describe('EditAccountModal', () => {
   beforeEach(() => {
     toastSuccess.mockClear();
@@ -345,6 +352,19 @@ describe('EditAccountModal', () => {
   });
 
   describe('connected account', () => {
+    it('shows the "last sync" line inside the connection panel when connected', async () => {
+      fetchStatus.mockResolvedValue({ ...BASE_STATUS, lastSyncDate: '2020-01-01T10:00:00Z' });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      const line = await screen.findByTestId('bank-connection-last-sync');
+      expect(line).toHaveTextContent('financeAccountsLastSyncAgo');
+    });
+
+    it('shows "never synced" in the panel when the connection has no lastSyncDate', async () => {
+      fetchStatus.mockResolvedValue({ ...BASE_STATUS, lastSyncDate: null });
+      renderModal({ account: CONNECTED_ACCOUNT });
+      expect(await screen.findByTestId('bank-connection-last-sync')).toHaveTextContent('financeAccountsNeverSynced');
+    });
+
     it('renders the bank connection panel (sync, editable IBAN, read-only Currency) and no Connect button', async () => {
       renderModal({ account: CONNECTED_ACCOUNT });
       await waitFor(() => expect(fetchStatus).toHaveBeenCalledWith('acc-9'));
@@ -1187,7 +1207,7 @@ describe('EditAccountModal', () => {
     function expectClearedFieldsHidden(section) {
       HIDDEN_CLEARED_FIELDS.forEach((key) => {
         expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
-        expect(within(section).queryByTestId(`field-${key}-chip`)).not.toBeInTheDocument();
+        expect(within(section).queryByTestId(`field-${key}-clear`)).not.toBeInTheDocument();
       });
       HIDDEN_CLEARED_LABELS.forEach((labelKey) => {
         expect(within(section).queryByText(labelKey)).not.toBeInTheDocument();
@@ -1203,7 +1223,7 @@ describe('EditAccountModal', () => {
       ALL_RENDERED_FIELDS.forEach((key) => {
         expect(within(section).getByTestId(`field-${key}`)).toBeInTheDocument();
       });
-      expect(within(section).getAllByRole('combobox')).toHaveLength(7);
+      expect(within(section).getAllByTestId(/^field-[A-Za-z]+$/)).toHaveLength(7);
       expectClearedFieldsHidden(section);
 
       // All 3 sub-section headings render, "General" included.
@@ -1225,7 +1245,7 @@ describe('EditAccountModal', () => {
       GENERAL_FIELDS.forEach((key) => {
         expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
       });
-      expect(within(section).getAllByRole('combobox')).toHaveLength(4);
+      expect(within(section).getAllByTestId(/^field-[A-Za-z]+$/)).toHaveLength(4);
       expectClearedFieldsHidden(section);
 
       // "General" is omitted, not merely hidden — the heading itself is absent.
@@ -1247,7 +1267,7 @@ describe('EditAccountModal', () => {
       GENERAL_FIELDS.forEach((key) => {
         expect(within(section).queryByTestId(`field-${key}`)).not.toBeInTheDocument();
       });
-      expect(within(section).getAllByRole('combobox')).toHaveLength(4);
+      expect(within(section).getAllByTestId(/^field-[A-Za-z]+$/)).toHaveLength(4);
       expectClearedFieldsHidden(section);
       expect(within(section).queryByText('financeAccountsEditTabGeneral')).not.toBeInTheDocument();
       expect(within(section).getByText('financeAccountsAccountingSectionPaymentIn')).toBeInTheDocument();
@@ -1306,8 +1326,8 @@ describe('EditAccountModal', () => {
       // Neither field's input/chip renders...
       expect(within(section).queryByTestId('field-clearedPaymentAccount')).not.toBeInTheDocument();
       expect(within(section).queryByTestId('field-clearedPaymentAccountOUT')).not.toBeInTheDocument();
-      expect(within(section).queryByTestId('field-clearedPaymentAccount-chip')).not.toBeInTheDocument();
-      expect(within(section).queryByTestId('field-clearedPaymentAccountOUT-chip')).not.toBeInTheDocument();
+      expect(within(section).queryByTestId('field-clearedPaymentAccount-clear')).not.toBeInTheDocument();
+      expect(within(section).queryByTestId('field-clearedPaymentAccountOUT-clear')).not.toBeInTheDocument();
       // ...nor does its label...
       expect(within(section).queryByText('financeAccountsAccountingClearedIn')).not.toBeInTheDocument();
       expect(within(section).queryByText('financeAccountsAccountingClearedOut')).not.toBeInTheDocument();
@@ -1349,8 +1369,7 @@ describe('EditAccountModal', () => {
 
       // Change an unrelated field so Save is enabled — the two cleared fields are never touched
       // by the user because they are not even rendered.
-      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE2'));
+      await pickAccount(user, 'fINBankfeeAcct', 'FEE2');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       await user.click(screen.getByTestId('edit-account-save'));
@@ -1410,29 +1429,24 @@ describe('EditAccountModal', () => {
       // Nothing changed yet — Save is disabled (nothing dirty anywhere in the form).
       expect(screen.getByTestId('edit-account-save')).toBeDisabled();
 
-      // Change depositAccount away from its snapshot value. Clearing via the chip's X
-      // reopens the dropdown immediately (CreatableSearchSelect's handleClear), so the
-      // desired option can be picked straight away.
-      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-depositAccount-DEP2'));
+      // Change depositAccount away from its snapshot value by picking another account in its
+      // popup (AccountSelect → SearchPopup, ETP-5681).
+      await pickAccount(user, 'depositAccount', 'DEP2');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       // Also change fINBankfeeAcct — a second, independent key in the same map.
-      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE2'));
+      await pickAccount(user, 'fINBankfeeAcct', 'FEE2');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       // Revert depositAccount back to its original snapshot value — the OTHER field
       // (fINBankfeeAcct) is still dirty, so Save must stay enabled: the two keys are not
       // collapsed into one shared dirty flag.
-      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-depositAccount-DEP1'));
+      await pickAccount(user, 'depositAccount', 'DEP1');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       // Revert fINBankfeeAcct too — every key in the map now matches its snapshot again,
       // so Save disables.
-      await user.click(within(screen.getByTestId('field-fINBankfeeAcct-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE1'));
+      await pickAccount(user, 'fINBankfeeAcct', 'FEE1');
       await waitFor(() => expect(screen.getByTestId('edit-account-save')).toBeDisabled());
     });
   });
@@ -1477,8 +1491,7 @@ describe('EditAccountModal', () => {
       // Fill the Banco-only "General" field while the account is still type Banco.
       await user.click(getTab('financeAccountsEditTabAccounting'));
       await screen.findByTestId('accounting-configuration-section');
-      await user.click(screen.getByTestId('field-fINBankfeeAcct'));
-      await user.click(await screen.findByTestId('option-fINBankfeeAcct-FEE1'));
+      await pickAccount(user, 'fINBankfeeAcct', 'FEE1');
       expect(screen.getByTestId('edit-account-save')).not.toBeDisabled();
 
       // Switch back to General and change Type to Cash BEFORE saving. The Accounting tab's
@@ -1537,8 +1550,7 @@ describe('EditAccountModal', () => {
       // Change depositAccount while the account is (momentarily) type Cash.
       await user.click(getTab('financeAccountsEditTabAccounting'));
       await screen.findByTestId('accounting-configuration-section');
-      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-depositAccount-DEP2'));
+      await pickAccount(user, 'depositAccount', 'DEP2');
 
       // Revert Type back to Banco — typeDirty clears, isolating accounting.dirty as the only
       // remaining source of Save being enabled.
@@ -1551,8 +1563,7 @@ describe('EditAccountModal', () => {
       // matches its snapshot again, so Save disables. Confirms the dirty map survived the round-trip type
       // switch uncorrupted (no bug here — this is the "confirmed fine" half of the QA check).
       await user.click(getTab('financeAccountsEditTabAccounting'));
-      await user.click(within(screen.getByTestId('field-depositAccount-chip')).getByLabelText('clear'));
-      await user.click(await screen.findByTestId('option-depositAccount-DEP1'));
+      await pickAccount(user, 'depositAccount', 'DEP1');
       await waitFor(() => expect(screen.getByTestId('edit-account-save')).toBeDisabled());
     });
   });
@@ -1730,7 +1741,7 @@ describe('EditAccountModal', () => {
       // Clear the only pre-filled field — under the old (retired) required-fINAssetAcct
       // behavior this exact action would have disabled Save. It must not anymore, for ANY
       // field, since none is required.
-      await user.click(within(screen.getByTestId('field-fINBankrevaluationgainAcct-chip')).getByLabelText('clear'));
+      await user.click(screen.getByTestId('field-fINBankrevaluationgainAcct-clear'));
 
       await waitFor(() =>
         expect(screen.getByTestId('field-fINBankrevaluationgainAcct')).toBeInTheDocument(),

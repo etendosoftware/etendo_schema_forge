@@ -64,7 +64,7 @@ export function resolveFieldLabel(dictionary, apiKey, fallbackLabel) {
 }
 
 // Account combinations (C_ValidCombination) — code + name, reused by every
-// AccountBadgeSelect in the "Valores por defecto" tab.
+// AccountSelect in the "Valores por defecto" tab.
 export const ACCOUNT_OPTIONS = [
   { id: 'acc-572', code: '572', name: 'Bancos c/c' },
   { id: 'acc-5723', code: '5723', name: 'Bancos, cuenta puente' },
@@ -278,7 +278,6 @@ export const DIMENSIONS_SEED = [
 export const GENERAL_ACCOUNTS_SEED = {
   suspenseBalancingUse: false,
   suspenseBalancing: null,
-  suspenseErrorUse: false,
   currencyBalancingUse: false,
   currencyBalancingAcct: null,
   retainedEarning: null,

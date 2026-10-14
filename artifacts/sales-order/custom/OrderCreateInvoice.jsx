@@ -176,13 +176,13 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
 
   const confirmedPanel = confirmedDocs && hasConfirmedDoc
     ? createPortal(
+        // ETP-5674 — the popup derives its title and banner from `docs`; `confirmedTitle` only
+        // feeds the no-document toast below.
         <ConfirmResultModal
-          title={confirmedTitle || ui('soConfirmedTitle')}
           docs={[
-            confirmedDocs?.shipment?.id && { type: 'salida', num: confirmedDocs.shipment.documentNo, amount: confirmedDocs.shipment.amount, route: `/goods-shipment/${confirmedDocs.shipment.id}` },
-            confirmedDocs?.invoice?.id && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
+            confirmedDocs?.shipment?.id && { type: 'salida', num: confirmedDocs.shipment.documentNo, documentStatus: confirmedDocs.shipment.documentStatus, route: `/goods-shipment/${confirmedDocs.shipment.id}` },
+            confirmedDocs?.invoice?.id && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, documentStatus: confirmedDocs.invoice.documentStatus, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
           ].filter(Boolean)}
-          currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
           onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); emitSurveyTrigger(); onRefresh?.(); }}
           data-testid="ConfirmResultModal__18d1f0" />,
@@ -306,10 +306,9 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           type="button"
           data-testid="sales-order-manage-docs"
           onClick={() => openModal(null)}
-          style={btnPrimaryStyle}
-          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
-          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
+          // ETP-5601 — record-toolbar primary button (Figma): 40px, 8px radius, text-sm/leading-6,
+          // #121217. Own classes rather than `btnPrimaryStyle`, which the modals below still use.
+          className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg bg-[#121217] text-white text-sm leading-6 font-medium hover:bg-[#121217]/90 transition-colors"
         >
           {buttonLabel}
         </button>
@@ -491,7 +490,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
           throw new Error(ui('soOrderConfirmedShipmentError') + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
-        currentShipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        // ETP-5674: carry documentStatus so the result modal badges the shipment from its real status.
+        currentShipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null, documentStatus: doc?.documentStatus ?? null };
         setShipmentResult(currentShipment);
         trackDocumentCreated('goods-shipment');
       } catch (e) {
@@ -628,7 +628,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
                 {bpName}
               </div>
             )}
-            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
+            <div data-testid="sales-order-confirm-grand-total" style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
               {formatCurrency(currency, grandTotal)}
             </div>
             <div style={{ fontSize: 11, color: 'var(--status-info-fg)', marginBottom: 10 }}>
@@ -804,7 +804,8 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
           throw new Error(translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
-        result.shipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        // ETP-5674: carry documentStatus so the result modal badges the shipment from its real status.
+        result.shipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null, documentStatus: doc?.documentStatus ?? null };
         trackDocumentCreated('goods-shipment');
       }
 

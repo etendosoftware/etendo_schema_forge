@@ -3,6 +3,7 @@ import { X, Upload, Trash2, Loader2, Download } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useMainAttachment } from './useMainAttachment.js';
 import PdfViewer from './PdfViewer.jsx';
+import UploadedFileViewer from './UploadedFileViewer.jsx';
 import { ACCEPTED_TYPES, ACCEPT_ATTR } from './attachmentFileTypes.js';
 
 function getBackdropClass(animState) {
@@ -16,6 +17,56 @@ function getCardClass(animState) {
   if (animState === 'closing') return 'translate-x-full transition-transform duration-[280ms]';
   if (animState === 'closingUp') return 'opacity-0 translate-x-full transition-all duration-[280ms]';
   return 'translate-x-0 transition-transform duration-[280ms]';
+}
+
+function StoredFileDownloadLink({ objectUrl, fileName }) {
+  const ui = useUI();
+  return (
+    <a
+      href={objectUrl}
+      download={fileName}
+      className="w-8 h-8 flex items-center justify-center bg-card border border-[hsl(var(--border-control))] shadow-sm rounded-lg hover:bg-muted transition-colors"
+      title={`${ui('downloadPdf')} — ${fileName}`}
+      aria-label={ui('downloadPdf')}
+    >
+      <Download size={16} className="text-[hsl(var(--text-disabled))]" data-testid="Download__152ff6" />
+    </a>
+  );
+}
+
+/**
+ * Stored-file view for drop-zone windows that opt into `fileActions` (ETP-5518): the file
+ * with its "More" menu (Replace / Delete, confirmed) and lightbox. Download stays where it
+ * was; the bare delete button is gone, so deleting always goes through the confirmation.
+ */
+function StoredFileWithActions({ attachment, readOnly, onPickFile }) {
+  const inputRef = useRef(null);
+  const { objectUrl, fileName } = attachment.storedFile;
+  return (
+    <div className="relative flex flex-col h-full min-h-0">
+      <div className="absolute top-2 left-2 z-10 flex gap-1">
+        <StoredFileDownloadLink
+          objectUrl={objectUrl}
+          fileName={fileName}
+          data-testid="StoredFileDownloadLink__152ff6" />
+      </div>
+      <UploadedFileViewer
+        file={attachment.storedFile}
+        onReplace={readOnly ? undefined : () => inputRef.current?.click()}
+        onDelete={readOnly ? undefined : () => attachment.deleteFile().catch(() => {})}
+        actionsDisabled={attachment.isBusy}
+        data-testid="UploadedFileViewer__152ff6" />
+      {!readOnly && (
+        <input
+          ref={inputRef}
+          type="file"
+          accept={ACCEPT_ATTR}
+          className="hidden"
+          onChange={onPickFile}
+          data-testid="preview-file-replace-input" />
+      )}
+    </div>
+  );
 }
 
 function ManagedLeftPanel({ cfg, leftPanel }) {
@@ -132,21 +183,26 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
   // Reached only when autoFetch is false (drop-zone windows: purchase-invoice,
   // goods-receipt, return-material-receipt) — `!autoFetch` below is therefore always true
   // in this branch; kept explicit rather than removed to keep this change a pure reorder.
+  if (attachment.storedFile && cfg.fileActions) {
+    return (
+      <StoredFileWithActions
+        attachment={attachment}
+        readOnly={readOnly}
+        onPickFile={handleFileChange}
+        data-testid="StoredFileWithActions__152ff6" />
+    );
+  }
+
   if (attachment.storedFile) {
     const { objectUrl, mimeType, fileName } = attachment.storedFile;
     return (
       <div className="relative flex flex-col h-full min-h-0">
         {!autoFetch && (
           <div className="absolute top-2 left-2 z-10 flex gap-1">
-            <a
-              href={objectUrl}
-              download={fileName}
-              className="w-8 h-8 flex items-center justify-center bg-card border border-[hsl(var(--border-control))] shadow-sm rounded-lg hover:bg-muted transition-colors"
-              title={`${ui('downloadPdf')} — ${fileName}`}
-              aria-label={ui('downloadPdf')}
-            >
-              <Download size={16} className="text-[hsl(var(--text-disabled))]" data-testid="Download__152ff6" />
-            </a>
+            <StoredFileDownloadLink
+              objectUrl={objectUrl}
+              fileName={fileName}
+              data-testid="StoredFileDownloadLink__152ff6" />
             {!readOnly && (<button
               type="button"
               onClick={() => attachment.deleteFile().catch(() => {})}
@@ -263,6 +319,10 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
  *                                 record's attachments, so it appears in the Attachments
  *                                 tab (ETP-4855). Omit it for generated-PDF caches —
  *                                 nobody attached those. See usePreviewAttachment.
+ *     fileActions?: boolean,    - drop-zone mode only (ETP-5518): the stored file gets the
+ *                                 "More" menu (Replace file / Delete file, with confirmation)
+ *                                 and opens in a lightbox when clicked. Opt-in per window;
+ *                                 omitted → the plain viewer with its download/delete buttons.
  *     readOnly?: boolean,       - Solo-Lectura tier (ETP-5205): the stored file is still
  *                                 shown and downloadable, but nothing is written — no
  *                                 auto-store, no drop zone/file picker, no delete.

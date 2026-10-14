@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
-import { getLayout303, matchesVisibility, isFieldRequired, resolveFieldLabelKey, isOptionDisabled, getInvalidSelectedOption } from './fm303Layouts.js';
-import { formatAmount, formatPercent, NEGATIVE_NOT_ALLOWED_BOXES, exceedsTypedIntegerDigits, exceedsTypedDecimalDigits } from '../../fiscalModelsUtils.js';
+import { getLayout303, matchesVisibility, isFieldRequired, resolveFieldLabelKey, isOptionDisabled, getInvalidSelectedOption, resolveOptionDisabledReasonKey } from './fm303Layouts.js';
+import { formatAmount, formatPercent, exceedsTypedIntegerDigits, exceedsTypedDecimalDigits } from '../../fiscalModelsUtils.js';
 
 const SECTION_ICON = {
   iva_devengado: <TrendingUp
@@ -22,13 +25,15 @@ function formatCell(val, colType) {
   return colType === 'percent' ? formatPercent(val) : formatAmount(val);
 }
 
+// Radix Select item value standing for "no value" (Radix forbids '' as an item value).
+const EMPTY_OPTION = '__empty__';
+
 const COMPACT_SECTIONS = new Set(['iva_devengado', 'iva_deducible', 'resultado', 'info_adicional', 'resultado_final']);
 const TITLED_SECTIONS  = new Set(['iva_devengado', 'iva_deducible']);
 
-// ETP-5393 Bug C — `min="0"` here (driven by the shared `NEGATIVE_NOT_ALLOWED_BOXES`, see
-// fiscalModelsUtils.js) is a UX hint only — the actual enforcement (clamp + i18n error) lives
-// in FmModel303Page.jsx's handleBoxChange, since a browser `min` on <input type="number"> does
-// not block typing or blur.
+// ETP-5393 Bug C — negative values on `NEGATIVE_NOT_ALLOWED_BOXES` (fiscalModelsUtils.js) are
+// enforced (clamp + i18n error) in FmModel303Page.jsx's handleBoxChange; the cell editor itself
+// is a text input (see renderCellInput) and carries no `min` hint any more.
 
 // Applies a derivedValue's `clampMin` (if any) to an already-computed display value.
 // A `null` display (nothing to compute) is left untouched — clamping never manufactures
@@ -70,7 +75,7 @@ function computeDerivedValueBlankOnMissing(dv, valueMap) {
 }
 
 
-export default function FmBoxes303({ boxes, year, period, sectionIds, identification, onIdentChange, onBoxChange, readOnly }) {
+export default function FmBoxes303({ boxes, year, period, sectionIds, identification, onIdentChange, onBoxChange, readOnly, lockRectificativaChecked }) {
   const ui = useUI();
   const t = ui;
   const layout = getLayout303(year, period);
@@ -125,8 +130,8 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   // clamped/rounded here, right before it's committed via onBoxChange. Returns the raw string
   // unchanged when it isn't a parseable number (e.g. empty string, to preserve "clear the field").
   const clampPercentValue = (raw) => {
-    const num = parseFloat(String(raw ?? '').replace(',', '.'));
-    if (isNaN(num)) return raw;
+    const num = parseLocaleNumber(raw).value;
+    if (num == null) return raw;
     const clamped = Math.min(100, Math.max(0, num));
     return String(Math.round(clamped * 100) / 100);
   };
@@ -150,83 +155,118 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     setEditingCell(null);
   };
 
+  // ETP-5597 (CP-18, round 7) — the editor is the canonical MaskedAmountInput
+  // (components/forms/fields.jsx), NOT a native <input type="number">: the browser parses a number
+  // input with ITS OWN UI locale, and Chromium under an English UI treats "," as a grouping
+  // separator and strips it, so typing "12,5" committed 125. Amount cells behave exactly like the
+  // app's other amount/price fields (EntityForm / DataTable / InlineLinesPanel for
+  // TWO_DECIMAL_FIELD_TYPES): `grouping` ON, instance separators from getCurrencyFormatConfig()
+  // (GET /sws/neo/currency-format) — with the es separators "12,5" → 12,50, "12.5" → 125 ("." is
+  // the thousands separator, dropped as typed) and "1.234,5" → 1.234,50. Percent cells keep
+  // grouping OFF, like every percent/quantity field in the app, so both "," and "." are a decimal
+  // point there. Either way the component reports the CLEAN value ("12.5": digits, optional "-",
+  // at most one ".") through onChange; that string is what `pendingValues`/onBoxChange carry, and
+  // FmModel303Page's parseBoxInput reads it with the same parseLocaleNumber the component uses, so
+  // what is shown and what is stored always agree.
   const renderCellInput = (boxNum, val, colType = 'amount') => {
     const isPercent = colType === 'percent';
     return (
-      <input
-        type="number"
-        step="any"
+      <MaskedAmountInput
+        bare
+        grouping={!isPercent}
         className="fm-aeat-cell__input"
         value={pendingValues[boxNum] ?? (val != null ? String(val) : '')}
-        onChange={e => {
-          const next = e.target.value;
-          // ETP-5456 (UX refinement) — HARD STOP at keystroke/paste time, BOTH sides of the
-          // decimal point:
-          //  - INTEGER part: refused once it reaches boxNum's AEAT record-length ceiling (15
-          //    digits, or 14 once the value is already negative — the minus sign occupies one of
-          //    the 17 Lon characters).
-          //  - DECIMAL part: refused once a 3rd decimal digit would be typed — a Lon=17 amount
-          //    box always allows exactly 2 (`exceedsTypedDecimalDigits`, box/sign-independent,
-          //    unlike the integer ceiling). Added after manual QA caught a 4-decimal value
-          //    ("...9012345.2057") going through uncaught in box 42 — only the integer side had
-          //    ever been guarded here.
-          // Percent cells are exempt from both — they have their own, separate [0,100] range
-          // enforced on commit (`clampPercentValue` below). Reaching either ceiling never blocks
-          // typing on the OTHER side (an integer-ceiling amount can still get its 2 decimals; a
-          // decimal-ceiling amount can still extend its integer part). See
-          // `exceedsTypedIntegerDigits`/`exceedsTypedDecimalDigits`'s doc comments
-          // (fiscalModelsUtils.js) for why this must happen here, at the keystroke, rather than
-          // as a post-hoc validity check — an out-of-range MANUAL value must never be typeable in
-          // the first place, not merely rejected once typed.
-          if (!isPercent && (exceedsTypedIntegerDigits(boxNum, next) || exceedsTypedDecimalDigits(next))) return;
-          setPendingValues(prev => ({ ...prev, [boxNum]: next }));
-        }}
+        // ETP-5456 (UX refinement) — HARD STOP at keystroke/paste time, BOTH sides of the
+        // decimal point:
+        //  - INTEGER part: refused once it reaches boxNum's AEAT record-length ceiling (15
+        //    digits, or 14 once the value is already negative — the minus sign occupies one of
+        //    the 17 Lon characters).
+        //  - DECIMAL part: refused once a 3rd decimal digit would be typed — a Lon=17 amount
+        //    box always allows exactly 2 (`exceedsTypedDecimalDigits`, box/sign-independent,
+        //    unlike the integer ceiling).
+        // Percent cells are exempt from both — they have their own, separate [0,100] range
+        // enforced on commit (`clampPercentValue` above). See `exceedsTypedIntegerDigits`/
+        // `exceedsTypedDecimalDigits`'s doc comments (fiscalModelsUtils.js) for why this must
+        // happen at the keystroke rather than as a post-hoc validity check. MaskedAmountInput's
+        // `isAllowed` veto keeps the refused text off screen.
+        isAllowed={clean => isPercent || !(exceedsTypedIntegerDigits(boxNum, clean) || exceedsTypedDecimalDigits(clean))}
+        onChange={clean => setPendingValues(prev => ({ ...prev, [boxNum]: clean }))}
         onBlur={() => commitCellEdit(boxNum, isPercent)}
-        onKeyDown={e => { if (e.key === 'Enter') { commitCellEdit(boxNum, isPercent); e.target.blur(); } if (e.key === 'Escape') { clearPendingValue(boxNum); setEditingCell(null); } }}
+        onKeyDown={e => { if (e.key === 'Escape') { clearPendingValue(boxNum); setEditingCell(null); } }}
         autoFocus
         disabled={readOnly}
-        max={isPercent ? 100 : undefined}
-        min={isPercent || NEGATIVE_NOT_ALLOWED_BOXES.has(boxNum) ? 0 : undefined}
+        data-testid={`fm-aeat-cell-input-${boxNum}`}
       />
     );
   };
 
+  // ETP-5584 — the app's Select (Radix, `@/components/ui/select`) instead of the browser's
+  // native <select>, so these dropdowns look like every other form field of the app. Same
+  // contract as the app's own optional selects (SelectorInput / EntityForm):
+  // - always CONTROLLED: an unset field is `''` (never `undefined` — a controlled->uncontrolled
+  //   flip swallows the first pick), rendered as the "Seleccionar..." placeholder;
+  // - an OPTIONAL field also offers the placeholder as a real item, so it can be cleared back to
+  //   '' like the native select's "Seleccionar..." option allowed. Radix forbids '' as an item
+  //   value, hence the `EMPTY_OPTION` sentinel, mapped back to '' on change.
+  //
   // ETP-5597 pt.1 — an option whose `disabledWhen` currently matches is rendered `disabled` (not
-  // selectable). If it is ALREADY the selected value (e.g. box 69 turned positive after choosing
+  // selectable). If it is ALREADY the selected value (e.g. box 71 turned positive after choosing
   // "Compensación"), it stays selected — FmModel303Page blocks generation/presentation instead of
-  // silently clearing the user's choice — and the option's `disabledReasonKey` is shown under the
+  // silently clearing the user's choice — and the option's disabled reason
+  // (`resolveOptionDisabledReasonKey`: the rule that currently applies) is shown under the
   // select so the user knows why the declaration cannot be filed as is.
   const renderIdentSelectField = (f, compact = false) => {
+    // A value fixed by `autoValueWhen` (tipo "Resultado cero" while 69 > 0 and 71 < 0) is never
+    // invalid and gets no message at all — the page selects it silently (ETP-5597 QA round 4).
+    const required = isFieldRequired(f, identification);
+    const placeholder = t('fm.ident.decl.placeholder');
     const invalidOption = getInvalidSelectedOption(f, identification);
     const errorId = invalidOption ? `fm-aeat-ident-${f.id}-error` : undefined;
     return (
       <div key={f.id} className={`fm-aeat-ident-inline-field${invalidOption ? ' fm-aeat-ident-inline-field--invalid' : ''}`}>
         <span className="fm-aeat-ident-inline-field__label">
-          {t(resolveFieldLabelKey(f, identification))}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+          {t(resolveFieldLabelKey(f, identification))}{required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
         </span>
-        <select
-          className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}${invalidOption ? ' fm-aeat-ident-inline-field__select--invalid' : ''}`}
+        <Select
           value={identification?.[f.id] ?? ''}
-          onChange={e => onIdentChange?.(f.id, e.target.value)}
+          onValueChange={value => onIdentChange?.(f.id, value === EMPTY_OPTION ? '' : value)}
           disabled={readOnly}
-          aria-invalid={invalidOption ? true : undefined}
-          aria-describedby={errorId}
+          data-testid="FmBoxes303__identSelectRoot"
         >
-          <option value="">{t('fm.ident.decl.placeholder')}</option>
-          {f.options?.map(opt => {
-            const optDisabled = isOptionDisabled(opt, identification);
-            return (
-              <option
-                key={opt.value}
-                value={opt.value}
-                disabled={optDisabled}
-                title={optDisabled && opt.disabledReasonKey ? t(opt.disabledReasonKey) : undefined}
-              >
-                {t(opt.labelKey)}
-              </option>
-            );
-          })}
-        </select>
+          <SelectTrigger
+            className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}${invalidOption ? ' fm-aeat-ident-inline-field__select--invalid' : ''}`}
+            aria-label={t(resolveFieldLabelKey(f, identification))}
+            aria-invalid={invalidOption ? true : undefined}
+            aria-describedby={errorId}
+            data-field-id={f.id}
+            data-testid="FmBoxes303__identSelect"
+          >
+            <SelectValue placeholder={placeholder} data-testid="SelectValue__49d327" />
+          </SelectTrigger>
+          <SelectContent data-testid="SelectContent__49d327">
+            {!required && (
+              <SelectItem value={EMPTY_OPTION} data-option-value="" data-testid="SelectItem__empty49d327">{placeholder}</SelectItem>
+            )}
+            {f.options?.map(opt => {
+              const optDisabled = isOptionDisabled(opt, identification);
+              return (
+                <SelectItem
+                  key={opt.value}
+                  value={opt.value}
+                  disabled={optDisabled}
+                  // The core SelectItem sets `data-[disabled]:pointer-events-none`, which hides the
+                  // reason `title` below; Radix still refuses to select a disabled item.
+                  className="data-[disabled]:pointer-events-auto data-[disabled]:cursor-not-allowed"
+                  title={optDisabled ? t(resolveOptionDisabledReasonKey(opt, identification)) : undefined}
+                  data-option-value={opt.value}
+                  data-testid="SelectItem__49d327"
+                >
+                  {t(opt.labelKey)}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
         {invalidOption && (
           <span
             id={errorId}
@@ -234,7 +274,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
             className="fm-aeat-ident-inline-field__error"
             data-testid={`fm-aeat-ident-${f.id}-error`}
           >
-            {t(invalidOption.disabledReasonKey ?? 'fm.ident.decl.option_not_allowed')}
+            {t(resolveOptionDisabledReasonKey(invalidOption, identification))}
           </span>
         )}
       </div>
@@ -441,12 +481,19 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                         });
                       }
                     };
+                    // ETP-5725 — "Autoliquidación rectificativa" is locked CHECKED (not editable
+                    // to uncheck) while a sibling declaration for this period is already
+                    // presented; see `lockRectificativaChecked` (FmModel303Page.jsx, derived from
+                    // `decl._duplicatePeriodPresented`). Every other checkbox in this section is
+                    // unaffected — `readOnly` alone still gates them.
+                    const fieldDisabled = readOnly
+                      || (f.id === 'rectificativa' && Boolean(lockRectificativaChecked));
                     return (
                       <div key={f.id} className="fm-aeat-ident-cb">
                         <CheckboxField
                           checked={identification?.[f.id] ?? false}
                           onToggle={handleChange}
-                          disabled={readOnly}
+                          disabled={fieldDisabled}
                           data-testid="CheckboxField__49d327" />
                         <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                       </div>

@@ -18,8 +18,13 @@ import {
 } from '@/components/ui/table';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
+import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency';
+import {
+  RATE_DECIMALS, decimalString, roundHalfUp,
+} from '@/components/contract-ui/reconciliationConversionMath.js';
 import { MovementStatusBadge } from './MovementStatusBadge';
 import { PostingStatusDot } from './PostingStatusDot';
+import { postingStatusLabel } from './postingStatusLabel.js';
 import { MovementRowKebab } from './MovementRowKebab';
 import { getContractGridColumns, getContractPanelFields } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel, SortableHeaderSegments } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
@@ -29,6 +34,8 @@ import { useDimensionLookup } from '@/hooks/useMovementLookups';
 import { useUpdateMovement, buildDimensionUpdatePayload } from '@/hooks/useCreateMovement';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { ACCOUNTING_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 
 // ETP-5101 — the "Más información" panel's editable dimension fields. Only these three:
 // FinancialAccountTransactionsHandler#applyEditableDimensions (the backend `update` action)
@@ -204,8 +211,10 @@ const MOVEMENT_CELL_RENDERERS = {
       {
         key: 'posted',
         labelKey: 'financeAccountMovementsColPosted',
-        // The translated PostingStatusDot text, so the two states group the way they read.
-        // Only 'Y' is posted; every other code renders as "Sin contabilizar".
+        // ETP-5684 — only for a role with "Show Accounting Fields" (header segment, sort entry
+        // and the dot in the cell).
+        visibleWhenCapability: ACCOUNTING_CAPABILITY,
+        // The translated PostingStatusDot text, so the states group the way they read.
         sortValue: (m, ctx) => ctx.getPostedLabel(m),
       },
     ],
@@ -218,7 +227,7 @@ const MOVEMENT_CELL_RENDERERS = {
             value={ctx.getTrxTypeLabel(m)}
             className="text-sm leading-5 text-[hsl(var(--foreground))]"
             data-testid="MovementTruncatedText__ae5a16" />
-          <PostingStatusDot posted={m.posted} data-testid="PostingStatusDot__ae5a16" />
+          {ctx.showAccounting && <PostingStatusDot posted={m.posted} data-testid="PostingStatusDot__ae5a16" />}
         </div>
       </TableCell>
     ),
@@ -395,6 +404,57 @@ function PanelField({ label, children }) {
 }
 
 /**
+ * Whether a movement carries a foreign-currency original worth showing: the backend sent a
+ * `foreignCurrency` and it is not the account's own. The ONE predicate behind both the panel's
+ * foreign fields and the row's expandability, so the two can never drift apart (ETP-5657).
+ *
+ * @param {object|null|undefined} movement
+ * @returns {boolean}
+ */
+function hasForeignOriginal(movement) {
+  const ccy = movement?.foreignCurrency;
+  return Boolean(ccy) && ccy !== movement.currencyIso;
+}
+
+/**
+ * ETP-5657 — the original side of a foreign-currency movement, shown first in the "more info"
+ * panel like Classic's Foreign Amount / Foreign Rate: the amount in its own currency
+ * ("$40,91", canonical `formatCurrency`) and the rate as a bare index ("0,67954": up to
+ * {@link RATE_DECIMALS} decimals, no grouping, no trailing zeros). The backend only sends
+ * `foreignAmount` / `foreignCurrency` / `foreignConversionRate` for a foreign-currency
+ * transaction, so a same-currency row — or one whose foreign currency is the account's own —
+ * renders nothing.
+ */
+function ForeignCurrencyFields({ movement, ui }) {
+  if (!hasForeignOriginal(movement)) return null;
+  const ccy = movement.foreignCurrency;
+  const amount = movement.foreignAmount == null
+    ? ''
+    : formatCurrency(ccy, Math.abs(Number(movement.foreignAmount) || 0));
+  const rate = roundHalfUp(movement.foreignConversionRate, RATE_DECIMALS);
+  return (
+    <>
+      <PanelField label={ui('financeAccountMovementsForeignAmount')} data-testid="PanelField__foreign-amount">
+        <Input
+          className="items-center"
+          value={amount}
+          disabled
+          readOnly
+          data-testid={`movement-foreign-amount-${movement.id}`} />
+      </PanelField>
+      <PanelField label={ui('financeAccountMovementsForeignRate')} data-testid="PanelField__foreign-rate">
+        <Input
+          className="items-center"
+          value={rate == null ? '' : formatPlainDecimal(decimalString(rate))}
+          disabled
+          readOnly
+          data-testid={`movement-foreign-rate-${movement.id}`} />
+      </PanelField>
+    </>
+  );
+}
+
+/**
  * "More info" panel — the fields declared for this panel in the window contract,
  * in their declared order, rendered in a 4-column grid with an elevated surface.
  *
@@ -431,6 +491,7 @@ function DimensionsPanel({ movement, ui, visible, ctx }) {
 
   return (
     <div className="grid grid-cols-1 gap-5 pl-16 pr-[52px] pb-8 pt-3 sm:grid-cols-2 lg:grid-cols-4">
+      <ForeignCurrencyFields movement={movement} ui={ui} data-testid="ForeignCurrencyFields__ae5a16" />
       {PANEL_FIELDS.map((field) => {
         const custom = MOVEMENT_PANEL_RENDERERS[field.name];
         if (custom) {
@@ -501,10 +562,8 @@ export function buildMovementSortCtx(ui, getTrxTypeLabel) {
       const config = m.processed === false ? DRAFT : MOVEMENT_STATUS_CONFIG[m.paymentStatus];
       return config ? ui(config.labelKey) : '';
     },
-    // Mirrors PostingStatusDot: only 'Y' is posted.
-    getPostedLabel: (m) => (m.posted === 'Y'
-      ? ui('financeAccountMovementsPosted')
-      : ui('financeAccountMovementsNotPosted')),
+    // The exact text PostingStatusDot shows, failure reasons included.
+    getPostedLabel: (m) => postingStatusLabel(m.posted, ui),
   };
 }
 
@@ -534,13 +593,18 @@ export function buildMovementSortAccessors(sortCtx) {
   };
 }
 
+/** The header segments the current role may see (ETP-5684: `posted` needs showAccountingFields). */
+function visibleParts(renderer, capabilities) {
+  return renderer.parts.filter((part) => isCapabilityVisible(capabilities, part.visibleWhenCapability));
+}
+
 /** The sortable columns, flattened over multi-segment headers, for the toolbar popover's menu. */
-export function buildMovementSortColumns(ui) {
+export function buildMovementSortColumns(ui, capabilities) {
   return [
     ...CONTRACT_COLUMNS.flatMap((col) => {
       const renderer = MOVEMENT_CELL_RENDERERS[col.name];
       if (renderer?.parts) {
-        return renderer.parts.map((part) => ({ key: part.key, label: ui(part.labelKey) }));
+        return visibleParts(renderer, capabilities).map((part) => ({ key: part.key, label: ui(part.labelKey) }));
       }
       return [{ key: col.name, label: renderer ? ui(renderer.labelKey) : col.label }];
     }),
@@ -602,6 +666,7 @@ export function MovementsTable({
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const getTrxTypeLabel = useTrxTypeLabel();
+  const capabilities = useCapabilitiesSafe();
   const [expandedId, setExpandedId] = useState(null);
   const { updateMovement } = useUpdateMovement();
   // ETP-5101 — mirrors MovementRowKebab's own `canEdit` exactly (isGlTransaction && !isPosted):
@@ -613,9 +678,11 @@ export function MovementsTable({
   // enabled in the chart of accounts (respects the org's accounting-dimension config).
   const displayedDims = DISPLAYED_DIMENSIONS.filter((k) => enabledDimensions.includes(k));
   const hasDimensions = displayedDims.length > 0;
-  // Expandability is per ROW, not global: a transfer row has a counterpart link to show even when
-  // the client has no accounting dimension enabled, and without this it would be unreachable.
-  const canExpand = (movement) => hasDimensions || Boolean(movement?.transferTxnId);
+  // Expandability is per ROW, not global: a transfer row has a counterpart link, and a
+  // foreign-currency row its original amount and rate (ETP-5657), to show even when the client has
+  // no accounting dimension enabled — without these they would be unreachable.
+  const canExpand = (movement) => hasDimensions || Boolean(movement?.transferTxnId)
+    || hasForeignOriginal(movement);
 
   // Scroll the deep-linked transaction (from the reconciled-txns modal) into view once loaded and
   // expand it so its accounting dimensions are visible.
@@ -656,6 +723,7 @@ export function MovementsTable({
   const cellCtx = {
     ui, bcpLocale, getTrxTypeLabel, openPayment, openTransferCounterpart,
     canEditDimensions, updateMovement, accountCurrencyId, onReload,
+    showAccounting: isCapabilityVisible(capabilities, ACCOUNTING_CAPABILITY),
   };
 
   const renderRow = (movement) => {
@@ -771,7 +839,7 @@ export function MovementsTable({
                 <TableHead key={col.name} data-testid="TableHead__ae5a16">
                   {renderer?.parts ? (
                     <SortableHeaderSegments
-                      parts={renderer.parts.map((part) => ({ key: part.key, label: ui(part.labelKey) }))}
+                      parts={visibleParts(renderer, capabilities).map((part) => ({ key: part.key, label: ui(part.labelKey) }))}
                       activeKey={sortKey}
                       direction={sortDirection}
                       onSort={onSort}
