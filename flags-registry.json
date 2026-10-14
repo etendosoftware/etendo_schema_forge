@@ -855,7 +855,7 @@
         "key": "batch-callout-skip-disabled",
         "defaultValue": false,
         "ttl": "2027-01-31",
-        "ttlNote": "PLACEHOLDER, not yet agreed with the owner. Retirement condition: the skip has run on real tenant imports without a wrong default being reported. Retiring it ships the skip: delete the flag check in NeoBatchScope.calloutSkipKillSwitchOn() and the GoFeatureFlags constant, keep NeoCalloutDiscardMemory and the _skipRedundantCallouts option.",
+        "ttlNote": "Agreed date, confirmed by the owner (Valentin Vivaldi) on 2026-10-14. Retirement condition: the skip has run on real tenant imports without a wrong default being reported. Retiring it ships the skip: delete the flag check in NeoBatchScope.calloutSkipKillSwitchOn() and the GoFeatureFlags constant, keep NeoCalloutDiscardMemory and the _skipRedundantCallouts option.",
         "symbols": [
           "batch-callout-skip-disabled",
           "FLAG_BATCH_CALLOUT_SKIP_DISABLED",
