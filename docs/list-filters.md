@@ -40,6 +40,9 @@ Its children, in this order:
 - **Actions cluster (`list-toolbar-actions`)** — the main actions (link, sort, refresh,
   import/export, print, "New …"). The link button (`list-share-link`) copies the current page
   URL, query string included (ETP-5593; it had no handler before).
+- **Vertical alignment** — the main row uses `items-start`: when the filters cluster wraps onto several
+  lines, the tab group and the actions cluster stay on the first line instead of being centered on the
+  wrapped block. Every control is 40px (`h-10`), so the single-line bar is unchanged.
 - **No separator** — ETP-5509 first drew a `border-b` on the toolbar container (`list-toolbar`);
   ETP-5601 removed it so the bar is exactly 56px per Figma (8px padding around 40px controls — see
   "Visual parity" below). A window that drops the bar with `hideListBar` draws its own
