@@ -34,7 +34,7 @@
   --fm-blue-50:    var(--status-info-bg);
   --fm-blue-200:   var(--status-info-border);
   --fm-blue-700f:  var(--status-info-fg);
-  /* Model-tag colors (303/349) — single source of truth for every "303"/"349" pill/badge
+  /* Model-tag colors (303/349/390) — single source of truth for every "303"/"349" pill/badge
      in this window (list rows, "Modal Modelos" filter dropdown, catalog cards, upcoming
      sidebar). Fixed brand hex values, not theme-derived — see fm-model-badge--*,
      fm-catalog-card__badge--*, fm-upcoming__badge--* below, all of which reference these. */
@@ -44,6 +44,9 @@
   --fm-model-349-bg:     #F4F1FD;
   --fm-model-349-fg:     #4316CA;
   --fm-model-349-border: #C6B6F7;
+  --fm-model-390-bg:     #ECFDF5;
+  --fm-model-390-fg:     #047857;
+  --fm-model-390-border: #A7F3D0;
   --fm-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --fm-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
   --fm-bg-page:   hsl(var(--card));
@@ -435,7 +438,7 @@
   content: ''; flex: 1; height: 1px; background: var(--fm-border-1);
 }
 .fm-catalog-card {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   padding: 14px 16px; border-radius: 12px;
   border: 1.5px solid var(--fm-border-1);
   background: var(--fm-bg-card, hsl(var(--card)));
@@ -456,6 +459,7 @@
 }
 .fm-catalog-card__badge--303 { background: var(--fm-model-303-bg); color: var(--fm-model-303-fg); border-color: var(--fm-model-303-border); }
 .fm-catalog-card__badge--349 { background: var(--fm-model-349-bg); color: var(--fm-model-349-fg); border-color: var(--fm-model-349-border); }
+.fm-catalog-card__badge--390 { background: var(--fm-model-390-bg); color: var(--fm-model-390-fg); border-color: var(--fm-model-390-border); }
 .fm-catalog-card__badge--muted { background: hsl(var(--muted)); color: hsl(var(--text-disabled)); border-color: hsl(var(--border-control)); }
 .fm-catalog-card__body { flex: 1; min-width: 0; }
 .fm-catalog-card__name {
@@ -857,13 +861,17 @@
 
 /* ETP-5597 — 349 header "Tipo: Normal | Sustitutiva": same segmented idiom, inline-sized. */
 .fm-349-type-segmented { width: auto; padding: 2px; gap: 2px; }
-.fm-349-type-segmented .fm-newdecl-segmented__btn { flex: 0 0 auto; padding: 4px 12px; font-size: 14px; }
-.fm-349-type-segmented .fm-newdecl-segmented__btn:disabled { cursor: default; }
-.fm-349-type-segmented .fm-newdecl-segmented__btn:disabled:not(.fm-newdecl-segmented__btn--active):hover { color: var(--fm-fg-3); }
+.fm-349-type-segmented .fm-newdecl-segmented__btn,
+.fm-type-segmented .fm-newdecl-segmented__btn { flex: 0 0 auto; padding: 4px 12px; font-size: 14px; }
+.fm-349-type-segmented .fm-newdecl-segmented__btn:disabled,
+.fm-type-segmented .fm-newdecl-segmented__btn:disabled { cursor: default; }
+.fm-349-type-segmented .fm-newdecl-segmented__btn:disabled:not(.fm-newdecl-segmented__btn--active):hover,
+.fm-type-segmented .fm-newdecl-segmented__btn:disabled:not(.fm-newdecl-segmented__btn--active):hover { color: var(--fm-fg-3); }
 
 /* ETP-5597 — 349 substitutive-declaration banner (warning role). Wraps the identifier block
    below the text on narrow widths. */
-.fm-349-substitutive-banner {
+.fm-349-substitutive-banner,
+.fm-substitutive-banner {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
   gap: 12px 24px; padding: 12px 16px; border-radius: 8px;
   background: var(--status-warning-bg); border: 1px solid var(--status-warning-border);
@@ -1285,6 +1293,7 @@
 }
 .fm-model-badge--303 { background: var(--fm-model-303-bg); color: var(--fm-model-303-fg); border: 1px solid var(--fm-model-303-border); border-radius: 8px; font: 400 12px/16px var(--fm-font-sans, system-ui); padding: 4px 10px; }
 .fm-model-badge--349 { background: var(--fm-model-349-bg); color: var(--fm-model-349-fg); border: 1px solid var(--fm-model-349-border); border-radius: 8px; font: 400 12px/16px var(--fm-font-sans, system-ui); padding: 4px 10px; }
+.fm-model-badge--390 { background: var(--fm-model-390-bg); color: var(--fm-model-390-fg); border: 1px solid var(--fm-model-390-border); border-radius: 8px; font: 400 12px/16px var(--fm-font-sans, system-ui); padding: 4px 10px; }
 .fm-model-year { font: 600 14px/20px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); }
 
 /* ─── Utility cells ────────────────────────────────────────────────── */
@@ -1380,6 +1389,7 @@
 .fm-upcoming__badge-num { font: 700 14px/16px var(--fm-font-mono, monospace); }
 .fm-upcoming__badge--303 { background: var(--fm-model-303-bg); color: var(--fm-model-303-fg); border: 1px solid var(--fm-model-303-border); }
 .fm-upcoming__badge--349 { background: var(--fm-model-349-bg); color: var(--fm-model-349-fg); border: 1px solid var(--fm-model-349-border); }
+.fm-upcoming__badge--390 { background: var(--fm-model-390-bg); color: var(--fm-model-390-fg); border: 1px solid var(--fm-model-390-border); }
 .fm-upcoming__info { flex: 1; min-width: 0; }
 .fm-upcoming__model-label { font: 500 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fm-upcoming__meta { display: flex; align-items: center; gap: 5px; margin-top: 2px; }
@@ -1521,3 +1531,104 @@
    toggles, so the reserved space is exactly the banner's own height. */
 .fm-aeat-testmode-slot { visibility: hidden; }
 .fm-aeat-testmode-slot--visible { visibility: visible; }
+
+/* ─── ETP-5716 — Modelo 390 ───────────────────────────────────────────────── */
+/* Catalog: SII confirmation under the card (a full-width row of the card's flex box). */
+.fm-catalog-sii-warning {
+  flex: 1 0 100%; order: 3;
+  display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 18px;
+}
+.fm-catalog-sii-warning__actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* "Nueva declaración": inline notices (duplicate ordinary, missing companion declarations). */
+.fm-newdecl-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 12px; font-size: 13px; line-height: 18px; }
+
+/* Detail page */
+.fm-390-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 12px 20px; background: hsl(var(--card)); flex-shrink: 0; }
+@media (max-width: 1100px) { .fm-390-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fm-390-tab { background: hsl(var(--card)); flex: 1; }
+.fm-390-former-input {
+  width: 180px; height: 36px; box-sizing: border-box; padding: 7px 12px; font-size: 14px;
+  border: 1px solid hsl(var(--border-control)); border-radius: 8px; outline: none;
+  color: hsl(var(--foreground)); background: hsl(var(--card));
+}
+.fm-390-former-input--invalid { border-color: hsl(var(--destructive)); }
+.fm-390-inline-error { font-size: 12px; line-height: 16px; color: hsl(var(--destructive)); }
+
+/* Casillas tab: sticky block index on the left, content on the right. Below 1200px the index
+   folds into a select above the content (1280×720 keeps the index). */
+.fm-390-boxes { display: flex; align-items: flex-start; gap: 8px; padding: 0; }
+.fm-390-index {
+  width: 220px; flex-shrink: 0; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px;
+  position: sticky; top: 49px;
+}
+.fm-390-index__item {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: none; border-radius: 8px;
+  background: transparent; color: hsl(var(--foreground)); font-size: 14px; line-height: 18px;
+  text-align: left; cursor: pointer;
+}
+.fm-390-index__item:hover { background: hsl(var(--muted)); }
+.fm-390-index__item--active { background: hsl(var(--muted)); font-weight: 500; }
+.fm-390-index__num { width: 18px; flex-shrink: 0; color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; }
+.fm-390-index-select { display: none; }
+@media (max-width: 1200px) {
+  .fm-390-boxes { flex-direction: column; }
+  .fm-390-index { display: none; }
+  .fm-390-index-select {
+    display: block; margin: 8px 20px 0; height: 36px; padding: 0 10px; font-size: 14px;
+    border: 1px solid hsl(var(--border-control)); border-radius: 8px; background: hsl(var(--card));
+    color: hsl(var(--foreground));
+  }
+}
+.fm-390-boxes__content { flex: 1; min-width: 0; padding: 6px 20px 24px; }
+.fm-390-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 4px 0 12px; }
+.fm-390-search { display: flex; align-items: center; gap: 8px; }
+.fm-390-search__field {
+  display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; width: 240px;
+  border: 1px solid hsl(var(--border-control)); border-radius: 8px; background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+}
+.fm-390-search__field input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 14px; color: hsl(var(--foreground)); }
+.fm-390-search__miss { font-size: 12px; color: hsl(var(--muted-foreground)); }
+.fm-390-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.fm-390-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+.fm-390-legend__swatch {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 14px;
+  border-radius: 4px; border: 1px solid hsl(var(--border-control)); color: hsl(var(--text-disabled));
+}
+.fm-390-legend__swatch--calc { background: hsl(var(--muted)); }
+.fm-390-legend__swatch--manual { background: hsl(var(--card)); }
+.fm-390-legend__swatch--modified { background: hsl(var(--card)); border-color: var(--status-warning-border); color: var(--status-warning-fg); }
+.fm-390-legend__swatch--total { background: hsl(var(--muted)); border-color: hsl(var(--foreground)); }
+.fm-390-design-note { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.fm-390-warnings {
+  display: flex; gap: 8px; margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; font-size: 13px;
+  background: var(--status-warning-bg); border: 1px solid var(--status-warning-border); color: var(--status-warning-fg);
+}
+.fm-390-warnings ul { margin: 0; padding-left: 16px; }
+.fm-390-hint { margin: 8px 0; font-size: 13px; line-height: 18px; color: hsl(var(--muted-foreground)); }
+.fm-390-org-link { align-self: flex-start; margin-top: 8px; font-size: 14px; }
+.fm-390-mini-table { width: 100%; max-width: 760px; border-collapse: collapse; font-size: 14px; margin-bottom: 8px; }
+.fm-390-mini-table th { text-align: left; font-weight: 600; padding: 6px 8px; border-bottom: 1px solid hsl(var(--border-subtle)); color: hsl(var(--foreground)); }
+.fm-390-mini-table td { padding: 6px 8px; border-bottom: 1px solid var(--fm-border-1); color: hsl(var(--foreground)); }
+.fm-390-rate-group { margin-bottom: 4px; }
+.fm-390-fold { display: inline-block; margin: 2px 0 6px; font-size: 13px; }
+.fm-390-cell--input { position: relative; }
+.fm-390-cell__input { line-height: 40px; }
+.fm-390-cell__input:disabled { color: hsl(var(--foreground)); cursor: default; }
+.fm-390-cell__pencil { display: flex; align-items: center; padding-right: 8px; color: hsl(var(--text-disabled)); flex-shrink: 0; }
+.fm-390-cell--modified { border-color: var(--status-warning-border); }
+.fm-390-cell--locked { background: hsl(var(--muted)); }
+.fm-390-cell--highlight { box-shadow: 0 0 0 2px hsl(var(--primary)); }
+.fm-390-cell--input:focus-within { box-shadow: 0 0 0 2px hsl(var(--ring, var(--primary)) / .5); }
+.fm-390-territory-toggle { border-bottom: none; padding-top: 0; }
+.fm-390-pager { display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid hsl(var(--border-subtle)); }
+.fm-390-pager .fm-btn { display: inline-flex; align-items: center; gap: 4px; }
+.fm-390-filegen__label { display: block; font-size: 14px; color: hsl(var(--foreground)); margin-bottom: 6px; }
+.fm-390-filegen__input {
+  width: 100%; font-size: 14px; padding: 8px 12px; height: 40px; box-sizing: border-box; outline: none;
+  border: 1px solid hsl(var(--border-control)); border-radius: 8px; color: hsl(var(--foreground)); background: hsl(var(--card));
+}
+.fm-390-filegen__summary { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 16px 0 0; font-size: 14px; }
+.fm-390-filegen__summary dt { color: hsl(var(--muted-foreground)); }
+.fm-390-filegen__summary dd { margin: 0; color: hsl(var(--foreground)); font-variant-numeric: tabular-nums; }
