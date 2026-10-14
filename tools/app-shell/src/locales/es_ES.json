@@ -14407,7 +14407,7 @@
       "label": "Movimiento entre almacenes reservado"
     },
     "Simple G/L Journal": {
-      "label": "Asientos Manuales Simplificados"
+      "label": "Asientos Manuales"
     },
     "Color Palette": {
       "label": "Paleta de Color"
@@ -16988,6 +16988,29 @@
     "calendarActions": "Acciones",
     "calendarAdjustmentPeriod": "Período de ajuste",
     "openClosePeriod": "Abrir/Cerrar Periodo",
+    "periodsBulkOpen": "Abrir",
+    "periodsBulkClose": "Cerrar",
+    "periodsBulkConfirmOpenTitle": "¿Abrir {count} periodos?",
+    "periodsBulkConfirmOpenTitleOne": "¿Abrir 1 periodo?",
+    "periodsBulkConfirmCloseTitle": "¿Cerrar {count} periodos?",
+    "periodsBulkConfirmCloseTitleOne": "¿Cerrar 1 periodo?",
+    "periodsBulkConfirmBody": "Se procesarán de a uno, en orden de fecha:",
+    "periodsBulkOpenedToast": "{count} periodos abiertos",
+    "periodsBulkOpenedToastOne": "1 periodo abierto",
+    "periodsBulkClosedToast": "{count} periodos cerrados",
+    "periodsBulkClosedToastOne": "1 periodo cerrado",
+    "periodsBulkSkippedSuffix": " ({count} ya lo estaban)",
+    "periodsBulkSkippedSuffixOne": " (1 ya lo estaba)",
+    "periodsBulkNothingToOpen": "Los periodos seleccionados ya estaban abiertos",
+    "periodsBulkNothingToClose": "Los periodos seleccionados ya estaban cerrados",
+    "periodsBulkResultTitle": "Resultado",
+    "periodsBulkResultOpened": "Abierto",
+    "periodsBulkResultClosed": "Cerrado",
+    "periodsBulkResultAlreadyOpen": "Ya estaba abierto",
+    "periodsBulkResultAlreadyClosed": "Ya estaba cerrado",
+    "periodsBulkResultFailed": "No se pudo procesar",
+    "periodsSelectAll": "Seleccionar todos los periodos",
+    "periodsSelectPeriod": "Seleccionar {name}",
     "openCloseDocument": "Abrir/Cerrar Documento",
     "bulkOpenCloseDocuments": "Abrir/Cerrar Documentos seleccionados",
     "calendarPeriodStatusAllClosed": "Todos cerrados",
@@ -17244,6 +17267,7 @@
     "backendError.assetGroupNameDuplicate": "Ya existe una categoría de activo con este nombre.",
     "backendError.assetSearchKeyDuplicate": "Ya existe un activo con este identificador en esta organización.",
     "backendError.productNotStockable": "Este producto es de tipo Servicio y no admite movimientos de inventario.",
+    "backendError.orderLinkedDocsCheckFailed": "No se pudieron comprobar los documentos vinculados al pedido, así que no se ha reactivado. Inténtalo de nuevo.",
     "processAssetCompleted": "Amortización creada",
     "processNowCompleted": "Períodos creados correctamente",
     "reactivated": "Documento reactivado",
@@ -22776,6 +22800,7 @@
     "accountTreeBalance": "Saldo",
     "accountTreeNoAccounts": "No hay cuentas para mostrar",
     "accountTreeReadOnlyPlaceholder": "Subcuenta de relleno — no editable",
+    "accountTreeOpenAccount": "Abrir cuenta {name}",
     "allAccountTypes": "Todos los tipos de cuenta",
     "expandAll": "Expandir todo",
     "collapseAll": "Contraer todo",
@@ -22897,7 +22922,6 @@
     "glc.section.suspense.title": "Cuentas de suspenso",
     "glc.section.suspense.subtitle": "Cuentas utilizadas para balancear transacciones no mapeadas.",
     "glc.toggle.suspenseBalancingUse": "Usar cuenta de balanceo de suspenso",
-    "glc.toggle.suspenseErrorUse": "Usar cuenta de error de suspenso",
     "glc.acct.suspenseBalancing": "Cuenta de balanceo de suspenso",
     "glc.section.currencyBalancing.title": "Balanceo de moneda",
     "glc.section.currencyBalancing.subtitle": "Cuenta usada para balancear diferencias multi-moneda.",
@@ -26711,7 +26735,7 @@
       "label": "Cierre de año"
     },
     "Simple G/L Journal": {
-      "label": "Asientos Manuales Simplificados"
+      "label": "Asientos Manuales"
     },
     "Cluster Services": {
       "label": "Servicios Cluster"
