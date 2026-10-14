@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/environmentPresentation.js
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -58,4 +59,26 @@ test('a demo that already originated a productive environment is not a purchase 
   assert.equal(isPurchaseSourceDemo({ plan: 'free', associatedWithProductive: true }), false);
   assert.equal(isPurchaseSourceDemo({ plan: 'productive' }), false);
   assert.equal(isPurchaseSourceDemo(undefined), false);
+});
+
+// ETP-5047 — a canceled subscription makes the backend report plan "free" while the environment
+// stays productive (environmentType "PRODUCTIVE", subscriptionStatus "EXPIRED"). It is not a demo.
+const canceledProductive = {
+  plan: 'free',
+  environmentType: 'PRODUCTIVE',
+  subscriptionStatus: 'EXPIRED',
+  accessState: 'SUBSCRIPTION_REQUIRED',
+  associatedWithProductive: false,
+};
+
+test('a canceled productive environment is not a purchase source although its plan reads free', () => {
+  assert.equal(isPurchaseSourceDemo(canceledProductive), false);
+  // A demo, or a legacy environment the backend reports no type for, stays a source.
+  assert.equal(isPurchaseSourceDemo({ plan: 'free', environmentType: 'DEMO' }), true);
+  assert.equal(isPurchaseSourceDemo({ plan: 'free', environmentType: null }), true);
+});
+
+test('a canceled productive environment is badged productive, not demo', () => {
+  assert.equal(environmentPlanLabelKey(canceledProductive), 'environmentProductive');
+  assert.equal(environmentPlanLabelKey({ plan: 'free', environmentType: 'DEMO' }), 'environmentDemo');
 });

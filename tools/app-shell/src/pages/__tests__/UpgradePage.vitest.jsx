@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/UpgradePage.jsx
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -1510,6 +1511,53 @@ describe('UpgradePage — provisioning environment synchronization (ETP-5443)', 
     expect(requests[0].body).not.toHaveProperty('demoClientId');
     expect(requests[0].body).not.toHaveProperty('dataTransfer');
     expect(sessionStorage.getItem('sf_pending_checkout_data_transfer')).toBe('{}');
+  });
+
+  /**
+   * ETP-5047: a canceled subscription makes the backend report `plan: 'free'` for a productive
+   * environment, with `environmentType: 'PRODUCTIVE'`. It is not a demo: a purchase from it is a
+   * clean productive environment (no picker, no self-preselect, no transfer), and from a demo it is
+   * never offered as the source.
+   */
+  const CANCELED_PRODUCTIVE = {
+    clientName: 'Canceled Productive', clientId: 'CANCELED-PROD', plan: 'free',
+    environmentType: 'PRODUCTIVE', subscriptionStatus: 'EXPIRED',
+    accessState: 'SUBSCRIPTION_REQUIRED', associatedWithProductive: false,
+  };
+
+  it('treats a canceled productive origin as productive: no source, no self-preselect, no transfer', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = 'CANCELED-PROD';
+    const requests = installFetch({ environments: [
+      CANCELED_PRODUCTIVE,
+      { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'free', environmentType: 'DEMO' },
+    ] });
+    await renderUpgradePage();
+
+    expect(screen.queryByTestId('upgrade-source-demo-field')).not.toBeInTheDocument();
+    const nameInput = screen.getByTestId('upgrade-tenant-name-input');
+    expect(nameInput).toHaveValue('');
+    await user.type(nameInput, 'Fresh Productive');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).not.toHaveProperty('demoClientId');
+    expect(requests[0].body).not.toHaveProperty('dataTransfer');
+  });
+
+  it('never offers a canceled productive environment as the source of a demo purchase', async () => {
+    UPGRADE_SESSION.clientId = 'TRIAL-1';
+    installFetch({ environments: [
+      CANCELED_PRODUCTIVE,
+      { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'free', environmentType: 'DEMO' },
+    ] });
+    await renderUpgradePage();
+
+    const sourceSelect = screen.getByTestId('upgrade-source-demo-select');
+    const offered = [...sourceSelect.querySelectorAll('option')].map(option => option.value);
+    expect(offered).toEqual(['', 'TRIAL-1']);
+    expect(sourceSelect).toHaveValue('TRIAL-1');
   });
 
   it('omits demo identity and transfer data after a Stripe return to a productive origin', async () => {

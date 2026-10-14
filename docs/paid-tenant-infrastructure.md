@@ -92,7 +92,14 @@ Two consequences follow, and neither is hypothetical:
    the account. Productive-origin requests discard any demo selection. A demo originates at most
    one productive environment: once it has, `/environments` reports it with
    `associatedWithProductive: true`, the picker hides it, and a purchase made from it is a clean
-   productive environment with no source or data transfer (ETP-5548).
+   productive environment with no source or data transfer (ETP-5548). A productive environment
+   is never a source either, including a canceled one: its closed subscription makes `plan` read
+   `free`, but `/environments` still reports `environmentType: 'PRODUCTIVE'`, so
+   `isPurchaseSourceDemo` (`lib/environmentPresentation.js`) keys on that type as well. Such an
+   environment is left out of the picker, a purchase made from it is a productive-origin purchase
+   (blank name, no self-preselect, no source or transfer), its badge stays "Productive", and the
+   backend refuses it as `demoClientId` (ETP-5047). An environment with no reported type (it
+   predates the lifecycle metadata) is still a demo.
 9. **The browser creates a durable billing purchase** through the account-scoped
    `POST /sws/go/billing/purchases` endpoint. The request describes the action, target name,
    locale and, only for a demo-origin purchase, the selected `demoClientId` and products/contacts
