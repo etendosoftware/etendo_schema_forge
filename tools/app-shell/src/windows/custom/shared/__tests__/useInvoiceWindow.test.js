@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { toast } from 'sonner';
 import {
   getInvoiceDraftMode, buildInvoiceRowQuickActions, buildInvoiceUnpostActions, invoiceUnpostRowFilter,
+  makeInvoiceReactivateRowFilter,
 } from '../useInvoiceWindow.js';
 
 const src = readFileSync(new URL('../useInvoiceWindow.js', import.meta.url), 'utf8');
@@ -511,6 +512,139 @@ describe('useInvoiceWindow', () => {
         assert.equal(invoiceUnpostRowFilter(CO_NOT_POSTED, 'post', fakeUi), true);
         assert.equal(invoiceUnpostRowFilter(VO_POSTED, 'other', fakeUi), true);
       });
+    });
+  });
+
+  // ETP-5745 follow-up — the bulk-bar sibling of DetailMoreActionsMenu's `reactivationBlocked`
+  // guard: a row whose reactivation is already known to be refused (fiscally accepted + a
+  // completed rectificativa) must never reach `runPreUnpost`. Unlike `invoiceUnpostRowFilter`,
+  // this cannot be answered from the row alone, so it fetches `${apiBaseUrl}/header/${row.id}`
+  // through the PLAIN (hook-free) `apiFetch` module — mocked here via `globalThis.fetch`
+  // (the module's only I/O boundary), never via `vi.mock`/`mock.module`: this suite runs under
+  // plain `node --test`, which the repo's Makefile invokes with no
+  // `--experimental-test-module-mocks` flag, so `mock.module` is unavailable here.
+  describe('makeInvoiceReactivateRowFilter', () => {
+    const originalFetch = globalThis.fetch;
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+      mock.restoreAll();
+    });
+
+    function stubFetch(handler) {
+      const calls = [];
+      globalThis.fetch = async (url, init) => {
+        calls.push({ url, init });
+        return handler(url, init);
+      };
+      return calls;
+    }
+
+    function jsonResponse(body, { ok = true, status = 200 } = {}) {
+      return { ok, status, json: async () => body };
+    }
+
+    // fakeUi above does not interpolate params; these two tests need to see what was passed.
+    const paramUi = (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key);
+
+    it('returns true immediately, with no fetch, when the action is not RE', async () => {
+      const calls = stubFetch(() => jsonResponse({}));
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      assert.equal(await rowFilter({ id: 'inv-1' }, 'unpost', fakeUi), true);
+      assert.equal(await rowFilter({ id: 'inv-1' }, 'post', fakeUi), true);
+      assert.equal(calls.length, 0);
+    });
+
+    it('returns true immediately, with no fetch, when the row has no id', async () => {
+      const calls = stubFetch(() => jsonResponse({}));
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      assert.equal(await rowFilter({}, 'RE', fakeUi), true);
+      assert.equal(await rowFilter(null, 'RE', fakeUi), true);
+      assert.equal(calls.length, 0);
+    });
+
+    it('returns true immediately, with no fetch, when apiBaseUrl is missing', async () => {
+      const calls = stubFetch(() => jsonResponse({}));
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: undefined, token: 'tok' });
+      assert.equal(await rowFilter({ id: 'inv-1' }, 'RE', fakeUi), true);
+      assert.equal(calls.length, 0);
+    });
+
+    it('fetches the record at ${apiBaseUrl}/header/${row.id} with the given token and an empty baseUrl override', async () => {
+      const calls = stubFetch(() => jsonResponse({ response: { data: [{ id: 'inv-1', reactivationBlocked: false }] } }));
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok-1' });
+      await rowFilter({ id: 'inv-1' }, 'RE', fakeUi);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].url, '/api/header/inv-1');
+    });
+
+    it('returns true when the fetched record is not reactivation-blocked', async () => {
+      stubFetch(() => jsonResponse({ response: { data: [{ id: 'inv-1', reactivationBlocked: false }] } }));
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      assert.equal(await rowFilter({ id: 'inv-1' }, 'RE', fakeUi), true);
+    });
+
+    it('returns true when the response carries no record at all', async () => {
+      stubFetch(() => jsonResponse({ response: { data: [] } }));
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      assert.equal(await rowFilter({ id: 'inv-1' }, 'RE', fakeUi), true);
+    });
+
+    it('reads the record from the bare data[0] envelope too', async () => {
+      stubFetch(() => jsonResponse({ data: [{ id: 'inv-1', reactivationBlocked: false }] }));
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      assert.equal(await rowFilter({ id: 'inv-1' }, 'RE', fakeUi), true);
+    });
+
+    it('returns the translated message when the fetched record is reactivation-blocked (array rectificativas)', async () => {
+      stubFetch(() => jsonResponse({
+        response: {
+          data: [{
+            id: 'inv-1',
+            reactivationBlocked: true,
+            reactivationBlockedFiscalSystem: 'Verifactu',
+            reactivationBlockedRectificativas: ['FR-0001', 'FR-0002'],
+          }],
+        },
+      }));
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      const result = await rowFilter({ id: 'inv-1' }, 'RE', paramUi);
+      assert.notEqual(result, true);
+      assert.match(result, /Verifactu/);
+      assert.match(result, /FR-0001, FR-0002/);
+    });
+
+    it('passes a non-array (bare) reactivationBlockedRectificativas value through unchanged', async () => {
+      stubFetch(() => jsonResponse({
+        response: {
+          data: [{
+            id: 'inv-1',
+            reactivationBlocked: true,
+            reactivationBlockedFiscalSystem: 'TicketBAI',
+            reactivationBlockedRectificativas: 'FR-0003',
+          }],
+        },
+      }));
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      const result = await rowFilter({ id: 'inv-1' }, 'RE', paramUi);
+      assert.match(result, /FR-0003/);
+    });
+
+    it('fails OPEN (returns true) on a non-ok response', async () => {
+      stubFetch(() => jsonResponse({}, { ok: false, status: 404 }));
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      assert.equal(await rowFilter({ id: 'inv-1' }, 'RE', fakeUi), true);
+    });
+
+    it('fails OPEN (returns true) when the fetch throws', async () => {
+      globalThis.fetch = async () => { throw new Error('network down'); };
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      assert.equal(await rowFilter({ id: 'inv-1' }, 'RE', fakeUi), true);
+    });
+
+    it('fails OPEN (returns true) when the body is not valid JSON', async () => {
+      globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('bad json'); } });
+      const rowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl: '/api', token: 'tok' });
+      assert.equal(await rowFilter({ id: 'inv-1' }, 'RE', fakeUi), true);
     });
   });
 

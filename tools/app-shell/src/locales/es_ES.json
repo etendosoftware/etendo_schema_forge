@@ -20921,6 +20921,7 @@
     "backendError.completedInvoiceFieldsLocked": "Esta factura está completada, por lo que algunos de tus cambios ya no se pueden guardar. Actualiza la factura para ver qué campos siguen siendo editables.",
     "backendError.invoiceStatusDimensionsLocked": "El proyecto y el centro de costos no se pueden modificar en una factura anulada o cerrada. Actualiza la factura para ver su estado actual.",
     "backendError.invoiceSiiSentReferenceLocked": "Esta factura de compra ya se ha enviado al SII, por lo que no se puede modificar el número de factura del proveedor.",
+    "backendError.invoiceReactivateFiscalRectified": "No se puede reactivar esta factura: ya ha sido aceptada por {fiscalSystem} y está rectificada por: {rectificativas}.",
     "backendError.documentAlreadyPosted": "Este documento ya está contabilizado. Actualízalo para ver su estado actual.",
     "backendError.cashCloseNoConcept": "Esta cuenta no tiene configurada una cuenta contable para las diferencias. Configúrala en Editar cuenta antes de confirmar un cierre que no cuadra.",
     "backendError.cashCloseDateInFuture": "La fecha del cierre no puede ser futura.",

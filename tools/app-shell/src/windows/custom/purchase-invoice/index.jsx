@@ -19,7 +19,7 @@ import OcrSidePanel, { ReadOnlyOcrSidePanel } from '../shared/OcrSidePanel.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
-import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord, buildInvoiceUnpostActions, invoiceUnpostRowFilter } from '../shared/useInvoiceWindow.js';
+import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord, buildInvoiceUnpostActions, invoiceUnpostRowFilter, makeInvoiceReactivateRowFilter } from '../shared/useInvoiceWindow.js';
 import { PURCHASE_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
 import { createFollowUpAfterProcess } from '@/components/follow-up-documents/followUpDocuments.js';
 import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
@@ -116,6 +116,12 @@ const LABEL_OVERRIDES = {
 };
 
 function PurchaseInvoiceBulkAction(props) {
+  // ETP-5745 follow-up — one row-fetch per SELECTED row when reactivating, not per list row;
+  // see makeInvoiceReactivateRowFilter's doc for why this is a plain (hook-free) factory, not a
+  // hook — this component is invoked as a bare function call (ETP-5209), never rendered as JSX.
+  const reactivateRowFilter = makeInvoiceReactivateRowFilter({
+    apiBaseUrl: props.apiBaseUrl, token: props.token,
+  });
   return (
     <>
       <BulkDocumentAction
@@ -125,6 +131,7 @@ function PurchaseInvoiceBulkAction(props) {
         // already unposts first (`preUnpost: true` in decisions.json); this makes the bulk
         // bar run the same two steps instead of failing with "Factura contabilizada".
         preUnpostActions={['RE']}
+        rowFilter={reactivateRowFilter}
         data-testid="BulkDocumentAction__c20e53" />
       {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
       <BulkDocumentAction
@@ -231,7 +238,7 @@ export default function PurchaseInvoiceWindow(props) {
   // can save corrected header dimensions; their decisions.json readOnlyLogic override
   // (@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')) keeps them locked while the invoice
   // is posted (matching core C_INVOICE_TRG) or in any processed status other than CO.
-  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate', 'project', 'costcenter'], editableLineFieldsWhenCompleted: ['project', 'costcenter'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
+  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate', 'project', 'costcenter', 'aeatsiiErrorRegistral'], editableLineFieldsWhenCompleted: ['project', 'costcenter'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
 
   // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
   // ListView below never picked up the read-only tier either, unlike GeneratedApp
