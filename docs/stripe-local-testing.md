@@ -175,8 +175,10 @@ re-test for replay protection.
 **Where the outcome is stored depends on the tenant (ETP-5046).**
 
 - **Tenant with an open `ETGO_SUBSCRIPTION` row** — every tenant paid since its environment set
-  the system preference `ETGO_SubscriptionModel` to `Y` (with the switch OFF — every environment's
-  starting state — a purchase writes the `ETGO_TenantPlan` marker and opens no row), and every
+  the system preference `ETGO_SubscriptionModel` to `Y` (the switch decides only a tenant's first
+  row: with it OFF — every environment's starting state — a tenant with no row yet that pays writes
+  the `ETGO_TenantPlan` marker and opens no row, while a tenant that already has any row, open or
+  closed, is always recorded on a row, whatever the switch), and every
   older one once the R37 backfill has run (R37 is opt-in: an environment runs it with
   `make data-fixes FIX=R37-tenant-subscription-backfill` when it switches to the subscription
   model — a plain `make data-fixes` never does): the event writes the row. `CURRENT` → `STATUS = active`,

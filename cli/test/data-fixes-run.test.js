@@ -24,7 +24,9 @@ import { setCacheMode } from '../src/db.js';
 import pg from 'pg';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 describe('parseArgs', () => {
   it('returns the default shape for no arguments', () => {
@@ -625,6 +627,20 @@ describe('runMain — opt-in fixes through the CLI entry point', () => {
   });
 
   describe('--fix <opt-in>', () => {
+    it('blocks a tenant with NO ledger rows: BLOCKED_CHAIN_BEHIND, exit 1, nothing run or written', async () => {
+      // --fix never runs the Phase 0 baseline sweep, so the tenant stays ledger-less.
+      const fresh = { id: 'C'.repeat(32), name: 'Initech', ledger: [] };
+      const pool = tenantDbPool([fresh], { checkMatches: 1 });
+      const code = await runCli(pool, ['--fix', R37_ID, '--client', fresh.id]);
+      assert.equal(code, 1);
+      assert.ok(lines.some(l => l.includes(`Initech (${fresh.id}): BLOCKED_CHAIN_BEHIND`)), 'Initech is reported as blocked');
+      assert.match(executionLog(), new RegExp(`SUMMARY: targeted fix ${R37_ID} — 0 FAILED, 1 BLOCKED_CHAIN_BEHIND\\.`));
+      assert.deepEqual(pool.calls.fixBodies, []);
+      assert.deepEqual(pool.calls.ledgerWrites, []);
+      assert.deepEqual(pool.calls.tx, []);
+      assert.equal(pool.ledgers.get(fresh.id).size, 0, 'not even a baseline row is written');
+    });
+
     it('exits 1 and reports the blocked tenants apart from FAILED when some are behind the opt-in date', async () => {
       const pool = tenantDbPool([CAUGHT_UP, BEHIND]);
       const code = await runCli(pool, ['--fix', R37_ID, '--dry-run']);
@@ -704,6 +720,40 @@ describe('runMain — opt-in fixes through the CLI entry point', () => {
       );
       assert.deepEqual(pool.calls.ledgerWrites, []);
     });
+  });
+
+  describe('a bare-prefix fix id (R37 matches three catalog files)', () => {
+    const RUN_JS = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'data-fixes', 'run.js');
+
+    it('is ambiguous in the real catalog, which is why it must never resolve', () => {
+      const r37Files = catalog.filter(f => f.id.startsWith('R37-')).map(f => f.fixId);
+      assert.ok(r37Files.length > 1, `expected several R37-* fixes, got ${r37Files}`);
+      assert.throws(() => resolveCatalogFix(catalog, 'R37'), /no such fix "R37" in catalog/);
+    });
+
+    for (const argv of [
+      ['--fix', 'R37', '--client', CAUGHT_UP.id],
+      ['--mark-fixed', '--client', CAUGHT_UP.id, '--fix', 'R37', '--reason', 'by hand'],
+    ]) {
+      it(`${argv[0]} R37 is rejected before any fix body or ledger write`, async () => {
+        const pool = tenantDbPool([CAUGHT_UP], { checkMatches: 1 });
+        await assert.rejects(() => runCli(pool, argv), /no such fix "R37" in catalog/);
+        assert.deepEqual(pool.calls.fixBodies, []);
+        assert.deepEqual(pool.calls.ledgerWrites, []);
+        assert.equal(pool.calls.ended, true, 'the pool is still closed');
+      });
+
+      it(`${argv[0]} R37 run as a script exits non-zero with the reason on stderr`, () => {
+        // Rejected while resolving the id, before the first query: no DB is reached.
+        const res = spawnSync(process.execPath, [RUN_JS, ...argv], {
+          encoding: 'utf-8',
+          timeout: 30_000,
+          env: { ...process.env, SF_DATA_FIX_LOG_DIR: logDir, SF_CACHE_MODE: 'off' },
+        });
+        assert.equal(res.status, 2, `stdout: ${res.stdout}\nstderr: ${res.stderr}`);
+        assert.match(res.stderr, /data-fixes runner failed: --fix: no such fix "R37" in catalog/);
+      });
+    }
   });
 });
 

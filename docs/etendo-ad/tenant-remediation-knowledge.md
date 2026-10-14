@@ -3375,7 +3375,7 @@ restart — but it argues for running this fix close to a restart.
   **Apply:** before writing an `UPDATE` on `c_doctype`, dump `pg_get_functiondef` for its triggers
   and check which columns they read. An `isactive`-only flip is not automatically safe there.
 
-- **Dry-run result (2026-09-16, `etendo_go_new_2`):** `--fix R37 --dry-run` over the full 56-tenant
+- **Dry-run result (2026-09-16, `etendo_go_new_2`):** `--fix R37-deactivate-reversed-invoice-doctypes --dry-run` (this ETP-5274 R37; a bare `R37` matches no fix id and the runner rejects it) over the full 56-tenant
   universe → 48 `WOULD_APPLY`, 8 `SKIPPED_NOT_NEEDED`, which matches the 48 clients the
   discriminator query returns. Guard verified read-only (no write transaction) by simulating the
   post-step-1 state in a CTE.
@@ -3450,7 +3450,7 @@ restart — but it argues for running this fix close to a restart.
   back below the watermark, so R42 (`20260929T190000Z`) always runs before R37 (`20261005T180000Z`),
   including for tenants onboarded later (baseline 2026-09-02 < both). A FAILED R42 halts the chain
   before R37 and the next run resumes at R42. Only `run.js --fix <R42>` (ignores order + watermark)
-  can run R42 after R37 — follow it with `--fix <R37> --client <tenant>`.
+  can run R42 after R37 — follow it with `--fix R37-tenant-subscription-backfill --client <tenant>`.
 - **Marker scoping re-verified:** the `ETGO_TenantPlan` marker is keyed by `VISIBLEAT_CLIENT_ID`
   (R37 statement 3, `TenantPlanService#retireProductivePreference`, `TenantPlanPreferenceFallback`,
   R42's INSERT). Only the lifecycle preferences (`ETGO_SubscriptionStatus/DueAt`) use `AD_CLIENT_ID`.
@@ -3479,9 +3479,13 @@ restart — but it argues for running this fix close to a restart.
     and `'Y '` (ON for the reader) counted 0. **Apply:** mirror the reader's filters exactly, never
     filter on the value; select `ad_preference_id, value, created ... order by created desc`;
     expect one row with `trim(value)='Y'`.
-  - **While the switch is OFF** a purchase still writes the marker and opens NO row, so "every
-    tenant paid since ETP-5046 has a row" / "R37 is a 0-row skip for a new tenant" hold only with
-    `ETGO_SubscriptionModel` ON. Run R37 before (or right after) setting the switch.
+  - **The switch decides only a tenant's first row.** While it is OFF, a tenant with no
+    subscription row yet that pays still writes the marker and opens NO row, so "every tenant paid
+    since ETP-5046 has a row" / "R37 is a 0-row skip for a new tenant" hold only with
+    `ETGO_SubscriptionModel` ON. A tenant that already has ANY row, open or closed
+    (`SubscriptionService#hasAnySubscription`), is always recorded on a row, whatever the switch
+    (Sentinel QA correction, 2026-10-14: the first wording said every purchase writes the marker
+    while OFF). Run R37 before (or right after) setting the switch.
 - **Trap the naive version falls into — watermark.** A `--fix` run's `APPLIED` row used to count
   toward the tenant's watermark like any other. Applying R37 (2026-10-05T18:00Z) to a tenant still
   behind would have pushed its watermark past every unprocessed earlier chain fix (e.g. R47,
@@ -3501,7 +3505,7 @@ restart — but it argues for running this fix close to a restart.
   R42 via `retired.json`.
 - **Local DB (etendo_core3) 2026-10-14:** zero R37 rows in `etgo_data_fix_history` (the ledger holds
   only `__baseline__` / `__costing-cadence-30s__` rows), so editing R37's header changed nothing
-  applied; R37 is not in `retired.json`, so no recorded checksum moved. `--fix R37 --dry-run`
+  applied; R37 is not in `retired.json`, so no recorded checksum moved. `--fix R37-tenant-subscription-backfill --dry-run`
   reports every local tenant `BLOCKED_CHAIN_BEHIND` (watermark none or the 2026-09-02 BASELINE).
 - **Correction (2026-10-14, Alex review) — opt-in gate.** The first gate (`watermark >= fix
   timestamp`) was stricter than the intent "caught up to the opt-in fix's date": a tenant whose only

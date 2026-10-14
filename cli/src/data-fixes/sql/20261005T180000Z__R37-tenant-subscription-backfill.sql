@@ -22,10 +22,13 @@
 --      no role/user/window), takes the NEWEST of them (created desc) and is ON only when its
 --      trimmed value is 'Y'. No row ships as module data: every environment starts OFF.
 -- Until step 1 has run, an environment keeps answering from the preference exactly as before.
--- While the switch is OFF -- every environment's starting state -- a purchase still writes the
--- ETGO_TenantPlan marker and opens NO subscription row, so every tenant paid before step 2 is a
--- backfill candidate exactly like a pre-ETP-5046 one. Run step 1 BEFORE step 2 (or repeat it right
--- after) so no tenant paid in between is left on the marker.
+-- The switch decides only a tenant's FIRST row. While it is OFF -- every environment's starting
+-- state -- a purchase by a tenant that has no subscription row yet still writes the ETGO_TenantPlan
+-- marker and opens NO row, so such a tenant paid before step 2 is a backfill candidate exactly like
+-- a pre-ETP-5046 one. A tenant that already has ANY subscription row (open or closed,
+-- SubscriptionService#hasAnySubscription) is always recorded on a row, whatever the switch. Run
+-- step 1 BEFORE step 2 (or repeat it right after) so no tenant paid in between is left on the
+-- marker.
 --
 -- Precondition the runner enforces: FIX= on an opt-in fix runs only for a tenant whose chain is
 -- caught up to this file's date (2026-10-05T18:00:00Z) -- no chain fix (not retired, not opt-in)
@@ -170,9 +173,10 @@
 -- write path is retired, a newly onboarded tenant never gets the preference at all, so @check's
 -- `EXISTS (productive preference)` is a cheap 0-row skip (SKIPPED_NOT_NEEDED) for every new tenant
 -- regardless of the CUT -- shipping without the bump is redundant here, never incorrect.
--- That holds only once the environment has set ETGO_SubscriptionModel: while it is OFF, a new paid
--- tenant DOES get the marker and no row, and @check selects it like any legacy tenant (see OPT-IN
--- above) -- also correct, and also independent of the CUT.
+-- That holds only once the environment has set ETGO_SubscriptionModel: the switch decides only a
+-- tenant's first row, so while it is OFF a new tenant paying for the first time DOES get the marker
+-- and no row, and @check selects it like any legacy tenant (see OPT-IN above) -- also correct, and
+-- also independent of the CUT.
 --
 -- PER-TENANT RETIREMENT OF ETGO_TenantPlan (statement 3 of @apply)
 -- --------------------------------------------------------------------------------------------
@@ -281,7 +285,8 @@
 -- watermark when this fix runs for it, branch (B) of @check retires whatever marker R42 wrote, and
 -- R42 never runs again for that tenant. The ONE way to run R42 after R37 for a tenant is an
 -- operator forcing it with `run.js --fix <R42>`, which ignores chain order and the watermark:
--- whoever does that must follow it with `run.js --fix <R37> --client <same tenant>`.
+-- whoever does that must follow it with
+-- `run.js --fix R37-tenant-subscription-backfill --client <same tenant>`.
 -- OPEN since R37 became opt-in: a tenant that first reaches R42 AFTER the environment switched
 -- (onboarded later, baseline 2026-09-02 below R42) runs R42 in its normal chain, and R37 no longer
 -- follows it there. If R42 matches that tenant it re-inserts a marker next to the tenant's
