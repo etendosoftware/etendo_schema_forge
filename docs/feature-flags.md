@@ -73,6 +73,15 @@ Leaving both on would record each flag twice in RUM, under the raw key
 (`import_batch_size`) from the hook, and the SDK would also merge the RUM user
 into the evaluation context.
 
+**Data sent to Datadog.** The browser POSTs the whole evaluation context —
+`targetingKey`/`accountId`, the lowercase `email` and the AD_Client `account_id` —
+to Datadog's flag CDN (`ff-cdn.datadoghq.eu`) to get its assignments, and the
+exposure and evaluation-telemetry events go to Datadog's intake. The backend
+(`GoFeatureFlags`, com.etendoerp.go) sends the same attributes. This is accepted
+under the same Datadog data processing as our logs and RUM. Note the difference
+from ConfigCat, which downloads the rules and evaluates in the client: with
+Datadog the context, account email included, leaves the client.
+
 ### ConfigCat (fallback)
 
 The ConfigCat provider fetches assignments at initialization and polls for
