@@ -3490,7 +3490,7 @@ restart — but it argues for running this fix close to a restart.
 - **Decision (user, 2026-10-14):** `R37-tenant-subscription-backfill` must never run in a full
   `make data-fixes`; each environment switches to the subscription model once, when the operator
   chooses: `make data-fixes FIX=R37-tenant-subscription-backfill`, then the system preference
-  `ETGO_SubscriptionModel`. Delivered as a generic header `-- @optIn: true` (parse-fix.js;
+  `ETGO_SubscriptionModel` (order reversed the same day — switch first; see below). Delivered as a generic header `-- @optIn: true` (parse-fix.js;
   `true`/`false` only, anything else throws).
 - **Verification = three checks** (R37 header; go design doc §6.2 must carry the same text):
   R37's ledger rows all `APPLIED`/`SKIPPED_NOT_NEEDED`; 0 active `ETGO_TenantPlan='PRODUCTIVE'`
@@ -3513,7 +3513,25 @@ restart — but it argues for running this fix close to a restart.
     `ETGO_SubscriptionModel` ON. A tenant that already has ANY row, open or closed
     (`SubscriptionService#hasAnySubscription`), is always recorded on a row, whatever the switch
     (Sentinel QA correction, 2026-10-14: the first wording said every purchase writes the marker
-    while OFF). Run R37 before (or right after) setting the switch.
+    while OFF). Run R37 after setting the switch (see the order bullet below).
+- **Order reversed — switch first, then R37 (user, 2026-10-14, ETP-5047).** The first version said
+  "R37, then the system preference". Recommended order now: (1) full `make data-fixes` (the
+  `optInChainGate` refuses a tenant whose chain is behind: `BLOCKED_CHAIN_BEHIND`); (2) set
+  `ETGO_SubscriptionModel=Y` (System, Property List, no org/role/user/window, no restart,
+  system-wide); (3) `make data-fixes FIX=R37-tenant-subscription-backfill [CLIENT=<id>] DRY_RUN=1`,
+  then without `DRY_RUN`; done when `select count(*) from ad_preference where attribute =
+  'ETGO_TenantPlan'` is 0 and the `ETP-5046-TRANSITIONAL-FALLBACK` WARN lines stop. **Why:** once
+  the switch is ON a new purchase opens a row instead of writing the marker, so one R37 pass catches
+  every legacy tenant; in the old order a purchase between the two steps still wrote the marker and
+  needed a second run. Both orders are safe; a tenant migrated with `CLIENT=` before the switch must
+  be re-run after it. **Apply:** R37's OPT-IN header, `sql/README.md`, the S1 rows and the go docs
+  (design doc §6.2/§8.3, `feature-flags-and-tenant-upgrade.md` §3, `open-and-notable-topics.md`
+  §2.3/§2.9) all state switch-first. R37 never creates the switch row, and it keeps
+  `ETGO_EnvironmentType` / `ETGO_SubscriptionStatus` (written on both routes by
+  `TenantEnvironmentLifecycleService#markProductive`, unread once a row exists — stale on a row
+  tenant). A productive tenant with no `ETGO_TenantPlan` marker (made productive by hand / dev tool)
+  is not picked up. Editing the header was safe: only `retired.json` fixes are checksummed, and R37
+  has never been applied on a shared environment (not on develop).
 - **Trap the naive version falls into — watermark.** A `--fix` run's `APPLIED` row used to count
   toward the tenant's watermark like any other. Applying R37 (2026-10-05T18:00Z) to a tenant still
   behind would have pushed its watermark past every unprocessed earlier chain fix (e.g. R47,

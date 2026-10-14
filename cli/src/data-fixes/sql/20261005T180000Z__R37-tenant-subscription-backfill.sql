@@ -11,32 +11,36 @@
 -- entirely -- no @check, no @apply, no ledger row -- and its ledger rows never move a tenant's
 -- watermark. Moving an environment from the ETGO_TenantPlan preference to the subscription model is
 -- a switch the operator makes ONCE, at a moment of their choosing, in two steps that belong
--- together:
---   1. run this fix explicitly (dry-run first; CLIENT=<id> narrows it to one tenant):
---        make data-fixes FIX=R37-tenant-subscription-backfill DRY_RUN=1
---        make data-fixes FIX=R37-tenant-subscription-backfill
---   2. set the system preference ETGO_SubscriptionModel (com.etendoerp.go), so that new purchases
+-- together -- SWITCH FIRST, THEN THIS FIX (order decided 2026-10-14), after a full
+-- `make data-fixes` has brought every tenant's chain current (see "Precondition" below):
+--   1. set the system preference ETGO_SubscriptionModel (com.etendoerp.go), so that new purchases
 --      open subscription rows instead of writing the ETGO_TenantPlan marker. It is a LIST property
 --      (AD_Preference.Property, ISPROPERTYLIST='Y'). The reader (SubscriptionModelSwitch) looks only
 --      at active, unrestricted System rows (AD_CLIENT_ID='0', visible-at client/org empty or '0',
 --      no role/user/window), takes the NEWEST of them (created desc, then updated desc, then
 --      ad_preference_id desc) and is ON only when its trimmed value is 'Y'. No row ships as
---      module data: every environment starts OFF.
--- Until step 1 has run, an environment keeps answering from the preference exactly as before.
+--      module data: every environment starts OFF. This fix never creates that row.
+--   2. run this fix explicitly (dry-run first; CLIENT=<id> narrows it to one tenant):
+--        make data-fixes FIX=R37-tenant-subscription-backfill DRY_RUN=1
+--        make data-fixes FIX=R37-tenant-subscription-backfill
+-- Until both steps have run, an environment keeps answering from the preference exactly as before
+-- for every tenant this fix has not reached (readers: the row first, the preference as fallback).
 -- The switch decides only a tenant's FIRST row. While it is OFF -- every environment's starting
 -- state -- a purchase by a tenant that has no subscription row yet still writes the ETGO_TenantPlan
--- marker and opens NO row, so such a tenant paid before step 2 is a backfill candidate exactly like
+-- marker and opens NO row, so such a tenant paid before step 1 is a backfill candidate exactly like
 -- a pre-ETP-5046 one. A tenant that already has ANY subscription row (open or closed,
--- SubscriptionService#hasAnySubscription) is always recorded on a row, whatever the switch. Run
--- step 1 BEFORE step 2 (or repeat it right after) so no tenant paid in between is left on the
--- marker.
+-- SubscriptionService#hasAnySubscription) is always recorded on a row, whatever the switch. That is
+-- why step 1 comes first: once it is ON a new purchase opens a row instead of writing the marker,
+-- so one pass of step 2 catches every tenant. The reverse order is safe too, but a tenant paid
+-- between the two steps is left on the marker until this fix is run again -- and so is any tenant
+-- migrated with CLIENT= before the switch was enabled: re-run step 2 after enabling it.
 --
 -- Precondition the runner enforces: FIX= on an opt-in fix runs only for a tenant whose chain is
 -- caught up to this file's date (2026-10-05T18:00:00Z) -- no chain fix (not retired, not opt-in)
 -- dated at or before it is still unprocessed for that tenant (run.js optInChainGate). Fixes dated
 -- AFTER it do not matter: a FAILED newer fix does not block. A tenant behind it is reported
 -- BLOCKED_CHAIN_BEHIND (listed apart from FAILED in the run summary), gets no ledger row and makes
--- the run exit non-zero: run the full `make data-fixes` first, then repeat step 1. This is what keeps the ORDERING INVARIANT below true
+-- the run exit non-zero: run the full `make data-fixes` first, then repeat step 2. This is what keeps the ORDERING INVARIANT below true
 -- now that this fix is no longer visited in chain order.
 --
 -- Verification -- the same three checks the com.etendoerp.go design doc (§6.2) lists:
@@ -45,7 +49,7 @@
 --    where fix_id = '20261005T180000Z__R37-tenant-subscription-backfill'
 --    order by status;
 --     -- every tenant APPLIED or SKIPPED_NOT_NEEDED; FAILED => the legacy-productive plan row is
---     -- missing (see "Why @apply ABORTS" below), fix it and run step 1 again.
+--     -- missing (see "Why @apply ABORTS" below), fix it and run step 2 again.
 --   select count(*) from ad_preference
 --    where attribute = 'ETGO_TenantPlan' and isactive = 'Y' and upper(trim(value)) = 'PRODUCTIVE';
 --     -- must be 0: no active productive marker is left. A tenant with NO subscription row at all
@@ -57,7 +61,7 @@
 --      and coalesce(visibleat_org_id, '0') = '0' and visibleat_role_id is null
 --      and ad_user_id is null and ad_window_id is null
 --    order by created desc, updated desc, ad_preference_id desc;
---     -- after step 2: exactly ONE row, and trim(value) = 'Y' -- the switch is ON. Filtered like
+--     -- after step 1: exactly ONE row, and trim(value) = 'Y' -- the switch is ON. Filtered like
 --     -- the reader and NOT on the value: a 'Y' row next to a newer 'N' row is OFF for the reader,
 --     -- and 'Y ' is ON for it. More than one row => deactivate the extras, the newest one decides
 --     -- (on equal created the latest updated, then the highest id -- the first row above).
@@ -317,7 +321,7 @@
 -- (onboarded later, baseline 2026-09-02 below R42) runs R42 in its normal chain, and R37 no longer
 -- follows it there. If R42 matches that tenant it re-inserts a marker next to the tenant's
 -- subscription row, which the count(*) end condition then shows. Until a subscription-aware
--- successor of R42 ships, re-run step 1 for such a tenant (`FIX=... CLIENT=<id>`).
+-- successor of R42 ships, re-run step 2 for such a tenant (`FIX=... CLIENT=<id>`).
 -- R42 is gated on a PROVISIONED paid checkout and excludes REFUNDED/CANCELED/EXPIRED checkouts,
 -- NOT on etgo_subscription, and a cancel on the row route changes neither the checkout request nor
 -- the ETGO_SubscriptionStatus preference R42 also reads. So a tenant whose ONLY subscription row

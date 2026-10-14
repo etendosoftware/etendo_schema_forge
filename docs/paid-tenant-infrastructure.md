@@ -25,6 +25,7 @@ The canonical sources are:
 | The scorer: dimensions, points, registry schema | `docs/flag-debt.md` |
 | How to record debt, and the protocols around it | `docs/technical-debt-playbook.md` |
 | The backend: server-side flags, paywall, plan marker | `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md` |
+| Moving an environment to the subscription model (`ETGO_SubscriptionModel` + R37) | `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md` §3, "The subscription-model switch"; short procedure in §3.8 below |
 | After the purchase: subscription lifecycle, grace, blocking, the 402 and its kill switch | `com.etendoerp.go` → `docs/open-and-notable-topics.md` §3.7–§3.11; operator page: "Operating environment-access enforcement" in `docs/feature-flags-and-tenant-upgrade.md` |
 
 ---
@@ -453,9 +454,10 @@ checkout request ID is an internal correlation key, not proof of payment by itse
 
 ## 3.4 The plan marker
 
-> **Snapshot from before ETP-5046.** The subscription row (`ETGO_SUBSCRIPTION`) is now the record of
-> a paid tenant and the preference below is only a transitional fallback; see
-> `feature-flags-and-tenant-upgrade.md` §3 in `com.etendoerp.go`.
+> **Snapshot from before ETP-5046.** On an environment that has switched to the subscription model
+> (§3.8) the subscription row (`ETGO_SUBSCRIPTION`) is the record of a paid tenant and the
+> preference below is only a transitional fallback; until then the preference is still written for
+> every purchase. See `feature-flags-and-tenant-upgrade.md` §3 in `com.etendoerp.go`.
 
 A tenant created through the paid flow is marked **productive**; every other tenant is
 **free**.
@@ -570,6 +572,58 @@ key for it in `flag-keys.js` and must never get one — it follows the 402 it is
 by `apiFetch` is recorded in the environment-access gate ([`request-policy.md`](request-policy.md)
 "402 and the blocked-access screen", ETP-5642), so with the switch on there is simply no 402 to
 block on. Registry entry: `environment-access-enforcement-kill-switch` in `flags-registry.json`.
+
+## 3.8 Installing ETP-5046/5047 and moving to the subscription model
+
+*Operator procedure. Canonical: "The subscription-model switch" in
+`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` §3 (verification queries included);
+checklist and rationale: design doc §6.2–§6.3 (`com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md`).*
+
+**Right after installing, nothing changes in how purchases are recorded.** The system preference
+`ETGO_SubscriptionModel` is OFF (no row ships with the module), the backfill data-fix
+`R37-tenant-subscription-backfill` is opt-in (`-- @optIn: true`, so a plain `make data-fixes` never
+runs it), and develop has no `SubscriptionService`, so no server has `ETGO_SUBSCRIPTION` rows yet.
+Every purchase keeps writing the `ETGO_TenantPlan` marker, exactly as before.
+
+**Moving an environment to the subscription model** — switch first, then backfill (decided
+2026-10-14):
+
+1. **Bring the data-fix chain current:** `make data-fixes`. R37 refuses a tenant whose earlier
+   chain fixes are not processed (`BLOCKED_CHAIN_BEHIND`, `optInChainGate` in
+   `cli/src/data-fixes/run.js`).
+2. **Set the switch:** System client, Property List checked, property *Billing: new purchases open
+   a subscription row (Y/N)* (`ETGO_SubscriptionModel`), value `Y`, no organization, role, user or
+   window restriction, no module. No restart; it is system-wide.
+3. **Run R37** — for every client at once, or client by client with `CLIENT=<ad_client_id>`; dry run
+   first:
+   ```bash
+   make data-fixes FIX=R37-tenant-subscription-backfill [CLIENT=<ad_client_id>] DRY_RUN=1
+   make data-fixes FIX=R37-tenant-subscription-backfill [CLIENT=<ad_client_id>]
+   ```
+4. **Done** when this returns 0 and the `ETP-5046-TRANSITIONAL-FALLBACK` WARN lines stop:
+   ```sql
+   select count(*) from ad_preference where attribute = 'ETGO_TenantPlan';
+   ```
+
+**Why switch first.** Once the switch is ON every new purchase opens a row, so one R37 pass catches
+every legacy tenant. In the old order (R37, then the switch) a purchase made between the two steps
+still wrote the marker and needed a second R37 run. Both orders are safe; whoever migrates client by
+client *before* switching on must re-run R37 after enabling the switch.
+
+Notes:
+
+- **Both models coexist meanwhile.** The switch is system-wide; only R37 is per client. Readers take
+  the tenant's subscription row first and fall back to the preference, so a tenant R37 has not
+  reached keeps working.
+- **One-way per tenant.** Once a tenant has any `ETGO_SUBSCRIPTION` row it stays on rows whatever
+  the switch says (`hasAnySubscription`).
+- **What R37 touches.** It inserts the backfilled row and deletes `ETGO_TenantPlan`; it does not
+  create the `ETGO_SubscriptionModel` preference. `ETGO_EnvironmentType` and
+  `ETGO_SubscriptionStatus` are kept on purpose — every purchase writes them on both routes
+  (`TenantEnvironmentLifecycleService.markProductive`) and nothing reads them once a row exists. On
+  a tenant with a row `ETGO_SubscriptionStatus` goes stale: read `ETGO_SUBSCRIPTION` instead.
+- **Not picked up by R37:** a productive tenant without `ETGO_TenantPlan` (made productive by hand or
+  with a dev tool).
 
 ---
 

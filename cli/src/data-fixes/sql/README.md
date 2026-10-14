@@ -111,8 +111,10 @@ never quietly put the fix back in the chain). Then:
 The timestamp still matters — it is the point a tenant's chain must have reached — so the same
 "Choosing the timestamp" rule applies. Worked example:
 `20261005T180000Z__R37-tenant-subscription-backfill.sql` (ETP-5046): an environment moves from the
-`ETGO_TenantPlan` preference to the subscription model by running it with `FIX=` and then setting
-the system preference `ETGO_SubscriptionModel`. Its header carries the procedure and three
+`ETGO_TenantPlan` preference to the subscription model by bringing the chain current, setting the
+system preference `ETGO_SubscriptionModel` **first**, and then running it with `FIX=` (whole
+environment, or `CLIENT=<id>` client by client) — switch-first, decided 2026-10-14, so one pass
+catches every tenant still on the marker. Its header carries the procedure and three
 checks: every tenant `APPLIED`/`SKIPPED_NOT_NEEDED` in `etgo_data_fix_history` for R37, zero active
 `ETGO_TenantPlan='PRODUCTIVE'` markers, and exactly ONE active, unrestricted System
 `ETGO_SubscriptionModel` list-property row whose trimmed value is `Y` (filtered like the go reader,
