@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "generatedAt": "2026-04-29T18:11:37.816Z",
-  "updatedAt": "2026-10-09T15:04:45.174Z",
-  "checksum": "eb5701ba9551cefa",
+  "updatedAt": "2026-10-14T16:48:18.716Z",
+  "checksum": "e236f2e8e5c0e020",
   "frontendContract": {
     "window": {
       "id": "139",
@@ -767,6 +767,10 @@
             "required": false,
             "grid": true,
             "form": false,
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
             "validation": {
               "maxLength": 22
             }
@@ -782,14 +786,17 @@
             "required": false,
             "grid": true,
             "form": false,
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
             "validation": {
               "maxLength": 10
             }
           }
         ],
         "searchableFields": [],
-        "computedFields": [],
-        "javaQualifier": "binContentsHandler"
+        "computedFields": []
       },
       "accounting": {
         "tableName": "M_Warehouse_Acct",
@@ -1671,8 +1678,7 @@
             "visibility": "readOnly",
             "required": false
           }
-        ],
-        "javaQualifier": "binContentsHandler"
+        ]
       },
       "accounting": {
         "tableName": "M_Warehouse_Acct",

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/warehouse/warehouseUtils.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { aggregateProducts } from '../warehouseUtils.js';
@@ -218,6 +219,51 @@ describe('aggregateProducts', () => {
     it('coerces numeric string etgoCost', () => {
       const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 1, etgoValuation: 5, etgoCost: '25' }];
       assert.equal(aggregateProducts(rows)[0].cost, 25);
+    });
+  });
+  describe('no-cost products (etgoCost / etgoValuation are JSON null)', () => {
+    const base = { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 4 };
+
+    for (const empty of [null, undefined, '']) {
+      it(`treats etgoCost and etgoValuation ${JSON.stringify(empty)} as 0 without NaN`, () => {
+        const [p] = aggregateProducts([{ ...base, etgoCost: empty, etgoValuation: empty }]);
+        assert.equal(p.cost, 0);
+        assert.equal(p.valuation, 0);
+        assert.equal(Number.isNaN(p.valuation), false);
+        assert.equal(p.qty, 4);
+      });
+    }
+
+    it('sums only the numeric valuations when some rows of the same product have none', () => {
+      const rows = [
+        { ...base, etgoCost: 10, etgoValuation: 40 },
+        { ...base, quantityOnHand: 6, etgoCost: null, etgoValuation: null },
+        { ...base, quantityOnHand: 2, etgoCost: 10, etgoValuation: 20 },
+      ];
+      const [p] = aggregateProducts(rows);
+      assert.equal(p.valuation, 60);
+      assert.equal(p.qty, 12);
+      assert.equal(Number.isNaN(p.valuation), false);
+    });
+
+    it('stays 0 when a first no-cost row is followed by another no-cost row', () => {
+      const rows = [
+        { ...base, etgoCost: null, etgoValuation: null },
+        { ...base, etgoCost: null, etgoValuation: null },
+      ];
+      const [p] = aggregateProducts(rows);
+      assert.equal(p.valuation, 0);
+      assert.equal(p.cost, 0);
+    });
+
+    it('sums negative qty with negative valuation correctly', () => {
+      const rows = [
+        { ...base, quantityOnHand: -3, etgoCost: 10, etgoValuation: -30 },
+        { ...base, quantityOnHand: -2, etgoCost: 10, etgoValuation: -20 },
+      ];
+      const [p] = aggregateProducts(rows);
+      assert.equal(p.qty, -5);
+      assert.equal(p.valuation, -50);
     });
   });
 });
