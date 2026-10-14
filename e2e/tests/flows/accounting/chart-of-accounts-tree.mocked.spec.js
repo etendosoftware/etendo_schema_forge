@@ -28,7 +28,12 @@ const leaf = (id, searchKey, name, accountType, ancestors) => ({
 });
 
 const ROWS = [
-  leaf('acc-20000001', '20000001', 'Investigación aplicada', 'A', [ACTIVO, anc('200', 'Investigación', 'C')]),
+  // `insertionChildren` is what the backend injects on a subaccount: the breakdown a new
+  // sibling goes under. "Nueva subcuenta" defaults its parent from it (ETP-5733).
+  {
+    ...leaf('acc-20000001', '20000001', 'Investigación aplicada', 'A', [ACTIVO, anc('200', 'Investigación', 'C')]),
+    insertionChildren: [{ id: 'bd-2000', value: '2000', name: 'Investigación básica', elementLevel: 'D' }],
+  },
   leaf('acc-21000001', '21000001', 'Terrenos', 'A', [ACTIVO, anc('210', 'Terrenos', 'C')]),
   leaf('acc-40000001', '40000001', 'Proveedor Uno', 'L', [PASIVO, anc('400', 'Proveedores', 'C')]),
   leaf('acc-60000001', '60000001', 'Compras de mercaderías', 'E', [GASTOS, anc('600', 'Compras', 'C')]),
@@ -126,5 +131,22 @@ test.describe('Chart of Accounts — tree toolbar', () => {
   test('"Nueva subcuenta" opens the create modal from the toolbar', async ({ page }) => {
     await page.getByTestId('action-new').click();
     await expect(page.getByRole('dialog')).toBeVisible();
+  });
+
+  // ETP-5733 — a click selects a leaf without leaving the list, so it can seed the modal.
+  test('a clicked leaf stays selected and seeds "Nueva subcuenta" with its breakdown', async ({ page }) => {
+    await page.getByTestId('coa-toggle-expand-all').click();
+    await row(page, 'acc-20000001').click();
+    await expect(row(page, 'acc-20000001')).toHaveAttribute('aria-selected', 'true');
+    await expect(page).toHaveURL(/\/chart-of-accounts(\?|$)/);
+
+    await page.getByTestId('action-new').click();
+    await expect(page.getByTestId('new-account-modal-parent')).toContainText('2000');
+  });
+
+  test('a leaf opens from its name, not from a plain click', async ({ page }) => {
+    await page.getByTestId('coa-toggle-expand-all').click();
+    await page.getByTestId('account-tree-open-acc-20000001').click();
+    await expect(page).toHaveURL(/acc-20000001/);
   });
 });

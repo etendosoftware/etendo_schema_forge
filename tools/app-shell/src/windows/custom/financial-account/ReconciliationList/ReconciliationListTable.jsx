@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Scale } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -7,6 +7,8 @@ import { StatusTag } from '@/components/ui/status-tag';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { formatDate } from '@/lib/formatSigned';
 import { getContractGridColumns } from '@/components/financial-accounts/contractColumns';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 import { ClearedItemsInline } from './ClearedItemsInline.jsx';
 import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
@@ -101,13 +103,25 @@ const CELL_RENDERERS = {
 };
 
 const COLUMNS = getContractGridColumns('reconciliations');
-const GRID_STYLE = {
-  gridTemplateColumns: [
-    LEAD_TRACKS,
-    ...COLUMNS.map((c) => CELL_RENDERERS[c.name]?.width ?? 'minmax(0,1fr)'),
-  ].join(' '),
-};
-const SKELETON_CELL_KEYS = ['chev', ...COLUMNS.map((c) => `c_${c.name}`)];
+
+/**
+ * ETP-5684 — the columns the current role may see (a contract column can carry
+ * `visibleWhenCapability`, e.g. `posted` → showAccountingFields), with the grid template and
+ * skeleton keys that follow from them.
+ */
+function buildReconciliationLayout(capabilities) {
+  const columns = COLUMNS.filter((c) => isCapabilityVisible(capabilities, c.visibleWhenCapability));
+  return {
+    columns,
+    gridStyle: {
+      gridTemplateColumns: [
+        LEAD_TRACKS,
+        ...columns.map((c) => CELL_RENDERERS[c.name]?.width ?? 'minmax(0,1fr)'),
+      ].join(' '),
+    },
+    skeletonCellKeys: ['chev', ...columns.map((c) => `c_${c.name}`)],
+  };
+}
 const SKELETON_ROWS = [1, 2, 3, 4];
 
 /**
@@ -148,8 +162,8 @@ export function buildReconciliationSortAccessors(cellCtx) {
 }
 
 /** The sortable columns, for the toolbar popover's menu. */
-export function buildReconciliationSortColumns(ui) {
-  return COLUMNS.map((col) => ({
+export function buildReconciliationSortColumns(ui, capabilities) {
+  return buildReconciliationLayout(capabilities).columns.map((col) => ({
     key: col.name,
     label: CELL_RENDERERS[col.name] ? ui(CELL_RENDERERS[col.name].labelKey) : col.label,
   }));
@@ -164,6 +178,8 @@ export function ReconciliationListTable({
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const [openId, setOpenId] = useState(null);
   const toggle = (id) => setOpenId((prev) => (prev === id ? null : id));
+  const capabilities = useCapabilitiesSafe();
+  const layout = useMemo(() => buildReconciliationLayout(capabilities), [capabilities]);
 
   const cellCtx = {
     ui,
@@ -189,7 +205,7 @@ export function ReconciliationListTable({
           not the uppercase muted small-caps used elsewhere. */}
       <div
         role="row"
-        style={GRID_STYLE}
+        style={layout.gridStyle}
         className={cn(
           GRID_CLASS,
           'items-center border-b border-[hsl(var(--border-subtle))] bg-card px-4',
@@ -197,7 +213,7 @@ export function ReconciliationListTable({
         )}
       >
         <span aria-hidden="true" />
-        {COLUMNS.map((col) => (
+        {layout.columns.map((col) => (
           <span key={col.name} className={amountAligned(col.name) ? 'text-right' : undefined}>
             <SortableHeaderLabel
               label={CELL_RENDERERS[col.name] ? ui(CELL_RENDERERS[col.name].labelKey) : col.label}
@@ -210,22 +226,22 @@ export function ReconciliationListTable({
           </span>
         ))}
       </div>
-      {renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, toggle })}
+      {renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, toggle, layout })}
     </div>
   );
 }
 
 /** Extracted so the loading / empty / rows branching isn't a nested ternary (Sonar). */
-function renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, toggle }) {
+function renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, toggle, layout }) {
   if (loading && reconciliations.length === 0) {
     return SKELETON_ROWS.map((n) => (
       <div
         key={n}
         role="row"
-        style={GRID_STYLE}
+        style={layout.gridStyle}
         className={cn(GRID_CLASS, 'border-b border-[hsl(var(--border-subtle))] px-4 py-3')}
       >
-        {SKELETON_CELL_KEYS.map((k) => <Skeleton key={k} className="h-4 w-full" data-testid="Skeleton__d80a75" />)}
+        {layout.skeletonCellKeys.map((k) => <Skeleton key={k} className="h-4 w-full" data-testid="Skeleton__d80a75" />)}
       </div>
     ));
   }
@@ -252,6 +268,7 @@ function renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, t
       row={row}
       currency={currency}
       cellCtx={cellCtx}
+      layout={layout}
       ui={ui}
       open={openId === row.id}
       onToggle={() => toggle(row.id)}
@@ -259,12 +276,12 @@ function renderBody({ loading, reconciliations, ui, currency, cellCtx, openId, t
   ));
 }
 
-function ReconciliationRow({ row, currency, cellCtx, ui, open, onToggle }) {
+function ReconciliationRow({ row, currency, cellCtx, layout, ui, open, onToggle }) {
   return (
     <>
       <div
         role="row"
-        style={GRID_STYLE}
+        style={layout.gridStyle}
         className={cn(
           GRID_CLASS,
           'group relative cursor-pointer items-center bg-card px-4 py-3 text-sm transition-shadow',
@@ -282,7 +299,7 @@ function ReconciliationRow({ row, currency, cellCtx, ui, open, onToggle }) {
           onToggle={() => onToggle()}
           iconTestId="ChevronDown__d80a75"
           data-testid="RowExpandToggle__d80a75" />
-        {COLUMNS.map((col) => {
+        {layout.columns.map((col) => {
           const renderer = CELL_RENDERERS[col.name];
           return (
             <Fragment key={col.name} data-testid="Fragment__d80a75">

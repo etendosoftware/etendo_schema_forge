@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -535,7 +536,7 @@ test.describe('Contacts Integration — Full journey', () => {
       // rows through InlineLinesPanel (DetailView's default `linesLayout` is
       // 'inlineEditable'), which emits `line-row-{id}` per row inside
       // `inline-lines-panel`, and within the row a `line-actions` strip whose
-      // delete button carries the `Trash2__3b7ec2` icon. Everything below is
+      // delete button carries the `IconicTrashIcon__3b7ec2` icon. Everything below is
       // anchored inside that ONE row, so the header toolbar is structurally
       // unreachable — no page-wide fallback.
       const bankRow = page
@@ -550,7 +551,7 @@ test.describe('Contacts Integration — Full journey', () => {
       const deleteBankBtn = bankRow
         .getByTestId('line-actions')
         .locator('button')
-        .filter({ has: page.locator('[data-testid="Trash2__3b7ec2"]') });
+        .filter({ has: page.locator('[data-testid="IconicTrashIcon__3b7ec2"]') });
       await expect(deleteBankBtn).toBeVisible({ timeout: 3_000 });
       await deleteBankBtn.click();
 

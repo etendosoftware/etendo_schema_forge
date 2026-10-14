@@ -58,6 +58,13 @@ function TextCell({ value, className = '' }) {
  * The website as a link tag (Figma): grey `Tag` look, a link icon, the address without its
  * scheme. Opens in a new tab and stops the click so the row does not navigate to the record.
  * An empty value falls back to the plain text cell, exactly as before.
+ *
+ * ETP-5600 (Figma "Página web" chip): radius md (not the Tag's pill), 16px #828FA3 link icon,
+ * and on hover the #121217 @ 5% overlay (≈ #EAECEE) over the unchanged #F5F7F9, 300ms ease-out.
+ * The Tag paints its colours through an inline `background` shorthand, so the overlay is an
+ * inset box-shadow (drawn above the background, below the content) instead of a second
+ * background layer the inline style would reset; `!rounded-md` likewise has to beat the
+ * inline `borderRadius`.
  */
 function WebsiteCell({ value }) {
   const href = toWebsiteHref(value);
@@ -71,11 +78,14 @@ function WebsiteCell({ value }) {
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
       title={label}
-      className="inline-flex max-w-[200px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+      className="group/web inline-flex max-w-[200px] cursor-pointer rounded-md no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
       data-testid="ContactsTable__websiteLink"
     >
-      <Tag variant="neutral" className="gap-1 max-w-full" data-testid="Tag__5c74a8">
-        <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" data-testid="Link2__5c74a8" />
+      <Tag
+        variant="neutral"
+        className="gap-1 max-w-full !rounded-md transition-shadow duration-300 ease-out group-hover/web:shadow-[inset_0_0_0_999px_rgba(18,18,23,0.05)]"
+        data-testid="Tag__5c74a8">
+        <Link2 className="h-4 w-4 shrink-0 text-[#828FA3]" aria-hidden="true" data-testid="Link2__5c74a8" />
         <span className="min-w-0 truncate">{label}</span>
       </Tag>
     </a>
