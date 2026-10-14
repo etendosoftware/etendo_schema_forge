@@ -23,8 +23,6 @@ export default function TabStripButton({
   return (
     <button
       onClick={disabled ? undefined : onClick}
-      role="tab"
-      aria-selected={isActive}
       aria-disabled={disabled || undefined}
       title={disabled ? disabledHint : undefined}
       data-testid={testId}

@@ -51,7 +51,7 @@ export default function DetailTabStrip({
   return (
     // min-w-0 + overflow-hidden: the strip takes the room its container gives it and can
     // never paint over a neighbour (e.g. the side panel) even when nothing more can be hidden.
-    <div ref={wrapperRef} className="relative flex flex-1 min-w-0 items-center gap-0 overflow-hidden" role="tablist" data-testid="detail-tab-strip">
+    <div ref={wrapperRef} className="relative flex flex-1 min-w-0 items-center gap-0 overflow-hidden" data-testid="detail-tab-strip">
       {/* Invisible natural-width probe for useFittingTabCount: every tab + the More trigger. */}
       <div ref={measureRef} aria-hidden="true" className="invisible pointer-events-none absolute left-0 top-0 flex w-max items-center gap-0">
         {tabs.map((tab) => (
