@@ -1,96 +1,146 @@
-import { Download, FileX, Loader2, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Download, Loader2 } from 'lucide-react';
+import { DataTable } from '@/components/contract-ui/DataTable.jsx';
 import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Skeleton } from '@/components/ui/skeleton';
+  ROW_ACTION_BUTTON_NEUTRAL,
+  ROW_ACTION_BUTTON_DESTRUCTIVE,
+} from '@/components/contract-ui/rowVisuals.js';
+import { IconicTrashIcon } from '@/components/ui/custom-icons';
+import { useClientSort } from '@/hooks/useClientSort';
 import { useUI } from '@/i18n';
 
-/**
- * Format an ISO date string as a compact date (no time).
- * e.g. "12 may. 2026" in es-ES
- */
-function formatDate(value) {
-  if (!value) return '—';
-  try {
-    const date = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(date.getTime())) return '—';
-    const locale = (typeof navigator !== 'undefined' && navigator.language) || 'es-ES';
-    return new Intl.DateTimeFormat(locale, {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(date);
-  } catch {
-    return '—';
-  }
-}
+const UPLOADING_ID_PREFIX = 'uploading:';
 
 /**
- * Single row for a file that is currently being uploaded.
+ * Flattens one attachment into the row shape the grid reads. The backend has used a few
+ * names for the same facts over time, so the fallbacks live here, once, and every column
+ * (and the client-side sort) reads the same normalized keys.
+ *
+ * `uploadedAt` / `updatedAt` are UTC instants (NeoAttachmentsHelper#formatDate), not
+ * date-only values: DataTable's `date` cell formats them in the viewer's local time and
+ * the UI locale, so no `parseCalendarDate` here (it would take the UTC calendar day).
  */
-function UploadingRow({ name, size, formatBytes, selectable }) {
+function toRow(item) {
+  return {
+    ...item,
+    name: item.name || item.fileName || item.id,
+    size: item.size ?? item.fileSize ?? null,
+    uploadedAt: item.uploadedAt || item.createdAt || item.creationDate || null,
+    updatedAt: item.updatedAt ?? item.modifiedAt ?? item.updateDate ?? null,
+    uploadedByName: item.uploadedBy?.name
+      ?? item.createdBy?.name
+      ?? item['createdBy$_identifier']
+      ?? null,
+  };
+}
+
+const isPersistedRow = (row) => !row.uploading;
+
+/**
+ * Hover actions of one attachment row — Figma "Fila" sm Round Tertiary buttons, the same
+ * class strings every list's quick actions use (rowVisuals.js). Rendered inside DataTable's
+ * shared quick-actions cell, so the sticky positioning and the fade behind it come for free.
+ */
+function AttachmentRowActions({ row, onDownload, onDelete }) {
+  const ui = useUI();
+  if (row.uploading) return null;
+  const stop = (handler) => (event) => {
+    event.stopPropagation();
+    handler(row.item);
+  };
   return (
-    <TableRow className="h-10" data-testid="TableRow__e868a0">
-      {selectable && <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0" />}
-      <TableCell className="px-3 py-0 font-medium" data-testid="TableCell__e868a0">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2
-            className="h-4 w-4 animate-spin"
-            aria-hidden="true"
-            data-testid="Loader2__e868a0" />
-          <span>{name}</span>
-        </div>
-      </TableCell>
-      <TableCell className="px-3 py-0" data-testid="TableCell__e868a0">{formatBytes(size)}</TableCell>
-      <TableCell
-        colSpan={4}
-        className="px-3 py-0 text-muted-foreground italic"
-        data-testid="TableCell__e868a0" />
-    </TableRow>
+    <div
+      className="absolute right-0 inset-y-0 z-10 flex h-full flex-row items-center justify-center gap-0.5 px-3 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100"
+      data-testid={`attachment-actions-${row.id}`}>
+      {onDownload && (
+        <button
+          type="button"
+          onClick={stop(onDownload)}
+          className={ROW_ACTION_BUTTON_NEUTRAL}
+          aria-label={ui('attachmentsDownload')}
+          title={ui('attachmentsDownload')}
+          data-testid={`attachment-download-${row.id}`}>
+          <Download className="h-5 w-5" aria-hidden="true" data-testid="Download__e868a0" />
+        </button>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={stop(onDelete)}
+          className={ROW_ACTION_BUTTON_DESTRUCTIVE}
+          aria-label={ui('delete')}
+          title={ui('delete')}
+          data-testid={`attachment-delete-${row.id}`}>
+          <IconicTrashIcon className="h-5 w-5" aria-hidden="true" data-testid="IconicTrashIcon__e868a0" />
+        </button>
+      )}
+    </div>
   );
 }
 
 /**
- * Generic table that renders the list of attachments for the current record.
+ * Keeps DataTable's internal selection in step with the caller-owned `selectedIds`.
+ *
+ * DataTable owns its checkbox state and only reports changes up (`onSelectionChange`); it
+ * can be told to clear everything (`clearSelectionTrigger`) or to drop some ids
+ * (`deselectTrigger` + `deselectRowIds`). The caller here owns the selection, so the two
+ * cases where it changes it on its own are pushed down:
+ *   - it emptied the Set (record navigation, the bar's close, a bulk delete) → clear;
+ *   - a selected row left the list (single delete) → drop that id on both sides, or
+ *     DataTable's "all selected" count would include a row no longer on screen.
+ */
+function useSelectionSync({ selectable, selectedIds, items, loading, onSelectionChange }) {
+  const [clearTrigger, setClearTrigger] = useState(0);
+  const [deselect, setDeselect] = useState({ trigger: 0, ids: [] });
+  const selectionSize = selectedIds?.size ?? 0;
+
+  useEffect(() => {
+    if (selectable && selectionSize === 0) setClearTrigger((n) => n + 1);
+  }, [selectable, selectionSize]);
+
+  useEffect(() => {
+    if (!selectable || loading || selectionSize === 0) return;
+    const live = new Set((items ?? []).map((it) => it.id));
+    const stale = [...selectedIds].filter((id) => !live.has(id));
+    if (stale.length === 0) return;
+    setDeselect((prev) => ({ trigger: prev.trigger + 1, ids: stale }));
+    onSelectionChange?.([...selectedIds].filter((id) => live.has(id)));
+  }, [selectable, loading, items, selectedIds, selectionSize, onSelectionChange]);
+
+  return { clearTrigger, deselect };
+}
+
+/**
+ * The attachments grid of the current record, rendered through the generic `DataTable`
+ * (ETP-5526) so it shares every list's row visuals: the lift hover (Shadows/lg + top
+ * separator), the #F5F7F9 checked row, the 32px row-action buttons and the fade behind
+ * them. Attachments are not a NEO entity (C_File has no AD tab), so `ListView` does not
+ * apply: the rows come from `useAttachments` and are sorted client-side.
  *
  * Props:
  *   items          - Attachment objects.
  *   loading        - True while the list is being fetched.
- *   uploadingFiles - Map<string, { name, size }> with optimistic upload rows.
- *   onDownload     - (attachment) => void
- *   onDelete       - (attachment) => void
- *   onDownloadAll  - () => void. Renders the header-wide "Download all (ZIP)" control.
- *                    Still used by SifAttachmentsSection, which has no selection and
- *                    no other way to pull its fiscal XML bundle; the Adjuntos tab
- *                    stopped passing it when the selection bar replaced it (ETP-5526).
+ *   uploadingFiles - Map<string, { name, size }> with optimistic upload rows (shown first,
+ *                    with a spinner, no checkbox and no actions).
+ *   onDownload     - (attachment) => void. Omit to hide the per-row Download button.
+ *   onDelete       - (attachment) => void. Omit to hide the per-row Delete button (this is
+ *                    how AttachmentsTab applies its `readOnly` rule).
+ *   onDownloadAll  - () => void. Renders a "Download all (ZIP)" link above the grid.
+ *                    Still used by SifAttachmentsSection, which has no selection and no
+ *                    other way to pull its fiscal XML bundle; the Adjuntos tab stopped
+ *                    passing it when the selection bar replaced it (ETP-5526).
  *   formatBytes    - (bytes) => string
  *
- * ── Selection is an opt-in capability (ETP-5526) ──────────────────────────────
- * This component is shared, and selection is NOT part of its baseline contract.
- * It is a CONTROLLED capability: the owner of the selection is the caller, exactly
- * as in MovementsTab → StatementsTable (`selectedIds` down, toggles up), which is
- * how the rest of the app wires a bulk-selection surface.
+ * ── Selection is an opt-in, caller-owned capability (ETP-5526) ─────────────────
+ *   selectedIds        - Set<string> | undefined. Supplying it turns the checkbox column
+ *                        ON. Leaving it out means no column and nothing to toggle —
+ *                        SifAttachmentsSection (read-only by design) relies on that.
+ *   onSelectionChange  - (ids: string[]) => void. The full new selection, every time it
+ *                        changes (row checkbox, header checkbox, or a selected row that
+ *                        left the list).
  *
- *   selectedIds  - Set<string> | undefined. Supplying it turns the capability ON:
- *                  the checkbox column appears and the rows tint. Leaving it out
- *                  means the capability does not exist here at all — no column, no
- *                  state, nothing to toggle. It used to render unconditionally, so
- *                  SifAttachmentsSection (the other consumer, read-only by design)
- *                  showed checkboxes that could not drive anything: the very
- *                  inert-control defect this ticket reports, in a second screen.
- *   onToggleRow  - (id) => void. One row's checkbox.
- *   onToggleAll  - (nextIds: string[]) => void. Header checkbox; receives the full
- *                  id list, or [] when it is clearing an already-complete selection.
- *
- * The selection BAR itself is deliberately not rendered here: SelectionToolbar
- * portals to document.body and its actions are caller business (download a subset,
- * delete a subset — each with its own gating), so the caller that owns the
+ * The selection BAR is deliberately not rendered here: SelectionToolbar portals to
+ * document.body and its actions are caller business, so the caller that owns the
  * selection owns the bar too. See AttachmentsTab.
  */
 export default function AttachmentsTable({
@@ -101,198 +151,121 @@ export default function AttachmentsTable({
   onDelete,
   onDownloadAll,
   selectedIds,
-  onToggleRow,
-  onToggleAll,
+  onSelectionChange,
   formatBytes,
 }) {
   const ui = useUI();
-
   const selectable = selectedIds != null;
-  const isSelected = (id) => selectable && selectedIds.has(id);
 
-  const uploadingEntries = uploadingFiles ? Array.from(uploadingFiles.entries()) : [];
-  const hasItems = items && items.length > 0;
-  const hasUploads = uploadingEntries.length > 0;
-
-  // fileName, size, uploadedAt, updatedAt, uploadedBy, actions — plus the
-  // checkbox column only when the caller opted into selection.
-  const COLUMNS = selectable ? 7 : 6;
-
-  // Counted against `items`, not against the raw Set: a row deleted by a bulk
-  // action leaves its id behind in the caller's Set for one render, and an
-  // "all selected" that includes ids no longer on screen would tick the header
-  // checkbox for a selection the user can no longer see.
-  const selectedCount = selectable && hasItems
-    ? items.filter((i) => selectedIds.has(i.id)).length
-    : 0;
-  const allSelected = hasItems && selectedCount === items.length;
-  const someSelected = selectedCount > 0 && !allSelected;
-
-  const toggleAll = () => onToggleAll?.(
-    allSelected || !hasItems ? [] : items.map((i) => i.id)
+  const rows = useMemo(
+    () => (items ?? []).map((item) => ({ ...toRow(item), item })),
+    [items],
   );
+  const { sorted, sortKey, sortDirection, toggleSort } = useClientSort(rows);
 
-  // h-10 overrides the default h-11 from TableHead base styles
-  const headCell = 'h-10 px-3 py-0 text-xs font-semibold text-foreground';
-  const dataCell = 'px-3 py-0 text-sm text-foreground';
+  // In-flight uploads stay on top whatever the sort: they are not part of the list yet.
+  const uploadingRows = useMemo(
+    () => (uploadingFiles ? Array.from(uploadingFiles.entries()) : []).map(([key, info]) => ({
+      id: `${UPLOADING_ID_PREFIX}${key}`,
+      uploading: true,
+      name: info.name,
+      size: info.size,
+    })),
+    [uploadingFiles],
+  );
+  const data = useMemo(() => [...uploadingRows, ...sorted], [uploadingRows, sorted]);
+
+  const { clearTrigger, deselect } = useSelectionSync({
+    selectable, selectedIds, items, loading, onSelectionChange,
+  });
+
+  const columns = useMemo(() => [
+    {
+      key: 'name',
+      label: ui('attachmentsFileName'),
+      type: 'string',
+      render: (row) => (row.uploading
+        ? (
+          <span className="flex items-center gap-2 font-medium text-muted-foreground" data-testid={`attachment-uploading-${row.id}`}>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" data-testid="Loader2__e868a0" />
+            <span>{row.name}</span>
+          </span>
+        )
+        : <span className="font-medium text-foreground" data-testid={`attachment-name-${row.id}`}>{row.name}</span>),
+    },
+    {
+      key: 'size',
+      label: ui('attachmentsSize'),
+      type: 'string',
+      render: (row) => formatBytes(row.size),
+    },
+    // `dot: false` — the date cell's due-date dot means nothing for an upload date.
+    { key: 'uploadedAt', label: ui('attachmentsUploadedAt'), type: 'date', dot: false },
+    { key: 'updatedAt', label: ui('attachmentsUpdatedAt'), type: 'date', dot: false },
+    {
+      key: 'uploadedByName',
+      label: ui('attachmentsUploadedBy'),
+      type: 'string',
+      render: (row) => (row.uploading ? null : (row.uploadedByName || ui('attachmentsUnknownUser'))),
+    },
+  ], [ui, formatBytes]);
+
+  const actionCount = (onDownload ? 1 : 0) + (onDelete ? 1 : 0);
+  const rowQuickActions = actionCount > 0
+    ? {
+      enabled: true,
+      buttonCount: actionCount,
+      render: (row) => (
+        <AttachmentRowActions
+          row={row}
+          onDownload={onDownload}
+          onDelete={onDelete}
+          data-testid="AttachmentRowActions__e868a0" />
+      ),
+    }
+    : undefined;
+
+  const hasItems = rows.length > 0;
+  const hasUploads = uploadingRows.length > 0;
 
   return (
-    <Table data-testid="attachments-table">
-      <TableHeader data-testid="TableHeader__e868a0">
-        <TableRow className="h-10" data-testid="TableRow__e868a0">
-          {selectable && (
-            <TableHead className={`${headCell} w-10 px-2`} data-testid="TableHead__e868a0">
-              <Checkbox
-                checked={allSelected}
-                indeterminate={someSelected}
-                onChange={toggleAll}
-                data-testid="attachments-select-all" />
-            </TableHead>
-          )}
-          <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsFileName')}</TableHead>
-          <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsSize')}</TableHead>
-          <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUploadedAt')}</TableHead>
-          <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUpdatedAt')}</TableHead>
-          <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUploadedBy')}</TableHead>
-          {/* ETP-5526 — the delete-all header control is gone from here: the selection
-              bar is the one bulk-delete affordance now, and the Figma header has exactly
-              the five data columns above. The download-all ZIP control survives only
-              because a caller without selection (SifAttachmentsSection) has no other way
-              to pull the whole bundle; the attachments tab no longer passes it. */}
-          <TableHead className={headCell} data-testid="TableHead__e868a0">
-            {onDownloadAll && (
-              <div className="flex justify-end items-center gap-3">
-                <button
-                  type="button"
-                  data-testid="attachments-download-all"
-                  onClick={onDownloadAll}
-                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
-                >
-                  <Download className="h-3.5 w-3.5" data-testid="Download__e868a0" />
-                  {ui('attachmentsDownloadAll')}
-                </button>
-              </div>
-            )}
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody data-testid="TableBody__e868a0">
-        {uploadingEntries.map(([id, info]) => (
-          <UploadingRow
-            key={id}
-            name={info.name}
-            size={info.size}
-            formatBytes={formatBytes}
-            selectable={selectable}
-            data-testid="UploadingRow__e868a0" />
-        ))}
-
-        {loading && !hasItems && !hasUploads && (
-          [0, 1, 2].map((i) => (
-            <TableRow key={`skeleton-${i}`} className="h-10" data-testid="TableRow__e868a0">
-              {selectable && (
-                <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-4" data-testid="Skeleton__e868a0" /></TableCell>
-              )}
-              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-32" data-testid="Skeleton__e868a0" /></TableCell>
-              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-16" data-testid="Skeleton__e868a0" /></TableCell>
-              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-28" data-testid="Skeleton__e868a0" /></TableCell>
-              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-28" data-testid="Skeleton__e868a0" /></TableCell>
-              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-24" data-testid="Skeleton__e868a0" /></TableCell>
-              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="ml-auto h-4 w-16" data-testid="Skeleton__e868a0" /></TableCell>
-            </TableRow>
-          ))
-        )}
-
-        {!loading && !hasItems && !hasUploads && (
-          <TableRow data-testid="TableRow__e868a0">
-            <TableCell colSpan={COLUMNS} className="py-10" data-testid="TableCell__e868a0">
-              <div data-testid="attachments-empty-state" className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
-                <FileX className="h-8 w-8" aria-hidden="true" data-testid="FileX__e868a0" />
-                <span className="text-sm">{ui('attachmentsNoFiles')}</span>
-              </div>
-            </TableCell>
-          </TableRow>
-        )}
-
-        {hasItems && items.map((item) => {
-          const uploadedByName = item.uploadedBy?.name
-            ?? item.createdBy?.name
-            ?? item['createdBy$_identifier']
-            ?? null;
-          const updatedAt = item.updatedAt ?? item.modifiedAt ?? item.updateDate ?? null;
-          return (
-            // ETP-5030 — exactly ONE background per row, mirroring
-            // `computeRowClassName` (contract-ui/InlineLinesPanel.jsx). TableRow's
-            // own base class is `hover:bg-muted/50`, so the `hover:` half is
-            // required: the pointer is over the row when the checkbox is clicked,
-            // and without it the base hover repaints over the tint at exactly the
-            // moment the user looks for feedback. TableRow merges via `cn`
-            // (tailwind-merge), so this className legitimately replaces the base
-            // hover rather than racing it on stylesheet order.
-            <TableRow
-              key={item.id}
-              data-testid={`attachment-row-${item.id}`}
-              className={isSelected(item.id)
-                ? 'group h-10 bg-primary/5 hover:bg-primary/5'
-                : 'group h-10'}
-            >
-              {selectable && (
-                <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0">
-                  <Checkbox
-                    checked={isSelected(item.id)}
-                    onChange={() => onToggleRow?.(item.id)}
-                    data-testid={`attachment-select-${item.id}`} />
-                </TableCell>
-              )}
-              <TableCell data-testid={`attachment-name-${item.id}`} className={`${dataCell} font-medium`}>
-                {item.name || item.fileName || item.id}
-              </TableCell>
-              <TableCell className={dataCell} data-testid="TableCell__e868a0">{formatBytes(item.size ?? item.fileSize)}</TableCell>
-              <TableCell className={dataCell} data-testid="TableCell__e868a0">{formatDate(item.uploadedAt || item.createdAt || item.creationDate)}</TableCell>
-              <TableCell className={dataCell} data-testid="TableCell__e868a0">{formatDate(updatedAt)}</TableCell>
-              <TableCell className={dataCell} data-testid="TableCell__e868a0">{uploadedByName || ui('attachmentsUnknownUser')}</TableCell>
-              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0">
-                <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {onDownload && (
-                    <button
-                      type="button"
-                      data-testid={`attachment-download-${item.id}`}
-                      onClick={() => onDownload(item)}
-                      // ETP-5526 — the hover plate was `--muted`, which in light mode is
-                      // hsl(210 40% 96%) against a row already hovering on `bg-muted/50`:
-                      // roughly a 7/255 lift, i.e. no visible circle at all, while the
-                      // sibling delete button reads clearly off its own
-                      // `--status-destructive-bg`. `--border-subtle` is the palette's
-                      // neutral counterpart with real separation from the hovered row in
-                      // BOTH themes (#E1E7EF light / hsl(215 20% 30%) dark), and it is
-                      // already the app's idiom for exactly this control — same h-8 w-8
-                      // rounded-full `--text-disabled` icon button in AccountRowActions,
-                      // MovementRowKebab, StatementsTable and ListModalWindow.
-                      className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))] hover:text-[hsl(var(--foreground))] transition-all"
-                      aria-label={ui('attachmentsDownload')}
-                      title={ui('attachmentsDownload')}
-                    >
-                      <Download className="h-4 w-4" aria-hidden="true" data-testid="Download__e868a0" />
-                    </button>
-                  )}
-                  {onDelete && (
-                    <button
-                      type="button"
-                      data-testid={`attachment-delete-${item.id}`}
-                      onClick={() => onDelete(item)}
-                      className="h-8 w-8 flex items-center justify-center rounded-full text-[hsl(var(--destructive))] hover:bg-[var(--status-destructive-bg)] transition-all"
-                      aria-label={ui('delete')}
-                      title={ui('delete')}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" data-testid="Trash2__e868a0" />
-                    </button>
-                  )}
-                </div>
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+    <div className="space-y-1" data-testid="attachments-table">
+      {onDownloadAll && (
+        <div className="flex justify-end" data-testid="attachments-table-toolbar">
+          <button
+            type="button"
+            data-testid="attachments-download-all"
+            onClick={onDownloadAll}
+            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+          >
+            <Download className="h-3.5 w-3.5" data-testid="Download__e868a0" />
+            {ui('attachmentsDownloadAll')}
+          </button>
+        </div>
+      )}
+      {/* No overflow box of our own: DataTable scrolls horizontally inside its wrapper, and
+          an `overflow-auto` here would turn the 24px it keeps below the last row for the
+          lift shadow into a stray vertical scrollbar. */}
+      <div className="min-w-0" data-testid="attachments-table-body">
+        <DataTable
+          columns={columns}
+          data={data}
+          loading={loading && !hasItems && !hasUploads}
+          showFooterTotals={false}
+          rowHoverStyle="lift-always"
+          selectable={selectable}
+          isRowSelectable={isPersistedRow}
+          onSelectionChange={(selectedRows) => onSelectionChange?.(selectedRows.map((r) => r.id))}
+          clearSelectionTrigger={clearTrigger}
+          deselectTrigger={deselect.trigger}
+          deselectRowIds={deselect.ids}
+          sortColumn={sortKey}
+          sortDirection={sortDirection}
+          onSort={toggleSort}
+          emptyState={{ title: ui('attachmentsNoFiles'), testId: 'attachments-empty-state' }}
+          rowQuickActions={rowQuickActions}
+          data-testid="DataTable__e868a0" />
+      </div>
+    </div>
   );
 }
