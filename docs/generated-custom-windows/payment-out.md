@@ -146,7 +146,7 @@ both sides plus the rate that was actually booked:
 
 ```
 Importe del pago
-21,34 $   (red, no sign)
+21,34 $   (default colour, no sign)
   (0,680272)  14,52 €
 ```
 
@@ -472,10 +472,9 @@ runs under the toolbar, above both the sidebar and the grid, across the full wid
 
 ## Amount sign and colour — ETP-5728
 
-For Payment Out the amount carries no minus sign and is always rendered in destructive red
-(`hsl(var(--destructive))`): the list Amount column (`PaymentHeaderTableBase.buildColumns`, including
-deposited/reconciled rows, which are no longer green), the list sidebar hero ("Pagado este mes") and
-the detail sidebar hero (`PaymentDetailSidebarBase`). The direction is conveyed by the colour and the
-window, not by a sign. `formatCurrency` still prints its own `-` for genuinely negative values; the
-direction is never prefixed on top of it. Payment In follows the same rule in the other colour: no `+` prefix, always success green
-(`var(--status-success-fg)`) — see `payment-in.md`.
+Payment Out amounts carry no sign and use the default (black) text colour (`hsl(var(--foreground))`),
+exactly like Payment In: the list Amount column (`PaymentHeaderTableBase.buildColumns`, including
+deposited/reconciled rows), the list sidebar hero ("Pagado este mes") and the detail sidebar hero
+(`PaymentDetailSidebarBase`). Neither direction is green or red; the direction is conveyed by the
+window itself (Receipts vs Payments), not by a sign or a colour. `formatCurrency` still prints its own
+`-` for genuinely negative values; nothing is prefixed on top of it. See also `payment-in.md`.

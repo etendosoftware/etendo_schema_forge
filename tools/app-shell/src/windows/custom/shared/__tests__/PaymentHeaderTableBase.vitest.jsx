@@ -180,7 +180,7 @@ describe('PaymentHeaderTableBase — sidebar', () => {
 
     // Hero: only p1 counts towards "this month" (p2's date is out of range).
     const hero = findHero(sidebar, fmtAmtNorm(120.5, 'EUR'));
-    expect(hero).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
     expect(hero.textContent).not.toContain('+');
 
     // Pending bucket = every non-deposited row (p3 + p4) = 85.
@@ -202,7 +202,7 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     // Hardcoded literal — the local fmtAmt() test helper above shares the SAME
     // missing-useGrouping bug as production, so it can never catch this regression.
     const hero = findHero(sidebar, '1.500,50 €');
-    expect(hero).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
     expect(hero.textContent).not.toContain('+');
     // Ungrouped text would never match the exact string above; assert no ungrouped figure exists anywhere.
     expect(sidebar.queryByText(/1500,50/)).not.toBeInTheDocument();
@@ -219,7 +219,7 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     expect(sidebar.queryByText('porMetodo')).not.toBeInTheDocument();
   });
 
-  it('shows the hero amount without a sign and in destructive red for dir="out" when this month\'s deposited total is nonzero', () => {
+  it('shows the hero amount without a sign and in the default foreground colour for dir="out" when this month\'s deposited total is nonzero', () => {
     const rows = [
       { id: 'p1', status: 'RPR', amount: '40', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
     ];
@@ -227,7 +227,7 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     const hero = sidebar.getAllByText(fmtAmtNorm(40, 'EUR')).find((el) => el.style.fontSize === '30px');
     expect(hero).toBeDefined();
-    expect(hero).toHaveStyle({ color: 'hsl(var(--destructive))' });
+    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
     expect(sidebar.queryByText(`− ${fmtAmtNorm(40, 'EUR')}`)).not.toBeInTheDocument();
   });
 
@@ -252,7 +252,7 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     const hero = findHero(sidebar, fmtAmtNorm(-40, 'EUR'));
-    expect(hero).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
     expect(hero.textContent).not.toContain('+');
     expect(sidebar.queryByText(`+ ${fmtAmtNorm(-40, 'EUR')}`)).not.toBeInTheDocument();
   });
@@ -348,33 +348,34 @@ describe('PaymentHeaderTableBase — columns', () => {
     expect(statusCol.enumLabels.ETGOERR).toBe('cpPaymentStateError');
   });
 
-  it('does not paint a PPM amount as deposited-green (dir="out")', () => {
+  it('does not paint a PPM amount as deposited-green or red (dir="out")', () => {
     // The green amount says "this money moved"; for PPM it has not left the account yet.
     const rows = [{ id: 'p13', status: 'PPM', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p13');
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--destructive))' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
+    expect(cell.querySelector('span')).not.toHaveStyle({ color: 'hsl(var(--destructive))' });
     expect(cell.querySelector('span')).not.toHaveStyle({ color: 'var(--status-success-fg)' });
   });
 
-  it('renders a deposited row amount in destructive red (dir="out")', () => {
+  it('renders a deposited row amount in the default foreground colour (dir="out")', () => {
     const rows = [{ id: 'p14', status: 'RPR', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p14');
     expect(cell).toHaveTextContent(fmtAmtNorm(50, 'EUR'));
     expect(cell.textContent).not.toContain('−');
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--destructive))' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 
-  it('renders the amount column without a sign and in semantic success color for a deposited row (dir="in")', () => {
+  it('renders the amount column without a sign and in the default foreground colour for a deposited row (dir="in")', () => {
     const rows = [{ id: 'p1', status: 'RPR', amount: '50', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p1');
     expect(cell).toHaveTextContent(fmtAmtNorm(50, 'EUR'));
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 
-  it('renders the amount column without a sign and in semantic success color for an RPAE (Awaiting Execution) row (dir="in")', () => {
+  it('renders the amount column without a sign and in the default foreground colour for an RPAE (Awaiting Execution) row (dir="in")', () => {
     // Regression test: RPAE was previously treated as NOT deposited (amber),
     // creating an inconsistency with the "Cobro depositado" DB label. It must
     // now render exactly like RPR — semantic success amount, deposited status.
@@ -382,24 +383,24 @@ describe('PaymentHeaderTableBase — columns', () => {
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p12');
     expect(cell).toHaveTextContent(fmtAmtNorm(50, 'EUR'));
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 
-  it('renders a non-deposited row amount in success green, never the default foreground (dir="in")', () => {
+  it('renders a non-deposited row amount in the default foreground colour, never green or red (dir="in")', () => {
     const rows = [{ id: 'p20', status: 'RPAP', amount: '20', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p20');
     expect(cell.textContent).toBe(fmtAmt(20, 'EUR'));
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 
-  it('renders the amount column without a sign and in destructive red for a non-deposited row (dir="out")', () => {
+  it('renders the amount column without a sign and in the default foreground colour for a non-deposited row (dir="out")', () => {
     const rows = [{ id: 'p2', status: 'RPAP', amount: '20', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p2');
     expect(cell).toHaveTextContent(fmtAmtNorm(20, 'EUR'));
     expect(cell.textContent).not.toContain('−');
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--destructive))' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 
   it('renders the amount column with a single sign (not a doubled "− -") for a negative amount (dir="out")', () => {
@@ -427,7 +428,7 @@ describe('PaymentHeaderTableBase — columns', () => {
     const cell = screen.getByTestId('col-amount-p11');
     expect(cell.textContent).toBe(fmtAmt(5, 'EUR'));
     expect(cell.textContent).not.toContain('+');
-    expect(cell.querySelector('span')).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 });
 

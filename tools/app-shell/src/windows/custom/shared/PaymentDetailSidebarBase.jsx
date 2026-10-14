@@ -409,7 +409,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           const fs = len <= 13 ? 30 : 26;
           const lh = fs === 30 ? '32px' : '30px';
           return (
-            <span className="tabular-nums" style={{ font: `500 ${fs}px/${lh} Inter`, color: isIn ? 'var(--status-success-fg)' : 'hsl(var(--destructive))' }}>
+            <span className="tabular-nums" style={{ font: `500 ${fs}px/${lh} Inter`, color: 'hsl(var(--foreground))' }}>
               {formatted}
             </span>
           );

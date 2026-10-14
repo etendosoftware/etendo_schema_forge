@@ -52,22 +52,22 @@ describe('PaymentDetailSidebarBase — amount formatting', () => {
     expect(panel.queryByText(/1500,50\s€/)).toBeNull();
   });
 
-  it('renders the out hero amount without a minus sign and in destructive red', async () => {
+  it('renders the out hero amount without a minus sign and in the default foreground colour', async () => {
     const data = baseData({ amount: '100', 'currency$_identifier': 'EUR' });
     render(<PaymentDetailSidebarBase dir="out" specName="payment-out" data={data} token="t" apiBaseUrl="http://x" />);
     const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
     const hero = panel.getAllByText(/100,00\s€/).find((el) => el.style.color);
     expect(hero.textContent).not.toContain('−');
-    expect(hero).toHaveStyle({ color: 'hsl(var(--destructive))' });
+    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 
-  it('renders the in hero amount without a sign and in success green', async () => {
+  it('renders the in hero amount without a sign and in the default foreground colour', async () => {
     const data = baseData({ amount: '100', 'currency$_identifier': 'EUR' });
     render(<PaymentDetailSidebarBase dir="in" specName="payment-in" data={data} token="t" apiBaseUrl="http://x" />);
     const panel = within(screen.getByTestId('PaymentDetailSidebar__panel'));
     const hero = panel.getAllByText(/100,00\s€/)[0];
     expect(hero.textContent).not.toContain('+');
-    expect(hero).toHaveStyle({ color: 'var(--status-success-fg)' });
+    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 });
 

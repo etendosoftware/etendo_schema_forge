@@ -397,9 +397,9 @@ a value that fits shows no tooltip.
 
 ## Amount sign and colour — ETP-5728
 
-For Payment In the amount carries no `+` prefix and is always rendered in success green
-(`var(--status-success-fg)`), whether or not the receipt is deposited: the list Amount column
-(`PaymentHeaderTableBase.buildColumns`), the list sidebar hero ("Cobrado este mes") and the detail
-sidebar hero (`PaymentDetailSidebarBase`). Payment Out is the mirror image (no sign, always red). The
-direction is conveyed by the colour and the window, not by a sign. `formatCurrency` still prints its
-own `-` for genuinely negative values; nothing is prefixed on top of it.
+Payment In amounts carry no `+` prefix and use the default (black) text colour (`hsl(var(--foreground))`),
+whether or not the receipt is deposited: the list Amount column (`PaymentHeaderTableBase.buildColumns`),
+the list sidebar hero ("Cobrado este mes") and the detail sidebar hero (`PaymentDetailSidebarBase`).
+Payment Out is identical (no sign, default colour). Neither direction is green or red; the direction is
+conveyed by the window itself (Receipts vs Payments). `formatCurrency` still prints its own `-` for
+genuinely negative values; nothing is prefixed on top of it.

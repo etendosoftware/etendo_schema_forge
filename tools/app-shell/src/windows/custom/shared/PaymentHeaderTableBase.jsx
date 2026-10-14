@@ -57,7 +57,7 @@ function buildColumns(dir, ui, locale) {
         const amt = parseFloat(row.amount ?? 0);
         const curr = row['currency$_identifier'] || 'EUR';
         return (
-          <span className="tabular-nums" style={{ color: isOut ? 'hsl(var(--destructive))' : 'var(--status-success-fg)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+          <span className="tabular-nums" style={{ color: 'hsl(var(--foreground))', fontWeight: 600, whiteSpace: 'nowrap' }}>
             {fmtAmt(amt, curr)}
           </span>
         );
@@ -265,7 +265,6 @@ function PaymentSidebar({ dir, data, ui }) {
     [data]
   );
 
-  const heroColor = isIn ? 'var(--status-success-fg)' : 'hsl(var(--destructive))';
   const heroLabel = isIn ? ui('cobradoEsteMes') : ui('pagadoEsteMes');
   return (
     <aside
@@ -309,7 +308,7 @@ function PaymentSidebar({ dir, data, ui }) {
         {data === null ? (
           <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
         ) : (
-          <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 30, lineHeight: '32px', color: heroColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+          <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 30, lineHeight: '32px', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
             {fmtAmt(thisMonth, currency)}
           </span>
         )}
