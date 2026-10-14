@@ -1658,6 +1658,39 @@ final fix passes the literal `true` to `hidePrintWhen` instead, which
 `evaluateFieldCondition(true, data) → true` treats as an unconditional match, gating **only**
 the detail view; the list keeps its pre-ticket, untouched, always-visible print button. See
 `docs/decisions-reference.md` ("Print Visibility") for the generic `hidePrintWhen` mechanism.
+## OCR reader — extraction failures: gateway timeout and changed session — ETP-5585
+
+`useOcrExtraction.js` classifies the error of the upload / `executeTool` call into sentinels
+(like `OCR_NO_DATA_ERROR`); `OcrInlineUploader.jsx` maps them to translated messages instead of
+the raw English text.
+
+| Sentinel | Raised when | Message |
+|---|---|---|
+| `OCR_NETWORK_ERROR` | there was no HTTP answer at all (`isNetworkError`: offline, DNS, connection reset) | `networkErrorRetry`, the generic network message core also puts in `NetworkError.message` (see `docs/request-policy.md`, ETP-5424) |
+| `OCR_TIMEOUT_ERROR` | the answer is 502 / 503 / 504 | `ocrExtractTimeout` — "La lectura de la factura tardó demasiado. Vuelva a intentarlo." |
+| `OCR_SESSION_CHANGED_ERROR` | an `AbortError` | `ocrExtractSessionChanged` — "Su sesión cambió mientras se leía la factura. Vuelva a intentarlo." |
+
+The `AbortError` is core's stale-session abort (`staleSessionError()` in `app-shell-core`
+`auth/api.js`): the session generation changed while the request was in flight. It is by design
+and does not log the user out. The hook and `copilotRequest` never create an `AbortController` or
+pass a `signal`, so an `AbortError` reaching the hook can only be that one; if a caller-owned
+signal is ever added, check it before this branch. Any other error keeps today's behavior.
+
+The checks run in this order: `AbortError`, network, 502/503/504. Offline is a connection problem, so it must not read as a slow server.
+
+For the three sentinels the uploader shows a **Reintentar** button (`retry`) next to the message; it
+re-runs the extraction for the file that is still selected, same as "Extraer y completar". There
+is **no automatic retry**, on purpose: after a gateway timeout the server keeps running the
+first extraction, so a silent second one would duplicate the work (and its cost), and a
+response that belongs to a superseded session must never be replayed under another identity.
+No-data and generic failures show no retry button.
+
+Gateway timeouts (CloudFront / ALB idle limits) and the Copilot client timeouts are infra and
+Copilot-module concerns, outside this repo; the UI only reports them clearly.
+
+Tests: `src/components/copilot/ocr/__tests__/useOcrExtraction.vitest.jsx`,
+`OcrInlineUploader.vitest.jsx`.
+
 ## OCR reader — empty extraction is rejected (ETP-5654)
 
 A blank or corrupt PDF used to open the "Datos detectados en la factura" modal completely empty:
@@ -1798,12 +1831,45 @@ When an invoice line from the OCR reader matches no product, the resolver popup 
 "Create product" (`ProductCreateForm` in `ProductResolverPopup.jsx`). The form asks for name,
 search key, unit of measure and tax category, then POSTs to `/sws/neo/product/product`.
 
-Unit of measure and tax category are **prefilled** from `GET <productSpecUrl>/product/defaults`
-(`ProductDefaultsHandler`, ETP-4670) — the same defaults the product window uses (typically
-"Unidad" and "IVA Normal"). The form reads `uOM`/`uOM$_identifier` and
-`taxCategory`/`taxCategory$_identifier` from the response; no ids or names are hardcoded. The
-prefill never overwrites a value the user already picked (it only fills an empty selector), and if
-the defaults call fails the selectors stay empty and the existing required-field validation applies.
+Unit of measure and tax category are **prefilled**. The unit of measure comes from
+`GET <productSpecUrl>/product/defaults` (`ProductDefaultsHandler`, ETP-4670), the same default the
+product window uses (typically "Unidad"). The form reads `uOM`/`uOM$_identifier` from the
+response; no ids or names are hardcoded. If the defaults call fails the selectors stay empty and
+the existing required-field validation applies.
+
+**Tax category priority: user pick > the line tax's category > `/product/defaults`.** Each popup row
+carries `taxId`, the tax the line holds after the lines review (preselected by `defaultTax` or
+changed by the user; null when the line stayed on "Autocompletar"). `resolveProductsForLines`
+adds it to every row, suggestion rows included. Only when the create form opens **and** `taxId` is
+set, the form lazily reads the tax record (`GET /sws/neo/tax/tax/<taxId>` through the shared
+`apiFetch`, record in `response.data[0]`) and prefills the category from its
+`taxCategory` / `taxCategory$_identifier`. The defaults and the tax record load concurrently and
+may resolve in any order: the form tracks where the current value came from
+(`user` | `tax` | `defaults`), so the tax category overrides a defaults-sourced value but nothing
+ever overrides a category the user picked. A line taxed "Adquisiciones IVA 10%" therefore proposes
+"IVA Reducido" instead of "IVA Normal". With no `taxId`, a non-OK answer (for example a role without
+access to the `tax` spec), a network error or a record without `taxCategory`, the form silently
+keeps the `/product/defaults` category; no new warning is shown.
+
+### Product resolver: every line must be decided
+
+Each unmatched line is in one of three states, kept per row in `ProductResolverPopup.jsx`:
+
+| State | How a row gets there | Submitted as |
+|-------|----------------------|--------------|
+| Undecided | Default for a line **without** a suggestion | (blocks Continue) |
+| Product | Created through the "New product" modal, picked from the dropdown, or arrived with a suggestion | the product id |
+| Skipped | The user explicitly chose "Skip line" | `null` |
+
+- An undecided row shows "+ Create product" instead of "Skip line". Clicking that label opens the
+  "New product" modal; nothing opens or is created automatically. The chevron next to it opens the
+  dropdown (search an existing product, "+ Create product", "Skip line").
+- **Continue is disabled while any row is undecided**, and a short helper
+  (`ocrProductResolverIncomplete`) explains why. Rows that arrive with a suggestion count as decided.
+- Skipping is always explicit (dropdown entry, or the ghost skip button on a row that has a
+  product). A skipped row can still go back to creating or picking a product.
+- The `onSubmit` contract is unchanged: `{ [idx]: productId | null }`, where `null` means skipped.
+  Cancel still discards the whole import.
 
 Tests: `src/components/copilot/ocr/__tests__/ProductResolverPopup.vitest.jsx`.
 
@@ -1835,7 +1901,7 @@ zeros are kept.
 |---|---|---|
 | `match` | ids equal after normalization | continue |
 | `mismatch` | receiver id present and different | **blocked**: error toast with both ids, flow stops |
-| `absent` | no receiver id | continue silently |
+| `absent` | no receiver id (null, blank or the "?" placeholder) | continue, no session call, no toast; the "Datos detectados" modal shows a non-blocking amber notice (`ocrReceiverTaxIdAbsent`, prop `receiverTaxIdAbsent`) that never affects "Continuar" |
 | `same-as-issuer` | receiver id equals the issuer id (`issuer.tax_id_raw` or `tax_id`) | continue (OCR confusion) |
 | `no-org-tax-id` | organization has no tax id | continue + warning toast |
 | (session call failed) | the org tax id could not be read | continue + "could not verify" warning toast |
@@ -1847,13 +1913,58 @@ Messages use `toast` from sonner directly (`ocrReceiverTaxIdMismatch`, `ocrOrgTa
 `ocrReceiverTaxIdUnverified`), not `useBulkActionToast().showResult`, which reads `failed[0].message`
 while this flow passes `{ reason }` (pre-existing, not changed here).
 
+The mismatch error (`ocrReceiverTaxIdMismatch`) is a **persistent** toast: `duration: Infinity`,
+`closeButton: true` and the stable id `ocr-receiver-tax-id-mismatch`, so it stays until the user
+closes it and a second wrong invoice replaces it instead of stacking. Each validation run dismisses
+that id before comparing, so a correct invoice never leaves a stale error on screen. The two
+warnings (`ocrOrgTaxIdMissing`, `ocrReceiverTaxIdUnverified`) stay transient with default options.
+
 Tests: `src/components/copilot/ocr/__tests__/receiverTaxIdCheck.test.js`,
 `useOcrFlow.flow.vitest.jsx`, `buildOcrSchema.test.js`.
 
+## OCR reader — line tax preselection — ETP-5585
+
+The tax a line starts with in the lines review comes from a backend action, not from a
+similarity search. `findDefaultTax` (`ingest/purchaseInvoiceDescriptor.js`, wired as the tax
+column's `preResolve` in `ocrDocTypes.js` and `strategies.js`) calls
+
+`POST /sws/neo/purchase-invoice/lines/new/action/defaultTax`
+with `{ partnerAddressId, invoiceDate, rate }` and reads `response.data.taxId` / `identifier` /
+`rate`. The backend resolves the purchase tax from the vendor's location, the invoice date and
+the printed rate. The request goes through the shared `apiFetch`.
+
+- **One call per distinct rate.** `useOcrFlow` builds a `taxContext` per OCR run, after the vendor
+  review and before the lines are resolved: `partnerAddressId` is the vendor's location
+  (`findBpLocation`, the same lookup the batch header uses), `invoiceDate` is the reviewed
+  date (falling back to the extracted one) through `toIsoDate`, and `cache` memoizes the promise
+  per rate. Ten lines at 21 % cost one request.
+- **No call without a rate.** A line whose `tax_rate` is null / not a number, or a run with no
+  partner address, resolves to no preselection without touching the network.
+- **Never blocking.** Any non-OK answer, a null `taxId` or a network error means "no
+  preselection": the cell shows the empty `ocrLinesTaxDefault` ("Autocompletar").
+- **NO_MATCH hint.** When the backend answers but could not determine a tax to propose for the printed rate (this does not mean no purchase tax exists at that rate), the line is
+  flagged (`tax_no_rate_match`) and the lines modal shows a non-blocking amber hint,
+  `ocrLinesTaxNoRateMatch` ("No se pudo proponer un impuesto de compra al {rate} %. Elíjalo manualmente."). It is not shown for a line
+  without a rate, after a network failure, or once the user picks a tax; it never blocks
+  "Completar automáticamente".
+- **The user's pick wins.** The preselection fills `tax_id`; the user can change or clear it in
+  the cell. On submit it becomes `_tax_id`, and that is the only source of the line's `tax`.
+- **Unresolved means omitted.** With no `_tax_id`, `buildLineOps` leaves `tax` out of the line
+  body so NEO's tax callout derives it from the product, vendor and date. The old fallback that
+  searched `FinancialMgmtTaxRate` at batch time was removed: it sent an arbitrary tax even when
+  the user left "Autocompletar", so the callout never got to decide.
+- The tax kept on the line also feeds the create-product form, which prefills the product's tax
+  category from it (see "create-product step defaults").
+- `simSearch` is no longer used for taxes (`findTax`, `buildTaxSearchTerm` and
+  `resolveTaxesForLines` were deleted). It remains in use for products.
+
+Tests: `ingest/__tests__/purchaseInvoiceDescriptor.vitest.jsx`,
+`__tests__/useOcrFlow.flow.vitest.jsx`.
+
 ## OCR reader — lookups without `_neoWhere` (production WAF)
 
-Every lookup the OCR reader makes — vendor, vendor address, the vendor picker, product, tax,
-UoM and tax category — used to send its filter as an HQL `_neoWhere` fragment in the query
+Every lookup the OCR reader makes — vendor, vendor address, the vendor picker, product,
+the manual tax picker, UoM and tax category — used to send its filter as an HQL `_neoWhere` fragment in the query
 string (`taxID = '…' and active = true`, `lower(name) like '%…%'`). The production edge WAF
 blocks that shape as SQL injection and answers **403**; locally there is no WAF, so it worked.
 In production the vendor was never auto-matched, the vendor picker listed nothing, and the
@@ -1868,7 +1979,7 @@ two shapes the rest of the app already sends in production:
 | Vendor (auto-match, fuzzy, picker) | `purchase-invoice/header/selectors/C_BPartner_ID` | `q=<name>` + `isSOTrx=N&isVendor=Y` |
 | Vendor address (`partnerAddress`) | `purchase-invoice/header/selectors/C_BPartner_Location_ID` | `C_BPartner_ID=<id>` + `isSOTrx=N&isVendor=Y` |
 | Product (unmatched-lines popup) | `purchase-invoice/intrastat/selectors/M_Product_ID` | `q=<text>` |
-| Tax (lines review) | `purchase-invoice/tax/selectors/C_Tax_ID` | `q=<text>` |
+| Tax (lines review, manual picker only) | `purchase-invoice/tax/selectors/C_Tax_ID` | `q=<text>` |
 | UoM / tax category (product create) | `product/product/selectors/…` | `q=<text>` |
 
 Two selectors are deliberately **not** the line's own:

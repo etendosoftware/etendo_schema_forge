@@ -10,7 +10,14 @@ vi.mock('../../copilotApi.js', () => ({
 }));
 
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useOcrExtraction, OCR_NO_DATA_ERROR } from '../useOcrExtraction.js';
+import { NetworkError } from '@etendosoftware/app-shell-core/auth';
+import {
+  useOcrExtraction,
+  OCR_NO_DATA_ERROR,
+  OCR_TIMEOUT_ERROR,
+  OCR_NETWORK_ERROR,
+  OCR_SESSION_CHANGED_ERROR,
+} from '../useOcrExtraction.js';
 import { uploadFile, executeTool, extractAnswerText } from '../../copilotApi.js';
 
 const defaultParams = {
@@ -347,5 +354,74 @@ describe('useOcrExtraction', () => {
     });
 
     expect(parsed).toEqual({ data: 'parsed' });
+  });
+
+  // ETP-5585 — gateway cut-offs and core's stale-session abort map to sentinels, not raw English.
+  describe('error classification', () => {
+    const run = async (rejection, { failUpload = false } = {}) => {
+      if (failUpload) {
+        uploadFile.mockRejectedValue(rejection);
+      } else {
+        uploadFile.mockResolvedValue({ file: '/tmp/ok.pdf' });
+        executeTool.mockRejectedValue(rejection);
+      }
+      const { result } = renderHook(() => useOcrExtraction(defaultParams));
+      await act(async () => {
+        await result.current.extract(new File(['pdf'], 'test.pdf')).catch(() => {});
+      });
+      return result.current;
+    };
+    const statusError = (status) => Object.assign(new Error(`Copilot request failed (${status})`), { status });
+
+    it.each([502, 503, 504])('maps a %i gateway answer to the timeout sentinel', async (status) => {
+      const hook = await run(statusError(status));
+      expect(hook.status).toBe('error');
+      expect(hook.error).toBe(OCR_TIMEOUT_ERROR);
+    });
+
+    it('maps a NetworkError to the network sentinel, not the timeout one', async () => {
+      const hook = await run(new NetworkError({ reason: 'offline' }));
+      expect(hook.error).toBe(OCR_NETWORK_ERROR);
+    });
+
+    it('classifies an upload failure the same way', async () => {
+      const hook = await run(statusError(504), { failUpload: true });
+      expect(hook.error).toBe(OCR_TIMEOUT_ERROR);
+    });
+
+    it('classifies an upload network failure as the network sentinel', async () => {
+      const hook = await run(new NetworkError({ reason: 'offline' }), { failUpload: true });
+      expect(hook.error).toBe(OCR_NETWORK_ERROR);
+    });
+
+    it('maps the stale-session AbortError to the session-changed sentinel', async () => {
+      const hook = await run(new DOMException('The request belongs to a superseded session.', 'AbortError'));
+      expect(hook.status).toBe('error');
+      expect(hook.error).toBe(OCR_SESSION_CHANGED_ERROR);
+    });
+
+    it('does not abort its own requests: no signal is ever handed to the copilot api', async () => {
+      uploadFile.mockResolvedValue({ file: '/tmp/ok.pdf' });
+      executeTool.mockResolvedValue({ answer: '{"a":1}' });
+      extractAnswerText.mockImplementation((r) => r?.answer ?? '');
+      const { result } = renderHook(() => useOcrExtraction(defaultParams));
+      await act(async () => { await result.current.extract(new File(['pdf'], 'test.pdf')); });
+      const calls = [...uploadFile.mock.calls, ...executeTool.mock.calls].flat();
+      expect(JSON.stringify(calls)).not.toContain('signal');
+    });
+
+    it('leaves a 500 and other errors untouched', async () => {
+      expect((await run(statusError(500))).error).toBe('Copilot request failed (500)');
+      expect((await run(new Error('Tool error'))).error).toBe('Tool error');
+    });
+
+    it('keeps the no-data sentinel', async () => {
+      uploadFile.mockResolvedValue({ file: '/tmp/ok.pdf' });
+      executeTool.mockResolvedValue({ answer: 'not json at all' });
+      extractAnswerText.mockImplementation((r) => r?.answer ?? '');
+      const { result } = renderHook(() => useOcrExtraction(defaultParams));
+      await act(async () => { await result.current.extract(new File(['pdf'], 'test.pdf')).catch(() => {}); });
+      expect(result.current.error).toBe(OCR_NO_DATA_ERROR);
+    });
   });
 });

@@ -12,6 +12,7 @@ function normaliseRow(line, columns) {
   }
   base.tax_id = line?.tax_id ?? null;
   base.tax_rate = line?.tax_rate ?? null;
+  base.tax_no_rate_match = Boolean(line?.tax_no_rate_match);
   return base;
 }
 
@@ -79,9 +80,14 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
                           token={token}
                           apiBaseUrl={apiBaseUrl}
                           onChange={(value) => update(idx, column.kind === 'entity'
-                            ? { tax_id: value?.id || null, [column.extractFrom]: value?.label || row[column.extractFrom] }
+                            ? { tax_id: value?.id || null, tax_no_rate_match: false, [column.extractFrom]: value?.label || row[column.extractFrom] }
                             : { [column.extractFrom]: value })}
                           data-testid="KindRenderer__cdff87" />
+                        {column.kind === 'entity' && !row.tax_id && row.tax_no_rate_match && (
+                          <p className="mt-1 text-xs text-status-warning-foreground" data-testid="ocr-tax-no-rate-match">
+                            {ui('ocrLinesTaxNoRateMatch', { rate: row.tax_rate })}
+                          </p>
+                        )}
                       </td>
                     ))}
                   </tr>

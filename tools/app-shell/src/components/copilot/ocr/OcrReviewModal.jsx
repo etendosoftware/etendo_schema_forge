@@ -101,6 +101,21 @@ function useVendorAddressStatus({ vendorId, token, apiBaseUrl }) {
   return { status: value, recheck: () => setAttempt(n => n + 1) };
 }
 
+// Informational only: never feeds `canSubmit`.
+function ReceiverTaxIdAbsentNotice({ show }) {
+  const ui = useUI();
+  if (!show) return null;
+  return (
+    <div
+      className="mb-2 flex items-start gap-2 rounded-lg border border-status-warning-border bg-status-warning px-3 py-2 text-xs text-status-warning-foreground"
+      data-testid="ocr-review-receiver-absent"
+    >
+      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" data-testid="AlertCircle__80a87a" />
+      <p className="min-w-0 flex-1">{ui('ocrReceiverTaxIdAbsent')}</p>
+    </div>
+  );
+}
+
 function VendorAddressNotice({ status, onRecheck }) {
   const ui = useUI();
   if (status !== 'missing') return null;
@@ -214,6 +229,7 @@ export default function OcrReviewModal({
   fields = [],
   preResolved = {},
   resolving,
+  receiverTaxIdAbsent = false,
   contactsBase,
   apiBaseUrl,
   token,
@@ -280,6 +296,8 @@ export default function OcrReviewModal({
             <X size={18} data-testid="X__80a87a" />
           </button>
         </div>
+
+        <ReceiverTaxIdAbsentNotice show={receiverTaxIdAbsent} />
 
         <div className="space-y-1 py-2">
           {fields.map((field) => {
