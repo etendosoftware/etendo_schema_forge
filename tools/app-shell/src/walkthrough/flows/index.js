@@ -1,6 +1,8 @@
 import createContact from './create-contact.json';
 import createProduct from './create-product.json';
 import createSalesOrder from './create-sales-order.json';
+import accountingCalendar from './accounting-calendar.json';
+import { isProductivePlan } from '@/pages/first-steps/firstStepsConfig.js';
 
 /**
  * The guided walkthroughs shipped with this application, in the order they are
@@ -26,4 +28,21 @@ export const WALKTHROUGH_FLOWS = [
   createContact,
   createProduct,
   createSalesOrder,
+  // ETP-5577: also launched from the "Revisar calendario contable" First Steps row.
+  accountingCalendar,
 ];
+
+/**
+ * Tours a trial (demo) environment is not offered. A demo's periods are open for the whole trial,
+ * so the calendar tour (opening periods, creating next year) would teach something it never needs.
+ */
+const PRODUCTIVE_ONLY_FLOW_IDS = Object.freeze(['accounting-calendar']);
+
+/**
+ * The tours offered to an environment on `plan`. An unknown plan counts as productive, the same
+ * fail-open direction as the First Steps checklist (`isProductivePlan`).
+ */
+export function walkthroughFlowsForPlan(plan) {
+  return isProductivePlan(plan) ? WALKTHROUGH_FLOWS
+    : WALKTHROUGH_FLOWS.filter((flow) => !PRODUCTIVE_ONLY_FLOW_IDS.includes(flow.id));
+}

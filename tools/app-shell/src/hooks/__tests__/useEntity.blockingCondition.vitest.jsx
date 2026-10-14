@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { useEntity } from '../useEntity';
 import { toast } from 'sonner';
+import { periodRecoveryFor, setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 
 /**
  * ETP-5024 — a "credit limit exceeded" / "Business Partner on hold" failure from
@@ -98,6 +99,35 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
 
     expect(result.current.blockingCondition?.kind).toBe('creditLimit');
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  // ETP-5577 — a "period not open" refusal toasts with the way out the layout registered.
+  it('handleProcess: a PeriodNotAvailable refusal toasts with the calendar action', async () => {
+    const navigate = vi.fn();
+    setPeriodRecovery(periodRecoveryFor({ pending: false }, navigate));
+    globalThis.fetch.mockImplementation(async (url, opts) => {
+      if (opts?.method === 'POST' && String(url).includes('/action/')) {
+        return new Response(JSON.stringify({
+          status: 'error',
+          message: 'El Periodo no existe o no está abierto',
+          messageKeys: ['PeriodNotAvailable'],
+        }), { status: 400 });
+      }
+      return defaultFallback();
+    });
+
+    const { result } = renderEntity();
+    act(() => { result.current.handleSelect({ id: 'doc-1', documentStatus: 'DR' }); });
+
+    await act(async () => {
+      await result.current.handleProcess({ columnName: 'docAction', name: 'Complete' });
+    });
+    setPeriodRecovery(null);
+
+    const [, options] = toast.error.mock.calls[0];
+    expect(options.action.label).toBe('periodNotAvailableOpenCalendar');
+    options.action.onClick();
+    expect(navigate).toHaveBeenCalledWith('/calendar');
   });
 
   it('handleProcess: a non-blocking failure still toasts as before (no regression)', async () => {

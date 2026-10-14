@@ -18,6 +18,7 @@ import { useFirstStepsState } from '@/pages/first-steps/FirstStepsContext.jsx';
 import FirstStepsImportButton from '@/pages/first-steps/FirstStepsImportButton.jsx';
 import { FIRST_STEPS_ICONS } from '@/pages/first-steps/firstStepsIcons.js';
 import CompanyDataSummary from '@/pages/first-steps/CompanyDataSummary.jsx';
+import CalendarReviewPanel from '@/pages/first-steps/CalendarReviewPanel.jsx';
 
 /**
  * ETP-5190 — post-signup onboarding checklist.
@@ -174,12 +175,19 @@ function StepGateQuestion({ step, ui, loading, onAnswer }) {
 function StepRow({
   step, done, expanded, loading, gateAnswered,
   onToggle, onOpen, onConfigure, onGateAnswer, ui, dataTransfer, onRetryError,
+  calendarReview, onNavigate,
 }) {
   const Icon = FIRST_STEPS_ICONS[step.iconName];
   const expandable = isStepExpandable(step);
   const gated = isStepGated(step, done, gateAnswered);
+  // Server-owned rows have no checkbox: their completion is a server fact, not a user assertion.
+  const serverOwned = step.action === 'dataTransfer' || step.action === 'calendarReview';
+  // ETP-5577: the pending calendar review is highlighted; posting fails until it is settled.
+  const highlighted = step.action === 'calendarReview' && !done;
   return (
-    <div className="bg-card" data-testid={`first-steps-step-${step.id}`}>
+    <div
+      className={cn('bg-card', highlighted && 'border-l-4 border-l-primary')}
+      data-testid={`first-steps-step-${step.id}`}>
       <div className="flex items-start gap-4 px-5 py-4">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
           {Icon && <Icon className="h-5 w-5" data-testid={`first-steps-step-icon-${step.id}`} />}
@@ -218,6 +226,14 @@ function StepRow({
                     <p className="text-xs text-muted-foreground">{ui(step.descKey)}</p>
                   )}
                   {step.action === 'company' && <CompanyDataSummary ui={ui} data-testid="CompanyDataSummary__45a28a" />}
+                  {step.action === 'calendarReview' && (
+                    <CalendarReviewPanel
+                      review={calendarReview}
+                      done={done}
+                      ui={ui}
+                      navigate={onNavigate}
+                      data-testid="CalendarReviewPanel__45a28a" />
+                  )}
                   <div className="flex items-center gap-3">
                     <StepAction
                       step={step}
@@ -236,7 +252,7 @@ function StepRow({
                   </div>
                 </>
               )}
-              {step.action !== 'dataTransfer' && <label className="flex w-fit items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              {!serverOwned && <label className="flex w-fit items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={done}
@@ -299,7 +315,8 @@ export default function FirstStepsPage() {
   // firstStepsConfig.js), and the page, the sidebar badge and the progress bar must all be
   // counting the same rows.
   const { completed, loading, toggleStep, plan, steps, completedCount, total, dismissed,
-    setDismissed, dataTransfer, demoDataTransfer } = useFirstStepsState();
+    setDismissed, dataTransfer, demoDataTransfer, calendarReview, calendarReviewStep } =
+    useFirstStepsState();
 
   // The optimistic rollback in `useFirstSteps` is invisible on its own — without this the row
   // would silently un-check itself after a failed POST.
@@ -361,7 +378,7 @@ export default function FirstStepsPage() {
     breadcrumb: ui('firstStepsPageTitle'),
   });
 
-  const allSet = areAllStepsDone(completed, plan, demoDataTransfer);
+  const allSet = areAllStepsDone(completed, plan, demoDataTransfer, calendarReviewStep);
 
   // `null` means "nothing opened by hand yet", which is what lets the default follow the
   // loading state: the first incomplete row opens once the real completion state arrives,
@@ -369,14 +386,14 @@ export default function FirstStepsPage() {
   // row, their choice wins for the rest of the visit — including closing every row.
   const [openedStepId, setOpenedStepId] = useState(null);
   const expandedStepId = openedStepId === null
-    ? findExpandedStepId(completed, plan, demoDataTransfer) : openedStepId;
+    ? findExpandedStepId(completed, plan, demoDataTransfer, calendarReviewStep) : openedStepId;
   const handleOpen = useCallback((id) => {
     setOpenedStepId((current) => {
       const effective = current === null
-        ? findExpandedStepId(completed, plan, demoDataTransfer) : current;
+        ? findExpandedStepId(completed, plan, demoDataTransfer, calendarReviewStep) : current;
       return effective === id ? '' : id;
     });
-  }, [completed, plan, demoDataTransfer]);
+  }, [completed, plan, demoDataTransfer, calendarReviewStep]);
 
   // Gate acted on here, after every hook above has already been called unconditionally on
   // every render (see the ETP-5395 comment at the top of this component).
@@ -459,7 +476,7 @@ export default function FirstStepsPage() {
               <StepRow
                 key={step.id}
                 step={step}
-                done={isStepDone(step, completed, demoDataTransfer)}
+                done={isStepDone(step, completed, demoDataTransfer, calendarReviewStep)}
                 expanded={step.id === expandedStepId}
                 loading={loading}
                 gateAnswered={Boolean(gateAnswered[step.id])}
@@ -469,6 +486,8 @@ export default function FirstStepsPage() {
                 onGateAnswer={handleGateAnswer}
                 dataTransfer={dataTransfer}
                 onRetryError={() => toast.error(ui('genericError'))}
+                calendarReview={calendarReview}
+                onNavigate={navigate}
                 ui={ui}
                 data-testid="StepRow__45a28a" />
             ))}

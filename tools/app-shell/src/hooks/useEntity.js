@@ -27,6 +27,7 @@ import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackS
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
+import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { notifySaveBlock } from '@/lib/saveBlockSignal.js';
 
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
@@ -278,6 +279,16 @@ export async function extractErrorMessage(res, ui) {
     } catch { /* body not JSON */
     }
     return `${translate('error', 'Error')} ${res.status}`;
+}
+
+// ETP-5577 — a refusal's `messageKeys`, read from a clone so the body stays readable. Never
+// throws: a response that cannot be cloned or parsed simply has no keys.
+async function readMessageKeys(res) {
+    try {
+        return extractBackendMessageKeys(await res.clone().json());
+    } catch {
+        return undefined;
+    }
 }
 
 const BATCH_SIZE = 75;
@@ -2598,6 +2609,8 @@ export function useEntity(entity, childEntity, {
     // Extracted alongside handleProcessSuccess above, same rationale — the verbatim
     // `else` body of handleProcess's `if (res.ok)`.
     const handleProcessFailure = useCallback(async (res) => {
+        // ETP-5577: the refusal's identity, read before extractErrorMessage consumes the body.
+        const messageKeys = await readMessageKeys(res);
         const msg = await extractErrorMessage(res, ui);
         // ETP-5024: a "BP on hold" Complete-time refusal must render as a persistent
         // inline banner instead of an auto-dismissing toast — skip the toast for it and
@@ -2611,7 +2624,10 @@ export function useEntity(entity, childEntity, {
             // combined multi-product insufficient-stock message) — the default sonner
             // duration (4s) isn't enough to read it. Longer, fixed duration for every
             // process-failure toast, not just this one message.
-            toast.error(msg, { duration: PROCESS_FAILURE_TOAST_DURATION_MS });
+            toast.error(msg, {
+                duration: PROCESS_FAILURE_TOAST_DURATION_MS,
+                ...periodNotAvailableToastOptions(messageKeys, ui),
+            });
         }
         // A refused process may still have bumped `updated` — see refreshRecordVersion.
         await refreshRecordVersion(selected?.id);

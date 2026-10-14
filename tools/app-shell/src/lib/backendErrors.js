@@ -402,6 +402,11 @@ const BACKEND_ERROR_KEY_MAP = {
   // process"), the STATUS_DocumentLocked message DocumentPostingService names in `messageKeys`
   // when another posting process holds the record (or AcctServer cannot take its lock).
   OtherPostingProcessActive: 'backendError.recordBeingPosted',
+  // ETP-5577 — core `PeriodNotAvailable` ("The period does not exist or is not open"): raised by
+  // the completion procedures (C_INVOICE_POST, M_INOUT_POST…), named in `messageKeys` by
+  // DocumentPostingService (STATUS_PeriodClosed) and by the payment services. A productive
+  // tenant starts with every period never-opened, so this is its first refusal.
+  PeriodNotAvailable: 'backendError.periodNotAvailable',
   // ETP-5692 — the invoice post/unpost refusals (com.etendoerp.go CompletedInvoiceWriteFence,
   // InvoicePostingGate, InvoiceExchangeRateHandler, DocumentPostingService). These are NOT
   // AD_MESSAGE records: the backend sends plain English plus these stable identity strings, so

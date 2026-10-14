@@ -320,6 +320,20 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   written to `ETGO_ACCOUNT.FIRST_STEPS.completed`. The row shows progress while the job runs,
   result counts when it completes, and a retry button if it fails. Closing the page does not
   cancel the job; reopening the page reads its latest server status.
+- **Calendar review (`action: 'calendarReview'`, ETP-5577).** "Revisar calendario contable" is
+  productive-only and, like the transfer row, server-owned: it is spliced in right after
+  Configuración fiscal (`calendarReviewStep.js`) only when `GET /sws/go/onboarding/calendar-review`
+  answers `required: true` — productive tenants onboarded since ETP-5577, whose periods all start
+  never-opened — and it is done when the server says `reviewed`. It adds one to the productive
+  total. The body (`CalendarReviewPanel.jsx`) summarizes the current fiscal year and offers
+  **Confirmar** (keep it) or **Modificar** → quarter select → **Aplicar** (regenerate the calendar
+  with another fiscal-year start; disabled with an explanation once a period was opened or
+  anything posted). Either way the user lands on `/calendar` to open the periods they need;
+  **Ver guía** starts the Calendar tour. `403` (not the owner) and `409` (calendar in use) are
+  translated toasts. Opening any period from Calendar also completes the row. When a document is
+  refused with `PeriodNotAvailable` while the review is pending, the toast sends the owner here
+  (others are told to ask the owner); afterwards it offers **Ir al calendario**
+  (`lib/periodNotAvailable.js`, registered by `AppLayout`).
 - **Gated row (`gateQuestionKey`).** The row asks a yes/no question that REPLACES its description
   and its action until it is answered. The only one today is **Configuración fiscal** (a
   `productiveOnly` row, so a trial tenant never sees it): *"¿Debe informar las facturas a algún
@@ -346,6 +360,10 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     failed-write / re-ask-after-untick paths.
   - `e2e/tests/flows/first-steps-onboarding.mocked.spec.js` — the gate in a real browser
     (Sí → navigation, No → completion persisted, un-tick → asked again).
+  - ETP-5577: `pages/first-steps/__tests__/calendarReviewStep.vitest.js` (splice, totals, done
+    state), `FirstStepsPage.vitest.jsx` (panel actions, refusals, Ver guía) and
+    `first-steps-onboarding.mocked.spec.js` (row shown, Confirmar → `/calendar`, hidden without
+    the marker).
 - **Manual verification path:**
   1. On a productive tenant, open Primeros pasos → "Configuración fiscal" and confirm it opens
      with the SIF question instead of the Configurar button.
@@ -355,6 +373,10 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   5. On a productive tenant, inspect demo data transfer while it runs, after completion, and
      after a failed job; confirm the row shows progress, result counts, and retry respectively.
      Reload after completion and confirm the completed row and progress count remain in place.
+  6. (ETP-5577) On a new productive tenant, open "Revisar calendario contable": check the year
+     summary, **Confirmar** and confirm it lands on Calendar and the row is done. On another new
+     tenant, **Modificar** → Julio → **Aplicar** and confirm the calendar now has one July - June
+     year. Sign in as a non-owner and confirm Confirmar answers "only the owner".
 
 ### 4. Entity list/detail data flow
 

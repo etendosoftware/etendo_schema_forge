@@ -2754,6 +2754,28 @@ describe('translateBackendError — OtherPostingProcessActive (ETP-5529)', () =>
   });
 });
 
+// ── ETP-5577: core `PeriodNotAvailable` — a document dated in a period that is not open ──
+//
+// A productive tenant starts with every period never-opened. The completion procedures, the
+// posting engine and the payment services all name this refusal in `messageKeys`.
+describe('translateBackendError — PeriodNotAvailable (ETP-5577)', () => {
+  const RAW_EN = 'The period does not exist or it is not opened';
+
+  it('renders the es_ES copy from the identity', () => {
+    assert.match(
+      translateBackendError(RAW_EN, localeTranslator('es_ES'), { messageKeys: ['PeriodNotAvailable'] }),
+      /período contable que no está abierto/,
+    );
+  });
+
+  it('renders the en_US copy from the identity', () => {
+    assert.match(
+      translateBackendError(RAW_EN, localeTranslator('en_US'), { messageKeys: ['PeriodNotAvailable'] }),
+      /accounting period that is not open/,
+    );
+  });
+});
+
 // ── ETP-5445: core `NotCalculatedCost` (document-level) on Internal Consumption posting ──
 //
 // Posting an Internal Consumption whose products have no calculated cost yet makes the core

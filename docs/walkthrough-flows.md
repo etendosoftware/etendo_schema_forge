@@ -365,7 +365,16 @@ both the launcher and the invitation. There is no separate "next flow" field to
 keep in sync, and a flow does not have to know what follows it. Contact →
 Product → Sales Order is deliberate: an order needs a customer and something to
 sell, so a user following the list in order always has the data the next tour
-asks for.
+asks for. `accounting-calendar` (ETP-5577) comes last: it needs no data from the
+others, and a user who just learned to make an order is the one who next needs
+an open period to complete it.
+
+**Plan-gated tours.** `walkthroughFlowsForPlan(plan)` (`flows/index.js`) is what
+`AppLayout` hands the provider: a trial (demo) environment is not offered the
+ids in `PRODUCTIVE_ONLY_FLOW_IDS` (today only `accounting-calendar` — a demo's
+periods are open for its whole trial). The plan is the First Steps provider's,
+and an unknown plan counts as productive. The progression follows the filtered
+list, so on a demo `create-sales-order` is the last tour.
 
 The invitation only renders when the next flow's `titleKey` resolves — an
 unnamed "Continue" button would be a mystery box.
@@ -678,9 +687,13 @@ launcher, in the same order: report `walkthrough_started` (with the status the
 flow had BEFORE this run, and `source` as the telemetry source), `markFlowStarted`,
 then `start`. `canLaunch` is false when there is no `WalkthroughProvider` or the
 flow id is unknown, so a caller can hide its link with it. `launch` returns
-`false` and does nothing in those cases and while another tour is running. Current caller: the Contacts empty
-state's "Ver guía" link, which launches `create-contact` with source
-`contacts_empty_state` (ETP-5600, `docs/generated-custom-windows/contacts.md`).
+`false` and does nothing in those cases and while another tour is running. Current callers:
+
+- the Contacts empty state's "Ver guía" link, which launches `create-contact` with source
+  `contacts_empty_state` (ETP-5600, `docs/generated-custom-windows/contacts.md`);
+- the "Revisar calendario contable" row of Primeros pasos (`CalendarReviewPanel.jsx`), whose
+  "Ver guía" button launches `accounting-calendar` with source `first_steps_calendar_review`
+  (ETP-5577).
 
 Out of scope for now, and **not** designed around:
 
@@ -693,9 +706,11 @@ None of them are foreclosed either: the launcher's whole job is to call
 `start(flowId)`, so a contextual trigger is another caller of the same API, not
 a redesign.
 
-This system is **independent of the existing onboarding**
-(`pages/FirstStepsPage.jsx`, `pages/onboarding/`). Chaining the two is a
-separate task.
+The onboarding checklist (`pages/FirstStepsPage.jsx`) links to the tours only
+through `useLaunchWalkthrough`, as any other caller: the calendar review row
+above is the first such link (ETP-5577). Tour progress and checklist progress
+stay independent — finishing the tour does not tick the row, and the row's
+completion is server-owned anyway.
 
 ---
 
