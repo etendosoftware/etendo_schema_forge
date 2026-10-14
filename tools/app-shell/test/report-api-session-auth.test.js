@@ -549,3 +549,44 @@ describe('vite.config.js — /jsreport proxy', () => {
     assert.equal(config.preview.proxy['/jsreport'].target, 'http://localhost:5488');
   });
 });
+
+// Source-level guard (the selector's pg Pool is created inline via dynamic import,
+// so the SQL cannot be exercised without refactoring the plugin).
+describe('report-api.js — warehouse selector org scoping (mirrors ReportSelectorsServlet.buildWarehouseQuery)', () => {
+  const start = PLUGIN_SRC.indexOf("if (type === 'warehouse') {");
+  const end = PLUGIN_SRC.indexOf("if (type === 'product') {", start);
+  const warehouseBlock = PLUGIN_SRC.slice(start, end);
+  const warehouseEntry = PLUGIN_SRC.match(/'warehouse':\s*\{[\s\S]*?\n\s{16}\},/)?.[0] ?? '';
+
+  it('locates the warehouse filter block and the warehouse query entry', () => {
+    assert.ok(start > -1 && end > start, 'warehouse filter block not found');
+    assert.match(warehouseEntry, /m_warehouse/);
+  });
+
+  it('never references ad_org_warehouse for the warehouse selector', () => {
+    assert.doesNotMatch(warehouseBlock, /ad_org_warehouse/);
+    assert.doesNotMatch(warehouseEntry, /ad_org_warehouse/);
+  });
+
+  it('adds no org predicate when neither selectedOrgId nor roleOrgIds is given', () => {
+    assert.match(warehouseBlock, /if \(selectedOrgId\) \{/);
+    assert.match(warehouseBlock, /if \(roleOrgIds\.length > 0\) \{/);
+    assert.doesNotMatch(warehouseBlock.replace(/if \(selectedOrgId\) \{[\s\S]*$/, ''), /whereFragments/);
+  });
+
+  it('scopes selectedOrgId by the warehouse own org, including System org 0', () => {
+    assert.match(
+      warehouseBlock,
+      /values\.push\(selectedOrgId\);\s*whereFragments\.push\(`AND m_warehouse\.ad_org_id IN \(\$\$\{values\.length\}, '0'\)`\);/,
+    );
+  });
+
+  it('restricts roleOrgIds with ad_org_id = ANY(array param), independent of selectedOrgId', () => {
+    assert.match(
+      warehouseBlock,
+      /values\.push\(roleOrgIds\);\s*whereFragments\.push\(`AND m_warehouse\.ad_org_id = ANY\(\$\$\{values\.length\}\)`\);/,
+    );
+    // two separate ifs (both can apply at once), not an else-if chain
+    assert.doesNotMatch(warehouseBlock, /else/);
+  });
+});
