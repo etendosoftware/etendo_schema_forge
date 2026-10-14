@@ -10,7 +10,11 @@ import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useInvoicePreview } from './useInvoicePreview.js';
 import { resolveInvoicePaymentBadge } from './invoicePaymentBadge.js';
 import { useFiscalStatus } from './useFiscalStatus.js';
-import { StatusPill } from '@/windows/custom/fiscal-monitor/FmPrimitives.jsx';
+// ETP-5700: the fiscal-monitor `StatusPill` is styled by `.fm-pill`, which only
+// fiscal-monitor.css defines — and only FiscalMonitorPage imports it — so in this
+// window it rendered as plain text. `FiscalStatusBadge` carries its own styling and
+// is what the invoice grid columns already use, so detail and grid now match.
+import { FiscalStatusBadge } from './FiscalStatusBadge.jsx';
 import { getInvoiceFiscalTargets } from './fiscalTargets.js';
 import SifSendingModal from './SifSendingModal.jsx';
 import SummaryCard, { InfoRow } from './preview-cards/SummaryCard.jsx';
@@ -157,9 +161,9 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
             {fiscalLoading
               ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
               // ETP-5229: a null/undefined status (invoice never relevant to SII) must
-              // render as a dash via StatusPill's own fallback, never a fabricated 'PE'
+              // render as a dash via FiscalStatusBadge's own fallback, never a fabricated 'PE'
               // ("Pendiente") — do not reintroduce a `?? 'PE'` default here.
-              : <StatusPill estado={siiStatus} data-testid="StatusPill__cf88e6" />}
+              : <FiscalStatusBadge status={siiStatus} data-testid="FiscalStatusBadge__cf88e6" />}
           </InfoRow>
         )}
         {fiscalTargets.showTbai && (
@@ -175,7 +179,7 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
               // ETP-5229: `useFiscalStatus` already resolves the correct 'Pendiente'
               // fallback (via `isSent(tbaiIssent)`) when TBAI is in scope; a bare `null`
               // here means "not relevant at all" and must stay a dash.
-              : <StatusPill estado={tbaiStatus} data-testid="StatusPill__cf88e6" />}
+              : <FiscalStatusBadge status={tbaiStatus} data-testid="FiscalStatusBadge__cf88e6" />}
           </InfoRow>
         )}
         {fiscalTargets.showVerifactu && (
@@ -185,7 +189,7 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
             {fiscalLoading
               ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
               // ETP-5229: same rule as SII above — no fabricated 'PE' default.
-              : <StatusPill estado={vfStatus} data-testid="StatusPill__cf88e6" />}
+              : <FiscalStatusBadge status={vfStatus} data-testid="FiscalStatusBadge__cf88e6" />}
           </InfoRow>
         )}
       </SummaryCard>
