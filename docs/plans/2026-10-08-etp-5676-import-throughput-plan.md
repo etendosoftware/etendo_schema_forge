@@ -411,7 +411,9 @@ cost 205 ms. Four user-approved cuts, documented in `com.etendoerp.go` `docs/neo
 1. `_skipPricesSeed` — product create directive, read and stripped by `ProductDefaultsHandler`;
    declared via `NeoHandler#createDirectives()` so MCP accepts and publishes it. The import sends
    the list of versions the row prices; the server skips a direction only when its own default
-   version is listed (review W2: client and server pick the default tariff by different rules).
+   version is listed (review W2: every GO price list has one version, so client and server can
+   only pick different tariffs when no list is flagged default, or when the selector leaves the
+   sales flag null and the client takes an unflagged list for sales).
 2. Per-batch callout skip — `NeoCalloutDiscardMemory` in `NeoBatchScope`: a create-cascade callout
    whose every output was discarded (caller-sent or suppressed fields), with no message, is not re-run
    for the same (tab, trigger, trigger value, kept-field set) within the batch.

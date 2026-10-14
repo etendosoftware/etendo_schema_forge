@@ -1550,7 +1550,8 @@ Four backend cuts, in `com.etendoerp.go` (`docs/neo-headless.md` §4.3.6):
   import (`resolvePlv`) and the server pick the same tariff. They can differ only after a user
   clears **Por defecto** on the Tarifas window: then each falls back to a different "first"
   direction-matching list, the server's tariff is still seeded at 0 and the imported price lands
-  on the import's choice, exactly as before. An unpriced row sends nothing and is seeded as before.
+  on the import's choice, exactly as before. The same holds if the selector leaves a list's sales
+  flag null: the import accepts it for sales, the server does not. An unpriced row sends nothing and is seeded as before.
 - **`_onlyReturnIds: true`** on every import `/batch` request (`useWindowImportDialog` wraps
   `useBatch.runBatch`; OCR does not send it). The backend skips locator-identifier enrichment and
   the `etgoHasCost` flag on each create. The response is unchanged — the import engine reads only
