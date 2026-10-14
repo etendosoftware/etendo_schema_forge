@@ -3,6 +3,12 @@ import { useUI } from '@/i18n';
 import ProgressFieldBadge from '@/windows/custom/shared/ProgressFieldBadge';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
+// Get-by-id answers with the row inside `response.data` (a one-element array).
+const headerRow = (payload) => {
+  const rows = payload?.response?.data;
+  return Array.isArray(rows) ? rows[0] : rows;
+};
+
 export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
   // Empty base ON PURPOSE: every URL below is already absolute, and several address a
   // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
@@ -25,39 +31,36 @@ export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
     if (!isCompleted || !recordId) return;
     let cancelled = false;
 
-
     Promise.all([
-      apiFetch(`${apiBaseUrl}/header/${recordId}/action/listInvoices`)
+      // Invoiced percentage: the stored computed column the list grid shows
+      // (EM_ETGO_Invoice_Status), re-read from the header so both views share ONE source.
+      // Never recompute it here from invoice amounts — that is what made grid and detail disagree.
+      apiFetch(`${apiBaseUrl}/header/${recordId}`)
         .then(r => r.ok ? r.json() : null)
-        .then(j => j?.response?.data ?? [])
-        .catch(() => []),
+        .then(j => headerRow(j)?.eTGOInvoiceStatus)
+        .catch(() => undefined),
       apiFetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`)
         .then(r => r.ok ? r.json() : null)
         .then(j => j?.response?.data ?? [])
         .catch(() => []),
-    ]).then(([invoices, orderLines]) => {
+    ]).then(([freshInvoiceStatus, orderLines]) => {
       if (cancelled) return;
-
-      const invoicesComplete = invoices.filter(i => i.documentStatus === 'CO');
 
       const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
       const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
 
-      const totalOrder    = Number(data?.grandTotalAmount) || 0;
-      const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
-
       const deliveredPct = qtyOrdered > 0 ? qtyDelivered / qtyOrdered : 0;
-      const invoicedPct = totalOrder > 0 ? totalInvoiced / totalOrder : 0;
 
-      setState({ deliveredPct, invoicedPct });
+      // A failed re-read falls back to the record the page already holds: same column, possibly older.
+      setState({ deliveredPct, invoiceStatus: freshInvoiceStatus ?? data?.eTGOInvoiceStatus });
     });
 
     return () => { cancelled = true; };
-  }, [isCompleted, recordId, token, apiBaseUrl, refreshKey, data?.grandTotalAmount]);
+  }, [isCompleted, recordId, token, apiBaseUrl, refreshKey, data?.eTGOInvoiceStatus]);
 
   if (!isCompleted || !state) return null;
 
-  const { deliveredPct, invoicedPct } = state;
+  const { deliveredPct, invoiceStatus } = state;
 
   return (
     <>
@@ -69,7 +72,7 @@ export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
       />
       <ProgressFieldBadge
         documentStatus={data?.documentStatus}
-        value={Number.isFinite(invoicedPct) ? invoicedPct * 100 : 0}
+        value={invoiceStatus}
         label={ui('soAllInvoiced')}
         testId="order-progress-badge"
       />

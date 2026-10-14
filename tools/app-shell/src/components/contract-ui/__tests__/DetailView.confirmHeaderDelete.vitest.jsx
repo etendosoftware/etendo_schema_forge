@@ -9,6 +9,8 @@
  *
  * Harness mirrors DetailView.deleteActionFallback.vitest.jsx.
  */
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/DetailDeleteButton.jsx
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -117,6 +119,12 @@ vi.mock('../SummaryBar.jsx', () => ({ SummaryBar: () => null }));
 vi.mock('../DocumentTotalsPanel.jsx', () => ({ default: () => null }));
 vi.mock('../LinesSelectionBar.jsx', () => ({ default: () => null }));
 vi.mock('../DocumentStatusPill.jsx', () => ({ default: ({ status }) => <span>{status}</span> }));
+// Iconic trash stubbed on top of the real module: the file does not depend on the core
+// version that ships it, and the icon inside the topbar Delete stays observable.
+vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+  ...(await importOriginal()),
+  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+}));
 vi.mock('@/components/attachments/AttachmentIcon', () => ({ AttachmentIcon: () => <span>📎</span> }));
 
 const MockForm = ({ data }) => <div data-testid="mock-form"><span>{data?.documentNo}</span></div>;
@@ -159,6 +167,25 @@ describe('DetailView — confirmHeaderDelete navigate-only-on-success (ETP-4656)
     navigateMock.mockClear();
     toast.success.mockClear();
     toast.error.mockClear();
+  });
+
+  it('topbar Delete is a labelled type="button" with the Iconic trash that only opens the confirm', async () => {
+    currentHook = makeHook({ id: '123', documentNo: 'SO-001', status: 'DR', processed: false });
+    const user = userEvent.setup();
+    renderDetailView();
+
+    const btn = screen.getByTestId('action-delete');
+    expect(btn).toHaveAttribute('type', 'button');
+    expect(btn).toHaveAttribute('title', 'delete');
+    expect(btn).toHaveAccessibleName('delete');
+    expect(btn.querySelector('[data-icon="iconic-trash"]')).not.toBeNull();
+    expect(screen.queryByTestId('action-delete-confirm')).toBeNull();
+
+    await user.click(btn);
+
+    expect(screen.getByTestId('action-delete-confirm')).toBeInTheDocument();
+    expect(currentHook.handleDelete).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it('navigates back to the list when handleDelete resolves true', async () => {
