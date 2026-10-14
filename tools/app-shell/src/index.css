@@ -1,5 +1,10 @@
 @import '@etendosoftware/app-shell-core/styles.css';
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+@import '@fontsource/plus-jakarta-sans/400.css';
+@import '@fontsource/plus-jakarta-sans/500.css';
+@import '@fontsource/plus-jakarta-sans/600.css';
+@import '@fontsource/plus-jakarta-sans/700.css';
+@import '@fontsource/space-mono/400.css';
+@import '@fontsource/space-mono/700.css';
 
 /*
  * Etendo AI visual identity (30 Sep 2026 email + Confluence brand manual).
@@ -7,10 +12,10 @@
  * pipeline re-runs inherit it automatically.
  */
 :root {
-  --brand-ink: 270 8% 11%;
-  --brand-blue: 229 100% 60%;
-  --brand-lime: 84 95% 65%;
-  --brand-lavender: 251 100% 82%;
+  --brand-ink: 252 8.8% 11.2%;
+  --brand-blue: 227.7 100% 59.8%;
+  --brand-lime: 83.3 94.4% 64.7%;
+  --brand-lavender: 251.5 100% 81.6%;
   --brand-blue-hex: #325CFF;
   --brand-blue-hover: #2849CC;
   --primary-hover: var(--brand-blue-hover);
@@ -69,7 +74,9 @@ button[class~="bg-[#121217]"]:hover {
 button[class~="hover:bg-accent-highlight"][class~="text-primary-foreground"]:hover,
 button[class~="hover:bg-accent-highlight"][class~="text-white"]:hover,
 button[class*="hover:bg-[hsl(var(--accent-highlight))]"][class*="text-primary-foreground"]:not(:disabled):hover,
-button[class*="enabled:hover:bg-[hsl(var(--accent-highlight))]"][class*="text-primary-foreground"]:enabled:hover {
+button[class*="hover:bg-[hsl(var(--accent-highlight))]"][class*="text-white"]:not(:disabled):hover,
+button[class*="enabled:hover:bg-[hsl(var(--accent-highlight))]"][class*="text-primary-foreground"]:enabled:hover,
+button[class*="enabled:hover:bg-[hsl(var(--accent-highlight))]"][class*="text-white"]:enabled:hover {
   background-color: var(--primary-hover) !important;
   color: white !important;
 }

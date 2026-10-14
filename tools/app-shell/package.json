@@ -23,6 +23,8 @@
     "@datadog/browser-rum-react": "^7.15.0",
     "@etendosoftware/app-shell-core": "0.3.72",
     "@etendosoftware/etendo-go-core": "0.3.72",
+    "@fontsource/plus-jakarta-sans": "^5.3.0",
+    "@fontsource/space-mono": "^5.3.0",
     "@iconicapp/iconic-react": "^1.1.4",
     "@openfeature/config-cat-web-provider": "^0.2.0",
     "@openfeature/core": "^1.11.0",
