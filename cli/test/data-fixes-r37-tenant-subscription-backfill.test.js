@@ -162,10 +162,16 @@ describe('R37 data-fix — header metadata', () => {
     assert.match(rawText, /optInChainGate/);
   });
 
-  it('documents the two verification queries: its ledger rows and the productive-marker count', () => {
+  it('documents the three verification queries: ledger rows, productive-marker count, switch row', () => {
     assert.match(rawText, /where fix_id = '20261005T180000Z__R37-tenant-subscription-backfill'/);
     assert.match(rawText, /where attribute = 'ETGO_TenantPlan' and isactive = 'Y' and upper\(trim\(value\)\) = 'PRODUCTIVE';/);
     assert.match(rawText, /must be 0/);
+    // Third check, shared with the com.etendoerp.go design doc §6.2: exactly one active System
+    // row of the ETGO_SubscriptionModel LIST property (Property, not Attribute) with value 'Y'.
+    assert.match(rawText, /where property = 'ETGO_SubscriptionModel' and ispropertylist = 'Y' and isactive = 'Y'/);
+    assert.match(rawText, /and ad_client_id = '0' and coalesce\(visibleat_client_id, '0'\) = '0'/);
+    assert.match(rawText, /and ad_user_id is null and ad_window_id is null and value = 'Y';/);
+    assert.match(rawText, /must be exactly 1 after step 2/);
   });
 
   it('records the R42 residual that opt-in opens for tenants reaching R42 after the switch', () => {

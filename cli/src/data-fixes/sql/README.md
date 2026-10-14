@@ -105,7 +105,7 @@ The timestamp still matters — it is the point a tenant's chain must have reach
 `20261005T180000Z__R37-tenant-subscription-backfill.sql` (ETP-5046): an environment moves from the
 `ETGO_TenantPlan` preference to the subscription model by running it with `FIX=` and then setting
 the system preference `ETGO_SubscriptionModel`. Its header carries the procedure and the
-verification queries.
+three checks: every tenant `APPLIED`/`SKIPPED_NOT_NEEDED` in `etgo_data_fix_history` for R37, zero active `ETGO_TenantPlan='PRODUCTIVE'` markers, and exactly one active System `ETGO_SubscriptionModel` list-property row with value `Y` (the same three the `com.etendoerp.go` design doc §6.2 lists).
 
 ## Mandatory rules
 

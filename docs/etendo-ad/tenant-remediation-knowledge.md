@@ -3466,6 +3466,12 @@ restart — but it argues for running this fix close to a restart.
   chooses: `make data-fixes FIX=R37-tenant-subscription-backfill`, then the system preference
   `ETGO_SubscriptionModel`. Delivered as a generic header `-- @optIn: true` (parse-fix.js;
   `true`/`false` only, anything else throws).
+- **Verification = three checks, kept identical on both sides** (R37 header + go design doc §6.2):
+  R37's ledger rows all `APPLIED`/`SKIPPED_NOT_NEEDED`; 0 active `ETGO_TenantPlan='PRODUCTIVE'`
+  markers; exactly 1 active `ETGO_SubscriptionModel` row with value `Y`. That preference is a LIST
+  property (`AD_Preference.Property`, `ISPROPERTYLIST='Y'`, NOT `attribute`), counted only at System
+  (`AD_CLIENT_ID='0'`, visible-at client/org NULL or `'0'`, no role/user/window); no row ships as
+  module data, so every environment starts OFF (local etendo_core3 2026-10-14: count 0).
 - **Trap the naive version falls into — watermark.** A `--fix` run's `APPLIED` row used to count
   toward the tenant's watermark like any other. Applying R37 (2026-10-05T18:00Z) to a tenant still
   behind would have pushed its watermark past every unprocessed earlier chain fix (e.g. R47,

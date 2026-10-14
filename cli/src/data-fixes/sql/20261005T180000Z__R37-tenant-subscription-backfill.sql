@@ -16,7 +16,10 @@
 --        make data-fixes FIX=R37-tenant-subscription-backfill DRY_RUN=1
 --        make data-fixes FIX=R37-tenant-subscription-backfill
 --   2. set the system preference ETGO_SubscriptionModel (com.etendoerp.go), so that new purchases
---      open subscription rows instead of writing the ETGO_TenantPlan marker.
+--      open subscription rows instead of writing the ETGO_TenantPlan marker. It is a LIST property
+--      (AD_Preference.Property, ISPROPERTYLIST='Y') that counts only as one active System row
+--      (AD_CLIENT_ID='0', visible-at client/org empty or '0', no role/user/window) and is ON only
+--      for value 'Y'. No row ships as module data: every environment starts OFF.
 -- Until step 1 has run, an environment keeps answering from the preference exactly as before.
 --
 -- Precondition the runner enforces: FIX= on an opt-in fix runs only for a tenant whose chain is
@@ -25,7 +28,7 @@
 -- `make data-fixes` first, then repeat step 1. This is what keeps the ORDERING INVARIANT below true
 -- now that this fix is no longer visited in chain order.
 --
--- Verification after step 1:
+-- Verification -- the same three checks the com.etendoerp.go design doc (§6.2) lists:
 --   select remediated_client_id, status, rows_affected, detail
 --     from etgo_data_fix_history
 --    where fix_id = '20261005T180000Z__R37-tenant-subscription-backfill'
@@ -35,6 +38,12 @@
 --   select count(*) from ad_preference
 --    where attribute = 'ETGO_TenantPlan' and isactive = 'Y' and upper(trim(value)) = 'PRODUCTIVE';
 --     -- must be 0: every active productive marker has become an open subscription row.
+--   select count(*) from ad_preference
+--    where property = 'ETGO_SubscriptionModel' and ispropertylist = 'Y' and isactive = 'Y'
+--      and ad_client_id = '0' and coalesce(visibleat_client_id, '0') = '0'
+--      and coalesce(visibleat_org_id, '0') = '0' and visibleat_role_id is null
+--      and ad_user_id is null and ad_window_id is null and value = 'Y';
+--     -- must be exactly 1 after step 2: the switch is ON, through a single System row.
 
 -- Why this file is dated 2026-10-05 (READ BEFORE RE-DATING IT)
 -- --------------------------------------------------------------------------------------------
