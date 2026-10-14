@@ -151,6 +151,17 @@ wrong file. `--fix <retired-id>` refuses outright, and retired fixes are exclude
 `--list-clients`'s pending-candidates filter. Worked example:
 `R16-tenant-roles-and-webhook-access` (superseded by ETP-4852's system-level templates, retired by
 ETP-4877). Full detail: `docs/etendo-ad/onboarding-and-datafixes-map.md` §3 item 6.
+
+### Opt-in fixes (`-- @optIn: true`, ETP-5046)
+For an environment-level switch rather than a correction every tenant needs on deploy. A full run
+skips an opt-in fix like a retired one (no `@check`, no `@apply`, no ledger row), and its ledger
+rows never move the watermark (`computeWatermark` ignores them). It runs only via
+`--fix <id>` (`make data-fixes FIX=<id>`, dry-run included), and only for a tenant whose watermark
+is already >= the fix's timestamp (`optInChainGate`); a tenant behind it is reported
+`BLOCKED_CHAIN_BEHIND`, gets no ledger row and makes the run exit non-zero. `--list-clients` shows
+opt-in fixes in an `OPT-IN` column, never as `PENDING`. A retired fix stays un-forceable. Worked
+example: `R37-tenant-subscription-backfill`. Full detail:
+`docs/etendo-ad/onboarding-and-datafixes-map.md` §3 item 7.
 </data_fixes_framework>
 
 <the_gaps>

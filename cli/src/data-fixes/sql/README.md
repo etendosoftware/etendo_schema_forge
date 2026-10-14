@@ -39,6 +39,7 @@ already processed — that check is the author's.
 -- @gap: C2
 -- @risk: medium
 -- @type: sql                 (default; or "webhook")
+-- @optIn: true                (optional; omit for an ordinary chain fix -- see below)
 -- @description: one-line human description
 
 -- @check
@@ -77,6 +78,34 @@ A fix with no `@report` section behaves exactly as before — `detail` stays
 for a worked example (skips flipping a locator with negative on-hand stock,
 reports which product/attribute/UOM/locator combination needs a manual
 physical-inventory correction first).
+
+### Optional `@optIn: true` header — a fix a full run never applies
+
+Some fixes are not corrections every environment needs as soon as it is deployed, but a switch an
+environment makes **once, at a moment the operator chooses**. Mark such a fix with
+`-- @optIn: true` (only `true`/`false` are accepted; any other value fails the parse, so a typo can
+never quietly put the fix back in the chain). Then:
+
+- **A full run never touches it** — `make data-fixes` (no `FIX=`) skips it for every tenant: no
+  `@check`, no `@apply`, no ledger row, just an `OPT-IN — skipped by a full run` line.
+- **Its ledger rows never move the watermark.** Applying it must not push a tenant's watermark past
+  a chain fix that tenant has not processed yet — that fix would be skipped forever with no error.
+- **Only `make data-fixes FIX=<id>` runs it** (`DRY_RUN=1` and `CLIENT=<id>` work as for any fix),
+  and only for a tenant whose chain is already **current up to the fix's own date** (watermark ≥ the
+  fix's timestamp). A tenant behind it is reported `BLOCKED_CHAIN_BEHIND`, gets no ledger row and
+  makes the run exit non-zero: run the full `make data-fixes` first. Fixes are chronological and
+  may depend on — or be undone by — earlier ones; this keeps an opt-in fix from ever running before
+  them. A retired fix stays un-forceable, opt-in or not.
+- **`make data-fixes LIST_CLIENTS=1`** lists the opt-in fixes above the table and reports them in
+  their own `OPT-IN` column (`done/total`, plus any `FAILED` explicit run). They never count as
+  `PENDING`, and a failed opt-in run is not counted under `FAILED` (that column is the chain's).
+
+The timestamp still matters — it is the point a tenant's chain must have reached — so the same
+"Choosing the timestamp" rule applies. Worked example:
+`20261005T180000Z__R37-tenant-subscription-backfill.sql` (ETP-5046): an environment moves from the
+`ETGO_TenantPlan` preference to the subscription model by running it with `FIX=` and then setting
+the system preference `ETGO_SubscriptionModel`. Its header carries the procedure and the
+verification queries.
 
 ## Mandatory rules
 
