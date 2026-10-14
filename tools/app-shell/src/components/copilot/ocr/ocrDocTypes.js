@@ -136,7 +136,9 @@ export const OCR_DOC_TYPES = [
         searchPlaceholder: 'ocrLinesTaxSearch',
         noMatchesLabel: 'ocrLinesTaxNoMatches',
         clearLabel: 'ocrLinesTaxClear',
-        width: 'w-48',
+        // Fixed layout (OcrLinesReviewModal `table-fixed`): quantity 96 + price 112 + tax 320 leave
+        // the description ~200 of the 728px content width, whatever the tax label length.
+        width: 'w-80',
       },
     ],
     // Header-level fields no review-modal row surfaces, but which pre-fill the

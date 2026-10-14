@@ -85,3 +85,14 @@ describe('OcrLinesReviewModal — tax hint', () => {
     expect(onSubmit.mock.calls[0][0][0]).toMatchObject({ description: 'A', tax_id: null, tax_no_rate_match: true });
   });
 });
+
+// ETP-5585 UX — column widths must not depend on the cell content (jsdom cannot measure layout;
+// these pin the classes that fix it).
+describe('OcrLinesReviewModal — stable layout', () => {
+  it('uses a fixed table layout and lets cells shrink below their content', () => {
+    renderModal([{ description: 'A', tax_id: 'T4', tax_label: 'Adquisiciones a Canarias,Ceuta y Melilla 4% - IVA Super Reducido' }]);
+    const table = screen.getByRole('table');
+    expect(table.className).toContain('table-fixed');
+    screen.getAllByRole('cell').forEach((cell) => expect(cell.className).toContain('min-w-0'));
+  });
+});

@@ -109,7 +109,7 @@ export default function ProductResolverPopup({
   return (
     <div className="fixed inset-0 z-50 bg-foreground/30 flex items-center justify-center p-4">
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border-subtle">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border-subtle">
           <h2 className="text-base font-semibold text-foreground">
             {ui('ocrProductResolverTitle')}
           </h2>
@@ -119,7 +119,7 @@ export default function ProductResolverPopup({
         </div>
 
         {hasPreselected && (
-          <div className="px-6 pt-4">
+          <div className="px-5 pt-3">
             <InfoBanner
               tone="warning"
               icon={AlertTriangle}
@@ -132,12 +132,12 @@ export default function ProductResolverPopup({
         )}
 
         {hasUnsuggested && (
-          <div className="px-6 py-3 text-xs text-muted-foreground border-b border-border-subtle">
+          <div className="px-5 py-3 text-xs text-muted-foreground border-b border-border-subtle">
             {ui('ocrProductResolverHint')}
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
           {unmatched.map((row) => (
             <ProductRow
               key={row.idx}
@@ -153,7 +153,7 @@ export default function ProductResolverPopup({
           ))}
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-subtle">
+        <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-border-subtle">
           {!canContinue && (
             <span id={incompleteHintId} className="mr-auto text-xs text-muted-foreground" data-testid="ocr-product-incomplete-hint">
               {ui('ocrProductResolverIncomplete')}

@@ -107,7 +107,7 @@ function ReceiverTaxIdAbsentNotice({ show }) {
   if (!show) return null;
   return (
     <div
-      className="mb-2 flex items-start gap-2 rounded-lg border border-status-warning-border bg-status-warning px-3 py-2 text-xs text-status-warning-foreground"
+      className="mt-3 flex items-start gap-2 rounded-lg border border-status-warning-border bg-status-warning px-3 py-2 text-xs text-status-warning-foreground"
       data-testid="ocr-review-receiver-absent"
     >
       <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" data-testid="AlertCircle__80a87a" />
@@ -281,59 +281,61 @@ export default function OcrReviewModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/30 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">{ui('ocrReviewTitle')}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{ui('ocrReviewSubtitle')}</p>
+      <div className="w-full max-w-md rounded-2xl bg-card shadow-2xl">
+        <div className="px-5 pt-3 pb-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">{ui('ocrReviewTitle')}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{ui('ocrReviewSubtitle')}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onCancel}
+              aria-label={ui('ocrReviewCancel')}
+              className="text-muted-foreground hover:text-muted-foreground"
+            >
+              <X size={18} data-testid="X__80a87a" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label={ui('ocrReviewCancel')}
-            className="text-muted-foreground hover:text-muted-foreground"
-          >
-            <X size={18} data-testid="X__80a87a" />
-          </button>
+
+          <ReceiverTaxIdAbsentNotice show={receiverTaxIdAbsent} />
+
+          <div className="space-y-1 pt-2">
+            {fields.map((field) => {
+              const entry = state[field.key] || { enabled: false, value: null, editing: false };
+              const currentValue = formatValue(entry.value);
+              const hasResolvedValue = hasUsableValue(field, entry.value);
+              return (
+                <FieldRow
+                  key={field.key}
+                  labelText={ui(field.label)}
+                  valueText={resolving && field.key === 'vendor' && !hasResolvedValue
+                    ? ui('ocrReviewVendorChecking')
+                    : currentValue}
+                  checked={Boolean(entry.enabled && hasResolvedValue)}
+                  onToggle={(checked) => updateField(field.key, { enabled: checked, editing: checked ? state[field.key]?.editing : false })}
+                  toggleDisabled={(field.key === 'vendor' && resolving) || !hasResolvedValue}
+                  expanded={!entry.enabled || !hasResolvedValue || entry.editing}
+                  notice={renderFieldNotice(field.key, { vendorAddress, duplicate })}
+                  data-testid={"FieldRow__" + field.id}>
+                  <KindRenderer
+                    mode="field"
+                    kind={field.kind}
+                    field={{ ...field, extracted }}
+                    value={entry.value}
+                    token={token}
+                    apiBaseUrl={apiBaseUrl}
+                    contactsBase={contactsBase}
+                    createComponent={field.createComponent ? CREATE_COMPONENTS[field.createComponent] : null}
+                    onChange={(value) => updateField(field.key, { value, enabled: true, editing: true })}
+                    data-testid={"KindRenderer__" + field.id} />
+                </FieldRow>
+              );
+            })}
+          </div>
         </div>
 
-        <ReceiverTaxIdAbsentNotice show={receiverTaxIdAbsent} />
-
-        <div className="space-y-1 py-2">
-          {fields.map((field) => {
-            const entry = state[field.key] || { enabled: false, value: null, editing: false };
-            const currentValue = formatValue(entry.value);
-            const hasResolvedValue = hasUsableValue(field, entry.value);
-            return (
-              <FieldRow
-                key={field.key}
-                labelText={ui(field.label)}
-                valueText={resolving && field.key === 'vendor' && !hasResolvedValue
-                  ? ui('ocrReviewVendorChecking')
-                  : currentValue}
-                checked={Boolean(entry.enabled && hasResolvedValue)}
-                onToggle={(checked) => updateField(field.key, { enabled: checked, editing: checked ? state[field.key]?.editing : false })}
-                toggleDisabled={(field.key === 'vendor' && resolving) || !hasResolvedValue}
-                expanded={!entry.enabled || !hasResolvedValue || entry.editing}
-                notice={renderFieldNotice(field.key, { vendorAddress, duplicate })}
-                data-testid={"FieldRow__" + field.id}>
-                <KindRenderer
-                  mode="field"
-                  kind={field.kind}
-                  field={{ ...field, extracted }}
-                  value={entry.value}
-                  token={token}
-                  apiBaseUrl={apiBaseUrl}
-                  contactsBase={contactsBase}
-                  createComponent={field.createComponent ? CREATE_COMPONENTS[field.createComponent] : null}
-                  onChange={(value) => updateField(field.key, { value, enabled: true, editing: true })}
-                  data-testid={"KindRenderer__" + field.id} />
-              </FieldRow>
-            );
-          })}
-        </div>
-
-        <div className="mt-4 flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-2 border-t border-border-subtle px-5 py-3">
           <button
             type="button"
             onClick={onCancel}
