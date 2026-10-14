@@ -230,7 +230,7 @@ replicate Classic:
 
 ### Data model
 
-`decisions.json` changes (configuration only; the UI section is a separate step):
+`decisions.json` changes (the UI that consumes them is described under "UI" below):
 
 | Entity | Field | Visibility | Notes |
 |---|---|---|---|
@@ -260,6 +260,41 @@ Same contract as `actividadesDelIae` (spec segment `organization`, not `organiza
 - Update / delete: `PATCH` / `DELETE /sws/neo/organization/representanteLegal/{id}`.
 - The `aeat390*` fields are read and written on the existing `information` entity
   (`/sws/neo/organization/information`), the same record the page already loads.
+
+### UI
+
+A sixth `SectionRow` in `OrganizationPage.jsx`, **"Representante legal / Modelo 390"**
+(`orgSection390`), placed last, right after "Actividades del IAE". Its body is
+`Modelo390IdentitySection.jsx`:
+
+- **"Persona física" switch** (`information.aeat390Isperson`). It is a page-form field: flipping it
+  shows the unsaved-changes banner and is persisted by the page's Save, in the same
+  `PATCH /information/{orgId}` as the rest of `AD_OrgInfo`. The branch below follows the form value,
+  so flipping it previews the other branch before saving.
+- **ON — natural person:** Nombre, Primer apellido, Segundo apellido, NIF del representante legal,
+  Nombre del representante legal (`aeat390Firstname/Surname1/Surname2/RepNif/RepName`). Also page-form
+  fields, saved with the page. All optional, as in Classic; inputs are capped at the AD lengths
+  (60, and 20 for the NIF). A non-empty representative NIF must pass `getTaxIdError`
+  (`tools/app-shell/src/lib/taxIdValidation.js`, the same validator as the organization NIF): Save is
+  blocked with an inline error and a toast. The check only runs while the switch is ON — the field is
+  hidden otherwise.
+- **OFF — legal representatives grid** (`RepresentantesLegalesSection.jsx` +
+  `useRepresentantesLegales.js`). Columns: Línea, CIF/NIF, Nombre y apellidos, Fecha del poder,
+  Notaría, edit/delete. Rows are listed by `lineNo` ascending (requested with `_sortBy=lineNo` and
+  sorted again on the client by `sortByLineNo`), and the first 3 carry a small **"390"** marker; rows
+  beyond the third are shown in muted text. A hint above the table states that only the first 3 by
+  line are sent. Line numbers are not editable — the server assigns `MAX+10` on create, so a new
+  representative always goes last.
+- **Add / edit** open a form card below the table (not an inline row: six fields, one a date picker,
+  do not fit in a row at 1280px). Inline validation before any request (`getRepresentativeErrors` in
+  `representanteLegal.js`): required `taxID`, `firstName`, `lastname1`, `powerDate`, `notaryName`
+  (`fieldRequired`), AD lengths (`fieldMaxLengthError`), and the NIF format via `getTaxIdError`.
+  Each create/update/delete persists immediately through its own request, like the IAE grid — the grid
+  is not part of the page's unsaved-changes form. Backend errors are toasted with the server message
+  (`extractApiErrorMessage`) and the form stays open.
+- **Dates:** `powerDate` is a date-only value. It is edited with the shared `DateField`, normalised to
+  `yyyy-MM-dd` with local getters (`toCalendarISO`, built on `parseCalendarDate`) before it is sent,
+  and displayed with `formatCalendarDate` in the UI locale — no timezone shift.
 
 ## Field change: SII/TicketBAI/Verifactu config flags exposed as `system` fields (ETP-4784)
 
@@ -376,22 +411,28 @@ case list, deliberately).
 - `tools/app-shell/src/menu.json` — `organization` entry under the Settings group.
 - `tools/app-shell/src/windows/registry.js` — `organization` in `customLoaders`.
 - `tools/app-shell/src/windows/custom/organization/index.jsx` — pipeline-generated scaffold, imports `OrganizationPage`.
-- `tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx` — the hand-built page: 4 sections (Identidad, Datos fiscales, Datos de contacto, Actividades del IAE), unsaved-changes banner, field mapping.
+- `tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx` — the hand-built page: sections Identidad, Datos fiscales, Certificado digital, Datos de contacto, Actividades del IAE and Representante legal / Modelo 390 (ETP-5716), unsaved-changes banner, field mapping (including the six `information.aeat390*` fields and the representative-NIF check).
 - `tools/app-shell/src/windows/custom/organization/useOrganizationData.js` — fetch/save hook (`organization` + `information`; `etgoEmail`/`etgoPhone`/`etgoWeb` are plain `information` fields, no Business Partner fetch).
 - `tools/app-shell/src/windows/custom/organization/OrgLogoField.jsx` — logo upload with initials fallback; PNG/JPG/SVG, 2 MB cap.
 - `tools/app-shell/src/windows/custom/organization/BusinessTypeCards.jsx` — Empresa/Autónomo selection cards.
 - `tools/app-shell/src/windows/custom/organization/countryFlag.js` — country-name → flag-emoji lookup for the read-only País pill.
 - `tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx` — editable IAE-activities grid (ETP-4975): selectors, default checkbox, add/delete rows, missing-code hint.
 - `tools/app-shell/src/windows/custom/organization/useActividadesIae.js` — fetch/create/update/delete hook + `enforceSingleDefault()` (ETP-4975 single-default rule) + `rowsRef` concurrent-toggle fix (QA).
+- `tools/app-shell/src/windows/custom/organization/Modelo390IdentitySection.jsx` — "Persona física" switch + natural-person fields, or the representatives grid (ETP-5716).
+- `tools/app-shell/src/windows/custom/organization/RepresentantesLegalesSection.jsx` — legal representatives grid, "390" marker on the first 3 by line, add/edit form card with inline validation (ETP-5716).
+- `tools/app-shell/src/windows/custom/organization/useRepresentantesLegales.js` — list (line-ordered) / create (no `lineNo`) / update / delete hook (ETP-5716).
+- `tools/app-shell/src/windows/custom/organization/representanteLegal.js` — pure helpers: `sortByLineNo`, `toCalendarISO`, `buildRepresentativePayload`, `getRepresentativeErrors`, AD length constants (ETP-5716).
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/AeatSubmitFlow.jsx` — `isMissingDefaultIaeActivity()`/`checkMissingIaeGuard()` pure helpers + the last-period pre-flight guard on "Marcar como Presentado" (ETP-4975); feedback is now `showIaeActivityReminder(t, navigate, { severity: 'error' })`, not a banner (ETP-5432 pt.10 — see "Modelo 303 pre-flight guard" above).
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx` — the mirror last-period pre-flight guard on "Generar fichero 303" (`handleGenerate`), reusing `isMissingDefaultIaeActivity()`/`checkMissingIaeGuard()` from `AeatSubmitFlow.jsx` (ETP-4975); plus (ETP-5432 pt.10) a proactive mount-effect check and the same guard now also covering `handlePresent`'s two direct manual "Registrar/Presentar" paths, all three firing the error-severity toast instead of the removed `genError`/`missingIaeGuard` banner state.
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js` — `isLastPeriodOfYear()`, extracted and shared with both guards above.
 - `tools/app-shell/src/components/contract-ui/CreatableSearchSelect.jsx` / `InlineSearchCombo.jsx` — QA-found pagination fixes (scroll-triggered "load more" was cutting results short) plus the `searchGenerationRef` fix (ETP-4975 BUG-2): a new search fired while a scroll-page fetch was still in flight could otherwise let the stale page's results land after the new search's, since both fixes share the same "tag every fetch with its search generation, discard a resolved fetch whose generation is no longer current" pattern.
 - `tools/app-shell/src/lib/imageUpload.js` — `sanitizeImageName()`, shared by this window's `OrgLogoField.jsx` and the generic `ImageField.jsx` (contract-ui): truncates upload filenames to AD_Image's 60-char `Name` limit.
 - `tools/app-shell/src/windows/custom/organization/__tests__/useOrganizationData.vitest.js` — load/save behavior (including the direct AD_OrgInfo contact columns), error handling.
-- `tools/app-shell/src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx` — field rendering, unsaved-changes banner, business-type card selection/colors, save flow, warehouse-spec address `apiBaseUrl` regression guard, plus (ETP-5395 Fix 3) a `WindowAccessGuard`-renders-instead-of-the-raw-error-box regression test for a `'none'` access tier.
+- `tools/app-shell/src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx` — field rendering, unsaved-changes banner, business-type card selection/colors, save flow, warehouse-spec address `apiBaseUrl` regression guard, plus (ETP-5395 Fix 3) a `WindowAccessGuard`-renders-instead-of-the-raw-error-box regression test for a `'none'` access tier.; plus (ETP-5716) the Modelo 390 identity fields: seeding from `information`, Save payload with the six `aeat390*` fields, and the representative-NIF block.
 - `tools/app-shell/src/windows/custom/organization/__tests__/ActividadesIaeSection.vitest.jsx` — grid rendering, selector picks, default toggle, add/delete rows, missing-code hint (ETP-4975).
 - `tools/app-shell/src/windows/custom/organization/__tests__/useActividadesIae.vitest.jsx` — load/create/update/delete, `enforceSingleDefault` sweep behavior including the per-row-swallowed-failure case (ETP-4975).
+- `tools/app-shell/src/windows/custom/organization/__tests__/useRepresentantesLegales.vitest.jsx` — line ordering (server param + client sort), create omits `lineNo` and carries `parentId`, `yyyy-MM-dd` power date, update/delete, and the `representanteLegal.js` validation helpers (ETP-5716).
+- `tools/app-shell/src/windows/custom/organization/__tests__/Modelo390IdentitySection.vitest.jsx` — "Persona física" switches person fields vs grid, "390" marker on the first 3 rows, required/NIF inline validation, create/edit/delete, save-error toast (ETP-5716).
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/__tests__/AeatSubmitFlow.missingIaeGuard.vitest.jsx` — the "Marcar como Presentado" pre-flight guard: blocks/proceeds cases, fail-open on fetch error (ETP-4975); updated for ETP-5432 pt.10 to assert `showIaeActivityReminder` is called with `{ severity: 'error' }` instead of asserting on banner/CTA text.
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/__tests__/FmModel303Page.missingIaeGuard.vitest.jsx` — the mirror "Generar fichero" pre-flight guard, same case matrix (ETP-4975); updated the same way for the toast, plus (ETP-5432 pt.10) a new describe block covering `handlePresent`'s two manual "Registrar/Presentar" paths — including an async-timing test that keeps the guard's own fetch pending to prove `handlePresent` genuinely awaits it rather than racing ahead — and mocking fixes so a double-prefixed/malformed guard URL 404s in the test the same way it would against the real backend (see "Double-prefixed URL bug" above).
 - `tools/app-shell/src/lib/__tests__/imageUpload.test.js` — `sanitizeImageName()` truncation/extension-preservation cases.
