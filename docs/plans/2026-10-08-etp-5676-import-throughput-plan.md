@@ -421,6 +421,9 @@ cost 205 ms. Four user-approved cuts, documented in `com.etendoerp.go` `docs/neo
    `etendo_batch`) gets it — the import sends it for products and contacts, OCR does not — and the
    backend kill switch `batch-callout-skip-disabled` (registered in `flags-registry.json` as
    `batch-redundant-callout-skip`, default off = skip allowed) turns it off for every batch.
+   **Not created in ConfigCat yet** (402: the `etendo-go` config is at the plan's 10-flag limit;
+   ETP-5751 migrates to Datadog Feature Flags). The local property / env var only works where no
+   ConfigCat SDK key is set, so production has no rollback for the skip until the flag exists.
 3. `_onlyReturnIds` — batch request option (REST body, MCP `etendo_batch`); skips locator
    enrichment and the product's `etgoHasCost`. The batch response was already ids-only. Sent by the
    import (`useWindowImportDialog`), not by OCR.
