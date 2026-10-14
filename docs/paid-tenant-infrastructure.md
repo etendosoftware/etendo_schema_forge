@@ -8,6 +8,11 @@
 > it caused an incident: the browser resolved it through ConfigCat while the backend resolved it
 > through local properties that were unset in every deployed environment, so accounts were charged
 > and then handed a Demo environment.
+>
+> **A third change since:** the hosted control plane now exists. Both ends read Datadog Feature
+> Flags first, with ConfigCat as the fallback (ETP-5751), so the "local control plane" wording in
+> §2.4, §2.5 and Part 5.1 is historical. Current state: `docs/feature-flags.md` and, for the backend,
+> `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md`.
 
 **About this document.** This is a single linear account of one feature: how a user on a
 free Etendo GO tenant gets a second, paid, productive one — and of the two systems built

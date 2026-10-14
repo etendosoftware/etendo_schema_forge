@@ -82,6 +82,20 @@ under the same Datadog data processing as our logs and RUM. Note the difference
 from ConfigCat, which downloads the rules and evaluates in the client: with
 Datadog the context, account email included, leaves the client.
 
+### Rollout, proof and rollback
+
+Turn Datadog on in Experimental first. Before Production, prove each end reads Datadog and not
+ConfigCat: the SPA must `POST` to `ff-cdn.datadoghq.eu/precompute-assignments?dd_env=experimental`
+and make no request to `cdn-global.configcat.com`, and a targeting rule on lowercase `email` for one
+tester, added only in Datadog's Experimental environment, must change what that tester sees (a flag
+that resolves the same on both control planes proves nothing). The step-by-step check, shared with
+the backend, is in `etendo-go-infraestructure/COMO-REEMPLAZAR-AL-TUTI.md`, section *Datadog Feature
+Flags (ETP-5751)*.
+
+**Rollback:** set the `VITE_FLAGS_PROVIDER` Actions variable to `configcat` and redeploy. The
+backend rolls back independently, by removing `DD_FEATURE_FLAGS_ENABLED` from its task definition
+(com.etendoerp.go `docs/feature-flags-and-tenant-upgrade.md` §1).
+
 ### ConfigCat (fallback)
 
 The ConfigCat provider fetches assignments at initialization and polls for
