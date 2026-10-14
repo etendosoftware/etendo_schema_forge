@@ -13,6 +13,7 @@
  *    its contact / amount / overpayment guards;
  *  - the shared error toast in `handleCreate` and the reset-on-close effect.
  */
+import { setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
@@ -573,6 +574,22 @@ describe('NewMovementWizard — submitPayment (FIN_Payment)', () => {
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(createPayment).not.toHaveBeenCalled();
     expect(createMovement).not.toHaveBeenCalled();
+  });
+
+  // ETP-5577 — a payment dated in a never-opened period: the toast carries the way out.
+  it('offers the period recovery on a PeriodNotAvailable refusal', async () => {
+    const go = vi.fn();
+    setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
+    createPayment.mockRejectedValueOnce({ message: 'Period not open', messageKeys: ['PeriodNotAvailable'] });
+    renderWizard();
+    goToPayment({ tercero: { id: 'bp-1' }, totals: { pago: 10, diff: 0 } });
+
+    fireEvent.click(findButton('financeAccountMovementsNewConfirm'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Period not open', {
+      action: { label: 'periodNotAvailableOpenCalendar', onClick: go },
+    }));
+    setPeriodRecovery(null);
   });
 
   it('toasts the generic payment error when the request fails without a message', async () => {

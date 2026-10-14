@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { getApiBase } from './useNeoResource';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { parseBackendErrorMessage } from '@/lib/backendErrors.js';
+import { parseBackendError } from '@/lib/backendErrors.js';
 
 /**
  * POSTs a JSON payload to a financial-account-transactions action and returns data.
@@ -19,7 +19,7 @@ async function postAction(apiFetch, action, payload) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const raw = await parseBackendErrorMessage(res);
+    const { message: raw, messageKeys } = await parseBackendError(res);
     const error = new Error(raw || `HTTP ${res.status}`);
     error.status = res.status;
     // Whether `message` is something the backend actually said, or the synthesized
@@ -28,6 +28,8 @@ async function postAction(apiFetch, action, payload) {
     // `translate(...) || friendlyFallback` chain would silently show the HTTP code
     // instead of the fallback (PSD-23).
     error.hasBackendMessage = Boolean(raw);
+    // ETP-5577 — the refusal's identity (e.g. `PeriodNotAvailable`), for translation and recovery.
+    error.messageKeys = messageKeys;
     throw error;
   }
   const json = await res.json();

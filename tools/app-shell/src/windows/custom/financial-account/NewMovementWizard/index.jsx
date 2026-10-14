@@ -14,6 +14,8 @@ import { X, Check, ChevronDown, Wallet, Percent, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import { useCreateMovement, useCreatePayment } from '@/hooks/useCreateMovement';
+import { translateBackendError } from '@/lib/backendErrors.js';
+import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { FINANCIAL_ACCOUNT_FIELD_LIMITS, getMaxLengthError } from '../fieldLengthValidation.js';
 import { FieldLengthCounter, FieldLengthError } from '../FieldLengthHint.jsx';
 import { useDimensionValues } from '@/hooks/useDimensionValues';
@@ -397,9 +399,15 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
       onSuccess?.();
       onClose();
     } catch (e) {
-      toast.error(e?.message || ui(choice === 'pay'
+      // ETP-5577 — a payment dated in a never-opened period is keyed `PeriodNotAvailable`.
+      const message = e?.message
+        && translateBackendError(e.message, ui, { messageKeys: e.messageKeys });
+      const text = message || ui(choice === 'pay'
         ? 'financeAccountMovementsWizardPaymentError'
-        : 'financeAccountMovementsNewError'));
+        : 'financeAccountMovementsNewError');
+      const recovery = periodNotAvailableToastOptions(e?.messageKeys, ui);
+      if (Object.keys(recovery).length > 0) toast.error(text, recovery);
+      else toast.error(text);
     }
   };
 
