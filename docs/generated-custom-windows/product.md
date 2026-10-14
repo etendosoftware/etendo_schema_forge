@@ -1537,6 +1537,25 @@ Every import run reports one `import_completed` telemetry event (counts, timings
 concurrency used, mapped columns, foreign keys resolved/created; never row content). See
 `decisions-reference.md` → *Import Limits* → Telemetry.
 
+### ETP-5676 — Server cost per imported row
+
+Measured in production: about 800 ms of server time per imported row (product, two prices, cost).
+Four backend cuts, in `com.etendoerp.go` (`docs/neo-headless.md` §4.3.6):
+
+- **No double price write.** A row that prices **both** directions sends `_skipPricesSeed: true`
+  on the product op (`productImportDescriptor.js`). The backend then does not seed the zero rows
+  on the default sales and purchase tariffs that `ProductPriceHandler` used to overwrite right
+  after. A row with one price or none still gets the seed, so the side it does not price stays
+  visible to sales/purchase at 0, as before. The import picks the same default tariff as the seed
+  (`resolvePlv`), so a both-prices row ends up with the same rows either way.
+- **`_onlyReturnIds: true`** on every import `/batch` request (`useWindowImportDialog` wraps
+  `useBatch.runBatch`; OCR does not send it). The backend skips locator-identifier enrichment and
+  the `etgoHasCost` flag on each create. The response is unchanged — the import engine reads only
+  `committed`, `operations[].recordId` and the failure envelope.
+- **Automatic, no client change:** within one batch, `SL_TaxCategory_Org` and
+  `SL_Costing_Currency` are not re-run once they have been seen proposing only values the row
+  already carries; spec/entity/default lookups are answered once per batch.
+
 ## Account selectors — ETP-5681
 
 Every account field of the **Contabilidad** tab (`fixedAsset`, `productExpense`, `productRevenue`, `productCOGS`, `invoicePriceVariance`) declares `"lookup": true` +

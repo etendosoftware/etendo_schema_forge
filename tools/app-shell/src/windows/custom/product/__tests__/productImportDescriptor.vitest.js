@@ -243,6 +243,22 @@ describe('product import descriptor', () => {
       assert.equal(purchase.parentRef, 'product');
     });
 
+    // ETP-5676 — a row that prices both directions writes both default tariffs itself, so the
+    // backend's zero-price seed (later overwritten by these very ops) is skipped. With one
+    // direction the seed still covers the other, so the directive is not sent.
+    it('asks the backend to skip the price seed only when the row prices both directions', async () => {
+      stubFetch(SALES_ITEMS);
+      const both = await buildOperations(
+        { ...baseRow, salesPrice: '150', purchasePrice: '100' },
+        productConfig('tok-seed-both'),
+      );
+      assert.equal(both[0].body._skipPricesSeed, true);
+      const salesOnly = await buildOperations({ ...baseRow, salesPrice: '150' }, productConfig('tok-seed-sales'));
+      assert.equal(salesOnly[0].body._skipPricesSeed, undefined);
+      const none = await buildOperations({ ...baseRow }, productConfig('tok-seed-none'));
+      assert.equal(none[0].body._skipPricesSeed, undefined);
+    });
+
     it('imports a purchase price on its own, without a sales price', async () => {
       stubFetch(SALES_ITEMS);
       const ops = await buildOperations(

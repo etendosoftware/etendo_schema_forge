@@ -6,7 +6,7 @@ import { getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
  * Drives the generic transactional batch endpoint.
  *
  *   POST /sws/neo/batch
- *     body: { operations: [{ id, spec, entity, body, parentRef? }, ...] }
+ *     body: { operations: [{ id, spec, entity, body, parentRef? }, ...], _onlyReturnIds? }
  *
  * Returns one of:
  *   { committed: true, operations: [{ id, recordId, ok: true }, ...] }
@@ -15,6 +15,11 @@ import { getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
  * Find-or-create logic lives in the caller (typically a per-window descriptor).
  * This hook does no orchestration beyond POST + JSON parsing — the same shape
  * an MCP agent would use when calling a `etendo_batch` tool.
+ *
+ * `runBatch(operations, { onlyReturnIds })` — ETP-5676: `onlyReturnIds: true` sends the request
+ * option `_onlyReturnIds`, which lets every create skip decorating the record it echoes back. The
+ * response shape is the same either way (ids only); send it only from a caller that never reads
+ * more than `committed`, `operations[].recordId` and the failure envelope.
  */
 export function useBatch({ token }) {
   const [loading, setLoading] = useState(false);
@@ -33,7 +38,7 @@ export function useBatch({ token }) {
   // strings, so it no longer derives: the NEO root has one owner now.
   const batchUrl = useMemo(() => `${getNeoBaseUrl()}/batch`, []);
 
-  const runBatch = useCallback(async (operations) => {
+  const runBatch = useCallback(async (operations, { onlyReturnIds = false } = {}) => {
     setError(null);
     setLoading(true);
     try {
@@ -43,7 +48,7 @@ export function useBatch({ token }) {
       const res = await apiFetch(batchUrl, {
         baseUrl: '',
         method: 'POST',
-        body: JSON.stringify({ operations }),
+        body: JSON.stringify(onlyReturnIds ? { operations, _onlyReturnIds: true } : { operations }),
         timeout: 0,
       });
       const text = await res.text().catch(() => '');

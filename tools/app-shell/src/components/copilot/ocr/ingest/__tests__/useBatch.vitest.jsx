@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/copilot/ocr/ingest/useBatch.js
 /**
  * Tests for useBatch — covers where the batch endpoint resolves to (ETP-5371) and the runBatch
  * POST flow (success, non-ok with body, non-ok without body, fetch rejection) with mocked fetch.
@@ -135,6 +136,20 @@ describe('useBatch — runBatch', () => {
     expect(url).toBe('/sws/neo/batch');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({ operations: ops });
+  });
+
+  it('ETP-5676: adds _onlyReturnIds to the body only when the caller asks for it', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '{}' });
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+    const ops = [{ id: 'op1', spec: 'product' }];
+
+    await act(async () => {
+      await result.current.runBatch(ops, { onlyReturnIds: true });
+      await result.current.runBatch(ops);
+    });
+
+    expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body)).toEqual({ operations: ops, _onlyReturnIds: true });
+    expect(JSON.parse(globalThis.fetch.mock.calls[1][1].body)).toEqual({ operations: ops });
   });
 
   it('returns json on a non-ok response that still carries a body', async () => {

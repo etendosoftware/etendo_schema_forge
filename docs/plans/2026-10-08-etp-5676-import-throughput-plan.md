@@ -400,3 +400,25 @@ products already run at ~26 ms/row server-side. (2) Real production gain needs a
 Next (measure before building): confirm which run was timed; browser timeline (HAR) of the
 client-side share; profile BusinessPartner add (326 ms: triggers, flush, refreshBobsFromDb,
 sequence); try contacts concurrency 4 → 8 locally (server avg concurrency is only 3.8).
+
+## Per-row server cuts after QA (2026-10-14)
+
+QA's production `[NEO-PERF]` logs (1000 products, 10-row chunks): ~800 ms of server time per row —
+product create 515 ms (pre-hook 84, callout cascade 130 of which `SL_TaxCategory_Org` ~90, add 90,
+post-hook + response ~193), both prices 73 ms (each one updating the row the seed had just inserted),
+cost 205 ms. Four user-approved cuts, documented in `com.etendoerp.go` `docs/neo-headless.md` §4.3.6:
+
+1. `_skipPricesSeed` — product create directive, read and stripped by `ProductDefaultsHandler`;
+   declared via `NeoHandler#createDirectives()` so MCP accepts and publishes it. The import sends it
+   only when the row prices both directions.
+2. Per-batch callout skip — `NeoCalloutDiscardMemory` in `NeoBatchScope`: a create-cascade callout
+   whose every output was discarded (caller-sent or suppressed fields), with no message, is not re-run
+   for the same (tab, trigger, trigger value, kept-field set) within the batch.
+3. `_onlyReturnIds` — batch request option (REST body, MCP `etendo_batch`); skips locator
+   enrichment and the product's `etgoHasCost`. The batch response was already ids-only. Sent by the
+   import (`useWindowImportDialog`), not by OCR.
+4. Per-batch lookup memo — `findSpec`, `findEntity`, product default uOM/taxCategory and default
+   tariff version, keyed by everything they read; dropped when the DAL session changes.
+
+Measurement before/after: pending (local environment).
+

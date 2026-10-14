@@ -469,6 +469,12 @@ registerImportDescriptor('product', async (row, config) => {
     buildPriceOperation(row.purchasePrice, { opId: 'purchasePrice', wantSales: false, config }),
   ]);
   ops.push(...priceOps.filter(Boolean));
+  // ETP-5676 — the backend seeds a zero price on the default sales and purchase tariffs of every
+  // new product, and ProductPriceHandler then overwrites that row with the price sent here: two
+  // writes, a flush and a price observer per row. When this row prices BOTH directions it covers
+  // both tariffs itself (resolvePlv picks the same default tariff the seed would), so the seed is
+  // skipped. With one direction or none, the seed still runs and keeps the unpriced side visible.
+  if (priceOps.every(Boolean)) productBody._skipPricesSeed = true;
 
   // ETP-5350. Synchronous, unlike the two price ops: a cost needs no price-list-version lookup,
   // since the handler derives the organisation and its currency itself.
