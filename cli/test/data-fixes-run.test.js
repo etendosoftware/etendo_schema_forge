@@ -302,11 +302,25 @@ describe('opt-in fixes — pure helpers', () => {
     assert.equal(gate.allowed, true);
   });
 
-  it('optInChainGate ignores retired and other opt-in fixes dated before it', () => {
-    const retiredEarly = catalogFix('20260930T120000Z__OLD-chain', { retired: true });
-    const otherOpt = catalogFix('20260930T130000Z__OTHER-switch', { optIn: true });
+  it('optInChainGate refuses while an unprocessed chain fix shares the opt-in fix timestamp', () => {
+    const sameTime = catalogFix('20261002T120000Z__SAME-chain');
+    assert.equal(sameTime.timestamp.getTime(), OPT.timestamp.getTime());
+    const gate = optInChainGate([A, sameTime, OPT, B], ledgerOf([[A.fixId, 'APPLIED']]), OPT);
+    assert.equal(gate.allowed, false);
+    assert.deepEqual(gate.lagging, [sameTime.fixId]);
+  });
+
+  it('optInChainGate ignores retired and other opt-in fixes dated between the watermark and it', () => {
+    // Watermark = A (Oct 1 12:00); both fixes sit above it and before OPT (Oct 2 12:00),
+    // unprocessed — so only their retired / opt-in exclusion keeps them out of `lagging`.
+    const retiredBetween = catalogFix('20261002T000000Z__OLD-chain', { retired: true });
+    const otherOpt = catalogFix('20261002T010000Z__OTHER-switch', { optIn: true });
     const ledger = ledgerOf([[A.fixId, 'APPLIED']]);
-    assert.equal(optInChainGate([retiredEarly, otherOpt, ...CATALOG], ledger, OPT).allowed, true);
+    const gate = optInChainGate([A, retiredBetween, otherOpt, OPT, B], ledger, OPT);
+    assert.ok(gate.watermark < retiredBetween.timestamp.getTime());
+    assert.ok(otherOpt.timestamp.getTime() < OPT.timestamp.getTime());
+    assert.equal(gate.allowed, true);
+    assert.deepEqual(gate.lagging, []);
   });
 
   it('optInChainGate allows a tenant whose watermark is at or past the opt-in date', () => {
