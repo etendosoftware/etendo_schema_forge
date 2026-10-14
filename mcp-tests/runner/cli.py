@@ -20,6 +20,7 @@ import asyncio
 import datetime as dt
 import json
 import secrets
+import subprocess
 import sys
 import traceback
 import webbrowser
@@ -46,6 +47,7 @@ from .mcp_client import (
     VerificationError,
     call_tool,
     count_rows,
+    describe_server,
     is_headless,
     mcp_session,
     preflight,
@@ -65,7 +67,12 @@ RUNS_DIR = HARNESS_ROOT / "runs"
 #: v3 adds `setup[]`, `teardown[]` and `teardownClean` (D41): the records of the
 #: deterministic calls the runner made around the agent. Never part of
 #: `toolCalls[]`, which stays the agent's own record.
-RUN_SCHEMA_VERSION = 3
+#: v4 (ETP-5750 S1, plan 2026-10-14 §2/§6) is the groundwork for reproducible
+#: comparisons. Probe file: `finalAnswer`, `usage.loop` / `usage.report`,
+#: `servedModel`, `silentWrong`. run.json: `harness` (commit + dirty flag) and
+#: `server` (`serverInfo`, `protocolVersion`, catalogue sha + tool count, read at
+#: preflight). Additive, but "never recorded" and "null" must stay tellable apart.
+RUN_SCHEMA_VERSION = 4
 
 
 def _unwrap(exc: BaseException) -> BaseException:
@@ -173,6 +180,62 @@ def _resolve_suite_path(name: str) -> Path:
     raise FileNotFoundError(f"No suite {name!r} under {SUITES_DIR}")
 
 
+def _harness_revision() -> dict[str, Any]:
+    """The harness commit and whether `mcp-tests/` had uncommitted changes.
+
+    A pin (plan §6): two runs from different harness code are not comparable,
+    and a dirty tree means the commit alone does not say what ran. Both are
+    None when git is not available — unknown, never assumed clean.
+    """
+    def git(*argv: str) -> str | None:
+        try:
+            done = subprocess.run(
+                ["git", *argv], cwd=HARNESS_ROOT, capture_output=True, text=True, timeout=10
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return done.stdout if done.returncode == 0 else None
+
+    commit = git("rev-parse", "HEAD")
+    status = git("status", "--porcelain", "--", ".")
+    return {
+        "commit": commit.strip() if commit else None,
+        "dirty": None if status is None else bool(status.strip()),
+    }
+
+
+async def _describe_target(target: dict[str, Any]) -> dict[str, Any]:
+    """`describe_server`, never raising: a failure is written down, not fatal.
+
+    Not a stop condition in itself — the probes open their own sessions and
+    report their own harness errors, exactly as before this read existed.
+    `error` has the shape of a probe's `harnessError` (`{kind, detail}`), so one
+    reader handles both.
+    """
+    try:
+        return {**await describe_server(target), "error": None}
+    except Exception as exc:  # noqa: BLE001
+        kind = "auth" if isinstance(_unwrap(exc), AuthError) else "server"
+        return {
+            "serverInfo": None,
+            "protocolVersion": None,
+            "catalogue": None,
+            "error": {"kind": kind, "detail": _error_detail(exc)},
+        }
+
+
+def _silent_wrong(verdict: dict[str, Any] | None, effect_verified: bool | None) -> bool | None:
+    """Item 8 of the plan (§3): the agent said OKAY and the objective check failed.
+
+    None when there is nothing to compare — no verdict, or no check (or a check
+    that could not run). A flag, not a verdict: such an attempt already failed
+    the objective check.
+    """
+    if verdict is None or effect_verified is None:
+        return None
+    return verdict.get("outcome") == "OKAY" and effect_verified is False
+
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -187,14 +250,20 @@ def _run_header(
     max_steps: int,
     max_result_chars: int,
     suite: Suite,
+    harness: dict[str, Any] | None = None,
+    server: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "schemaVersion": RUN_SCHEMA_VERSION,
         "runId": run_id,
         "startedAt": started_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "target": {"name": target["name"], "url": target["url"]},
-        # Not resolved in this slice: the .go build id lives in the other repo (D1).
+        # Still null (D1): Etendo's `serverInfo.version` is a constant of the MCP
+        # implementation, not the module build, so it cannot stand in for one.
+        # `server.catalogue.sha` is the proxy that tells two builds apart.
         "serverBuild": None,
+        "server": server,
+        "harness": harness,
         "provider": provider["name"],
         "model": provider["model"],
         "temperature": provider["temperature"],
@@ -388,6 +457,13 @@ async def _run(args: argparse.Namespace) -> int:
     suite = load_suite(_resolve_suite_path(args.suite))
     probes = [suite.probe(args.probe)] if args.probe else list(suite.probes)
 
+    # What the target says it is, and its tool catalogue, read once before the
+    # first probe (plan §6). Skipped when auth already failed: there is no
+    # session to open, and every probe will say so.
+    server = None if preflight_error else await _describe_target(target)
+    if server and server["error"]:
+        print(f"  (server identity not read: {server['error']['detail']})", file=sys.stderr)
+
     started_at = dt.datetime.now(dt.timezone.utc)
     run_id = _new_run_id(target["name"], started_at)
     run_dir = RUNS_DIR / run_id
@@ -402,6 +478,8 @@ async def _run(args: argparse.Namespace) -> int:
             max_steps=max_steps,
             max_result_chars=max_result_chars,
             suite=suite,
+            harness=_harness_revision(),
+            server=server,
         ),
     )
     # The effective configuration on screen, before the first probe, so a
@@ -435,6 +513,12 @@ async def _run(args: argparse.Namespace) -> int:
     print(f"  maxResChars {max_result_chars}")
     print(f"  promptVer   {PROMPT_VERSION}")
     print(f"  suite       {suite.path.name} @ {suite.sha} ({len(probes)} probe(s))")
+    if server and not server["error"]:
+        info, cat = server["serverInfo"], server["catalogue"]
+        # A server may omit either; say so rather than print "None None".
+        identity = " ".join(v for v in (info.get("name"), info.get("version")) if v)
+        print(f"  server      {identity or '(serverInfo without name/version)'} · "
+              f"{cat['toolCount']} tools · catalogue {cat['sha'][:12]}")
 
     exit_code = 0
     tally = {"ok": 0, "error": 0, "mixed": 0, "notMeasured": 0}
@@ -465,6 +549,12 @@ async def _run(args: argparse.Namespace) -> int:
             # or not verifiable; never conflated with "verified absent".
             "effectVerified": None,
             "effectCheck": None,
+            # Persisted, not just printed (plan §3 item 8). See _silent_wrong.
+            "silentWrong": None,
+            # None until the agent ran; then always present (agent.run_probe).
+            "finalAnswer": None,
+            "usage": None,
+            "servedModel": None,
             "setup": [],
             "teardown": [],
             # None = the probe declares no teardown; False = something it
@@ -525,6 +615,7 @@ async def _run(args: argparse.Namespace) -> int:
             )
             result["effectVerified"] = verified
             result["effectCheck"] = detail
+            result["silentWrong"] = _silent_wrong(verdict, verified)
             if check_error:
                 result["harnessError"] = check_error
                 print(f"    effect NOT VERIFIABLE: {check_error['detail']}", file=sys.stderr)

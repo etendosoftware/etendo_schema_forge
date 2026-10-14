@@ -191,6 +191,25 @@ def probe_files(run_dir: Path) -> list[str]:
     return sorted(p.stem for p in probes.glob("*.json"))
 
 
+def record_v4(probe: dict[str, Any]) -> dict[str, Any] | None:
+    """The fields run schema v4 added to a probe file, or None before v4.
+
+    Old runs are never rewritten (D14), so a v3 file is not "a v4 file with
+    nulls": it never recorded an answer or a token count, and a view that
+    rendered `None` there would claim the agent said nothing and cost nothing.
+    """
+    if not isinstance(probe.get("schemaVersion"), int) or probe["schemaVersion"] < 4:
+        return None
+    usage = probe.get("usage") or {}
+    return {
+        "finalAnswer": probe.get("finalAnswer"),
+        "loop": usage.get("loop"),
+        "report": usage.get("report"),
+        "servedModel": probe.get("servedModel"),
+        "silentWrong": probe.get("silentWrong"),
+    }
+
+
 def outcome_badge(probe: dict[str, Any]) -> str:
     """One word for a probe file — the PROBE FILE, which is authoritative."""
     if probe.get("harnessError"):

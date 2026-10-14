@@ -989,7 +989,7 @@ requires-dist = [
     { name = "langchain-mcp-adapters", specifier = ">=0.1" },
     { name = "langchain-openai", specifier = ">=0.2" },
     { name = "langgraph", specifier = ">=0.3" },
-    { name = "mcp", specifier = ">=1.9" },
+    { name = "mcp", specifier = ">=1.30" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "streamlit", marker = "extra == 'ui'", specifier = ">=1.39" },

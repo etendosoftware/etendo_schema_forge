@@ -7,7 +7,8 @@ dependencies = [
     "langchain>=0.3",
     "langgraph>=0.3",
     "langchain-mcp-adapters>=0.1",
-    "mcp>=1.9",
+    # >=1.30: describe_server paginates tools/list with `params=PaginatedRequestParams`.
+    "mcp>=1.30",
     # Default provider is deliberately NOT Anthropic (D8). The OpenAI client also
     # drives any OpenAI-compatible gateway via `base_url`.
     "langchain-openai>=0.2",

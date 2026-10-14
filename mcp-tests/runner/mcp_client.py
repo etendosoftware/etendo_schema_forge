@@ -603,16 +603,8 @@ def preflight(
 
 
 @asynccontextmanager
-async def mcp_session(target: dict[str, Any]):
-    """Open one MCP session for one probe and yield the raw MCP `ClientSession`.
-
-    Probes are fully independent (design §3): a fresh session per probe, closed
-    when the probe ends.
-
-    Deliberately returns an SDK session, not LangChain tools: converting the
-    session into agent-library tools belongs to `agent.py`, which is the single
-    file allowed to import the agent library (design §5, protecting D8).
-    """
+async def _open_session(target: dict[str, Any]):
+    """Connect, initialize, and yield `(session, initialize_result)`."""
     # Imported lazily so that `--help` and config errors do not require the
     # MCP stack to be installed.
     from mcp import ClientSession
@@ -626,8 +618,77 @@ async def mcp_session(target: dict[str, Any]):
         _get_session_id,
     ):
         async with ClientSession(read, write) as session:
-            await session.initialize()
-            yield session
+            initialized = await session.initialize()
+            yield session, initialized
+
+
+@asynccontextmanager
+async def mcp_session(target: dict[str, Any]):
+    """Open one MCP session for one probe and yield the raw MCP `ClientSession`.
+
+    Probes are fully independent (design §3): a fresh session per probe, closed
+    when the probe ends.
+
+    Deliberately returns an SDK session, not LangChain tools: converting the
+    session into agent-library tools belongs to `agent.py`, which is the single
+    file allowed to import the agent library (design §5, protecting D8).
+    """
+    async with _open_session(target) as (session, _initialized):
+        yield session
+
+
+def _dump(value: Any) -> Any:
+    """An SDK model as plain JSON data; anything else unchanged."""
+    dump = getattr(value, "model_dump", None)
+    return dump(mode="json", by_alias=True, exclude_none=True) if callable(dump) else value
+
+
+def catalogue_digest(tools: list[Any]) -> dict[str, Any]:
+    """sha256 + count of a `tools/list` catalogue, independent of its order.
+
+    The WHOLE tool definition is hashed (name, description, schemas,
+    annotations), not just the names: a reworded description changes what the
+    agent reads, so it changes what is measured. Sorted by name and serialised
+    with sorted keys so the same catalogue always hashes the same.
+    """
+    entries = sorted((_dump(t) for t in tools), key=lambda t: str(t.get("name", "")))
+    canonical = json.dumps(entries, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return {
+        "sha": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        "toolCount": len(entries),
+    }
+
+
+async def describe_server(target: dict[str, Any]) -> dict[str, Any]:
+    """What the target says it is, read once at preflight (plan §6 pins).
+
+    `serverInfo` is the MCP `initialize` answer — discarded by every session
+    before this existed. The catalogue digest is what tells two runs apart when
+    the server's version string does not move (Holded's build is not ours to
+    read; Etendo's `serverInfo.version` is a constant, see `serverBuild` in
+    cli.py). Raises whatever the connection raises; the caller decides what a
+    failure means.
+    """
+    async with _open_session(target) as (session, initialized):
+        tools: list[Any] = []
+        cursor: str | None = None
+        while True:
+            if cursor:
+                from mcp.types import PaginatedRequestParams
+
+                page = await session.list_tools(params=PaginatedRequestParams(cursor=cursor))
+            else:
+                page = await session.list_tools()
+            tools.extend(page.tools)
+            cursor = getattr(page, "nextCursor", None)
+            if not cursor:
+                break
+    info = _dump(getattr(initialized, "serverInfo", None)) or {}
+    return {
+        "serverInfo": {"name": info.get("name"), "version": info.get("version")},
+        "protocolVersion": getattr(initialized, "protocolVersion", None),
+        "catalogue": catalogue_digest(tools),
+    }
 
 
 class VerificationError(RuntimeError):

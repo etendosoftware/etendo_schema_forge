@@ -553,8 +553,9 @@ over-optimistic self-report**: an `exhausted` probe that answers `OKAY` is rewri
 That last part is not in the design and is the runner asserting something objective over something
 subjective, which is §6.1's rule applied.
 
-Not implemented: token and cost recording. The design assumed they came for free; nothing in the
-run files carries either, so the data to add a global budget later does **not** currently exist.
+Token recording exists since run schema v4 (§6.1): every probe file carries provider tokens for
+the tool loop (`usage.loop`) and, separately, for the reporting call (`usage.report`). No budget is
+enforced on them — a global cost cap is still not built; the data to set one now exists.
 
 ---
 
@@ -625,6 +626,28 @@ when the session *also* failed on the way out, so `cli.py` walks the whole excep
 computing payload metrics must be able to tell *"results were never recorded"* from *"the results
 were empty"*, and only the version says which (D14 doing its job).
 
+#### 2026-10-14: run schema v4 — what a comparison needs pinned (ETP-5750 S1)
+
+Groundwork for the reproducible Etendo Go vs Holded comparison
+(`docs/plans/2026-10-14-mcp-tests-reproducible-comparison-plan.md`, §2, §5.5, §5.7, §6). (v3 had added `setup[]`,
+`teardown[]` and `teardownClean` — D41.) **`RUN_SCHEMA_VERSION` 3 → 4.**
+New on every probe file:
+
+| Field | Meaning |
+|---|---|
+| `finalAnswer` | Text of the last AI turn of the **tool loop**, in the task's language — what the user was told. Never the verdict, which is asked for afterwards, in English. `null` when the loop did not end on an answer (last AI turn still asked for tools, e.g. a blown step cap, or no AI turn at all); `""` when it answered with nothing. Reasoning blocks are dropped. |
+| `usage.loop` | Tokens summed over the loop's AI turns: `inputTokens`, `outputTokens`, `totalTokens`, `cachedInputTokens` (`input_token_details.cache_read`), plus `turns` and `turnsWithUsage`. **Missing is `null`, never `0`**: a total is given only when every turn reported it, because a sum over the turns that happened to carry usage would understate the cost silently. Turns dropped as empty completions are not counted (they are in `emptyCompletions`). |
+| `usage.report` | Same shape, for the reporting call alone. **Not cost**: it is the instrument talking, not the task. `null` until the reporter has answered (so `null` on a probe aborted before it). |
+| `servedModel` | `{models, systemFingerprints}` — the distinct `model_name` / `system_fingerprint` values the gateway returned, loop and report, in order of first appearance; `[]` when not reported. The requested id stays in `run.json.model`. |
+| `silentWrong` | Persisted, no longer only printed: `true` when the verdict is `OKAY` and `effectVerified` is `false`; `false` when both exist and that is not the case; `null` when there is no verdict or no check. A flag — such an attempt already failed the objective check. |
+
+`finalAnswer`, `usage` and `servedModel` are `null` on a probe whose agent never ran (setup or auth
+failure); a probe that crashed mid-loop keeps them in its salvaged partial record, as it keeps its
+transcript. `run.json` gains `harness` and `server` (§6.2). `events.ndjson` is unchanged and stays
+non-authoritative: none of these fields exists only in the event stream. `ui/runs.py`
+(`record_v4`) reads them and returns `None` for an older file, which never recorded them — not "a
+v4 file with nulls".
+
 ### 6.2 Run metadata header (`run.json`, written before the first probe)
 
 Without this a run is unreadable three weeks later.
@@ -633,11 +656,19 @@ As implemented:
 
 ```jsonc
 {
-  "schemaVersion": 2,               // 1 -> 2 on 2026-09-14, see §6.1
+  "schemaVersion": 4,               // 1 -> 2 on 2026-09-14, 3 -> 4 on 2026-10-14, see §6.1
   "runId": "20260911T1402-local-a3f1",
   "startedAt": "2026-09-11T14:02:11Z",
   "target": { "name": "local", "url": "http://..." },
   "serverBuild": null,              // ALWAYS null: not resolved, see below
+  "server": {                       // v4: read once at preflight, after auth
+    "serverInfo": { "name": "...", "version": "1.0.0" },   // the MCP initialize answer
+    "protocolVersion": "2025-06-18",
+    "catalogue": { "sha": "<sha256>", "toolCount": 28 },   // tools/list, every page
+    "error": null                   // a failed read: { "kind": "auth" | "server", "detail": "..." },
+                                    // the shape of a probe's harnessError (§6.4); never fatal
+  },                                // null when preflight auth already failed
+  "harness": { "commit": "<sha>", "dirty": false },        // v4; null values = git unavailable
   "provider": "openai",             // the CLIENT, not the vendor — see §5
   "model": "openai/gpt-5.2",        // the gateway's routed id, verbatim
   "temperature": 0,
@@ -650,8 +681,13 @@ As implemented:
 ```
 
 Two fields do not yet keep their promise. **`serverBuild` is always `null`** — D1's accepted
-consequence was that a run pins a `.go` build id it does not own, and nothing resolves it, so today
-a run does not in fact record what it measured against. **`repeat` is always `1`** because §7's
+consequence was that a run pins a `.go` build id it does not own, and nothing resolves it. Since v4
+`server.serverInfo` is recorded, but it cannot fill `serverBuild`: Etendo's `serverInfo.version` is a
+constant of the MCP implementation (`McpModernResults.SERVER_VERSION`, `1.0.0`), not the module
+build. The **catalogue sha** is the proxy that tells two builds apart — the whole tool definitions
+are hashed (name, description, schemas, annotations), order-independently, so a reworded description
+moves it — and it is the only build proxy available for Holded at all. `harness.dirty` looks at
+`mcp-tests/` only. **`repeat` is always `1`** because §7's
 `REPEAT` was not built. Both are written anyway, so the shape is right when they are filled in.
 
 ### 6.3 Verdict schema (structured output)
@@ -869,7 +905,7 @@ would now be derivable from:
 | **M1** calls-to-outcome | `toolCallCount` per probe | ✅ |
 | **M2** first-call success | first non-error call of each phase | ✅ (`error` per call) |
 | **M3** payload signal ratio | `resultBytes` vs. bytes the agent actually referenced | ⚠️ numerator only — nothing measures what was *referenced* |
-| **ACE-v** context cost | tokens consumed by tool results | ❌ no token accounting anywhere |
+| **ACE-v** context cost | tokens consumed by tool results | ⚠️ since v4, provider tokens per probe (`usage.loop`, §6.1); priming (the catalogue, paid every turn) is not yet separated from the per-task remainder |
 | latency | wall clock per call | ⚠️ events only (`ms`), and it is the *step boundary*, so it includes the agent loop's own overhead and is not the server's latency |
 
 These map onto the metrics the registry already tracks, so a harness run should feed §2 of the
@@ -1115,7 +1151,7 @@ classified). What the first three days of real runs opened instead:
 | — | The Streamlit UI (§9) | ✅ all four v1 views |
 | — | `expectEffect` post-condition (D34) | ✅ — added after the design, not in the original scope |
 | — | `findings/` (D35) | ✅ eight findings written |
-| — | **Tests** | ❌ **none, anywhere.** Not deferred by a decision — simply not written. |
+| — | **Tests** | ⚠️ `unittest` under `mcp-tests/tests/` since 2026-10-01 (setup/teardown, empty completions); run schema v4 added agent-record, run-header, `mcp_client` and `ui/runs.py` cases. Run with `.venv/bin/python -m unittest discover -s tests -t .` from `mcp-tests/`. |
 
 Still deferred as designed: chained scenarios (though `full-flows.yaml` is one long chained write
 task inside a single probe, which is not the same thing), `expect` assertions beyond D34, run
