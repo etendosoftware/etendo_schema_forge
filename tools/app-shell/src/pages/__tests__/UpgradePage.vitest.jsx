@@ -1560,6 +1560,80 @@ describe('UpgradePage — provisioning environment synchronization (ETP-5443)', 
     expect(sourceSelect).toHaveValue('TRIAL-1');
   });
 
+  // The kill switch lets a canceled environment keep working: access reads ALLOWED although the
+  // subscription is EXPIRED. The type alone keeps it out of the source flow, whatever the access.
+  it('treats a canceled productive origin with kill-switch access as productive: no source, no transfer', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = 'CANCELED-PROD';
+    const requests = installFetch({ environments: [
+      { ...CANCELED_PRODUCTIVE, accessState: 'ALLOWED' },
+      { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'free', environmentType: 'DEMO' },
+    ] });
+    await renderUpgradePage();
+
+    expect(screen.queryByTestId('upgrade-source-demo-field')).not.toBeInTheDocument();
+    const nameInput = screen.getByTestId('upgrade-tenant-name-input');
+    expect(nameInput).toHaveValue('');
+    await user.type(nameInput, 'Fresh Productive');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe('Fresh Productive');
+    expect(requests[0].body).not.toHaveProperty('demoClientId');
+    expect(requests[0].body).not.toHaveProperty('dataTransfer');
+  });
+
+  it('omits demo identity and transfer data after a Stripe return to a canceled productive origin', async () => {
+    UPGRADE_SESSION.clientId = 'CANCELED-PROD';
+    setupCheckoutReturn({ tenantName: 'New Productive' });
+    sessionStorage.setItem('sf_pending_checkout_data_transfer', JSON.stringify({ products: true, contacts: true }));
+    const requests = installFetch({
+      environments: (() => {
+        let reads = 0;
+        const beforeProvision = [
+          CANCELED_PRODUCTIVE,
+          { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'free', environmentType: 'DEMO' },
+        ];
+        return () => jsonResponse({ environments: reads++ === 0 ? beforeProvision : [
+          ...beforeProvision,
+          { clientName: 'New Productive', clientId: 'CREATED-PRODUCTIVE', plan: 'productive' },
+        ] });
+      })(),
+      purchases: [{ purchaseId: 'upgrade-request-1', status: 'PAID', clientName: 'New Productive' }],
+      // The server persists no demo source for a purchase started in a productive environment.
+      statuses: ['paid'],
+      onboarding: () => successStream({ clientId: 'CREATED-PRODUCTIVE' }),
+    });
+
+    await renderUpgradePage();
+    await screen.findByTestId('upgrade-success');
+
+    const onboardingCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/sws/go/onboarding'));
+    expect(onboardingCall).toBeTruthy();
+    const body = JSON.parse(onboardingCall[1].body);
+    expect(body).not.toHaveProperty('demoClientId');
+    expect(body).not.toHaveProperty('dataTransfer');
+    expect(requests).toHaveLength(0);
+  });
+
+  // Pinned, not endorsed: the taken-name guard is plan-based, so a canceled productive
+  // environment (plan "free") does not reserve its name on the client. Whether it should is open
+  // (register §4.13 item 12, ETP-5742); a change here must be deliberate.
+  it('does not treat a canceled productive environment name as taken on the client', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [CANCELED_PRODUCTIVE] });
+    await renderUpgradePage();
+
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), 'CANCELED PRODUCTIVE');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(screen.queryByTestId('upgrade-tenant-name-taken')).not.toBeInTheDocument();
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe('CANCELED PRODUCTIVE');
+  });
+
   it('omits demo identity and transfer data after a Stripe return to a productive origin', async () => {
     UPGRADE_SESSION.clientId = 'CURRENT-PRODUCTIVE';
     setupCheckoutReturn({ tenantName: 'New Productive' });

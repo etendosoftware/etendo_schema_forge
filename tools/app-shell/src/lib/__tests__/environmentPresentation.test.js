@@ -82,3 +82,27 @@ test('a canceled productive environment is badged productive, not demo', () => {
   assert.equal(environmentPlanLabelKey(canceledProductive), 'environmentProductive');
   assert.equal(environmentPlanLabelKey({ plan: 'free', environmentType: 'DEMO' }), 'environmentDemo');
 });
+
+// The lifecycle type is compared trimmed and case-insensitively: a lower-case or padded
+// "PRODUCTIVE" is still productive. A missing or empty type is not (a legacy environment).
+test('normalizes the lifecycle type before treating a free-plan environment as productive', () => {
+  for (const environmentType of ['productive', ' PRODUCTIVE ', 'Productive']) {
+    const environment = { plan: 'free', environmentType };
+    assert.equal(isPurchaseSourceDemo(environment), false, `type ${JSON.stringify(environmentType)}`);
+    assert.equal(environmentPlanLabelKey(environment), 'environmentProductive',
+      `type ${JSON.stringify(environmentType)}`);
+  }
+  for (const environment of [{ plan: 'free' }, { plan: 'free', environmentType: '' },
+    { plan: 'free', environmentType: '   ' }]) {
+    assert.equal(isPurchaseSourceDemo(environment), true, JSON.stringify(environment));
+    assert.equal(environmentPlanLabelKey(environment), 'environmentDemo', JSON.stringify(environment));
+  }
+});
+
+test('a canceled productive environment that is also marked as associated stays out and productive', () => {
+  const associated = { ...canceledProductive, associatedWithProductive: true };
+  assert.equal(isPurchaseSourceDemo(associated), false);
+  assert.equal(environmentPlanLabelKey(associated), 'environmentProductive');
+  // The plan-based predicate is deliberately unchanged: a canceled productive reads as not paying.
+  assert.equal(isProductiveEnvironment(associated), false);
+});
