@@ -844,6 +844,48 @@
           }
         ]
       }
+    },
+    {
+      "id": "batch-redundant-callout-skip",
+      "description": "Per-batch skip of create-cascade callouts proven redundant (ETP-5676): inside one /sws/neo/batch request sent with _skipRedundantCallouts: true, a callout is skipped once an earlier operation with the same tab, field, trigger value and caller-sent fields showed that every value it writes is discarded. The skip code is PERMANENT; the flag is a backend-only, environment-level kill switch whose true value turns the skip off for every batch, whatever the request asks. Inverted on purpose: false or unset means the opt-in is honoured.",
+      "owner": "valenvivaldi",
+      "jira": "ETP-5676",
+      "created": "2026-10-14",
+      "flag": {
+        "key": "batch-callout-skip-disabled",
+        "defaultValue": false,
+        "ttl": "2027-01-31",
+        "ttlNote": "PLACEHOLDER, not yet agreed with the owner. Retirement condition: the skip has run on real tenant imports without a wrong default being reported. Retiring it ships the skip: delete the flag check in NeoBatchScope.calloutSkipKillSwitchOn() and the GoFeatureFlags constant, keep NeoCalloutDiscardMemory and the _skipRedundantCallouts option.",
+        "symbols": [
+          "batch-callout-skip-disabled",
+          "FLAG_BATCH_CALLOUT_SKIP_DISABLED",
+          "ETGO_FLAG_BATCH_CALLOUT_SKIP_DISABLED",
+          "etendo.go.flags.batch-callout-skip-disabled",
+          "calloutSkipKillSwitchOn"
+        ],
+        "$symbolsComment": "Backend-only flag: nothing in the browser evaluates it, so it must never be declared in flag-keys.js (same rule as mcp-modern-era-disabled). The property and env-var spellings are listed because a grep for the bare key misses Openbravo.properties and the ECS task definition. Evaluated with an empty context, once per batch, when NeoBatchScope opens."
+      },
+      "paths": {
+        "frontend": [],
+        "backend": []
+      },
+      "$pathsComment": "No owned code: the skip (NeoCalloutDiscardMemory, the _skipRedundantCallouts option in BatchService/McpToolRouter/ToolRegistry, the import's postBatch in useWindowImportDialog.js) is permanent and is NOT deleted when the flag retires. The toggle point is NeoBatchScope.calloutSkipKillSwitchOn(); GoFeatureFlags is shared framework code. Docs: com.etendoerp.go docs/neo-headless.md section 'Bulk writes through /sws/neo/batch - per-row cost options (ETP-5676)'.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoBatchScopeTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/BatchServiceTest.java"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ListView.importLabels.vitest.jsx"
+          }
+        ]
+      }
     }
   ]
 }

@@ -191,7 +191,7 @@ describe('ListView — onImportFinished emits import_completed', () => {
 // ETP-5676 — the import engine reads only `committed`, each op's `recordId` and the failure
 // envelope, so the poster it is handed always asks the backend for ids only.
 describe('ListView — import postBatch asks for ids only', () => {
-  it('hands ImportDialog a poster that forwards the operations with onlyReturnIds', async () => {
+  it('hands ImportDialog a poster that forwards the operations with both batch options', async () => {
     flagValue.batchSize = 0;
     runBatchMock.mockClear();
     const { postBatch } = openImport();
@@ -202,6 +202,6 @@ describe('ListView — import postBatch asks for ids only', () => {
     await expect(postBatch(ops)).resolves.toBe(response);
 
     expect(runBatchMock).toHaveBeenCalledTimes(1);
-    expect(runBatchMock).toHaveBeenCalledWith(ops, { onlyReturnIds: true });
+    expect(runBatchMock).toHaveBeenCalledWith(ops, { onlyReturnIds: true, skipRedundantCallouts: true });
   });
 });

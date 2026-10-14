@@ -416,7 +416,11 @@ cost 205 ms. Four user-approved cuts, documented in `com.etendoerp.go` `docs/neo
    sales flag null and the client takes an unflagged list for sales).
 2. Per-batch callout skip — `NeoCalloutDiscardMemory` in `NeoBatchScope`: a create-cascade callout
    whose every output was discarded (caller-sent or suppressed fields), with no message, is not re-run
-   for the same (tab, trigger, trigger value, kept-field set) within the batch.
+   for the same (tab, trigger, trigger value, kept-field set) within the batch. **Opt-in** since the
+   user's safety review: only a request sent with `_skipRedundantCallouts: true` (REST body, MCP
+   `etendo_batch`) gets it — the import sends it for products and contacts, OCR does not — and the
+   backend kill switch `batch-callout-skip-disabled` (registered in `flags-registry.json` as
+   `batch-redundant-callout-skip`, default off = skip allowed) turns it off for every batch.
 3. `_onlyReturnIds` — batch request option (REST body, MCP `etendo_batch`); skips locator
    enrichment and the product's `etgoHasCost`. The batch response was already ids-only. Sent by the
    import (`useWindowImportDialog`), not by OCR.

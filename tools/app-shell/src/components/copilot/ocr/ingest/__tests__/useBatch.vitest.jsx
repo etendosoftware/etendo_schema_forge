@@ -138,7 +138,7 @@ describe('useBatch — runBatch', () => {
     expect(JSON.parse(opts.body)).toEqual({ operations: ops });
   });
 
-  it('ETP-5676: adds _onlyReturnIds to the body only when the caller asks for it', async () => {
+  it('ETP-5676: adds each batch option to the body only when the caller asks for it', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '{}' });
     const { result } = renderHook(() => useBatch({ token: 'tok' }));
     const ops = [{ id: 'op1', spec: 'product' }];
@@ -146,10 +146,13 @@ describe('useBatch — runBatch', () => {
     await act(async () => {
       await result.current.runBatch(ops, { onlyReturnIds: true });
       await result.current.runBatch(ops);
+      await result.current.runBatch(ops, { skipRedundantCallouts: true });
     });
 
     expect(JSON.parse(globalThis.fetch.mock.calls[0][1].body)).toEqual({ operations: ops, _onlyReturnIds: true });
     expect(JSON.parse(globalThis.fetch.mock.calls[1][1].body)).toEqual({ operations: ops });
+    expect(JSON.parse(globalThis.fetch.mock.calls[2][1].body))
+      .toEqual({ operations: ops, _skipRedundantCallouts: true });
   });
 
   it('ETP-5676: returns an ids-only response as-is when the caller asks for ids only', async () => {

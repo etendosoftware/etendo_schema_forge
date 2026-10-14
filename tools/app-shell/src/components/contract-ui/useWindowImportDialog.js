@@ -46,9 +46,11 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   // base for the existing-record lookup below, and must be the SPEC's URL.
   const { runBatch } = useBatch({ token });
   // ETP-5676 — the import engine reads only `committed`, each op's `recordId` and the failure
-  // envelope, so every create may skip decorating the record it would echo back.
+  // envelope, so every create may skip decorating the record it would echo back. Its rows are
+  // many similar creates that always send the same fields, the case the redundant-callout skip is
+  // for; the OCR flow sends neither option.
   const postBatch = useCallback(
-    (operations) => runBatch(operations, { onlyReturnIds: true }),
+    (operations) => runBatch(operations, { onlyReturnIds: true, skipRedundantCallouts: true }),
     [runBatch],
   );
   const entity = importConfig?.entity;

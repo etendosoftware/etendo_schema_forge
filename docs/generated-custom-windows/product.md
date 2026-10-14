@@ -1556,9 +1556,14 @@ Four backend cuts, in `com.etendoerp.go` (`docs/neo-headless.md` §4.3.6):
   `useBatch.runBatch`; OCR does not send it). The backend skips locator-identifier enrichment and
   the `etgoHasCost` flag on each create. The response is unchanged — the import engine reads only
   `committed`, `operations[].recordId` and the failure envelope.
-- **Automatic, no client change:** within one batch, `SL_TaxCategory_Org` and
-  `SL_Costing_Currency` are not re-run once they have been seen proposing only values the row
-  already carries; spec/entity/default lookups are answered once per batch.
+- **`_skipRedundantCallouts: true`** on every import `/batch` request (same wrapper; OCR does not
+  send it): within one batch, `SL_TaxCategory_Org` and `SL_Costing_Currency` are not re-run once
+  they have been seen proposing only values the row already carries. Opt-in on purpose — a batch
+  without it runs every callout — and the backend kill switch `batch-callout-skip-disabled` turns
+  it off for every batch whatever the request asks (com.etendoerp.go `docs/neo-headless.md`
+  §4.3.6 says how to flip it). The generic import hook sends it, so it covers the two windows that
+  have an import today: product and contacts.
+- **Automatic, no client change:** spec/entity/default lookups are answered once per batch.
 
 ## Account selectors — ETP-5681
 
