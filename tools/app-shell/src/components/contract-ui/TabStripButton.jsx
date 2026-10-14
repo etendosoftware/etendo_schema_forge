@@ -18,11 +18,13 @@ export default function TabStripButton({
   return (
     <button
       onClick={disabled ? undefined : onClick}
+      role="tab"
+      aria-selected={isActive}
       aria-disabled={disabled || undefined}
       title={disabled ? disabledHint : undefined}
       data-testid={testId}
       className={[
-        `${showHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${paddingY} text-sm font-medium transition-colors relative`,
+        `${showHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${paddingY} text-sm font-medium whitespace-nowrap shrink-0 transition-colors relative`,
         isActive ? 'text-foreground' : 'text-muted-foreground',
         !isActive && !disabled && 'hover:text-foreground',
         disabled && 'opacity-50 cursor-not-allowed',
