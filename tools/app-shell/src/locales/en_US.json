@@ -17012,6 +17012,7 @@
     "backendError.assetGroupNameDuplicate": "There is already an asset category with this name.",
     "backendError.assetSearchKeyDuplicate": "There is already an asset with this identifier in this organization.",
     "backendError.productNotStockable": "This product is of type Service and cannot be used in inventory movements.",
+    "backendError.orderLinkedDocsCheckFailed": "The documents linked to this order could not be checked, so it has not been reactivated. Try again.",
     "processAssetCompleted": "Create Amortization completed",
     "processNowCompleted": "Create Periods completed",
     "reactivated": "Document reactivated",

@@ -89,7 +89,7 @@ This window should let a user create, review, confirm, and manage sales orders f
 - Tax auto-fill after product selection works for business partners with a Spanish billing address, because `c_gettax` in Etendo core requires a valid tax zone derived from the address country. For business partners without a Spanish address, tax remains empty and must be entered manually. This is a core AD constraint, not a UI gap.
 - `lineGrossAmount` recalculates instantly client-side on every `orderedQuantity`, `listPrice`, or `discount` change — no callout needed. The `DocumentTotalsPanel` in the detail footer also recomputes subtotal/discount/tax/total from all saved lines plus the in-progress add-row in real time, so the user sees an accurate running total without saving. Server-side header fields (`summedLineAmount`, `grandTotalAmount`) still only update after a save, but the panel does not read from them.
 - Completed-order management uses delivered quantities from order lines and invoice totals from related invoices, but there is no explicit browser proof for partial shipments, partial invoicing, or mixed draft/completed downstream document scenarios.
-- The menu action exposes `Reactivate Order` only when status is `CO` **and** the order has no linked documents. The `hasLinkedDocuments` flag is computed server-side by `SalesOrderHeaderHandler.afterHandle()` (via `AbstractOrderHeaderHandler`) — a batch SQL query checks whether any active `C_Invoice` or `M_InOut` record references the order. The action is declared with `visibleWhenFieldFalse: 'hasLinkedDocuments'` in `decisions.json`, so it is hidden on the client whenever the backend annotates the record as having linked documents. For orders without linked documents, clicking the action calls the standard `documentAction` endpoint with `docAction=RE`, which Etendo core's `C_Order_Post` procedure handles. Bulk reactivation is available from the list selection bar via `OrderReactivateBulkAction` — a single button reading **Procesar** / **Process** (`labelKey="process"`). It passes no `buildActions`, so `BulkDocumentAction`'s default builder fills the dropdown: **Reactivar** / **Reactivate** (`RE`) whenever at least one selected row is `CO`, **Confirmar** / **Confirm** (`CO`) whenever at least one is `DR`, and both for a mixed selection. The bulk action uses `rowFilter: (row) => !row.hasLinkedDocuments` so rows with linked documents are counted as errors in the result toast rather than submitted, preventing silent backend rejections. **Known rough edge:** on a mixed `DR` + `CO` selection, choosing Reactivar submits `RE` for the draft rows too, which the backend rejects — they appear as failures in the summary toast. This is `BulkDocumentAction`'s generic behavior, shared with `purchase-order`, the invoice windows and the shipment windows; a fix belongs in the shared component, not per window. `purchase-order` mounts this exact pattern as of ETP-5302 — see `purchase-order.md`.
+- The menu action exposes `Reactivate Order` only when status is `CO` **and** the order has no linked documents. The `hasLinkedDocuments` flag is computed server-side by `SalesOrderHeaderHandler.afterHandle()` (via `AbstractOrderHeaderHandler`) — a batch SQL query checks whether any active `C_Invoice` or `M_InOut` record references the order. The action is declared with `visibleWhenFieldFalse: 'hasLinkedDocuments'` in `decisions.json`, so it is hidden on the client whenever the backend annotates the record as having linked documents. For orders without linked documents, clicking the action calls the standard `documentAction` endpoint with `docAction=RE`, which Etendo core's `C_Order_Post` procedure handles. Bulk reactivation is available from the list selection bar via `OrderReactivateBulkAction` — a single button reading **Procesar** / **Process** (`labelKey="process"`). It passes no `buildActions`, so `BulkDocumentAction`'s default builder fills the dropdown: **Reactivar** / **Reactivate** (`RE`) whenever at least one selected row is `CO`, **Confirmar** / **Confirm** (`CO`) whenever at least one is `DR`, and both for a mixed selection. The bulk action uses `rowFilter: (row) => !row.hasLinkedDocuments` so rows with linked documents are counted as errors in the result toast rather than submitted. Since ETP-5704 the backend enforces the same rule (`OrderReactivationGuard`, see the section at the end), so a stale row that slips past the filter is refused with the same sentence instead of being reactivated. **Known rough edge:** on a mixed `DR` + `CO` selection, choosing Reactivar submits `RE` for the draft rows too, which the backend rejects — they appear as failures in the summary toast. This is `BulkDocumentAction`'s generic behavior, shared with `purchase-order`, the invoice windows and the shipment windows; a fix belongs in the shared component, not per window. `purchase-order` mounts this exact pattern as of ETP-5302 — see `purchase-order.md`.
 - Bulk creation of downstream documents is grouped under a kebab (three-dot) menu in the list selection bar — `BulkOrderMoreMenu`. The menu exposes "Crear facturas" and "Crear albaranes"; each item posts one request per selected order to the existing per-record `createDraftInvoice` and `createShipment` NeoHandler endpoints. Before each create call, the kebab pre-checks whether the order already has a draft of the same kind: it reuses the `checkDraftInvoice` action for invoices and queries `goods-shipment/goodsShipment?criteria=salesOrder=<id>` for shipments. Orders with an existing draft are reported as failed without a duplicate creation; orders not in `CO` are also reported as failed; orders that are fully fulfilled fall back to the backend's "no pending lines" message. The run never aborts on per-order failures — the aggregated `{ok}/{failed}` toast is surfaced through `useBulkActionToast` after the page reload. **Since ETP-5381 the invoice half of that pre-check no longer catches the common case**: an invoice generated from this window is confirmed on creation, so it is never in `DR` and `checkDraftInvoice` will not see it — it now only catches a draft a user made by hand. It was deliberately left in place, since that hand-made case is the only one it can still protect. Duplicate protection for the generated invoices comes from the backend instead: the order's `qtyinvoiced` is written at completion time, so the existing "no pending lines" **400** now actually fires. `createShipment` is unaffected — shipments are still created in draft.
 - Related documents cover quotation, shipment, and invoice navigation (payments are deliberately excluded, ETP-5527), but there is no evidence that replacement orders, reserved stock, related products, or related services are surfaced to users even though contracts exist for those entities.
 - Label-override duplication is a known piece of technical debt. The sales-specific "Delivery Status" label is declared both in `decisions.json` (as `labelOverrides.DeliveryStatus`) and, separately, in the custom wrapper's `LABEL_OVERRIDES` constant, because the custom list wrapper bypasses the generated `HeaderPage` when feeding labels into the `ListView`. Any change to this label has to be made in both places until the wrapper reuses the generated labels.
@@ -645,3 +645,48 @@ boxes: title «Documentos creados», two cards, only «Cerrar»; clicking either
 `tools/app-shell/src/windows/custom/shared/__tests__/useOrderWindow.vitest.jsx`,
 `e2e/tests/flows/sales/sales-order-confirm-idempotency.mocked.spec.js`,
 `e2e/tests/flows/sales/order-to-invoice-discount.mocked.spec.js`.
+
+## Reactivate refused in the backend when the order has linked documents — ETP-5704
+
+Until ETP-5704 the "no linked documents" rule for Reactivate lived only in the SPA: the
+`hasLinkedDocuments` flag hid the kebab action and the bulk bar's `rowFilter` skipped those rows,
+but core's `C_Order_Post` reactivates an order with a linked shipment or invoice without complaint
+(its RE branch only checks payments, `APRM_OrderWithPayments`). An MCP agent or any integration
+could therefore reactivate a completed order with a draft shipment and leave that shipment pointing
+at a draft order.
+
+`SalesOrderHeaderHandler.handle()` now calls `OrderReactivationGuard.refuseIfLinkedDocuments`
+(com.etendoerp.go) before the button runs, on the REST action sub-endpoint and on MCP
+`etendo_action` alike:
+
+- **Which requests**: a POST on the `DocAction` / `documentAction` button whose **effective**
+  value is `RE` — the value the DB procedure will actually run, resolved next to the code that
+  writes it (`DocActionResolution.docActionToRun`): the root `docAction` parameter when the DAL would
+  accept writing it on the order (non-blank, an exact case-sensitive member of the DocAction list,
+  writable), otherwise the order's stored `C_Order.DocAction`, which `C_Order_Post` then executes —
+  `setDocAction` silently gives up on a value the DAL refuses. `fieldValues` is not read: the
+  procedure never reads it either. Bypasses closed along the way: QA cycle 1 — a body with
+  `fieldValues.documentAction: "CO"` plus `docAction: "RE"` passed as a CO and reactivated, and an
+  empty body ran a stored `DocAction = 'RE'` unchecked (4 booked orders in the local DB carry one);
+  review cycle 1 — `docAction: "re"` / `" RE"` / `"XX"` were taken verbatim as non-RE while the
+  procedure, unable to write them, ran the stored `RE`.
+- **"Linked"** is exactly the flag's own rule — `AbstractOrderHeaderHandler.hasLinkedDocuments`,
+  the query behind `hasLinkedDocuments`: an active `C_Invoice` or `M_InOut` whose header
+  `C_Order_ID` is the order, **in any status (VO and DR included)**. Documents linked only through
+  their lines are not counted, as the flag does not count them.
+- **Refusal**: HTTP 400 with AD_Message `ETGO_OrderReactivateLinkedDocs` ("This order cannot be
+  reactivated because it has linked shipments or invoices."). The SPA maps it in `backendErrors.js`
+  to the bulk bar's existing `cannotReactivateLinkedDocs` key, so both refusals read the same.
+- **Fails closed**: if the order cannot be loaded or resolved (so the action that will run is
+  unknown) or its linked documents cannot be read, the action is
+  refused with HTTP 500 and
+  `ETGO_OrderLinkedDocsCheckFailed`, mapped to `backendError.orderLinkedDocsCheckFailed`.
+- **Unknown order id**: a DocAction on an order id that does not exist answers HTTP 404
+  `Record not found` — reusing `NeoActionRecordGuard`'s not-found status and message (that guard
+  itself only refuses another tenant's record; an unknown id passes it) — not the
+  fail-closed "could not be checked… not reactivated" 500 (QA round 5, BUG-3).
+
+No visible change in the normal flow — the SPA still hides the action. A user only meets the
+refusal on a stale screen (a shipment created from another tab after the list loaded), where it
+used to succeed silently. The `documentAction` agentPrompt's sentence "the process will reject it"
+is now true. Purchase orders are not covered (out of scope).

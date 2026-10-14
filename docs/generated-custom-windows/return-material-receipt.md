@@ -585,3 +585,55 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 - The `posted` field was already gated (ETP-4520); `ListView` now also drops it from the filter, sort and export.
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Header currency defaulted on create — ETP-5704
+
+`M_InOut.EM_ETGO_Currency_ID` (`etgoCurrency`) is mandatory in AD, curated `system` (read-only,
+never rendered) in this window, and had no default anywhere. Two consequences:
+
+- **MCP could not create a return at all.** `etendo_create` without the field answered 422
+  "Missing required fields" (the MCP mandatory check walks every AD-mandatory column), and with the
+  field it answered 422 `read_only_field`.
+- **The SPA's "+ Nuevo" saved the header with a NULL currency** (the REST validator only checks
+  mandatory fields the client sent, and the DB column is nullable). Returns created from the
+  goods-shipment "Crear devolución" wizard were unaffected — `NeoCommercialDocumentFactory` copies
+  the source shipment's currency.
+
+`decisions.json` now declares `etgoCurrency: { "visibility": "system", "defaultExpr":
+"@C_Currency_ID@" }` — the same default goods-shipment and goods-receipt use. `push-to-neo` writes
+it to `ETGO_SF_FIELD.DefaultValue` (row `30F49B14F1184833A70E70D7E3F20DBA`), and the shared
+`NeoMandatoryDefaultsService.injectMandatoryDefaults` fills it on every create path: REST single,
+REST batch, MCP `etendo_create` and `etendo_batch`. The field stays read-only: an agent that sends
+it explicitly is still refused with `read_only_field`, matching the UI, which does not show it.
+
+No visible UI change (`etgoCurrency` appears in no generated page or custom component of this
+window); `contract.json` and the generated JSX are unchanged by the regen. Existing returns with a
+NULL currency were deliberately left as they are. `return-to-vendor-shipment` has the same gap and
+is out of scope.
+
+## Return actions discoverable through MCP — ETP-5704
+
+The window's own actions (served by `ReturnMaterialReceiptHeaderHandler` in com.etendoerp.go) worked
+through `etendo_action` but were invisible to agents: `etendo_schema` `view:"actions"` listed only
+the AD buttons and `etendo_discover` named none of them, so the customer-return flow was unreachable
+unless the caller already knew the action names. The handler now declares them through
+`NeoHandler#actionContracts()` — the same mechanism `SalesQuotationHeaderHandler` uses for
+`rejectQuotation` / `createRejectReason` — so `etendo_schema` publishes each one with its parameter
+schema, `etendo_discover` lists it, and `etendo_action` validates a call against it (422 naming the
+wrong key) before the handler runs. The REST action endpoint the SPA calls is not judged by the
+declarations, so the UI is unaffected.
+
+| Action | id | Parameters |
+|---|---|---|
+| `availableShipments` | not used — pass `"_"` | `businessPartner` (required) |
+| `availableShipmentLines` | not used — pass `"_"` | `shipmentId` (required) |
+| `importShipmentLines` | the draft return receipt | `lines` (required): `[{sourceLineId, returnQuantity}]` |
+| `rectifiableInvoices` | the completed return receipt | `startRow`, `pageSize` (default 80), `search` (all optional) |
+| `createReturnInvoice` | the completed return receipt | `originInvoices` (optional; default: the auto-detected invoice) |
+
+Each description ends with the flow, and the spec carries it too as its agent prompt
+(`decisions.json` → `window.agentPrompt` → `agent-prompts/return-material-receipt/spec.md`, pushed
+to `ETGO_SF_SPEC.AGENT_PROMPT`): create the header → `availableShipments` →
+`availableShipmentLines` → `importShipmentLines` → DocAction `CO` → `rectifiableInvoices` →
+`createReturnInvoice`. The regen only added `agentPrompt` to `contract.json` / `contract.mcp.json`;
+the generated JSX is unchanged.
