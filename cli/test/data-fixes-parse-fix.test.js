@@ -190,13 +190,13 @@ describe('parseFix — @optIn header', () => {
   });
 
   it('parses "-- @optIn: true" as an opt-in fix', () => {
-    const fix = parseFix(['-- @id: R9-switch', '-- @optIn: true', ...body].join('\n'), 'fix-opt');
+    const fix = parseFix(['-- @id: R9-switch', '-- @optIn: true', ...body].join('\n'), '20261001T120000Z__R9-switch');
     assert.equal(fix.optIn, true);
     assert.equal(fix.id, 'R9-switch');
   });
 
   it('accepts the value and the key in any case', () => {
-    assert.equal(parseFix(['-- @OPTIN: TRUE', ...body].join('\n'), 'fix-upper').optIn, true);
+    assert.equal(parseFix(['-- @OPTIN: TRUE', ...body].join('\n'), '20261001T120000Z__fix-upper').optIn, true);
     assert.equal(parseFix(['-- @optIn: False', ...body].join('\n'), 'fix-false').optIn, false);
   });
 
@@ -205,6 +205,15 @@ describe('parseFix — @optIn header', () => {
       () => parseFix(['-- @optIn: yes', ...body].join('\n'), 'fix-typo'),
       /fix-typo: invalid @optIn "yes" \(expected true\|false\)/,
     );
+  });
+
+  it('rejects an opt-in fix whose file name has no parseable timestamp (it could never be gated)', () => {
+    assert.throws(
+      () => parseFix(['-- @optIn: true', ...body].join('\n'), 'fix-no-stamp'),
+      /fix-no-stamp: an @optIn fix needs a <YYYYMMDDThhmmssZ>__ timestamp prefix/,
+    );
+    // An ordinary chain fix keeps accepting such an id, exactly as before.
+    assert.equal(parseFix(body.join('\n'), 'fix-no-stamp').optIn, false);
   });
 
   it('only reads @optIn from the header region, never from inside a section body', () => {

@@ -472,8 +472,15 @@ export function computeWatermark(catalog, ledger) {
 
 /**
  * Decide whether an opt-in fix may run for a tenant: only once the tenant's
- * chain is current up to the opt-in fix's own date, i.e. its watermark (which
- * ignores opt-in fixes) is at or past the fix's timestamp.
+ * chain is caught up to the opt-in fix's own date — i.e. there is NO chain fix
+ * (not retired, not opt-in) dated at or before the opt-in fix that a full run
+ * could still apply to this tenant: one above its watermark (which ignores
+ * opt-in fixes) and not recorded as PROCESSED.
+ *
+ * Fixes dated AFTER the opt-in fix do not matter: a tenant whose only lagging
+ * fix is newer (say it FAILED) is still caught up to the opt-in date, and an
+ * opt-in fix authored as the newest file can run as soon as every earlier
+ * chain fix is processed.
  *
  * Why: fixes are chronological and may depend on — or be undone by — earlier
  * ones. Everything at or before the watermark never runs again in a full run,
@@ -487,12 +494,19 @@ export function computeWatermark(catalog, ledger) {
  * @param {object[]} catalog - the loaded catalog
  * @param {Map<string, object>} ledger - the tenant's ledger (see fetchLedgerMap)
  * @param {object} fix - the opt-in fix about to run
- * @returns {{allowed: boolean, watermark: number}}
+ * @returns {{allowed: boolean, watermark: number, lagging: string[]}} `lagging` lists the
+ *   chain fixIds (oldest first) that still block the opt-in fix for this tenant.
  */
 export function optInChainGate(catalog, ledger, fix) {
   const watermark = computeWatermark(catalog, ledger);
-  if (!fix.optIn || !fix.timestamp) return { allowed: true, watermark };
-  return { allowed: watermark >= fix.timestamp.getTime(), watermark };
+  if (!fix.optIn || !fix.timestamp) return { allowed: true, watermark, lagging: [] };
+  const cutoff = fix.timestamp.getTime();
+  const lagging = catalog
+    .filter(f => !f.retired && !f.optIn && f.timestamp)
+    .filter(f => f.timestamp.getTime() <= cutoff && f.timestamp.getTime() > watermark)
+    .filter(f => !PROCESSED.has(ledger.get(f.fixId)?.status))
+    .map(f => f.fixId);
+  return { allowed: lagging.length === 0, watermark, lagging };
 }
 
 /** Status reported (never written to the ledger) when optInChainGate() refuses a tenant. */
@@ -541,20 +555,39 @@ export async function applyChain(pool, catalog, clientId, names, { dryRun }) {
 // Commands
 // ---------------------------------------------------------------------------
 
-async function cmdMarkFixed(pool, { client, fix, reason }) {
+/**
+ * Resolve a `--fix` argument — the full fix_id or the short `@id` — to its
+ * catalog entry. Throws on an unknown id, so nothing is ever recorded or run
+ * under an id the catalog (and hence the watermark and --list-clients) does
+ * not know.
+ */
+export function resolveCatalogFix(catalog, fix) {
+  const target = catalog.find(f => f.fixId === fix || f.id === fix);
+  if (!target) throw new Error(`--fix: no such fix "${fix}" in catalog`);
+  return target;
+}
+
+export async function cmdMarkFixed(pool, catalog, { client, fix, reason }) {
   if (!client) throw new Error('--mark-fixed requires --client <id>');
   if (!fix) throw new Error('--mark-fixed requires --fix <id>');
   if (!reason) throw new Error('--mark-fixed requires --reason "<what was done by hand>"');
+  // Store the FULL catalog fix_id: a short id typed by the operator would create
+  // a ledger row that matches no catalog entry and is ignored everywhere.
+  const target = resolveCatalogFix(catalog, fix);
   await writeLedger(pool, {
-    clientId: client, fixId: fix, status: STATUS.MANUALLY_FIXED, appliedUtc: new Date(),
+    clientId: client, fixId: target.fixId, status: STATUS.MANUALLY_FIXED, appliedUtc: new Date(),
     rowsAffected: 0, detail: reason,
   });
-  console.log(`Marked ${fix} as MANUALLY_FIXED for ${client}: ${reason}`);
+  console.log(`Marked ${target.fixId} as MANUALLY_FIXED for ${client}: ${reason}`);
 }
 
+/**
+ * @returns {Promise<{failed: number, blocked: number, blockedClients: string[], names: Map}>}
+ *   `blocked` counts tenants an opt-in fix was refused for (BLOCKED_CHAIN_BEHIND);
+ *   they are reported apart from `failed` but still make the run exit non-zero.
+ */
 export async function cmdTargetedFix(pool, catalog, { client, fix, dryRun }) {
-  const target = catalog.find(f => f.fixId === fix || f.id === fix);
-  if (!target) throw new Error(`--fix: no such fix "${fix}" in catalog`);
+  const target = resolveCatalogFix(catalog, fix);
   if (target.retired) {
     throw new Error(
       `--fix: "${target.fixId}" is retired (see retired.json) and can never be forced — ` +
@@ -565,19 +598,19 @@ export async function cmdTargetedFix(pool, catalog, { client, fix, dryRun }) {
   const tenants = client ? [client] : await resolveTenants(pool, null);
   console.log(`Targeted run of ${target.fixId} (ignores order + cutoff) for ${tenants.length} tenant(s)`);
   if (target.optIn) {
-    console.log('  (opt-in fix: runs only for tenants whose chain is current up to its date)');
+    console.log('  (opt-in fix: runs only for tenants whose chain is caught up to its date)');
   }
   let failed = 0;
+  const blockedClients = [];
   for (const clientId of tenants) {
     if (target.optIn) {
       const gate = optInChainGate(catalog, await fetchLedgerMap(pool, clientId), target);
       if (!gate.allowed) {
-        const wm = gate.watermark === -Infinity ? 'none' : new Date(gate.watermark).toISOString();
         console.log(
-          `  ${tenantLabel(names, clientId)}: ${CHAIN_BEHIND} — watermark ${wm} is before ` +
-          `${target.timestamp.toISOString()}; run the full chain first (make data-fixes CLIENT=${clientId}). ` +
-          'No ledger row written.');
-        failed++;
+          `  ${tenantLabel(names, clientId)}: ${CHAIN_BEHIND} — ${gate.lagging.length} chain fix(es) dated at or ` +
+          `before ${target.timestamp.toISOString()} not processed yet (oldest: ${gate.lagging[0]}); ` +
+          `run the full chain first (make data-fixes CLIENT=${clientId}). No ledger row written.`);
+        blockedClients.push(clientId);
         continue;
       }
     }
@@ -587,7 +620,18 @@ export async function cmdTargetedFix(pool, catalog, { client, fix, dryRun }) {
     console.log(`  ${tenantLabel(names, clientId)}: ${res.status}${rowCountMessage}${detailedMessage}`);
     if (res.status === STATUS.FAILED) failed++;
   }
-  return failed;
+  return { failed, blocked: blockedClients.length, blockedClients, names };
+}
+
+/** Execution-log footer of a targeted (`--fix`) run. Pure, exported for tests. */
+export function buildTargetedSummary(fixArg, { failed, blocked, blockedClients = [], names = null }) {
+  if (!failed && !blocked) return `SUMMARY: targeted fix ${fixArg} — ok.`;
+  const lines = [`SUMMARY: targeted fix ${fixArg} — ${failed} FAILED, ${blocked} ${CHAIN_BEHIND}.`];
+  if (blocked) {
+    lines.push(`${CHAIN_BEHIND} tenants (no ledger row written — run the full chain first, then repeat --fix):`);
+    for (const clientId of blockedClients) lines.push(`  - ${tenantLabel(names, clientId)}`);
+  }
+  return lines.join('\n');
 }
 
 async function cmdFullRun(pool, catalog, { client, dryRun }) {
@@ -611,14 +655,6 @@ async function cmdFullRun(pool, catalog, { client, dryRun }) {
   return { processed: tenants.length, halted, haltedClients, names };
 }
 
-/**
- * `--list-clients` — overview of every tenant's remediation state. For each
- * tenant: the newest fix recorded as APPLIED/MANUALLY_FIXED ("last applied"),
- * and how many catalog fixes are still pending (never recorded as a success and
- * not skipped — i.e. missing or FAILED). FAILED is also surfaced on its own so a
- * halted chain stands out. No @check is run, so this is a fast, read-only report
- * (it reflects the ledger, not a fresh re-evaluation of each fix's condition).
- */
 /**
  * Summarize one tenant's ledger against the catalog for `--list-clients`. Pure
  * (no DB) so it is unit-testable.
@@ -664,6 +700,16 @@ export function formatOptInCell({ done, total, failed }) {
   return failed ? `${done}/${total} (${failed} FAILED)` : `${done}/${total}`;
 }
 
+/**
+ * `--list-clients` — overview of every tenant's remediation state. For each
+ * tenant: the newest fix recorded as APPLIED/MANUALLY_FIXED ("last applied"),
+ * and how many catalog fixes are still pending (never recorded as a success and
+ * not skipped — i.e. missing or FAILED). FAILED is also surfaced on its own so a
+ * halted chain stands out. No @check is run, so this is a fast, read-only report
+ * (it reflects the ledger, not a fresh re-evaluation of each fix's condition).
+ * PENDING and FAILED count chain fixes only (retired and opt-in fixes excluded);
+ * opt-in fixes get their own OPT-IN column.
+ */
 async function cmdListClients(pool, catalog) {
   const { rows: tenants } = await pool.query(
     `SELECT ad_client_id, name FROM ad_client WHERE ad_client_id <> '0' ORDER BY name`);
@@ -728,7 +774,7 @@ export async function runMain({ dbConfig, argv } = {}) {
 
   try {
     if (args.markFixed) {
-      await cmdMarkFixed(pool, args);
+      await cmdMarkFixed(pool, await loadCatalogWithRetirement(), args);
     } else if (args.listClients) {
       const catalog = await loadCatalogWithRetirement();
       await cmdListClients(pool, catalog);
@@ -742,9 +788,9 @@ export async function runMain({ dbConfig, argv } = {}) {
         if (args.dryRun) console.log('(dry-run: no writes will be committed)\n');
 
         if (args.fix) {
-          const failed = await cmdTargetedFix(pool, catalog, { client: args.client, fix: args.fix, dryRun: args.dryRun });
-          exitCode = toExitCode(failed);
-          log.end(`SUMMARY: targeted fix ${args.fix} — ${failed ? 'FAILED' : 'ok'}.`);
+          const result = await cmdTargetedFix(pool, catalog, { client: args.client, fix: args.fix, dryRun: args.dryRun });
+          exitCode = toExitCode(result.failed + result.blocked);
+          log.end(buildTargetedSummary(args.fix, result));
         } else {
           if (catalog.length === 0) console.log('No .sql fixes in catalog (cli/src/data-fixes/sql/).');
           const { processed, halted, haltedClients, names } = await cmdFullRun(pool, catalog, { client: args.client, dryRun: args.dryRun });

@@ -156,9 +156,11 @@ ETP-4877). Full detail: `docs/etendo-ad/onboarding-and-datafixes-map.md` §3 ite
 For an environment-level switch rather than a correction every tenant needs on deploy. A full run
 skips an opt-in fix like a retired one (no `@check`, no `@apply`, no ledger row), and its ledger
 rows never move the watermark (`computeWatermark` ignores them). It runs only via
-`--fix <id>` (`make data-fixes FIX=<id>`, dry-run included), and only for a tenant whose watermark
-is already >= the fix's timestamp (`optInChainGate`); a tenant behind it is reported
-`BLOCKED_CHAIN_BEHIND`, gets no ledger row and makes the run exit non-zero. `--list-clients` shows
+`--fix <id>` (`make data-fixes FIX=<id>`, dry-run included), and only for a tenant with no
+non-retired, non-opt-in chain fix dated at or before it still unprocessed (`optInChainGate`; newer
+fixes, FAILED or not, do not block); a tenant behind it is reported `BLOCKED_CHAIN_BEHIND` (apart
+from FAILED in the summary), gets no ledger row and makes the run exit non-zero. An opt-in fix must
+carry a timestamp prefix. `--mark-fixed` resolves a short `@id` to the full `fix_id`. `--list-clients` shows
 opt-in fixes in an `OPT-IN` column, never as `PENDING`. A retired fix stays un-forceable. Worked
 example: `R37-tenant-subscription-backfill`. Full detail:
 `docs/etendo-ad/onboarding-and-datafixes-map.md` §3 item 7.

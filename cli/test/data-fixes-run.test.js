@@ -13,6 +13,9 @@ import {
   formatOptInCell,
   applyChain,
   cmdTargetedFix,
+  cmdMarkFixed,
+  buildTargetedSummary,
+  resolveCatalogFix,
   loadCatalogWithRetirement,
   runMain,
 } from '../src/data-fixes/run.js';
@@ -266,11 +269,44 @@ describe('opt-in fixes — pure helpers', () => {
     assert.equal(optInChainGate(CATALOG, ledger, OPT).allowed, false);
   });
 
-  it('optInChainGate refuses a tenant whose chain has not reached the opt-in date', () => {
-    const ledger = ledgerOf([['__baseline__', 'BASELINE', '2026-09-01T00:00:00Z'], [A.fixId, 'APPLIED']]);
+  it('optInChainGate refuses a tenant with an earlier chain fix not processed yet, and names it', () => {
+    const ledger = ledgerOf([['__baseline__', 'BASELINE', '2026-09-01T00:00:00Z']]);
     const gate = optInChainGate(CATALOG, ledger, OPT);
     assert.equal(gate.allowed, false);
+    assert.deepEqual(gate.lagging, [A.fixId]);
+    assert.equal(gate.watermark, new Date('2026-09-01T00:00:00Z').getTime());
+  });
+
+  it('optInChainGate refuses while an earlier chain fix is FAILED', () => {
+    const ledger = ledgerOf([['__baseline__', 'BASELINE', '2026-09-01T00:00:00Z'], [A.fixId, 'FAILED']]);
+    assert.deepEqual(optInChainGate(CATALOG, ledger, OPT).lagging, [A.fixId]);
+  });
+
+  it('optInChainGate allows a tenant whose only lagging chain fix is NEWER than the opt-in fix', () => {
+    // Alex's example 1: A processed, B (dated after OPT) FAILED -> watermark stays at A < OPT,
+    // yet nothing dated at or before OPT is left to run.
+    const ledger = ledgerOf([[A.fixId, 'APPLIED'], [B.fixId, 'FAILED']]);
+    const gate = optInChainGate(CATALOG, ledger, OPT);
     assert.equal(gate.watermark, A.timestamp.getTime());
+    assert.equal(gate.allowed, true);
+    assert.deepEqual(gate.lagging, []);
+  });
+
+  it('optInChainGate allows an opt-in fix authored as the newest file once the whole chain is processed', () => {
+    // Alex's example 2: no chain fix dated after the opt-in one exists to lift the watermark past it.
+    const newest = catalogFix('20261009T120000Z__NEWEST-switch', { optIn: true });
+    const catalog = [A, B, newest];
+    const ledger = ledgerOf([[A.fixId, 'APPLIED'], [B.fixId, 'SKIPPED_NOT_NEEDED']]);
+    const gate = optInChainGate(catalog, ledger, newest);
+    assert.ok(gate.watermark < newest.timestamp.getTime());
+    assert.equal(gate.allowed, true);
+  });
+
+  it('optInChainGate ignores retired and other opt-in fixes dated before it', () => {
+    const retiredEarly = catalogFix('20260930T120000Z__OLD-chain', { retired: true });
+    const otherOpt = catalogFix('20260930T130000Z__OTHER-switch', { optIn: true });
+    const ledger = ledgerOf([[A.fixId, 'APPLIED']]);
+    assert.equal(optInChainGate([retiredEarly, otherOpt, ...CATALOG], ledger, OPT).allowed, true);
   });
 
   it('optInChainGate allows a tenant whose watermark is at or past the opt-in date', () => {
@@ -352,7 +388,7 @@ describe('opt-in fixes — runner behavior (fake pool)', () => {
 
   it('--fix applies an opt-in fix for a tenant whose chain is current, whatever the watermark', async () => {
     const pool = fakePool({ ledgerRows: [[A.fixId, 'APPLIED'], [B.fixId, 'APPLIED']] });
-    const failed = await cmdTargetedFix(pool, CATALOG, { client: CLIENT, fix: 'OPT-switch', dryRun: false });
+    const { failed } = await cmdTargetedFix(pool, CATALOG, { client: CLIENT, fix: 'OPT-switch', dryRun: false });
     assert.equal(failed, 0);
     assert.deepEqual(pool.calls.checks, ['OPT-switch']);
     assert.deepEqual(pool.calls.applies, ['OPT-switch']);
@@ -362,7 +398,7 @@ describe('opt-in fixes — runner behavior (fake pool)', () => {
 
   it('--fix --dry-run on an opt-in fix runs @check only and writes nothing', async () => {
     const pool = fakePool({ ledgerRows: [[A.fixId, 'APPLIED'], [B.fixId, 'APPLIED']] });
-    const failed = await cmdTargetedFix(pool, CATALOG, { client: CLIENT, fix: OPT.fixId, dryRun: true });
+    const { failed } = await cmdTargetedFix(pool, CATALOG, { client: CLIENT, fix: OPT.fixId, dryRun: true });
     assert.equal(failed, 0);
     assert.deepEqual(pool.calls.checks, ['OPT-switch']);
     assert.deepEqual(pool.calls.applies, []);
@@ -370,12 +406,14 @@ describe('opt-in fixes — runner behavior (fake pool)', () => {
     assert.deepEqual(pool.calls.tx, []);
   });
 
-  it('--fix refuses an opt-in fix for a tenant behind it: no @check, no ledger row, counted as failed', async () => {
+  it('--fix refuses an opt-in fix for a tenant behind it: no @check, no ledger row, counted as blocked', async () => {
     const lines = [];
     console.log.mock.mockImplementation((msg) => lines.push(msg));
-    const pool = fakePool({ ledgerRows: [['__baseline__', 'BASELINE', '2026-09-01T00:00:00Z'], [A.fixId, 'APPLIED']] });
-    const failed = await cmdTargetedFix(pool, CATALOG, { client: CLIENT, fix: OPT.fixId, dryRun: true });
-    assert.equal(failed, 1);
+    const pool = fakePool({ ledgerRows: [['__baseline__', 'BASELINE', '2026-09-01T00:00:00Z']] });
+    const result = await cmdTargetedFix(pool, CATALOG, { client: CLIENT, fix: OPT.fixId, dryRun: true });
+    assert.equal(result.failed, 0);
+    assert.equal(result.blocked, 1);
+    assert.deepEqual(result.blockedClients, [CLIENT]);
     assert.deepEqual(pool.calls.checks, []);
     assert.deepEqual(pool.calls.ledgerWrites, []);
     assert.ok(lines.some(l => String(l).includes(CHAIN_BEHIND)), `expected a ${CHAIN_BEHIND} line`);
@@ -393,7 +431,7 @@ describe('opt-in fixes — runner behavior (fake pool)', () => {
 
   it('--fix on an ordinary chain fix is not gated by the chain position', async () => {
     const pool = fakePool({ ledgerRows: [] });
-    const failed = await cmdTargetedFix(pool, CATALOG, { client: CLIENT, fix: B.fixId, dryRun: true });
+    const { failed } = await cmdTargetedFix(pool, CATALOG, { client: CLIENT, fix: B.fixId, dryRun: true });
     assert.equal(failed, 0);
     assert.deepEqual(pool.calls.checks, ['B-chain']);
   });
@@ -573,11 +611,13 @@ describe('runMain — opt-in fixes through the CLI entry point', () => {
   });
 
   describe('--fix <opt-in>', () => {
-    it('exits 1 and logs FAILED when some tenants are blocked behind the opt-in date', async () => {
+    it('exits 1 and reports the blocked tenants apart from FAILED when some are behind the opt-in date', async () => {
       const pool = tenantDbPool([CAUGHT_UP, BEHIND]);
       const code = await runCli(pool, ['--fix', R37_ID, '--dry-run']);
       assert.equal(code, 1);
-      assert.match(executionLog(), new RegExp(`SUMMARY: targeted fix ${R37_ID} — FAILED\\.`));
+      const log = executionLog();
+      assert.match(log, new RegExp(`SUMMARY: targeted fix ${R37_ID} — 0 FAILED, 1 BLOCKED_CHAIN_BEHIND\\.`));
+      assert.ok(log.includes(`  - Globex (${BEHIND.id})`), 'the blocked tenant is listed in the summary');
       // The blocked tenant is reported, and only the caught-up one reaches @check.
       assert.ok(lines.some(l => l.includes(`Globex (${BEHIND.id}): BLOCKED_CHAIN_BEHIND`)), 'Globex is reported as blocked');
       assert.deepEqual(pool.calls.fixBodies, [r37Check(CAUGHT_UP.id)]);
@@ -627,5 +667,78 @@ describe('runMain — opt-in fixes through the CLI entry point', () => {
       assert.ok(!written.includes(R37_FIX_ID), 'the MANUALLY_FIXED R37 row is left alone');
       assert.ok(lines.some(l => l.includes('(watermark: 2026-10-05T15:00:00.000Z)')));
     });
+
+    it('resolves a short id to the full fix_id, so --list-clients then shows OPT-IN 1/1', async () => {
+      const tenant = { id: 'F'.repeat(32), name: 'Shorty', ledger: [] };
+      const pool = tenantDbPool([tenant]);
+      assert.equal(await runCli(pool,
+        ['--mark-fixed', '--client', tenant.id, '--fix', R37_ID, '--reason', 'switched by hand']), 0);
+      assert.deepEqual(pool.calls.ledgerWrites, [{ clientId: tenant.id, fixId: R37_FIX_ID, status: 'MANUALLY_FIXED' }]);
+
+      lines.length = 0;
+      await runCli(pool, ['--list-clients']);
+      const row = lines.find(l => l.startsWith('Shorty'));
+      assert.ok(row.trimEnd().endsWith('1/1'), `expected OPT-IN 1/1 in "${row}"`);
+    });
+
+    it('rejects an unknown id and writes nothing', async () => {
+      const tenant = { id: 'F'.repeat(32), name: 'Shorty', ledger: [] };
+      const pool = tenantDbPool([tenant]);
+      await assert.rejects(
+        () => runCli(pool, ['--mark-fixed', '--client', tenant.id, '--fix', 'R99-nope', '--reason', 'x']),
+        /no such fix "R99-nope" in catalog/,
+      );
+      assert.deepEqual(pool.calls.ledgerWrites, []);
+    });
+  });
+});
+
+describe('targeted-run summary and fix-id resolution', () => {
+  it('buildTargetedSummary says ok when nothing failed and nothing was blocked', () => {
+    assert.equal(buildTargetedSummary('R9', { failed: 0, blocked: 0 }), 'SUMMARY: targeted fix R9 — ok.');
+  });
+
+  it('buildTargetedSummary reports FAILED and BLOCKED_CHAIN_BEHIND apart and lists the blocked tenants', () => {
+    const names = new Map([[CLIENT, 'Acme']]);
+    const out = buildTargetedSummary('R9', { failed: 2, blocked: 1, blockedClients: [CLIENT], names });
+    assert.equal(out, [
+      'SUMMARY: targeted fix R9 — 2 FAILED, 1 BLOCKED_CHAIN_BEHIND.',
+      'BLOCKED_CHAIN_BEHIND tenants (no ledger row written — run the full chain first, then repeat --fix):',
+      `  - Acme (${CLIENT})`,
+    ].join('\n'));
+  });
+
+  it('resolveCatalogFix accepts the full fix_id or the short @id, and rejects an unknown id', () => {
+    assert.equal(resolveCatalogFix(CATALOG, OPT.fixId), OPT);
+    assert.equal(resolveCatalogFix(CATALOG, 'OPT-switch'), OPT);
+    assert.throws(() => resolveCatalogFix(CATALOG, 'NOPE'), /no such fix "NOPE" in catalog/);
+  });
+});
+
+describe('--mark-fixed resolves the fix id against the catalog', () => {
+  beforeEach(() => { mock.method(console, 'log', () => {}); });
+  afterEach(() => { mock.restoreAll(); });
+
+  it('stores the FULL fix_id when the operator types the short @id', async () => {
+    const pool = fakePool();
+    await cmdMarkFixed(pool, CATALOG, { client: CLIENT, fix: 'OPT-switch', reason: 'switched by hand' });
+    assert.deepEqual(pool.calls.ledgerWrites, [{ fixId: OPT.fixId, status: 'MANUALLY_FIXED' }]);
+  });
+
+  it('rejects an unknown id without writing any ledger row', async () => {
+    const pool = fakePool();
+    await assert.rejects(
+      () => cmdMarkFixed(pool, CATALOG, { client: CLIENT, fix: 'R99-nope', reason: 'x' }),
+      /no such fix "R99-nope" in catalog/,
+    );
+    assert.deepEqual(pool.calls.ledgerWrites, []);
+  });
+
+  it('a short-id mark counts in the listing: OPT-IN reads 1/1, not 0/1', async () => {
+    const pool = fakePool();
+    await cmdMarkFixed(pool, CATALOG, { client: CLIENT, fix: 'OPT-switch', reason: 'switched by hand' });
+    const [{ fixId, status }] = pool.calls.ledgerWrites;
+    const summary = summarizeTenantLedger(CATALOG, ledgerOf([[fixId, status]]));
+    assert.equal(formatOptInCell(summary.optIn), '1/1');
   });
 });

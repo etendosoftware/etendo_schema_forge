@@ -119,6 +119,11 @@ export function parseFix(text, fixId) {
   validations(type, check, fixId, apply, meta);
   // Header keys are lower-cased on capture, so `@optIn` lands in `meta.optin`.
   const optIn = parseOptIn(meta.optin, fixId);
+  // The run gate of an opt-in fix is its own date (run.js optInChainGate): without a
+  // parseable <YYYYMMDDThhmmssZ> prefix it could never be gated, so refuse it outright.
+  if (optIn && !parseFixTimestamp(fixId)) {
+    throw new Error(`${fixId}: an @optIn fix needs a <YYYYMMDDThhmmssZ>__ timestamp prefix in its file name`);
+  }
 
   return {
     fixId,
