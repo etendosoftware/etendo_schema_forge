@@ -38,7 +38,17 @@ export function DetailMoreActionsMenu({
   // popover would open as an empty box. Mirrors Sales Order's menuActions
   // behavior where the kebab opens nothing when no action applies.
   const moreMenuProbeRef = useRef(null);
-  const [customMenuHasContent, setCustomMenuHasContent] = useState(customMenuContent ? null : false);
+  // ETP-5562 — the probe verdict is only valid for the record it was measured on. A `false`
+  // measured on `/new` (custom content renders null for an unsaved header) used to stick after
+  // the first save: the early `return null` below unmounts the probe, so nothing could ever flip
+  // it back and the kebab stayed hidden until a full reload. Keying the verdict by record id makes
+  // it read as "unknown" (null → probe mounts again) as soon as the record identity changes.
+  const probeKey = data?.id || recordId;
+  const [probeVerdict, setProbeVerdict] = useState({ key: probeKey, has: customMenuContent ? null : false });
+  // A verdict measured on another record is stale: unknown (null) when there is custom content to
+  // probe, nothing to show (false) when there is none.
+  const staleVerdict = customMenuContent ? null : false;
+  const customMenuHasContent = probeVerdict.key === probeKey ? probeVerdict.has : staleVerdict;
 
   useEffect(() => {
     if (!showMoreMenu) return;
@@ -56,7 +66,7 @@ export function DetailMoreActionsMenu({
   useEffect(() => {
     if (!customMenuContent) return;
     const has = !!(moreMenuProbeRef.current && moreMenuProbeRef.current.childElementCount > 0);
-    setCustomMenuHasContent(prev => (prev === has ? prev : has));
+    setProbeVerdict(prev => (prev.key === probeKey && prev.has === has ? prev : { key: probeKey, has }));
   });
 
   // More actions — only render the button when there is something to show

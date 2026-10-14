@@ -184,6 +184,7 @@
           "grid": true,
           "gridOrder": 3,
           "grow": true,
+          "gridReadOnly": true,
           "columnWidth": 192,
           "readOnlyLogic": null
         },
@@ -203,6 +204,7 @@
           "grid": true,
           "gridOrder": 5,
           "grow": true,
+          "gridReadOnly": true,
           "columnWidth": 192,
           "readOnlyLogic": null
         },

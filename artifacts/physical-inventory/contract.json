@@ -1,8 +1,8 @@
 {
   "version": "0.38.0",
   "generatedAt": "2026-07-29T14:51:09.380Z",
-  "updatedAt": "2026-10-07T11:18:34.362Z",
-  "checksum": "3639f70ede02fea4",
+  "updatedAt": "2026-10-13T18:41:46.965Z",
+  "checksum": "86cc1b213a230a7f",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -619,6 +619,7 @@
             "gridOrder": 3,
             "grow": true,
             "columnWidth": 192,
+            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 10
@@ -664,6 +665,7 @@
             "gridOrder": 5,
             "grow": true,
             "columnWidth": 192,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 10
             }
