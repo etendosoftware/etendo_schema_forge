@@ -3,8 +3,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:accounting
 const columns = [
-  { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', label: 'Accumulated Depreciation', required: true, lookup: true, grow: true },
-  { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', label: 'Depreciation', required: true, lookup: true, grow: true },
+  { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', label: 'Accumulated Depreciation', required: true, lookup: true, lookupDrawer: 'account', grow: true },
+  { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', label: 'Depreciation', required: true, lookup: true, lookupDrawer: 'account', grow: true },
 ];
 // @sf-generated-end columns:accounting
 

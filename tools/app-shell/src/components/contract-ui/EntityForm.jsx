@@ -18,6 +18,7 @@ import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveFkNavigation } from './fkNavigation.js';
 import { ImageField } from './ImageField.jsx';
 import ProductSearchDrawer from './ProductSearchDrawer.jsx';
+import { resolveLookupDrawer } from './lookupDrawers.js';
 import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
 import { CurrencyRatePicker } from './CurrencyRatePicker.jsx';
@@ -288,11 +289,13 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
 }
 
 /**
- * Form field that opens a ProductSearchDrawer for lookup-enabled search fields.
+ * Form field that opens the field's lookup drawer (`field.lookupDrawer`, resolved through the
+ * shared registry — the product search drawer by default) for lookup-enabled search fields.
  */
 function LookupFormField({ field, value, displayValue, selectorUrl, selectorContext, token, resolvedLabel, onChange }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
+  const Drawer = resolveLookupDrawer(field.lookupDrawer);
   const display = displayValue || value || '';
   return (
     <>
@@ -311,7 +314,7 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
           <span className="flex-1 truncate text-muted-foreground">{buildSearchPlaceholder(ui, resolvedLabel)}</span>
         )}
       </button>
-      <ProductSearchDrawer
+      <Drawer
         open={open}
         onClose={() => setOpen(false)}
         onSelect={(item) => {

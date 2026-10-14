@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/saveActions.jsx
 import { describe, it, expect, vi } from 'vitest';
 import { buildSaveGate } from '../saveActions.jsx';
 
@@ -204,6 +205,59 @@ describe('buildSaveGate', () => {
       });
       expect(gate.blocked).toBe(true);
       expect(gate.missingAttr).toBe('businessPartner,warehouse');
+    });
+
+    // ETP-5692 — picking a value in a header selector writes BOTH the FK key and its
+    // `<key>$_identifier` display-label companion into `editing`, so both show up as dirty.
+    // The companion follows its base field: allowed iff the base is allowed, and a blocked
+    // field is reported once, by its base key — never as `<key>$_identifier`.
+    describe('$_identifier companion follows its base field (ETP-5692)', () => {
+      it('allowed base dirty together with its $_identifier companion → not blocked', () => {
+        const gate = buildSaveGate({
+          ...PASS_REQUIRED,
+          isDraftModeCompleted: true,
+          draftMode: { keepSaveWhenCompletedFields: ['accountingDate', 'project', 'costcenter'] },
+          dirtyFieldKeys: ['project', 'project$_identifier'],
+        });
+        expect(gate).toEqual({ blocked: false, title: undefined, missingAttr: undefined });
+      });
+
+      it('a lone $_identifier companion of an allowed base → not blocked', () => {
+        const gate = buildSaveGate({
+          ...PASS_REQUIRED,
+          isDraftModeCompleted: true,
+          draftMode: { keepSaveWhenCompletedFields: ['project'] },
+          dirtyFieldKeys: ['project$_identifier'],
+        });
+        expect(gate.blocked).toBe(false);
+      });
+
+      it('disallowed base dirty with its companion → blocked, reported once by the base key and label', () => {
+        const gate = buildSaveGate({
+          isValid: true, ui,
+          labelFor: (col) => ({ C_BPartner_ID: 'Tercero' }[col]),
+          isDraftModeCompleted: true,
+          draftMode: { keepSaveWhenCompletedFields: ['project'] },
+          dirtyFieldKeys: ['project', 'project$_identifier', 'bpartner', 'bpartner$_identifier'],
+          gateFields: [{ key: 'bpartner', column: 'C_BPartner_ID' }],
+        });
+        expect(gate.blocked).toBe(true);
+        expect(gate.title).toBe('saveBlockedFieldsNotAllowedWhenCompleted:Tercero');
+        expect(gate.missingAttr).toBe('bpartner');
+        expect(gate.title).not.toContain('$_identifier');
+      });
+
+      it('a lone $_identifier companion of a disallowed base → blocked under the base key', () => {
+        const gate = buildSaveGate({
+          ...PASS_REQUIRED,
+          isDraftModeCompleted: true,
+          draftMode: { keepSaveWhenCompletedFields: ['project'] },
+          dirtyFieldKeys: ['bpartner$_identifier'],
+        });
+        expect(gate.blocked).toBe(true);
+        expect(gate.missingAttr).toBe('bpartner');
+        expect(gate.title).toBe('saveBlockedFieldsNotAllowedWhenCompleted:bpartner');
+      });
     });
 
     describe('label resolution fallback chain: labelFor(descriptor.column) -> descriptor.label -> raw key', () => {
