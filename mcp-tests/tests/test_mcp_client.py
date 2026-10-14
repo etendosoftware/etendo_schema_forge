@@ -127,5 +127,72 @@ class DescribeServerTest(unittest.TestCase):
                          mcp_client.catalogue_digest([_tool("a"), _tool("b"), _tool("c")]))
 
 
+
+class WhereTest(unittest.TestCase):
+    """Suite v2 `expectEffect.where`: exact-match filtering by the runner."""
+
+    def test_counts_rows_matching_every_condition(self):
+        payload = {"data": [
+            {"notes": "m", "status": {"code": "CO"}},
+            {"notes": "m", "status": {"code": "DR"}},
+            {"notes": "other", "status": {"code": "CO"}},
+        ]}
+        self.assertEqual(mcp_client.count_matching(payload, {"notes": "m"}), 2)
+        self.assertEqual(mcp_client.count_matching(payload, {"notes": "m", "status.code": "CO"}), 1)
+        # Number-like scalars compare by value; booleans are never numbers.
+        self.assertEqual(mcp_client.count_matching([{"a": 1}, {"a": 1.0}, {"a": "1"}], {"a": 1}), 3)
+        self.assertEqual(mcp_client.count_matching([{"a": "1.50"}], {"a": 1.5}), 1)
+        self.assertEqual(mcp_client.count_matching([{"a": True}], {"a": 1}), 0)
+        self.assertEqual(mcp_client.count_matching([{"a": "x"}], {"a": "X"}), 0)
+        self.assertEqual(mcp_client.count_matching([{"a": [{"b": 2}]}], {"a.0.b": 2}), 1)
+
+    def test_a_partial_page_is_not_verifiable(self):
+        payload = {"data": [{"a": 1}], "totalRows": 50}
+        with self.assertRaises(mcp_client.VerificationError) as ctx:
+            mcp_client.count_matching(payload, {"a": 1})
+        self.assertIn("1 of 50", str(ctx.exception))
+        self.assertEqual(mcp_client.count_matching({"data": [{"a": 1}], "totalRows": 1}, {"a": 1}), 1)
+
+    def test_without_where_a_partial_page_is_counted_by_its_total(self):
+        # The count path (no `where`) trusts the server's total, which is the
+        # complete answer to the server-side filter: it is verifiable, unlike
+        # a client-side `where` over the same page.
+        page = {"data": [{"a": 1}], "totalRows": 50}
+        self.assertEqual(mcp_client.count_rows(page), 50)
+        self.assertEqual(mcp_client.count_rows({"data": [], "totalCount": 0}), 0)
+        with self.assertRaises(mcp_client.VerificationError):
+            mcp_client.extract_rows(page)
+
+    def test_a_path_no_row_has_is_not_verifiable(self):
+        # A typo or a moved vendor field must never read as "no row matches":
+        # with expect: none that would pass a refusal in silence.
+        rows = [{"status": {"code": "CO"}}, {"status": None}, {}]
+        for where in ({"status.cod": "CO"}, {"status.code.x": "CO"}, {"status.code": "CO", "nope": 1}):
+            with self.subTest(where=where), self.assertRaises(mcp_client.VerificationError) as ctx:
+                mcp_client.count_matching(rows, where)
+            self.assertIn("no row", str(ctx.exception))
+        with self.assertRaises(mcp_client.VerificationError):
+            mcp_client.count_matching([{"a": [1]}], {"a.5": 1})
+        with self.assertRaises(mcp_client.VerificationError):
+            mcp_client.count_matching([{}], {"a": None})
+
+    def test_a_path_some_rows_have_is_matched_normally(self):
+        rows = [{"status": {"code": "CO"}}, {"status": None}, {}]
+        self.assertEqual(mcp_client.count_matching(rows, {"status.code": "CO"}), 1)
+        self.assertEqual(mcp_client.count_matching(rows, {"status.code": "DR"}), 0)
+        # A present null is a value; it matches an expected None.
+        self.assertEqual(mcp_client.count_matching([{"a": None}], {"a": None}), 1)
+        self.assertEqual(mcp_client.count_matching([{"a": None}, {}], {"a": 1}), 0)
+
+    def test_no_rows_at_all_is_an_honest_zero(self):
+        # An empty answer has no shape to check a path against; nothing was
+        # found, which is what expect: none asks.
+        self.assertEqual(mcp_client.count_matching({"data": []}, {"status.cod": "CO"}), 0)
+
+    def test_an_unknown_payload_shape_is_an_error_not_zero(self):
+        with self.assertRaises(mcp_client.VerificationError):
+            mcp_client.count_matching({"totalRows": 3}, {"a": 1})
+
+
 if __name__ == "__main__":
     unittest.main()

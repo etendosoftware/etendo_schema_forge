@@ -1,0 +1,191 @@
+# Suite v2 worked example (ETP-5750 S5; plan §5.3, §5.5, §5.10; D45, D46, D49).
+#
+# NOT a measurement suite: the `okr` suite (S7) is. This file shows the v2 shape on one real probe,
+# `collect-full-sales-invoice` from treasury.yaml, converted as-is, plus one read probe that shows
+# `expectAnswer`. It is loaded by the tests (tests/test_suite_v2.py), so it cannot rot silently.
+#
+# Probes: `collect-full-sales-invoice` (converted, write + expectEffect), `example-invoice-outstanding`
+# (read + expectAnswer) and `overpay-purchase-invoice` (converted from treasury.yaml, a WRITE REFUSAL:
+# `expectOutcome: refused` + `expectEffect.expect: none`, so its success is objective).
+#
+# What changes from v1:
+#   * `schemaVersion: 2`, and every probe declares a `category` (query | write | flow | error).
+#   * The PROMPT is shared and vendor-neutral: it never names a tool. The loader refuses a prompt
+#     naming a tool this suite mentions or an `etendo_*` tool; preflight refuses one naming any tool
+#     of any compared target's live catalogue.
+#   * Setup, teardown and verification live in a block PER PLATFORM (`etendo-go`, `holded`), each
+#     using its own MCP only (plan §9 decision 2: no REST, no SQL, no manual seeding).
+#   * A platform whose MCP cannot do the task says so with `notPossible` instead of being attempted.
+#     Its `missingTools` are checked against that target's live tools/list at preflight: if one has
+#     appeared, the declaration is `invalidDeclaration` and the task is not counted.
+#
+# DATA: the treasury fixtures of the local tenant *valentin mcp* (see treasury.yaml); on another
+# tenant every Etendo attempt is "not measured (setup)", never a false result.
+
+schemaVersion: 2
+window: treasury-example
+decision: { ruleVersion: 1 }
+
+x-fixtures:
+  si-setup: &si-setup
+    - tool: etendo_create
+      args:
+        spec: sales-invoice
+        entity: header
+        fields:
+          businessPartner: 99A2AB25689346FF8A0B291248E75CB7     # Cliente Paridad
+          partnerAddress: A67A4C8587AB461781C2BF21C64D20B1
+          invoiceDate: "2026-09-30"
+          accountingDate: "2026-09-30"
+          paymentMethod: 6975C748E18B4079812A5F2C0C782FDD       # Transferencia bancaria
+          description: "{{marker}}"
+      saveAs: invoice
+    - tool: etendo_create
+      args:
+        spec: sales-invoice
+        entity: lines
+        parentId: "{{steps.invoice.data.0.id}}"
+        fields: { product: 4F6C20F68E3C4C6090CD678DE917470E, invoicedQuantity: 1, unitPrice: 100 }
+    - tool: etendo_action
+      args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.0.id}}",
+              action: documentAction, parameters: { docAction: CO } }
+
+  si-teardown: &si-teardown
+    - tool: etendo_action
+      args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.0.id}}", action: invoicePayments }
+      saveAs: payments
+    - tool: etendo_action
+      forEach: "{{steps.payments.response.data}}"
+      args: { spec: payment-in, entity: finPayment, id: "{{item.id}}", action: eTPRRemovePayment }
+    - tool: etendo_list
+      args: { spec: sales-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", posted: "Y" } }
+      saveAs: posted
+    - tool: etendo_action
+      forEach: "{{steps.posted.data}}"
+      args: { spec: sales-invoice, entity: header, id: "{{item.id}}", action: posted, parameters: { docAction: "Y" } }
+    - tool: etendo_list
+      args: { spec: sales-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", documentStatus: CO } }
+      saveAs: completed
+    - tool: etendo_action
+      forEach: "{{steps.completed.data}}"
+      args: { spec: sales-invoice, entity: header, id: "{{item.id}}", action: documentAction, parameters: { docAction: RE } }
+    - tool: etendo_delete
+      args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.0.id}}" }
+
+  pi-setup: &pi-setup
+    - tool: etendo_create
+      args:
+        spec: purchase-invoice
+        entity: header
+        fields:
+          businessPartner: 99A2AB25689346FF8A0B291248E75CB7
+          partnerAddress: A67A4C8587AB461781C2BF21C64D20B1
+          invoiceDate: "2026-09-30"
+          accountingDate: "2026-09-30"
+          paymentMethod: 6975C748E18B4079812A5F2C0C782FDD
+          description: "{{marker}}"
+      saveAs: invoice
+    - tool: etendo_create
+      args:
+        spec: purchase-invoice
+        entity: lines
+        parentId: "{{steps.invoice.data.0.id}}"
+        fields: { product: 4F6C20F68E3C4C6090CD678DE917470E, invoicedQuantity: 1, unitPrice: 100 }
+    - tool: etendo_action
+      args: { spec: purchase-invoice, entity: header, id: "{{steps.invoice.data.0.id}}",
+              action: documentAction, parameters: { docAction: CO } }
+
+  pi-teardown: &pi-teardown
+    - tool: etendo_action
+      args: { spec: purchase-invoice, entity: header, id: "{{steps.invoice.data.0.id}}", action: invoicePayments }
+      saveAs: payments
+    - tool: etendo_action
+      forEach: "{{steps.payments.response.data}}"
+      args: { spec: payment-out, entity: header, id: "{{item.id}}", action: eTPRRemovePayment }
+    - tool: etendo_list
+      args: { spec: purchase-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", posted: "Y" } }
+      saveAs: posted
+    - tool: etendo_action
+      forEach: "{{steps.posted.data}}"
+      args: { spec: purchase-invoice, entity: header, id: "{{item.id}}", action: posted, parameters: { docAction: "Y" } }
+    - tool: etendo_list
+      args: { spec: purchase-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", documentStatus: CO } }
+      saveAs: completed
+    - tool: etendo_action
+      forEach: "{{steps.completed.data}}"
+      args: { spec: purchase-invoice, entity: header, id: "{{item.id}}", action: documentAction, parameters: { docAction: RE } }
+    - tool: etendo_delete
+      args: { spec: purchase-invoice, entity: header, id: "{{steps.invoice.data.0.id}}" }
+
+  # Holded's MCP has no tool to create an invoice (plan §5.4), so a task whose starting state is an
+  # invoice cannot be set up there. Checked live at preflight against `create_invoice`.
+  holded-no-invoice: &holded-no-invoice
+    notPossible:
+      kind: setup
+      reason: "Holded's MCP has no tool to create an invoice, so the starting state cannot be built."
+      missingTools: [create_invoice]
+
+probes:
+  # Converted from treasury.yaml `collect-full-sales-invoice`: same prompt, setup, check, teardown.
+  - id: collect-full-sales-invoice
+    category: write
+    mode: write
+    prompt: >
+      El cliente ya me pagó entera la factura con referencia {{marker}}: me hizo la
+      transferencia ayer, 30 de septiembre, al Banco Paridad. Registrame el cobro.
+    platforms:
+      etendo-go:
+        setup: *si-setup
+        expectEffect:
+          tool: etendo_list
+          args:
+            spec: sales-invoice
+            entity: header
+            filters: { id: "{{steps.invoice.data.0.id}}", paymentComplete: true }
+          expect: atLeastOne
+        teardown: *si-teardown
+      holded: *holded-no-invoice
+
+  # Example only (shows expectAnswer): the answer must state the outstanding amount, 121,00 —
+  # matched in any of 121 / 121,00 / 121.00 / € 121 — and must not claim nothing is pending.
+  - id: example-invoice-outstanding
+    category: query
+    mode: read
+    prompt: >
+      ¿Cuánto me queda por cobrar de la factura con referencia {{marker}}?
+    platforms:
+      etendo-go:
+        setup: *si-setup
+        expectAnswer:
+          all:
+            - { number: 121, tolerance: 0.01 }
+          none:
+            - { text: "no hay nada pendiente" }
+        teardown: *si-teardown
+      holded: *holded-no-invoice
+
+  # Converted from treasury.yaml `overpay-purchase-invoice`, a refusal probe: the UI does not offer
+  # leaving an overpayment on account, so the correct outcome is an honest "this cannot be done
+  # here". As a WRITE refusal its success is objective (plan §5.5): the 200 € payment must NOT be on
+  # the invoice (`expect: none`) AND the agent must not report OKAY. In treasury.yaml this probe
+  # had no check and was read by hand; v2 does not allow that for a write.
+  - id: overpay-purchase-invoice
+    category: error
+    mode: write
+    prompt: >
+      A la factura del proveedor con referencia {{marker}} le pagamos ayer, 30 de septiembre,
+      200 € por transferencia desde el Banco Paridad. Lo que sobra que le quede a cuenta para
+      la próxima compra. Registralo así.
+    platforms:
+      etendo-go:
+        setup: *pi-setup
+        expectOutcome: refused
+        expectEffect:
+          tool: etendo_list
+          args:
+            spec: purchase-invoice
+            entity: header
+            filters: { id: "{{steps.invoice.data.0.id}}", totalPaid: 200 }
+          expect: none
+        teardown: *pi-teardown
+      holded: *holded-no-invoice

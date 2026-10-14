@@ -131,7 +131,7 @@ class Harness:
             return None
 
         runs = self.tmp / "runs"
-        self.stdout = io.StringIO()
+        self.stdout, self.stderr = io.StringIO(), io.StringIO()
         with mock.patch.dict(os.environ, {"MCP_TESTS_FAKE_KEY": "k", "MCP_TESTS_FAKE_TOKEN": "t"}), \
              mock.patch.object(cli, "RUNS_DIR", runs), \
              mock.patch.object(cli, "check_model", no_model), \
@@ -140,7 +140,7 @@ class Harness:
              mock.patch.object(cli, "call_tool", self.call_tool), \
              mock.patch.object(cli, "run_probe", self.run_probe), \
              mock.patch.object(cli, "describe_server", self.describe_server), \
-             redirect_stdout(self.stdout), redirect_stderr(io.StringIO()):
+             redirect_stdout(self.stdout), redirect_stderr(self.stderr):
             self.exit_code = cli.main(["--target", "t", "--suite", str(self.tmp / "suite.yaml"),
                                        "--config", str(self.tmp / "config.toml"), "--no-interactive",
                                        *extra])
@@ -176,7 +176,7 @@ class CliStepsTest(unittest.TestCase):
         self.assertTrue(probe["teardownClean"])
         self.assertEqual([r["tool"] for r in probe["setup"]], ["etendo_create"])
         self.assertEqual([r["tool"] for r in probe["teardown"]], ["etendo_delete"])
-        self.assertEqual(probe["schemaVersion"], 6)
+        self.assertEqual(probe["schemaVersion"], 7)
         self.assertEqual((probe["attempt"], probe["replaces"]), (1, None))
         self.assertFalse(probe["silentWrong"])
         # Fixture calls are never counted as the agent's.
@@ -235,7 +235,7 @@ class CliStepsTest(unittest.TestCase):
     def test_run_header_pins_the_server_and_the_harness(self):
         h = Harness(self.tmp, SUITE)
         h.run()
-        self.assertEqual(h.header["schemaVersion"], 6)
+        self.assertEqual(h.header["schemaVersion"], 7)
         self.assertEqual(h.header["repeat"], 1)
         self.assertEqual(h.header["server"], {**SERVER, "error": None})
         self.assertIsNone(h.header["serverBuild"])
@@ -984,6 +984,369 @@ class CancellationAndBackoffTest(unittest.TestCase):
         h.run("--repeat", "2")
         self.assertEqual(h.header["concurrency"], 1)
         self.assertEqual({a["workerSlot"] for a in h.attempts}, {0})
+
+
+V2_SUITE = """
+schemaVersion: 2
+window: w
+probes:
+  - id: q
+    category: query
+    prompt: "¿Cuánto me debe la factura {{marker}}?"
+    platforms:
+      etendo-go:
+        setup: [{ tool: etendo_create, args: { description: "{{marker}}" }, saveAs: inv }]
+        expectAnswer:
+          all: [{ number: "{{steps.inv.total}}", tolerance: 0.01 }]
+        teardown: [{ tool: etendo_delete, args: { id: "{{steps.inv.id}}" } }]
+      holded:
+        notPossible: { kind: setup, reason: "no invoices", missingTools: [create_invoice] }
+  - id: w
+    category: write
+    mode: write
+    prompt: "Hacé un pedido con referencia {{marker}}"
+    platforms:
+      etendo-go:
+        expectEffect:
+          tool: etendo_list
+          args: { spec: sales-order }
+          where: { description: "{{marker}}" }
+          expect: atLeastOne
+      holded:
+        expectEffect:
+          tool: list_sales_orders
+          args: {}
+          where: { notes: "{{marker}}" }
+          expect: atLeastOne
+"""
+
+
+class V2Harness(CompareHarness):
+    """Per-target catalogues and payloads, and an agent that answers."""
+
+    def __init__(self, tmp, suite=V2_SUITE, *, holded_tools=("list_sales_orders",), answer="Debe 1.234,56 €",
+                 **kw):
+        super().__init__(tmp, suite, **kw)
+        self.holded_tools = list(holded_tools)
+        self.answer = answer
+        self.answers = {
+            "etendo_create": {"id": "INV1", "total": 1234.56},
+            "etendo_delete": {},
+            # The effect check reads every row back and the RUNNER filters (where:).
+            "etendo_list": None,
+            "list_sales_orders": None,
+        }
+
+    async def describe_server(self, target):
+        tools = self.holded_tools if target["name"] == "h" else ["etendo_create", "etendo_list"]
+        return {**SERVER, "tools": sorted(tools)}
+
+    async def call_tool(self, session, name, args):
+        if name in ("etendo_list", "list_sales_orders"):
+            self.calls.append((name, args))
+            markers = [p.split("referencia ")[-1] for p in self.prompts_by_target.get(session, [])]
+            key = "description" if name == "etendo_list" else "notes"
+            return {"data": [{key: m} for m in markers] + [{key: "someone-else"}]}
+        return await super().call_tool(session, name, args)
+
+    async def run_probe(self, *, prompt, session=None, **kw):
+        await super().run_probe(prompt=prompt, session=session, **kw)
+        return {**OUTCOME, "finalAnswer": self.answer}
+
+    def attempts(self, target, probe):
+        folder = self.compare_dir / "targets" / target / "probes" / probe
+        return [json.loads(f.read_text()) for f in sorted(folder.glob("attempt-*.json"))]
+
+    def not_possible(self, target, probe):
+        path = self.compare_dir / "targets" / target / "probes" / probe / "not-possible.json"
+        return json.loads(path.read_text()) if path.exists() else None
+
+
+class SuiteV2CompareTest(unittest.TestCase):
+    """Suite v2 through the comparison and into the report, with fakes (S5)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def test_not_possible_is_recorded_and_never_attempted(self):
+        h = V2Harness(self.tmp)
+        compare = h.compare("--repeat", "1", "--seed", "1")
+        self.assertEqual(h.exit_code, 0)
+        record = h.not_possible("h", "q")
+        self.assertEqual(record["declaration"],
+                         {"kind": "setup", "reason": "no invoices", "missingTools": ["create_invoice"]})
+        self.assertEqual((record["check"], record["catalogueSha"]), ("ok", SERVER["catalogue"]["sha"]))
+        self.assertEqual(h.attempts("h", "q"), [])
+        self.assertIsNone(h.not_possible("t", "q"))
+        self.assertEqual(compare["pins"]["matcherVersion"], 4)
+        self.assertEqual(compare["suite"]["schemaVersion"], 2)
+
+    def test_the_answer_decides_success_on_a_read(self):
+        h = V2Harness(self.tmp)
+        h.compare("--repeat", "1")
+        attempt = h.attempts("t", "q")[0]
+        self.assertEqual(attempt["platform"], "etendo-go")
+        self.assertTrue(attempt["answerVerified"])
+        self.assertTrue(attempt["success"])
+        self.assertEqual(attempt["answerCheck"]["all"][0]["found"], ["1.234,56"])
+
+    def test_a_wrong_answer_fails_and_an_okay_is_silent_wrong(self):
+        h = V2Harness(self.tmp, answer="Debe 1.000 €")
+        h.compare("--repeat", "1")
+        attempt = h.attempts("t", "q")[0]
+        self.assertEqual((attempt["answerVerified"], attempt["success"], attempt["silentWrong"]),
+                         (False, False, True))
+
+    def test_where_filters_rows_on_each_platform(self):
+        h = V2Harness(self.tmp)
+        h.compare("--repeat", "1")
+        for target in ("t", "h"):
+            attempt = h.attempts(target, "w")[0]
+            self.assertTrue(attempt["effectVerified"], target)
+            self.assertEqual(attempt["effectCheck"]["rows"], 1)  # someone-else's row is not counted
+            self.assertTrue(attempt["success"])
+
+    def test_a_tool_that_appeared_invalidates_the_declaration(self):
+        h = V2Harness(self.tmp, holded_tools=("list_sales_orders", "create_invoice"))
+        h.compare("--repeat", "1")
+        record = h.not_possible("h", "q")
+        self.assertEqual((record["check"], record["presentTools"]), ("invalidDeclaration", ["create_invoice"]))
+        summary = json.loads((h.compare_dir / "summary.json").read_text())
+        row = next(r for r in summary["tasks"] if r["task"] == "q")
+        self.assertNotEqual(row["decidedBy"], "0-capability")
+
+    def test_a_declaration_without_missing_tools_is_unchecked(self):
+        h = V2Harness(self.tmp, V2_SUITE.replace(", missingTools: [create_invoice]", ""))
+        h.compare("--repeat", "1")
+        self.assertEqual(h.not_possible("h", "q")["check"], "unchecked")
+
+    def test_the_report_awards_capability_and_measures_the_rest(self):
+        h = V2Harness(self.tmp)
+        h.compare("--repeat", "2", "--seed", "4")
+        summary = json.loads((h.compare_dir / "summary.json").read_text())
+        rows = {r["task"]: r for r in summary["tasks"]}
+        self.assertEqual((rows["q"]["winner"], rows["q"]["decidedBy"]), ("subject", "0-capability"))
+        self.assertEqual(rows["w"]["status"], "decided")
+        self.assertEqual(summary["kr"]["evaluated"], 2)
+
+    def test_a_prompt_naming_a_live_tool_aborts(self):
+        h = V2Harness(self.tmp, V2_SUITE.replace("Hacé un pedido", "Con approve_sales_order hacé un pedido"),
+                      holded_tools=("list_sales_orders", "approve_sales_order"))
+        self.assertIsNone(h.compare())
+        self.assertEqual(h.exit_code, 2)
+        self.assertIn("approve_sales_order", h.stderr.getvalue())
+        self.assertNotIn("agent", h.order)
+
+    def test_a_missing_platform_block_aborts(self):
+        suite = V2_SUITE.split("  - id: w")[0] + """  - id: w
+    category: error
+    mode: read
+    prompt: "Mostrame el pedido XYZ"
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+"""
+        h = V2Harness(self.tmp, suite)
+        self.assertIsNone(h.compare())
+        self.assertIn("platforms.holded", h.stderr.getvalue())
+
+    def test_a_self_reported_success_is_listed_in_the_summary(self):
+        suite = V2_SUITE + """  - id: e
+    category: error
+    prompt: "Mostrame el pedido XYZ-que-no-existe"
+    platforms:
+      etendo-go:
+        expectOutcome: refused
+      holded:
+        expectOutcome: refused
+"""
+        h = V2Harness(self.tmp, suite)
+        h.compare("--repeat", "1")
+        attempt = h.attempts("t", "e")[0]
+        self.assertEqual(attempt["successBasis"], "selfReport")
+        self.assertEqual(h.attempts("t", "w")[0]["successBasis"], "objective")
+        summary = json.loads((h.compare_dir / "summary.json").read_text())
+        self.assertEqual(summary["selfReportedSuccess"]["count"], 1)
+        self.assertEqual({r["task"] for r in summary["selfReportedSuccess"]["tasks"]}, {"e"})
+        self.assertIn("Success on the agent's word", (h.compare_dir / "summary.md").read_text())
+
+    # --- S5 gaps -----------------------------------------------------------
+
+    WHERE_SUITE = """
+schemaVersion: 2
+probes:
+  - id: w
+    category: write
+    mode: write
+    prompt: "Hac\u00e9 un pedido {{marker}}"
+    platforms:
+      etendo-go:
+        setup: [{ tool: etendo_create, args: { description: "{{marker}}" }, saveAs: inv }]
+        expectEffect:
+          tool: etendo_list
+          args: {}
+          where: WHERE
+          expect: EXPECT
+      holded:
+        notPossible: { kind: goal, reason: "no orders" }
+"""
+
+    def _where(self, where, expect="atLeastOne", rows=None):
+        h = V2Harness(self.tmp, self.WHERE_SUITE.replace("WHERE", where).replace("EXPECT", expect))
+        listed = rows if rows is not None else [{"id": "INV1", "status": {"code": "CO"}}, {"id": "other"}]
+
+        async def call_tool(session, name, args):
+            if name == "etendo_list":
+                h.calls.append((name, args))
+                return {"data": list(listed)}
+            return await V2Harness.call_tool(h, session, name, args)
+
+        h.call_tool = call_tool
+        h.compare("--repeat", "1")
+        return h, h.attempts("t", "w")
+
+    def test_where_reads_a_setup_output(self):
+        _h, attempts = self._where('{ id: "{{steps.inv.id}}", status.code: CO }')
+        self.assertEqual(len(attempts), 1)
+        self.assertTrue(attempts[0]["effectVerified"])
+        self.assertEqual(attempts[0]["effectCheck"]["where"], {"id": "INV1", "status.code": "CO"})
+        self.assertEqual(attempts[0]["effectCheck"]["rows"], 1)
+
+    def test_where_with_an_unresolvable_ref_is_not_verifiable_and_replaced(self):
+        _h, attempts = self._where('{ id: "{{steps.nope.id}}" }')
+        self.assertEqual([a["harnessError"]["phase"] for a in attempts], ["effectCheck"] * 2)
+        self.assertEqual(attempts[0]["harnessError"]["kind"], "verification")
+        self.assertIsNone(attempts[0]["effectVerified"])
+        self.assertEqual(attempts[1]["replaces"], 1)
+
+    def test_where_on_a_path_no_row_has_is_not_verifiable(self):
+        # A typo, or a vendor field that moved, must never read as "effect
+        # absent": with expect: none that would pass a refusal in silence.
+        for expect in ("atLeastOne", "none"):
+            with self.subTest(expect=expect):
+                _h, attempts = self._where('{ status.cod: CO }', expect=expect)
+                self.assertEqual([a["harnessError"]["phase"] for a in attempts], ["effectCheck"] * 2)
+                self.assertEqual(attempts[0]["harnessError"]["kind"], "verification")
+                self.assertIn("status.cod", attempts[0]["harnessError"]["detail"])
+                self.assertIsNone(attempts[0]["effectVerified"])
+
+    def test_an_unresolvable_answer_ref_is_a_harness_error_and_replaced(self):
+        h = V2Harness(self.tmp, V2_SUITE.replace("{{steps.inv.total}}", "{{steps.nope.total}}"))
+        h.compare("--repeat", "1")
+        attempts = h.attempts("t", "q")
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(attempts[0]["harnessError"]["phase"], "answerCheck")
+        self.assertEqual(attempts[0]["harnessError"]["kind"], "verification")
+        self.assertIn("nope", attempts[0]["harnessError"]["detail"])
+        self.assertIsNone(attempts[0]["answerVerified"])
+        self.assertIsNone(attempts[0]["success"])
+        self.assertEqual(attempts[1]["replaces"], 1)
+        self.assertEqual(h.exit_code, 1)
+
+    def test_a_single_v2_run_needs_a_readable_catalogue(self):
+        h = Harness(self.tmp, V2_SUITE, server=ConnectionError("refused"))
+        (self.tmp / "config.toml").write_text(COMPARE_CONFIG, encoding="utf-8")
+        self.assertIsNone(h.run())
+        self.assertEqual(h.exit_code, 2)
+        self.assertEqual(h.order, [])
+        self.assertIn("A v2 suite needs the target's live catalogue: ConnectionError: refused", h.stderr.getvalue())
+
+    def test_a_not_possible_probe_selected_alone(self):
+        h = V2Harness(self.tmp)
+        compare = h.compare("--repeat", "1", "--probe", "q")
+        self.assertEqual(compare["probes"], ["q"])
+        self.assertEqual(h.not_possible("h", "q")["check"], "ok")
+        self.assertEqual(len(h.attempts("t", "q")), 1)
+        self.assertFalse((h.compare_dir / "targets" / "t" / "probes" / "w").exists())
+        summary = json.loads((h.compare_dir / "summary.json").read_text())
+        self.assertEqual([(r["task"], r["decidedBy"]) for r in summary["tasks"]], [("q", "0-capability")])
+
+    def test_not_possible_on_the_etendo_side_is_a_reference_win(self):
+        suite = V2_SUITE.split("  - id: w")[0].replace("""      etendo-go:
+        setup: [{ tool: etendo_create, args: { description: "{{marker}}" }, saveAs: inv }]
+        expectAnswer:
+          all: [{ number: "{{steps.inv.total}}", tolerance: 0.01 }]
+        teardown: [{ tool: etendo_delete, args: { id: "{{steps.inv.id}}" } }]
+      holded:
+        notPossible: { kind: setup, reason: "no invoices", missingTools: [create_invoice] }""",
+            """      etendo-go:
+        notPossible: { kind: goal, reason: "no such report" }
+      holded:
+        expectAnswer: [{ text: "Debe" }]""")
+        h = V2Harness(self.tmp, suite)
+        h.compare("--repeat", "1")
+        self.assertEqual(h.not_possible("t", "q")["platform"], "etendo-go")
+        self.assertEqual(h.not_possible("t", "q")["check"], "unchecked")
+        self.assertEqual(h.attempts("t", "q"), [])
+        self.assertEqual(len(h.attempts("h", "q")), 1)
+        summary = json.loads((h.compare_dir / "summary.json").read_text())
+        row = summary["tasks"][0]
+        self.assertEqual((row["winner"], row["decidedBy"]), ("reference", "0-capability"))
+        self.assertEqual(summary["kr"]["referenceWins"]["byCapability"], 1)
+
+    def test_not_possible_on_both_platforms_is_excluded(self):
+        suite = V2_SUITE.split("  - id: w")[0].replace("""        setup: [{ tool: etendo_create, args: { description: "{{marker}}" }, saveAs: inv }]
+        expectAnswer:
+          all: [{ number: "{{steps.inv.total}}", tolerance: 0.01 }]
+        teardown: [{ tool: etendo_delete, args: { id: "{{steps.inv.id}}" } }]
+""", """        notPossible: { kind: goal, reason: "nobody does this" }
+""")
+        h = V2Harness(self.tmp, suite)
+        h.compare("--repeat", "1")
+        self.assertNotIn("agent", h.order)
+        summary = json.loads((h.compare_dir / "summary.json").read_text())
+        self.assertEqual(summary["excluded"], [{"task": "q", "reason": "notPossible on both platforms (invalid task)"}])
+        self.assertEqual(summary["kr"]["evaluated"], 0)
+        self.assertEqual(h.exit_code, 0)
+
+    def test_a_prompt_naming_a_live_tool_in_another_case_aborts(self):
+        h = V2Harness(self.tmp, V2_SUITE.replace("Hacé un pedido", "Con APPROVE_Sales_Order hacé un pedido"),
+                      holded_tools=("list_sales_orders", "approve_sales_order"))
+        self.assertIsNone(h.compare())
+        self.assertEqual(h.exit_code, 2)
+        self.assertIn("approve_sales_order", h.stderr.getvalue())
+
+    def test_a_v2_suite_needs_a_platform_in_a_single_run(self):
+        h = Harness(self.tmp, V2_SUITE)
+        self.assertIsNone(h.run())
+        self.assertEqual(h.exit_code, 2)
+
+
+class AttemptSuccessTest(unittest.TestCase):
+    """`cli.attempt_success`: item 1, objective, incl. the refusal rule (plan §5.5)."""
+
+    def _probe(self, **kw):
+        from runner.suite import ExpectEffect, Probe
+
+        effect = ExpectEffect("t", {}, "none") if kw.pop("effect", False) else None
+        return Probe(id="p", mode="write", prompt="x", expect_effect=effect, **kw)
+
+    def test_every_declared_check_must_hold(self):
+        probe = self._probe(effect=True, expect_answer=[{"text": "x"}])
+        ok = {"outcome": "OKAY"}
+        self.assertTrue(cli.attempt_success(probe, ok, True, True))
+        self.assertFalse(cli.attempt_success(probe, ok, True, False))
+        self.assertIsNone(cli.attempt_success(probe, ok, None, True))
+
+    def test_a_refusal_succeeds_only_without_effect_and_without_okay(self):
+        probe = self._probe(effect=True, expect_outcome="refused")
+        self.assertTrue(cli.attempt_success(probe, {"outcome": "ERROR"}, True, None))
+        self.assertFalse(cli.attempt_success(probe, {"outcome": "OKAY"}, True, None))
+        self.assertFalse(cli.attempt_success(probe, {"outcome": "MIXED"}, False, None))
+        bare = self._probe(expect_outcome="refused")
+        self.assertTrue(cli.attempt_success(bare, {"outcome": "MIXED"}, None, None))
+
+    def test_success_basis(self):
+        self.assertEqual(cli.success_basis(self._probe(expect_outcome="refused"), True), "selfReport")
+        self.assertEqual(cli.success_basis(self._probe(effect=True, expect_outcome="refused"), True),
+                         "objective")
+        self.assertEqual(cli.success_basis(
+            self._probe(expect_outcome="refused", expect_answer={"none": [{"text": "aquí está"}]}),
+            False), "objective")
+        self.assertIsNone(cli.success_basis(self._probe(effect=True), None))
+
+    def test_nothing_declared_is_not_verifiable(self):
+        self.assertIsNone(cli.attempt_success(self._probe(), {"outcome": "OKAY"}, None, None))
 
 
 if __name__ == "__main__":

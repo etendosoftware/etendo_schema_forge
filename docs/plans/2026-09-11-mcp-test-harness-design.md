@@ -133,6 +133,10 @@ a run is read by a human or by the UI).
 
 ### Suite file shape
 
+Two schema versions are read. **v1** (no `schemaVersion` key) is below and is unchanged. **v2**
+(`schemaVersion: 2`, ETP-5750 S5) is the vendor-neutral shape used by comparisons — see *Suite v2*
+at the end of this section and the worked example `suites/examples/collect-invoice.v2.yaml`.
+
 ```yaml
 window: sales-order
 probes:
@@ -217,6 +221,100 @@ happened — including a setup that failed halfway.
 is the only thing that lets us say *"this probe passed last week and fails today"*.
 
 ---
+
+### Suite v2 (D45, D46, D49 — ETP-5750 S5)
+
+```yaml
+schemaVersion: 2
+window: okr
+decision: { ruleVersion: 1, callsMargin: 0.20, tokensMargin: 0.10 }   # optional, runner/decide.py
+
+probes:
+  - id: q-invoice-outstanding        # permanent (D13)
+    category: query                  # REQUIRED: query | write | flow | error
+    mode: read                       # read | write (default read)
+    exclusive: false                 # optional, D44
+    prompt: >                        # SHARED by every platform; never names a tool
+      ¿Cuánto me queda por cobrar de la factura con referencia {{marker}}?
+    platforms:                       # REQUIRED; keys: etendo-go | holded
+      etendo-go:
+        setup:    [ ... ]            # D41 steps, through THIS platform's MCP only
+        teardown: [ ... ]
+        expectEffect:                # optional; any mode in v2
+          tool: etendo_list
+          args: { ... }
+          where: { description: "{{marker}}" }   # optional: exact match, applied by the runner
+          expect: atLeastOne         # atLeastOne | none
+        expectAnswer:                # optional; matcher over finalAnswer (runner/matcher.py)
+          all:  [ { number: 121, tolerance: 0.01 }, { number: 3, near: "unidades" },
+                  { number: 21, percent: true }, { text: "Cliente Paridad" } ]
+          none: [ { text: "no hay nada pendiente" } ]
+        expectOutcome: refused       # optional; the only value — see the refusal rules below
+      holded:
+        notPossible:                 # instead of everything above (D49)
+          kind: setup                # goal | setup
+          reason: "Holded's MCP has no tool to create an invoice."
+          missingTools: [create_invoice]   # checked against the live tools/list
+```
+
+Loader rules (`runner/suite.py`):
+
+- `setup` / `teardown` / `expect*` / `notPossible` at the probe top level are refused: they belong
+  in a platform block.
+- Every platform block either **verifies** (at least one of `expectEffect`, `expectAnswer`,
+  `expectOutcome`) or is **`notPossible`** (and then declares nothing else). A probe compared on a
+  platform it has no block for is refused at preflight (`Probe.for_platform` raises): every task
+  verifies on every platform it runs on.
+- **Prompt neutrality is enforced twice.** At load: the prompt may not contain, as a whole word
+  (case-insensitive), any tool the suite itself names (steps, effect tools, `missingTools`) nor any
+  `etendo_*` / `neo_*` word. At preflight: nor any tool of ANY compared target's live `tools/list`.
+  Either refuses the run (exit 2) before an attempt.
+- **Refusals (`expectOutcome: refused`, plan §5.5)** — success is the objective no-effect AND the
+  agent not reporting `OKAY`:
+  - `mode: write` + `refused` **requires** `expectEffect` with `expect: none` — the agent's word alone
+    does not prove nothing was written;
+  - `refused` + `expect: atLeastOne` is refused as contradictory;
+  - a read refusal (e.g. "show me a document that does not exist") may have no objective check. It is
+    allowed, and its attempts carry `successBasis: selfReport`, which the summary lists under
+    *Success on the agent's word* (`summary.json → selfReportedSuccess {count, tasks}`). Prefer
+    adding `expectAnswer.none` items pinning what the agent must NOT claim; that makes it objective.
+- A literal `number:` that is a small integer (|n| < 100) with no `near:`, `tolerance` or `percent`
+  is refused: a bare 3 or 10 is in almost every answer (a day, a line count, a document number).
+- `{{fixture.*}}` is refused until the baseline dataset exists (S6).
+- `expectEffect.where` is v2 only (a v1 suite that declares it is refused, not silently ignored).
+- v1 suites load exactly as before; `Probe.for_platform` returns a v1 probe unchanged.
+
+`expectAnswer` (`runner/matcher.py`, **`MATCHER_VERSION` 4**, a pin in `compare.json`; v1 → v2 in
+the S5 review: ids/dates/percentages, `near:`, `percent:`, no plain-space grouping, whole-word text;
+v3: `near:` binds to the nearest number only; v4: document numbers, clock times and phones):
+
+- Matched against `finalAnswer`, never the verdict. No answer (`finalAnswer: null`) is a mismatch.
+- `number:` — only **free-standing** numeric tokens count. A token touching a letter, a digit,
+  `_` or `/`, joined by a dash to a word or number, or followed by another separator and digit is
+  part of an id or a date and is skipped (`FV/2026/0010`, `14/10/2026`, `FV-2026`, `2026-10-14`,
+  `14.10.2026`, `FV2026`). Also skipped: a clock time (a token joined by `:` to a digit —
+  `10:00`, `…T10:00:00Z`; a label colon as in `Total: 121` does not count), a document number
+  after `Nº` / `N.º` / `N°` / `No.` / `núm.` / `#` (`Pedido Nº 10`; a bare `no` is the negation and
+  does not count), and every part of an international phone number (`+` country code and at least
+  two more digit groups: `+34 600 123 456`). A token followed by `%` is a percentage and matches only an item with
+  `percent: true`. Each token is read under Spanish and English conventions: with both `.` and `,`
+  the last one is the decimal separator; one separator repeated groups thousands; a single
+  separator followed by exactly three digits is **ambiguous** (`1.234` = 1234 or 1.234) and
+  matches on either reading; anything else is decimal. **Only NBSP / narrow NBSP group digits**
+  (as `Intl.NumberFormat('es')` writes `1 234,56`); a plain space never does, so "Hay 3 120
+  unidades" is 3 and 120 — reading 3120 there is a false positive no tolerance undoes, while the
+  cost of the rule (an agent typing a plain-space-grouped amount fails to match) is a
+  conservative false negative. Currency signs are not part of the token. Matches when `|value −
+  expected| ≤ tolerance` (default 0). `near: <text>` binds each occurrence of the anchor (folded,
+  whole words) to its **nearest** numeric token within 30 characters, whatever that token's value,
+  and only that token is compared (a tie goes to the token before the anchor): in "Hay 10 unidades
+  y 3 cajas", `near: unidades` is about 10 and `near: cajas` about 3. Any anchor occurrence may
+  carry the expected number. Finding the nearest token is a bisect per anchor occurrence, so a 1 MB
+  answer matches in well under the 5 s test bound. The expected value may be a `{{steps.*}}`
+  reference; a string Python reads as a float is read that way, any other must be unambiguous.
+- `text:` — case- and accent-insensitive, **whole words** (`si` does not match "posiblemente"),
+  whitespace-tolerant.
+- `all:` must all be found, `none:` must all be absent; a bare list means `all:`.
 
 ## 4b. How probes are written
 
@@ -785,6 +883,53 @@ Rules:
 run.json gains `compareId` (null for a single run), `platform`, `concurrency` and
 `schedule: {seed, shuffled}`.
 
+#### 2026-10-14: run schema v7 — suite v2 results (ETP-5750 S5, D45/D46/D49)
+
+**`RUN_SCHEMA_VERSION` 6 → 7.** For a v2 suite each target runs the probe **as its platform**
+(`Probe.for_platform`): its own setup, teardown and checks. Every attempt file adds:
+
+| Field | Meaning |
+|---|---|
+| `platform` | `etendo-go` / `holded` for a v2 suite; `null` for v1. |
+| `answerVerified` | `expectAnswer` result: true / false / null (not declared, or not checked). |
+| `answerCheck` | `{matcherVersion, verified, answered, all[], none[]}` — each item with what was found. |
+| `successBasis` | `objective` \| `selfReport` (a refusal with no objective check, listed by the summary) \| `null` when `success` is null. |
+| `success` | **Item 1, objective** — what `report.py` reads. Every declared check must hold; a declared check that could not be decided gives `null` (not verifiable, never a fail). `expectOutcome: refused` adds the one self-report rule: the agent must not have reported `OKAY`. Nothing declared → `null`. |
+
+`silentWrong` now covers both checks: `OKAY` while `effectVerified` or `answerVerified` is false.
+An `expectAnswer` whose reference cannot be resolved is a harness error (`kind: verification`,
+`phase: answerCheck`), not a failed answer.
+
+**`notPossible`** (D49). For a platform block declaring it, no attempt runs and no budget is spent;
+the target's run gets `probes/<probeId>/not-possible.json`:
+
+```jsonc
+{ "schemaVersion": 7, "probeId": "q-…", "platform": "holded", "outcome": "notPossible",
+  "declaration": { "kind": "setup", "reason": "…", "missingTools": ["create_invoice"] },
+  "catalogueSha": "<the live catalogue it was checked against>",
+  "check": "ok" | "invalidDeclaration" | "unchecked",
+  "presentTools": [] }                 // the missingTools the catalogue DOES have
+```
+
+`expectEffect.where` is applied by the runner to the rows of the answer: number-like scalars compare
+by value (`1` = `1.0` = `"1"`; booleans never equal numbers), everything else exactly. When the
+payload says it holds more rows than it carries (`totalRows` / `totalCount` above the page), the
+check is **not verifiable** (harness error), never counted on a partial page. A `where` path that
+**no row** of a non-empty answer has (a typo, a vendor field that moved) is likewise not
+verifiable: counted as "no match" it would let `expect: none` pass a refusal in silence. A path
+some rows have is matched normally (a row without it does not match; a present `null` is a value),
+and an empty answer is an honest 0 — there is no row shape to check and nothing was found.
+
+`ok` = every `missingTools` entry is absent from the live tools/list; `invalidDeclaration` = at
+least one now exists (the report does not award the task by capability: a vendor update cannot
+keep winning a loss silently); `unchecked` = no `missingTools` declared. To make these checks
+`run.json.server` also carries `tools`, the sorted live tool names.
+
+A v2 suite needs the target's `platform` and live catalogue even in a single `mcp-test`: an auth or
+catalogue failure there exits 2 instead of writing "not measured" probes, because neither the
+platform blocks nor the `notPossible` checks can be resolved blind. `compare.json` gains
+`suite.schemaVersion` and `pins.suiteSchemaVersion` / `pins.matcherVersion`.
+
 ### 6.2 Run metadata header (`run.json`, written before the first probe)
 
 Without this a run is unreadable three weeks later.
@@ -1287,6 +1432,9 @@ in a changelog.
 | D4 | **Probes are hand-written, grown incrementally.** The first one is deliberately simple in *what it asks for* (a sales order for the default customer, no lines) so that the first failure is unambiguous while the harness itself is still unproven. | 2026-09-11 | Simple in scope — **not** simple in phrasing; see D21. |
 | D44 | **A comparison groups one standard run per target under one `compareId`.** Targets run concurrently; attempts within a target run in a pool of K (`--concurrency` / `run.concurrency`, default 4; a target's own `concurrency` only caps it), in a seeded shuffled order whose seed is recorded and pinned; `exclusive` probes run alone; every attempt records its real start, finish and worker slot. Preflight covers every target and any failure aborts the whole comparison. | 2026-10-14 | ETP-5750 S3; plan §5.2. Parallel from v1 was a user decision (plan §9.3). All-or-nothing preflight because one side alone produces no winner. The seed is a pin so that a stability pair runs the same order; parallelism is a variance source, so the schedule is recorded rather than inferred. |
 | D43 | **`--repeat N` runs each probe N times, each attempt in its own MCP session, conversation and `{{marker}}`; every attempt is kept as `probes/<id>/attempt-<n>.json`, never averaged away.** A harness-errored attempt does not count and is replaced after the planned ones, at most N replacements per probe; a preflight auth failure is never replaced. | 2026-10-14 | ETP-5750 S2; plan `2026-10-14-mcp-tests-reproducible-comparison-plan.md` §5.1. Variance was unmeasured (§11 q4). Replacing harness errors keeps a transient provider fault from shrinking N, and the cap keeps a deterministically broken probe from looping. `mcp-compare` defaults to 3 (D44). **Behaviour change (S3):** the exit code is 1 whenever any attempt has a `harnessError` — a replaced transient error, or an effect check that could not run (before S3 the latter exited 0). |
+| D45 | **A suite v2 probe has one vendor-neutral prompt and a block per platform** (`setup`, `teardown`, `expectEffect` + client-side `where`, `expectAnswer`, `expectOutcome: refused`, or `notPossible`). The prompt never names a tool — enforced at load and against every target's live catalogue at preflight; every block verifies or is `notPossible`; a write refusal must prove `expect: none`; a `where` path absent from every row is not verifiable. `where` compares number-like scalars by value and refuses a partial page. v1 suites are unchanged. | 2026-10-14 | ETP-5750 S5; plan §5.3. Narrows D34 again: still one post-condition, now per platform. Neutrality enforced, not hoped for, because a prompt that names one vendor's tool hands that vendor the task. |
+| D46 | **`expectAnswer` is a deterministic, versioned matcher over `finalAnswer`** (`runner/matcher.py`, `MATCHER_VERSION`): locale-tolerant numbers (Spanish and English) that skip ids, dates, clock times, document numbers (`Nº 10`), phone numbers and percentages, `near:` anchors bound to their nearest number, `percent:`, whole-word accent-insensitive text, `all` / `none`; small literal integers need an anchor. No LLM judge. | 2026-10-14 | ETP-5750 S5; plan §5.5. A judge adds its own variance to criterion 1 and puts a second model inside the measurement. Conservative false negatives accepted, as in D34. |
+| D49 | **"Not possible on this platform" is a first-class outcome**: declared per platform, checked against the live tools/list at preflight (`ok` / `invalidDeclaration` / `unchecked`), recorded as `not-possible.json`, never attempted and never worked around outside the MCP (no REST, no manual seeding). | 2026-10-14 | ETP-5750 S5; plan §5.10 and §9 decision 2. Declared rather than inferred because an agent cannot tell "does not exist" from "did not find it" (D38). |
 | D47 | **The decision rule is code (`runner/decide.py`, `RULE_VERSION`) and its thresholds are data** (the suite's `decision:` block, copied into `compare.json`, over `DEFAULT_PARAMETERS`). Every summary records the version, the parameters and their sha. | 2026-10-14 | ETP-5750 S4; plan §5.6. A KR figure without the rule that produced it is unreadable later, and a rule tweak must be re-appliable to an old run (`make mcp-report`) and visible in the diff. A declared `ruleVersion` the code does not implement is refused, never silently re-interpreted. |
 | D48 | **Metrics come only from `compare.json`, `run.json` and the probe files; `events.ndjson` is never read by the report.** | 2026-10-14 | ETP-5750 S4. Restates §6.5 rule 1 as a property of the report and guards it with a test that deletes the event files and asserts a byte-identical summary. |
 | D42 | **An empty model turn is asked again, not read as the end of the probe.** A turn with no text and no tool call is retried from the same state, the empty message dropped, at most `MAX_EMPTY_COMPLETIONS` (3) times, then the probe is a provider failure (`harnessError.kind: provider`, `EmptyCompletion`). The count is recorded as `emptyCompletions`. | 2026-10-01 | Run `20261001T1912-local-45e9`: three probes ended with 0 tool calls and a verdict saying *"no tools were provided"* while 28 tools were bound — the Gemini route of the gateway answered the first turn with an empty `stop` 4 times out of 5 in a direct reproduction. LangGraph reads that as *the agent is done*, so a provider fault was being reported as a product result. Not a change to the instrument: an empty turn carries no decision, so asking again is the call that never answered, not a second chance at one. A resumed stream gets only the remaining step budget. |

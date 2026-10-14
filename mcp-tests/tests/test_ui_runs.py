@@ -138,6 +138,22 @@ class AttemptLayoutTest(unittest.TestCase):
         self.assertEqual(listed["cmp"].probe_count, 0)
         self.assertEqual(runs.probe_files(compare), [])
 
+    def test_a_target_dir_with_only_not_possible_lists_no_probe(self):
+        # A notPossible task has no attempt, so the UI helpers do not list it;
+        # only report.load_target reads not-possible.json.
+        self._header(7)
+        folder = self.run_dir / "probes" / "q"
+        folder.mkdir()
+        (folder / "not-possible.json").write_text(json.dumps({"outcome": "notPossible", "probeId": "q"}))
+        self.assertTrue(runs.uses_attempt_layout(self.run_dir))
+        self.assertEqual(runs.probe_files(self.run_dir), [])
+        self.assertEqual(runs.attempt_numbers(self.run_dir, "q"), [])
+        self.assertIsNone(runs.load_probe(self.run_dir, "q", 1))
+        from runner import report
+        target = report.load_target(self.run_dir, "h")
+        self.assertEqual(target.probes["q"].attempts, [])
+        self.assertEqual(target.probes["q"].not_possible["outcome"], "notPossible")
+
     def test_a_v4_run_is_one_attempt_per_probe(self):
         self._header(4)
         (self.run_dir / "probes" / "p.json").write_text(json.dumps(V4))

@@ -695,6 +695,9 @@ async def describe_server(target: dict[str, Any]) -> dict[str, Any]:
         "serverInfo": {"name": info.get("name"), "version": info.get("version")},
         "protocolVersion": getattr(initialized, "protocolVersion", None),
         "catalogue": catalogue_digest(tools),
+        # Sorted names, for the suite v2 checks at preflight: the prompt
+        # tool-name lint and the `notPossible.missingTools` check (D49).
+        "tools": sorted(str(getattr(t, "name", "")) for t in tools),
     }
 
 
@@ -727,6 +730,103 @@ async def call_tool(session: Any, name: str, args: dict[str, Any]) -> Any:
         return json.loads(texts[0])
     except json.JSONDecodeError as exc:
         raise VerificationError(f"{name} returned non-JSON content") from exc
+
+
+def extract_rows(payload: Any) -> list[Any]:
+    """The records of an MCP read, across the list shapes NEO uses.
+
+    Holded's shapes are not known yet (plan §5.3: "unknown until probed");
+    a payload this does not recognise raises, it is never read as empty.
+
+    Only a COMPLETE answer is returned: when the payload says it holds more
+    rows than it carries (`totalRows` / `totalCount` above the page size), a
+    client-side `where` over this page would count a part as the whole, so it
+    raises — not verifiable — rather than answer from a partial page.
+    """
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("data", "items", "results", "records"):
+            if isinstance(payload.get(key), list):
+                rows = payload[key]
+                total = next((payload[k] for k in ("totalRows", "totalCount")
+                              if isinstance(payload.get(k), int)), None)
+                if total is not None and total > len(rows):
+                    raise VerificationError(
+                        f"the read returned {len(rows)} of {total} rows (one page); a client-side "
+                        f"`where` cannot be checked on a partial answer — filter server-side or "
+                        f"raise the page size"
+                    )
+                return rows
+    keys = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
+    raise VerificationError(f"cannot read rows out of payload {keys}")
+
+
+def _path(row: Any, dotted: str) -> Any:
+    value = row
+    for part in dotted.split("."):
+        if isinstance(value, dict) and part in value:
+            value = value[part]
+        elif isinstance(value, list) and part.isdigit() and int(part) < len(value):
+            value = value[int(part)]
+        else:
+            return _MISSING
+    return value
+
+
+_MISSING = object()
+
+
+def _same(actual: Any, expected: Any) -> bool:
+    """Exact match, except that number-like scalars compare by value.
+
+    `1`, `1.0` and `"1"` are the same amount whichever way a vendor serialises
+    it; booleans are never numbers here (`True` is not `1`).
+    """
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        return type(actual) is type(expected) and actual == expected  # True is not 1
+    a, b = _as_number(actual), _as_number(expected)
+    if a is not None and b is not None:
+        return a == b
+    return actual == expected
+
+
+def _as_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def count_matching(payload: Any, where: dict[str, Any]) -> int:
+    """Rows whose every `where` path equals the expected value exactly (suite v2).
+
+    Applied by the runner, not the server, so the check does not depend on
+    which fields a vendor's list tool can filter by.
+
+    A path that NO row has (a typo, a vendor field that moved) raises — not
+    verifiable — instead of counting 0: with `expect: none` a 0 would pass a
+    refusal in silence. A path some rows have is matched normally (a row
+    without it does not match; a present null is a value). No rows at all is
+    an honest 0: there is no shape to check, and nothing was found.
+    """
+    rows = extract_rows(payload)
+    if rows:
+        for key in where:
+            if all(_path(row, key) is _MISSING for row in rows):
+                raise VerificationError(
+                    f"`where` path {key!r} is in no row of the answer ({len(rows)} rows) — a typo or "
+                    "a field this target does not return; it cannot be read as \"no match\"")
+    return sum(
+        1 for row in rows
+        if all(_same(_path(row, key), expected) for key, expected in where.items())
+    )
 
 
 def count_rows(payload: Any) -> int:

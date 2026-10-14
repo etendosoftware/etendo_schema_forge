@@ -331,6 +331,39 @@ class StabilityTest(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertEqual(result["agreement"]["ratio"], 1.0, "still computed, just not valid")
 
+    def test_self_reported_tasks_are_flagged_but_decided_and_compared_as_any_other(self):
+        # Documents the S5 contract: `successBasis: selfReport` is VISIBLE
+        # (summary.json + summary.md) but neither the rule (decide.py never
+        # sees it) nor stability treats it differently. A self-reported task
+        # flips and agrees like any other; stability does not flag it.
+        cmp_dir = _copy_fixture()
+        for f in cmp_dir.glob("targets/*/probes/f-process-sales-order/attempt-*.json"):
+            record = json.loads(f.read_text())
+            record["successBasis"] = "selfReport"
+            f.write_text(json.dumps(record))
+        summary = report.build_summary(cmp_dir)
+        self.assertEqual(summary["selfReportedSuccess"]["count"], 1)
+        self.assertEqual({(r["task"], r["target"]) for r in summary["selfReportedSuccess"]["tasks"]},
+                         {("f-process-sales-order", "local"), ("f-process-sales-order", "holded")})
+        md = report.render_markdown(summary)
+        self.assertIn("## Success on the agent's word", md)
+        self.assertIn("- **f-process-sales-order** on local", md)
+        self.assertEqual(_task(summary, "f-process-sales-order")["decidedBy"],
+                         _task(self.base, "f-process-sales-order")["decidedBy"])
+        a = copy.deepcopy(summary)
+        for t in a["freshness"].values():
+            t["status"] = "fresh"
+        a["official"] = True
+        b = copy.deepcopy(a)
+        _task(b, "f-process-sales-order")["winner"] = "subject"
+        result = report.stability(a, b)
+        flipped = next(t for t in result["tasks"] if t["task"] == "f-process-sales-order")
+        self.assertFalse(flipped["agree"])
+        self.assertNotIn("selfReport", json.dumps(result))
+        # A summary without any self-reported task renders no such section.
+        self.assertEqual(self.base["selfReportedSuccess"], {"count": 0, "tasks": []})
+        self.assertNotIn("agent's word", report.render_markdown(self.base))
+
     def test_cli_stability_json_prints_the_full_result(self):
         with redirect_stdout(io.StringIO()) as out:
             code = report.main(["stability", str(FIXTURE), str(FIXTURE), "--json"])

@@ -53,6 +53,7 @@ from .mcp_client import (
     AuthError,
     VerificationError,
     call_tool,
+    count_matching,
     count_rows,
     describe_server,
     is_headless,
@@ -60,7 +61,16 @@ from .mcp_client import (
     preflight,
 )
 from .steps import StepError, resolve_refs, run_steps
-from .suite import Probe, Suite, attempt_marker, interpolate, interpolate_args, load_suite
+from .matcher import MATCHER_VERSION, check_answer
+from .suite import (
+    Probe,
+    Suite,
+    attempt_marker,
+    interpolate,
+    interpolate_args,
+    load_suite,
+    prompt_tool_mentions,
+)
 from .verdict import VERDICT_SCHEMA_VERSION
 
 HARNESS_ROOT = Path(__file__).resolve().parent.parent
@@ -90,7 +100,11 @@ RUNS_DIR = HARNESS_ROOT / "runs"
 #: `compareId`, `concurrency` and `schedule`. A comparison writes one ordinary
 #: run per target under `runs/<compareId>/targets/<target>/`. The probe-file
 #: layout is unchanged from v5.
-RUN_SCHEMA_VERSION = 6
+#: v7 (ETP-5750 S5, D45/D46/D49) adds suite v2: each attempt records
+#: `platform`, `answerVerified` / `answerCheck` (expectAnswer, runner/matcher.py)
+#: and the objective `success`; a platform that declared a probe impossible gets
+#: `probes/<id>/not-possible.json` and no attempt at all.
+RUN_SCHEMA_VERSION = 7
 
 #: `compare.json` shape (plan §5.2, §6). Read by `report.py`.
 COMPARE_SCHEMA_VERSION = 1
@@ -268,16 +282,79 @@ async def _describe_target(target: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-def _silent_wrong(verdict: dict[str, Any] | None, effect_verified: bool | None) -> bool | None:
-    """Item 8 of the plan (§3): the agent said OKAY and the objective check failed.
+def _silent_wrong(
+    verdict: dict[str, Any] | None, effect_verified: bool | None, answer_verified: bool | None = None
+) -> bool | None:
+    """Item 8 of the plan (§3): the agent said OKAY and an objective check failed.
 
     None when there is nothing to compare — no verdict, or no check (or a check
     that could not run). A flag, not a verdict: such an attempt already failed
     the objective check.
     """
-    if verdict is None or effect_verified is None:
+    checks = [c for c in (effect_verified, answer_verified) if c is not None]
+    if verdict is None or not checks:
         return None
-    return verdict.get("outcome") == "OKAY" and effect_verified is False
+    return verdict.get("outcome") == "OKAY" and not all(checks)
+
+
+def attempt_success(
+    probe: Probe,
+    verdict: dict[str, Any] | None,
+    effect_verified: bool | None,
+    answer_verified: bool | None,
+) -> bool | None:
+    """Item 1, objective (plan §3, §5.5): what `report.py` reads as success.
+
+    Every check the probe declares must hold; a declared check that could not
+    be decided (None) makes success None — "not verifiable", never a failure.
+    `expectOutcome: refused` adds the one self-report rule: the agent must not
+    have reported OKAY. A probe that declares nothing yields None (a v1 read).
+    """
+    declared = []
+    if probe.expect_effect is not None:
+        declared.append(effect_verified)
+    if probe.expect_answer is not None:
+        declared.append(answer_verified)
+    if not declared and probe.expect_outcome != "refused":
+        return None
+    if any(c is None for c in declared):
+        return None
+    if verdict is None:
+        return None
+    success = all(declared)
+    if probe.expect_outcome == "refused":
+        success = success and verdict.get("outcome") != "OKAY"
+    return success
+
+
+def success_basis(probe: Probe, success: bool | None) -> str | None:
+    """What `success` rests on: `objective` or `selfReport` (plan §5.5, S5 review).
+
+    `selfReport` only for a refusal with no objective check at all — a read
+    error task such as "show me a document that does not exist", where nothing
+    can be written and there is nothing to read back. It is allowed, and it is
+    flagged in the summary rather than hidden in the success count. An
+    `expectAnswer` (e.g. `none:` items pinning what the agent must NOT claim)
+    makes it objective.
+    """
+    if success is None:
+        return None
+    if probe.expect_effect is None and probe.expect_answer is None:
+        return "selfReport"
+    return "objective"
+
+
+def _check_answer(probe: Probe, answer: Any, *, saved: dict[str, Any], interp: dict[str, Any]
+                  ) -> tuple[bool | None, dict[str, Any] | None, str | None]:
+    """(answerVerified, answerCheck, error). An unresolvable spec is an error, not a fail."""
+    if probe.expect_answer is None:
+        return None, None, None
+    try:
+        spec = resolve_refs(interpolate_args(probe.expect_answer, **interp), saved)
+        check = check_answer(answer if isinstance(answer, str) else None, spec)
+    except (StepError, ValueError) as exc:
+        return None, None, f"answer check: {exc}"
+    return check["verified"], check, None
 
 
 def attempt_path(run_dir: Path, probe_id: str, attempt: int) -> Path:
@@ -368,7 +445,14 @@ async def _verify_effect(
         # A session of its own, so nothing the agent's session held can reach it.
         async with mcp_session(target) as session:
             payload = await call_tool(session, effect.tool, call_args)
-            rows = count_rows(payload)
+            where = None
+            if effect.where:
+                where = resolve_refs(interpolate_args(
+                    effect.where, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+                ), saved or {})
+                rows = count_matching(payload, where)
+            else:
+                rows = count_rows(payload)
     except AuthError as exc:
         return None, None, {"kind": "auth", "phase": "effectCheck", "detail": f"effect check: {exc}"}
     except Exception as exc:  # noqa: BLE001 - VerificationError included
@@ -380,6 +464,8 @@ async def _verify_effect(
 
     verified = rows >= 1 if effect.expect == "atLeastOne" else rows == 0
     detail = {"tool": effect.tool, "args": call_args, "expect": effect.expect, "rows": rows}
+    if effect.where:
+        detail["where"] = where
     return verified, detail, None
 
 
@@ -496,6 +582,8 @@ class AttemptContext:
     preflight_error: dict[str, Any] | None = None
     #: Console prefix; `[<target>] ` in a comparison, where lines interleave.
     tag: str = ""
+    #: The target's platform when the suite is v2; None for a v1 suite.
+    platform: str | None = None
 
 
 @dataclass(frozen=True)
@@ -574,6 +662,8 @@ async def run_attempt(
         "replaces": replaces,
         "marker": marker,
         "mode": probe.mode,
+        # The platform this attempt ran as (suite v2); None for a v1 suite.
+        "platform": ctx.platform,
         "prompt": prompt,
         # Real wall clock, ms precision, and the pool slot that ran it (D44):
         # the actual schedule, on file, not inferred.
@@ -585,6 +675,14 @@ async def run_attempt(
         "effectCheck": None,
         # Persisted, not just printed (plan §3 item 8). See _silent_wrong.
         "silentWrong": None,
+        # Suite v2 (D46): expectAnswer over finalAnswer, and the objective
+        # success the report reads. None = not checked / not verifiable.
+        "answerVerified": None,
+        "answerCheck": None,
+        "success": None,
+        # objective | selfReport (a refusal with no objective check); None
+        # when success is None.
+        "successBasis": None,
         # None until the agent ran; then always present (agent.run_probe).
         "finalAnswer": None,
         "usage": None,
@@ -655,7 +753,20 @@ async def run_attempt(
         )
         result["effectVerified"] = verified
         result["effectCheck"] = detail
-        result["silentWrong"] = _silent_wrong(verdict, verified)
+        answered, answer_check, answer_error = _check_answer(
+            probe, result.get("finalAnswer"), saved=saved,
+            interp={"run_id": ctx.token_run_id, "probe_id": probe.id, "timestamp": timestamp,
+                    "marker": marker},
+        )
+        result["answerVerified"] = answered
+        result["answerCheck"] = answer_check
+        if answer_error and not check_error:
+            check_error = {"kind": "verification", "phase": "answerCheck", "detail": answer_error}
+        result["silentWrong"] = _silent_wrong(verdict, verified, answered)
+        result["success"] = attempt_success(probe, verdict, verified, answered)
+        result["successBasis"] = success_basis(probe, result["success"])
+        if answered is not None:
+            print(f"    {tag} answer {'matched' if answered else 'DID NOT match'}")
         if check_error:
             result["harnessError"] = check_error
             print(f"    {tag} effect NOT VERIFIABLE: {check_error['detail']}", file=sys.stderr)
@@ -1002,6 +1113,7 @@ def _open_target_run(
     seed: int | None,
     compare_id: str | None,
     preflight_error: dict[str, Any] | None,
+    platform: str | None = None,
 ) -> AttemptContext:
     """Write one target's run.json, open its event stream, print its banner."""
     _write_json(
@@ -1078,7 +1190,84 @@ def _open_target_run(
         token_run_id=compare_id or run_id,
         preflight_error=preflight_error,
         tag=f"[{target['name']}] " if compare_id else "",
+        platform=platform,
     )
+
+
+@dataclass
+class TargetPlan:
+    """What one target will actually run of a suite (suite v2, D45/D49)."""
+
+    runnable: list[Probe]
+    not_possible: list[dict[str, Any]]
+    problems: list[str]
+
+
+def plan_target(suite: Suite, probes: list[Probe], platform: str | None,
+                server: dict[str, Any] | None) -> TargetPlan:
+    """Resolve every probe for one target's platform and check its declarations.
+
+    - A v1 suite runs as it always has: every probe, unchanged.
+    - A v2 probe with no block for this platform is a PROBLEM (the run is
+      refused): every task verifies on every platform it runs on (plan §5.3).
+    - A `notPossible` block is checked against the live tools/list (D49): any
+      `missingTools` entry that the catalogue now has makes the declaration
+      `invalidDeclaration` (a vendor update cannot keep awarding a loss); no
+      `missingTools` at all is `unchecked`; otherwise `ok`. No attempt runs.
+    """
+    if suite.schema_version < 2:
+        return TargetPlan(list(probes), [], [])
+    live = set((server or {}).get("tools") or [])
+    catalogue_sha = ((server or {}).get("catalogue") or {}).get("sha")
+    plan = TargetPlan([], [], [])
+    for probe in probes:
+        try:
+            resolved = probe.for_platform(platform)
+        except KeyError as exc:
+            plan.problems.append(exc.args[0])
+            continue
+        if resolved.not_possible is None:
+            plan.runnable.append(resolved)
+            continue
+        declared = resolved.not_possible
+        present = sorted(t for t in declared.missing_tools if t in live)
+        check = "unchecked" if not declared.missing_tools else (
+            "invalidDeclaration" if present else "ok")
+        plan.not_possible.append({
+            "schemaVersion": RUN_SCHEMA_VERSION,
+            "probeId": probe.id,
+            "platform": platform,
+            "outcome": "notPossible",
+            "declaration": declared.to_json(),
+            "catalogueSha": catalogue_sha,
+            "check": check,
+            "presentTools": present,
+        })
+    return plan
+
+
+def prompt_problems(probes: list[Probe], servers: list[dict[str, Any] | None]) -> list[str]:
+    """v2 prompts that name a tool of ANY compared target's live catalogue (plan §5.3)."""
+    names = set()
+    for server in servers:
+        names.update((server or {}).get("tools") or [])
+    problems = []
+    for probe in probes:
+        if probe.platforms is None:
+            continue
+        mentions = prompt_tool_mentions(probe.prompt, names)
+        if mentions:
+            problems.append(f"Probe {probe.id!r}: the shared prompt names live tool(s) {mentions}.")
+    return problems
+
+
+def _write_not_possible(ctx: AttemptContext, plan: TargetPlan) -> None:
+    for record in plan.not_possible:
+        _write_json(ctx.run_dir / "probes" / record["probeId"] / "not-possible.json", record)
+        note = {"ok": "", "unchecked": " (unchecked: no missingTools)",
+                "invalidDeclaration": f" — INVALID: {record['presentTools']} now exist"}[record["check"]]
+        print(f"  {ctx.tag}{record['probeId']}: not possible on {record['platform']} "
+              f"({record['declaration']['kind']}){note}")
 
 
 def _finish_target(ctx: AttemptContext, outcome: TargetOutcome) -> None:
@@ -1130,6 +1319,27 @@ async def _run_single(
     if server and server["error"]:
         print(f"  (server identity not read: {server['error']['detail']})", file=sys.stderr)
 
+    platform = None
+    if suite.schema_version >= 2:
+        # A v2 suite cannot be run blind: its platform blocks, its notPossible
+        # checks and its prompt lint all need the target's platform AND its
+        # live catalogue. So here the soft rule does not apply (D45, D49).
+        try:
+            platform = cfg.target_platform(target)
+        except ValueError as exc:
+            print(exc.args[0], file=sys.stderr)
+            return 2
+        if preflight_error or not server or server["error"]:
+            why = (preflight_error or (server or {}).get("error") or {}).get("detail", "no catalogue")
+            print(f"A v2 suite needs the target's live catalogue: {why}. Nothing was measured.",
+                  file=sys.stderr)
+            return 2
+    plan = plan_target(suite, probes, platform, server)
+    problems = plan.problems + prompt_problems(probes, [server])
+    if problems:
+        print("Suite refused for this target:\n  " + "\n  ".join(problems), file=sys.stderr)
+        return 2
+
     started_at = dt.datetime.now(dt.timezone.utc)
     run_id = _new_run_id(target["name"], started_at)
     run_dir = RUNS_DIR / run_id
@@ -1139,11 +1349,12 @@ async def _run_single(
     ctx = _open_target_run(
         run_id=run_id, run_dir=run_dir, started_at=started_at, target=target,
         provider=provider, max_steps=max_steps, max_result_chars=max_result_chars,
-        repeat=repeat, suite=suite, probes=probes, server=server,
+        repeat=repeat, suite=suite, probes=plan.runnable, server=server,
         harness=_harness_revision(), concurrency=concurrency, seed=args.seed,
-        compare_id=None, preflight_error=preflight_error,
+        compare_id=None, preflight_error=preflight_error, platform=platform,
     )
-    outcome = await run_target(ctx, probes, concurrency=concurrency, seed=args.seed)
+    _write_not_possible(ctx, plan)
+    outcome = await run_target(ctx, plan.runnable, concurrency=concurrency, seed=args.seed)
     _finish_target(ctx, outcome)
     if outcome.stopped:
         print(_stop_message(provider), file=sys.stderr)
@@ -1200,6 +1411,13 @@ async def _run_compare(
             print(f"Comparison aborted: could not read target {target['name']!r} "
                   f"({server['error']['detail']}). Nothing was measured.", file=sys.stderr)
             return 2
+    plans = [plan_target(suite, probes, cfg.target_platform(t), srv) for t, srv in zip(targets, servers)]
+    problems = [f"[{t['name']}] {p}" for t, plan in zip(targets, plans) for p in plan.problems]
+    problems += prompt_problems(probes, servers)
+    if problems:
+        print("Comparison aborted, the suite is not runnable as declared:\n  " + "\n  ".join(problems),
+              file=sys.stderr)
+        return 2
 
     started_at = dt.datetime.now(dt.timezone.utc)
     compare_id = _new_compare_id(started_at)
@@ -1211,17 +1429,19 @@ async def _run_compare(
 
     contexts = []
     target_meta = []
-    for target, server in zip(targets, servers):
+    for target, server, plan in zip(targets, servers, plans):
         k = cfg.target_concurrency(target, concurrency)
         run_id = f"{compare_id}-{target['name']}"
         ctx = _open_target_run(
             run_id=run_id, run_dir=compare_dir / "targets" / target["name"],
             started_at=started_at, target=target, provider=provider, max_steps=max_steps,
-            max_result_chars=max_result_chars, repeat=repeat, suite=suite, probes=probes,
+            max_result_chars=max_result_chars, repeat=repeat, suite=suite, probes=plan.runnable,
             server=server, harness=harness, concurrency=k, seed=seed,
             compare_id=compare_id, preflight_error=None,
+            platform=cfg.target_platform(target) if suite.schema_version >= 2 else None,
         )
-        contexts.append((ctx, k))
+        _write_not_possible(ctx, plan)
+        contexts.append((ctx, k, plan))
         target_meta.append({
             "name": target["name"],
             "platform": cfg.target_platform(target),
@@ -1247,9 +1467,9 @@ async def _run_compare(
 
     stop = asyncio.Event()
     outcomes = await asyncio.gather(*(
-        run_target(ctx, probes, concurrency=k, seed=seed, stop=stop) for ctx, k in contexts
+        run_target(ctx, plan.runnable, concurrency=k, seed=seed, stop=stop) for ctx, k, plan in contexts
     ))
-    for (ctx, _k), outcome in zip(contexts, outcomes):
+    for (ctx, _k, _plan), outcome in zip(contexts, outcomes):
         _finish_target(ctx, outcome)
 
     record["finishedAt"] = _now_ms()
@@ -1306,7 +1526,8 @@ def _compare_record(
         "repeat": repeat,
         # The suite's `decision:` block, verbatim (D47); null = rule defaults.
         "decision": suite.decision,
-        "suite": {"file": suite.path.name, "sha": suite.sha, "window": suite.window},
+        "suite": {"file": suite.path.name, "sha": suite.sha, "window": suite.window,
+                  "schemaVersion": suite.schema_version},
         "probes": [p.id for p in probes],
         "schedule": {"seed": seed, "concurrency": concurrency},
         "pins": {
@@ -1323,6 +1544,8 @@ def _compare_record(
             "repeat": repeat,
             "seed": seed,
             "suiteSha": suite.sha,
+            "suiteSchemaVersion": suite.schema_version,
+            "matcherVersion": MATCHER_VERSION,
         },
         "targets": targets,
     }

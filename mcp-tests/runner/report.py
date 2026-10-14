@@ -36,8 +36,10 @@ from typing import Any
 
 from . import decide as rule
 
-REPORT_VERSION = 1
-SUMMARY_SCHEMA_VERSION = 1
+#: v2 (S5 review): `selfReportedSuccess` — tasks whose success rests on the
+#: agent's own report (a refusal with no objective check) are listed, never hidden.
+REPORT_VERSION = 2
+SUMMARY_SCHEMA_VERSION = 2
 STABILITY_TARGET = 0.90
 
 # A characters-per-token estimate for the tool catalogue's priming share
@@ -354,6 +356,17 @@ def _target_pins(target: TargetRecords, meta: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _self_reported(tasks: list[str], targets: tuple[TargetRecords, ...]) -> dict[str, Any]:
+    """Tasks whose success, on some target, rests on `successBasis: selfReport`."""
+    rows = []
+    for task in tasks:
+        for target in targets:
+            records = target.probes.get(task)
+            if records and any(rec.get("successBasis") == "selfReport" for _n, rec in records.attempts):
+                rows.append({"task": task, "target": target.name})
+    return {"count": len({r["task"] for r in rows}), "tasks": rows}
+
+
 def build_summary(compare_dir: Path) -> dict[str, Any]:
     compare_dir = Path(compare_dir)
     compare = _read_json(compare_dir / "compare.json") or {}
@@ -441,6 +454,10 @@ def build_summary(compare_dir: Path) -> dict[str, Any]:
         "kr": kr,
         "stumbleIndicators": stumbles,
         "tasks": task_rows,
+        # Plan §5.5 / S5 review: success that rests on the agent's own word (a
+        # refusal with no objective check) is allowed, but never hidden in the
+        # success count — every such task is listed here.
+        "selfReportedSuccess": _self_reported(tasks, (subject, reference)),
         "capabilityGaps": [
             {"task": r["task"], "target": side["target"], **side["notPossible"]}
             for r in task_rows for side in (r["subject"], r["reference"])
@@ -561,6 +578,13 @@ def render_markdown(summary: dict[str, Any]) -> str:
         for gap in summary["capabilityGaps"]:
             tools = ", ".join(gap["missingTools"]) or "no tools declared (unchecked)"
             lines.append(f"- **{gap['task']}** on {gap['target']} ({gap['kind']}): {gap['reason']} — missing: {tools}")
+    self_reported = summary.get("selfReportedSuccess") or {}
+    if self_reported.get("count"):
+        lines += ["", "## Success on the agent's word", "",
+                  f"{self_reported['count']} task(s) decide success by the agent's self-report alone "
+                  f"(a refusal with no objective check, plan §5.5) — read them with that in mind:", ""]
+        for row in self_reported["tasks"]:
+            lines.append(f"- **{row['task']}** on {row['target']}")
     if summary["excluded"] or summary["notEvaluable"]:
         lines += ["", "## Not counted", ""]
         for row in summary["excluded"]:
