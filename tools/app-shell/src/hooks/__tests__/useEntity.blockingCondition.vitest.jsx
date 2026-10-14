@@ -104,7 +104,9 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
   // ETP-5577 — a "period not open" refusal toasts with the way out the layout registered.
   it('handleProcess: a PeriodNotAvailable refusal toasts with the calendar action', async () => {
     const navigate = vi.fn();
-    setPeriodRecovery(periodRecoveryFor({ pending: false }, navigate));
+    setPeriodRecovery(periodRecoveryFor({ pending: false }, navigate, async () => [
+      { year: 'Y2026', startingDate: '2027-01-01', endingDate: '2027-01-31' },
+    ]));
     globalThis.fetch.mockImplementation(async (url, opts) => {
       if (opts?.method === 'POST' && String(url).includes('/action/')) {
         return new Response(JSON.stringify({
@@ -117,7 +119,7 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
     });
 
     const { result } = renderEntity();
-    act(() => { result.current.handleSelect({ id: 'doc-1', documentStatus: 'DR' }); });
+    act(() => { result.current.handleSelect({ id: 'doc-1', documentStatus: 'DR', accountingDate: '2027-01-15' }); });
 
     await act(async () => {
       await result.current.handleProcess({ columnName: 'docAction', name: 'Complete' });
@@ -126,8 +128,9 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
 
     const [, options] = toast.error.mock.calls[0];
     expect(options.action.label).toBe('periodNotAvailableOpenCalendar');
-    options.action.onClick();
-    expect(navigate).toHaveBeenCalledWith('/calendar');
+    await options.action.onClick();
+    // The year of the period that contains the document's accounting date.
+    expect(navigate).toHaveBeenCalledWith('/calendar/Y2026');
   });
 
   it('handleProcess: a non-blocking failure still toasts as before (no regression)', async () => {
@@ -255,6 +258,41 @@ describe('useEntity — blocking BP condition (ETP-5024)', () => {
     expect(result.current.blockingCondition).toBeNull();
     // ETP-5037: process-failure toasts now carry an explicit, longer duration.
     expect(toast.error).toHaveBeenCalledWith('Process failed for another reason', { duration: 8000 });
+  });
+
+  // ETP-5577 — the draft-mode "Confirmar" (save, then complete) offers the same way out.
+  it('handleSaveAndProcess: a PeriodNotAvailable refusal toasts with the calendar action', async () => {
+    const navigate = vi.fn();
+    setPeriodRecovery(periodRecoveryFor({ pending: false }, navigate));
+    const saved = { id: 'doc-5', documentStatus: 'DR' };
+    globalThis.fetch.mockImplementation(async (url, opts) => {
+      if (String(url).includes('/defaults')) return { ok: true, json: async () => ({ defaults: {} }) };
+      if (opts?.method === 'POST' && !String(url).includes('/action/')) {
+        return { ok: true, json: async () => ({ response: { data: [saved] } }) };
+      }
+      if (opts?.method === 'POST' && String(url).includes('/action/')) {
+        return new Response(JSON.stringify({
+          status: 'error',
+          message: 'El Periodo no existe o no está abierto',
+          messageKeys: ['PeriodNotAvailable'],
+        }), { status: 400 });
+      }
+      return defaultFallback();
+    });
+
+    const { result } = renderEntity();
+    await act(async () => { await result.current.handleNew(); });
+    act(() => { result.current.handleChange('name', 'Doc'); });
+
+    await act(async () => {
+      await result.current.handleSaveAndProcess({ processField: 'docAction', processValue: 'CO' });
+    });
+    setPeriodRecovery(null);
+
+    const [, options] = toast.error.mock.calls[0];
+    expect(options.action.label).toBe('periodNotAvailableOpenCalendar');
+    await options.action.onClick();
+    expect(navigate).toHaveBeenCalledWith('/calendar');
   });
 
   it('handleSaveAndProcess: a successful completion bumps completionSignal and clears blockingCondition', async () => {

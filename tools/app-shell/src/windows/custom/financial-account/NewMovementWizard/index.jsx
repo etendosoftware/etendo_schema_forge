@@ -385,6 +385,10 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
       writeoffs: snap.writeoffs || {},
       glItems,
       overpaymentAction: snap.overpaymentAction || null,
+    }).catch((err) => {
+      // ETP-5577 — the date a "period not open" refusal was about, to open its fiscal year.
+      if (err && typeof err === 'object') err.periodDate = snap.fechaPago;
+      throw err;
     });
     toast.success(ui('financeAccountMovementsWizardPaymentSuccess'));
   };
@@ -405,7 +409,7 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
       const text = message || ui(choice === 'pay'
         ? 'financeAccountMovementsWizardPaymentError'
         : 'financeAccountMovementsNewError');
-      const recovery = periodNotAvailableToastOptions(e?.messageKeys, ui);
+      const recovery = periodNotAvailableToastOptions(e?.messageKeys, ui, { date: e?.periodDate });
       if (Object.keys(recovery).length > 0) toast.error(text, recovery);
       else toast.error(text);
     }

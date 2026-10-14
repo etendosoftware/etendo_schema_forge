@@ -27,7 +27,7 @@ import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackS
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
-import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
+import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { notifySaveBlock } from '@/lib/saveBlockSignal.js';
 
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
@@ -2519,6 +2519,8 @@ export function useEntity(entity, childEntity, {
             timeout: 0,
         });
         if (!res.ok) {
+            // ETP-5577: the refusal's identity, read before extractErrorMessage consumes the body.
+            const messageKeys = await readMessageKeys(res);
             const msg = await extractErrorMessage(res, ui);
             // ETP-5024: same routing as handleProcess above — a BP-on-hold refusal of the
             // draft-mode Complete flow becomes a persistent banner, not a toast.
@@ -2528,7 +2530,10 @@ export function useEntity(entity, childEntity, {
             } else {
                 // ETP-5037: same rationale as handleProcessFailure above — a long
                 // process-rejection message needs more than sonner's default 4s.
-                toast.error(msg, { duration: PROCESS_FAILURE_TOAST_DURATION_MS });
+                toast.error(msg, {
+                    duration: PROCESS_FAILURE_TOAST_DURATION_MS,
+                    ...periodNotAvailableToastOptions(messageKeys, ui, { date: documentPeriodDate(saved) }),
+                });
             }
             // A refused process may still have bumped `updated` — see refreshRecordVersion.
             await refreshRecordVersion(saved.id);
@@ -2626,7 +2631,7 @@ export function useEntity(entity, childEntity, {
             // process-failure toast, not just this one message.
             toast.error(msg, {
                 duration: PROCESS_FAILURE_TOAST_DURATION_MS,
-                ...periodNotAvailableToastOptions(messageKeys, ui),
+                ...periodNotAvailableToastOptions(messageKeys, ui, { date: documentPeriodDate(selected) }),
             });
         }
         // A refused process may still have bumped `updated` — see refreshRecordVersion.

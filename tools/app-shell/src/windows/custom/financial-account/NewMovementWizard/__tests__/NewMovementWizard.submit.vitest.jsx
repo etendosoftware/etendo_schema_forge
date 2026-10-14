@@ -582,13 +582,16 @@ describe('NewMovementWizard — submitPayment (FIN_Payment)', () => {
     setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
     createPayment.mockRejectedValueOnce({ message: 'Period not open', messageKeys: ['PeriodNotAvailable'] });
     renderWizard();
-    goToPayment({ tercero: { id: 'bp-1' }, totals: { pago: 10, diff: 0 } });
+    goToPayment({ tercero: { id: 'bp-1' }, totals: { pago: 10, diff: 0 }, fechaPago: '2027-01-15' });
 
     fireEvent.click(findButton('financeAccountMovementsNewConfirm'));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Period not open', {
-      action: { label: 'periodNotAvailableOpenCalendar', onClick: go },
+      action: { label: 'periodNotAvailableOpenCalendar', onClick: expect.any(Function) },
     }));
+    toastError.mock.calls[0][1].action.onClick();
+    // The payment's own date, so the action opens the fiscal year it belongs to.
+    expect(go).toHaveBeenCalledWith('2027-01-15');
     setPeriodRecovery(null);
   });
 

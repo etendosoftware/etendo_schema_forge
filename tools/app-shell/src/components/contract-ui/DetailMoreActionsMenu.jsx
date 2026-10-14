@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
-import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
+import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
 import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
@@ -139,7 +139,8 @@ export function DetailMoreActionsMenu({
         messageKeys: result.messageKeys,
         messageParams: result.messageParams,
       }) || ui('actionFailed');
-      const recovery = periodNotAvailableToastOptions(result.messageKeys, ui);
+      const recovery = periodNotAvailableToastOptions(result.messageKeys, ui,
+        { date: documentPeriodDate(data) });
       if (Object.keys(recovery).length > 0) toast.error(text, recovery);
       else toast.error(text);
     }

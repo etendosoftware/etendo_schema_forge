@@ -166,14 +166,14 @@ test.describe('Calendar — Cerrar Año guard', () => {
 /**
  * ETP-5577 — the `accounting-calendar` guided tour (`walkthrough/flows/accounting-calendar.json`),
  * run end to end so every selector it names is proven against the real window: the menu path, the
- * year row, the Periods tab, the open/close button and the list's New action. Also covers its
- * launcher in the First Steps calendar review row.
+ * list's New action, the year row, the Periods tab and the open/close button, plus "Atrás" from
+ * inside a year. Also covers its launcher in the First Steps calendar review row.
  *
  * @covers tools/app-shell/src/walkthrough/flows/accounting-calendar.json
  * @covers tools/app-shell/src/pages/first-steps/CalendarReviewPanel.jsx
  */
 test.describe('Calendar — guided tour (ETP-5577)', () => {
-  test('walks list → year → Periods → open/close → next year', async ({ page }) => {
+  test('walks list → next year → year → Periods → open/close, and back', async ({ page }) => {
     test.setTimeout(90_000);
     await login(page);
     await installYearMock(page);
@@ -199,6 +199,10 @@ test.describe('Calendar — guided tour (ETP-5577)', () => {
     await expect(card).not.toContainText(/walkthroughCalendar/);
     await page.getByTestId('walkthrough-next').click();
 
+    await atStep('next-year');
+    await expect(page.getByTestId('walkthrough-error-message')).toHaveCount(0);
+    await page.getByTestId('walkthrough-next').click();
+
     await atStep('open-year');
     await page.getByTestId('row-year-001').click();
 
@@ -207,10 +211,20 @@ test.describe('Calendar — guided tour (ETP-5577)', () => {
 
     await atStep('open-close-period');
     await expect(page.getByTestId('walkthrough-error-message')).toHaveCount(0);
-    await page.getByTestId('walkthrough-next').click();
 
-    await atStep('next-year');
+    // "Atrás" from inside the year: the list steps declare `route`, so going back returns to the
+    // year list instead of looking for its rows on the year's own screen.
+    await page.getByTestId('walkthrough-previous').click();
+    await atStep('periods-tab');
+    await page.getByTestId('walkthrough-previous').click();
+    await atStep('open-year');
     await expect(page).toHaveURL(/\/calendar$/, { timeout: 20_000 });
+    await expect(page.getByTestId('walkthrough-error-message')).toHaveCount(0);
+    await page.getByTestId('row-year-001').click();
+    await atStep('periods-tab');
+    await page.getByTestId('tab-periods').click();
+
+    await atStep('open-close-period');
     await expect(page.getByTestId('walkthrough-error-message')).toHaveCount(0);
     await page.getByTestId('walkthrough-finish').click();
     // The completion card; the last flow in the registry offers no next tour.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { isChromelessEmbed } from '@/lib/embeddedWindow.js';
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Building2, ChevronDown, Loader2, LogOut } from 'lucide-react';
@@ -42,6 +42,8 @@ import { WalkthroughProvider } from '@etendosoftware/app-shell-core/walkthrough'
 import { WALKTHROUGH_FLOWS, walkthroughFlowsForPlan } from '@/walkthrough/flows';
 import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js';
 import { periodRecoveryFor, setPeriodRecovery } from '@/lib/periodNotAvailable.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { NEO_BASE } from '@/lib/neoWebhookClient.js';
 
 /**
  * ETP-5144 — the engine's `onFinish`, bound to the flow list so the handler can
@@ -572,12 +574,21 @@ function AppLayoutAccessGate({ menuGroups }) {
   const navigate = useNavigate();
   const calendarReviewPending = Boolean(firstStepsProgress?.calendarReview?.pending);
   const calendarReviewOwner = Boolean(firstStepsProgress?.calendarReview?.isOwner);
+  // The calendar's periods, read only when "Ir al calendario" is clicked, to open the right year.
+  const periodApiFetch = useApiFetch(`${NEO_BASE}/open-close-period-control`);
+  const loadPeriods = useCallback(async () => {
+    // shortcut: one page of 1000 periods (~76 years); paginate if a calendar ever outgrows it.
+    const res = await periodApiFetch('/periodControl?_startRow=0&_endRow=1000');
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body?.response?.data ?? [];
+  }, [periodApiFetch]);
   useEffect(() => {
     setPeriodRecovery(periodRecoveryFor(
       { pending: calendarReviewPending, isOwner: calendarReviewOwner,
-        firstStepsDismissed: firstStepsDismissed === true }, navigate));
+        firstStepsDismissed: firstStepsDismissed === true }, navigate, loadPeriods));
     return () => setPeriodRecovery(null);
-  }, [calendarReviewPending, calendarReviewOwner, firstStepsDismissed, navigate]);
+  }, [calendarReviewPending, calendarReviewOwner, firstStepsDismissed, navigate, loadPeriods]);
 
   // ETP-5402 QA follow-up — the caller's own Informes-subsection report access
   // (`fetchMyReportAccess()`), used only as a FALLBACK inside `filterMenuGroupsByAccess`'s

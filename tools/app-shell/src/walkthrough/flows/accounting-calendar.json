@@ -1,7 +1,7 @@
 {
   "id": "accounting-calendar",
   "schemaVersion": 1,
-  "revision": 1,
+  "revision": 2,
   "titleKey": "walkthroughCalendarTitle",
   "descriptionKey": "walkthroughCalendarDescription",
   "navPathSpeedMs": 3000,
@@ -35,7 +35,19 @@
       }
     },
     {
+      "id": "next-year",
+      "route": "/calendar",
+      "targetTestId": "action-new",
+      "titleKey": "walkthroughCalendarStepNextYearTitle",
+      "bodyKey": "walkthroughCalendarStepNextYearBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "manual"
+      }
+    },
+    {
       "id": "open-year",
+      "route": "/calendar",
       "target": "tr[data-testid^=\"row-\"]",
       "titleKey": "walkthroughCalendarStepYearTitle",
       "bodyKey": "walkthroughCalendarStepYearBody",
@@ -60,34 +72,6 @@
       "titleKey": "walkthroughCalendarStepOpenCloseTitle",
       "bodyKey": "walkthroughCalendarStepOpenCloseBody",
       "placement": "left",
-      "advance": {
-        "on": "manual"
-      }
-    },
-    {
-      "id": "next-year",
-      "route": "/calendar",
-      "navTimeoutMs": 15000,
-      "navPath": [
-        {
-          "targetTestId": "sidebar-expand",
-          "optional": true,
-          "timeoutMs": 800
-        },
-        {
-          "targetTestId": "menu-group-finance",
-          "skipIf": {
-            "targetTestId": "menu-item-calendar"
-          }
-        },
-        {
-          "targetTestId": "menu-item-calendar"
-        }
-      ],
-      "targetTestId": "action-new",
-      "titleKey": "walkthroughCalendarStepNextYearTitle",
-      "bodyKey": "walkthroughCalendarStepNextYearBody",
-      "placement": "bottom",
       "advance": {
         "on": "manual"
       }

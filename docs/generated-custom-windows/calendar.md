@@ -129,10 +129,17 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   the end of the trial. A document dated in a period that is not open is refused with
   `PeriodNotAvailable`; the refusal toast offers **Ir al calendario** (or, while the review is
   pending, sends the owner back to the review row), and the MCP answer carries a hint naming the
-  `openClose` action.
+  `openClose` action. **Ir al calendario** opens `/calendar/<yearId>` of the fiscal year whose
+  period contains the document's date (accounting date, else movement or payment date), never a
+  year chosen by label: on a July–June calendar a January 2027 invoice opens the year that started
+  in July 2026. Without a date (bulk and row quick actions) or a matching period it opens the list.
+  Completion still requires an open period — the core `*_POST` procedures check it; there is no
+  bypass.
 - **Guided tour (ETP-5577).** `walkthrough/flows/accounting-calendar.json` ("Calendario contable")
-  walks through opening a year, its **Periods** tab, the **Abrir/Cerrar Periodo** action and
-  creating next year with **Nuevo**. Productive tenants only (`PRODUCTIVE_ONLY_FLOW_IDS`): it is
+  walks through creating next year with **Nuevo**, opening a year, its **Periods** tab and the
+  **Abrir/Cerrar Periodo** action. The steps on the year list declare `route: "/calendar"`, so
+  "Atrás" from inside a year goes back to the list; the tour never returns into a year after
+  leaving it (that step could not name the year's URL). Productive tenants only (`PRODUCTIVE_ONLY_FLOW_IDS`): it is
   offered by the top-bar launcher and by the review row's **Ver guía**. See
   `docs/walkthrough-flows.md`.
 - The top-level `calendar` entity (`C_Calendar`) itself is not exposed as a browsable tab — most
@@ -520,7 +527,9 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
     and confirm the run is refused with the overlap message and no period is created.
 22. (ETP-5577) On a new productive tenant, complete a draft invoice before opening any period:
     the refusal toast offers **Revisar calendario contable** (owner) and leads to First Steps; once
-    a period is open, the same refusal for another month offers **Ir al calendario**.
+    a period is open, the same refusal for another month offers **Ir al calendario**, which opens
+    the fiscal year holding that month (on a July–June calendar, a January date opens the year
+    that started the previous July).
 
 ## Automated evidence
 - ETP-5577: `FiscalYearPeriodsHandlerTest` (default start month, 409 overlap),
