@@ -7,10 +7,12 @@
 // model must have one — enforced by __tests__/modelRegistry.vitest.js.
 import listBehavior303 from './models/303/listBehavior303.js';
 import listBehavior349 from './models/349/listBehavior349.js';
+import listBehavior390 from './models/390/listBehavior390.js';
 
 const LIST_BEHAVIORS = Object.freeze({
   '303': listBehavior303,
   '349': listBehavior349,
+  '390': listBehavior390,
 });
 
 /** The list behaviour of model `id`, or `undefined` for an unknown id. */

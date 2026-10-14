@@ -18,16 +18,27 @@
 //   defaultActive               Catalog toggle state when no saved catalog is passed in.
 //   locked                      Catalog "Próximamente" card (no toggle, not counted as active).
 //   badgeVariant                Catalog badge CSS modifier (`fm-catalog-card__badge--<v>`).
-//   monthlyDeadline             (year, month) => Date — AEAT deadline of a MONTHLY period.
-//                               Quarterly periods share one rule for every model (utils).
+//   monthlyDeadline             (year, month) => Date — AEAT deadline of a MONTHLY period, or
+//                               `null` for a model never filed monthly. Quarterly periods share
+//                               one rule for every model (utils).
+//   annualDeadline              (year) => Date — AEAT deadline of the ANNUAL period ('0A'), or
+//                               `null` for a model never filed annually.
 //   iaeReminderOnActivate       Show the IAE-activity reminder when the catalog activates it.
 //   iaeReminderOnYearEndPeriod  Show it when "Nueva declaración" selects T4 / 12 for it.
 //   telematicFiling             The detail page can file to the AEAT telematically
 //                               (receives `onSubmittedRemotely`).
 //   syncDraftComputeToDetail    The list pushes this model's draft auto-compute results into
 //                               an open detail page (`onComputeUpdate`).
+//   siiWarningOnActivate        The catalog asks for confirmation before activating it when the
+//                               organization is in the SII (entities in the SII are exempt).
+//   singleOrdinaryPerYear       Only one ordinary declaration per exercise (the backend answers a
+//                               second one with 409 DUPLICATE_ORDINARY); the modal pre-checks it.
+//   newDeclWarning              (existingDecls, year) => { key, params } | null — non-blocking
+//                               notice of "Nueva declaración" for this model, or `null` (no hook).
 import { monthlyDeadline303 } from './models/303/deadline303.js';
 import { monthlyDeadline349 } from './models/349/deadline349.js';
+import { annualDeadline390 } from './models/390/deadline390.js';
+import { newDeclWarning390 } from './models/390/newDeclWarning390.js';
 
 const MODELS = Object.freeze([
   Object.freeze({
@@ -37,10 +48,14 @@ const MODELS = Object.freeze([
     locked: false,
     badgeVariant: '303',
     monthlyDeadline: monthlyDeadline303,
+    annualDeadline: null,
     iaeReminderOnActivate: true,
     iaeReminderOnYearEndPeriod: true,
     telematicFiling: true,
     syncDraftComputeToDetail: false,
+    siiWarningOnActivate: false,
+    singleOrdinaryPerYear: false,
+    newDeclWarning: null,
   }),
   Object.freeze({
     id: '349',
@@ -49,10 +64,32 @@ const MODELS = Object.freeze([
     locked: false,
     badgeVariant: '349',
     monthlyDeadline: monthlyDeadline349,
+    annualDeadline: null,
     iaeReminderOnActivate: false,
     iaeReminderOnYearEndPeriod: false,
     telematicFiling: false,
     syncDraftComputeToDetail: true,
+    siiWarningOnActivate: false,
+    singleOrdinaryPerYear: false,
+    newDeclWarning: null,
+  }),
+  // Annual VAT summary. Not active by default (an opt-in model: SII entities are exempt). The
+  // telematic filing is a later phase — until then the detail page only registers a filing.
+  Object.freeze({
+    id: '390',
+    periodicities: Object.freeze(['annual']),
+    defaultActive: false,
+    locked: false,
+    badgeVariant: '390',
+    monthlyDeadline: null,
+    annualDeadline: annualDeadline390,
+    iaeReminderOnActivate: false,
+    iaeReminderOnYearEndPeriod: false,
+    telematicFiling: false,
+    syncDraftComputeToDetail: false,
+    siiWarningOnActivate: true,
+    singleOrdinaryPerYear: true,
+    newDeclWarning: newDeclWarning390,
   }),
 ]);
 

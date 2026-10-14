@@ -20,15 +20,18 @@ import { getConfigSection } from '../modelRegistryConfig.js';
 
 const BOOLEAN_FIELDS = [
   'defaultActive', 'locked', 'iaeReminderOnActivate', 'iaeReminderOnYearEndPeriod',
-  'telematicFiling', 'syncDraftComputeToDetail',
+  'telematicFiling', 'syncDraftComputeToDetail', 'siiWarningOnActivate', 'singleOrdinaryPerYear',
 ];
+// Optional hooks: a function, or `null` when the model has none (ETP-5716).
+const NULLABLE_FUNCTION_FIELDS = ['monthlyDeadline', 'annualDeadline', 'newDeclWarning'];
+const isFnOrNull = (v) => v === null || typeof v === 'function';
 const KNOWN_PERIODICITIES = new Set(['monthly', 'quarterly', 'annual']);
 
 describe('modelRegistry — entries', () => {
   const models = listModels();
 
-  it('lists 303 then 349, in that order (catalog, filters and modal keep it)', () => {
-    expect(models.map(m => m.id)).toEqual(['303', '349']);
+  it('lists 303, 349 then 390, in that order (catalog, filters and modal keep it)', () => {
+    expect(models.map(m => m.id)).toEqual(['303', '349', '390']);
   });
 
   it('has unique, 3-digit string ids', () => {
@@ -44,11 +47,16 @@ describe('modelRegistry — entries', () => {
     expect(Array.isArray(m.periodicities)).toBe(true);
     expect(m.periodicities.length).toBeGreaterThan(0);
     m.periodicities.forEach(p => expect(KNOWN_PERIODICITIES.has(p), p).toBe(true));
-    expect(typeof m.monthlyDeadline).toBe('function');
-    for (let month = 1; month <= 12; month++) {
-      const d = m.monthlyDeadline(2026, month);
-      expect(d).toBeInstanceOf(Date);
-      expect(Number.isNaN(d.getTime())).toBe(false);
+    NULLABLE_FUNCTION_FIELDS.forEach(field => expect(isFnOrNull(m[field]), field).toBe(true));
+    // A model filed monthly has a monthly rule; a model filed annually has an annual one.
+    expect(typeof m.monthlyDeadline === 'function').toBe(m.periodicities.includes('monthly'));
+    expect(typeof m.annualDeadline === 'function').toBe(m.periodicities.includes('annual'));
+    if (m.monthlyDeadline) {
+      for (let month = 1; month <= 12; month++) {
+        const d = m.monthlyDeadline(2026, month);
+        expect(d).toBeInstanceOf(Date);
+        expect(Number.isNaN(d.getTime())).toBe(false);
+      }
     }
   });
 
@@ -68,6 +76,37 @@ describe('modelRegistry — entries', () => {
       iaeReminderOnActivate: false, iaeReminderOnYearEndPeriod: false,
       telematicFiling: false, syncDraftComputeToDetail: true,
     });
+    ['303', '349'].forEach(id => expect(getModel(id)).toMatchObject({
+      annualDeadline: null, siiWarningOnActivate: false, singleOrdinaryPerYear: false, newDeclWarning: null,
+    }));
+  });
+
+  // ETP-5716 — Modelo 390, the annual VAT summary.
+  it('registers 390 as an annual, single-ordinary model with the SII activation warning', () => {
+    expect(getModel('390')).toMatchObject({
+      periodicities: ['annual'], defaultActive: false, locked: false, badgeVariant: '390',
+      monthlyDeadline: null, iaeReminderOnActivate: false, iaeReminderOnYearEndPeriod: false,
+      telematicFiling: false, syncDraftComputeToDetail: false,
+      siiWarningOnActivate: true, singleOrdinaryPerYear: true,
+    });
+    // Filed from January 1 to January 30 of the following year.
+    expect(getModel('390').annualDeadline(2026)).toEqual(new Date(2027, 0, 30));
+    expect(getModel('390').annualDeadline('2026')).toEqual(new Date(2027, 0, 30));
+  });
+
+  it('warns on "Nueva declaración" of a 390 when 303s of the year are missing', () => {
+    const warn = getModel('390').newDeclWarning;
+    const quarterly = [
+      { model: '303', year: 2026, period: 'T1' }, { model: '303', year: 2026, period: 'T2' },
+      { model: '303', year: 2026, period: 'T3' }, { model: '303', year: 2025, period: 'T4' },
+      { model: '349', year: 2026, period: 'T4' },
+    ];
+    expect(warn(quarterly, 2026)).toEqual({ key: 'fm.m390.new_decl.missing_303', params: { year: 2026, periods: 'T4' } });
+    expect(warn([...quarterly, { model: '303', year: 2026, period: 'T4' }], 2026)).toBeNull();
+    // A monthly filer: every month is expected, shown without the leading zero.
+    const monthly = ['01', '02', '03', '04', '05', '06', '07', '08', '09'].map(p => ({ model: '303', year: 2026, period: p }));
+    expect(warn(monthly, 2026).params.periods).toBe('10, 11, 12');
+    expect(warn([], 2026).params.periods).toBe('T1, T2, T3, T4');
   });
 
   it('binds each model to its own monthly AEAT deadline rule', () => {
@@ -92,35 +131,40 @@ describe('modelRegistry — accessors', () => {
     expect(isKnownModel('303')).toBe(true);
     expect(isKnownModel('349')).toBe(true);
     expect(isKnownModel(303)).toBe(false);
-    expect(isKnownModel('390')).toBe(false);
+    expect(isKnownModel('390')).toBe(true);
+    expect(isKnownModel(390)).toBe(false);
+    expect(isKnownModel('111')).toBe(false);
     expect(isKnownModel(undefined)).toBe(false);
-    expect(getModel('390')).toBeUndefined();
+    expect(getModel('111')).toBeUndefined();
   });
 
   it('falls back to the default model for an unknown id', () => {
     expect(getModelOrDefault('349').id).toBe('349');
-    expect(getModelOrDefault('390').id).toBe('303');
+    expect(getModelOrDefault('390').id).toBe('390');
+    expect(getModelOrDefault('111').id).toBe('303');
     expect(getModelOrDefault(undefined).id).toBe('303');
   });
 
   it('builds the model title i18n key from the id', () => {
     expect(modelTitleKey('303')).toBe('fm.config.m303.title');
     expect(modelTitleKey('349')).toBe('fm.config.m349.title');
+    expect(modelTitleKey('390')).toBe('fm.config.m390.title');
   });
 });
 
 describe('modelRegistry — bindings', () => {
-  it.each(listModels().map(m => [m.id]))('model %s has a list behaviour, a detail page and a config section', (id) => {
+  it.each(listModels().map(m => [m.id]))('model %s has a list behaviour and a detail page (config section optional)', (id) => {
     const behavior = getListBehavior(id);
     expect(typeof behavior?.computeFn).toBe('function');
     expect(typeof behavior?.checkModifiedFn).toBe('function');
     expect(typeof behavior?.deriveListResult).toBe('function');
     expect(typeof getDetailPage(id)).toBe('function');
-    expect(typeof getConfigSection(id)).toBe('function');
+    const section = getConfigSection(id);
+    expect(section === undefined || typeof section === 'function').toBe(true);
   });
 
   it('binds nothing for an unknown id (including inherited object keys)', () => {
-    ['390', 'toString', '__proto__', undefined].forEach((id) => {
+    ['111', 'toString', '__proto__', undefined].forEach((id) => {
       expect(getListBehavior(id)).toBeUndefined();
       expect(getDetailPage(id)).toBeUndefined();
       expect(getConfigSection(id)).toBeUndefined();
@@ -130,8 +174,11 @@ describe('modelRegistry — bindings', () => {
   it('binds each model to its own detail page and config section', () => {
     expect(getDetailPage('303').name).toBe('FmModel303Page');
     expect(getDetailPage('349').name).toBe('FmModel349Page');
+    expect(getDetailPage('390').name).toBe('FmModel390Page');
     expect(getConfigSection('303').name).toBe('ConfigSection303');
     expect(getConfigSection('349').name).toBe('ConfigSection349');
+    // 390 has nothing to configure: no config section (ConfigDrawer shows "Declarante" only).
+    expect(getConfigSection('390')).toBeUndefined();
   });
 
   it('derives the list result per model (303: box 71 of the boxes; 349: abs-summed key totals)', () => {
@@ -144,6 +191,21 @@ describe('modelRegistry — bindings', () => {
       summary: { totalE: '10', totalS: -5 }, rectificativeSummary: { totalA: -2.5 },
     });
     expect(res349).toEqual({ kind: 'info', amount: 17.5 });
+  });
+
+  // ETP-5716 — 390: the annual result ([86], or [94] in territory mode) with the shared sign rule.
+  it('derives the 390 list result from summary.annualResult, falling back to the boxes', () => {
+    const derive = getListBehavior('390').deriveListResult;
+    const decl = { manualData: {} };
+    expect(derive(decl, { summary: { accrued: '300.00', deductible: '100.00', annualResult: '200.00' }, boxes: {} }))
+      .toEqual({ kind: 'I', amount: 200 });
+    expect(derive(decl, { summary: { accrued: '100.00', deductible: '150.00', annualResult: '-50.00' }, boxes: {} }))
+      .toEqual({ kind: 'C', amount: 50 });
+    expect(derive(decl, { summary: {}, boxes: { 47: '10.00', 64: '10.00', 86: '0.00' }, mode: 'liquidation' }))
+      .toEqual({ kind: 'zero', amount: 0 });
+    expect(derive(decl, { summary: {}, boxes: { 47: '50.00', 86: '1.00', 94: '25.00' }, mode: 'territory' }))
+      .toEqual({ kind: 'I', amount: 25 });
+    expect(derive(decl, { summary: {}, boxes: {} })).toEqual({ kind: 'N', amount: 0 });
   });
 });
 

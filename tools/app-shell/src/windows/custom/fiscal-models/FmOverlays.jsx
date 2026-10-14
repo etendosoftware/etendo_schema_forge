@@ -10,6 +10,7 @@ import { formatPeriod, showIaeActivityReminder, RECEIPT_ATTACHMENT_CONFIG } from
 import { buildAcceptAttribute, buildTypesLabel, isFileTypeAllowed } from '@/components/attachments/attachmentPolicy.js';
 import { isValidFormerStatement } from './formerStatement.js';
 import { listModels, getModel, DEFAULT_MODEL_ID, modelTitleKey } from './modelRegistry.js';
+import { ANNUAL_PERIOD, isAnnualPeriod, isAnnualOnlyModel } from './fiscalPeriods.js';
 import { getConfigSection } from './modelRegistryConfig.js';
 import { CfgField, INPUT_ST } from './FmConfigFields.jsx';
 import './fiscal-models.css';
@@ -213,9 +214,15 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   // formatting key NewDeclModal's preview line already uses). Falls back to
   // the generic instructional subtitle when decl doesn't carry model/year/period
   // (e.g. tests that pass a bare `{ id }` stub).
-  const subtitle = (decl?.model && decl?.year && decl?.period)
-    ? t('fm.new_decl.preview', { model: decl.model, period: formatPeriod(decl.period), year: decl.year })
-    : (t('fm.present.subtitle') ?? 'Selecciona cómo fue presentada la declaración');
+  // An annual declaration (period '0A') reads "Modelo <model> · Anual <year>" (ETP-5716).
+  let subtitle;
+  if (decl?.model && decl?.year && isAnnualPeriod(decl?.period)) {
+    subtitle = t('fm.new_decl.preview_annual', { model: decl.model, year: decl.year });
+  } else if (decl?.model && decl?.year && decl?.period) {
+    subtitle = t('fm.new_decl.preview', { model: decl.model, period: formatPeriod(decl.period), year: decl.year });
+  } else {
+    subtitle = t('fm.present.subtitle') ?? 'Selecciona cómo fue presentada la declaración';
+  }
 
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
@@ -636,7 +643,16 @@ function YearSelectMenu({ year, years, onSelect, onClose }) {
 // the rectificativa flow (filed early, more invoices arrived later for the same
 // period). The onConfirm contract (`{ model, year, period, status: 'draft' }`)
 // is unchanged.
-export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclarations }) {
+//
+// ETP-5716 — registry-driven extras, none of them model-specific here:
+//   - an annual-only model (`periodicities: ['annual']`, the 390) asks for the year alone — no
+//     Frecuencia / Período — and is created on `ANNUAL_PERIOD` ('0A');
+//   - a `singleOrdinaryPerYear` model that already has an ordinary declaration for the selected
+//     year shows an inline notice with "Abrir declaración" (`onOpenExisting(decl)`) and disables
+//     "Crear declaración" (the backend would answer 409 DUPLICATE_ORDINARY anyway);
+//   - the entry's `newDeclWarning(existingDeclarations, year)` notice (390: missing 303s), amber,
+//     never blocking.
+export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclarations, onOpenExisting }) {
   const ui = useUI();
   const t = ui;
   const navigate = useNavigate();
@@ -657,6 +673,16 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
   const [yearMenuOpen, setYearMenuOpen] = useState(false);
 
   const periods = frequency === 'monthly' ? MONTHLY_PERIODS : QUARTERLY_PERIODS;
+  const modelEntry = getModel(model);
+  const annualOnly = isAnnualOnlyModel(modelEntry);
+  const effectivePeriod = annualOnly ? ANNUAL_PERIOD : period;
+  // ETP-5716 — the ordinary declaration of a single-ordinary model for the selected year, if any.
+  const existingOrdinary = modelEntry?.singleOrdinaryPerYear
+    ? (existingDeclarations ?? []).find(d => String(d.model) === String(model)
+        && Number(d.year) === Number(year) && d.type !== 'com') ?? null
+    : null;
+  const modelWarning = modelEntry?.newDeclWarning?.(existingDeclarations ?? [], year) ?? null;
+  const canCreateNow = canCreate && !existingOrdinary;
   // Most-recent-first for the Año dropdown — SELECTABLE_YEARS itself stays
   // ascending (other consumers, if any, keep relying on that order).
   // Restricted to the current filing year only (see SELECTABLE_YEARS in
@@ -704,7 +730,8 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
   }
 
   function handleCreate() {
-    onConfirm?.({ model, year, period, status: 'draft' });
+    if (!canCreateNow) return;
+    onConfirm?.({ model, year, period: effectivePeriod, status: 'draft' });
     onClose();
   }
 
@@ -778,6 +805,7 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                   data-testid="YearSelectMenu__cda0bb" />
               )}
             </div>
+            {!annualOnly && (
             <div className="fm-newdecl-field">
               <label className="fm-newdecl-label">{t('fm.new_decl.frequency')}</label>
               <div className="fm-newdecl-segmented" role="group" aria-label={t('fm.new_decl.frequency')}>
@@ -799,9 +827,11 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                 </button>
               </div>
             </div>
+            )}
           </div>
 
-          {/* Período */}
+          {/* Período — not asked for an annual-only model (ETP-5716) */}
+          {!annualOnly && (
           <div className="fm-newdecl-field">
             <div className="fm-newdecl-field__label-row">
               <label className="fm-newdecl-label" style={{ marginBottom: 0 }}>{t('fm.new_decl.period')}</label>
@@ -859,19 +889,47 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
               })}
             </div>
           </div>
+          )}
+
+          {existingOrdinary && (
+            <div className="fm-banner fm-banner--warning fm-newdecl-notice" role="alert" data-testid="NewDeclModal__duplicateOrdinary">
+              <span>{t('fm.new_decl.duplicate_ordinary', { model, year })}</span>
+              {onOpenExisting && (
+                <button
+                  type="button"
+                  className="fm-link-btn fm-link-btn--bold"
+                  onClick={() => { onOpenExisting(existingOrdinary); onClose(); }}
+                  data-testid="NewDeclModal__openExisting"
+                >
+                  {t('fm.new_decl.open_existing')}
+                </button>
+              )}
+            </div>
+          )}
+          {!existingOrdinary && modelWarning && (
+            <div className="fm-banner fm-banner--warning fm-newdecl-notice" role="status" data-testid="NewDeclModal__modelWarning">
+              {t(modelWarning.key, modelWarning.params)}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="fm-config-modal__footer">
           <div className="fm-newdecl-preview">
-            {t('fm.new_decl.will_create_as')} <strong>{t('fm.new_decl.preview', { model, period, year })}</strong>
+            {t('fm.new_decl.will_create_as')}{' '}
+            <strong>
+              {annualOnly
+                ? t('fm.new_decl.preview_annual', { model, year })
+                : t('fm.new_decl.preview', { model, period, year })}
+            </strong>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="fm-btn fm-btn--cancel-pill" onClick={onClose}>{t('fm.action.cancel')}</button>
             <button
-              className={`fm-btn fm-btn--save-pill${canCreate ? ' fm-btn--save-pill--active' : ''}`}
-              disabled={!canCreate}
+              className={`fm-btn fm-btn--save-pill${canCreateNow ? ' fm-btn--save-pill--active' : ''}`}
+              disabled={!canCreateNow}
               onClick={handleCreate}
+              data-testid="NewDeclModal__create"
             >
               {t('fm.new_decl.create_cta')}
             </button>
@@ -961,9 +1019,12 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
 
   const set = (key) => (e) => { setForm(prev => ({ ...prev, [key]: e.target.value })); setIsDirty(true); };
 
+  // A model without a config section (registry binding is optional) gets no model tab.
   const TABS = [
     { id: 'declarante', label: t('fm.config.declarant.title') ?? 'Declarante' },
-    { id: 'model',      label: t(modelTitleKey(modelTab)) ?? `Modelo ${modelTab}` },
+    ...(ModelConfigSection
+      ? [{ id: 'model', label: t(modelTitleKey(modelTab)) ?? `Modelo ${modelTab}` }]
+      : []),
   ];
 
   // Tab button style — segmented control (same as fiscal-config TabBar)

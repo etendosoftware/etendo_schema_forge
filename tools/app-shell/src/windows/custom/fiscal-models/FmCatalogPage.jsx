@@ -5,10 +5,31 @@ import { X } from 'lucide-react';
 import { ConfigDrawer } from './FmOverlays.jsx';
 import { showIaeActivityReminder } from './fiscalModelsUtils.js';
 import { listModels, getModel } from './modelRegistry.js';
+import useOrgSiiStatus from './useOrgSiiStatus.js';
 
 // The catalog lists every registered model (id, periodicities, default state, lock, badge
 // variant) — see modelRegistry.js.
 const CATALOG = listModels();
+const ANY_SII_WARNING = CATALOG.some(m => m.siiWarningOnActivate);
+
+// ETP-5716 — inline, non-blocking confirmation under a card whose model asks for it
+// (`siiWarningOnActivate`) when the organization is in the SII: "Cancelar" leaves it off,
+// "Activar" activates it. Amber (warning role), inside the card list so it needs no extra layer.
+function SiiActivationWarning({ onCancel, onConfirm, t }) {
+  return (
+    <div className="fm-banner fm-banner--warning fm-catalog-sii-warning" role="alertdialog" aria-live="polite" data-testid="FmCatalogPage__siiWarning">
+      <span>{t('fm.catalog.sii_warning')}</span>
+      <div className="fm-catalog-sii-warning__actions">
+        <button type="button" className="fm-btn fm-btn--cancel-pill" onClick={onCancel} data-testid="FmCatalogPage__siiCancel">
+          {t('fm.action.cancel')}
+        </button>
+        <button type="button" className="fm-btn fm-btn--save-pill fm-btn--save-pill--active" onClick={onConfirm} data-testid="FmCatalogPage__siiConfirm">
+          {t('fm.catalog.activate')}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // Toggle switch component
 function ToggleSwitch({ checked, onChange, disabled }) {
@@ -44,6 +65,9 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
     () => activeModels ?? Object.fromEntries(CATALOG.map(m => [m.id, m.defaultActive]))
   );
   const [configModel, setConfigModel] = useState(null);
+  // ETP-5716 — the model awaiting the SII confirmation (see SiiActivationWarning), or null.
+  const [siiPendingId, setSiiPendingId] = useState(null);
+  const getSiiActive = useOrgSiiStatus({ apiBaseUrl, enabled: ANY_SII_WARNING });
 
   const handleClose = () => { onSave?.(active); onBack?.(); };
 
@@ -51,11 +75,22 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
   // year-end declaration (see `showIaeActivityReminder`'s own doc comment in
   // `fiscalModelsUtils.js`). Only fires on the inactive → active transition of a model whose
   // registry entry asks for it (`iaeReminderOnActivate`: 303 only) — never on deactivation.
-  const toggleModel = (id) => setActive(prev => {
+  const applyToggle = (id) => setActive(prev => {
     const next = { ...prev, [id]: !prev[id] };
     if (getModel(id)?.iaeReminderOnActivate && !prev[id] && next[id]) showIaeActivityReminder(t, navigate);
     return next;
   });
+  // ETP-5716 — activating a `siiWarningOnActivate` model for an organization in the SII asks
+  // first (SiiActivationWarning). Deactivating, or an organization outside the SII (or an SII
+  // status that cannot be read), toggles right away.
+  const toggleModel = async (id) => {
+    if (!getModel(id)?.siiWarningOnActivate || active[id]) {
+      applyToggle(id);
+      return;
+    }
+    if (await getSiiActive()) setSiiPendingId(id);
+    else applyToggle(id);
+  };
   const lockedIds = new Set(CATALOG.filter(m => m.locked).map(m => m.id));
   const activeCount = Object.entries(active).filter(([id, v]) => v && !lockedIds.has(id)).length;
 
@@ -124,6 +159,12 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
                       ))}
                     </div>
                   </div>
+                  {siiPendingId === model.id && (
+                    <SiiActivationWarning
+                      t={t}
+                      onCancel={() => setSiiPendingId(null)}
+                      onConfirm={() => { setSiiPendingId(null); applyToggle(model.id); }} />
+                  )}
                   <div className="fm-catalog-card__actions" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     {isLocked ? (
                       <span style={{ fontSize: 13, color: 'hsl(var(--text-disabled))', fontWeight: 400, whiteSpace: 'nowrap' }}>

@@ -22,8 +22,9 @@ import { Button } from '@/components/ui/button.jsx';
 import {
   formatAmount, countUpcomingDeadlines, isUpcomingDeadline,
   fetchDeclarationIncidents, deleteDeclaration, resolveResultColors,
-  persistDeclarationStatus,
+  persistDeclarationStatus, fetchDeclaration,
 } from './fiscalModelsUtils.js';
+import { isAnnualPeriod } from './fiscalPeriods.js';
 import { getIncidentSeverity, getIncidentIndicator } from './incidentSeverity.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 import { listModels, isKnownModel, getModelOrDefault, modelTitleKey } from './modelRegistry.js';
@@ -180,7 +181,24 @@ const STATUS_FILTER_RAW = {
 function periodSortValue(period) {
   if (/^T\d$/.test(period)) return parseInt(period[1], 10) * 3;
   if (/^\d{2}$/.test(period)) return parseInt(period, 10);
+  // ETP-5716 — the annual summary closes the exercise: it sorts after December / T4.
+  if (isAnnualPeriod(period)) return 13;
   return 0;
+}
+
+// The "Periodo" cell: an annual declaration reads "Anual", every other period its code.
+function periodLabel(period, t) {
+  return isAnnualPeriod(period) ? t('fm.period.annual') : period;
+}
+
+// ETP-5716 — `POST /declarations` refused because the exercise already has its single ordinary
+// declaration (FiscalDeclCrudHandler#rejectDuplicateOrdinary): `{ error: { code, existingId } }`.
+// Returns the existing declaration's id, or `null` for any other failure.
+async function duplicateOrdinaryId(res) {
+  if (res?.status !== 409) return null;
+  const body = await res.json().catch(() => null);
+  const error = body?.error ?? body?.response?.error ?? body;
+  return error?.code === 'DUPLICATE_ORDINARY' ? (error.existingId ?? null) : null;
 }
 
 const STATUS_SORT_ORDER = ['pending', 'draft', 'ready', 'submitted', 'submitted_ack', 'submitted_ext', 'skipped'];
@@ -799,6 +817,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     return () => document.removeEventListener('mousedown', handler);
   }, [showSortMenu]);
 
+  // Opens a declaration by id (ETP-5716 — "Abrir declaración" of a duplicate ordinary): from the
+  // list when it is loaded, otherwise re-read from the backend.
+  const openDeclarationById = useCallback(async (id) => {
+    if (!id) return;
+    const known = decls.find(d => d.id === id);
+    const decl = known ?? await fetchDeclaration(id, { token, apiBaseUrl });
+    if (decl) onSelect?.(known ? decl : normDecl(decl, bcpLocale));
+  }, [decls, token, apiBaseUrl, onSelect, bcpLocale]);
+
   const handleNewDecl = useCallback(({ model, year, period, status }) => {
     if (apiBaseUrl) {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
@@ -807,8 +834,32 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         baseUrl: '',
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(created => setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]))
+        .then(async r => {
+          if (r.ok) return r.json();
+          // ETP-5716 — a single-ordinary model (390) refuses a 2nd ordinary of the exercise
+          // with 409 DUPLICATE_ORDINARY + the existing declaration's id: say so and offer it.
+          const existingId = await duplicateOrdinaryId(r);
+          if (existingId) {
+            const toastId = toast.error(
+              <span>
+                {t('fm.new_decl.duplicate_ordinary', { model, year })}{' '}
+                <button
+                  type="button"
+                  className="fm-link-btn fm-link-btn--bold"
+                  onClick={() => { toast.dismiss(toastId); openDeclarationById(existingId); }}
+                  data-testid="FmListPage__openExistingDecl"
+                >
+                  {t('fm.new_decl.open_existing')}
+                </button>
+              </span>,
+            );
+            return null;
+          }
+          return Promise.reject(r.status);
+        })
+        .then(created => {
+          if (created) setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]);
+        })
         .catch(() => {
           // ETP-5272 — this used to silently swallow the backend's error (a 409 when a draft
           // already exists for the period, or any other failure), leaving the user staring at a
@@ -817,7 +868,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           toast.error(t('fm.list.new_decl_failed') ?? 'No se pudo crear la declaración.');
         });
     }
-  }, [token, apiBaseUrl, apiFetch, t, bcpLocale]);
+  }, [token, apiBaseUrl, apiFetch, t, bcpLocale, openDeclarationById]);
 
   // Row hover "delete" action (ETP-5187) — draft declarations only, gated the same
   // way both here (caller only ever passes a draft decl into setDeleteTarget) and
@@ -1011,7 +1062,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                   <ModelBadge model={decl.model} data-testid="ModelBadge__cb728e" />
                   <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
                 </td>
-                <td><span className="fm-period">{decl.period}</span></td>
+                <td><span className="fm-period">{periodLabel(decl.period, t)}</span></td>
                 {/* ETP-5338 pt.3 / ETP-5456 — "Tipo" must reflect AEAT's rectificativa (303) and
                     sustitutiva (349) flags, which the user sets on each model's own detail page
                     ("Autoliquidación Rectificativa" / "Sustitutiva" checkboxes), both persisted
@@ -1240,6 +1291,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         onClose={() => setShowNewDecl(false)}
         activeModels={activeModels}
         existingDeclarations={decls}
+        onOpenExisting={(decl) => onSelect?.(decl)}
         data-testid="NewDeclModal__cb728e" />}
       {/* ── Catalog drawer (slides from right) ───────────────────── */}
       {showCatalog && (

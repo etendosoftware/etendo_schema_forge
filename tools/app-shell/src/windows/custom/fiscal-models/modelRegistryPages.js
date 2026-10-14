@@ -11,10 +11,12 @@
 // must have one — enforced by __tests__/modelRegistry.vitest.js.
 import FmModel303Page from './models/303/FmModel303Page.jsx';
 import FmModel349Page from './models/349/FmModel349Page.jsx';
+import FmModel390Page from './models/390/FmModel390Page.jsx';
 
 const DETAIL_PAGES = Object.freeze({
   '303': FmModel303Page,
   '349': FmModel349Page,
+  '390': FmModel390Page,
 });
 
 /** The detail-page component of model `id`, or `undefined` for an unknown id. */

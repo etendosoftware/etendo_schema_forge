@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 // this file), so no import cycle.
 import { computeBox111 } from './models/303/fm303Layouts.js';
 import { getModelOrDefault, DEFAULT_MODEL_ID } from './modelRegistry.js';
+import { isAnnualPeriod } from './fiscalPeriods.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
@@ -1288,7 +1289,11 @@ function getQuarterlyDeadline(year, quarter) {
 
 // The MONTHLY rule is per model and lives with the model: `monthlyDeadline` of its
 // `modelRegistry.js` entry (`models/303/deadline303.js`, `models/349/deadline349.js`). An
-// unknown model falls back to the default model's (303) rule, as it always did.
+// unknown model — or a model never filed monthly (`monthlyDeadline: null`) — falls back to the
+// default model's (303) rule, as it always did.
+//
+// The ANNUAL rule (period `ANNUAL_PERIOD`, '0A') is per model too: `annualDeadline` of the
+// entry (ETP-5716, `models/390/deadline390.js`). A model without one has no annual deadline.
 
 // Dispatches to the quarterly rule above or to the model's own monthly rule based on
 // `period`'s shape and `model`. Split out of a single branch-heavy function
@@ -1300,7 +1305,12 @@ function getDeadlineDate(model, year, period) {
   }
   if (/^\d{2}$/.test(period)) {
     const m = parseInt(period, 10);
-    return getModelOrDefault(model).monthlyDeadline(year, m);
+    const monthlyRule = getModelOrDefault(model).monthlyDeadline
+      ?? getModelOrDefault(DEFAULT_MODEL_ID).monthlyDeadline;
+    return monthlyRule(year, m);
+  }
+  if (isAnnualPeriod(period)) {
+    return getModelOrDefault(model).annualDeadline?.(year) ?? null;
   }
   return null;
 }

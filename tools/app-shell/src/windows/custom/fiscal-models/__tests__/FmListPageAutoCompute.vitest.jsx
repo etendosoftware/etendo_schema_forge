@@ -29,21 +29,22 @@ describe('FmListPage — auto-compute wiring', () => {
   // "other" (ready/skipped, non-draft, one-time) hooks fed the list, 4 total.
   // ETP-5438 narrowed "other" further: submitted-family declarations were carved
   // out into their own 2 "submitted" (frozen) hooks, so it's 6 total now.
-  it('calls useFiscalAutoCompute exactly 6 times (draft 303/349, other 303/349, submitted 303/349)', () => {
+  // ETP-5716 — one bucket set per registered model: 303, 349 and 390 → 9 calls.
+  it('calls useFiscalAutoCompute exactly 9 times (draft, other and submitted × 303/349/390)', () => {
     render(<FmListPage token="tok" apiBaseUrl="http://host/neo/fiscal-models" />);
-    expect(useFiscalAutoCompute.mock.calls).toHaveLength(6);
+    expect(useFiscalAutoCompute.mock.calls).toHaveLength(9);
   });
 
-  it('the 2 "other" (ready/skipped) hook calls have no checkModifiedFn — no polling', () => {
+  it('the 3 "other" (ready/skipped) hook calls have no checkModifiedFn — no polling', () => {
     render(<FmListPage token="tok" apiBaseUrl="http://host/neo/fiscal-models" />);
     const calls = useFiscalAutoCompute.mock.calls;
-    // 2 draft hooks carry a real (polling) checkModifiedFn, 2 submitted hooks carry a
-    // frozen "always false" one (ETP-5438 — see the next test), and the 2 "other"
-    // (ready/skipped) hooks intentionally omit it entirely.
+    // 3 draft hooks carry a real (polling) checkModifiedFn, 3 submitted hooks carry a
+    // frozen "always false" one (ETP-5438 — see the next test), and the 3 "other"
+    // (ready/skipped) hooks intentionally omit it entirely (one of each per model, ETP-5716).
     const withCheckModified = calls.filter(call => typeof call[1].checkModifiedFn === 'function');
     const withoutCheckModified = calls.filter(call => call[1].checkModifiedFn === undefined);
-    expect(withCheckModified).toHaveLength(4);
-    expect(withoutCheckModified).toHaveLength(2);
+    expect(withCheckModified).toHaveLength(6);
+    expect(withoutCheckModified).toHaveLength(3);
   });
 
   // ETP-5438 — the 2 submitted-family hooks are distinguished from the 2 draft
@@ -51,23 +52,23 @@ describe('FmListPage — auto-compute wiring', () => {
   // always resolving `false` — this is what makes useFiscalAutoCompute trust its own
   // sessionStorage cache instead of live-recomputing on every FmListPage re-mount
   // (the actual "sigue tomando facturas aun presentada" root cause).
-  it('the 2 "submitted" hook calls carry a distinct, always-false checkModifiedFn (frozen, not polling)', async () => {
+  it('the 3 "submitted" hook calls carry a distinct, always-false checkModifiedFn (frozen, not polling)', async () => {
     const { checkModified303, checkModified349 } = await import('../fiscalModelsUtils.js');
+    const { checkModified390 } = await import('../models/390/fm390Api.js');
+    const polling = new Set([checkModified303, checkModified349, checkModified390]);
     render(<FmListPage token="tok" apiBaseUrl="http://host/neo/fiscal-models" />);
     const calls = useFiscalAutoCompute.mock.calls;
-    const draftCalls = calls.filter(call =>
-      call[1].checkModifiedFn === checkModified303 || call[1].checkModifiedFn === checkModified349);
+    const draftCalls = calls.filter(call => polling.has(call[1].checkModifiedFn));
     const frozenCalls = calls.filter(call =>
-      typeof call[1].checkModifiedFn === 'function'
-      && call[1].checkModifiedFn !== checkModified303
-      && call[1].checkModifiedFn !== checkModified349);
-    expect(draftCalls).toHaveLength(2);
-    expect(frozenCalls).toHaveLength(2);
-    await expect(frozenCalls[0][1].checkModifiedFn()).resolves.toBe(false);
-    await expect(frozenCalls[1][1].checkModifiedFn()).resolves.toBe(false);
+      typeof call[1].checkModifiedFn === 'function' && !polling.has(call[1].checkModifiedFn));
+    expect(draftCalls).toHaveLength(3);
+    expect(frozenCalls).toHaveLength(3);
+    for (const call of frozenCalls) {
+      await expect(call[1].checkModifiedFn()).resolves.toBe(false);
+    }
   });
 
-  it('all 6 hook calls still gate enabled on token+apiBaseUrl, including the "other"/"submitted" ones', () => {
+  it('all 9 hook calls still gate enabled on token+apiBaseUrl, including the "other"/"submitted" ones', () => {
     render(<FmListPage token="tok" apiBaseUrl="http://host/neo/fiscal-models" />);
     const calls = useFiscalAutoCompute.mock.calls;
     calls.forEach(call => {
@@ -75,10 +76,10 @@ describe('FmListPage — auto-compute wiring', () => {
     });
   });
 
-  it('passes enabled=false for all 6 hook calls when token/apiBaseUrl are absent', () => {
+  it('passes enabled=false for all 9 hook calls when token/apiBaseUrl are absent', () => {
     render(<FmListPage />);
     const calls = useFiscalAutoCompute.mock.calls;
-    expect(calls).toHaveLength(6);
+    expect(calls).toHaveLength(9);
     calls.forEach(call => {
       expect(call[1].enabled).toBe(false);
     });

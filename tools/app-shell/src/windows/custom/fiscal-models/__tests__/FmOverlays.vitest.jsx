@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/FmOverlays.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/formerStatement.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/fiscalPeriods.js
 // Vitest component tests for FmOverlays.jsx — PresentModal and FileGenModal
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -40,6 +41,7 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 import { PresentModal, FileGenModal, NewDeclModal } from '../FmOverlays.jsx';
 import { toast } from 'sonner';
 import { RECEIPT_ATTACHMENT_CONFIG } from '../fiscalModelsUtils.js';
+import { SELECTABLE_YEARS } from '../models/303/fm303Layouts';
 
 // ── PresentModal ──────────────────────────────────────────────────────────────
 
@@ -818,13 +820,14 @@ describe('NewDeclModal', () => {
     expect(trigger.querySelector('.fm-model-badge').textContent).toBe('303');
   });
 
-  it('legacy fallback (no activeModels prop) offers both 303 and 349, enabled', () => {
+  // ETP-5716 — every registered model, the annual 390 included.
+  it('legacy fallback (no activeModels prop) offers every registered model (303, 349, 390), enabled', () => {
     const { container } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
     const trigger = getModelTrigger(container);
     expect(trigger.disabled).toBe(false);
     openModelMenu(container);
     const optionIds = getModelOptions(container).map(o => o.querySelector('.fm-model-badge').textContent);
-    expect(optionIds).toEqual(['303', '349']);
+    expect(optionIds).toEqual(['303', '349', '390']);
     const createBtn = getCreateBtn(container);
     expect(createBtn.disabled).toBe(false);
     expect(document.body.textContent).not.toContain('fm.new_decl.no_active_models');
@@ -1383,5 +1386,91 @@ describe('NewDeclModal', () => {
         expect(btn.hasAttribute('disabled')).toBe(false);
       }
     });
+  });
+});
+
+// ── NewDeclModal — annual-only model (ETP-5716, Modelo 390) ───────────────────
+describe('NewDeclModal — annual model (390)', () => {
+  const only390 = { '390': true };
+  // The modal's default (and only) selectable year.
+  const YEAR = SELECTABLE_YEARS[SELECTABLE_YEARS.length - 1];
+
+  it('asks for the year only (no Frecuencia / Período) and previews "Anual <year>"', () => {
+    const { container } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={only390} />);
+    expect(container.querySelector('.fm-newdecl-model-trigger .fm-model-badge').textContent).toBe('390');
+    expect(document.body.textContent).not.toContain('fm.new_decl.frequency');
+    expect(container.querySelectorAll('.fm-newdecl-period-btn')).toHaveLength(0);
+    expect(document.body.textContent).toContain('fm.new_decl.preview_annual');
+  });
+
+  it('creates the declaration on the annual period 0A', () => {
+    const onConfirm = vi.fn();
+    const { container } = render(<NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} activeModels={only390} />);
+    fireEvent.click(getCreateBtn(container));
+    expect(onConfirm).toHaveBeenCalledWith({ model: '390', year: YEAR, period: '0A', status: 'draft' });
+  });
+
+  it('switching from 303 to 390 hides the period grid and sends 0A', () => {
+    const onConfirm = vi.fn();
+    const { container } = render(<NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} activeModels={{ '303': true, '390': true }} />);
+    expect(container.querySelectorAll('.fm-newdecl-period-btn').length).toBeGreaterThan(0);
+    openModelMenu(container);
+    fireEvent.click(getModelOption(container, '390'));
+    expect(container.querySelectorAll('.fm-newdecl-period-btn')).toHaveLength(0);
+    fireEvent.click(getCreateBtn(container));
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ model: '390', period: '0A' }));
+  });
+
+  it('blocks a second ordinary 390 of the year and offers to open the existing one', () => {
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const onOpenExisting = vi.fn();
+    const year = YEAR;
+    const existing = { id: 'd390', model: '390', year, period: '0A', status: 'draft', type: 'ord' };
+    const { container } = render(
+      <NewDeclModal onConfirm={onConfirm} onClose={onClose} activeModels={only390}
+        existingDeclarations={[existing]} onOpenExisting={onOpenExisting} />,
+    );
+    expect(screen.getByTestId('NewDeclModal__duplicateOrdinary').textContent).toContain('fm.new_decl.duplicate_ordinary');
+    expect(getCreateBtn(container).disabled).toBe(true);
+    fireEvent.click(getCreateBtn(container));
+    expect(onConfirm).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('NewDeclModal__openExisting'));
+    expect(onOpenExisting).toHaveBeenCalledWith(existing);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('a substitute (type com) 390 of the year does not block a new one', () => {
+    const year = YEAR;
+    const { container } = render(
+      <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={only390}
+        existingDeclarations={[{ id: 's', model: '390', year, period: '0A', status: 'draft', type: 'com' }]} />,
+    );
+    expect(screen.queryByTestId('NewDeclModal__duplicateOrdinary')).toBeNull();
+    expect(getCreateBtn(container).disabled).toBe(false);
+  });
+
+  it('warns (without blocking) when 303s of the year are missing', () => {
+    const year = YEAR;
+    const decls = ['T1', 'T2', 'T3'].map(p => ({ id: p, model: '303', year, period: p, status: 'submitted' }));
+    const { container } = render(
+      <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={only390} existingDeclarations={decls} />,
+    );
+    expect(screen.getByTestId('NewDeclModal__modelWarning').textContent).toBe('fm.m390.new_decl.missing_303');
+    expect(getCreateBtn(container).disabled).toBe(false);
+  });
+
+  it('shows no annual notice for 303', () => {
+    render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': true }} existingDeclarations={[]} />);
+    expect(screen.queryByTestId('NewDeclModal__modelWarning')).toBeNull();
+    expect(screen.queryByTestId('NewDeclModal__duplicateOrdinary')).toBeNull();
+  });
+});
+
+describe('PresentModal — annual declaration subtitle (ETP-5716)', () => {
+  it('reads "Modelo 390 · Anual <year>" for period 0A', () => {
+    render(<PresentModal decl={{ id: 'x', model: '390', year: 2026, period: '0A' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('fm.new_decl.preview_annual');
+    expect(document.body.textContent).not.toContain('fm.new_decl.preview ');
   });
 });

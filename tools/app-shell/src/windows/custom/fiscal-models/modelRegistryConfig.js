@@ -7,8 +7,9 @@
 // FmOverlays.jsx themselves.
 //
 // Section contract: `({ t, values, onChange })`, plus an optional static `initialValues` object
-// for the inputs it controls (see ConfigSection303.jsx). Every registered model must have one —
-// enforced by __tests__/modelRegistry.vitest.js.
+// for the inputs it controls (see ConfigSection303.jsx). The binding is OPTIONAL (ETP-5716): a
+// model with nothing to configure (390) has none, and ConfigDrawer then shows only "Declarante".
+// __tests__/modelRegistry.vitest.js checks that every binding present is a component.
 import ConfigSection303 from './models/303/ConfigSection303.jsx';
 import ConfigSection349 from './models/349/ConfigSection349.jsx';
 
