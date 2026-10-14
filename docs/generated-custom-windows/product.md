@@ -1545,12 +1545,12 @@ Four backend cuts, in `com.etendoerp.go` (`docs/neo-headless.md` §4.3.6):
 - **No double price write.** A priced row sends `_skipPricesSeed: [<versions it prices>]` on the
   product op (`productImportDescriptor.js`). The backend skips the zero-price seed for a direction
   only when the version **it** would seed (`PriceListVersionResolver`) is in that list, so
-  `ProductPriceHandler` no longer overwrites a row seeded a moment earlier. The import's own tariff
-  choice (`resolvePlv`: selector order, and for sales an unflagged list is accepted) can differ
-  from the server's (default flag, org before `*`, newest `ValidFromDate`) when no list is flagged
-  default or the default list has several versions; in that case the server's default tariff is
-  still seeded at 0 and the imported price lands on the import's choice, exactly as before. An
-  unpriced row sends nothing and is seeded as before.
+  `ProductPriceHandler` no longer overwrites a row seeded a moment earlier. Every GO price list
+  has one version, and onboarding seeds one default sales and one default purchase list, so the
+  import (`resolvePlv`) and the server pick the same tariff. They can differ only after a user
+  clears **Por defecto** on the Tarifas window: then each falls back to a different "first"
+  direction-matching list, the server's tariff is still seeded at 0 and the imported price lands
+  on the import's choice, exactly as before. An unpriced row sends nothing and is seeded as before.
 - **`_onlyReturnIds: true`** on every import `/batch` request (`useWindowImportDialog` wraps
   `useBatch.runBatch`; OCR does not send it). The backend skips locator-identifier enrichment and
   the `etgoHasCost` flag on each create. The response is unchanged — the import engine reads only
