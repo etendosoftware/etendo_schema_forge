@@ -192,7 +192,7 @@ test.describe('Financial Account — Nuevo movimiento (mocked)', () => {
     const glInput = page.getByPlaceholder(GL_PLACEHOLDER);
     await glInput.click();
     await glInput.fill('Comis');
-    await page.getByRole('button', { name: 'Comisiones bancarias' }).click();
+    await page.getByRole('option', { name: 'Comisiones bancarias' }).click();
 
     // Enter a positive amount. ETP-5107: the call site has always asked for
     // data-testid="tx-amount", but the old `AmountInput` never destructured `data-testid`, so the
@@ -235,7 +235,7 @@ test.describe('Financial Account — Nuevo movimiento (mocked)', () => {
     const glInput = page.getByPlaceholder(GL_PLACEHOLDER);
     await glInput.click();
     await glInput.fill('Inter');
-    await page.getByRole('button', { name: 'Intereses' }).click();
+    await page.getByRole('option', { name: 'Intereses' }).click();
     // Same testid note as the test above (ETP-5107: `MaskedAmountInput` honours `data-testid`).
     await page.getByTestId('tx-amount').fill('75');
 
