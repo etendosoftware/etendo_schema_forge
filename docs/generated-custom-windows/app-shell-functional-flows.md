@@ -330,10 +330,15 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   with another fiscal-year start; disabled with an explanation once a period was opened or
   anything posted). Either way the user lands on `/calendar` to open the periods they need;
   **Ver guía** starts the Calendar tour. `403` (not the owner) and `409` (calendar in use) are
-  translated toasts. Opening any period from Calendar also completes the row. When a document is
-  refused with `PeriodNotAvailable` while the review is pending, the toast sends the owner here
-  (others are told to ask the owner); afterwards it offers **Ir al calendario**
+  translated toasts. Opening any period from Calendar also completes the row; the state is read
+  once per app load by the provider and re-read every time Primeros pasos is opened. When a
+  document is refused with `PeriodNotAvailable` while the review is pending, the toast sends the
+  owner here (others are told to ask the owner); afterwards it offers **Ir al calendario**
   (`lib/periodNotAvailable.js`, registered by `AppLayout`).
+  **Known gap — dismissed accounts.** "Finalizar configuración inicial" is per account, the review
+  per environment: an owner who dismissed First Steps (e.g. on the demo, before upgrading) never
+  sees this row. Their refusal toast offers **Ir al calendario** instead, so they can still open
+  periods, but they cannot regenerate the calendar from the UI.
 - **Gated row (`gateQuestionKey`).** The row asks a yes/no question that REPLACES its description
   and its action until it is answered. The only one today is **Configuración fiscal** (a
   `productiveOnly` row, so a trial tenant never sees it): *"¿Debe informar las facturas a algún

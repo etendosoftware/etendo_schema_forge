@@ -24,15 +24,15 @@ export function setPeriodRecovery(next) {
 
 /**
  * Recovery for the current tenant, from its calendar review state (`GET calendar-review`):
- * `pending` and `isOwner`.
+ * `pending` and `isOwner`, plus whether the account dismissed First Steps. Dismissal is per
+ * account and the review per environment, so a dismissed owner (e.g. one who finished the
+ * checklist on a demo, then upgraded) cannot reach the review row and goes to Calendar instead.
  */
 export function periodRecoveryFor(review, navigate) {
-  if (!review?.pending) {
-    return { labelKey: 'periodNotAvailableOpenCalendar', go: () => navigate('/calendar') };
-  }
-  return review.isOwner
+  if (review?.pending && !review.isOwner) return { descriptionKey: 'periodNotAvailableAskOwner' };
+  return review?.pending && !review.firstStepsDismissed
     ? { labelKey: 'periodNotAvailableReviewCalendar', go: () => navigate('/first-steps') }
-    : { descriptionKey: 'periodNotAvailableAskOwner' };
+    : { labelKey: 'periodNotAvailableOpenCalendar', go: () => navigate('/calendar') };
 }
 
 /**

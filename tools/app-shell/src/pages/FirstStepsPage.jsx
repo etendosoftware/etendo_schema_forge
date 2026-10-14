@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Check, Circle, Clock, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
@@ -317,6 +317,11 @@ export default function FirstStepsPage() {
   const { completed, loading, toggleStep, plan, steps, completedCount, total, dismissed,
     setDismissed, dataTransfer, demoDataTransfer, calendarReview, calendarReviewStep } =
     useFirstStepsState();
+
+  // ETP-5577 — the provider reads the review once per app load; a period opened in Calendar since
+  // then completes the row, so re-read it on every visit.
+  const refreshCalendarReview = calendarReview?.refresh;
+  useEffect(() => { refreshCalendarReview?.(); }, [refreshCalendarReview]);
 
   // The optimistic rollback in `useFirstSteps` is invisible on its own — without this the row
   // would silently un-check itself after a failed POST.

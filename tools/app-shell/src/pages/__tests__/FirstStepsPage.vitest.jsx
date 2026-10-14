@@ -357,6 +357,13 @@ describe('FirstStepsPage — accounting calendar review (ETP-5577)', () => {
     expect(screen.queryByTestId('first-steps-toggle-calendar-review')).not.toBeInTheDocument();
   });
 
+  it('re-reads the review state on every visit (a period opened in Calendar completes it)', () => {
+    const refresh = vi.fn();
+    setHook({ calendarReview: { ...PENDING, refresh } });
+    render(<FirstStepsPage />);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it('confirms, then sends the user to Calendar to open periods', async () => {
     const user = userEvent.setup();
     const { calendarReview } = setHook({ calendarReview: PENDING });

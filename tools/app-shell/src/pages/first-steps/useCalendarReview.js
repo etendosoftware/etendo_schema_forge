@@ -7,7 +7,8 @@ const ENDPOINT = '/sws/go/onboarding/calendar-review';
 /**
  * ETP-5577 — the accounting calendar review state of the tenant in the current session.
  *
- * Any read failure leaves `required` false, so an unknown answer hides the row rather than
+ * Read once per mount; `refresh` re-reads it (First Steps does on every visit, since opening a
+ * period in Calendar completes the review). Any read failure leaves `required` false, so an unknown answer hides the row rather than
  * showing an error. `confirm` and `regenerate` answer with the new state; a refusal (403 not the
  * owner, 409 the calendar is already in use) rejects with an error carrying the HTTP `status`.
  */
@@ -15,6 +16,8 @@ export function useCalendarReview() {
   const apiFetch = useApiFetch(getApiBase());
   const [state, setState] = useState({ required: false, reviewed: false });
   const [loading, setLoading] = useState(true);
+  // Bumped by `refresh`: the state changes outside this hook (a period opened in Calendar).
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,7 +34,9 @@ export function useCalendarReview() {
       }
     })();
     return () => { cancelled = true; };
-  }, [apiFetch]);
+  }, [apiFetch, version]);
+
+  const refresh = useCallback(() => setVersion((current) => current + 1), []);
 
   const post = useCallback(async (path, body) => {
     const response = await apiFetch(`${ENDPOINT}/${path}`, {
@@ -53,7 +58,7 @@ export function useCalendarReview() {
   const regenerate = useCallback(
     (fiscalYearStart) => post('regenerate', { fiscalYearStart }), [post]);
 
-  return { ...state, loading, confirm, regenerate };
+  return { ...state, loading, confirm, regenerate, refresh };
 }
 
 export default useCalendarReview;

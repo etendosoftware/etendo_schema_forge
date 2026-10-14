@@ -28,6 +28,16 @@ describe('periodNotAvailableToastOptions', () => {
       { description: 't:periodNotAvailableAskOwner' });
   });
 
+  it('sends an owner who dismissed First Steps to Calendar, the row being unreachable', () => {
+    const visited = [];
+    setPeriodRecovery(periodRecoveryFor({ pending: true, isOwner: true, firstStepsDismissed: true },
+      (path) => visited.push(path)));
+    const { action } = periodNotAvailableToastOptions(['PeriodNotAvailable'], ui);
+    assert.equal(action.label, 't:periodNotAvailableOpenCalendar');
+    action.onClick();
+    assert.deepEqual(visited, ['/calendar']);
+  });
+
   it('sends to Calendar once the review is done', () => {
     const visited = [];
     setPeriodRecovery(periodRecoveryFor({ pending: false, isOwner: true }, (path) => visited.push(path)));

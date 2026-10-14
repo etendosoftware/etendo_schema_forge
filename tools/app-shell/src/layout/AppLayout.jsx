@@ -574,9 +574,10 @@ function AppLayoutAccessGate({ menuGroups }) {
   const calendarReviewOwner = Boolean(firstStepsProgress?.calendarReview?.isOwner);
   useEffect(() => {
     setPeriodRecovery(periodRecoveryFor(
-      { pending: calendarReviewPending, isOwner: calendarReviewOwner }, navigate));
+      { pending: calendarReviewPending, isOwner: calendarReviewOwner,
+        firstStepsDismissed: firstStepsDismissed === true }, navigate));
     return () => setPeriodRecovery(null);
-  }, [calendarReviewPending, calendarReviewOwner, navigate]);
+  }, [calendarReviewPending, calendarReviewOwner, firstStepsDismissed, navigate]);
 
   // ETP-5402 QA follow-up — the caller's own Informes-subsection report access
   // (`fetchMyReportAccess()`), used only as a FALLBACK inside `filterMenuGroupsByAccess`'s
