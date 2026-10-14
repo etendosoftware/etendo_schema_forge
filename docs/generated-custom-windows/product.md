@@ -1540,7 +1540,7 @@ concurrency used, mapped columns, foreign keys resolved/created; never row conte
 ### ETP-5676 — Server cost per imported row
 
 Measured in production: about 800 ms of server time per imported row (product, two prices, cost).
-Four backend cuts, in `com.etendoerp.go` (`docs/neo-headless.md` §4.3.6):
+Four backend cuts, in `com.etendoerp.go` (`docs/neo-headless.md` §4.3.7):
 
 - **No double price write.** A priced row sends `_skipPricesSeed: [<versions it prices>]` on the
   product op (`productImportDescriptor.js`). The backend skips the zero-price seed for a direction
@@ -1561,7 +1561,7 @@ Four backend cuts, in `com.etendoerp.go` (`docs/neo-headless.md` §4.3.6):
   they have been seen proposing only values the row already carries. Opt-in on purpose — a batch
   without it runs every callout — and the backend kill switch `batch-callout-skip-disabled` turns
   it off for every batch whatever the request asks (com.etendoerp.go `docs/neo-headless.md`
-  §4.3.6). That flag is not created in ConfigCat yet (ETP-5751), and production has no rollback
+  §4.3.7). That flag is not created in ConfigCat yet (ETP-5751), and production has no rollback
   for the skip until it is. The generic import hook sends it, so it covers the two windows that
   have an import today: product and contacts.
 - **Automatic, no client change:** spec/entity/default lookups are answered once per batch.

@@ -406,7 +406,7 @@ sequence); try contacts concurrency 4 → 8 locally (server avg concurrency is o
 QA's production `[NEO-PERF]` logs (1000 products, 10-row chunks): ~800 ms of server time per row —
 product create 515 ms (pre-hook 84, callout cascade 130 of which `SL_TaxCategory_Org` ~90, add 90,
 post-hook + response ~193), both prices 73 ms (each one updating the row the seed had just inserted),
-cost 205 ms. Four user-approved cuts, documented in `com.etendoerp.go` `docs/neo-headless.md` §4.3.6:
+cost 205 ms. Four user-approved cuts, documented in `com.etendoerp.go` `docs/neo-headless.md` §4.3.7:
 
 1. `_skipPricesSeed` — product create directive, read and stripped by `ProductDefaultsHandler`;
    declared via `NeoHandler#createDirectives()` so MCP accepts and publishes it. The import sends
