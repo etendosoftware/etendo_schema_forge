@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/preUnpost.js
 /**
  * ETP-5302 — `preUnpost.js` is the single home of the "reactivating a posted document
  * reverses its accounting first" rule. It used to live only inside
@@ -11,7 +12,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isPosted, runPreUnpost } from '../preUnpost.js';
+import { isPosted, runPreUnpost, preUnpostErrorIdentity } from '../preUnpost.js';
 
 /** Records `(recordId, action)` pairs and resolves whatever the test asked for. */
 function spyExecute(result) {
@@ -172,5 +173,41 @@ describe('runPreUnpost — applies', () => {
     await runPreUnpost({ recordId: 'rec-10', record: { posted: 'Y' }, enabled: true, execute });
 
     assert.equal(execute.calls[0][1], 'unpost');
+  });
+});
+
+// ETP-5692 — on a stale screen an invoice can still read as posted after it was unposted
+// elsewhere; its unpost is then refused in plain English plus a `messageKeys` identity, and the
+// identity is the only translatable part. The failure must carry it to the caller's toast.
+describe('runPreUnpost — refusal identity (ETP-5692)', () => {
+  it('carries the backend messageKeys / messageParams of a refused unpost', async () => {
+    const execute = spyExecute({
+      success: false,
+      message: "Only a completed invoice can be unposted. This invoice's status is VO.",
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    });
+    const result = await runPreUnpost({
+      recordId: 'rec-11', record: { posted: 'Y' }, enabled: true, execute,
+    });
+
+    assert.deepEqual(result, {
+      ran: true,
+      success: false,
+      message: "Only a completed invoice can be unposted. This invoice's status is VO.",
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    });
+    assert.deepEqual(preUnpostErrorIdentity(result), {
+      messageKeys: ['ETGO_InvoiceUnpostNotCompleted'],
+      messageParams: { docStatus: 'VO' },
+    });
+  });
+
+  it('yields empty translateBackendError options for a result without identity', () => {
+    assert.deepEqual(preUnpostErrorIdentity({ success: false, message: 'x' }),
+      { messageKeys: undefined, messageParams: undefined });
+    assert.deepEqual(preUnpostErrorIdentity(undefined),
+      { messageKeys: undefined, messageParams: undefined });
   });
 });

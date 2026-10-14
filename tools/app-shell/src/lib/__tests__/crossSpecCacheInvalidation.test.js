@@ -5,6 +5,7 @@
  * `needsPrimaryDoc` / `needsInvoiceDoc` annotations are refetched instead of served for 30 s.
  *
  * ETP-5571 adds the entity map: a write to `contacts` marks every cached selector page stale.
+ * ETP-5681 maps the accounting dimensions too: `cost-center`, `project`, `service-project`.
  *
  * Contracts, each table-driven:
  *   1. `specsInvalidatedByWrite(url)` — which parent specs a URL writes into, matched by WHOLE
@@ -69,6 +70,10 @@ describe('entitiesInvalidatedByWrite', () => {
     ['contacts only in the query string → nothing', '/sws/neo/sales-order/header?bp=contacts', []],
     ['contacts only in the fragment → nothing', '/sws/neo/sales-order/header#contacts', []],
     ['segment that merely starts with contacts → nothing', '/sws/neo/contactsX/header/1', []],
+    ['cost-center write → selector (ETP-5681)', '/sws/neo/cost-center/costCenter/ABC', ['selector']],
+    ['project write → selector (ETP-5681)', '/sws/neo/project/project/ABC', ['selector']],
+    ['service-project write → selector (ETP-5681)', '/sws/neo/service-project/project/ABC', ['selector']],
+    ['cost-center only in the query string → nothing', '/sws/neo/simple-g-l-journal/gLJournal?x=cost-center', []],
     ['a spec mapped to no entity → nothing', '/sws/neo/sales-order/header', []],
     ['empty string → nothing', '', []],
     ['null → nothing', null, []],

@@ -12,7 +12,6 @@ export function useConfirmWithCredit({
   entitySegment,
   invoiceRoute,
   invoiceType,
-  invoiceCreatedTitleKey,
 }) {
   const ui = useUI();
   const [showModal, setShowModal] = useState(false);
@@ -22,7 +21,6 @@ export function useConfirmWithCredit({
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const status = data?.documentStatus;
-  const currency = data?.['currency$_identifier'] || '';
   // ETP-5381: trust the backend flag. ReturnShipmentUtils computes it over every non-voided
   // invoice of the return document, which is the same predicate the server-side duplicate guard
   // uses — so the button and the guard can never disagree. The previous client-side override
@@ -58,11 +56,9 @@ export function useConfirmWithCredit({
       const invData = (await res.json())?.response?.data;
       setShowModal(false);
       setResult({
-        title: ui(invoiceCreatedTitleKey),
         docs: invData?.id ? [{
           type: invoiceType,
           num: invData.documentNo || '',
-          amount: invData.grandTotalAmount ?? null,
           // ETP-5381: the rectificative invoice is confirmed on creation; without this the
           // result modal would badge it as Borrador.
           documentStatus: invData.documentStatus ?? null,
@@ -74,25 +70,23 @@ export function useConfirmWithCredit({
     } finally {
       setCreatingInvoice(false);
     }
-  }, [data, recordId, apiFetch, ui, creatingInvoice, entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey, setShowModal]);
+  }, [data, recordId, apiFetch, ui, creatingInvoice, entitySegment, invoiceRoute, invoiceType, setShowModal]);
 
   const buildInvoiceResultFromConfirm = useCallback((invoice) => {
     if (!invoice?.id) return null;
     return {
-      title: ui(invoiceCreatedTitleKey),
       docs: [{
         type: invoiceType,
         num: invoice.documentNo || '',
-        amount: invoice.amount ?? invoice.grandTotal,
         documentStatus: invoice.documentStatus ?? null,
         route: `${invoiceRoute}${invoice.id}`,
       }],
     };
-  }, [ui, invoiceCreatedTitleKey, invoiceType, invoiceRoute]);
+  }, [invoiceType, invoiceRoute]);
 
   return {
     ui,
-    status, currency, hasReturnInvoice,
+    status, hasReturnInvoice,
     headers, base,
     showModal, setShowModal,
     creatingInvoice, result, setResult,

@@ -942,7 +942,11 @@ function resolveNumericInputMode(field, isNumeric) {
   return numericInputMode;
 }
 
+// A search field flagged `lookup`, or any FK field that names a `lookupDrawer` (ETP-5681): the
+// generator marks only the first `search`-type add-line field as the lookup, so a `selector`-type
+// field such as the G/L journal Account declares its popup through the drawer key alone.
 function isLookupSearchField(field) {
+  if (field.lookupDrawer && (field.type === 'search' || field.type === 'selector')) return true;
   return field.type === 'search' && field.lookup;
 }
 

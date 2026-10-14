@@ -1,3 +1,5 @@
+// @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -252,8 +254,8 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
     });
 
     await test.step('Navigate to the generated shipment', async () => {
-      const orderConfirmedMsg = page.getByText(/pedido confirmado|order confirmed/i);
-      await expect(orderConfirmedMsg).toBeVisible({ timeout: 30_000 });
+      // ETP-5674: the result popup is titled after the single created shipment.
+      await expect(page.getByTestId('confirm-result-title')).toHaveText(/albarán creado|shipment created/i, { timeout: 30_000 });
       await slow(page);
 
       const viewShipmentBtn = page.getByRole('button', { name: /ver albar[aá]n/i });
@@ -290,7 +292,7 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       await shipmentConfirmPromise;
       await slow(page);
 
-      const closeShipmentResultBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
+      const closeShipmentResultBtn = page.getByTestId('action-confirm-result-close');
       await expect(closeShipmentResultBtn).toBeVisible({ timeout: 15_000 });
       await closeShipmentResultBtn.click();
       await slow(page);

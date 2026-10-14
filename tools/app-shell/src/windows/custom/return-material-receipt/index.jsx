@@ -118,8 +118,7 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
           specName: 'return-material-receipt',
           entityName: 'returnMaterialReceipt',
           confirmedTitleKey: 'documentConfirmed',
-          invoiceResultTitleKey: 'rmrInvoiceCreatedTitle',
-          invoiceDocType: 'facturaVenta',
+          invoiceDocType: 'facturaRectificativa',
           invoiceRoute: '/sales-invoice',
         }}
         {...rest}

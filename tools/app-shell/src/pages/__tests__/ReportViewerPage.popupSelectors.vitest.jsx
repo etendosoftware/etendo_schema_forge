@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/ReportViewerPage.jsx
 // Coverage-recovery suite (ETP-4346 batch 2): targets the uncovered popup-style
 // selectors in ReportViewerPage.jsx — SelectorPopup (popup-single inputStyle),
 // PopupMultiSelector (popup inputStyle), the default inline SearchInput dropdown
@@ -99,7 +100,9 @@ vi.mock('@/components/ui/dialog', () => ({
       {children}
     </div>
   ) : null),
-  DialogContent: ({ children }) => <div>{children}</div>,
+  DialogContent: ({ children, className, 'data-testid': testId }) => (
+    <div className={className} data-testid={testId}>{children}</div>
+  ),
   DialogHeader: ({ children }) => <div>{children}</div>,
   DialogTitle: ({ children }) => <h2>{children}</h2>,
 }));
@@ -218,10 +221,10 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
 
     await waitFor(() => expect(screen.getByText('Cash')).toBeInTheDocument());
 
-    // The header close button (X icon) is the first button in the popup header
-    const closeButtons = screen.getAllByRole('button');
-    const headerClose = closeButtons.find((b) => b.querySelector('[data-testid="X__3c998a"]'));
-    await user.click(headerClose);
+    // The popup is the shared SearchPopup (a Dialog): close it through the Dialog's own
+    // onOpenChange(false) path, the one its X button and Escape drive.
+    const popupDialog = screen.getByTestId('report-selector-popup').closest('[data-testid="dialog"]');
+    await user.click(within(popupDialog).getByTestId('dialog-close'));
 
     await waitFor(() => {
       expect(screen.queryByText('Cash')).not.toBeInTheDocument();
@@ -316,9 +319,8 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
     await waitFor(() => expect(screen.getByText('Account')).toBeInTheDocument());
     await user.click(screen.getByText('selectPlaceholder'));
 
-    const searchInput = await screen.findByPlaceholderText('Search...');
-    const popupBox = searchInput.closest('.rounded-xl');
-    expect(popupBox).toBeTruthy();
+    await screen.findByPlaceholderText('Search...');
+    const popupBox = screen.getByTestId('report-selector-popup');
     expect(popupBox.classList.contains('w-[42rem]')).toBe(true);
     expect(popupBox.classList.contains('max-w-[90vw]')).toBe(true);
     expect(popupBox.classList.contains('w-96')).toBe(false);

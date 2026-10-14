@@ -1,8 +1,10 @@
+// @covers tools/app-shell/src/windows/custom/shared/sifSending.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getPendingSifTargets,
   getSifBodyKey,
+  getSifButtonLabelKey,
   getSifTbaiSuccessKey,
   getSifTbaiErrorKey,
 } from '../sifSending.js';
@@ -78,12 +80,14 @@ describe('sifSending', () => {
         );
       });
 
+      // ETP-5700 — tbaisystemdate is an AD Date column, so it reaches the client as a bare
+      // `yyyy-MM-dd`; the former UTC-midnight fixture only passed west of UTC.
       it('keeps TBAI pending when the invoice date equals the adoption date (inclusive)', () => {
         assert.deepEqual(
           getPendingSifTargets('sales-invoice', 'tbai', {
             tbaiIssent: false,
             invoiceDate: '2026-01-01',
-          }, null, { tbaisystemdate: '2026-01-01T00:00:00.000Z' }),
+          }, null, { tbaisystemdate: '2026-01-01' }),
           { sendSii: false, sendTbai: true },
         );
       });
@@ -126,12 +130,14 @@ describe('sifSending', () => {
         );
       });
 
+      // ETP-5700 — fechaAcogidaSII is an AD Date column, so it reaches the client as a bare
+      // `yyyy-MM-dd`; the former UTC-midnight fixture only passed west of UTC.
       it('keeps SII pending when the accounting date equals the cutover date (inclusive)', () => {
         assert.deepEqual(
           getPendingSifTargets('sales-invoice', 'sii', {
             aeatsiiIssent: false,
             accountingDate: '2026-09-24',
-          }, null, null, '2026-09-24T00:00:00.000Z'),
+          }, null, null, '2026-09-24'),
           { sendSii: true, sendTbai: false },
         );
       });
@@ -425,6 +431,36 @@ describe('sifSending', () => {
   // ETP-5087: the RESULT copy must follow the same purchase/sales split the
   // confirmation copy uses — the modal used to report "Enviado a TicketBAI
   // correctamente." for an invoice the user had just confirmed sending to Batuz.
+  // ETP-5700 — the action caption names the system the invoice is pending for,
+  // instead of the generic "Enviar a SIF".
+  describe('getSifButtonLabelKey', () => {
+    it('names SII alone on a sales invoice', () => {
+      assert.equal(getSifButtonLabelKey('sales-invoice', { sendSii: true, sendTbai: false }), 'sendToSifLabelSii');
+    });
+
+    it('names TBAI alone on a sales invoice', () => {
+      assert.equal(getSifButtonLabelKey('sales-invoice', { sendSii: false, sendTbai: true }), 'sendToSifLabelTbai');
+    });
+
+    it('names both systems on a sales invoice pending for SII and TBAI', () => {
+      assert.equal(getSifButtonLabelKey('sales-invoice', { sendSii: true, sendTbai: true }), 'sendToSifLabelBoth');
+    });
+
+    it('names SII alone on a purchase invoice', () => {
+      assert.equal(getSifButtonLabelKey('purchase-invoice', { sendSii: true, sendTbai: false }), 'sendToSifLabelSii');
+    });
+
+    it('names Batuz, not TBAI, on a purchase invoice (Bizkaia only — ETP-5087)', () => {
+      assert.equal(getSifButtonLabelKey('purchase-invoice', { sendSii: false, sendTbai: true }), 'sendToSifLabelTbaiPurchase');
+      assert.equal(getSifButtonLabelKey('purchase-invoice', { sendSii: true, sendTbai: true }), 'sendToSifLabelBothPurchase');
+    });
+
+    it('falls back to the SII caption when nothing is pending or targets are missing', () => {
+      assert.equal(getSifButtonLabelKey('sales-invoice', { sendSii: false, sendTbai: false }), 'sendToSifLabelSii');
+      assert.equal(getSifButtonLabelKey('sales-invoice'), 'sendToSifLabelSii');
+    });
+  });
+
   describe('getSifTbaiSuccessKey', () => {
     it('uses the Batuz-specific success copy for purchase invoices', () => {
       assert.equal(getSifTbaiSuccessKey('purchase-invoice'), 'sendToSifSuccessTbaiPurchase');
