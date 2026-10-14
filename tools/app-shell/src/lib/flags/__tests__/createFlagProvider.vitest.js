@@ -5,7 +5,7 @@ import {
 } from '../bootstrap.js';
 import { PROOF_OF_CONCEPT_MENU } from '../flag-keys.js';
 
-vi.mock('@/lib/observability.js', () => ({ track: vi.fn(), reset: vi.fn(), identify: vi.fn(), group: vi.fn() }));
+vi.mock('@/lib/observability.js', () => ({ track: vi.fn(), addFeatureFlagEvaluation: vi.fn(), reset: vi.fn(), identify: vi.fn(), group: vi.fn() }));
 const env = { VITE_CONFIGCAT_SDK_KEY: 'configcat-sdk-1', VITE_CONFIGCAT_POLL_SECONDS: '15' };
 const logger = { warn: vi.fn() };
 afterEach(async () => { vi.useRealTimers(); vi.restoreAllMocks(); await OpenFeature.clearProviders(); OpenFeature.clearHooks(); await OpenFeature.setContext({}); });
@@ -82,6 +82,69 @@ describe('remote provider selection', () => {
   it('surfaces a failing Datadog SDK import to initFeatureFlags, which degrades to defaults', async () => {
     await expect(createFlagProvider({ env: datadogEnv, logger, datadogLoader: () => Promise.reject(new Error('chunk')) }))
       .rejects.toThrow('chunk');
+  });
+});
+
+describe('Datadog startup failures degrade to declared defaults', () => {
+  afterEach(() => { vi.doUnmock('@datadog/openfeature-browser'); vi.resetModules(); });
+
+  it('returns none when the Datadog SDK import fails, without throwing', async () => {
+    vi.doMock('@datadog/openfeature-browser', () => { throw new Error('chunk load failed'); });
+    const warn = vi.fn();
+    await expect(initFeatureFlags({ env: datadogEnv, logger: { warn } })).resolves.toBe('none');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('falling back to declared defaults'), expect.any(Error));
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(false);
+  });
+
+  it('returns none when Datadog readiness hangs past the bounded timeout', async () => {
+    const constructed = vi.fn();
+    vi.doMock('@datadog/openfeature-browser', () => ({
+      DatadogProvider: class { constructor(options) { constructed(options); this.metadata = {}; } },
+      withTimeout: impl => impl,
+    }));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const setProvider = vi.spyOn(OpenFeature, 'setProviderAndWait').mockReturnValue(new Promise(() => {}));
+    const warn = vi.fn();
+    const ready = initFeatureFlags({ env: datadogEnv, logger: { warn } });
+    // The readiness timer starts only once the lazily imported SDK has resolved.
+    while (setProvider.mock.calls.length === 0) await new Promise(resolve => setImmediate(resolve));
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(warn).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await ready).toBe('none');
+    expect(constructed).toHaveBeenCalledWith(expect.objectContaining({ applicationId: 'rum-app' }));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('falling back to declared defaults'), expect.any(Error));
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, false)).toBe(false);
+  });
+});
+
+describe('an incomplete Datadog credential set', () => {
+  const credentials = ['VITE_DATADOG_CLIENT_TOKEN', 'VITE_DATADOG_SITE', 'VITE_DATADOG_APPLICATION_ID', 'VITE_APP_ENV'];
+
+  it.each(credentials)('without %s falls back to ConfigCat when its key is set', async (missing) => {
+    const { loader: datadogLoader } = datadogLoaderStub();
+    const provider = { metadata: {} };
+    const create = vi.fn(() => provider);
+    const result = await createFlagProvider({
+      env: { ...env, ...datadogEnv, [missing]: undefined }, logger,
+      loader: async () => ({ ConfigCatWebProvider: { create } }), datadogLoader,
+    });
+    expect(datadogLoader).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith('configcat-sdk-1', expect.any(Object));
+    expect(result.metadata.name).toBe('ConfigCatWebProvider');
+  });
+
+  it.each(credentials)('without %s and no ConfigCat key uses the declared defaults', async (missing) => {
+    const { loader: datadogLoader } = datadogLoaderStub();
+    const configCatLoader = vi.fn();
+    const provider = await createFlagProvider({
+      env: { ...datadogEnv, [missing]: '' }, logger, loader: configCatLoader, datadogLoader,
+    });
+    await OpenFeature.setProviderAndWait(provider);
+    expect(datadogLoader).not.toHaveBeenCalled();
+    expect(configCatLoader).not.toHaveBeenCalled();
+    expect(OpenFeature.getProviderMetadata().name).not.toMatch(/datadog|ConfigCat/i);
+    expect(OpenFeature.getClient().getBooleanValue(PROOF_OF_CONCEPT_MENU, true)).toBe(false);
   });
 });
 
