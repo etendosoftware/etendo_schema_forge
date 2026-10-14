@@ -7,9 +7,42 @@ import {
 } from '@/components/contract-ui/rowVisuals.js';
 import { IconicTrashIcon } from '@/components/ui/custom-icons';
 import { useClientSort } from '@/hooks/useClientSort';
-import { useUI } from '@/i18n';
+import { useLocaleSwitch, useUI } from '@/i18n';
 
 const UPLOADING_ID_PREFIX = 'uploading:';
+
+const DATE_PARTS = new Set(['weekday', 'day', 'month']);
+
+/**
+ * Figma date of an attachment row: abbreviated weekday (capitalized), day and abbreviated
+ * month, never a year, no abbreviation dots — "Jue 30 abr" (es_ES), "Thu Apr 30" (en_US).
+ * The parts keep the locale's own order (formatToParts); the locale's separators are
+ * replaced by single spaces, which drops the ", " after the weekday.
+ *
+ * `value` is a UTC instant (NeoAttachmentsHelper#formatDate), so `new Date(value)` and the
+ * viewer's local time are correct here — this is NOT a date-only value, and
+ * `parseCalendarDate` would read the UTC calendar day instead.
+ *
+ * @param {string|Date|null|undefined} value ISO-8601 instant
+ * @param {string} locale UI locale, e.g. "es_ES"
+ * @returns {string} the formatted date, or "—" when missing or invalid
+ */
+export function formatAttachmentDate(value, locale) {
+  if (!value) return '—';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const tag = String(locale || 'es_ES').replace('_', '-');
+  const parts = new Intl.DateTimeFormat(tag, { weekday: 'short', day: 'numeric', month: 'short' })
+    .formatToParts(date)
+    .filter((part) => DATE_PARTS.has(part.type))
+    .map((part) => {
+      const text = part.value.replaceAll('.', '');
+      return part.type === 'weekday'
+        ? text.charAt(0).toLocaleUpperCase(tag) + text.slice(1)
+        : text;
+    });
+  return parts.join(' ');
+}
 
 /**
  * Flattens one attachment into the row shape the grid reads. The backend has used a few
@@ -17,8 +50,8 @@ const UPLOADING_ID_PREFIX = 'uploading:';
  * (and the client-side sort) reads the same normalized keys.
  *
  * `uploadedAt` / `updatedAt` are UTC instants (NeoAttachmentsHelper#formatDate), not
- * date-only values: DataTable's `date` cell formats them in the viewer's local time and
- * the UI locale, so no `parseCalendarDate` here (it would take the UTC calendar day).
+ * date-only values; they stay raw ISO strings here (sorting) and are formatted at render
+ * time by `formatAttachmentDate`.
  */
 function toRow(item) {
   return {
@@ -121,7 +154,8 @@ function useSelectionSync({ selectable, selectedIds, items, loading, onSelection
  *   items          - Attachment objects.
  *   loading        - True while the list is being fetched.
  *   uploadingFiles - Map<string, { name, size }> with optimistic upload rows (shown first,
- *                    with a spinner, no checkbox and no actions).
+ *                    with a spinner, a disabled checkbox when selection is on — DataTable
+ *                    renders it with `isRowSelectable` false — and no actions).
  *   onDownload     - (attachment) => void. Omit to hide the per-row Download button.
  *   onDelete       - (attachment) => void. Omit to hide the per-row Delete button (this is
  *                    how AttachmentsTab applies its `readOnly` rule).
@@ -155,6 +189,7 @@ export default function AttachmentsTable({
   formatBytes,
 }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const selectable = selectedIds != null;
 
   const rows = useMemo(
@@ -199,16 +234,30 @@ export default function AttachmentsTable({
       type: 'string',
       render: (row) => formatBytes(row.size),
     },
-    // `dot: false` — the date cell's due-date dot means nothing for an upload date.
-    { key: 'uploadedAt', label: ui('attachmentsUploadedAt'), type: 'date', dot: false },
-    { key: 'updatedAt', label: ui('attachmentsUpdatedAt'), type: 'date', dot: false },
+    // Figma "Jue 30 abr" through `render`, so DataTable's shared date cell (and its
+    // due-date dot — `dot: false` documents that it never applies) stays untouched. The
+    // row keeps the raw ISO value, so the client sort stays chronological.
+    {
+      key: 'uploadedAt',
+      label: ui('attachmentsUploadedAt'),
+      type: 'date',
+      dot: false,
+      render: (row) => (row.uploading ? null : formatAttachmentDate(row.uploadedAt, locale)),
+    },
+    {
+      key: 'updatedAt',
+      label: ui('attachmentsUpdatedAt'),
+      type: 'date',
+      dot: false,
+      render: (row) => (row.uploading ? null : formatAttachmentDate(row.updatedAt, locale)),
+    },
     {
       key: 'uploadedByName',
       label: ui('attachmentsUploadedBy'),
       type: 'string',
       render: (row) => (row.uploading ? null : (row.uploadedByName || ui('attachmentsUnknownUser'))),
     },
-  ], [ui, formatBytes]);
+  ], [ui, locale, formatBytes]);
 
   const actionCount = (onDownload ? 1 : 0) + (onDelete ? 1 : 0);
   const rowQuickActions = actionCount > 0
