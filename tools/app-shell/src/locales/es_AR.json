@@ -21700,7 +21700,13 @@
     "rectifyLinkedBadge": "Relacionada",
     "soGenerateDocsImplied": "Documento a generar",
     "rectifySelectedCount": "{count} seleccionadas",
-    "rectifySelectInvoices": "Seleccionar facturas a rectificar…"
+    "rectifySelectInvoices": "Seleccionar facturas a rectificar…",
+    "myCompaniesSubtitle": "Accedé a tus empresas y gestioná la suscripción de cada una",
+    "myCompaniesInvitationTitle": "{company} te invitó",
+    "myCompaniesInvitationHint": "Abrí el correo de la invitación para aceptarla.",
+    "myCompaniesLoadError": "No pudimos cargar tus empresas. Intentá de nuevo.",
+    "myCompaniesEmpty": "Todavía no tenés empresas.",
+    "myCompaniesEnterError": "No pudimos abrir {company}. Puede que todavía no tengas un rol asignado ahí."
   },
   "menus": {
     "Goods Movement": {

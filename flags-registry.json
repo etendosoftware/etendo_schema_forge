@@ -844,6 +844,102 @@
           }
         ]
       }
+    },
+    {
+      "id": "my-companies",
+      "description": "\"Mis empresas\" page: every company of the signed-in account split into owned and invited, the invitations still waiting for an answer, entering any company through the shared environment switch, and the billing portal for the productive owned company. Reads GET /sws/go/environments?details=true (userCount, ownerName, role fields — opt-in so the per-load environment list stays cheap) and GET /sws/go/company-invitations/mine (clientId, invitedAt, inviter).",
+      "owner": "fran-roig",
+      "jira": "ETP-5734",
+      "created": "2026-10-13",
+      "flag": {
+        "key": "my-companies-page",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "Visual gate for a first iteration. By this date the entry is shown to everyone (delete the flag and its two toggle points) or the page is removed with its owned paths.",
+        "symbols": [
+          "my-companies-page",
+          "MY_COMPANIES_PAGE",
+          "MyCompaniesPage",
+          "menu-my-companies",
+          "myCompanies"
+        ],
+        "$symbolsComment": "MyCompaniesPage is how runtime-routes.jsx references the feature without naming the flag; menu-my-companies is the user-menu item test id in UserAvatarButton.jsx; myCompanies is the prefix of every genericLabels key this feature adds to the three locale files, none of which contains the flag key."
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/pages/MyCompaniesPage.jsx",
+          "tools/app-shell/src/lib/myCompanies/"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/rest/EnvironmentDetails.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. UserAvatarButton.jsx, runtime-routes.jsx, flag-keys.js, lib/flags/index.js and the three locale files are shared toggle points. The backend is NOT gated by the flag (frontend-only flag, see targeting-key-divergence): EnvironmentDetails and the extra /company-invitations/mine fields are additive, authorized by the account session, and would stay if the page is kept. EtendoGoJwtServlet.java and CompanyInvitationService.java are touch points. lib/observability/events.js is a touch point too: it declares the MY_COMPANIES_* events.",
+      "$measurementComment": "Rollout measurement (lib/myCompanies/telemetry.js, Mixpanel): exposure is feature_flag_evaluated (flagKey my-companies-page, enabled true); my_companies_viewed {count: companies the account can enter} once per visit; my_companies_enter_clicked {type: owner|guest} before the switch and my_companies_enter_failed {type} when it is refused. A successful switch navigates away from inside the hook, so successes are clicked minus failed. KPI targets and the rollout decision are tracked outside this repo.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/MyCompaniesPage.vitest.jsx",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/myCompanies/__tests__/companies.vitest.js",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/myCompanies/__tests__/api.vitest.js",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/myCompanies/__tests__/telemetry.vitest.js",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/__tests__/UserAvatarButton.vitest.jsx",
+            "expected": true,
+            "note": "Shared spec; covers the flag on/off cases of the user-menu entry."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/rest/EnvironmentDetailsTest.java",
+            "expected": true
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/rest/EtendoGoJwtServletTest.java",
+            "expected": true,
+            "note": "Shared spec; covers the ?details=true branch of GET /environments."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/rest/CompanyInvitationServiceTest.java",
+            "expected": true,
+            "note": "Shared spec; covers the invitation-origin fields."
+          }
+        ]
+      },
+      "deferredItems": [
+        {
+          "id": "company-row-actions",
+          "kind": "scope",
+          "note": "The design's row menu also offers Renombrar, Transferir propiedad, Eliminar empresa (owner) and Abandonar empresa (invitee). None has a backend yet; left out of this iteration by scope decision. Each needs its own ticket, and delete/transfer need explicit confirmation plus a server-side permission check independent of this flag."
+        },
+        {
+          "id": "invitation-answer-in-app",
+          "kind": "scope",
+          "note": "Pending invitations are listed only. Accepting still needs the emailed token (acceptExistingAccount takes the raw token, which the list cannot return) and there is no decline endpoint. Answering from the page needs an accept-by-id endpoint that checks the invitation email against the account, and a decline status."
+        },
+        {
+          "id": "per-company-amount",
+          "kind": "scope",
+          "note": "The design shows a plan name and an amount per company. The model has one Stripe subscription per account and only free/productive plans, so the page shows the plan and the stored renewal date without an amount."
+        }
+      ]
     }
   ]
 }

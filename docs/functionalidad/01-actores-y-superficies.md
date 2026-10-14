@@ -21,6 +21,7 @@
 | Logout / reanudar onboarding | `/logout` → `LogoutRoute` (`runtime-routes.jsx:52`) | Cuenta con sesión activa |
 | Upgrade / checkout de pago | `/upgrade` → `UpgradePage.jsx` | Cuenta con ≥1 tenant, flag `tenant-upgrade` |
 | Selector de entorno + badge Demo/Productive | `SideMenu.jsx` (header + dropdown "switch company") | Cualquier cuenta con ≥1 tenant, flag `tenant-upgrade` |
+| Mis empresas (propias e invitadas, invitaciones pendientes, acceso y portal de suscripción) | `/companies` → `MyCompaniesPage.jsx`, entrada en el menú de usuario (`UserAvatarButton.jsx`) | Cualquier cuenta con ≥1 tenant, flag `my-companies-page` (ETP-5734; la ruta existe siempre, la flag solo oculta la entrada) |
 | Resumen de roles del tenant | `/roles` → `RolesOverviewPage.jsx` | Admin / client-admin |
 | Asignación de roles a un usuario | Ventana `User` (`Configuración > Usuarios`) → `AssignTemplateRolesControl.jsx` (`headerExtra.customForm`) + tab "Roles del usuario" (`UserRolesTab.jsx`) | Quien tenga acceso de escritura a la ventana `User` (AD_Window_Access) |
 | Menú de navegación filtrado por rol | `AppLayout.jsx` + `useRoleMenu.js` + `registry.js` | Todo usuario autenticado |
@@ -39,7 +40,8 @@ Todos los handlers viven en `EtendoGoJwtServlet.java` salvo que se indique lo co
 | `/sws/go/password-reset/request` | POST | Solicitar reseteo de contraseña (respuesta siempre neutral) | — |
 | `/sws/go/password-reset/confirm` | POST | Confirmar nueva contraseña con token | — |
 | `/sws/go/onboarding/draft` | POST / GET | Guardar / restaurar borrador de onboarding (perfil+empresa) | `handleSaveOnboardingDraft` |
-| `/sws/go/environments` | GET | Listar tenants de la cuenta, con `plan` y orden productive-first | `handleEnvironments` |
+| `/sws/go/environments` | GET | Listar tenants de la cuenta, con `plan`, `relationship` (OWNER/INVITED) y orden productive-first. Con `?details=true` agrega por empresa `userCount` (propietario) u `ownerName` + `roleName`/`roleIsClientAdmin`/`roleTemplateNames` (invitado) — opt-in para no encarecer la lista que lee cada carga de la app (ETP-5734) | `handleEnvironments` → `EnvironmentDetails` |
+| `/sws/go/company-invitations/mine` | GET | Invitaciones dirigidas a la cuenta, de cualquier empresa, con `clientId`, `invitedAt`, `inviterName`/`inviterEmail` (ETP-5734) | `handleCompanyInvitationMine` → `CompanyInvitationService.listInvitationsForAccount` |
 | `/sws/go/onboarding` | POST (NDJSON stream) | Aprovisionar un tenant nuevo (gratis o pago — mismo endpoint) | `handleOnboarding` |
 | `/sws/go/checkout/sessions` | POST | Crear sesión de Stripe Checkout | `handleCheckoutSession` → `HostedCheckoutService` |
 | `/sws/go/checkout/sessions/{requestId}` | GET | Consultar si un `requestId` de checkout ya fue pagado | `handleCheckoutStatus` |
