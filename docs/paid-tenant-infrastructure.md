@@ -575,40 +575,52 @@ block on. Registry entry: `environment-access-enforcement-kill-switch` in `flags
 
 ## 3.8 Installing ETP-5046/5047 and moving to the subscription model
 
-*Operator procedure. Canonical: "The subscription-model switch" in
-`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` §3 (verification queries included);
-checklist and rationale: design doc §6.2–§6.3 (`com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md`).*
+*A summary for orientation, not the procedure to execute. Follow the canonical operator page —
+"The subscription-model switch" in `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` §3
+— which spells out the human gate that step 1 only names (re-verify that production Stripe
+checkout has not gone live, `open-and-notable-topics.md` §2.4, and settle the R37 edge cases of
+§3.11) and gives the full verification queries. Checklist and rationale: design doc §6.2–§6.3
+(`com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md`).*
 
 **Right after installing, nothing changes in how purchases are recorded.** The system preference
-`ETGO_SubscriptionModel` is OFF (no row ships with the module), the backfill data-fix
+`ETGO_SubscriptionModel` is OFF (no row ships with the module), and the backfill data-fix
 `R37-tenant-subscription-backfill` is opt-in (`-- @optIn: true`, so a plain `make data-fixes` never
-runs it), and develop has no `SubscriptionService`, so no server has `ETGO_SUBSCRIPTION` rows yet.
-Every purchase keeps writing the `ETGO_TenantPlan` marker, exactly as before.
+runs it). At the time of writing (2026-10-14, before ETP-5046 reaches develop) develop has no
+`SubscriptionService`, so a server built from develop has no `ETGO_SUBSCRIPTION` rows; a server that
+ran an ETP-5046/5047 feature-branch build may already have some. Every purchase by a tenant without
+a row keeps writing the `ETGO_TenantPlan` marker, exactly as before.
 
 **Moving an environment to the subscription model** — switch first, then backfill (decided
 2026-10-14):
 
-1. **Bring the data-fix chain current:** `make data-fixes`. R37 refuses a tenant whose earlier
+1. **Re-verify the R37 pre-check** on the target environment — the deliberate human gate
+   (canonical page, step 1).
+2. **Bring the data-fix chain current:** `make data-fixes`. R37 refuses a tenant whose earlier
    chain fixes are not processed (`BLOCKED_CHAIN_BEHIND`, `optInChainGate` in
    `cli/src/data-fixes/run.js`).
-2. **Set the switch:** System client, Property List checked, property *Billing: new purchases open
-   a subscription row (Y/N)* (`ETGO_SubscriptionModel`), value `Y`, no organization, role, user or
-   window restriction, no module. No restart; it is system-wide.
-3. **Run R37** — for every client at once, or client by client with `CLIENT=<ad_client_id>`; dry run
+3. **Set the switch:** System client, Property List checked, property *Billing: new purchases open
+   a subscription row (Y/N)* (`ETGO_SubscriptionModel`), value `Y`, Organization `*`, no role,
+   user or window, no Module. No restart; it is system-wide.
+4. **Run R37** — for every client at once, or client by client with `CLIENT=<ad_client_id>`; dry run
    first:
    ```bash
    make data-fixes FIX=R37-tenant-subscription-backfill [CLIENT=<ad_client_id>] DRY_RUN=1
    make data-fixes FIX=R37-tenant-subscription-backfill [CLIENT=<ad_client_id>]
    ```
-4. **Done** when this returns 0 and the `ETP-5046-TRANSITIONAL-FALLBACK` WARN lines stop:
+5. **Done** when this returns 0 and the `ETP-5046-TRANSITIONAL-FALLBACK` WARN lines stop:
    ```sql
    select count(*) from ad_preference where attribute = 'ETGO_TenantPlan';
    ```
+   Rows that remain are the worklist, not noise: a tenant with no subscription row whose marker is
+   inactive or not `productive` matches neither R37 branch and needs a decision by hand, and a
+   tenant onboarded later can get its marker back from R42 (`open-and-notable-topics.md` §3.13).
 
 **Why switch first.** Once the switch is ON every new purchase opens a row, so one R37 pass catches
 every legacy tenant. In the old order (R37, then the switch) a purchase made between the two steps
-still wrote the marker and needed a second R37 run. Both orders are safe; whoever migrates client by
-client *before* switching on must re-run R37 after enabling the switch.
+still wrote the marker and needed a second R37 run. Both orders are safe. Migrating client by client
+*before* switching on has the same gap: a migrated tenant has a row and needs nothing more, but every
+other tenant that bought while the switch was OFF wrote the marker, so run R37 once more for the
+whole environment after enabling the switch.
 
 Notes:
 

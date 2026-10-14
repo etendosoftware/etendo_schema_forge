@@ -32,8 +32,10 @@
 -- SubscriptionService#hasAnySubscription) is always recorded on a row, whatever the switch. That is
 -- why step 1 comes first: once it is ON a new purchase opens a row instead of writing the marker,
 -- so one pass of step 2 catches every tenant. The reverse order is safe too, but a tenant paid
--- between the two steps is left on the marker until this fix is run again -- and so is any tenant
--- migrated with CLIENT= before the switch was enabled: re-run step 2 after enabling it.
+-- between the two steps is left on the marker until this fix is run again. The same holds when
+-- step 2 is run client by client (CLIENT=) before step 1: a tenant already migrated has a row and
+-- needs nothing more, but every OTHER tenant that bought while the switch was still OFF wrote the
+-- marker -- run step 2 once more, for the whole environment, after enabling the switch.
 --
 -- Precondition the runner enforces: FIX= on an opt-in fix runs only for a tenant whose chain is
 -- caught up to this file's date (2026-10-05T18:00:00Z) -- no chain fix (not retired, not opt-in)

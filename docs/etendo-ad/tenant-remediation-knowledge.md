@@ -3523,8 +3523,11 @@ restart — but it argues for running this fix close to a restart.
   'ETGO_TenantPlan'` is 0 and the `ETP-5046-TRANSITIONAL-FALLBACK` WARN lines stop. **Why:** once
   the switch is ON a new purchase opens a row instead of writing the marker, so one R37 pass catches
   every legacy tenant; in the old order a purchase between the two steps still wrote the marker and
-  needed a second run. Both orders are safe; a tenant migrated with `CLIENT=` before the switch must
-  be re-run after it. **Apply:** R37's OPT-IN header, `sql/README.md`, the S1 rows and the go docs
+  needed a second run. Both orders are safe. Running R37 client by client (`CLIENT=`) before the
+  switch has the same gap: a migrated tenant has a row (one-way) and needs nothing more, but every
+  other tenant that bought while the switch was OFF wrote the marker, so R37 must run once more for
+  the whole environment after the switch (Alex review correction, 2026-10-14: the first wording said
+  the migrated tenant itself needed the re-run). **Apply:** R37's OPT-IN header, `sql/README.md`, the S1 rows and the go docs
   (design doc §6.2/§8.3, `feature-flags-and-tenant-upgrade.md` §3, `open-and-notable-topics.md`
   §2.3/§2.9) all state switch-first. R37 never creates the switch row, and it keeps
   `ETGO_EnvironmentType` / `ETGO_SubscriptionStatus` (written on both routes by
