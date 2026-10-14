@@ -39,6 +39,7 @@ already processed — that check is the author's.
 -- @gap: C2
 -- @risk: medium
 -- @type: sql                 (default; or "webhook")
+-- @optIn: true                (optional; omit for an ordinary chain fix -- see below)
 -- @description: one-line human description
 
 -- @check
@@ -77,6 +78,45 @@ A fix with no `@report` section behaves exactly as before — `detail` stays
 for a worked example (skips flipping a locator with negative on-hand stock,
 reports which product/attribute/UOM/locator combination needs a manual
 physical-inventory correction first).
+
+### Optional `@optIn: true` header — a fix a full run never applies
+
+Some fixes are not corrections every environment needs as soon as it is deployed, but a switch an
+environment makes **once, at a moment the operator chooses**. Mark such a fix with
+`-- @optIn: true` (only `true`/`false` are accepted; any other value fails the parse, so a typo can
+never quietly put the fix back in the chain). Then:
+
+- **A full run never touches it** — `make data-fixes` (no `FIX=`) skips it for every tenant: no
+  `@check`, no `@apply`, no ledger row, just an `OPT-IN — skipped by a full run` line.
+- **Its ledger rows never move the watermark.** Applying it must not push a tenant's watermark past
+  a chain fix that tenant has not processed yet — that fix would be skipped forever with no error.
+- **Only `make data-fixes FIX=<id>` runs it** (`DRY_RUN=1` and `CLIENT=<id>` work as for any fix),
+  and only for a tenant whose chain is **caught up to the fix's own date**: no chain fix (not
+  retired, not opt-in) dated at or before it is still unprocessed for that tenant. Fixes dated after
+  it do not count — a FAILED newer fix does not block, and an opt-in fix that is the newest file
+  runs as soon as everything before it is processed. A tenant behind it is reported
+  `BLOCKED_CHAIN_BEHIND` (named, with the oldest blocking fix, and listed apart from `FAILED` in the
+  run summary), gets no ledger row and makes the run exit non-zero: run the full `make data-fixes`
+  first. A timestamp prefix is mandatory for an opt-in fix (the parse fails without one), since the
+  gate is its date. Fixes are chronological and
+  may depend on — or be undone by — earlier ones; this keeps an opt-in fix from ever running before
+  them. A retired fix stays un-forceable, opt-in or not.
+- **`make data-fixes LIST_CLIENTS=1`** lists the opt-in fixes above the table and reports them in
+  their own `OPT-IN` column (`done/total`, plus any `FAILED` explicit run). They never count as
+  `PENDING`, and a failed opt-in run is not counted under `FAILED`. `PENDING` and `FAILED` count
+  chain fixes only — since ETP-5046 a retired fix's old `FAILED` row is no longer counted either.
+- **`MARK_FIXED=1 FIX=<id>`** accepts the short `@id` too and stores the full catalog `fix_id`; an
+  id the catalog does not know is rejected (true for every fix, opt-in or not).
+
+The timestamp still matters — it is the point a tenant's chain must have reached — so the same
+"Choosing the timestamp" rule applies. Worked example:
+`20261005T180000Z__R37-tenant-subscription-backfill.sql` (ETP-5046): an environment moves from the
+`ETGO_TenantPlan` preference to the subscription model by running it with `FIX=` and then setting
+the system preference `ETGO_SubscriptionModel`. Its header carries the procedure and three
+checks: every tenant `APPLIED`/`SKIPPED_NOT_NEEDED` in `etgo_data_fix_history` for R37, zero active
+`ETGO_TenantPlan='PRODUCTIVE'` markers, and exactly ONE active, unrestricted System
+`ETGO_SubscriptionModel` list-property row whose trimmed value is `Y` (filtered like the go reader,
+which takes the newest such row — not on the value).
 
 ## Mandatory rules
 
