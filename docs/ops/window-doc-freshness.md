@@ -13,9 +13,9 @@ That gap was easy to miss during artifact regeneration or custom window edits: a
 
 Add a dedicated GitHub Actions gate in `.github/workflows/window-doc-freshness.yml` backed by a zero-dependency CLI script in `cli/src/check-window-docs.js`.
 
-The workflow resolves the diff range for pull requests and push events, then checks whether a diff changes a specific window without also changing `docs/generated-custom-windows/<window>.md` in the same range.
+The workflow runs on pull requests only and takes the PR base and head as the diff range, then checks whether a diff changes a specific window without also changing `docs/generated-custom-windows/<window>.md` in the same range.
 
-For now the check is warning-only: it emits a workflow warning and, on pull requests, leaves a single bot-managed comment with the latest missing-doc report. When the warning is resolved, that managed comment is deleted.
+For now the check is warning-only: it emits a workflow warning and leaves a single bot-managed comment on the PR with the latest missing-doc report. When the warning is resolved, that managed comment is deleted.
 
 ## Detection scope
 

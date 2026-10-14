@@ -1,10 +1,9 @@
 name: Mini Pipeline
 
-# ETP-5695: the per-PR mini pipeline on GitHub Actions. It does the same work as the experimental
-# Jenkins job (etendo-go/experimental/ExperimentalSchemaForgeJenkinsfile in
-# com.etendoerp.jenkins.pipelines) so the two can be timed against each other: install the
-# dependencies and run the mocked Playwright suite. The unit tests already run on every PR in
-# test.yml; the mocked suite needs no backend.
+# ETP-5695: the per-PR mini pipeline. It installs the dependencies and runs the mocked Playwright
+# suite, which needs no backend; the unit tests already run on every PR in test.yml. Timed against
+# the same work on Jenkins, it took 10 min against 24, so it runs here. Where it sits in the flow:
+# docs/branch-workflow.md.
 
 on:
   pull_request:
