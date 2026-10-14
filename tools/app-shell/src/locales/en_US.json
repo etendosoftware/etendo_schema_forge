@@ -14243,7 +14243,7 @@
       "label": "Reserved Goods Movement"
     },
     "Simple G/L Journal": {
-      "label": "Simple G/L Journal"
+      "label": "Manual Journals"
     },
     "Color Palette": {
       "label": "Color Palette"
@@ -16755,6 +16755,29 @@
     "calendarActions": "Actions",
     "calendarAdjustmentPeriod": "Adjustment Period",
     "openClosePeriod": "Open/Close Period",
+    "periodsBulkOpen": "Open",
+    "periodsBulkClose": "Close",
+    "periodsBulkConfirmOpenTitle": "Open {count} periods?",
+    "periodsBulkConfirmOpenTitleOne": "Open 1 period?",
+    "periodsBulkConfirmCloseTitle": "Close {count} periods?",
+    "periodsBulkConfirmCloseTitleOne": "Close 1 period?",
+    "periodsBulkConfirmBody": "They will be processed one at a time, in date order:",
+    "periodsBulkOpenedToast": "{count} periods opened",
+    "periodsBulkOpenedToastOne": "1 period opened",
+    "periodsBulkClosedToast": "{count} periods closed",
+    "periodsBulkClosedToastOne": "1 period closed",
+    "periodsBulkSkippedSuffix": " ({count} already were)",
+    "periodsBulkSkippedSuffixOne": " (1 already was)",
+    "periodsBulkNothingToOpen": "The selected periods were already open",
+    "periodsBulkNothingToClose": "The selected periods were already closed",
+    "periodsBulkResultTitle": "Result",
+    "periodsBulkResultOpened": "Opened",
+    "periodsBulkResultClosed": "Closed",
+    "periodsBulkResultAlreadyOpen": "Already open",
+    "periodsBulkResultAlreadyClosed": "Already closed",
+    "periodsBulkResultFailed": "Could not be processed",
+    "periodsSelectAll": "Select all periods",
+    "periodsSelectPeriod": "Select {name}",
     "openCloseDocument": "Open/Close Document",
     "bulkOpenCloseDocuments": "Open/Close selected documents",
     "calendarPeriodStatusAllClosed": "All Closed",
@@ -17012,6 +17035,7 @@
     "backendError.assetGroupNameDuplicate": "There is already an asset category with this name.",
     "backendError.assetSearchKeyDuplicate": "There is already an asset with this identifier in this organization.",
     "backendError.productNotStockable": "This product is of type Service and cannot be used in inventory movements.",
+    "backendError.orderLinkedDocsCheckFailed": "The documents linked to this order could not be checked, so it has not been reactivated. Try again.",
     "processAssetCompleted": "Create Amortization completed",
     "processNowCompleted": "Create Periods completed",
     "reactivated": "Document reactivated",
@@ -22536,6 +22560,7 @@
     "accountTreeBalance": "Balance",
     "accountTreeNoAccounts": "No accounts to display",
     "accountTreeReadOnlyPlaceholder": "Placeholder subaccount — not editable",
+    "accountTreeOpenAccount": "Open account {name}",
     "allAccountTypes": "All account types",
     "expandAll": "Expand all",
     "collapseAll": "Collapse all",
@@ -22657,7 +22682,6 @@
     "glc.section.suspense.title": "Suspense accounts",
     "glc.section.suspense.subtitle": "Accounts used to balance unmapped transactions.",
     "glc.toggle.suspenseBalancingUse": "Use suspense balancing account",
-    "glc.toggle.suspenseErrorUse": "Use suspense error account",
     "glc.acct.suspenseBalancing": "Suspense balancing account",
     "glc.section.currencyBalancing.title": "Currency balancing",
     "glc.section.currencyBalancing.subtitle": "Account used to balance multi-currency differences.",
@@ -26157,7 +26181,7 @@
       "label": "Applications"
     },
     "Simple G/L Journal": {
-      "label": "Simple G/L Journal"
+      "label": "Manual Journals"
     },
     "System Info": {
       "label": "System Info"

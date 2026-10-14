@@ -101,6 +101,8 @@ survives the route change.
 | `optional` | no | `false` | If the target never appears, silently skip to the next step instead of showing the error card. Pair with a short `targetTimeoutMs`. |
 | `blockOutside` | no | **`true`** | The dimming scrim swallows clicks outside the highlight: if it is dimmed, it is not touchable. Opt out with `false`. What it never blocks: the spotlighted target itself (there is no scrim over the hole, so the field stays clickable and typable), the step card, and `Escape`. It also only engages once the step is ACTIVE with a measured hole — during navigation there is no hole, and a full-screen block with no hole is just a frozen application. |
 | `spotlightPadding` | no | `8` | Pixels of breathing room around the highlighted element. |
+| `highlightTargetTestId` | no | `null` | **Spotlight-only** element, as a test id (normalized like `targetTestId`). The ring, the scrim hole and the card anchoring use this element; everything else stays on the target. See *Spotlighting more than the target* below. |
+| `highlightTarget` | no | `null` | Same as `highlightTargetTestId`, as a raw CSS selector. If both are given, `highlightTarget` wins. |
 | `targetTimeoutMs` | no | `10000` | How long to wait for the target to mount before erroring (or skipping, when `optional`). |
 | `navTimeoutMs` | no | `8000` | How long to wait for `routeMatch` to become true after navigating. |
 | `navPath` | no | `[]` | The clicks the tutorial performs **itself** to reach this step's screen, instead of a bare route jump. See §5. Requires `route` (the fallback). |
@@ -130,6 +132,63 @@ If you write a raw `target` instead, you own both shapes yourself:
 
 `resolveTarget` returns the first **visible** match, so the order in the list is
 a preference, not a requirement.
+
+### Spotlighting more than the target
+
+Sometimes the element the step must advance on is smaller than what the user
+reads as one control. The list's **split "New" button** is the case that
+motivated it: `action-new` is the main button (the click that should advance the
+step), and the chevron `action-new-more` sits beside it inside the
+`action-new-group` wrapper. Spotlighting `action-new` alone cut the chevron out
+of the ring and dimmed it, so the control looked broken in half.
+
+`highlightTargetTestId` (or `highlightTarget`) names a larger element to draw
+the spotlight around, without moving anything else:
+
+```json
+{
+  "id": "open-new",
+  "targetTestId": "action-new",
+  "highlightTargetTestId": "action-new-group",
+  "advance": { "on": "targetClick" }
+}
+```
+
+| Concern | Uses |
+|---|---|
+| Ring, scrim hole, step-card placement | the highlight element |
+| `targetClick` listener, `targetValue` / `requireValue` read, disabled check | `target` |
+| "Target not found" wait, `targetTimeoutMs`, `optional` skip, error detail | `target` |
+| Route-first check (`route` / `routeMatch`), foreign-dialog detection | `target` |
+
+Rules the engine applies:
+
+- **It must contain the target.** The first visible match that *encloses* the
+  target is used, so a test id shared by several mounted lists still resolves
+  to the right instance. A match that does not contain the target would cut the
+  control the user must click out of the hole, so it is ignored.
+- **It never fails the step.** A missing, hidden, non-enclosing or malformed
+  highlight element silently falls back to the target's own box (the default
+  behaviour, including the selector-field widening described above).
+- **The card anchors to the highlight**, not to the target. The card is placed
+  against what is drawn, so it never covers the chevron that is now inside the
+  ring.
+- **Clicks inside the ring but outside the target are blocked** while the step
+  blocks outside its target (`blockOutside`, on by default). The scrim never
+  covers the hole, so without this a click on the chevron would reach the page:
+  it would not advance the step, but it would open the chevron's menu (Import…)
+  and derail the tour. That area is outside the target, so it is treated like
+  the rest of the outside — with a transparent shield, so it still reads as
+  spotlighted. With `"blockOutside": false` nothing is blocked anywhere, and
+  neither is this area. The implicit selector-field widening is **not**
+  shielded: there the extra area is the same control.
+
+Used today only by `create-contact` step `open-new`. `create-product` and
+`create-sales-order` also point at `action-new` and do not declare it: the
+button is split only when the list offers extra "New" actions (Import…), so a
+flow whose window gains them should add `"highlightTargetTestId":
+"action-new-group"` the same way. Without it nothing breaks — the ring simply
+leaves the chevron out.
 
 ### Target first: the engine never opens a screen it is already on
 
