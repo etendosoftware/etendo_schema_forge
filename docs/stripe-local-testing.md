@@ -214,9 +214,11 @@ enforcement" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`.
   never overwriting a period an event already wrote) and `LAST_EVENT_AT` the ordering watermark.
   Since ETP-5047 a cancellation also **closes** the row (`END_DATE` = Stripe's
   `ended_at`, else `canceled_at`, else now); a closed row reads as `canceled` whatever `STATUS`
-  says, so the tenant is `free` and `EXPIRED`, and a new purchase for the same tenant opens a
-  **fresh** row (a tenant can be re-opened and buy again; today's checkout, though, still
-  provisions a new environment for every purchase — `com.etendoerp.go`
+  says, so the tenant is `free` and `EXPIRED`, and a new purchase for the same tenant would open a
+  **fresh** row. No purchase reaches that tenant yet: letting a canceled tenant re-subscribe its
+  own environment was decided on 2026-10-14 (Martin Taal), but the flow is ETP-5742 and does not
+  exist yet. Today every checkout provisions a new environment, and since ETP-5047 a canceled
+  productive tenant is no longer a demo source either (`com.etendoerp.go`
   `docs/feature-flags-and-tenant-upgrade.md` §3). Query the tenant's rows, newest first:
 
   ```sql
@@ -1050,7 +1052,7 @@ and the resulting tenant/payment state in Etendo.
 | SF-STRIPE-LOCAL-19 | A second past_due `customer.subscription.updated` keeps the already-stored due date | offline recipe (§4), two consecutive `status:"past_due"` events with different `current_period_start` values | `ETGO_SubscriptionDueAt` unchanged from the first event; the second payload's `current_period_start` is not applied | P0 |
 | SF-STRIPE-LOCAL-20 | An out-of-order (older) lifecycle event is ignored as stale | offline recipe (§4), watermark pair with an older `created` on the second event | `event_result=IGNORED`, `failure_reason="stale event"`; the stored projection stays as the newer, already-applied event left it | P0 |
 | SF-STRIPE-LOCAL-21 | A late event for a canceled subscription does not revive it (ETP-5047) | after SF-STRIPE-LOCAL-14 on a tenant with a row, post `invoice.paid` for the same subscription | `event_result=IGNORED`, `failure_reason="subscription closed"`; the row stays closed and `canceled` | P0 |
-| SF-STRIPE-LOCAL-22 | Re-subscribing opens a fresh row (ETP-5047) | after SF-STRIPE-LOCAL-14, buy again for the same tenant (Test Mode, §5) | a second `etgo_subscription` row, `END_DATE` null, `STATUS=active`, the new `stripe_subscription_id`; the old row stays closed; NEO answers 200 again | P0 |
+| SF-STRIPE-LOCAL-22 | Re-subscribing opens a fresh row (ETP-5047) | **not runnable from the product until ETP-5742**: today's checkout provisions a new environment, and since ETP-5047 a canceled productive tenant is not a demo source either. Covered by `SubscriptionResubscriptionIntegrationTest` (`com.etendoerp.go`). Once ETP-5742 lands: after SF-STRIPE-LOCAL-14, buy again for the same tenant (Test Mode, §5) | a second `etgo_subscription` row, `END_DATE` null, `STATUS=active`, the new `stripe_subscription_id`; the old row stays closed; NEO answers 200 again | P0 |
 | SF-STRIPE-LOCAL-23 | A dispute is an alert only (ETP-5047) | Test Mode card `4000000000000259`, or a hand-signed `charge.dispute.created` (§4) | `event_result=APPLIED`; a WARN `Billing alert: ... charge.dispute.created`; no status or due-date change | P1 |
 | SF-STRIPE-LOCAL-24 | Blocked tenant: structured 402 on NEO and MCP (ETP-5047) | a tenant past its grace (e.g. SF-STRIPE-LOCAL-10 with an old `period_end`); call any `/sws/neo/...` and `POST /sws/mcp` | 402 with `error.code=ENVIRONMENT_ACCESS_DENIED`, `error.decision=SUBSCRIPTION_REQUIRED`, `error.message` unchanged; `/account` and `/upgrade` still load; the SPA shows the blocked screen | P0 |
 | SF-STRIPE-LOCAL-25 | Kill switch on (ETP-5047) | SF-STRIPE-LOCAL-24 with `etendo.go.flags.environment-access-enforcement-off=true`, Tomcat restarted | 200 on NEO and MCP; INFO `Environment access enforcement is switched off: ... would have refused tenant` in the log; `GET /sws/go/environments` shows that tenant's `accessState` as `ALLOWED` (subscription status and trial fields unchanged); remove the property → 402 again and `accessState` back to the refusal | P0 |

@@ -33,7 +33,8 @@ import { formatReportDetail } from '../src/data-fixes/run.js';
  * retirement — the only audit trail left once the row is gone.
  *
  * <p>WIDENED RETIREMENT: @check selects a tenant on either of two branches — (A) the original
- * backfill (active productive marker, no open subscription) and (B) any ETGO_TenantPlan marker
+ * backfill (active productive marker and no subscription row at all, active or not, open or closed —
+ * "no open subscription" until ETP-5047) and (B) any ETGO_TenantPlan marker
  * next to any etgo_subscription row. Branch (B) catches the marker develop's R42 re-inserts for a
  * tenant that is already on the row model; without it that marker survives forever.
  */
