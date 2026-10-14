@@ -59,7 +59,14 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
   // ETP-5700 — `extraMenuActions(row)` appends window-specific row-kebab entries after
   // the document actions (the fiscal "send to SII/TBAI" entry). It may return one
   // descriptor, an array of them, or nothing.
-  const { showEmail = true, onRefresh, ui, extraMenuActions = null } = options;
+  const { showEmail = true, onRefresh, ui, extraMenuActions = null, apiBaseUrl, token } = options;
+  // ETP-5745 QA follow-up — the row-hover kebab is a THIRD surface running the same
+  // preUnpost-then-reactivate sequence as the detail kebab and the bulk bar, and list rows
+  // are never GET-enriched with `reactivationBlocked` (only the detail GET is), so it needs
+  // the exact same per-row check `makeInvoiceReactivateRowFilter` already does for the bulk
+  // bar. Reused as-is rather than re-implemented, wired through the generic
+  // `action.preUnpostGuard` hook point `RowQuickActions.jsx` now reads.
+  const reactivateRowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl, token });
   return {
     enabled: true,
     editMode: 'navigate',
@@ -127,6 +134,9 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
             // Reactivating a posted invoice must reverse its accounting first, or the
             // backend rejects the bare docAction — same flag the form-view kebab uses.
             preUnpost: true,
+            // ETP-5745 QA follow-up — checked BEFORE preUnpost; see reactivateRowFilter above.
+            preUnpostGuard: (currentRow, currentAction, uiFn) =>
+              reactivateRowFilter(currentRow, currentAction, uiFn),
           }]
           : []),
         ...(!isPosted && isProcessed

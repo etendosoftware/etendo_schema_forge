@@ -267,15 +267,32 @@ describe('useInvoiceWindow', () => {
       };
       const build = () => buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
 
+      // ETP-5745 QA follow-up — the real `reactivate` entry now also carries a
+      // `preUnpostGuard` function (RowQuickActions.jsx's generic pre-preUnpost hook,
+      // wired via `reactivateRowFilter` below). A plain `deepEqual` against a REACTIVATE
+      // object literal can never express "a function", so every assertion that used to
+      // compare the full action list now asserts the function's presence/type on the
+      // `reactivate` entry separately, then deep-equals the REST of the array (including
+      // the rest of the `reactivate` entry's own fields) with that one key stripped.
+      function withoutPreUnpostGuard(actions) {
+        return actions.map(({ preUnpostGuard, ...rest }) => rest);
+      }
+      function assertReactivateGuard(actions) {
+        const reactivate = actions.find((a) => a.key === 'reactivate');
+        assert.equal(typeof reactivate?.preUnpostGuard, 'function');
+      }
+
       it('completed and NOT posted -> Reactivate AND Post, in that order', () => {
         const actions = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: 'N' } });
-        assert.deepEqual(actions, [REACTIVATE, POST]);
+        assertReactivateGuard(actions);
+        assert.deepEqual(withoutPreUnpostGuard(actions), [REACTIVATE, POST]);
       });
 
       // ETP-5692 — reverses ETP-5302: a posted invoice offers a standalone Unpost too.
       it('completed and posted -> Reactivate AND Unpost, in that order (never Post)', () => {
         const actions = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: 'Y' } });
-        assert.deepEqual(actions, [REACTIVATE, UNPOST_ENTRY]);
+        assertReactivateGuard(actions);
+        assert.deepEqual(withoutPreUnpostGuard(actions), [REACTIVATE, UNPOST_ENTRY]);
       });
 
       it('draft -> Confirm only, never Reactivate or Post', () => {
@@ -285,13 +302,15 @@ describe('useInvoiceWindow', () => {
 
       it('a posting-error status (posted="i") still counts as not posted, so Post stays offered', () => {
         const actions = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: 'i' } });
-        assert.deepEqual(actions, [REACTIVATE, POST]);
+        assertReactivateGuard(actions);
+        assert.deepEqual(withoutPreUnpostGuard(actions), [REACTIVATE, POST]);
       });
 
       it('carries preUnpost so reactivating a posted invoice reverses its accounting first', () => {
         const [reactivate] = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: 'Y' } });
         assert.equal(reactivate.preUnpost, true);
         assert.equal(reactivate.documentAction, 'RE');
+        assert.equal(typeof reactivate.preUnpostGuard, 'function');
       });
 
       it('exposes documentStatus as the statusField so RowQuickActions can resolve the status', () => {
@@ -306,6 +325,89 @@ describe('useInvoiceWindow', () => {
         ]) {
           assert.ok(!build().menuActions({ row }).some(a => a.key === 'confirm'));
         }
+      });
+    });
+
+    // ETP-5745 QA follow-up — the row-hover kebab is a THIRD surface running the same
+    // preUnpost-then-reactivate sequence as the detail kebab and the bulk bar, and list rows
+    // are never GET-enriched with `reactivationBlocked`. `buildInvoiceRowQuickActions` now
+    // wires the reactivate entry's `preUnpostGuard` to `makeInvoiceReactivateRowFilter` built
+    // from the options' `apiBaseUrl`/`token`, which is the exact function already covered
+    // end-to-end (fetch shape, fail-open cases, message interpolation) in the
+    // `makeInvoiceReactivateRowFilter` describe block below — these tests only prove the
+    // WIRING: that the guard is present, that it is that same function (not a re-implementation),
+    // and that it is reachable with no `apiBaseUrl`/`token` passed (existing call sites unaffected).
+    describe('menuActions reactivate entry — preUnpostGuard wiring (ETP-5745 follow-up)', () => {
+      const originalFetch = globalThis.fetch;
+      afterEach(() => {
+        globalThis.fetch = originalFetch;
+        mock.restoreAll();
+      });
+
+      function stubFetch(handler) {
+        const calls = [];
+        globalThis.fetch = async (url, init) => {
+          calls.push({ url, init });
+          return handler(url, init);
+        };
+        return calls;
+      }
+
+      function jsonResponse(body, { ok = true, status = 200 } = {}) {
+        return { ok, status, json: async () => body };
+      }
+
+      const COMPLETED_ROW = { id: 'inv-9', documentStatus: 'CO', processed: true, posted: 'N' };
+
+      it('exposes a preUnpostGuard function on the reactivate entry when apiBaseUrl/token are passed', () => {
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, {
+          apiBaseUrl: '/api', token: 'tok',
+        });
+        const [reactivate] = result.menuActions({ row: COMPLETED_ROW });
+        assert.equal(reactivate.key, 'reactivate');
+        assert.equal(typeof reactivate.preUnpostGuard, 'function');
+      });
+
+      it('preUnpostGuard delegates to makeInvoiceReactivateRowFilter: blocks reactivation when the fetched row is reactivation-blocked', async () => {
+        stubFetch(() => jsonResponse({
+          response: {
+            data: [{
+              id: COMPLETED_ROW.id,
+              reactivationBlocked: true,
+              reactivationBlockedFiscalSystem: 'Verifactu',
+              reactivationBlockedRectificativas: ['FR-01'],
+            }],
+          },
+        }));
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, {
+          apiBaseUrl: '/api', token: 'tok',
+        });
+        const [reactivate] = result.menuActions({ row: COMPLETED_ROW });
+        const guardResult = await reactivate.preUnpostGuard(
+          COMPLETED_ROW,
+          reactivate.documentAction,
+          (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+        );
+        assert.notEqual(guardResult, true);
+        assert.match(guardResult, /Verifactu/);
+      });
+
+      it('preUnpostGuard resolves to true (lets reactivation proceed) when the fetched row is not blocked', async () => {
+        stubFetch(() => jsonResponse({ response: { data: [{ id: COMPLETED_ROW.id, reactivationBlocked: false }] } }));
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, {
+          apiBaseUrl: '/api', token: 'tok',
+        });
+        const [reactivate] = result.menuActions({ row: COMPLETED_ROW });
+        assert.equal(await reactivate.preUnpostGuard(COMPLETED_ROW, reactivate.documentAction, fakeUi), true);
+      });
+
+      it('preUnpostGuard still resolves to true, with no fetch, when apiBaseUrl/token are not passed (existing call sites unaffected)', async () => {
+        const calls = stubFetch(() => jsonResponse({}));
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+        const [reactivate] = result.menuActions({ row: COMPLETED_ROW });
+        assert.equal(typeof reactivate.preUnpostGuard, 'function');
+        assert.equal(await reactivate.preUnpostGuard(COMPLETED_ROW, reactivate.documentAction, fakeUi), true);
+        assert.equal(calls.length, 0);
       });
     });
 

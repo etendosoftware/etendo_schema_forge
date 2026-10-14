@@ -210,8 +210,10 @@ export default function SalesInvoiceWindow(props) {
       onRefresh: () => setRefreshKey(k => k + 1),
       ui,
       extraMenuActions: sifMenuActions,
+      apiBaseUrl,
+      token,
     }),
-    [navigate, windowName, requestDelete, ui, sifMenuActions],
+    [navigate, windowName, requestDelete, ui, sifMenuActions, apiBaseUrl, token],
   );
 
   // Pick up the saved record from navigation state when arriving at the list view
