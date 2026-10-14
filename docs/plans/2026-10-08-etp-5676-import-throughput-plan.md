@@ -420,5 +420,45 @@ cost 205 ms. Four user-approved cuts, documented in `com.etendoerp.go` `docs/neo
 4. Per-batch lookup memo — `findSpec`, `findEntity`, product default uOM/taxCategory and default
    tariff version, keyed by everything they read; dropped when the DAL session changes.
 
-Measurement before/after: pending (local environment).
+### Local measurement (2026-10-14, main checkout, local hardware)
+
+Run `MV8954W9`: 2 × 50 PERF5676 products through `POST /sws/neo/batch` from the logged-in SPA, the
+import's exact op shape (product + salesPrice + purchasePrice + cost), 10-row chunks, sequential.
+Server time per chunk = `[BATCH] received` → `committed` in `openbravo.log`.
+
+| Run | Flags | Server ms/row (chunks 2–5, warm) | Client ms/row (all chunks) |
+|---|---|---|---|
+| A | off | 104 (996–1084 ms per chunk; first chunk 2161 = warm-up) | 130 |
+| B | `_skipPricesSeed` + `_onlyReturnIds` | 71 (612–802 ms per chunk) | 72 |
+
+**Fixes 1 + 3 (A → B): −32 % server time per row.** In A the two price ops never reach
+`executePostCreate` — `ProductPriceHandler` finds the seeded zero row and updates it — while in B
+they are plain creates (6.7 ms each); product create 30.0 → 23.4 ms, costing create 19.0 → 9.5 ms
+(avg `executePostCreate` total).
+
+**Fix 2 (automatic, both runs):** every chunk of both runs logged `skip learned` for three callouts
+and then `skipped 9 time(s)` for each — 90 skips per callout over the 100 rows:
+
+| Tab | Trigger | Outputs (all kept) | Callout |
+|---|---|---|---|
+| Product (180) | `organization` | `taxCategory` | `SL_TaxCategory_Org` |
+| Product (180) | `productType` = I | `stocked` | `SL_Product_Type` |
+| Costing (800057) | `organization` | `currency` | `SL_Costing_Currency` |
+
+`SL_TaxCategory_Org` returned no `productCategory` (this org has no default category), so its only
+output was the `taxCategory` the product pre-hook injects. Callout cascade on the learning row vs the
+skipped rows: product 20.5 → 1.2 ms, costing 5.8 → 0 ms — about 25 ms per row locally, i.e. a row
+without the skip would be ≈ 127 ms in A. In production the same cascade measured 130 ms on the
+product alone (`SL_TaxCategory_Org` ~90, `SL_Product_Type` ~13), all of it on callouts this skips.
+
+**Fix 4:** the memo has no hit counter (not instrumented); its effect is inside the per-op numbers
+above and not separable without a code change.
+
+**Relative effect, all four fixes:** ≈ 127 → 71 ms/row locally (−44 %). Local hardware is ~6–8×
+faster than production (≈ 800 ms/row), so absolute savings do not transfer; the proportions are the
+estimate to check against the next production `[NEO-PERF]` capture.
+
+**Correctness (DB):** every product of both runs has exactly one sales and one purchase
+`M_ProductPrice` (no leftover zero row), one `M_Costing` at 5 EUR, a tax category and
+`IsStocked = Y` — the skipped callouts' outputs were indeed redundant.
 
