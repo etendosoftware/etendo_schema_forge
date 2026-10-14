@@ -183,13 +183,16 @@ function StepRow({
   // Server-owned rows have no checkbox: their completion is a server fact, not a user assertion.
   const serverOwned = step.action === 'dataTransfer' || step.action === 'calendarReview';
   // ETP-5577: the pending calendar review is highlighted; posting fails until it is settled.
+  // An inset bar, not a border: a border would push this row's icon and title out of line.
   const highlighted = step.action === 'calendarReview' && !done;
   return (
     <div
-      className={cn('bg-card', highlighted && 'border-l-4 border-l-primary')}
+      className={cn('bg-card', highlighted && 'shadow-[inset_3px_0_0_var(--status-warning-border)]')}
       data-testid={`first-steps-step-${step.id}`}>
       <div className="flex items-start gap-4 px-5 py-4">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+          highlighted ? 'bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]'
+            : 'bg-muted text-muted-foreground')}>
           {Icon && <Icon className="h-5 w-5" data-testid={`first-steps-step-icon-${step.id}`} />}
         </div>
 
