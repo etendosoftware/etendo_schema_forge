@@ -19,8 +19,9 @@
 --      open subscription rows instead of writing the ETGO_TenantPlan marker. It is a LIST property
 --      (AD_Preference.Property, ISPROPERTYLIST='Y'). The reader (SubscriptionModelSwitch) looks only
 --      at active, unrestricted System rows (AD_CLIENT_ID='0', visible-at client/org empty or '0',
---      no role/user/window), takes the NEWEST of them (created desc) and is ON only when its
---      trimmed value is 'Y'. No row ships as module data: every environment starts OFF.
+--      no role/user/window), takes the NEWEST of them (created desc, then updated desc, then
+--      ad_preference_id desc) and is ON only when its trimmed value is 'Y'. No row ships as
+--      module data: every environment starts OFF.
 -- Until step 1 has run, an environment keeps answering from the preference exactly as before.
 -- The switch decides only a tenant's FIRST row. While it is OFF -- every environment's starting
 -- state -- a purchase by a tenant that has no subscription row yet still writes the ETGO_TenantPlan
