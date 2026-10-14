@@ -1,4 +1,52 @@
 @import '@etendosoftware/app-shell-core/styles.css';
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+/*
+ * Etendo AI visual identity handoff (30 Sep 2026).
+ *
+ * The email identifies the primary interaction colour and Navigation Rail as
+ * the first transversal changes. Keep them as semantic overrides here so the
+ * published app-shell theme remains the source for every window and state.
+ * Inter stays on body copy and data-heavy surfaces; headings use Plus Jakarta
+ * Sans and code/widget labels can opt into Space Mono.
+ */
+:root {
+  --primary: 213 83% 48%;
+  --primary-foreground: 0 0% 100%;
+  --focus-ring: 213 83% 48%;
+  --sidebar-primary: 213 83% 48%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 213 100% 97%;
+  --sidebar-accent-foreground: 213 83% 36%;
+}
+
+.dark {
+  --primary: 217 91% 60%;
+  --primary-foreground: 222 47% 11%;
+  --focus-ring: 217 91% 60%;
+  --sidebar-primary: 217 91% 60%;
+  --sidebar-primary-foreground: 222 47% 11%;
+  --sidebar-accent: 217 35% 22%;
+  --sidebar-accent-foreground: 210 20% 98%;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+}
+
+.font-code,
+.font-mono {
+  font-family: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 
 /*
  * Scrim (modal backdrop) colour.
