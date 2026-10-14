@@ -48,15 +48,16 @@
 --   select count(*) from ad_preference
 --    where attribute = 'ETGO_TenantPlan' and isactive = 'Y' and upper(trim(value)) = 'PRODUCTIVE';
 --     -- must be 0: every active productive marker has become an open subscription row.
---   select ad_preference_id, value, created from ad_preference
+--   select ad_preference_id, value, created, updated from ad_preference
 --    where property = 'ETGO_SubscriptionModel' and ispropertylist = 'Y' and isactive = 'Y'
 --      and ad_client_id = '0' and coalesce(visibleat_client_id, '0') = '0'
 --      and coalesce(visibleat_org_id, '0') = '0' and visibleat_role_id is null
 --      and ad_user_id is null and ad_window_id is null
---    order by created desc;
+--    order by created desc, updated desc, ad_preference_id desc;
 --     -- after step 2: exactly ONE row, and trim(value) = 'Y' -- the switch is ON. Filtered like
 --     -- the reader and NOT on the value: a 'Y' row next to a newer 'N' row is OFF for the reader,
---     -- and 'Y ' is ON for it. More than one row => deactivate the extras, the newest one decides.
+--     -- and 'Y ' is ON for it. More than one row => deactivate the extras, the newest one decides
+--     -- (on equal created the latest updated, then the highest id -- the first row above).
 
 -- Why this file is dated 2026-10-05 (READ BEFORE RE-DATING IT)
 -- --------------------------------------------------------------------------------------------

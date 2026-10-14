@@ -3474,10 +3474,12 @@ restart — but it argues for running this fix close to a restart.
   2026-10-14: no row).
   - **Correction (2026-10-14, Alex review):** the first version counted rows with `value = 'Y'` and
     expected 1. Wrong: the reader `SubscriptionModelSwitch` filters active + `AD_CLIENT_ID='0'` +
-    visible-at client/org NULL or `'0'` + no role/user/window, takes the NEWEST row (`created desc`,
-    max 1) and TRIMS the value. A `'Y'` row plus a newer `'N'` row passed while the switch was OFF,
+    visible-at client/org NULL or `'0'` + no role/user/window, takes the NEWEST row (`created desc,
+    updated desc, ad_preference_id desc` — deterministic tie-break, go follow-up 2026-10-14; max 1)
+    and TRIMS the value. A `'Y'` row plus a newer `'N'` row passed while the switch was OFF,
     and `'Y '` (ON for the reader) counted 0. **Apply:** mirror the reader's filters exactly, never
-    filter on the value; select `ad_preference_id, value, created ... order by created desc`;
+    filter on the value; select `ad_preference_id, value, created, updated ... order by created desc,
+    updated desc, ad_preference_id desc` (identical to go design doc §6.2);
     expect one row with `trim(value)='Y'`.
   - **The switch decides only a tenant's first row.** While it is OFF, a tenant with no
     subscription row yet that pays still writes the marker and opens NO row, so "every tenant paid

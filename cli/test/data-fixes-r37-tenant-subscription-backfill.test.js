@@ -169,12 +169,13 @@ describe('R37 data-fix — header metadata', () => {
     // Third check, shared with the com.etendoerp.go design doc §6.2: exactly one active System
     // row of the ETGO_SubscriptionModel LIST property (Property, not Attribute) with value 'Y'.
     // Filtered exactly like the go reader SubscriptionModelSwitch (newest unrestricted System row,
-    // value trimmed) and NOT on the value: a 'Y' row beside a newer 'N' row is OFF for the reader.
-    assert.match(rawText, /select ad_preference_id, value, created from ad_preference/);
+    // ties broken by updated then id, value trimmed) and NOT on the value: a 'Y' row beside a
+    // newer 'N' row is OFF for the reader.
+    assert.match(rawText, /select ad_preference_id, value, created, updated from ad_preference/);
     assert.match(rawText, /where property = 'ETGO_SubscriptionModel' and ispropertylist = 'Y' and isactive = 'Y'/);
     assert.match(rawText, /and ad_client_id = '0' and coalesce\(visibleat_client_id, '0'\) = '0'/);
     assert.match(rawText, /and coalesce\(visibleat_org_id, '0'\) = '0' and visibleat_role_id is null/);
-    assert.match(rawText, /and ad_user_id is null and ad_window_id is null\n--\s+order by created desc;/);
+    assert.match(rawText, /and ad_user_id is null and ad_window_id is null\n--\s+order by created desc, updated desc, ad_preference_id desc;/);
     assert.doesNotMatch(rawText, /ad_window_id is null and value = 'Y'/);
     assert.match(rawText, /exactly ONE row, and trim\(value\) = 'Y'/);
   });
