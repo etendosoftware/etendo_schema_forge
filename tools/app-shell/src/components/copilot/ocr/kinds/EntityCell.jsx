@@ -42,8 +42,8 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
   // in a Popover PORTAL, not as an `absolute` child of the modal's `overflow-auto` body — there it
   // grew the scroll area, added a vertical scrollbar and reflowed every column.
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
+    <Popover open={open} onOpenChange={setOpen} data-testid="Popover__65a761">
+      <PopoverAnchor asChild data-testid="PopoverAnchor__65a761">
         <div ref={wrapRef} className="min-w-0">
           {open ? (
             <div className="flex w-full min-w-0 items-center gap-2 rounded-md border border-foreground bg-card px-2 py-1.5 text-sm">

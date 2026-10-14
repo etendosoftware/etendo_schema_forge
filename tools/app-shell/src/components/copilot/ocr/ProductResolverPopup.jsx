@@ -317,7 +317,7 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, ski
   // the popup's scrolling body instead of overlapping it.
   return (
     <Popover open={open} onOpenChange={setOpen} data-testid="Popover__b3ae11">
-      <PopoverAnchor asChild>
+      <PopoverAnchor asChild data-testid="PopoverAnchor__b3ae11">
         <div className="flex w-full items-stretch rounded-lg border border-border-control bg-card hover:border-border-control focus-within:ring-2 focus-within:ring-focus-ring">
           {/* Undecided + creatable: the label itself opens the "new product" modal (never auto-opened). */}
           <button

@@ -298,7 +298,9 @@ export default function OcrReviewModal({
             </button>
           </div>
 
-          <ReceiverTaxIdAbsentNotice show={receiverTaxIdAbsent} />
+          <ReceiverTaxIdAbsentNotice
+            show={receiverTaxIdAbsent}
+            data-testid="ReceiverTaxIdAbsentNotice__80a87a" />
 
           <div className="space-y-1 pt-2">
             {fields.map((field) => {
