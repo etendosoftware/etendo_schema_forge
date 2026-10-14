@@ -20653,7 +20653,7 @@
     "backendError.costNotCalculated": "The product cost has not been calculated yet. The system calculates it automatically; please try posting the document again in a few minutes. To avoid blocks, make sure all your products have an initial cost configured.",
     "backendError.periodClosedForUnposting": "The period is closed. A document in a closed period cannot be unposted; reopen the period first.",
     "backendError.recordBeingPosted": "This record is being posted by another process. If the problem persists, refresh the record; it may already be posted.",
-    "backendError.periodNotAvailable": "The document's date falls in an accounting period that is not open. Open the period in the accounting calendar and try again.",
+    "backendError.periodNotAvailable": "The accounting period of the document's date is not open.",
     "backendError.invoicePostedFieldsLocked": "This invoice is posted, so its accounting date, project and cost center cannot be changed. Unpost it first to correct its accounting.",
     "backendError.invoicePostedExchangeRateLocked": "This invoice is posted, so its exchange rates cannot be changed. Unpost it first.",
     "backendError.invoiceUnpostNotPosted": "This invoice is not posted, so it has no accounting entries to remove. Refresh the invoice to see its current status.",

@@ -2764,14 +2764,14 @@ describe('translateBackendError — PeriodNotAvailable (ETP-5577)', () => {
   it('renders the es_ES copy from the identity', () => {
     assert.match(
       translateBackendError(RAW_EN, localeTranslator('es_ES'), { messageKeys: ['PeriodNotAvailable'] }),
-      /período contable que no está abierto/,
+      /período contable de la fecha del documento no está abierto/,
     );
   });
 
   it('renders the en_US copy from the identity', () => {
     assert.match(
       translateBackendError(RAW_EN, localeTranslator('en_US'), { messageKeys: ['PeriodNotAvailable'] }),
-      /accounting period that is not open/,
+      /accounting period of the document's date is not open/,
     );
   });
 });

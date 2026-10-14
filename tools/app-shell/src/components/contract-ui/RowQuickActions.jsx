@@ -106,7 +106,7 @@ export default function RowQuickActions({
   onClone,
   onEmail,
   onDelete,
-  onMenuActionExecuted, // (action, result) — host can refresh after execution
+  onMenuActionExecuted, // (action, result, row) — host can refresh after execution
   // Optional per-action config from decisions.json → window.rowQuickActions.actions.
   // Shape: { edit: { show: true, visibleWhen?: string }, duplicate: ..., email: ..., delete: ...,
   //          <processKey>: { show: 'fixed'|'kebab'|false, visibleWhen?: string } }
@@ -247,7 +247,7 @@ export default function RowQuickActions({
           return;
         }
         const result = await docAction.execute(row?.id, action.documentAction);
-        onMenuActionExecuted?.(action, result);
+        onMenuActionExecuted?.(action, result, row);
         return;
       }
       if (action.neoAction) {
@@ -283,12 +283,12 @@ export default function RowQuickActions({
           return;
         }
         const result = await neoAction.execute(row?.id, wireActionName);
-        onMenuActionExecuted?.(action, result);
+        onMenuActionExecuted?.(action, result, row);
         return;
       }
       if (action.onClick) {
         const result = await action.onClick({ row, windowName, apiBaseUrl, token });
-        onMenuActionExecuted?.(action, result);
+        onMenuActionExecuted?.(action, result, row);
         return;
       }
       // columnName-based AD process buttons require the detail-page hook (handleProcess)

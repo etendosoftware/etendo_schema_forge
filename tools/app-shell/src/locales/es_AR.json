@@ -20786,7 +20786,7 @@
     "firstStepsDemoDataTransferSkipped": "No seleccionaste datos de la demo para transferir.",
     "firstStepsDemoDataTransferRetry": "Reintentar transferencia",
     "firstStepsCalendarReview": "Revisar calendario contable",
-    "backendError.periodNotAvailable": "La fecha del documento cae en un período contable que no está abierto. Abrí el período en el calendario contable y volvé a intentarlo.",
+    "backendError.periodNotAvailable": "El período contable de la fecha del documento no está abierto.",
     "periodNotAvailableReviewCalendar": "Revisar calendario contable",
     "periodNotAvailableOpenCalendar": "Ir al calendario",
     "periodNotAvailableAskOwner": "Solo el propietario del entorno puede abrir los primeros períodos: pedile que revise el calendario contable.",

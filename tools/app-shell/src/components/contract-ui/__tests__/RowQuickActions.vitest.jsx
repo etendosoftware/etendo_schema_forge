@@ -310,6 +310,7 @@ describe('RowQuickActions', () => {
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'custom2' }),
         { handled: true },
+        expect.objectContaining({ id: expect.anything() }), // the row (ETP-5577)
       );
     });
   });
@@ -544,6 +545,7 @@ describe('RowQuickActions', () => {
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'x' }),
         { success: true },
+        expect.objectContaining({ id: expect.anything() }), // the row (ETP-5577)
       );
     });
 
@@ -560,6 +562,7 @@ describe('RowQuickActions', () => {
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'reactivate' }),
         { success: true },
+        expect.objectContaining({ id: expect.anything() }), // the row (ETP-5577)
       );
       expect(toast.error).not.toHaveBeenCalled();
     });
