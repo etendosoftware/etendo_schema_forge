@@ -2,7 +2,7 @@
   "version": "0.21.0",
   "generatedAt": "2026-06-26T00:48:58.290Z",
   "updatedAt": "2026-09-23T17:59:06.716Z",
-  "contractChecksum": "174072b4643f1d82",
+  "contractChecksum": "5b20c2bade03eb34",
   "apiPrediction": {
     "specName": "internal-consumption",
     "baseUrl": "/sws/neo/internal-consumption",

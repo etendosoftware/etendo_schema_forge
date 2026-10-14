@@ -20,6 +20,7 @@ import { useRowConfirmAction } from '../shared/useRowConfirmAction.jsx';
 import GoodsShipmentConfirmModal from '@generated/goods-shipment/custom/GoodsShipmentConfirmModal';
 import { useShipmentPdf } from './useShipmentPdf';
 import GoodsShipmentPreview from './GoodsShipmentPreview';
+import { ACCOUNTING_CAPABILITY } from '@/lib/capabilityVisibility.js';
 
 const LABEL_OVERRIDES = {
   es_ES: { InvoiceStatus: 'Estado de facturación' },
@@ -31,7 +32,7 @@ const COLUMNS = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
-  { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } } },
+  { key: 'posted', column: 'Posted', type: 'boolean', required: true, visibleWhenCapability: ACCOUNTING_CAPABILITY, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } } },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'string', required: true },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent' },
 ];

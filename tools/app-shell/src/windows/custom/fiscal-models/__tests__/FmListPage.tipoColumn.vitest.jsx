@@ -254,6 +254,84 @@ describe('FmListPage — "Tipo" column derivation (ETP-5338)', () => {
   });
 });
 
+// ── ETP-5725: unsaved-draft fallback (duplicatePeriodPresented) ────────────
+// A brand-new declaration opened for a period whose latest sibling is already presented
+// auto-defaults rectificativa/sustitutiva in the DETAIL page's local state (FmModel303Page.jsx/
+// FmModel349Page.jsx's identChecks lazy initializer), but that never reaches `manualData` until
+// the user clicks "Guardar". Before this fix the list always showed "Ordinaria" for that window;
+// `resolveDeclTypeLabel` now falls back to the same label the detail page will persist, driven by
+// the same `duplicatePeriodPresented` condition FmListPage.jsx already computes per-row (any
+// sibling for the same model/year/period in the submitted family).
+function siblingDecl(overrides = {}) {
+  return makeDecl({ id: 'sibling-1', year: 2026, period: 'T1', ...overrides });
+}
+
+describe('FmListPage — "Tipo" column unsaved-draft fallback (ETP-5725)', () => {
+  it('303: shows "Rectificativa" for a never-saved draft when a sibling for the period is already submitted', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const sibling = siblingDecl({ model: '303', status: 'submitted' });
+    const freshDraft = makeDecl({ id: 'fresh-1', model: '303', year: 2026, period: 'T1', status: 'draft' });
+    delete freshDraft.manualData;
+    const { container } = render(<FmListPage declarations={[sibling, freshDraft]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const rows = container.querySelectorAll('tbody tr');
+    expect(rows.length).toBe(2);
+    const draftRow = Array.from(rows).find(r => tipoCellOf(r).textContent !== 'fm.type.ordinary')
+      ?? Array.from(rows)[1];
+    expect(tipoCellOf(draftRow).textContent).toBe('fm.type.rectificative');
+  });
+
+  it('303: does NOT fall back when the sibling exists but is not yet submitted (still draft/ready)', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const sibling = siblingDecl({ model: '303', status: 'ready' });
+    const freshDraft = makeDecl({ id: 'fresh-2', model: '303', year: 2026, period: 'T1', status: 'draft' });
+    delete freshDraft.manualData;
+    const { container } = render(<FmListPage declarations={[sibling, freshDraft]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const rows = container.querySelectorAll('tbody tr');
+    expect(tipoCellOf(rows[1]).textContent).toBe('fm.type.ordinary');
+  });
+
+  it('303: an explicit persisted rectificativa=false on the draft still wins over the fallback', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const sibling = siblingDecl({ model: '303', status: 'submitted' });
+    const draft = makeDecl({
+      id: 'fresh-3', model: '303', year: 2026, period: 'T1', status: 'draft',
+      manualData: { identification: { rectificativa: false } },
+    });
+    const { container } = render(<FmListPage declarations={[sibling, draft]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const rows = container.querySelectorAll('tbody tr');
+    expect(tipoCellOf(rows[1]).textContent).toBe('fm.type.ordinary');
+  });
+
+  it('349: shows "Sustitutiva" for a never-saved draft when a sibling for the period is already submitted', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const sibling = siblingDecl({ model: '349', status: 'submitted_ack' });
+    const freshDraft = makeDecl({ id: 'fresh-4', model: '349', year: 2026, period: 'T1', status: 'draft' });
+    delete freshDraft.manualData;
+    const { container } = render(<FmListPage declarations={[sibling, freshDraft]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const rows = container.querySelectorAll('tbody tr');
+    expect(tipoCellOf(rows[1]).textContent).toBe('fm.type.substitutive');
+  });
+
+  it('a period with no prior declaration at all keeps "Ordinaria" (regression guard)', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const onlyDecl = makeDecl({ id: 'solo-1', model: '303', year: 2026, period: 'T3', status: 'draft' });
+    delete onlyDecl.manualData;
+    const { container } = render(<FmListPage declarations={[onlyDecl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const row = container.querySelector('tbody tr');
+    expect(tipoCellOf(row).textContent).toBe('fm.type.ordinary');
+  });
+});
+
 // ── Real-locale resolution (all 3 locale files) ─────────────────────────────
 // Mirrors FmListPage.breadcrumb.i18n.vitest.jsx's pattern: mocks '@/i18n' (the
 // path FmListPage.jsx actually imports useUI from) with a real-dictionary
