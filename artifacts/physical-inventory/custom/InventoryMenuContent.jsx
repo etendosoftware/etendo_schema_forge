@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
-import InventoryCreateListModal from './InventoryCreateListModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // ETP-5601 — same markup as the generic kebab items (DetailMoreActionsMenu), so these two
@@ -17,7 +16,6 @@ export default function InventoryMenuContent({ data, recordId, token, apiBaseUrl
   // /sws/neo/<this>/sws/neo/<other>/... and a 404.
   const apiFetch = useApiFetch('');
   const ui = useUI();
-  const [showModal, setShowModal] = useState(false);
   const [updating, setUpdating] = useState(false);
 
   if (!recordId || recordId === 'new') return null;
@@ -48,14 +46,6 @@ export default function InventoryMenuContent({ data, recordId, token, apiBaseUrl
     <>
       <button
         type="button"
-        className={itemCls}
-        style={itemFont}
-        onClick={() => { onClose(); setShowModal(true); }}
-      >
-        {ui('createInventoryCountList')}
-      </button>
-      <button
-        type="button"
         disabled={updating}
         className={itemCls}
         style={itemFont}
@@ -63,21 +53,6 @@ export default function InventoryMenuContent({ data, recordId, token, apiBaseUrl
       >
         {updating ? ui('updating') : ui('updateListSystemCount')}
       </button>
-
-      {showModal && (
-        <InventoryCreateListModal
-          inventoryId={recordId}
-          warehouseId={data?.warehouse?.id ?? data?.warehouse}
-          apiBaseUrl={apiBaseUrl}
-          token={token}
-          onClose={() => setShowModal(false)}
-          onSuccess={() => {
-            setShowModal(false);
-            toast.success(ui('inventoryListGenerated'));
-            window.location.reload();
-          }}
-        />
-      )}
     </>
   );
 }

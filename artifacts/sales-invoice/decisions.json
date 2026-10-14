@@ -138,7 +138,7 @@
         "field": "posted",
         "trueKey": "postedStatus",
         "falseKey": "notPostedStatus",
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
       }
     ],
     "rowQuickActions": {

@@ -2474,3 +2474,73 @@ describe('FmBoxes303 — identification field maxLength (ETP-5438)', () => {
     expect(ibanInput.getAttribute('maxlength')).toBe('34');
   });
 });
+
+// ETP-5725 — "Autoliquidación rectificativa" is locked CHECKED (not uncheckable) while
+// `lockRectificativaChecked` is true, so the user can't undo the auto-default FmModel303Page.jsx
+// applies when the period's latest sibling declaration is already presented. Only the
+// `rectificativa` checkbox itself is affected — `baja_domiciliacion` (also rendered once
+// rectificativa is checked, via `visibleWhen`) must stay editable regardless.
+describe('FmBoxes303 — lockRectificativaChecked (ETP-5725)', () => {
+  function rectificativaCheckbox() {
+    const label = screen.getByText('fm.ident.rectificativa');
+    return label.closest('.fm-aeat-ident-cb').querySelector('input[type="checkbox"]');
+  }
+
+  function bajaDomiciliacionCheckbox() {
+    const label = screen.getByText('fm.ident.baja_domiciliacion');
+    return label.closest('.fm-aeat-ident-cb').querySelector('input[type="checkbox"]');
+  }
+
+  it('disables the rectificativa checkbox when lockRectificativaChecked is true', () => {
+    render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['rectificativa']}
+        identification={{ rectificativa: true }}
+        lockRectificativaChecked
+      />
+    );
+    expect(rectificativaCheckbox()).toBeChecked();
+    expect(rectificativaCheckbox()).toBeDisabled();
+  });
+
+  it('leaves the rectificativa checkbox editable when lockRectificativaChecked is false/absent', () => {
+    render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['rectificativa']}
+        identification={{ rectificativa: true }}
+      />
+    );
+    expect(rectificativaCheckbox()).not.toBeDisabled();
+  });
+
+  it('does not lock a sibling checkbox (baja_domiciliacion) in the same section', () => {
+    render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['rectificativa']}
+        identification={{ rectificativa: true }}
+        lockRectificativaChecked
+      />
+    );
+    expect(bajaDomiciliacionCheckbox()).not.toBeDisabled();
+  });
+
+  it('readOnly (submitted declaration) still disables rectificativa regardless of the lock flag', () => {
+    render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['rectificativa']}
+        identification={{ rectificativa: true }}
+        readOnly
+        lockRectificativaChecked={false}
+      />
+    );
+    expect(rectificativaCheckbox()).toBeDisabled();
+  });
+});

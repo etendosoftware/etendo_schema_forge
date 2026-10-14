@@ -22,6 +22,7 @@ import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { useLabel, useMenuLabel, useUI } from '@/i18n';
 import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver } from './saveActions.jsx';
+import { DetailDeleteButton } from './DetailDeleteButton.jsx';
 import { translateBackendError, translateBackendErrorResponse } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -2814,14 +2815,10 @@ export function DetailView({
                 // processed-document delete behavior changes.
                 hideDeleteButton: hideDeleteButton || windowReadOnly,
               }) && (
-                <button
+                <DetailDeleteButton
                   onClick={() => setShowDeleteConfirm(true)}
-                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors`}
                   title={ui('delete')}
-                  data-testid="action-delete"
-                >
-                  <Trash2 className="h-5 w-5" data-testid="Trash2__fa3275" />
-                </button>
+                  data-testid="DetailDeleteButton__fa3275" />
               )}
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
