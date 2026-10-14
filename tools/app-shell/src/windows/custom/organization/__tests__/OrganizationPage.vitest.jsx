@@ -5,6 +5,8 @@ import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  // ETP-5716 — the Modelo 390 representatives grid formats its date-only column per locale.
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 // ETP-5395 Fix 3: OrganizationPage is now gated by useWindowAccess — default to 'full' so
@@ -618,6 +620,64 @@ describe('OrganizationPage', () => {
 
       fireEvent.change(screen.getByTestId('OrganizationPage__taxid'), { target: { value: 'B1234567D' } });
       expect(screen.queryByTestId('OrganizationPage__error-taxID')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Modelo 390 identity (ETP-5716) — information.aeat390* fields saved with the page', () => {
+    const BASE = (info) => makeFetchMock([
+      [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme', socialName: 'Acme SL', etgoBusinessType: 'CO' })],
+      [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID: 'B1234567D', locationAddress: 'LOC_1', ...info })],
+    ]);
+
+    const infoPatchBody = () => {
+      const call = globalThis.fetch.mock.calls.find(([url, opts]) =>
+        opts?.method === 'PATCH' && url.includes(`/organization/information/${ORG_ID}`));
+      return call ? JSON.parse(call[1].body) : null;
+    };
+
+    it('renders the section and seeds the natural-person fields from information (Y/N boolean)', async () => {
+      globalThis.fetch = BASE({ aeat390Isperson: 'Y', aeat390Firstname: 'Ana', aeat390RepNif: '12345678Z' });
+      render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+
+      expect(await screen.findByTestId('OrganizationPage__section-390')).toHaveTextContent('orgSection390Desc');
+      await waitFor(() => expect(screen.getByTestId('Modelo390IdentitySection__aeat390Firstname')).toHaveValue('Ana'));
+      expect(screen.getByTestId('Modelo390IdentitySection__aeat390RepNif')).toHaveValue('12345678Z');
+      expect(screen.queryByTestId('OrganizationPage__unsaved-banner')).not.toBeInTheDocument();
+    });
+
+    it('toggling Persona física marks the page dirty and Save sends the aeat390 fields on information', async () => {
+      globalThis.fetch = BASE({ aeat390Isperson: false });
+      render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__name')).toHaveValue('Acme'));
+
+      fireEvent.click(screen.getByTestId('Modelo390IdentitySection__isPerson'));
+      expect(await screen.findByTestId('OrganizationPage__unsaved-banner')).toBeInTheDocument();
+      fireEvent.change(screen.getByTestId('Modelo390IdentitySection__aeat390Firstname'), { target: { value: 'Ana' } });
+      fireEvent.change(screen.getByTestId('Modelo390IdentitySection__aeat390Surname1'), { target: { value: 'García' } });
+      fireEvent.click(screen.getByTestId('OrganizationPage__save'));
+
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('savedSuccessfully'));
+      expect(infoPatchBody()).toMatchObject({
+        aeat390Isperson: true,
+        aeat390Firstname: 'Ana',
+        aeat390Surname1: 'García',
+        aeat390Surname2: '',
+        aeat390RepNif: '',
+        aeat390RepName: '',
+      });
+    });
+
+    it('blocks Save on a malformed representative NIF while Persona física is on', async () => {
+      globalThis.fetch = BASE({ aeat390Isperson: true });
+      render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+      await waitFor(() => expect(screen.getByTestId('Modelo390IdentitySection__aeat390RepNif')).toBeInTheDocument());
+
+      fireEvent.change(screen.getByTestId('Modelo390IdentitySection__aeat390RepNif'), { target: { value: '12345678A' } });
+      fireEvent.click(screen.getByTestId('OrganizationPage__save'));
+
+      expect(await screen.findByTestId('Modelo390IdentitySection__error-aeat390RepNif')).toHaveTextContent(/taxIdInvalid/);
+      expect(toastError).toHaveBeenCalled();
+      expect(infoPatchBody()).toBeNull();
     });
   });
 });

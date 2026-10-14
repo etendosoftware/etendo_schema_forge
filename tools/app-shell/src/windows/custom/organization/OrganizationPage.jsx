@@ -18,6 +18,8 @@ import OrgLogoField from './OrgLogoField.jsx';
 import BusinessTypeCards from './BusinessTypeCards.jsx';
 import { getCountryFlag } from './countryFlag.js';
 import ActividadesIaeSection from './ActividadesIaeSection.jsx';
+import Modelo390IdentitySection from './Modelo390IdentitySection.jsx';
+import { isEtendoTrue } from './representanteLegal.js';
 // ETP-5391 — reused as-is from fiscal-config (NOT forked): the backend
 // (`GET/POST/DELETE /sws/neo/certificate?orgId=...`, NeoCertificateHelper.java) is
 // already organization-scoped, not per fiscal system, so the same component that
@@ -49,6 +51,13 @@ const emptyForm = {
   email: '',
   phone: '',
   web: '',
+  // Modelo 390 identity (ETP-5716) — AD_OrgInfo EM_AEAT390_* columns.
+  aeat390Isperson: false,
+  aeat390Firstname: '',
+  aeat390Surname1: '',
+  aeat390Surname2: '',
+  aeat390RepNif: '',
+  aeat390RepName: '',
 };
 
 // BUG-1 (QA rejection round): the backend rejects (500) when a required field is blank —
@@ -98,6 +107,15 @@ function getTaxIdErrorKey(form) {
   return getTaxIdError(form.taxID);
 }
 
+// ETP-5716 — the natural-person representative NIF of the Modelo 390 is optional (as in
+// Classic), but a non-empty value must be a valid NIF: same validator as the NIF above. Only
+// checked while "Persona física" is on — the field is hidden otherwise, and an error on a field
+// the user cannot see would be unfixable.
+function getRepNifErrorKey(form) {
+  if (!form.aeat390Isperson) return null;
+  return getTaxIdError(form.aeat390RepNif);
+}
+
 const EMAIL_FIELD_DESCRIPTOR = { key: 'email' };
 const WEBSITE_FIELD_DESCRIPTOR = { key: 'web', inputPrefix: 'https://' };
 const PHONE_FIELD_DESCRIPTOR = { key: 'phone' };
@@ -133,6 +151,12 @@ function buildFormFromData(header, info) {
     email: info?.etgoEmail ?? '',
     phone: info?.etgoPhone ?? '',
     web: info?.etgoWeb ?? '',
+    aeat390Isperson: isEtendoTrue(info?.aeat390Isperson),
+    aeat390Firstname: info?.aeat390Firstname ?? '',
+    aeat390Surname1: info?.aeat390Surname1 ?? '',
+    aeat390Surname2: info?.aeat390Surname2 ?? '',
+    aeat390RepNif: info?.aeat390RepNif ?? '',
+    aeat390RepName: info?.aeat390RepName ?? '',
   };
 }
 
@@ -239,6 +263,12 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
       toast.error(ui(taxIdErrorKey));
       return;
     }
+    const repNifErrorKey = getRepNifErrorKey(form);
+    if (repNifErrorKey) {
+      setFieldErrors({ aeat390RepNif: ui(repNifErrorKey) });
+      toast.error(ui(repNifErrorKey));
+      return;
+    }
     const formatErrorKey = getInvalidFormatErrorKey(form);
     if (formatErrorKey) {
       toast.error(ui(formatErrorKey));
@@ -260,6 +290,12 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
           etgoEmail: form.email,
           etgoPhone: form.phone,
           etgoWeb: form.web,
+          aeat390Isperson: form.aeat390Isperson,
+          aeat390Firstname: form.aeat390Firstname,
+          aeat390Surname1: form.aeat390Surname1,
+          aeat390Surname2: form.aeat390Surname2,
+          aeat390RepNif: form.aeat390RepNif,
+          aeat390RepName: form.aeat390RepName,
         },
       });
       await refetch();
@@ -582,7 +618,6 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         <SectionRow
           titleKey="orgSectionIae"
           descKey="orgSectionIaeDesc"
-          divider={false}
           testId="OrganizationPage__section-iae"
           data-testid="SectionRow__a5f503">
           <ActividadesIaeSection
@@ -590,6 +625,25 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
             apiBaseUrl={apiBaseUrl}
             orgId={orgId}
             data-testid="ActividadesIaeSection__a5f503" />
+        </SectionRow>
+
+        {/* Representante legal / Modelo 390 (ETP-5716) — the toggle and the natural-person
+            fields are `information` fields, part of `form` and saved with the page; the
+            representatives grid (shown when the org is not a natural person) persists row by
+            row on its own, like the IAE grid above. See Modelo390IdentitySection.jsx. */}
+        <SectionRow
+          titleKey="orgSection390"
+          descKey="orgSection390Desc"
+          divider={false}
+          testId="OrganizationPage__section-390"
+          data-testid="SectionRow__a5f503">
+          <Modelo390IdentitySection
+            form={form}
+            fieldErrors={fieldErrors}
+            onFieldChange={updateField}
+            apiBaseUrl={apiBaseUrl}
+            orgId={orgId}
+            data-testid="Modelo390IdentitySection__a5f503" />
         </SectionRow>
         </div>
       </div>
