@@ -644,18 +644,25 @@ def _dump(value: Any) -> Any:
 
 
 def catalogue_digest(tools: list[Any]) -> dict[str, Any]:
-    """sha256 + count of a `tools/list` catalogue, independent of its order.
+    """sha256, count and size of a `tools/list` catalogue, independent of its order.
 
     The WHOLE tool definition is hashed (name, description, schemas,
     annotations), not just the names: a reworded description changes what the
     agent reads, so it changes what is measured. Sorted by name and serialised
     with sorted keys so the same catalogue always hashes the same.
+
+    `bytes` is the UTF-8 size of that canonical form: the base of the report's
+    priming estimate (catalogue tokens ≈ bytes ÷ 4, paid on every turn, plan
+    §5.7). Compact JSON, so it understates what a client actually sends; an
+    estimate, labelled as one wherever it is used.
     """
     entries = sorted((_dump(t) for t in tools), key=lambda t: str(t.get("name", "")))
     canonical = json.dumps(entries, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    encoded = canonical.encode("utf-8")
     return {
-        "sha": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        "sha": hashlib.sha256(encoded).hexdigest(),
         "toolCount": len(entries),
+        "bytes": len(encoded),
     }
 
 

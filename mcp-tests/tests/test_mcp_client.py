@@ -29,6 +29,15 @@ class CatalogueDigestTest(unittest.TestCase):
         b = mcp_client.catalogue_digest([_tool("b"), _tool("a")])
         self.assertEqual(a, b)
         self.assertEqual(a["toolCount"], 2)
+        self.assertEqual(set(a), {"sha", "toolCount", "bytes"})
+
+    def test_bytes_is_the_size_of_the_canonical_catalogue(self):
+        small = mcp_client.catalogue_digest([_tool("a", "x")])
+        large = mcp_client.catalogue_digest([_tool("a", "x" * 101)])
+        self.assertEqual(large["bytes"] - small["bytes"], 100)
+        # UTF-8 bytes, not characters.
+        accented = mcp_client.catalogue_digest([_tool("a", "á")])
+        self.assertEqual(accented["bytes"] - small["bytes"], 1)
 
     def test_a_reworded_description_changes_the_sha(self):
         a = mcp_client.catalogue_digest([_tool("a", "lists orders")])

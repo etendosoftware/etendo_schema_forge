@@ -121,10 +121,28 @@ def load_suite(path: str | Path) -> Suite:
     return Suite(path=path, window=data.get("window", path.stem), probes=probes)
 
 
-def interpolate(prompt: str, *, run_id: str, probe_id: str, timestamp: str) -> str:
-    """Expand {{marker}} / {{runId}} / {{probeId}} / {{timestamp}}."""
+def attempt_marker(prefix: str, probe_id: str, attempt: int) -> str:
+    """`{{marker}}` for one attempt (D43, plan §5.1): `<prefix>-<probeId>-a<n>`.
+
+    Unique per probe AND attempt, so one attempt's effect check can never pass on
+    a sibling attempt's record. `prefix` is the run id today; a comparison (S3)
+    passes its compareId, which keeps the marker — and so the prompt text —
+    byte-identical across targets for the same attempt. It still starts with the
+    prefix, so the leftover sweep of design §8 keeps matching it.
+    """
+    return f"{prefix}-{probe_id}-a{attempt}"
+
+
+def interpolate(
+    prompt: str, *, run_id: str, probe_id: str, timestamp: str, marker: str | None = None
+) -> str:
+    """Expand {{marker}} / {{runId}} / {{probeId}} / {{timestamp}}.
+
+    `marker` defaults to the pre-REPEAT form `<runId>-<probeId>`; the runner
+    always passes `attempt_marker(...)`.
+    """
     values = {
-        "marker": f"{run_id}-{probe_id}",
+        "marker": marker if marker is not None else f"{run_id}-{probe_id}",
         "runId": run_id,
         "probeId": probe_id,
         "timestamp": timestamp,
@@ -132,18 +150,15 @@ def interpolate(prompt: str, *, run_id: str, probe_id: str, timestamp: str) -> s
     return _TOKEN_RE.sub(lambda m: values[m.group(1)], prompt)
 
 
-def interpolate_args(args: Any, *, run_id: str, probe_id: str, timestamp: str) -> Any:
+def interpolate_args(
+    args: Any, *, run_id: str, probe_id: str, timestamp: str, marker: str | None = None
+) -> Any:
     """Expand the templating tokens inside an expectEffect args tree."""
+    kw = {"run_id": run_id, "probe_id": probe_id, "timestamp": timestamp, "marker": marker}
     if isinstance(args, str):
-        return interpolate(args, run_id=run_id, probe_id=probe_id, timestamp=timestamp)
+        return interpolate(args, **kw)
     if isinstance(args, dict):
-        return {
-            k: interpolate_args(v, run_id=run_id, probe_id=probe_id, timestamp=timestamp)
-            for k, v in args.items()
-        }
+        return {k: interpolate_args(v, **kw) for k, v in args.items()}
     if isinstance(args, list):
-        return [
-            interpolate_args(v, run_id=run_id, probe_id=probe_id, timestamp=timestamp)
-            for v in args
-        ]
+        return [interpolate_args(v, **kw) for v in args]
     return args

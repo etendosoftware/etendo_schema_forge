@@ -57,7 +57,7 @@ token_env = "MCP_TESTS_FAKE_TOKEN"
 SERVER = {
     "serverInfo": {"name": "etendo-go", "version": "1.0.0"},
     "protocolVersion": "2025-06-18",
-    "catalogue": {"sha": "ab" * 32, "toolCount": 28},
+    "catalogue": {"sha": "ab" * 32, "toolCount": 28, "bytes": 58000},
 }
 
 OUTCOME = {
@@ -100,6 +100,9 @@ class Harness:
         self.calls.append((name, args))
         self.order.append(name)
         answer = self.answers[name]
+        if isinstance(answer, list):
+            # One scripted answer per call, in order (attempts differ).
+            answer = answer.pop(0)
         if isinstance(answer, Exception):
             raise answer
         return answer
@@ -111,8 +114,9 @@ class Harness:
     async def run_probe(self, *, prompt, **_):
         self.order.append("agent")
         self.prompts.append(prompt)
-        if self.agent:
-            raise self.agent
+        outcome = self.agent.pop(0) if isinstance(self.agent, list) else self.agent
+        if outcome:
+            raise outcome
         return dict(OUTCOME)
 
     def run(self, *extra: str) -> dict | None:
@@ -138,7 +142,11 @@ class Harness:
         run_dir = next(runs.iterdir())
         self.events = [json.loads(line) for line in (run_dir / "events.ndjson").read_text().splitlines()]
         self.header = json.loads((run_dir / "run.json").read_text())
-        return json.loads((run_dir / "probes" / "p.json").read_text())
+        self.run_dir = run_dir
+        files = sorted((run_dir / "probes" / "p").glob("attempt-*.json"),
+                       key=lambda f: int(f.stem.split("-")[1]))
+        self.attempts = [json.loads(f.read_text()) for f in files]
+        return self.attempts[0]
 
 
 class CliStepsTest(unittest.TestCase):
@@ -149,7 +157,8 @@ class CliStepsTest(unittest.TestCase):
         h = Harness(self.tmp, SUITE)
         probe = h.run()
         self.assertEqual(h.order, ["etendo_create", "agent", "etendo_list", "etendo_delete"])
-        marker = f"{probe['runId']}-p"
+        marker = f"{probe['runId']}-p-a1"
+        self.assertEqual(probe["marker"], marker)
         self.assertEqual(h.calls[0], ("etendo_create", {"description": marker}))
         # Setup results reach the prompt, the effect check and teardown.
         self.assertEqual(h.prompts[0], f"Cobrá la factura FV9 ({marker})")
@@ -160,7 +169,8 @@ class CliStepsTest(unittest.TestCase):
         self.assertTrue(probe["teardownClean"])
         self.assertEqual([r["tool"] for r in probe["setup"]], ["etendo_create"])
         self.assertEqual([r["tool"] for r in probe["teardown"]], ["etendo_delete"])
-        self.assertEqual(probe["schemaVersion"], 4)
+        self.assertEqual(probe["schemaVersion"], 5)
+        self.assertEqual((probe["attempt"], probe["replaces"]), (1, None))
         self.assertFalse(probe["silentWrong"])
         # Fixture calls are never counted as the agent's.
         self.assertEqual(probe["toolCallCount"], 3)
@@ -172,7 +182,8 @@ class CliStepsTest(unittest.TestCase):
     def test_teardown_runs_when_the_agent_crashes(self):
         h = Harness(self.tmp, SUITE, agent=RuntimeError("agent died"))
         probe = h.run()
-        self.assertEqual(h.order, ["etendo_create", "agent", "etendo_delete"])
+        # Attempt 1, then its replacement (D43): each tears down its own records.
+        self.assertEqual(h.order, ["etendo_create", "agent", "etendo_delete"] * 2)
         self.assertEqual(probe["harnessError"]["kind"], "provider")
         self.assertTrue(probe["teardownClean"])
 
@@ -182,7 +193,7 @@ class CliStepsTest(unittest.TestCase):
         probe = h.run()
         # The agent never ran; teardown ran, and could not resolve the id it
         # needed, so it made NO call rather than a half-filled one.
-        self.assertEqual(h.order, ["etendo_create"])
+        self.assertEqual(h.order, ["etendo_create"] * 2)  # attempt 1 + its replacement
         self.assertEqual(probe["harnessError"]["kind"], "setup")
         self.assertIn("no period", probe["harnessError"]["detail"])
         self.assertIsNone(probe["verdict"])
@@ -217,7 +228,8 @@ class CliStepsTest(unittest.TestCase):
     def test_run_header_pins_the_server_and_the_harness(self):
         h = Harness(self.tmp, SUITE)
         h.run()
-        self.assertEqual(h.header["schemaVersion"], 4)
+        self.assertEqual(h.header["schemaVersion"], 5)
+        self.assertEqual(h.header["repeat"], 1)
         self.assertEqual(h.header["server"], {**SERVER, "error": None})
         self.assertIsNone(h.header["serverBuild"])
         self.assertIn("commit", h.header["harness"])
@@ -301,6 +313,104 @@ class CliStepsTest(unittest.TestCase):
 
     def test_no_banner_when_the_server_could_not_be_read(self):
         self.assertEqual(self._banner(ConnectionError("refused")), [])
+
+    def test_repeat_writes_one_file_per_attempt_with_its_own_marker(self):
+        h = Harness(self.tmp, SUITE)
+        h.run("--repeat", "3")
+        self.assertEqual([a["attempt"] for a in h.attempts], [1, 2, 3])
+        markers = [a["marker"] for a in h.attempts]
+        run_id = h.attempts[0]["runId"]
+        self.assertEqual(markers, [f"{run_id}-p-a{n}" for n in (1, 2, 3)])
+        # Each attempt's setup got its own marker; each teardown ran.
+        creates = [args["description"] for name, args in h.calls if name == "etendo_create"]
+        self.assertEqual(creates, markers)
+        self.assertEqual(h.order.count("etendo_delete"), 3)
+        self.assertEqual(h.header["repeat"], 3)
+        started = [e for e in h.events if e["t"] == "probe_started"]
+        self.assertEqual([e["attempt"] for e in started], [1, 2, 3])
+        # Every probe-scoped event says which attempt it belongs to.
+        scoped = [e for e in h.events if e.get("probe")]
+        self.assertTrue(all("attempt" in e for e in scoped))
+
+    def test_a_harness_error_is_replaced_and_capped(self):
+        # Every attempt fails: N attempts plus at most N replacements.
+        h = Harness(self.tmp, SUITE, agent=RuntimeError("agent died"))
+        h.run("--repeat", "2")
+        self.assertEqual([a["attempt"] for a in h.attempts], [1, 2, 3, 4])
+        self.assertEqual([a["replaces"] for a in h.attempts], [None, None, 1, 2])
+        self.assertTrue(all(a["harnessError"] for a in h.attempts))
+
+    def test_a_measured_attempt_is_not_replaced(self):
+        h = Harness(self.tmp, SUITE)
+        h.run("--repeat", "2")
+        self.assertEqual(len(h.attempts), 2)
+
+    def test_a_preflight_failure_is_not_rescheduled(self):
+        h = Harness(self.tmp, SUITE, preflight_error=cli.AuthError("no token"))
+        h.run("--repeat", "3")
+        self.assertEqual(len(h.attempts), 3)
+        self.assertEqual([a["replaces"] for a in h.attempts], [None] * 3)
+
+    def test_repeat_must_be_positive(self):
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            cli.main(["--suite", "x", "--repeat", "0"])
+
+    def test_a_replacement_that_succeeds_counts_and_names_its_attempt(self):
+        # ok, error, error, then the two replacements succeed: N measured, and
+        # each replacement names the attempt it stands in for.
+        h = Harness(self.tmp, SUITE, agent=[None, RuntimeError("429"), RuntimeError("502"), None, None])
+        h.run("--repeat", "3")
+        self.assertEqual([a["attempt"] for a in h.attempts], [1, 2, 3, 4, 5])
+        self.assertEqual([a["replaces"] for a in h.attempts], [None, None, None, 2, 3])
+        measured = [a for a in h.attempts if not a["harnessError"]]
+        self.assertEqual([a["attempt"] for a in measured], [1, 4, 5])
+        self.assertEqual(len(measured), 3)
+        # The errored attempts stay on file.
+        self.assertEqual([a["harnessError"]["kind"] for a in h.attempts if a["harnessError"]],
+                         ["provider", "provider"])
+        # A replaced transient error still makes the run exit non-zero.
+        self.assertEqual(h.exit_code, 1)
+
+    def test_a_provider_rejection_stops_the_run_without_more_attempts(self):
+        class Unauthorized(RuntimeError):
+            status_code = 401
+
+        # A second probe after p: the stop must reach it too.
+        h = Harness(self.tmp, SUITE + "  - id: q\n    prompt: hola\n", agent=Unauthorized("bad key"))
+        h.run("--repeat", "3")
+        self.assertEqual(len(h.attempts), 1, "no further attempt after a 401")
+        self.assertEqual(h.order.count("agent"), 1)
+        self.assertFalse((h.run_dir / "probes" / "q").exists(), "no later probe either")
+        # The one attempt still tore down what its setup created.
+        self.assertEqual(h.order.count("etendo_delete"), 1)
+        self.assertEqual([e["t"] for e in h.events][-1], "run_finished")
+        self.assertEqual(h.exit_code, 1)
+
+    def test_teardown_runs_on_a_replacement_whose_setup_fails(self):
+        suite = """
+            probes:
+              - id: p
+                mode: write
+                prompt: "hola {{marker}}"
+                setup:
+                  - tool: etendo_create
+                    args: { description: "{{marker}}" }
+                teardown:
+                  - tool: etendo_delete
+                    args: { description: "{{marker}}" }
+        """
+        h = Harness(self.tmp, suite, agent=RuntimeError("agent died"), answers={
+            "etendo_create": [{"id": "A"}, RuntimeError("no period")],
+            "etendo_list": {}, "etendo_delete": {}})
+        h.run("--repeat", "1")
+        first, replacement = h.attempts
+        self.assertEqual(replacement["replaces"], 1)
+        self.assertEqual(replacement["harnessError"]["kind"], "setup")
+        deletes = [args["description"] for name, args in h.calls if name == "etendo_delete"]
+        self.assertEqual(deletes, [first["marker"], replacement["marker"]])
+        self.assertTrue(replacement["teardownClean"])
+        teardown_events = [e["attempt"] for e in h.events if e["t"] == "teardown_step"]
+        self.assertEqual(teardown_events, [1, 2])
 
     def test_a_probe_without_steps_is_unchanged(self):
         h = Harness(self.tmp, """

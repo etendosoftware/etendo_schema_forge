@@ -1054,14 +1054,26 @@ TARGET ?= local
 SUITE  ?= sales-order
 PROBE  ?=
 MODEL  ?=
+REPEAT ?=
 
 .PHONY: mcp-test
-mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=)
-	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL))
+mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=, REPEAT=)
+	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL)) $(if $(REPEAT),--repeat $(REPEAT))
 
 .PHONY: mcp-login
 mcp-login: ## Pre-warm or refresh a target's OAuth token (TARGET=). Never a prerequisite for mcp-test.
 	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --login
+
+# Pure, from files: never contacts an MCP or an LLM, never reads events.ndjson (D48).
+.PHONY: mcp-report
+mcp-report: ## Derive summary.json + summary.md of a comparison (RUN=<compareId>|<path>)
+	@if [ -z "$(RUN)" ]; then echo "RUN is required, e.g. make mcp-report RUN=20261014T1000-cmp-a1b2"; exit 1; fi
+	cd mcp-tests && uv run python -m runner.report report $(RUN)
+
+.PHONY: mcp-stability
+mcp-stability: ## Winner agreement between two comparisons; exit 2 if pins differ or a run is unofficial (A=, B=)
+	@if [ -z "$(A)" ] || [ -z "$(B)" ]; then echo "A and B are required, e.g. make mcp-stability A=<compareId> B=<compareId>"; exit 1; fi
+	cd mcp-tests && uv run python -m runner.report stability $(A) $(B)
 
 # Deliberately NOT folded into mcp-test: that target must stay a command that
 # starts, runs and returns an exit code, so it keeps working from a script and

@@ -1,6 +1,9 @@
 """Setup/teardown steps (D41): loader, reference resolution and the step runner.
 
 Run with `cd mcp-tests && uv run python -m unittest discover -s tests`.
+
+@covers mcp-tests/runner/steps.py
+@covers mcp-tests/runner/suite.py
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ import unittest
 from pathlib import Path
 
 from runner.steps import StepError, parse_steps, resolve_refs, run_steps
-from runner.suite import load_suite
+from runner.suite import attempt_marker, interpolate, interpolate_args, load_suite
 
 
 def _suite(text: str) -> Path:
@@ -70,6 +73,23 @@ class LoaderTest(unittest.TestCase):
     def test_foreach_must_be_a_single_reference(self):
         with self.assertRaisesRegex(ValueError, "forEach"):
             parse_steps([{"tool": "t", "forEach": "items"}], probe_id="p", phase="teardown")
+
+
+class InterpolateTest(unittest.TestCase):
+    KW = {"run_id": "R", "probe_id": "p", "timestamp": "T"}
+
+    def test_the_default_marker_is_the_pre_repeat_form(self):
+        # Backward compatible: a caller that passes no marker gets `<runId>-<probeId>`.
+        self.assertEqual(interpolate("{{marker}}", **self.KW), "R-p")
+        self.assertEqual(interpolate_args({"a": ["{{marker}}"]}, **self.KW), {"a": ["R-p"]})
+
+    def test_an_attempt_marker_replaces_it_everywhere(self):
+        marker = attempt_marker("R", "p", 2)
+        self.assertEqual(marker, "R-p-a2")
+        self.assertEqual(interpolate("{{marker}} {{runId}} {{probeId}} {{timestamp}}", marker=marker, **self.KW),
+                         "R-p-a2 R p T")
+        self.assertEqual(interpolate_args({"a": [{"b": "x-{{marker}}"}], "n": 3}, marker=marker, **self.KW),
+                         {"a": [{"b": "x-R-p-a2"}], "n": 3})
 
 
 class ResolveRefsTest(unittest.TestCase):

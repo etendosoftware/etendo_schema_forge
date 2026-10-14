@@ -424,7 +424,9 @@ stable id all change outputs. Some reasoning models ignore or reject `temperatur
 - Margins on steps 2 and 4, so a 9-vs-10-calls median does not decide a task.
 - **Parallelism adds a source of variance** (contention on one tenant). Every attempt's real
   schedule is recorded, tasks that behave differently at concurrency 1 and 4 are `exclusive`
-  (§5.2), and `mcp-stability` reports the concurrency used by both runs.
+  (§5.2), and `mcp-stability` reports the concurrency used by both runs — it does **not** refuse a
+  pair over it (as implemented, S4): concurrency is a lever of §6, so it may differ between A and B
+  and is shown next to the agreement instead.
 - A per-task **fragility flag**: a winner decided by one attempt in step 1 (e.g. 3/3 vs 2/3), or by
   a margin within 5 points of the threshold. Fragile tasks are the ones expected to flip.
 
@@ -440,7 +442,10 @@ version bump — treat fragile step-1 wins as ties. The 90 % target may not be r
 plan treats that as a finding to report, not something to tune away.
 
 **What each comparison records (`compare.json`)** — everything that, if changed, invalidates a
-stability comparison:
+stability comparison, **except** the run's own identity and timing (`compareId`, start/finish,
+`--initialized-at`, `checkedAt`), `freshness` (checked separately: both runs must be official) and
+**concurrency, which is reported next to the agreement, not compared** (S4, `report.py`
+`_VOLATILE_PINS`):
 
 | Pin | Source |
 |---|---|

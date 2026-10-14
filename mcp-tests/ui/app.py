@@ -323,7 +323,9 @@ def view_live() -> None:
 
     done = state.done_count
     total = state.expected_probes or max(len(state.probes), 1)
-    st.progress(min(done / total, 1.0), text=f"{done}/{total} probes")
+    unit = "attempts" if state.repeat > 1 else "probes"
+    # Replacements for harness-errored attempts can push `done` past the plan.
+    st.progress(min(done / total, 1.0), text=f"{done}/{total} {unit}")
 
     if state.finished:
         level, text = run_status(state.finished)
@@ -367,7 +369,12 @@ def view_live() -> None:
 
 def _render_probe(probe: dict) -> None:
     badge = runs_lib.outcome_badge(probe)
-    st.markdown(f"### :{_outcome_color(badge)}[{badge}] · `{probe['probeId']}`")
+    title = f"### :{_outcome_color(badge)}[{badge}] · `{probe['probeId']}`"
+    if probe.get("attempt"):
+        title += f" · attempt {probe['attempt']}"
+        if probe.get("replaces"):
+            title += f" (replaces {probe['replaces']})"
+    st.markdown(title)
     if probe.get("harnessError"):
         st.error(f"{probe['harnessError'].get('kind')}: {probe['harnessError'].get('detail')}")
         with st.expander("traceback"):
@@ -443,12 +450,13 @@ def view_run_detail() -> None:
         st.warning("This run wrote no probe files.")
         return
     for probe_id in probe_ids:
-        probe = runs_lib.load_probe(summary.path, probe_id)
-        if probe is None:
-            st.error(f"{probe_id}.json is unreadable")
-            continue
-        with st.container(border=True):
-            _render_probe(probe)
+        for attempt in runs_lib.attempt_numbers(summary.path, probe_id):
+            probe = runs_lib.load_probe(summary.path, probe_id, attempt)
+            if probe is None:
+                st.error(f"{probe_id} attempt {attempt} is unreadable")
+                continue
+            with st.container(border=True):
+                _render_probe(probe)
 
 
 def view_history() -> None:

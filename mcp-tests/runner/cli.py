@@ -5,12 +5,12 @@
 Auth per target is `bearer` or `oauth` (authorization code + PKCE), resolved at
 preflight before the first probe.
 
-Each run writes `run.json`, one `probes/<id>.json` per probe, and the live
+Each run writes `run.json`, one `probes/<id>/attempt-<n>.json` per attempt, and the live
 `events.ndjson` stream (§6.5) that the optional Streamlit UI (`make mcp-ui`)
 tails. The UI is a separate process that shells out to this CLI: nothing here
 knows it exists (D11).
 
-Still out of scope: redaction, REPEAT, metrics derivation and summary.md.
+Still out of scope here: redaction and multi-target comparison.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ from .mcp_client import (
     preflight,
 )
 from .steps import StepError, resolve_refs, run_steps
-from .suite import Probe, Suite, interpolate, interpolate_args, load_suite
+from .suite import Probe, Suite, attempt_marker, interpolate, interpolate_args, load_suite
 
 HARNESS_ROOT = Path(__file__).resolve().parent.parent
 SUITES_DIR = HARNESS_ROOT / "suites"
@@ -72,7 +72,12 @@ RUNS_DIR = HARNESS_ROOT / "runs"
 #: `servedModel`, `silentWrong`. run.json: `harness` (commit + dirty flag) and
 #: `server` (`serverInfo`, `protocolVersion`, catalogue sha + tool count, read at
 #: preflight). Additive, but "never recorded" and "null" must stay tellable apart.
-RUN_SCHEMA_VERSION = 4
+#: v5 (ETP-5750 S2, D43) is REPEAT: one file per ATTEMPT,
+#: `probes/<probeId>/attempt-<n>.json`, instead of `probes/<probeId>.json`; each
+#: carries `attempt`, `replaces` and `marker`, and `{{marker}}` becomes
+#: `<runId>-<probeId>-a<n>`. run.json.repeat is the requested N. The layout
+#: change is what the version is for: a reader picks the layout from it.
+RUN_SCHEMA_VERSION = 5
 
 
 def _unwrap(exc: BaseException) -> BaseException:
@@ -236,6 +241,11 @@ def _silent_wrong(verdict: dict[str, Any] | None, effect_verified: bool | None) 
     return verdict.get("outcome") == "OKAY" and effect_verified is False
 
 
+def attempt_path(run_dir: Path, probe_id: str, attempt: int) -> Path:
+    """Where one attempt's record lives (run schema v5)."""
+    return run_dir / "probes" / probe_id / f"attempt-{attempt}.json"
+
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -252,6 +262,7 @@ def _run_header(
     suite: Suite,
     harness: dict[str, Any] | None = None,
     server: dict[str, Any] | None = None,
+    repeat: int = 1,
 ) -> dict[str, Any]:
     return {
         "schemaVersion": RUN_SCHEMA_VERSION,
@@ -270,7 +281,9 @@ def _run_header(
         "promptVersion": PROMPT_VERSION,
         "maxSteps": max_steps,
         "maxResultChars": max_result_chars,
-        "repeat": 1,
+        # Requested MEASURED attempts per probe (D43). Replacements for
+        # harness-errored attempts come on top, capped at `repeat` per probe.
+        "repeat": repeat,
         "suites": [{"file": suite.path.name, "sha": suite.sha}],
     }
 
@@ -282,6 +295,7 @@ async def _verify_effect(
     run_id: str,
     timestamp: str,
     saved: dict[str, Any] | None = None,
+    marker: str | None = None,
 ) -> tuple[bool | None, dict[str, Any] | None, dict[str, Any] | None]:
     """Run a write probe's post-condition in a FRESH MCP session.
 
@@ -295,7 +309,7 @@ async def _verify_effect(
         return None, None, None
 
     call_args = interpolate_args(
-        effect.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp
+        effect.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
     )
     try:
         # A check may name what setup created (`{{steps.invoice.id}}`, D41).
@@ -336,6 +350,8 @@ async def _run_phase(
     saved: dict[str, Any],
     max_result_chars: int,
     events: Any,
+    marker: str | None = None,
+    attempt: int | None = None,
 ) -> list[dict[str, Any]]:
     """Run a probe's setup or teardown in a session of its own (D41).
 
@@ -348,7 +364,9 @@ async def _run_phase(
     steps = [
         replace(
             s,
-            args=interpolate_args(s.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp),
+            args=interpolate_args(
+                s.args, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+            ),
         )
         for s in declared
     ]
@@ -360,6 +378,7 @@ async def _run_phase(
         events.emit(
             event_type,
             probe=probe.id,
+            **({"attempt": attempt} if attempt is not None else {}),
             index=rec.get("index"),
             tool=rec.get("tool"),
             ok=rec["ok"],
@@ -389,6 +408,7 @@ async def _run(args: argparse.Namespace) -> int:
     provider = cfg.provider_settings(config, model=args.model)
     max_steps = cfg.max_steps(config, override=args.max_steps)
     max_result_chars = cfg.max_result_chars(config)
+    repeat = args.repeat
 
     if not provider["model"]:
         print("No model configured. Set provider.model in config.toml.", file=sys.stderr)
@@ -480,6 +500,7 @@ async def _run(args: argparse.Namespace) -> int:
             suite=suite,
             harness=_harness_revision(),
             server=server,
+            repeat=repeat,
         ),
     )
     # The effective configuration on screen, before the first probe, so a
@@ -500,6 +521,7 @@ async def _run(args: argparse.Namespace) -> int:
         model=provider["model"],
         suite=suite.path.name,
         maxSteps=max_steps,
+        repeat=repeat,
     )
 
     print(f"run {run_id} -> {run_dir}")
@@ -510,6 +532,7 @@ async def _run(args: argparse.Namespace) -> int:
     print(f"  temperature {provider['temperature']}")
     print(f"  target      {target['name']} -> {target['url']} (auth={target.get('auth', 'bearer')})")
     print(f"  maxSteps    {max_steps}")
+    print(f"  repeat      {repeat}")
     print(f"  maxResChars {max_result_chars}")
     print(f"  promptVer   {PROMPT_VERSION}")
     print(f"  suite       {suite.path.name} @ {suite.sha} ({len(probes)} probe(s))")
@@ -527,21 +550,39 @@ async def _run(args: argparse.Namespace) -> int:
         events.emit(RUN_FINISHED, **tally)
         events.close()
 
-    for probe in probes:
+    async def run_attempt(
+        probe: Probe, attempt: int, replaces: int | None
+    ) -> tuple[dict[str, Any], bool]:
+        """One attempt of one probe: setup, agent, effect check, teardown (D41, D43).
+
+        Writes `probes/<probeId>/attempt-<n>.json` and returns (record,
+        stop_run). Each attempt is a fresh MCP session and a fresh conversation,
+        and its own `{{marker}}`, so attempts never see each other's records.
+        """
+        nonlocal exit_code
         timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        marker = attempt_marker(run_id, probe.id, attempt)
         prompt = interpolate(
-            probe.prompt, run_id=run_id, probe_id=probe.id, timestamp=timestamp
+            probe.prompt, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
         )
-        print(f"  probe {probe.id} ({probe.mode}) ...", flush=True)
-        events.emit(PROBE_STARTED, probe=probe.id, attempt=1, mode=probe.mode)
+        again = f", replaces {replaces}" if replaces else ""
+        print(f"  probe {probe.id} ({probe.mode}) attempt {attempt}/{repeat}{again} ...", flush=True)
+        events.emit(PROBE_STARTED, probe=probe.id, attempt=attempt, mode=probe.mode,
+                    **({"replaces": replaces} if replaces else {}))
         # The agent never learns which probe it is running: the probe id is
         # stamped on here, by the owner of the stream.
-        on_event = lambda t, fields: events.emit(t, probe=probe.id, **fields)  # noqa: E731
+        on_event = lambda t, fields: events.emit(t, probe=probe.id, attempt=attempt, **fields)  # noqa: E731
 
         result: dict[str, Any] = {
             "schemaVersion": RUN_SCHEMA_VERSION,
             "runId": run_id,
             "probeId": probe.id,
+            # 1-based, unique per probe within the run (D43). A replacement for
+            # an attempt that hit a harness error gets the next free number and
+            # names the one it replaces; the errored attempt stays on file.
+            "attempt": attempt,
+            "replaces": replaces,
+            "marker": marker,
             "mode": probe.mode,
             "prompt": prompt,
             "startedAt": timestamp,
@@ -568,16 +609,17 @@ async def _run(args: argparse.Namespace) -> int:
             result["harnessError"] = preflight_error
             result["verdict"] = None
             result["finishedAt"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            _write_json(run_dir / "probes" / f"{probe.id}.json", result)
-            events.emit(PROBE_ABORTED, probe=probe.id, kind="auth", detail=preflight_error["detail"], toolCalls=0)
+            _write_json(attempt_path(run_dir, probe.id, attempt), result)
+            events.emit(PROBE_ABORTED, probe=probe.id, attempt=attempt, kind="auth",
+                        detail=preflight_error["detail"], toolCalls=0)
             tally["notMeasured"] += 1
             print("    not measured (auth)", file=sys.stderr)
             exit_code = 1
-            continue
+            return result, False
 
         try:
             result["setup"] = await _run_phase(
-                probe, "setup", target, run_id=run_id, timestamp=timestamp,
+                probe, "setup", target, run_id=run_id, timestamp=timestamp, marker=marker, attempt=attempt,
                 saved=saved, max_result_chars=max_result_chars, events=events,
             )
             failed = next((r for r in result["setup"] if not r["ok"]), None)
@@ -589,7 +631,7 @@ async def _run(args: argparse.Namespace) -> int:
                 raise SetupFailed(f"prompt: {exc}") from exc
             result["prompt"] = prompt
 
-            # A fresh MCP session per probe: probes are fully independent (§3).
+            # A fresh MCP session per attempt: attempts are fully independent (§3).
             async with mcp_session(target) as session:
                 outcome = await run_probe(
                     session=session,
@@ -611,7 +653,7 @@ async def _run(args: argparse.Namespace) -> int:
             )
 
             verified, detail, check_error = await _verify_effect(
-                probe, target, run_id=run_id, timestamp=timestamp, saved=saved
+                probe, target, run_id=run_id, timestamp=timestamp, saved=saved, marker=marker
             )
             result["effectVerified"] = verified
             result["effectCheck"] = detail
@@ -628,7 +670,7 @@ async def _run(args: argparse.Namespace) -> int:
 
             events.emit(
                 PROBE_FINISHED,
-                probe=probe.id,
+                probe=probe.id, attempt=attempt,
                 outcome=verdict["outcome"],
                 steps=result["toolCallCount"],
                 exhausted=result.get("exhausted", False),
@@ -636,7 +678,7 @@ async def _run(args: argparse.Namespace) -> int:
             if probe.expect_effect is not None:
                 events.emit(
                     EFFECT_CHECKED,
-                    probe=probe.id,
+                    probe=probe.id, attempt=attempt,
                     verified=verified,
                     rows=None if detail is None else detail.get("rows"),
                 )
@@ -645,14 +687,14 @@ async def _run(args: argparse.Namespace) -> int:
             # The agent never ran: there is nothing to measure (D41).
             result["harnessError"] = {"kind": "setup", "detail": str(exc)}
             result["verdict"] = None
-            events.emit(PROBE_ABORTED, probe=probe.id, kind="setup", detail=str(exc), toolCalls=0)
+            events.emit(PROBE_ABORTED, probe=probe.id, attempt=attempt, kind="setup", detail=str(exc), toolCalls=0)
             tally["notMeasured"] += 1
             print(f"    not measured (setup): {exc}", file=sys.stderr)
             exit_code = 1
         except AuthError as exc:
             result["harnessError"] = {"kind": "auth", "detail": str(exc)}
             result["verdict"] = None
-            events.emit(PROBE_ABORTED, probe=probe.id, kind="auth", detail=str(exc), toolCalls=0)
+            events.emit(PROBE_ABORTED, probe=probe.id, attempt=attempt, kind="auth", detail=str(exc), toolCalls=0)
             tally["notMeasured"] += 1
             print(f"    not measured (auth): {exc}", file=sys.stderr)
             exit_code = 1
@@ -683,7 +725,7 @@ async def _run(args: argparse.Namespace) -> int:
             # The terminal event for a probe that has no outcome. Without it a
             # tailing UI would spin forever on a probe that is already dead.
             events.emit(
-                PROBE_ABORTED, probe=probe.id, kind="provider", detail=detail, toolCalls=salvaged
+                PROBE_ABORTED, probe=probe.id, attempt=attempt, kind="provider", detail=detail, toolCalls=salvaged
             )
             tally["notMeasured"] += 1
             print(f"    not measured: {detail}{salvage_note}", file=sys.stderr)
@@ -694,7 +736,8 @@ async def _run(args: argparse.Namespace) -> int:
             # halfway: teardown is what keeps the tenant clean (D41).
             if probe.teardown:
                 result["teardown"] = await _run_phase(
-                    probe, "teardown", target, run_id=run_id, timestamp=timestamp,
+                    probe, "teardown", target, run_id=run_id, timestamp=timestamp, marker=marker,
+                    attempt=attempt,
                     saved=saved, max_result_chars=max_result_chars, events=events,
                 )
                 result["teardownClean"] = all(r["ok"] for r in result["teardown"])
@@ -704,7 +747,33 @@ async def _run(args: argparse.Namespace) -> int:
                           file=sys.stderr)
 
         result["finishedAt"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        _write_json(run_dir / "probes" / f"{probe.id}.json", result)
+        _write_json(attempt_path(run_dir, probe.id, attempt), result)
+        return result, stop_run
+
+    for probe in probes:
+        # D43: `repeat` MEASURED attempts per probe. An attempt with a harness
+        # error is kept on file but does not count; a replacement is scheduled,
+        # at most `repeat` of them per probe, so a broken probe cannot loop. A
+        # preflight auth failure is never retried: it would fail identically.
+        # A probe still short of `repeat` measured attempts is "not evaluable"
+        # for the report (plan §5.1) — never silently padded.
+        # The N planned attempts run first; replacements follow, oldest error
+        # first, so `replaces` always names an attempt that already ran.
+        errored: list[int] = []
+        attempt = replacements = 0
+        stop_run = False
+        while not stop_run:
+            if attempt < repeat:
+                replaces = None
+            elif errored and not preflight_error and replacements < repeat:
+                replaces = errored.pop(0)
+                replacements += 1
+            else:
+                break
+            attempt += 1
+            result, stop_run = await run_attempt(probe, attempt, replaces)
+            if result.get("harnessError"):
+                errored.append(attempt)
         if stop_run:
             finish_run()
             print(
@@ -761,12 +830,22 @@ def main(argv: list[str] | None = None) -> int:
         "the config file.",
     )
     parser.add_argument("--max-steps", type=int, help="Override the per-probe agent loop cap")
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Measured attempts per probe (D43, default 1). Each attempt is a fresh "
+        "session, conversation and {{marker}}. An attempt with a harness error is "
+        "kept and replaced, at most REPEAT replacements per probe.",
+    )
     parser.add_argument("--config", help="Path to config.toml")
     args = parser.parse_args(argv)
     if args.interactive and args.no_interactive:
         parser.error("--interactive and --no-interactive contradict each other")
     if not args.suite and not args.login:
         parser.error("--suite is required unless --login is given")
+    if args.repeat < 1:
+        parser.error("--repeat must be at least 1")
     return asyncio.run(_run(args))
 
 

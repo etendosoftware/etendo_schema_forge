@@ -108,7 +108,8 @@ mcp-tests/
     verdict.py                    ✅  Pydantic schema for structured output (§6.3, now v3)
     prompts/probe_system.md       ✅  the naive system prompt, promptVersion 4 (D17/D20)
     redact.py                     ❌  NOT BUILT — D15 is unimplemented, see §6.7
-    report.py                     ❌  NOT BUILT — no summary.md, no summary.json, see §6.6
+    report.py                     ✅  comparison metrics, KR summary, stability (§6.6, D48) — reads files only
+    decide.py                     ✅  the versioned decision rule, `RULE_VERSION` (§6.6, D47)
   ui/
     app.py                        ✅  Streamlit panel (§9)
     runs.py                       ✅  pure file-reading, no Streamlit import — the testable half
@@ -206,7 +207,7 @@ happened — including a setup that failed halfway.
   first and looping over the answer — `neo_list` with `filters: {id: …, posted: "Y"}` saved as
   `posted`, then `forEach: "{{steps.posted.data}}"` runs the unpost zero or one times. That keeps
   the runner free of conditionals and every recorded failure meaningful.
-- The calls are recorded in `probes/<id>.json` as `setup[]` and `teardown[]` (tool, resolved
+- The calls are recorded in the probe file (`probes/<id>/attempt-<n>.json` since v5, §6.1) as `setup[]` and `teardown[]` (tool, resolved
   args, `ok`, `error`, capped `result`, `ms`) plus `teardownClean` (`null` = no teardown declared,
   `false` = something may be left on the server), and streamed as `setup_step` / `teardown_step`
   events. They are never part of `toolCalls[]` or `toolCallCount`: those stay the agent's.
@@ -648,6 +649,49 @@ non-authoritative: none of these fields exists only in the event stream. `ui/run
 (`record_v4`) reads them and returns `None` for an older file, which never recorded them — not "a
 v4 file with nulls".
 
+#### 2026-10-14: run schema v5 — one file per attempt (ETP-5750 S2, D43)
+
+**`RUN_SCHEMA_VERSION` 4 → 5.** `--repeat N` (default 1, D2) asks for N **measured** attempts of every
+probe. The layout changes, which is what the version is for:
+
+```
+runs/<runId>/
+  run.json                       # "repeat": N
+  events.ndjson
+  probes/<probeId>/attempt-<n>.json    # v5; v1–v4 wrote probes/<probeId>.json
+```
+
+Each attempt file is a full probe record of the v4 shape (every field above) plus:
+
+| Field | Meaning |
+|---|---|
+| `attempt` | 1-based, unique per probe within the run. Planned attempts are `1..N`; replacements continue at `N+1`. |
+| `replaces` | `null` for a planned attempt; for a replacement, the number of the harness-errored attempt it stands in for. |
+| `marker` | The resolved `{{marker}}`: `<runId>-<probeId>-a<n>`. Unique per probe **and** attempt, still prefixed by the run id (the §8 sweep keeps matching). The prefix is a parameter (`suite.attempt_marker`), so the comparison orchestrator can pass its `compareId` and keep the marker — and the prompt — byte-identical across targets for the same attempt. |
+
+Rules, all in `cli.py` (the `for probe in probes` scheduler around `run_attempt`):
+
+- Each attempt is independent: its own setup, MCP session, agent conversation, effect check and
+  teardown — teardown in `finally`, per attempt, exactly as D41 had it per probe.
+- **A harness error does not count.** The errored attempt stays on file; after the N planned
+  attempts, replacements run oldest error first, **at most N per probe**. A replacement that errors
+  is itself eligible for replacement while the cap lasts.
+- A preflight auth failure is **never** rescheduled (it would fail identically): every planned
+  attempt is written with that `harnessError`, no replacement.
+- A probe that ends with fewer than N measured attempts (`harnessError == null`) is *not
+  evaluable* for that run. The runner does not pad it; deciding that is the report's job (plan §5.1).
+- A provider configuration error (401/403/404) still stops the whole run at once.
+
+Events: `run_started` carries `repeat`; **every probe-scoped event** (`probe_started`, `tool_call`,
+`tool_result`, `setup_step`, `teardown_step`, `probe_finished`, `probe_aborted`, `effect_checked`)
+carries `attempt`, and `probe_started` carries `replaces` on a replacement. Still progress only.
+The run-finished tally counts attempts, replacements included.
+
+Readers: `ui/runs.py` picks the layout from `run.json.schemaVersion` (≥ 5 → attempts; no header →
+whatever is on disk) and exposes `probe_files`, `attempt_numbers(run, probe)` and
+`load_probe(run, probe, attempt=1)`; an older run is attempt 1 of each probe. Report code (S4)
+should read through the same rule.
+
 ### 6.2 Run metadata header (`run.json`, written before the first probe)
 
 Without this a run is unreadable three weeks later.
@@ -656,7 +700,7 @@ As implemented:
 
 ```jsonc
 {
-  "schemaVersion": 4,               // 1 -> 2 on 2026-09-14, 3 -> 4 on 2026-10-14, see §6.1
+  "schemaVersion": 5,               // 1 -> 2 on 2026-09-14, 3 -> 4 and 4 -> 5 on 2026-10-14, see §6.1
   "runId": "20260911T1402-local-a3f1",
   "startedAt": "2026-09-11T14:02:11Z",
   "target": { "name": "local", "url": "http://..." },
@@ -664,7 +708,8 @@ As implemented:
   "server": {                       // v4: read once at preflight, after auth
     "serverInfo": { "name": "...", "version": "1.0.0" },   // the MCP initialize answer
     "protocolVersion": "2025-06-18",
-    "catalogue": { "sha": "<sha256>", "toolCount": 28 },   // tools/list, every page
+    "catalogue": { "sha": "<sha256>", "toolCount": 28, "bytes": 58000 },   // tools/list, every page;
+                                    // bytes = UTF-8 size of the canonical (compact, sorted) form
     "error": null                   // a failed read: { "kind": "auth" | "server", "detail": "..." },
                                     // the shape of a probe's harnessError (§6.4); never fatal
   },                                // null when preflight auth already failed
@@ -675,20 +720,21 @@ As implemented:
   "promptVersion": 4,               // 1 -> 4, see §6.3
   "maxSteps": 25,
   "maxResultChars": 20000,          // added with the result recording (§6.1)
-  "repeat": 1,                      // always 1: REPEAT was never implemented (§7)
+  "repeat": 1,                      // --repeat N: measured attempts per probe (D43, §6.1)
   "suites": [{ "file": "sales-order.yaml", "sha": "e3b0c442" }]
 }
 ```
 
-Two fields do not yet keep their promise. **`serverBuild` is always `null`** — D1's accepted
+One field does not yet keep its promise. **`serverBuild` is always `null`** — D1's accepted
 consequence was that a run pins a `.go` build id it does not own, and nothing resolves it. Since v4
 `server.serverInfo` is recorded, but it cannot fill `serverBuild`: Etendo's `serverInfo.version` is a
 constant of the MCP implementation (`McpModernResults.SERVER_VERSION`, `1.0.0`), not the module
 build. The **catalogue sha** is the proxy that tells two builds apart — the whole tool definitions
 are hashed (name, description, schemas, annotations), order-independently, so a reworded description
-moves it — and it is the only build proxy available for Holded at all. `harness.dirty` looks at
-`mcp-tests/` only. **`repeat` is always `1`** because §7's
-`REPEAT` was not built. Both are written anyway, so the shape is right when they are filled in.
+moves it — and it is the only build proxy available for Holded at all. `catalogue.bytes` is the
+size of that canonical form, recorded as the base of the report's priming estimate (≈ bytes ÷ 4
+tokens per turn); compact JSON, so it understates what a client actually sends. `harness.dirty` looks at
+`mcp-tests/` only.
 
 ### 6.3 Verdict schema (structured output)
 
@@ -825,8 +871,9 @@ distinction D37 added a `harnessError.kind` for. And `effectVerified` is never f
 result than an honest failure, and merging them would erase exactly the case the check exists to
 catch.
 
-Made cheap by `{{marker}}` (§8), which is unique per *probe*, not per run — so one probe's effect
-check can never pass on another probe's record.
+Made cheap by `{{marker}}` (§8), which is unique per *probe* — and since run schema v5 per
+*attempt* (§6.1) — not per run, so one probe's effect check can never pass on another probe's or
+another attempt's record.
 
 ### 6.5 Event stream (`events.ndjson`)
 
@@ -879,7 +926,7 @@ into the event layer, which is precisely what the harness keeps out of itself.
 #### Two rules that keep the stream honest
 
 1. **The event stream is never the source of truth for results.** It is a progress feed: small,
-   lossy-tolerant, and explicitly subordinate. `run.json` and `probes/<id>.json` are the record, and
+   lossy-tolerant, and explicitly subordinate. `run.json` and the probe files are the record, and
    where the two disagree — a probe finished between two polls, a line lost to a full disk — the
    probe file wins. Nothing downstream may derive a metric from events that it could have derived
    from the probe files.
@@ -893,25 +940,93 @@ survives, instead of losing the run.
 
 ### 6.6 Metrics derived from the transcript (free, objective)
 
-**NOT IMPLEMENTED.** `report.py` does not exist, no `summary.md` or `summary.json` is produced, and
-the harness derives no metric at all: a run is read by a human, or by the UI, from the raw files.
+**Implemented 2026-10-14 for comparisons (ETP-5750 S4, D47, D48).** `runner/report.py` derives
+every metric of the Etendo Go vs Holded comparison from files, and `runner/decide.py` applies the
+decision rule. Plan: `docs/plans/2026-10-14-mcp-tests-reproducible-comparison-plan.md` §3, §5.6,
+§5.7, §6.
 
-The 2026-09-14 result recording (§6.1) was the prerequisite for most of this — before it,
-`resultBytes` did not exist and M3 and ACE-v were not computable from a run at all. What each metric
-would now be derivable from:
+```
+make mcp-report RUN=<compareId>|<path>     # writes <compareDir>/summary.json + summary.md
+make mcp-stability A=<compareId> B=<compareId>   # exit 2 if a pin differs or a run is unofficial
+```
+
+**Inputs, and the one thing never read.** `compare.json`, each `targets/<t>/run.json`, and
+`targets/<t>/probes/<id>/attempt-<n>.json` / `not-possible.json`. **`events.ndjson` is never
+opened** (D48): a test deletes it and asserts the summary is byte-identical. `load_target`
+reads attempts through `ui/runs.py` (`probe_files`, `attempt_numbers`, `load_probe` — stdlib only),
+so both layouts (v5 attempts, pre-REPEAT flat file as attempt 1) have one owner; it reads only
+`not-possible.json` itself, which has no attempt. The summary carries no generation timestamp, so re-running the report on the same files
+produces the same bytes — that is what lets a rule change be re-applied to an old run and diffed.
+
+**Per attempt** (`measure_attempt`), the plan's nine items:
+
+| # | Item | Rule as implemented |
+|---|---|---|
+| 1 | success | `success` if the runner recorded it (suite v2); else every objective check present (`effectVerified`, `answerVerified`) must hold; **none present → `null`**, and one such attempt makes that side *not evaluable* — never a quiet failure. Never the verdict. |
+| 2 | consistency | successes / counted attempts |
+| 3 | calls | median `toolCallCount` over **successful** attempts only |
+| 4 | first-call success | `toolCalls[0].error == false`, k/n; an attempt with no call is out of `n` |
+| 5 | unrecovered errors | an error call with no **later** successful call to the same tool, summed |
+| 6 | self-corrected | error calls − unrecovered, shown over all errors |
+| 7 | stumbles | error calls + `verdict.wastedCalls` — flagged `partlySelfReported` |
+| 8 | silent wrong | count of attempts with `silentWrong == true` |
+| 9 | cost | median `usage.loop.totalTokens` over successful attempts (catalogue included), plus median summed `resultBytes`; `priming ≈ catalogueTokens × turns` shown as an **estimate** next to it, from `run.json.server.catalogue.bytes` (recorded at preflight, §6.2) ÷ 4; absent on runs that predate it. The bytes are the compact canonical catalogue, so the estimate **understates** what a client actually sends each turn |
+
+`verdict.failures[].recovered` is reported only as `crossCheck.selfReportedUnrecovered`, never as
+item 5.
+
+**Which attempts count.** Harness-errored attempts are kept on file and listed, but excluded (D12);
+the first N measured attempts by attempt number are counted (N = `compare.json.repeat`). Fewer than
+N → the side is *not evaluable*, and so is the task.
+
+**The rule (`decide.py`, `RULE_VERSION = 1`).** Step 0 capability (one side `notPossible` → the
+other wins, provided it was itself measured; both → *excluded*; `invalidDeclaration` → *not
+evaluable*), then successes (both 0/N = tie, `1-noSuccess`), median calls with `callsMargin` (0.20,
+inclusive: 8 vs 10 decides, 81 vs 100 does not), unrecovered errors, median tokens with
+`tokensMargin` (0.10) — or bytes when any successful attempt lacks token usage (`4-bytes`) — and
+otherwise `5-tie`. Every task records `winner`, `decidedBy`, the decisive values with their
+`distance` to the threshold, and `fragile` (+ reasons): a step-1 win by one attempt, a step-3 win by
+one error, or a step-2/4 gap within `fragileBand` (0.05) of its threshold on either side.
+
+**Versioning.** The step logic is `RULE_VERSION`; the thresholds come from the suite's `decision:`
+block, copied into `compare.json`, over `DEFAULT_PARAMETERS`. A declared `ruleVersion` the code does
+not implement is refused (`RuleMismatch`). Every summary records `rule.version`, `rule.parameters`,
+`rule.parametersSha` and `rule.versionAtRun` (what `compare.json` declared), and the same block sits
+in `pins`.
+
+**`summary.json`** (`summarySchemaVersion` 1, `reportVersion` 1): `kr` (subject vs reference, tasks,
+evaluated, wins split `byCapability` / `byMeasurement` for both sides, ties, `winRate` and its two
+halves, fragile count), `official` + `freshness` per target (official only when every target is
+`fresh`; a missing status is `unknown`), `stumbleIndicators` per target (stumbles per counted
+attempt, tasks with any stumble), `tasks[]` (decision + both sides' items and per-attempt rows),
+`capabilityGaps`, `excluded`, `notEvaluable`, `backlog` (frictions by phase, suggestions by kind,
+verbatim; a legacy prose suggestion is `unclassified`), `cost` (per target: attempts incl.
+replacements, harness errors, loop and report tokens, attempts without usage, wall time), `pins`.
+
+**`summary.md`** is the projection: headline with OFFICIAL / UNOFFICIAL and the KR split, freshness
+table, one row per task × target (or `not possible (<kind>): <reason>` in place of the items),
+stumble indicators, capability gaps, uncounted tasks, backlog, run cost, pins. It holds counts and
+verdict text only — **no tool result and no `finalAnswer`** — because it is the copy-paste path and
+§6.7 is still not built.
+
+**Stability.** `stability(A, B)`: agreement = same `winner` (a tie equals a tie) over tasks decided
+in both runs, plus the same over tasks fragile in neither. Pins are compared flattened, minus the
+ones that legitimately vary (`compareId`, timestamps, `freshness`, `concurrency` — concurrency is
+reported instead). A pin difference or an unofficial run makes the pair `valid: false` (exit 2):
+the number is still printed, it does not count.
+
+The transcript-level metrics of the registry, unchanged:
 
 | Metric | Derivable as | Data present? |
 |---|---|---|
-| **M1** calls-to-outcome | `toolCallCount` per probe | ✅ |
-| **M2** first-call success | first non-error call of each phase | ✅ (`error` per call) |
+| **M1** calls-to-outcome | `toolCallCount` per probe | ✅ item 3 |
+| **M2** first-call success | first non-error call of each phase | ⚠️ item 4 is the first call of the attempt, not of each phase |
 | **M3** payload signal ratio | `resultBytes` vs. bytes the agent actually referenced | ⚠️ numerator only — nothing measures what was *referenced* |
-| **ACE-v** context cost | tokens consumed by tool results | ⚠️ since v4, provider tokens per probe (`usage.loop`, §6.1); priming (the catalogue, paid every turn) is not yet separated from the per-task remainder |
+| **ACE-v** context cost | tokens consumed by tool results | ⚠️ item 9: provider totals per attempt; priming split out as an estimate from `server.catalogue.bytes` ÷ 4, now recorded at preflight — a lower bound, since that size is compact JSON and a client's serialisation is larger |
 | latency | wall clock per call | ⚠️ events only (`ms`), and it is the *step boundary*, so it includes the agent loop's own overhead and is not the server's latency |
 
-These map onto the metrics the registry already tracks, so a harness run should feed §2 of the
-registry rather than inventing a parallel scoreboard — but until this is built, transcribing a
-harness number into the registry is a manual act by a human, exactly as it was before the harness
-existed.
+A single-target `make mcp-test` run is still not summarised: `report.py` needs a comparison
+(exactly two targets). Transcribing a number into the registry stays a manual act (D6).
 
 ### 6.7 Redaction (D15)
 
@@ -947,10 +1062,9 @@ An LLM probe is not a deterministic test. Two runs of the same prompt can differ
    One run is the default (cheap, fast, enough to spot a hard regression). Raising it measures
    *variance* when a result looks suspicious: with `N > 1` the report shows `OKAY 2/3` instead of a
    boolean, and the per-attempt verdicts are all kept, not averaged away.
-   **NOT IMPLEMENTED.** There is no `REPEAT` flag; `run.json` always records `repeat: 1` and
-   `probe_started` always records `attempt: 1`. Consequence, stated plainly: today a single
-   surprising result cannot be distinguished from model variance except by re-running the probe by
-   hand and comparing two run directories. Variance is currently unmeasured, not small.
+   **Implemented 2026-10-14 (D43, ETP-5750 S2):** `--repeat N` on the CLI, one file per attempt,
+   harness-errored attempts replaced up to N per probe — see §6.1, run schema v5. The `OKAY 2/3`
+   aggregation belongs to the report (`report.py`), not to the runner.
 2. **Temperature 0** where the provider allows it; the model id, provider and `promptVersion` are
    pinned in the run header — an upgrade changes results and the report must make that visible.
    Implemented, and it has already earned its place: `promptVersion` went 1 → 4 in three days, so
@@ -1071,9 +1185,12 @@ in a changelog.
 | # | Decision | Date | Note |
 |---|---|---|---|
 | D1 | **The harness lives in the functional module** (`etendo_schema_forge`, this repo). | 2026-09-11 | Tentative (*"en principio"*). Puts it next to `docs/mcp-evaluation/`, which consumes its output. Accepted consequence: the thing under test (the Java MCP server) lives in the other repo, so a run pins a `.go` build id it does not own — hence `serverBuild` in the run header. |
-| D2 | **`REPEAT` defaults to `1`.** | 2026-09-11 | Non-determinism is real but not paid for on every run. §7. **Not implemented:** there is no way to raise it, so the default is currently the only value and variance is unmeasured. |
+| D2 | **`REPEAT` defaults to `1`.** | 2026-09-11 | Non-determinism is real but not paid for on every run. §7. Raisable since D43 (`--repeat N`); the default is unchanged. Even at `REPEAT=1` a harness-errored probe is now retried once (D43's replacement rule), so a write probe that crashed mid-loop can leave a **second agent-created record** on the tenant: teardown only removes what setup created, never what the agent wrote. |
 | D3 | **No enforced data-hygiene policy.** Writes are a per-probe decision by the suite author; the runner offers `{{marker}}` instead of a rule. | 2026-09-11 | §8 — the token is `{{marker}}` (`<runId>-<probeId>`) rather than the `{{runId}}` this row originally named; D34 needed per-probe uniqueness. Accepted consequence: the tenant accumulates records and nothing prevents it — the marker makes the sweep cheap, it does not perform it. |
 | D4 | **Probes are hand-written, grown incrementally.** The first one is deliberately simple in *what it asks for* (a sales order for the default customer, no lines) so that the first failure is unambiguous while the harness itself is still unproven. | 2026-09-11 | Simple in scope — **not** simple in phrasing; see D21. |
+| D43 | **`--repeat N` runs each probe N times, each attempt in its own MCP session, conversation and `{{marker}}`; every attempt is kept as `probes/<id>/attempt-<n>.json`, never averaged away.** A harness-errored attempt does not count and is replaced after the planned ones, at most N replacements per probe; a preflight auth failure is never replaced. | 2026-10-14 | ETP-5750 S2; plan `2026-10-14-mcp-tests-reproducible-comparison-plan.md` §5.1. Variance was unmeasured (§11 q4). Replacing harness errors keeps a transient provider fault from shrinking N, and the cap keeps a deterministically broken probe from looping. The `mcp-compare` default of 3 lands with S3. |
+| D47 | **The decision rule is code (`runner/decide.py`, `RULE_VERSION`) and its thresholds are data** (the suite's `decision:` block, copied into `compare.json`, over `DEFAULT_PARAMETERS`). Every summary records the version, the parameters and their sha. | 2026-10-14 | ETP-5750 S4; plan §5.6. A KR figure without the rule that produced it is unreadable later, and a rule tweak must be re-appliable to an old run (`make mcp-report`) and visible in the diff. A declared `ruleVersion` the code does not implement is refused, never silently re-interpreted. |
+| D48 | **Metrics come only from `compare.json`, `run.json` and the probe files; `events.ndjson` is never read by the report.** | 2026-10-14 | ETP-5750 S4. Restates §6.5 rule 1 as a property of the report and guards it with a test that deletes the event files and asserts a byte-identical summary. |
 | D42 | **An empty model turn is asked again, not read as the end of the probe.** A turn with no text and no tool call is retried from the same state, the empty message dropped, at most `MAX_EMPTY_COMPLETIONS` (3) times, then the probe is a provider failure (`harnessError.kind: provider`, `EmptyCompletion`). The count is recorded as `emptyCompletions`. | 2026-10-01 | Run `20261001T1912-local-45e9`: three probes ended with 0 tool calls and a verdict saying *"no tools were provided"* while 28 tools were bound — the Gemini route of the gateway answered the first turn with an empty `stop` 4 times out of 5 in a direct reproduction. LangGraph reads that as *the agent is done*, so a provider fault was being reported as a product result. Not a change to the instrument: an empty turn carries no decision, so asking again is the call that never answered, not a second chance at one. A resumed stream gets only the remaining step budget. |
 | D41 | **Deterministic `setup:` / `teardown:` per probe** — runner-made MCP calls around the agent, with `saveAs` / `{{steps.<name>.<path>}}` to pass ids forward and `forEach` for the one loop teardown needs. Teardown always runs (`finally`); a failed setup makes the probe not measured. | 2026-10-01 | **Relaxes D3 for the suites that opt in, does not reverse it**: the runner still imposes no hygiene policy, it only lets an author make a probe self-contained (its own fresh record, created before the agent) and reversible (undone after it). Forced by treasury (ETP-5558): a collection probe needs a completed, unpaid invoice, and either reusing the tenant's few pending ones made the suite non-replicable, or asking the agent to create one put the fixture inside the measurement. Deliberately not a mini-language: no conditionals, no retries, one loop. Fixture calls stay out of `toolCalls[]`, so a fixture never inflates the agent's metrics (§6.6). |
 | D40 | **`plannedApproach` is RECALL, not the plan, and must never be read as ground truth.** Kept anyway. | 2026-09-14 | It is asked *after* the task has ended, so the agent already knows how things turned out and will reconstruct something more coherent than what it actually had — a polished story, not a record. Accepted deliberately, for one reason: **the objective tool-call sequence is recorded alongside it** (§6.1), so the contrast between the claimed plan and the executed one is informative *even when the claim is polished* — a plan that matches the transcript and a plan that visibly does not are both findings. `howKnown` exists to make the contrast sharper by forcing a named source ("I guessed" is explicitly a valid and valuable answer; "from the tools" is of no use). The honest alternative — asking for the plan *before* the task — was rejected as a bigger change to the instrument than the signal justifies: it would put a planning step into the loop the naive agent (D20) is supposed to run without. The UI says so next to the value, not only in the schema. |
@@ -1142,12 +1259,12 @@ classified). What the first three days of real runs opened instead:
 | 3 | Runner on LangChain Python, provider from config, agent library confined to `runner/agent.py` | ✅ containment holds; ⚠️ one client wired, see §5 |
 | 4 | `{{runId}}` / `{{probeId}}` / `{{timestamp}}` interpolation | ✅ plus `{{marker}}` (§8) |
 | 5 | `run.json`, live `events.ndjson`, per-probe verdict + transcript | ✅ — and transcripts now carry results (§6.1) |
-| 5b | `summary.md` | ❌ not built (§6.6) |
+| 5b | `summary.md` | ✅ for comparisons — `summary.json` + `summary.md`, `make mcp-report` / `mcp-stability` (§6.6, D47, D48); a single-target run is not summarised |
 | 6 | `harnessError` separation | ✅ axis; ⚠️ only three kinds classified (§6.4) |
 | 6b | Credential redaction | ❌ **not built** (§6.7) |
 | 6c | Naive versioned system prompt (D20) | ✅ at promptVersion 4 |
 | 7 | `bearer` + `oauth` (auth code + PKCE), token cache, silent refresh | ✅ · `oauth_client_credentials` ❌ by choice |
-| 8 | `make mcp-test` / `mcp-login` / `mcp-ui` | ✅ · `MODE` and `REPEAT` ❌ (§5, §7) |
+| 8 | `make mcp-test` / `mcp-login` / `mcp-ui` | ✅ · `REPEAT=` (`--repeat`, D43) · `MODE` ❌ (§5, §7) |
 | — | The Streamlit UI (§9) | ✅ all four v1 views |
 | — | `expectEffect` post-condition (D34) | ✅ — added after the design, not in the original scope |
 | — | `findings/` (D35) | ✅ eight findings written |
@@ -1159,6 +1276,8 @@ comparison, CI gating, Holded comparison, auto-updating the IMP-* registry, glob
 
 **The honest one-line summary:** the measuring half is built and has already produced findings; the
 *reporting* half (`report.py`, metrics, redaction, repeat) is not, and neither is any test.
+*(2026-10-14: `report.py`, the decision rule and REPEAT now exist for comparisons — §6.6, D43,
+D47, D48; redaction still does not.)*
 
 ---
 
