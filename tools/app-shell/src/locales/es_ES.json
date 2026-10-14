@@ -22774,6 +22774,7 @@
     "accountTreeBalance": "Saldo",
     "accountTreeNoAccounts": "No hay cuentas para mostrar",
     "accountTreeReadOnlyPlaceholder": "Subcuenta de relleno — no editable",
+    "accountTreeOpenAccount": "Abrir cuenta {name}",
     "allAccountTypes": "Todos los tipos de cuenta",
     "expandAll": "Expandir todo",
     "collapseAll": "Contraer todo",

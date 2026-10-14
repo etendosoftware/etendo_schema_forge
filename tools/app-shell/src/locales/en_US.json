@@ -22536,6 +22536,7 @@
     "accountTreeBalance": "Balance",
     "accountTreeNoAccounts": "No accounts to display",
     "accountTreeReadOnlyPlaceholder": "Placeholder subaccount — not editable",
+    "accountTreeOpenAccount": "Open account {name}",
     "allAccountTypes": "All account types",
     "expandAll": "Expand all",
     "collapseAll": "Collapse all",
