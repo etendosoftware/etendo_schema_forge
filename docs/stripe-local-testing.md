@@ -1098,32 +1098,39 @@ SF-STRIPE-LOCAL-22, deferred.) Background: `com.etendoerp.go`
    - On C: **no** `ETGO_AssociatedDemoClientId` and **no** `ETGO_DemoDataTransferSource`.
    - P's row stays closed and `canceled` (§1 query), and NEO still answers P with 402.
    - C has an open row (§1 query: `end_date` null, `status = active`) when
-     `ETGO_SubscriptionModel` is ON, or the `ETGO_TenantPlan = PRODUCTIVE` marker when it is OFF
+     `ETGO_SubscriptionModel` is ON, or the `ETGO_TenantPlan = productive` marker when it is OFF
      (§1 "Where the outcome is stored").
    - D is untouched: its `ETGO_%` preferences are the same as before the purchase.
 5. **API negatives.** Send each from a session in the named environment (copy its bearer token
    from the browser's DevTools, any `/sws/go` request), with a `clientName` no client and no open
-   purchase uses yet:
+   purchase uses yet, and a `planKey` from `GET /sws/go/plans` as in the §5 example — without
+   one, an environment with a priced plan answers `400 PLAN_NOT_AVAILABLE` instead (§1, §8):
 
    ```bash
    # from a D session: P is not an acceptable source -> 400 INVALID_DEMO_SELECTION
    curl -i -X POST "$ETENDO_BASE_URL/sws/go/billing/purchases" \
      -H "Authorization: Bearer $D_SESSION_TOKEN" -H 'Content-Type: application/json' \
-     -d '{"clientName":"SF27 negative A","demoClientId":"<P>"}'
+     -d '{"clientName":"SF27 negative A","demoClientId":"<P>",
+          "planKey":"<planKey from GET /sws/go/plans>"}'
 
    # from a P session: a productive origin ignores the source -> 201, no source recorded
    curl -i -X POST "$ETENDO_BASE_URL/sws/go/billing/purchases" \
      -H "Authorization: Bearer $P_SESSION_TOKEN" -H 'Content-Type: application/json' \
      -d '{"clientName":"SF27 negative B","demoClientId":"<D>",
-          "dataTransfer":{"products":true,"contacts":true}}'
+          "dataTransfer":{"products":true,"contacts":true},
+          "planKey":"<planKey from GET /sws/go/plans>"}'
    ```
 
-   For the 201, the purchase row for `SF27 negative B` has `demo_client_id` NULL and
-   `transfer_products` / `transfer_contacts` = `N`. It is an unpaid purchase; leave it, or abandon
-   the hosted Checkout page.
+   Negative A is refused while the source is resolved, before the plan is read, so its answer
+   does not depend on the plan catalog. For the 201, the purchase row for `SF27 negative B` has
+   `demo_client_id` NULL and `transfer_products` / `transfer_contacts` = `N`. It is an unpaid
+   purchase; leave it, or abandon the hosted Checkout page.
 6. **Repeat step 5 in two more configurations**, with the same results:
-   - `ETGO_SubscriptionModel` **OFF**, with a rowless productive tenant that has only the
-     `ETGO_TenantPlan` marker in the place of P (bought while the switch was OFF);
+   - `ETGO_SubscriptionModel` **OFF**, with a productive tenant bought while the switch was OFF in
+     the place of P: it has no subscription row, only the preference markers that purchase wrote
+     (`ETGO_TenantPlan = productive`, `ETGO_EnvironmentType = PRODUCTIVE`,
+     `ETGO_SubscriptionStatus = CURRENT`). It is a paying productive origin, not a canceled one, so
+     this run tests the productive-origin rule, not the canceled shape;
    - `etendo.go.flags.environment-access-enforcement-off=true` (Tomcat restarted, as in
      SF-STRIPE-LOCAL-25). The kill switch changes access, never source eligibility.
 
