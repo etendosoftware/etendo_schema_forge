@@ -58,8 +58,9 @@ pending.
 Datadog flag environments map one to one to `VITE_APP_ENV`. Only **Experimental**
 and **Production** are enabled in Datadog today; a build whose environment is
 disabled there (staging, development) resolves every flag to its code default.
-Targeting rules match the lowercase `email` context attribute and bucket on
-`targetingKey`; Datadog requires every context attribute to be a flat primitive,
+Targeting rules match the `email` context attribute case-sensitively against
+lowercase values, so `buildEvaluationContext` sends it trimmed and lowercased;
+they bucket on `targetingKey`, which is sent unchanged; Datadog requires every context attribute to be a flat primitive,
 which `buildEvaluationContext` guarantees.
 
 **One RUM exposure source.** The SDK ships three telemetry paths. Two stay on —

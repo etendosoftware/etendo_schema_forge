@@ -104,7 +104,9 @@ export function readSessionContext(storage = globalThis.localStorage) {
  * `accountId` is the ETGO_ACCOUNT the backend also targets on, so it takes the
  * targeting key when present; `username` (the environment's ERP admin name)
  * only stands in until the session exposes an account. `email` is the
- * explicit account attribute remote targeting rules can read.
+ * explicit account attribute remote targeting rules can read; it is trimmed and
+ * lowercased because Datadog's ONE_OF/MATCHES rules compare case-sensitively
+ * against lowercase values (ETP-5751). The targeting key is left as-is.
  *
  * `account_id` is the AD_Client — a different identity that predates this and
  * is what the observability layer groups by. Do not conflate it with
@@ -119,8 +121,9 @@ export function buildEvaluationContext({ username, clientId, accountId, accountE
   if (accountId) {
     context.accountId = accountId;
   }
-  if (accountEmail) {
-    context.email = accountEmail;
+  const email = typeof accountEmail === 'string' ? accountEmail.trim().toLowerCase() : '';
+  if (email) {
+    context.email = email;
   }
   if (clientId) {
     context.account_id = clientId;
