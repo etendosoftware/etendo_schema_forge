@@ -115,7 +115,7 @@
         "field": "posted",
         "trueKey": "postedStatus",
         "falseKey": "notPostedStatus",
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
       }
     ]
   },
@@ -228,6 +228,7 @@
           "reason": "CurrencyRate — derived from currency/period, not user-edited."
         },
         "posted": {
+          "visibleWhenCapability": "showAccountingFields",
           "visibility": "readOnly",
           "reason": "Posting status — surfaced as a readOnly status pill (Sin contabilizar/Contabilizado). Posting itself is handled via the Post/Unpost menuActions (DocumentPostingService).",
           "form": false,

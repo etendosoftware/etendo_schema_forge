@@ -394,3 +394,11 @@ the same `FieldItem`) and is **not** changed here.
 payment whose customer or deposit account has a long name. The date shows in full, for example
 `23/09/2026`, and the long values end in "…". Hovering a cut value shows the full text, and hovering
 a value that fits shows no tooltip.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

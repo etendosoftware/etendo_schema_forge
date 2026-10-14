@@ -39,7 +39,12 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
+// ETP-5684 — posting entries are gated on capabilities.showAccountingFields (fail closed).
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 import RowQuickActions from '../RowQuickActions.jsx';
+import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
 
 const DRAFT_ROW = { id: '1', documentStatus: 'DR' };
 const COMPLETED_ROW = { id: '2', documentStatus: 'CO' };
@@ -592,5 +597,40 @@ describe('RowQuickActions', () => {
       expect(mockNeoExecute).not.toHaveBeenCalledWith('9', 'unpost');
       expect(mockNeoExecute).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// ETP-5684 — the row kebab drops Contabilizar / Descontabilizar for a role without
+// "Show Accounting Fields", whether the descriptor came from the shared builder or was
+// hand-rolled in a window's index.jsx: the gate reads the generic `neoAction`.
+describe('RowQuickActions — accounting capability gate (ETP-5684)', () => {
+  const menuActions = [
+    { key: 'complete', label: 'Complete', documentAction: 'CO' },
+    { key: 'post', label: 'Post', neoAction: 'post' },
+    { key: 'unpost', label: 'Unpost', neoAction: 'unpost' },
+  ];
+
+  it('lists post and unpost when the role can see accounting', async () => {
+    const user = userEvent.setup();
+    setup({ menuActions });
+    await user.click(screen.getByTestId('row-quick-action-more'));
+    expect(screen.getByText('Post')).toBeTruthy();
+    expect(screen.getByText('Unpost')).toBeTruthy();
+  });
+
+  it('drops post and unpost and keeps the rest when the capability is off', async () => {
+    const user = userEvent.setup();
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    setup({ menuActions });
+    await user.click(screen.getByTestId('row-quick-action-more'));
+    expect(screen.getByText('Complete')).toBeTruthy();
+    expect(screen.queryByText('Post')).toBeNull();
+    expect(screen.queryByText('Unpost')).toBeNull();
+  });
+
+  it('renders no kebab when posting was the only menu action', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    setup({ menuActions: [{ key: 'post', label: 'Post', neoAction: 'post' }] });
+    expect(screen.queryByTestId('row-quick-action-more')).toBeNull();
   });
 });

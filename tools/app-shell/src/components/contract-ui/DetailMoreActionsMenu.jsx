@@ -5,6 +5,8 @@ import { translateBackendError } from '@/lib/backendErrors.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
 import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { filterPostingActions } from '@/lib/capabilityVisibility.js';
 
 /**
  * Kebab ("more actions") menu of the detail toolbar.
@@ -31,6 +33,7 @@ export function DetailMoreActionsMenu({
   windowReadOnly,
 }) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const capabilities = useCapabilitiesSafe();
   const moreMenuRef = useRef(null);
   // Probe to detect whether customMenuContent actually renders anything for the
   // current record. A custom kebab component may return null based on status
@@ -79,9 +82,10 @@ export function DetailMoreActionsMenu({
   // same "!windowReadOnly && ..." pattern DetailView.jsx already applies to
   // renderSaveActions/processes/detailProcesses (see ETP-5116 sibling commit).
   const normalizedActions = Array.isArray(resolvedActions) ? resolvedActions : [];
+  // ETP-5684: a role without "Show Accounting Fields" sees no post/unpost action.
   const visibleActions = windowReadOnly
     ? []
-    : normalizedActions.filter(a => a.visible !== false);
+    : filterPostingActions(normalizedActions, capabilities).filter(a => a.visible !== false);
   // Every existing customMenuContent implementation (GoodsShipmentMoreMenu,
   // InventoryMenuContent, InternalConsumptionActions) fires a write action
   // (post/void/update quantities) on click, so it must be gated the same way

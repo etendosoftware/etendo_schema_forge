@@ -170,3 +170,17 @@ describe('getContractPanelFields', () => {
     expect(getContractPanelFields('nope')).toEqual([]);
   });
 });
+
+// ETP-5684 — the posting status of a reconciliation is an accounting field: the contract
+// carries the capability key from decisions.json so the hand-rolled grid can gate it.
+describe('getContractGridColumns — visibleWhenCapability (ETP-5684)', () => {
+  it('forwards the capability key of the reconciliations posted column', () => {
+    const posted = getContractGridColumns('reconciliations').find((c) => c.name === 'posted');
+    expect(posted.visibleWhenCapability).toBe('showAccountingFields');
+  });
+
+  it('leaves ungated columns without a key', () => {
+    const documentNo = getContractGridColumns('reconciliations').find((c) => c.name === 'documentNo');
+    expect(documentNo.visibleWhenCapability).toBeUndefined();
+  });
+});

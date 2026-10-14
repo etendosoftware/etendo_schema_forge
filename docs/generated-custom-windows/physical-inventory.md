@@ -283,3 +283,12 @@ no-id/no-data cases.
   `decisions.json` → `readOnly: true` in `InventoryLineTable.jsx`, so `InlineLinesPanel` never renders an input.
 - **Kebab on a freshly created record** (`DetailMoreActionsMenu.jsx`): the hidden probe's verdict is now keyed
   by record id, so the `false` measured on `/new` no longer sticks after the first save.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped). The custom list columns in `windows/custom/physical-inventory/index.jsx` (`COLUMNS`) carry the same gate.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
