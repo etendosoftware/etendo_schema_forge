@@ -1,6 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
 import { describe, it, expect } from 'vitest';
-import { getLayout303, applyPatch, SUPPORTED_YEARS, SELECTABLE_YEARS } from '../fm303Layouts.js';
+import { getLayout303, applyPatch, SUPPORTED_YEARS, SELECTABLE_YEARS, isOptionDisabled, resolveOptionDisabledReasonKey } from '../fm303Layouts.js';
 import enUS from '@/locales/en_US.json';
 import esES from '@/locales/es_ES.json';
 
@@ -701,25 +701,36 @@ describe('getLayout303 — datos_bancarios section visibility (EDID065 + rectifi
   });
 });
 
-// ── ETP-5597 pt.1 — tipo_declaracion options locked by a positive box 69 ─────
+// ── ETP-5597 pt.1 — tipo_declaracion options locked by the result boxes (71 / 69+71) ─────
 
-describe('getLayout303 — tipo_declaracion negative-result options (ETP-5597)', () => {
+describe('getLayout303 — tipo_declaracion option restrictions (ETP-5597)', () => {
   const tipo = getLayout303(2026, 'T2').sections
     .flatMap(s => s.fields ?? [])
     .find(f => f.id === 'tipo_declaracion');
   const byValue = Object.fromEntries(tipo.options.map(o => [o.value, o]));
+  const POSITIVE = { _tipoDeclRestriction: 'positive_result' };
+  const ZERO_ONLY = { _tipoDeclRestriction: 'zero_only' };
 
-  it.each(['C', 'D', 'V', 'X'])('option %s is disabled while _box69Positive, with a translated reason', (value) => {
-    expect(byValue[value].disabledWhen).toEqual({ field: '_box69Positive', equals: true });
-    expect(byValue[value].disabledReasonKey).toBe('fm.ident.decl.disabled_positive_result');
+  it.each(['C', 'D', 'V', 'X'])('option %s is disabled under both rules, with the matching reason', (value) => {
+    expect(isOptionDisabled(byValue[value], POSITIVE)).toBe(true);
+    expect(isOptionDisabled(byValue[value], ZERO_ONLY)).toBe(true);
+    expect(isOptionDisabled(byValue[value], { _tipoDeclRestriction: null })).toBe(false);
+    expect(resolveOptionDisabledReasonKey(byValue[value], POSITIVE)).toBe('fm.ident.decl.disabled_positive_result');
+    expect(resolveOptionDisabledReasonKey(byValue[value], ZERO_ONLY)).toBe('fm.ident.decl.disabled_zero_only');
   });
 
-  it.each(['I', 'U', 'N'])('option %s is never disabled', (value) => {
-    expect(byValue[value].disabledWhen).toBeUndefined();
+  it.each(['I', 'U'])('option %s is disabled only under the zero-only rule', (value) => {
+    expect(isOptionDisabled(byValue[value], POSITIVE)).toBe(false);
+    expect(isOptionDisabled(byValue[value], ZERO_ONLY)).toBe(true);
+    expect(resolveOptionDisabledReasonKey(byValue[value], ZERO_ONLY)).toBe('fm.ident.decl.disabled_zero_only');
+  });
+
+  it('option N is never disabled', () => {
+    expect(byValue.N.disabledWhen).toBeUndefined();
   });
 
   it('the disabled-reason and Cuenta bancaria keys exist in both locales', () => {
-    for (const key of ['fm.ident.decl.disabled_positive_result', 'fm.ident.bank.account']) {
+    for (const key of ['fm.ident.decl.disabled_positive_result', 'fm.ident.decl.disabled_zero_only', 'fm.ident.bank.account']) {
       expect(enUS.genericLabels[key], key).toBeTruthy();
       expect(esES.genericLabels[key], key).toBeTruthy();
     }

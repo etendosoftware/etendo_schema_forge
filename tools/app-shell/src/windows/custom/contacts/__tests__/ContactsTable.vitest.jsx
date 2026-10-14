@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsTable.jsx
+// @covers tools/app-shell/src/windows/custom/contacts/contactsWebUrl.js
 // --- Mocks (before imports) ---
 
 vi.mock('@/i18n', () => ({
@@ -7,8 +9,10 @@ vi.mock('@/i18n', () => ({
 
 // DataTable is a thin stub, but exposes a button that fires `onDeleteRow` so the
 // confirm-delete dialog + toast flow (ETP-5026) can be exercised without a real grid.
+// It also keeps its last props, so a test can render a column's own cell renderer.
+let dataTableProps = null;
 vi.mock('@/components/contract-ui', () => ({
-  DataTable: (props) => (
+  DataTable: (props) => (dataTableProps = props) && (
     <div
       data-testid="data-table"
       data-editing-row-id={props.editingRowId ?? ''}
@@ -40,7 +44,7 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('@/components/ui/tag', () => ({
-  Tag: ({ label }) => <span data-testid="tag">{label}</span>,
+  Tag: ({ label, children }) => <span data-testid="tag">{label}{children}</span>,
 }));
 
 vi.mock('@/components/ui/button.jsx', () => ({
@@ -54,6 +58,10 @@ vi.mock('@/components/ui/dialog.jsx', () => ({
   DialogTitle: ({ children }) => <div>{children}</div>,
   DialogDescription: ({ children }) => <div>{children}</div>,
   DialogFooter: ({ children }) => <div data-testid="dialog-footer">{children}</div>,
+}));
+
+vi.mock('../ContactsEmptyState.jsx', () => ({
+  default: ({ context }) => <div data-testid="contacts-empty-state-stub" data-has-create={String(Boolean(context?.onCreate))} />,
 }));
 
 vi.mock('@/lib/apiError', () => ({
@@ -181,5 +189,53 @@ describe('ContactsTable', () => {
     render(<ContactsTable {...defaultProps} />);
     const hidden = JSON.parse(screen.getByTestId('data-table').getAttribute('data-hidden-columns'));
     expect(hidden).toContain('__contactType');
+  });
+
+  describe('website column (link tag)', () => {
+    function renderWebsiteCell(value, onRowClick = vi.fn()) {
+      render(<ContactsTable {...defaultProps} />);
+      const column = dataTableProps.columns.find((c) => c.key === 'etgoWeb');
+      const cell = column.render({ id: 'bp-1', etgoWeb: value });
+      // The row's own click handler, standing in for DataTable's navigate-to-record.
+      render(<div data-testid="row" onClick={onRowClick}>{cell}</div>);
+      return onRowClick;
+    }
+
+    it.each([
+      // [stored value, label (no scheme), href]
+      ['acme.example', 'acme.example', 'https://acme.example'],
+      ['https://acme.example/es', 'acme.example/es', 'https://acme.example/es'],
+      ['  HTTP://Acme.example  ', 'Acme.example', 'https://Acme.example'],
+      // A hostile value can only ever become an https navigation, never a javascript: link.
+      ['javascript:x', 'javascript:x', 'https://javascript:x'],
+    ])('%s renders as a new-tab link labelled %s to %s', (value, label, href) => {
+      renderWebsiteCell(value);
+      const link = screen.getByTestId('ContactsTable__websiteLink');
+      expect(link).toHaveTextContent(label);
+      expect(link).toHaveAttribute('title', label);
+      expect(link).toHaveAttribute('href', href);
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    });
+
+    it('does not let a click on the link reach the row (no navigation to the record)', () => {
+      const onRowClick = renderWebsiteCell('acme.example');
+      fireEvent.click(screen.getByTestId('ContactsTable__websiteLink'));
+      expect(onRowClick).not.toHaveBeenCalled();
+    });
+
+    it.each([[''], ['   '], [null]])('renders an empty value (%j) as a plain cell, not a link', (value) => {
+      renderWebsiteCell(value);
+      expect(screen.queryByTestId('ContactsTable__websiteLink')).toBeNull();
+      expect(screen.getByTestId('row').querySelector('a')).toBeNull();
+    });
+  });
+
+  describe('empty list (emptyListContext)', () => {
+    it('renders ContactsEmptyState instead of the grid, handing it the context', () => {
+      render(<ContactsTable {...defaultProps} emptyListContext={{ onCreate: vi.fn() }} />);
+      expect(screen.getByTestId('contacts-empty-state-stub')).toHaveAttribute('data-has-create', 'true');
+      expect(screen.queryByTestId('data-table')).toBeNull();
+    });
   });
 });

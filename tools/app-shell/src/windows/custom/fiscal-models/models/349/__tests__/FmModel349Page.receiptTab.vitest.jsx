@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 // Vitest tests for the "Justificante" tab (AttachmentsTab bound to
 // ETGO_Fiscal_Decl) and the handlePresent acuse-de-recibo upload wiring in
 // FmModel349Page.jsx — ported from the equivalent Modelo 303 feature (see
@@ -18,14 +19,16 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
-vi.mock('../../../fiscalModelsUtils.js', () => ({
+// RECEIPT_ATTACHMENT_CONFIG is the REAL constant (ETP-5584 P13): the page passes it to the
+// Justificante tab and PresentModal derives its upload label/accept/type check from it.
+vi.mock('../../../fiscalModelsUtils.js', async () => ({
+  RECEIPT_ATTACHMENT_CONFIG: (await vi.importActual('../../../fiscalModelsUtils.js')).RECEIPT_ATTACHMENT_CONFIG,
   formatAmount: (n) => (n == null ? '—' : String(n)),
   compute349Operators: vi.fn().mockResolvedValue(null),
   generate349File: vi.fn().mockResolvedValue(false),
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
-  MoreOptionsMenu: () => null,
   KpiWidget: () => null,
   Tabs: ({ tabs, active, onSelect }) => React.createElement(
     'div',
@@ -43,6 +46,8 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('lucide-react', () => ({
+  // ETP-5584 — the detail status chip shows DocumentStatusPill's Check icon for success tones.
+  Check: () => null,
   ArrowLeft: () => null, Save: () => null,
   Download: () => null, CircleCheck: () => null, Search: () => null, Loader2: () => null,
   Globe: () => null, MoreVertical: () => null, ChevronDown: () => null, Users: () => null,
@@ -89,6 +94,10 @@ vi.mock('@/components/attachments', () => ({
     'data-table-name': props.tableName,
     'data-record-id': props.recordId,
     'data-mime-types': JSON.stringify(props.config?.allowedMimeTypes ?? []),
+    // Stringified from the prop as actually received — `String(undefined)` is
+    // 'undefined', so a dropped `readOnly` fails the assertions below instead
+    // of silently coercing to 'false'.
+    'data-read-only': String(props.readOnly),
   }, 'attachments-tab'),
   useAttachments: (...args) => useAttachmentsMock(...args),
 }));
@@ -164,6 +173,40 @@ describe('FmModel349Page — "Justificante" receipt tab', () => {
       tableName: 'ETGO_Fiscal_Decl',
       recordId: decl.id,
     }));
+  });
+});
+
+describe('FmModel349Page — "Justificante" tab is read-only unless the declaration is a draft (ETP-5432 pt.3)', () => {
+  function openReceiptTab() {
+    const tabs = screen.getAllByRole('tab');
+    fireEvent.click(tabs.find(t => t.textContent.includes('fm.tab.receipt')));
+    return screen.getByTestId('attachments-tab-mock');
+  }
+
+  // `submitted_ack` is not redundant with `submitted`: it pins that the rule is
+  // "anything that is not a draft", not an enumeration of one filed status — a
+  // future `readOnly={status === 'submitted'}` would pass the `submitted` row
+  // alone while leaving the justificante deletable on an acuse-de-recibo filing.
+  it.each([
+    ['draft',         'false'],
+    ['submitted',     'true'],
+    ['submitted_ack', 'true'],
+  ])('passes readOnly=%s -> %s to AttachmentsTab', (status, expected) => {
+    render(<FmModel349Page decl={makeDecl({ status })} {...defaultProps} />);
+    expect(openReceiptTab().getAttribute('data-read-only')).toBe(expected);
+  });
+
+  it('flips readOnly to true when the declaration is presented while the receipt tab is open', () => {
+    // Guards the live `status` state rather than the `decl.status` prop: a
+    // `readOnly={decl.status !== 'draft'}` regression would pass the table above
+    // and still leave the justificante deletable right after presenting.
+    render(<FmModel349Page decl={makeDecl({ status: 'draft' })} {...defaultProps} onStatusChange={vi.fn()} />);
+    expect(openReceiptTab().getAttribute('data-read-only')).toBe('false');
+
+    openPresentModal();
+    fireEvent.click(screen.getByTestId('present-confirm-submitted'));
+
+    expect(screen.getByTestId('attachments-tab-mock').getAttribute('data-read-only')).toBe('true');
   });
 });
 

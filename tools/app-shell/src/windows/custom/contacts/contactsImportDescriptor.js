@@ -16,6 +16,7 @@ import {
 } from '@/lib/taxIdValidation.js';
 import { registerExportHints } from '@/lib/importExportColumns.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
+import { stripUrlScheme } from './contactsWebUrl.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // `creditLimit` used to be listed here with no matching decisions.json column, so nothing
@@ -85,7 +86,7 @@ function pick(row, targets) {
   return body;
 }
 
-/**
+/*
  * ETP-5031 follow-up — `etgoWeb` is stored WITHOUT its scheme: the Contacts form's fixed
  * "https://" chip (decisions.json `inputPrefix`) means a manually-entered contact never has
  * one in the stored value, and BusinessPartnerHandler's server-side domain-shape check
@@ -95,10 +96,8 @@ function pick(row, targets) {
  * so the import must normalize it the same way the form's chip does, not assume the cell is
  * already bare. Reproduced live: an un-normalized cell 400'd the whole business partner
  * create, which is what silently dropped rows from ETP-4905's own Tomcat integration spec.
+ * `stripUrlScheme` lives in `./contactsWebUrl.js`, shared with the list's website cell.
  */
-function stripUrlScheme(value) {
-  return String(value ?? '').replace(/^https?:\/\//i, '');
-}
 
 // Mirrors useEntity.js's derivePersonName exactly (the known-working manual create flow).
 function derivePersonName(firstName, lastName) {

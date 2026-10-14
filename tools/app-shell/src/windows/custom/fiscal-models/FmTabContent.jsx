@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  TriangleAlert, OctagonAlert, CircleCheck, ChevronRight,
+  TriangleAlert, OctagonAlert, CircleCheck, ChevronRight, ReceiptText,
 } from 'lucide-react';
 import { EmptyState } from './FmCommon.jsx';
 import { formatAmount } from './fiscalModelsUtils.js';
@@ -20,7 +20,18 @@ function buildBoxIncidentMap(incidents) {
 // `showTaxColumns` (default true) renders the 303-only columns — Cuota, Total and
 // Casillas. Modelo 349 declares taxable bases per intra-community operator, so those
 // columns carry no meaning there and its caller passes `false` (ETP-5597).
-export function SourcesTab({ decl, t, showTaxColumns = true }) {
+//
+// `keyColumn` (optional, default none) opts a caller into an extra column right after "Tipo" (or
+// in its place, when `hiddenColumns` drops it):
+// `{ label: string, render: (row) => ReactNode }`. Modelo 349 uses it for the AEAT349 key of each
+// origin row (a mixed goods + services invoice arrives as one row per key, ETP-5597); 303 never
+// passes it, so its table is unchanged. Kept as a caller-supplied renderer so this component stays
+// model-agnostic.
+//
+// `hiddenColumns` (optional, default none) lists base columns a caller hides; only `'type'` is
+// supported today (349 hides it, its key column already tells a purchase from a sale).
+export function SourcesTab({ decl, t, showTaxColumns = true, keyColumn = null, hiddenColumns = [] }) {
+  const showType = !hiddenColumns.includes('type');
   const [onlyIncidents, setOnlyIncidents] = useState(false);
   const sources = decl.sources ?? [];
   const boxIncidentMap = buildBoxIncidentMap(decl.incidents?.items ?? []);
@@ -69,11 +80,12 @@ export function SourcesTab({ decl, t, showTaxColumns = true }) {
         </div>
       )}
       {sources.length === 0 ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {t('fm.sources.empty') ?? 'Sin facturas'}
-          </span>
-        </div>
+        // ETP-5584 (P11) — the window's one empty state (icon + title + text).
+        <EmptyState
+          icon={<ReceiptText size={28} strokeWidth={1.5} data-testid="ReceiptText__931756" />}
+          title={t('fm.sources.empty') ?? 'Sin facturas'}
+          sub={t('fm.sources.empty_sub')}
+          data-testid="fm-sources-empty" />
       ) : (
         <div className="fm-table-wrap">
           <table className="fm-dtable fm-dtable--plain">
@@ -82,7 +94,8 @@ export function SourcesTab({ decl, t, showTaxColumns = true }) {
                 <th>{t('fm.sources.col.date')}</th>
                 <th>{t('fm.sources.col.accountingDate')}</th>
                 <th>{t('fm.sources.col.ref')}</th>
-                <th>{t('fm.sources.col.type')}</th>
+                {showType && <th>{t('fm.sources.col.type')}</th>}
+                {keyColumn && <th>{keyColumn.label}</th>}
                 <th>{t('fm.sources.col.party')}</th>
                 <th className="num">{t('fm.sources.col.base')}</th>
                 {showTaxColumns && (
@@ -96,7 +109,7 @@ export function SourcesTab({ decl, t, showTaxColumns = true }) {
             </thead>
             <tbody>
               {visible.length === 0 && (
-                <tr><td colSpan={showTaxColumns ? 9 : 6} style={{ textAlign:'center', color:'hsl(var(--text-disabled))', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
+                <tr><td colSpan={(showTaxColumns ? 9 : 6) + (keyColumn ? 1 : 0) - (showType ? 0 : 1)} style={{ textAlign:'center', color:'hsl(var(--text-disabled))', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
               )}
               {visible.map((r) => {
                 const incs = rowIncidents(r);
@@ -118,7 +131,8 @@ export function SourcesTab({ decl, t, showTaxColumns = true }) {
                     <td className="strong">{fmtDate(r.date)}</td>
                     <td>{fmtDate(r.accountingDate)}</td>
                     <td>{r.ref}</td>
-                    <td>{typeLabel(r.type)}</td>
+                    {showType && <td>{typeLabel(r.type)}</td>}
+                    {keyColumn && <td>{keyColumn.render(r)}</td>}
                     <td>{r.party}</td>
                     <td className="num strong">{formatAmount(r.base)}</td>
                     {showTaxColumns && <td className="num">{r.vat != null ? formatAmount(r.vat) : '—'}</td>}
@@ -162,12 +176,13 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
   }, [blocking, warning]);
 
   if (blocking === 0 && warning === 0) {
+    // ETP-5584 (P11) — same empty state (icon + title + text) as every other tab.
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-          {t('fm.incidents.empty') ?? 'Sin incidencias'}
-        </span>
-      </div>
+      <EmptyState
+        icon={<CircleCheck size={28} strokeWidth={1.5} data-testid="CircleCheck__incidentsEmpty" />}
+        title={t('fm.incidents.empty') ?? 'Sin incidencias'}
+        sub={t('fm.incidents.empty_sub')}
+        data-testid="fm-incidents-empty" />
     );
   }
 

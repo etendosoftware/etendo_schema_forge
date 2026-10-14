@@ -1,3 +1,4 @@
+// @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -694,16 +695,14 @@ describe('PurchaseOrderActions', () => {
     });
   });
 
-  // ETP-4312: the modal must DERIVE the view label from each doc's type. Passing
-  // a hardcoded primary={ui('soViewInvoice')} would force "Ver factura" on a
-  // receipt-only result. The arrow now comes from the modal's SVG, not the label.
-  describe('ConfirmResultModal primary label (ETP-4312 regression)', () => {
-    it('does not force a hardcoded soViewInvoice primary label', () => {
-      assert.doesNotMatch(src, /primary=\{ui\('soViewInvoice'\)\}/);
-    });
-
-    it('does not pass any hardcoded primary view label to the modal', () => {
-      assert.doesNotMatch(src, /primary=\{ui\('(soViewInvoice|poViewInvoice|soViewShipment|poViewReceipt|sqViewOrder)'\)\}/);
+  // ETP-4312 / ETP-5674: ConfirmResultModal derives its title, banner and "Ver …" label
+  // from each doc's type. The caller hands it only `docs`; a title/primary/currency prop
+  // would be silently ignored (and was how "Ver factura" ended up on a receipt-only result).
+  describe('ConfirmResultModal receives only docs, never presentational props (ETP-4312)', () => {
+    it('passes no title, primary or currency prop to the modal', () => {
+      const element = src.match(/<ConfirmResultModal[\s\S]*?\/>/);
+      assert.ok(element, 'ConfirmResultModal element not found');
+      assert.doesNotMatch(element[0], /\b(title|primary|currency)=/);
     });
   });
 

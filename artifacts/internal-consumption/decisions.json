@@ -17,7 +17,6 @@
     "listViewOptions": {
       "hideStatusFilter": true
     },
-    "customListIcons": true,
     "noHeaderBorder": true,
     "menuActions": [
       {
@@ -151,7 +150,6 @@
           "searchable": true,
           "lookup": true,
           "lookupDrawer": "product-stock",
-          "lookupTitle": "Product + Warehouse",
           "onSelectMappings": [
             {
               "from": "_aux._LOC",

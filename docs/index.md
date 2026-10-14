@@ -35,6 +35,7 @@
 |------|-------------|
 | [sonarqube-access.md](sonarqube-access.md) | **SonarQube quick access**: bypass RTK with `rtk proxy`, project keys, useful endpoints, local scanner fallback |
 | [xml-regeneration-check.md](xml-regeneration-check.md) | **XML regeneration check**: compare original module XML vs export.database output without DB access |
+| [local-env-plugin.md](local-env-plugin.md) | **local-env plugin** (`local-env.d/plugins/etendo-go`): seeds the GO sample client into local-env's cached DB and starts one Etendo GO SPA per environment on its own `SPA_PORT`/`BFF_PORT`; how `make dev` / `make dev-local-core` honour those ports |
 | [ci-parity-install.md](ci-parity-install.md) | **CI parity install** (`make ci-parity`): bring the local Etendo checkout to the module/branch set CI installs, then clean DB + install — dry-run by default |
 
 ## Field & Pipeline Reference
@@ -44,6 +45,7 @@
 | [decisions-reference.md](decisions-reference.md) | **Complete reference for all `decisions.json` options**: visibility, draftMode, sections, selectors, rules, discard patterns |
 | [field-visibility-types.md](field-visibility-types.md) | Field visibility types (editable, readOnly, system, discarded): behavior across pipeline, NEO Headless, and frontend |
 | [ui-customization.md](ui-customization.md) | **UI customization guide**: all extension points driven by `decisions.json` (statusBar, listKpiCards, customComponents, menuActions, layoutType, etc.) with real examples and decision tree |
+| [vector-search-configuration.md](vector-search-configuration.md) | **Global search (vector search) how-to**: how the palette finds records (one semantic request, top 10, text/best/other grouping, score formula), the current window → target → indexed-columns table, and step-by-step procedures to add/edit an indexed column (incl. stored computed columns for values in other tables), add a window (`SEARCH_KEY` = `vectorSearch.target` = spec name), remove a column/window and clean its vectors; troubleshooting and checklist |
 | [ui-design-guidelines.md](ui-design-guidelines.md) | **UI design guidelines**: z-index scale, scrim opacity, overlay/drawer patterns, monetary amount formatting (`formatCurrency` vs `formatDashboardAmount`), column alignment |
 | [walkthrough-flows.md](walkthrough-flows.md) | **Guided walkthroughs**: the flow JSON contract (step shape, `advance` modes, route/target resolution), where the engine vs. the flow data lives, failure behaviour, and the checklist for adding a flow |
 | [list-filters.md](list-filters.md) | **List view filters reference**: subset filters, quick filters, document-type filters, advanced filter popover — composition rules, URL-param hooks, when to use which; plus the list toolbar layout (two rows + separator, ETP-5509) |

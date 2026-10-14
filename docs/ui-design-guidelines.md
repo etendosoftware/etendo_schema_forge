@@ -15,7 +15,7 @@ Use this scale for all z-index decisions. Do not use arbitrary values outside th
 | **Floating** | `z-20` | Small local floating elements | `UserAvatarButton` dropdown, inline tooltips |
 | **Sticky** | `z-30` | Sticky table headers, fixed section bars | Table headers in scroll containers |
 | **Navigation** | `z-40` | App-level navigation chrome | **Sidebar**, bottom navigation bar |
-| **Overlay** | `z-50` | Full-screen blocking overlays and modals | **Modals** (`NewPaymentModal`, `ReportViewerPage` modals), **Drawers** (`ProductSearchDrawer`, `ReportDrawer`) |
+| **Overlay** | `z-50` | Full-screen blocking overlays and modals | **Modals** (`NewPaymentModal`, `SearchPopup` — the shared report / account search popup), **Drawers** (`ProductSearchDrawer`, `ReportDrawer`) |
 | **Dropdown-in-modal** | `z-60` | Dropdowns or menus that appear inside a modal | `Select`, `Combobox`, popovers rendered inside a `z-50` modal |
 | **Global tools** | `z-70` | App-wide tools always accessible — one level above the max modal tier | `CommandPalette`, **Toasts (Sonner)**, `CopilotWidget` |
 
@@ -281,6 +281,106 @@ away from creating a junk one, and a permissions problem looks like an empty rec
 - Only **two** variants exist — `notFound` and `error` — on purpose. Do not add a "no permissions"
   screen: the backend does not distinguish it, so that screen would be a guess presented as a fact.
   `recordNotFoundBody` states both possibilities in one sentence instead.
+
+---
+
+## Attachments Upload Dropzone (ETP-5526)
+
+`components/attachments/UploadDropzone.jsx` is aligned to the Figma component **"Drag"**. Its
+three states and the value each one reads:
+
+| State | Border | Fill | Helper text |
+|---|---|---|---|
+| default | gray/200 `#D1D4DB` → `border-[hsl(var(--field-disabled-border))]` | none | gray/500 → `text-muted-foreground` |
+| hover | gray/400 `#828FA3` → `hover:border-[#828FA3]` | black/50 @ 5% → `hover:bg-[rgba(18,18,23,0.05)]` | unchanged — gray/500 |
+| disabled | `#D1D4DB` → `border-[hsl(var(--field-disabled-border))]` | `#F5F7F9` → `bg-[hsl(var(--field-hover))]` | gray/400 → `text-[#828FA3]` |
+
+Transition between default and hover: `transition-colors duration-200 ease-in`. Border: 1px
+dashed, radius 8px (`rounded-lg`). Container padding `py-5`, children `gap-2`.
+
+Three things worth keeping in mind before touching another dropzone:
+
+- **`border-border` is not gray/200.** The generic token resolves to `--border-subtle` `#E1E7EF`,
+  noticeably lighter than the design. `#D1D4DB` lives in the palette exactly once, as
+  `--field-disabled-border` (the design's `color/border/input/disabled`), and gray/200 is the same
+  colour — read that token. Do **not** redefine `--border` to reach it: it paints the whole app.
+- **`#F5F7F9` is `--field-hover`**, which `<Input>`, `<Select>` and `<DateField>` already reuse as
+  their disabled fill. Both tokens adapt in dark mode; `#828FA3` and the 5% black have no token and
+  stay literals, matching the core date/calendar chrome.
+- **A disabled state is a fill plus a border, not `opacity-50` on the container.** The blanket
+  opacity is what made the dropzone's helper text unreadable on completed documents.
+
+Only this dropzone has been migrated. The other dashed dropzones (`ImageField`, `OcrSidePanel`,
+`CertSection`, `ImportStatementModal`, …) still carry their own colours.
+
+### The "browse" control is a deliberate divergence from the design
+
+The helper sentence is `attachmentsOr` + a button labelled `attachmentsBrowse` + `attachmentsAllowedFormats`.
+**The Figma component paints all three the same flat `color/gray/500` (#6C6C89), with no underline
+and no link treatment.** We do not follow it: the button carries `text-primary underline
+underline-offset-2` — the app's existing inline-text-link convention (`ApiKeysPage`,
+`OAuth2ClientDialog`, `DocumentTotalsPanel`, `ReversedInvoicesPanel`), reusing the `--primary`
+palette token rather than a literal.
+
+This is an intentional product override, not drift. QA found the control invisible in practice: it
+is the only clickable thing in the sentence and, at the design's value, it is indistinguishable
+from the static text on either side. **Do not "restore" the flat grey** — if the override is ever
+reversed, it is a product decision, not a design-fidelity fix.
+
+When the zone is disabled the button drops both the accent colour and the underline and inherits
+the sentence's gray/400, so a dead control never reads as an active link. It still gets no
+`disabled:opacity-50`: the whole sentence is already uniformly dimmed, and a 50% veil on one word
+would single the button out.
+
+---
+
+## Form View at 1280x720 (ETP-5513)
+
+1280x720 is the minimum supported desktop viewport. The shared header form (`EntityForm`
+with `layout="horizontal"`) is built to work there next to a side panel:
+
+- **Columns follow the form's own width, not the viewport.** `formResponsiveLayout.js`
+  measures the grid with a `ResizeObserver` and sets `grid-template-columns` inline:
+  < 480 px → 2 columns, < 960 px → 3, otherwise 4. A header next to a 320 px side panel at
+  1280 px therefore gets 3 columns; a header without a side panel keeps 4. Do not reintroduce
+  `md:`/`lg:` column prefixes for this: they key off the viewport and ignore the rail and the
+  side panel. The static `grid-cols-2 md:grid-cols-4` classes remain only as the
+  pre-measurement (and jsdom) fallback. A field `span` wider than the measured grid is clamped
+  to it, so it never creates implicit columns.
+- **First 2 rows + "Mostrar más datos".** `DetailView` renders the principal header form with
+  `initialRows={2}`. When the fields overflow 2 rows, required fields (red asterisk) are moved
+  first and the rest are revealed by `FormShowMoreToggle` (`showMoreFormData` /
+  `showLessFormData`). Expanded and collapsed share the same order, so expanding only appends.
+  A required field that is read-only (the whole form read-only, `readOnly`, or locked by
+  `readOnlyLogic` on a completed document) shows no asterisk, so it is not moved: a read-only
+  form keeps its declared order. If a hidden field carries a validation error (e.g. an empty
+  required field on save), the block opens on its own and stays open after the error clears
+  (fixing the field clears its error, and the field must not vanish under the cursor); only the
+  user collapses it again; while an error holds the block open, the toggle is `aria-disabled`
+  and inert. **A required field in the collapsed block that the save gate is blocking on is
+  revealed too** — Save/Confirm are *disabled* while it is empty, so the user can never click
+  them and no error is ever set. Hovering, focusing or pressing the disabled button
+  (`GateTooltip` in `saveActions.jsx` → `saveGateAttempts.js` → `useInitialRowsCollapse`)
+  opens the block, latched like an error, when the button's `data-missing-required` names a
+  hidden field. It deliberately does not open on load or on "required field empty" alone: a
+  fresh New form always has empty required fields, which would defeat the 2-row collapse; the
+  user's own attempt to save is the signal, and it is also the moment the tooltip already
+  names the missing fields. All of the form's fields stay registered for validation whether
+  shown or not, and the `trailing` slot (e.g. tax's `TaxSifField`, a nested form) is always
+  rendered, collapsed or not, so its own fields stay registered too. The split is inert until
+  the grid is measured, so jsdom tests see every field.
+- **Side panels are a fixed 320 px**, never a percentage (`w-[320px]` in `sidebarClassName`, or
+  `sidePanelStyle={{ width: 320 }}`).
+- **Textareas are at least 2 rows tall.** `EntityForm` clamps `rows` to a minimum of 2, so a
+  `rows: 1` in `decisions.json` still renders 2 lines.
+- **Column-aligned rows inside tabs share one grid template**, not per-cell flex widths.
+  Flex boxes with the same basis shrink by different amounts when one row has an extra child (a
+  delete button), so columns drift. Use the same `grid-cols-[...]` template, made of
+  content-independent `minmax(<min>,<max>)` tracks, on the header, the labels and every row,
+  with the row-action slot reserved as its own track. Give value columns a readable minimum
+  and let the descriptive column give way. If the minimum still doesn't fit, rearrange the
+  layout from a measured width (`useElementWidth`), as `ProductPriceBar.jsx` does by moving its
+  Venta/Compra switch above the section.
 
 ## References
 

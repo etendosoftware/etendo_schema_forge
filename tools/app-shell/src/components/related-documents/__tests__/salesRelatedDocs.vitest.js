@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/related-documents/salesRelatedDocs.js
 // ETP-5527 — SALES_RELATED_DOCS is the single definition behind both the form's
 // "Related documents" section and the list preview card. These tests resolve each
 // definition against a fake backend (the helpers are mocked by their exact arguments,
@@ -11,6 +12,14 @@ vi.mock('../helpers.js', () => ({
   fetchByCriteria: vi.fn(async (spec, entity, field, value) => backend.byCriteria[`${spec}/${entity}?${field}=${value}`] ?? []),
   fetchById: vi.fn(async (spec, entity, id) => backend.byId[`${spec}/${entity}/${id}`] ?? null),
   fetchListInvoices: vi.fn(async (spec, entity, id) => backend.listInvoices[`${spec}/${entity}/${id}`] ?? []),
+  // Same contract as the real fetchOriginInvoicesOf (covered in helpers.relatedFetch.vitest.js):
+  // every originInvoices entry, else the legacy singular originInvoice, unreadable ones dropped.
+  fetchOriginInvoicesOf: vi.fn((spec) => async ({ record }) => {
+    const ids = Array.isArray(record?.originInvoices)
+      ? record.originInvoices.map(o => o?.id).filter(Boolean)
+      : [record?.originInvoice].filter(Boolean);
+    return ids.map(id => backend.byId[`${spec}/header/${id}`]).filter(Boolean);
+  }),
 }));
 
 import * as helpers from '../helpers.js';

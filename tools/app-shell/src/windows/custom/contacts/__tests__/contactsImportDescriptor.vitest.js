@@ -368,19 +368,9 @@ describe('contacts import descriptor', () => {
     });
   });
 
-  it('strips a bare http:// scheme from etgoWeb too', async () => {
-    const ops = await buildOperations({
-      name: 'Acme Iberia', etgoWeb: 'http://acme.example',
-    }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
-    assert.equal(ops[0].body.etgoWeb, 'acme.example');
-  });
-
-  it('leaves an already-bare etgoWeb value untouched', async () => {
-    const ops = await buildOperations({
-      name: 'Acme Iberia', etgoWeb: 'acme.example',
-    }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
-    assert.equal(ops[0].body.etgoWeb, 'acme.example');
-  });
+  // The scheme variants (http://, any case, already bare) are stripUrlScheme's own behavior,
+  // shared with the list's website cell since contactsWebUrl.js: they are covered once, in
+  // ContactsTable.vitest.jsx. The case above proves the import applies it.
 
   it('builds a location operation when an imported contact includes address data', async () => {
     const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-ES', name: 'Spain' });

@@ -157,12 +157,10 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   const confirmedPanel = confirmedDocs && hasConfirmedDoc
     ? createPortal(
         <ConfirmResultModal
-          title={confirmedTitle || ui('poConfirmedTitle')}
           docs={[
-            confirmedDocs?.receipt?.id && { type: 'entrada', num: confirmedDocs.receipt.documentNo, amount: confirmedDocs.receipt.amount, route: `/goods-receipt/${confirmedDocs.receipt.id}` },
-            confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
+            confirmedDocs?.receipt?.id && { type: 'entrada', num: confirmedDocs.receipt.documentNo, route: `/goods-receipt/${confirmedDocs.receipt.id}` },
+            confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
           ].filter(Boolean)}
-          currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
           onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); emitSurveyTrigger(); onRefresh?.(); }}
           data-testid="ConfirmResultModal__8b5323" />,
@@ -284,10 +282,9 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           type="button"
           data-testid="purchase-order-manage-docs"
           onClick={() => setShowActions(true)}
-          style={btnPrimaryStyle}
-          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
-          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
+          // ETP-5601 — record-toolbar primary button (Figma): 40px, 8px radius, text-sm/leading-6,
+          // #121217. Own classes rather than `btnPrimaryStyle`, which the modals below still use.
+          className="inline-flex items-center justify-center gap-2 h-10 px-3 rounded-lg bg-[#121217] text-white text-sm leading-6 font-medium hover:bg-[#121217]/90 transition-colors"
         >
           {buttonLabel}
         </button>

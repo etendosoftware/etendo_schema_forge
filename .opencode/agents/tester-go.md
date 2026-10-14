@@ -1,7 +1,7 @@
 ---
 description: "qa -- Tester (go). Writes and extends the JUnit tests of com.etendoerp.go — Mockito by default, OBBaseTest/WeldBaseTest only when real DAL or persistence behavior is under test — reuse-first, extending existing test classes before creating new ones."
 mode: subagent
-color: "green"
+color: "#22C55E"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/tester-go.md - Regenerate: make sync-agents

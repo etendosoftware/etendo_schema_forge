@@ -2,7 +2,6 @@ import { useMemo, useEffect } from 'react';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import { toast } from 'sonner';
 import InternalConsumptionTable from './InternalConsumptionTable';
 import InternalConsumptionForm from './InternalConsumptionForm';
@@ -58,7 +57,7 @@ const requiredHeaderFields = ['movementDate', 'name'];
 const addLineFields = {
   entry: [
     { key: 'lineNo', column: 'Line', type: 'number', label: 'Line No.', defaultValue: '@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM M_INTERNAL_CONSUMPTIONLINE WHERE M_INTERNAL_CONSUMPTION_ID=@M_INTERNAL_CONSUMPTION_ID@' },
-    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'product-stock', lookupTitle: 'Product + Warehouse', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["warehouse","warehouse$_identifier","storageBin"]}] },
+    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'product-stock', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["warehouse","warehouse$_identifier","storageBin"]}] },
     { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0, min: 1 },
     { key: 'storageBin', column: 'M_Locator_ID', type: 'search', required: true, label: 'Warehouse', reference: 'Locator', inputMode: 'search' },
   ],
@@ -238,8 +237,6 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
       dateFilterKey="movementDate"
       hidePrint
       hideLink
-      SortIconComponent={SortIcon}
-      RefreshIconComponent={RefreshIcon}
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
       {...props} window={effectiveWindow}

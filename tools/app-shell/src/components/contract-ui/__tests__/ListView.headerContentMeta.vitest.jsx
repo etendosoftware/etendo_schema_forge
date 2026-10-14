@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 /**
  * ListView — `meta` forwarded to a functional `headerContent` (ETP-4658 Fase 0).
  *
@@ -52,7 +53,8 @@ vi.mock('../ListFilterBar.jsx', () => ({ ListFilterBar: () => <div data-testid="
 import { noOpExtractQueryParamConditions } from './testUtils/gridQueryMock.js';
 
 vi.mock('@/lib/gridQuery', () => ({
-  buildAdvancedFilterCriteria: () => null,
+  // Any applied advanced filter yields a criteria array, so `advancedFilterPart` is set.
+  buildAdvancedFilterCriteria: (conditions) => (conditions ? [{ fieldName: 'name' }] : null),
   extractQueryParamConditions: noOpExtractQueryParamConditions,
 }));
 vi.mock('@/hooks/useWindowFilterPresets', () => ({
@@ -145,6 +147,18 @@ describe('ListView — headerContent({ meta })', () => {
   });
 });
 
+describe('ListView — headerContent wrapper collapse', () => {
+  it('marks the padded wrapper empty:hidden so a slot that renders null takes no space', () => {
+    const NullSlot = () => null;
+    render(<ListView {...defaultProps} headerContent={NullSlot} />);
+
+    const wrapper = document.querySelector('div.px-6.pt-4');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper).toBeEmptyDOMElement();
+    expect(wrapper).toHaveClass('empty:hidden');
+  });
+});
+
 describe('ListView — meta and the Table slot', () => {
   // `window.customComponents.headerTable` is generated as ListView's `Table` prop, NOT as
   // `headerContent`, so a custom headerTable that renders its own aggregate panel (the
@@ -198,5 +212,84 @@ describe('ListView — recordCount (hideRecordCount)', () => {
 
     const lastCall = useSetPageMeta.mock.calls.at(-1);
     expect(lastCall[0]).toMatchObject({ recordCount: undefined });
+  });
+});
+
+describe('ListView — emptyListContext (the window has no records at all)', () => {
+  const LOADED_EMPTY = { items: [], meta: { status: 0, startRow: 0, totalRows: 0 }, loading: false };
+  const IMPORT = { enabled: true, spec: 'contacts', fields: [], formats: ['csv', 'xlsx'] };
+
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it('never reaches the Table while the first page is still loading, so no empty state can flash', () => {
+    hookState = { ...LOADED_EMPTY, loading: true };
+
+    render(<ListView {...defaultProps} />);
+
+    expect(screen.queryByTestId('mock-table')).toBeNull();
+  });
+
+  it.each([
+    ['a refresh is in flight over existing rows', { hookState: { ...LOADED_EMPTY, loading: true, items: [{ id: 'bp-1' }] } }],
+    ['the fetch returned rows', { hookState: { ...LOADED_EMPTY, items: [{ id: 'bp-1' }] } }],
+    ['no successful response yet (meta == null)', { hookState: { ...LOADED_EMPTY, meta: null } }],
+    ['a column filter / the search box narrowed it', { props: { initialColumnFilters: { name: { value: 'zzz' } } } }],
+    ['the advanced filter narrowed it', { props: { initialAdvancedFilter: { conditions: [{ field: 'name' }] } } }],
+    ['the active subset carries a server-side filter', { props: { subsetFilters: [{ label: 'Customers', filter: 'customer=true' }] } }],
+    ['an active quick filter carries a server-side filter', {
+      props: { quickFilters: [{ label: 'Active', filter: 'active=true' }], initialQuickFilterIndex: 0 },
+    }],
+  ])('is null when %s', (_label, { hookState: state = LOADED_EMPTY, props = {} }) => {
+    hookState = state;
+
+    render(<ListView {...defaultProps} {...props} />);
+
+    expect(tableProps.emptyListContext).toBeNull();
+  });
+
+  it('is set when only a client-side rowFilter subset is active (it never narrows the fetched rows)', () => {
+    hookState = LOADED_EMPTY;
+
+    render(<ListView {...defaultProps} subsetFilters={[{ label: 'Customers', rowFilter: () => false }]} />);
+
+    expect(tableProps.emptyListContext).not.toBeNull();
+  });
+
+  it('carries the window create and import entry points, and the import formats', () => {
+    hookState = LOADED_EMPTY;
+
+    render(<ListView {...defaultProps} import={IMPORT} />);
+
+    const ctx = tableProps.emptyListContext;
+    expect(typeof ctx.onCreate).toBe('function');
+    expect(typeof ctx.onImport).toBe('function');
+    expect(ctx.importFormats).toEqual(['csv', 'xlsx']);
+  });
+
+  it.each([
+    ['hideCreate', { hideCreate: true }],
+    ['the static read-only flag (api.window.readOnly)', { api: { window: { readOnly: true } } }],
+    ['the runtime read-only tier (window.readOnly)', { window: { readOnly: true } }],
+  ])('drops onCreate under %s', (_label, props) => {
+    hookState = LOADED_EMPTY;
+
+    render(<ListView {...defaultProps} import={IMPORT} {...props} />);
+
+    expect(tableProps.emptyListContext.onCreate).toBeUndefined();
+    expect(typeof tableProps.emptyListContext.onImport).toBe('function');
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['disabled', { ...IMPORT, enabled: false }],
+  ])('drops onImport and the formats when the import is %s', (_label, importConfig) => {
+    hookState = LOADED_EMPTY;
+
+    render(<ListView {...defaultProps} import={importConfig} />);
+
+    expect(tableProps.emptyListContext.onImport).toBeUndefined();
+    expect(tableProps.emptyListContext.importFormats).toBeUndefined();
   });
 });

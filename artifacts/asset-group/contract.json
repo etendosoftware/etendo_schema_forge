@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.16.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
-  "updatedAt": "2026-09-07T16:05:37.702Z",
-  "checksum": "26f17d6d560e122f",
+  "updatedAt": "2026-10-09T15:04:44.412Z",
+  "checksum": "9c8e2c62c8ad4060",
   "frontendContract": {
     "window": {
       "id": "252",
@@ -11,7 +11,6 @@
       "category": "finance",
       "hidePrint": true,
       "hideLink": true,
-      "customListIcons": true,
       "secondaryTabs": {
         "accounting": {
           "tabOrder": 1,
@@ -292,6 +291,7 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "lookup": true,
+            "lookupDrawer": "account",
             "gridOrder": 1,
             "grow": true,
             "validation": {
@@ -314,6 +314,7 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "lookup": true,
+            "lookupDrawer": "account",
             "gridOrder": 2,
             "grow": true,
             "validation": {
@@ -336,7 +337,6 @@
       "category": "finance",
       "hidePrint": true,
       "hideLink": true,
-      "customListIcons": true,
       "secondaryTabs": {
         "accounting": {
           "tabOrder": 1,

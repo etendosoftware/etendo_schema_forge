@@ -224,17 +224,38 @@ const _BANK_FOREIGN_DETAILS_REQUIRED_WHEN = _BANK_REST_OF_WORLD;
 // over from another tipo cannot relabel the IBAN of a Domiciliación (tipo U).
 const _BANK_ACCOUNT_LABEL_WHEN = [{ when: _BANK_REST_OF_WORLD, labelKey: 'fm.ident.bank.account' }];
 
-// ETP-5597 pt.1 — the declaration types that settle a NEGATIVE result (compensación and every
-// devolución variant: D, V, X) cannot be chosen while casilla 69 is positive (an amount to pay).
-// AEAT semantics: a positive result is filed as Ingreso (I) or Domiciliación (U); only a negative
-// result can be compensated or refunded. `_box69Positive` is a synthetic key — box values live in
-// `liveBoxes`, not in `identification` — merged in by `withDerivedBoxFlags` (fiscalModelsUtils.js),
-// the same technique `_box111NonZero` uses. A missing box 69 (no compute yet) reads as "not
-// positive", so nothing is blocked before the first calculation.
-const _RESULT_69_POSITIVE = { field: '_box69Positive', equals: true };
+// ETP-5597 pt.1 (QA round 1: moved from casilla 69 to casilla 71, plus the "Resultado cero"
+// rule) — which declaration types can be chosen depends on the result boxes. Both rules are
+// resolved in ONE place, `resolveTipoDeclaracionRestriction` (fiscalModelsUtils.js), into the
+// synthetic `_tipoDeclRestriction` key merged into `identification` by `withDerivedBoxFlags`
+// (box values live in `liveBoxes`, not in `identification` — same technique as `_box111NonZero`):
+//   'positive_result' — casilla 71 > 0 (an amount to pay): compensación and every devolución
+//                       variant (C, D, V, X) are disabled; I, U and N stay selectable. AEAT
+//                       semantics: only a negative result can be compensated or refunded.
+//   'zero_only'       — casilla 69 > 0 AND casilla 71 < 0: only "Resultado cero" (N) is allowed;
+//                       every other type (C, D, I, U, V, X) is disabled. Because a single option
+//                       is left, the field declares `autoValueWhen` (QA rounds 3-4): the page
+//                       SETS tipo_declaracion = 'N' itself, silently (editable declarations only;
+//                       no error, no hint) — see `resolveFieldAutoValue`.
+//   null              — no restriction (includes "nothing computed yet": a missing 69/71 never
+//                       blocks anything before the first calculation).
+// The two rules are mutually exclusive by the sign of casilla 71, so at most one applies and the
+// reason shown is unambiguous. Under 'positive_result' an option already selected when the rule
+// starts to apply is NOT cleared (several valid types remain, so the user must choose) — see
+// `getInvalidSelectedOptions`. Under 'zero_only' there is nothing to choose, so it is auto-set.
+const _TIPO_RESTRICTION_POSITIVE = { field: '_tipoDeclRestriction', equals: 'positive_result' };
+const _TIPO_RESTRICTION_ZERO_ONLY = { field: '_tipoDeclRestriction', equals: 'zero_only' };
+const _ZERO_ONLY_REASON_KEY = 'fm.ident.decl.disabled_zero_only';
+// C, D, V, X — disabled under either rule; the reason names the rule that applies.
 const _NEGATIVE_RESULT_OPTION = {
-  disabledWhen: _RESULT_69_POSITIVE,
+  disabledWhen: { anyOf: [_TIPO_RESTRICTION_POSITIVE, _TIPO_RESTRICTION_ZERO_ONLY] },
   disabledReasonKey: 'fm.ident.decl.disabled_positive_result',
+  disabledReasonKeyWhen: [{ when: _TIPO_RESTRICTION_ZERO_ONLY, labelKey: _ZERO_ONLY_REASON_KEY }],
+};
+// I, U — disabled only while the "Resultado cero" rule applies.
+const _NON_ZERO_RESULT_OPTION = {
+  disabledWhen: _TIPO_RESTRICTION_ZERO_ONLY,
+  disabledReasonKey: _ZERO_ONLY_REASON_KEY,
 };
 
 // ETP-5597 pt.4 — casillas 70 ("A deducir") and 109 ("Devoluciones acordadas por la AEAT") only
@@ -249,11 +270,12 @@ const _EDITABLE_WHEN_COMPLEMENTARIA = { field: 'complementaria', equals: true };
 
 const TIPO_DECLARACION_FIELD = {
   id: 'tipo_declaracion', labelKey: 'fm.ident.tipo_declaracion', type: 'select', readOnly: false, required: true,
+  autoValueWhen: [{ when: _TIPO_RESTRICTION_ZERO_ONLY, value: 'N' }],
   options: [
     { value: 'C', labelKey: 'fm.ident.decl.compensacion', ..._NEGATIVE_RESULT_OPTION },
     { value: 'D', labelKey: 'fm.ident.decl.devolucion', ..._NEGATIVE_RESULT_OPTION },
-    { value: 'I', labelKey: 'fm.ident.decl.ingreso' },
-    { value: 'U', labelKey: 'fm.ident.decl.domiciliacion' },
+    { value: 'I', labelKey: 'fm.ident.decl.ingreso', ..._NON_ZERO_RESULT_OPTION },
+    { value: 'U', labelKey: 'fm.ident.decl.domiciliacion', ..._NON_ZERO_RESULT_OPTION },
     { value: 'N', labelKey: 'fm.ident.decl.resultado_cero' },
     { value: 'V', labelKey: 'fm.ident.decl.dev_cta_corriente', ..._NEGATIVE_RESULT_OPTION },
     { value: 'X', labelKey: 'fm.ident.decl.dev_transferencia_ext', ..._NEGATIVE_RESULT_OPTION },
@@ -629,7 +651,12 @@ const BASE = {
           visibleWhen: { field: 'rectificativa', equals: true } },
         { id: 'baja_domiciliacion',    labelKey: 'fm.ident.baja_domiciliacion',    type: 'checkbox', readOnly: false,
           visibleWhen: { field: 'rectificativa', equals: true } },
-        { id: 'motivo_rectificacion',  labelKey: 'fm.ident.motivo_heading',        type: 'select',   readOnly: false,
+        // ETP-5597 (QA round 1) — mandatory whenever it is on screen, i.e. while the
+        // rectificativa check is set (`isRequiredFieldMissing` skips a field whose `visibleWhen`
+        // does not match, so an unchecked rectificativa never reports it). The pre-October-2024
+        // layouts replace this whole section with `_COMPLEMENTARIA_RECTIF_OP`, which has no
+        // rectification reason at all, so nothing is required there.
+        { id: 'motivo_rectificacion',  labelKey: 'fm.ident.motivo_heading',        type: 'select',   readOnly: false, required: true,
           visibleWhen: { field: 'rectificativa', equals: true },
           options: [
             { value: 'R', labelKey: 'fm.ident.motivo_rectificaciones' },
@@ -967,10 +994,54 @@ export function isOptionDisabled(opt, identification) {
   return Boolean(opt?.disabledWhen) && matchesVisibility(opt.disabledWhen, identification);
 }
 
+// ETP-5597 — the reason a disabled option shows (option `title` and the error under the select,
+// plus the blocking toast). An option disabled by more than one rule declares
+// `disabledReasonKeyWhen` (same `[{ when, labelKey }]` shape as `labelKeyWhen`, first match
+// wins); otherwise its static `disabledReasonKey` applies, then the generic fallback.
+export function resolveOptionDisabledReasonKey(opt, identification) {
+  const hit = Array.isArray(opt?.disabledReasonKeyWhen)
+    ? opt.disabledReasonKeyWhen.find(entry => matchesVisibility(entry.when, identification))
+    : null;
+  return hit?.labelKey ?? opt?.disabledReasonKey ?? 'fm.ident.decl.option_not_allowed';
+}
+
+// ETP-5597 (QA rounds 3-4) — a field may declare `autoValueWhen: [{ when, value }]`: while a
+// condition matches, the field's value is FIXED to `value` (there is nothing left to choose).
+// Returns the first matching entry, or null. The page applies the value itself, silently, on
+// editable declarations (`getAutoValueChanges`), and the field is never reported as an invalid
+// selection meanwhile (no error, no block, no message) — including on a read-only declaration,
+// whose stored value is kept untouched.
+export function resolveFieldAutoValue(f, identification) {
+  if (!Array.isArray(f?.autoValueWhen)) return null;
+  return f.autoValueWhen.find(entry => matchesVisibility(entry.when, identification)) ?? null;
+}
+
+/**
+ * ETP-5597 (QA round 3) — the `{ field, value }` pairs a page must apply now: visible fields whose
+ * `autoValueWhen` currently matches and whose value differs from the fixed one. Empty when there
+ * is nothing to do, so applying it from an effect is idempotent.
+ */
+export function getAutoValueChanges(year, period, identification) {
+  const layout = getLayout303(year, period);
+  const changes = [];
+  for (const section of layout.sections) {
+    if (!Array.isArray(section.fields)) continue;
+    if (!isSectionVisible(section, identification)) continue;
+    for (const f of section.fields) {
+      if (f.visibleWhen && !matchesVisibility(f.visibleWhen, identification)) continue;
+      const auto = resolveFieldAutoValue(f, identification);
+      if (auto && identification?.[f.id] !== auto.value) changes.push({ field: f.id, value: auto.value });
+    }
+  }
+  return changes;
+}
+
 // Returns the option currently selected in a select field when that option is disabled right
-// now, or null. Shared by FmBoxes303's inline error and `getInvalidSelectedOptions` below.
+// now, or null. Shared by FmBoxes303's inline error and `getInvalidSelectedOptions` below. A field
+// whose value is currently fixed by `autoValueWhen` is never invalid (see resolveFieldAutoValue).
 export function getInvalidSelectedOption(f, identification) {
   if (f.type !== 'select' || !Array.isArray(f.options)) return null;
+  if (resolveFieldAutoValue(f, identification)) return null;
   const val = identification?.[f.id];
   if (val === undefined || val === null || val === '') return null;
   const opt = f.options.find(o => o.value === val);
@@ -979,10 +1050,10 @@ export function getInvalidSelectedOption(f, identification) {
 
 /**
  * ETP-5597 pt.1 — visible select fields whose CURRENT value is an option that is disabled in the
- * current state (e.g. tipo "Compensación" selected and box 69 then becomes positive). The value is
- * deliberately NOT cleared automatically: box 69 changes as a side effect of unrelated edits or a
+ * current state (e.g. tipo "Compensación" selected and box 71 then becomes positive). The value is
+ * deliberately NOT cleared automatically: box 71 changes as a side effect of unrelated edits or a
  * recalculation, and silently wiping the user's choice there would be surprising (and would undo
- * itself badly when 69 turns negative again). Instead FmModel303Page blocks "Generar fichero" and
+ * itself badly when 71 turns negative again). Instead FmModel303Page blocks "Generar fichero" and
  * "Registrar/Presentar" while this is non-empty, and FmBoxes303 shows the reason under the select.
  * Returns `[{ field, option }]`.
  */

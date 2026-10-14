@@ -1081,11 +1081,12 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `file-lightbox-delete` | — | Lightbox "Eliminar archivo" button (opens `confirm-delete-dialog`) |
 | `file-lightbox-close` | — | Lightbox close (X) button |
 | `filter-{key}` | `filter-alltab`, `filter-invoicestab`, `filter-rectificativeinvoicestab` (invoices); `filter-all`, `filter-persons`, `filter-companies` (contacts) | ListView subset filter buttons (second toolbar row). `{key}` is the entry's `key`, or else its `label` as declared (the i18n key, not the translated text) lowercased — so there is no `filter-todos` |
-| `filter-status`, `filter-type`, `filter-date`, `filter-advanced` | — | ListFilterBar triggers in the first toolbar row (status, type — a column flagged `isTypeFilter` —, date range, "Filters"), each present only when the window has that filter. They share the `filter-` prefix with the subset buttons: scope a `[data-testid^="filter-"]` query to `list-toolbar-tabs-row` or `list-toolbar-main-row` |
+| `filter-status`, `filter-type`, `filter-date`, `filter-advanced` | — | ListFilterBar triggers in the first toolbar row (status, type — a column flagged `isTypeFilter` —, date range, "Filters"), each present only when the window has that filter. They share the `filter-` prefix with the subset buttons: scope a `[data-testid^="filter-"]` query to `list-toolbar-tabs` or `list-toolbar-filters` |
 | `quick-filter-{name}` | `quick-filter-active` | ListView quick filter toggle buttons |
 | `list-toolbar` | — | ListView idle toolbar container; carries the toolbar/body separator (absent under `hideListBar`) |
-| `list-toolbar-main-row` | — | ListView toolbar first row: filters on the left, main actions on the right |
-| `list-toolbar-tabs-row` | — | ListView toolbar second row: subset filter buttons and the list/gallery `view-toggle`. Rendered only when the window has one of them |
+| `list-toolbar-main-row` | — | ListView toolbar flex-wrap row holding the subset tabs, the filters cluster and the actions cluster; `data-tabs-placement` = `inline` / `wrapped` when the window has subset tabs |
+| `list-toolbar-tabs` | — | ListView toolbar subset tabs (`filter-<key>` buttons). First child of `list-toolbar-main-row` while they fit; the same element moves to its own line below (`data-tabs-placement="wrapped"` on the main row) when they do not. Absent without `subsetFilters` |
+| `list-toolbar-filters` / `list-toolbar-actions` | — | ListView toolbar clusters: quick filters, ListFilterBar triggers and the `view-toggle` (last) / main actions |
 | `list-share-link` | — | ListView toolbar Share button: copies the current page URL, query string included (absent under `hideLink`) |
 | `selection-count` | — | ListView selection bar (count of selected rows) |
 | `list-progress-bar` | — | ListView loading progress indicator |
@@ -1197,6 +1198,30 @@ it and silently resolves to some other button on the page.
 (which prefers `data-row-status` over translated cell text). Prefer
 `page.getByTestId('row-<id>')` whenever the test already knows the record id —
 "the first Completed row" also matches leftovers from earlier runs.
+
+### Gotcha: header fields hidden behind "Mostrar más datos"
+
+Since ETP-5513 the header `EntityForm` renders only its first 2 rows (required
+fields first). The rest sit behind "Mostrar más datos"
+(`data-testid="form-show-more-toggle"`), and the collapsed fields are **not in
+the DOM** until that block is expanded. A bare `page.getByTestId('field-<key>')`
+on a header field can therefore fail with "element(s) not found" even though the
+field exists on the form.
+
+Reach header fields through the shared helpers in
+`e2e/tests/helpers/purchase-helpers.js`, called after the form is ready
+(`waitForDetailReady`):
+
+| Helper | Use when | Behavior |
+|--------|----------|----------|
+| `revealHeaderField(page, key, { timeout })` | The field must exist | Expands only if the field is not rendered yet, asserts it is visible and returns its locator (chip or input). Fails with a message that tells "not on this form" apart from a typo or a slow render |
+| `hasHeaderField(page, key)` | Some documents lack the field (e.g. `warehouse`) | Resolves to `true`/`false` after the same lazy expansion; waits briefly for the field or the toggle first, so "not rendered yet" is not read as "absent" |
+| `expandHeaderFields(page)` | You need every collapsed block open | Opens every collapsed toggle; idempotent, never closes an open block, no-op when there is no toggle |
+
+Never conclude that a field is absent because a bare `count()` returned 0 — on a
+collapsed form that is the expected result. Known follow-up: some sales specs
+(`e2e/tests/flows/sales/*`) still read `field-paymentTerms` directly and should
+move to these helpers.
 
 ## Toast selectors
 
@@ -1312,15 +1337,18 @@ The glob-crossing bug described above is not a permanent Playwright limitation �
 
 `e2e/tests/flows/platform/list-toolbar-1280.mocked.spec.js` is the only automated guard for the
 list toolbar's **geometry** — jsdom has no layout, so the unit suite
-(`ListView.toolbarLayout.vitest.jsx`) can only pin where each control lives in the DOM. At
-1280×720 with the navigation rail expanded it checks, for purchase-invoice, sales-invoice,
-contacts, product, warehouse, payment-in, payment-out and chart-of-accounts (ETP-5593 — its tree
-controls share the main row): the second row
-(`list-toolbar-tabs-row`) exists exactly when the window has a tab group and sits below the main
-row; the main row does not overflow, none of its buttons is clipped and its two clusters do not
-overlap; the toolbar paints its bottom border and ends above the grid. It also re-measures
-sales-invoice with a date range and a status applied, and payment-in at 1920×1080. Layout
-reference: `docs/list-filters.md` → "Toolbar layout (ETP-5509)".
+(`ListView.toolbarLayout.vitest.jsx`) feeds the fit check stubbed widths. At 1280×720 with the
+navigation rail expanded it checks, for purchase-invoice, sales-invoice, contacts, product,
+warehouse, payment-in, payment-out and chart-of-accounts (ETP-5593 — its tree controls share the
+main row): the subset tabs (`list-toolbar-tabs`) are rendered once, either opening the first line
+or on a line of their own below it (`data-tabs-placement`); the main row does not overflow, none
+of its buttons is clipped and the filters and actions clusters keep their 16px minimum gap; the
+toolbar paints its bottom border and ends above the grid. It also re-measures sales-invoice with a
+date range and a status applied, checks payment-in and every subset-tab window at 1920×1080
+(single row there), resizes purchase-invoice down to 960px and back to prove the tabs move and
+return live without losing focus, and pins Product's view toggle after "Filtros" (the
+pre-ETP-5509 order) at both resolutions. Layout reference: `docs/list-filters.md` → "Toolbar
+layout (ETP-5509)".
 
 ```bash
 cd e2e
@@ -1332,8 +1360,6 @@ CI=1 E2E_RETRIES=0 npx playwright test tests/flows/platform/list-toolbar-1280.mo
   turns retries off, so a layout failure is reported on the first attempt.
 - The `login()` mock session renders in `es_ES`, the wider of the two locales. That is kept on
   purpose: the fit assertions are measured against the longer labels.
-- The "view toggle placement on Product" describe is isolated because that placement is still
-  pending product confirmation; the comments in the spec say what to flip if it is reversed.
 
 ## Mock-mode Tests (No Backend Required)
 

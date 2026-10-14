@@ -25,6 +25,7 @@ A user should be able to:
 - reactivate a completed invoice back to draft from the detail view kebab menu when the invoice status is `CO`;
 - complete multiple draft invoices or reactivate multiple completed invoices at once from the list selection bar using the bulk action, labeled "Procesar" (i18n key `process`); its dialog offers **Confirmar** / **Confirm** (`CO`) for draft selections and **Reactivar** / **Reactivate** (`RE`) for completed ones, and its confirm button reads **Aceptar** / **Accept**. Bulk **Reactivar** works on an already-posted invoice: it unposts each posted row first, exactly as the detail kebab does (ETP-5302). The list refetches in place afterwards — scroll position and active filters survive;
 - post ("Contabilizar") a completed, not-yet-posted invoice directly from the list — via the row-hover kebab menu for a single record, or via the dedicated "Contabilizar" bulk action in the list selection bar for multiple selected records — without needing to open the record in form view first (ETP-5209);
+- unpost ("Descontabilizar") a posted invoice **without reactivating it** — from the detail kebab menu, the row-hover kebab menu, or the dedicated "Descontabilizar" bulk action in the list selection bar. It removes the accounting entries (`posted = 'N'`) and leaves the invoice Completed (`CO`), so the **Exchange rates** tab (locked only while posted, ETP-5657) and the header and line accounting dimensions (project, cost center) can be corrected and saved, and the invoice posted again. Offered only on Completed **and** posted invoices; "Reactivar" still unposts and returns the invoice to draft (ETP-5692);
 - copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved.
 
 ## Interaction model
@@ -237,7 +238,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
   backdrop reject: the invoice stays Completed and nothing is created — there is no «Ahora no»
   card. «Crear albarán» POSTs
   `sales-invoice/header/{id}/action/createShipment`, which creates a **Draft** sales shipment (Albarán de Venta) with only
-  the pending lines; the result view links to it (`/goods-shipment/{id}`). Backend error codes
+  the pending lines; the shared `ConfirmResultModal` then announces it (`resultDocType: 'salida'`:
+  «Albarán creado», card «Albarán de venta · Borrador · Nº …», «Cerrar» + «Ver albarán» →
+  `/goods-shipment/{id}`; see `docs/ui-customization.md` §21). Backend error codes
   (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
 - **Warehouse asked when the backend cannot decide it.** The shipment needs a target warehouse. When
   the backend cannot determine it on its own, `createShipment` answers `409 FOLLOW_UP_WAREHOUSE_REQUIRED`
@@ -254,6 +257,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
   while something is pending (never for a read-only window). After a creation the record is
   re-read (the button disappears; a partial movement later offers only what is still missing)
   and `sales-invoice:document-created` refreshes the related documents (`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`).
+  Completing (or editing / deleting) that shipment later marks the invoice's cached record stale
+  (`goods-shipment → sales-invoice` in `lib/crossSpecCacheInvalidation.js`), so coming back to the
+  invoice shows the new delivery status and shipment status without a manual reload.
 - Config: `SALES_INVOICE_FOLLOW_UP` in `tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js`.
 
 The previous ad-hoc «¿Gestionar envío?» dialog in `artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`
@@ -263,6 +269,77 @@ Confirm navigated to the list anyway, so the dialog was unreachable. The sibling
 `invoice:sendAfterConfirm:{id}` flag on the same listener is kept untouched — it has the same
 limitation (it only reacts to a `DocAction` process run through `hook.handleProcess`, which this
 window does not expose), so its behaviour is unchanged.
+
+## Fiscal sending: same-day eligibility, system-specific caption and new entry points — ETP-5700
+
+**Symptom.** With a fiscal system active in Configuración fiscal, the sales invoice offered no way to
+send the invoice to SII / TicketBAI: no button in the detail preview, nothing in the form view kebab
+(only "Reactivar"), nothing on the grid row hover, and the fiscal status column showed "—". The SIF
+tab still showed the fiscal data, because it only depends on the fiscal profile, not on the date gate.
+
+**Root cause — the date gate, east of UTC.** `fechaAcogidaSII` (`aeatsii_config.insiisystemdate`)
+and `tbaisystemdate` are AD **Date** columns, which NEO serialises as a bare `yyyy-MM-dd`.
+`isSifEligibleByDate` (`tools/app-shell/src/windows/custom/shared/fiscalTargets.js`) parsed it with
+`new Date(raw)`, i.e. UTC midnight, which in Europe/Madrid is already 02:00 local (01:00 in winter,
+and the same in Atlantic/Canary). The invoice's own day is compared at local midnight, so an invoice
+dated on the day the fiscal configuration was created always compared as "before" the adoption: no
+send action and a dash instead of its fiscal status, from the moment the configuration existed. West
+of UTC (Argentina) the same parse lands on the previous evening, which is why it never reproduced
+there. `useFiscalConfig.js`'s `earliestCutoverDate()` made it worse by re-serialising the earliest
+value with `toISOString()`.
+
+**Fix.**
+- `parseAdoptionDate()` (new, `fiscalTargets.js`) reads a date-only adoption date as a LOCAL calendar
+  day (`parseCalendarDate`); a full timestamp (VERI*FACTU's `inVfactuSystem`, or any value with a
+  time-of-day) is still compared as the instant it names, exactly like Classic.
+- `earliestCutoverDate()` orders rows with the same parser and returns the winning row's value as-is
+  (a `yyyy-MM-dd` for SII/TBAI), never a UTC-re-serialised timestamp.
+- Every "today" the fiscal-config flows write into those date fields (onboarding wizard payloads,
+  `createComplementary`, the SII and TBAI configuration sections) is the local calendar day
+  (`todayCalendarISO`), not `toISOString().slice(0, 10)`, which in Spain right after midnight is
+  still yesterday.
+
+**System-specific caption.** Every send entry point now names the system the invoice is pending for,
+via `getSifButtonLabelKey(specName, pendingTargets)` (`shared/sifSending.js`, next to
+`getSifBodyKey`). The generic `sendToSif` ("Enviar a SIF") is no longer used by these entry points.
+
+**Entry points.** All of them gate on the same `getPendingSifTargets()` and open the same
+`SifSendingModal`:
+
+| Surface | Where | Notes |
+|---|---|---|
+| Detail preview (list side panel) | `InvoicePreview.jsx` (`useInvoicePreview`) | Unchanged except the caption. |
+| Form view topbar | `SendToSifButton.jsx` | Caption, plus a gate fix: ETP-5205 hid it with `isDocumentReadOnly`, which `DetailView` also sets for every processed document (`lockWhenProcessed`), i.e. for every completed invoice — so the button never showed where sending applies. It now hides only under the Solo Lectura tier (`windowReadOnly`). |
+| Form view kebab (⋮) | `SifSendMenuItem.jsx`, declared as `decisions.json → window.customComponents.moreMenuContent` | NEW. A `menuActions` entry cannot express it: its caption is a fixed `labelKey` and its visibility can only test the status or a record field, while this action depends on the org's fiscal configuration. The kebab unmounts its content when the menu closes, so the item hands the request (with the targets it computed through `useInvoiceSifSending`, the hook the topbar button also uses) to `SifSendModalHost`, which the window wrapper (`index.jsx`) mounts next to the form unconditionally (window event `sif:open-send-modal`). |
+| Grid row hover kebab | `useSifRowSendAction.jsx`, appended through `buildInvoiceRowQuickActions(..., { extraMenuActions })` | NEW. Gated per row with the same rules. Uses the fiscal config of the top-nav selected org, the same one the list's fiscal status columns use (per-row org resolution is ETP-5248). Hidden under the Solo Lectura tier. A successful send refreshes the list when the modal closes. |
+
+VERI*FACTU has no manual send path (Classic sends it automatically on completion), so no entry point
+offers it.
+
+**Known limitation — the kebab send does not flush unsaved header edits.** The kebab entry has no
+save handle, so it sends the last-persisted invoice. The topbar button still saves pending header
+edits first (ETP-5272, below). On a completed invoice the header is normally locked, so this only
+matters for the few fields that stay editable after completion (e.g. `accountingDate`).
+
+**Captions on a sales invoice.**
+
+| Pending for | es_ES | en_US | Key |
+|---|---|---|---|
+| SII only | Envío SII | Send to SII | `sendToSifLabelSii` |
+| TicketBAI only | Envío TBAI | Send to TBAI | `sendToSifLabelTbai` |
+| SII and TicketBAI | Envío SII+TBAI | Send to SII+TBAI | `sendToSifLabelBoth` |
+
+**Manual verification (Europe/Madrid browser timezone).**
+1. Configure SII for an org today (Configuración fiscal), create and confirm an invoice dated today:
+   the preview, the form topbar, the form kebab and the grid row kebab all offer "Envío SII", and the
+   SII status column shows "Pendiente", not "—".
+2. Same with TicketBAI only: "Envío TBAI" everywhere.
+3. With SII + TicketBAI: "Envío SII+TBAI"; after sending only one of them (partial failure) the
+   caption names the remaining one.
+4. From the form kebab entry, the confirmation modal opens and stays open while you click inside it.
+5. From the grid row kebab, a successful send refreshes the row's status when the modal closes.
+6. Under the Solo Lectura tier, none of the four entry points is offered.
+7. An invoice dated before the org's adoption date still offers nothing and shows "—".
 
 ## Known issues / Open bugs
 
@@ -528,10 +605,11 @@ backend change is deployed.
 11. Open a completed sales invoice detail and confirm the kebab menu exposes a `Reactivate` action. Trigger it and verify the document returns to draft status and a `sonner` toast notification appears with the message `Document reactivated` / `Documento reactivado` (i18n key `reactivated`).
 12. From the list, select multiple draft invoices and confirm the bulk action bar shows a `Procesar (N)` button whose dropdown offers **Confirmar** (`CO`); then select multiple completed invoices and confirm the same button offers **Reactivar** (`RE`). Confirm the dialog's confirm button reads **Aceptar** / **Accept** (not "Completado"). Verify each produces the expected status transition and a result toast.
 12b. **ETP-5302 — bulk reactivate of a posted invoice.** Complete an invoice, post it ("Contabilizar"), then select it in the list and run `Procesar` → **Reactivar**. It must return to draft and the toast must report it as successful. Before this fix the row failed with `{"status":"error","message":"Factura contabilizada"}` while reactivating the very same invoice from its form kebab succeeded. Also confirm the page does **not** reload: scroll down a long list, apply a filter, run the bulk action, and verify the filter and scroll position are still there and only the rows refetch.
+12c. **ETP-5692 — Descontabilizar without reactivating.** On a completed, posted invoice confirm **Descontabilizar** is offered in the detail kebab, in the row-hover kebab and — after selecting it — as a `Descontabilizar` button in the selection bar; on a not-posted invoice confirm none of the three offers it (Contabilizar is offered instead). Run it from each place and verify the invoice stays **Completada**, the posted badge flips to *Sin contabilizar*, a `Documento descontabilizado correctamente` toast appears, and Contabilizar is offered again. Confirm a posted invoice in any other status (e.g. voided) does not offer it either. Correct a rate in the **Exchange rates** tab (editable again once unposted), post again, and verify the new entries use the corrected rate. On another unposted invoice, change the header **Proyecto** / **Centro de costos**, confirm **Guardar** is enabled and saves, post again, and verify the new entries carry the dimension — without having reactivated. Confirm both fields are read-only again once the invoice is posted. Then, on an unposted Completed invoice, expand a line's **Dimensiones contables** panel (Layers icon or chevron): confirm **Proyecto** / **Centro de costos** are editable while every other line value stays read-only and no add/edit/delete line affordance appears; change one, confirm the `Registro guardado` toast and that the value survives a reload, then post again and verify the new line entries carry it. Once posted, confirm the line dimensions are read-only again. Finally, on a **voided** invoice that is not posted, confirm Descontabilizar is not offered and both the header and the line **Proyecto** / **Centro de costos** are read-only (not editable, no Save offered for them), while the accounting date behaves exactly as before. In the bulk run, mix Completed+posted, not-posted and posted-but-not-Completed invoices and confirm only the first are unposted and the others are left unchanged; the result toast only counts them ("N procesados, M omitidos (no elegibles), K con error") — it does not say why a row was skipped (ETP-5316). On an invoice whose entries fall in a closed period, confirm the translated closed-period error appears and the invoice is unchanged. Finally confirm **Reactivar** still unposts and returns the invoice to draft.
 13. Open a draft invoice and confirm the Send/"Enviar" action is **not** shown, neither in the topbar nor as a row quick action in the list. Confirm the invoice, then open the Send Email modal from the topbar and from the invoice preview and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language. Also confirm the `Asunto` and `Mensaje` fields are editable (not greyed-out/read-only), that they pre-fill with the auto-derived subject and an empty message, and that sending without touching either still succeeds normally.
 14. Open an existing draft invoice without touching any field and confirm the "Save Draft" button is **disabled**. Change any header field and confirm it becomes enabled. Save and confirm it disables again. Revert the changed field to its original value without saving and confirm the button disables once more. Add a line: once the add-row is submitted, the button should disable again if no header changes remain pending. Confirm the "Confirm" button stays enabled throughout all these states.
-15. Under an org configured for `sii+tbai`, open a completed sales invoice and confirm `Enviar a SIF` still appears after a partial send until both targets are sent. The confirmation copy must indicate both targets, and the result modal must attempt both `Em_aeatsii_send` and `Em_Tbai_Xmlgenerator` independently.
-16. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+15. Under an org configured for `sii+tbai`, open a completed sales invoice and confirm the send action still appears after a partial send until both targets are sent, captioned with the remaining target (`Envío SII` or `Envío TBAI`; `Envío SII+TBAI` while both are pending — see the ETP-5700 section). The confirmation copy must indicate both targets, and the result modal must attempt both `Em_aeatsii_send` and `Em_Tbai_Xmlgenerator` independently.
+16. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 17. On a draft invoice tied to a customer that has at least one completed (not fully invoiced) sales order, open `Import from Sales Order` and confirm: only that customer's completed-and-not-fully-invoiced orders appear; expanding an order lists its lines with already-imported lines marked and disabled; submitting creates invoice lines that reference the source order (`salesOrderLine`). If every imported order carried the same non-zero `etgoTotalDiscount`, confirm the invoice header now shows that same total discount; if the imported orders carry different discounts (or none), the header discount is left untouched.
 18. In the list, select 0, then 1, then 2+ invoices and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/sales-invoice/<id>`. Open a saved invoice and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
 19. **ETP-4737:** open `/sales-invoice` and confirm the subset control shows exactly **Todos** / **Facturas** / **Facturas rectificativas** (no separate credit-note or return-invoice tab). Confirm a plain invoice appears under "Facturas" but NOT under "Facturas rectificativas", and confirm an invoice using the new "Factura Rectificativa" doc type (or a historical AR Credit Memo / Return Material Sales Invoice) appears under "Facturas rectificativas" but NOT under "Facturas". On a draft rectificative invoice tied to a business partner, confirm the empty-lines state (and the "+ Añadir línea" dropdown chevron) offers BOTH `Import from Return Shipment` and `Import from Source Invoice`. Open `Import from Source Invoice` and confirm only completed, same-customer, plain-`Factura`-type invoices are offered as sources (no rectificative invoice ever appears in that list) and that submitting creates lines carrying the source line's price/discount/tax unchanged.
@@ -552,11 +630,20 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - `tools/app-shell/src/menu.json` shows `sales-invoice` is visible in the `Sales` menu.
 - `tools/app-shell/src/windows/registry.js` registers `sales-invoice` as a custom app-shell window override.
 - `tools/app-shell/src/windows/custom/sales-invoice/index.jsx` proves the custom list/detail wrapper, overdue quick filter, lateral preview modal, clone-from-grid flow, related-documents tab wiring, add-line guard, detail route composition, and the bulk-action component mounted in the list selection bar.
-- `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-action component supporting both CO and RE based on selected row statuses; mounted with `labelKey="process"` so the button renders as "Procesar" / "Process", with "Confirmar" / "Confirm" (`labelKey: 'confirm'`) and "Reactivar" / "Reactivate" (`labelKey: 'reactivate'`) as the `CO` / `RE` entries inside its dropdown. The `Reactivate` kebab menu action in the detail view is declared in `artifacts/sales-invoice/decisions.json` with `visibleWhenStatus: "CO"` and `documentAction: "RE"`. That decisions.json `menuActions` array (`reactivate`, `post`) only drives the form-view kebab (`HeaderPage`'s detail branch, which this wrapper does not override for `menuActions`); the list view is a hand-rolled `ListView` the wrapper always overrides, so its row-kebab and bulk actions are wired directly in code, not read from decisions.json (see ETP-5209 note below).
+- `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-action component supporting both CO and RE based on selected row statuses; mounted with `labelKey="process"` so the button renders as "Procesar" / "Process", with "Confirmar" / "Confirm" (`labelKey: 'confirm'`) and "Reactivar" / "Reactivate" (`labelKey: 'reactivate'`) as the `CO` / `RE` entries inside its dropdown. The `Reactivate` kebab menu action in the detail view is declared in `artifacts/sales-invoice/decisions.json` with `visibleWhenStatus: "CO"` and `documentAction: "RE"`. That decisions.json `menuActions` array (`reactivate`, `post`, `unpost` — the last added by ETP-5692) only drives the form-view kebab (`HeaderPage`'s detail branch, which this wrapper does not override for `menuActions`); the list view is a hand-rolled `ListView` the wrapper always overrides, so its row-kebab and bulk actions are wired directly in code, not read from decisions.json (see ETP-5209 note below).
 - **ETP-5209 — Post reachable from the list, not just form view**: `tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js`'s `buildInvoiceRowQuickActions()` (shared with purchase-invoice) adds a `menuActions` entry (`{ neoAction: 'post' }`) to the row-hover kebab, gated on `!posted && processed` (same gate as the decisions.json-driven form-view Post action) — wired via `sales-invoice/index.jsx`'s `rowQuickActions`, refreshing the list on success (`onMenuActionExecuted` bumps `refreshKey`). For bulk, `SalesInvoiceBulkAction` in `tools/app-shell/src/windows/custom/sales-invoice/index.jsx` renders a second `BulkDocumentAction` instance (`actionMode="neoAction"`, `buildActions={buildPostActions}`, `rowFilter={postRowFilter}`, `labelKey="post"`) alongside the existing confirm/reactivate one — `buildPostActions`/`postRowFilter` are exported from `BulkDocumentAction.jsx` and shared across purchase-invoice, sales-invoice, goods-receipt, and goods-shipment. `postRowFilter` is a plain `(row, action, ui) => ...` function (not a `createPostRowFilter(ui)` factory), so it is passed by reference — the `ui` translator is supplied by `BulkDocumentAction`'s own `handleDone` at call time, not by the window wrapper. A row already posted, or not yet processed, is excluded from the bulk run with a translated rejection message (`bulkRowAlreadyPosted` / `bulkRowNotCompleted`).
 - **ETP-5302 — selection-bar button renamed to "Procesar", dropdown option renamed to "Confirmar"**: the floating selection-bar button is now mounted with `labelKey="process"` ("Procesar" / "Process") — the `confirmBulk` key it used before was deleted from `en_US.json`, `es_ES.json` and `es_AR.json`. In the same move, `BulkDocumentAction`'s `CO` entry (in both `buildInOutActions` and the default `buildActions`) switched from `labelKey: 'book'` to `labelKey: 'confirm'`, so the dropdown option that completes the document now reads "Confirmar" / "Confirm". The `RE` entry keeps `labelKey: 'reactivate'`. Labels only — the dialog, the per-row `Promise.allSettled` loop, the `documentAction=CO` call and the result toast are untouched. The second selection-bar button added by ETP-5209 (`labelKey="post"`, "Contabilizar") is unaffected.
 - **ETP-5302 — BUG: bulk reactivate failed on a posted invoice.** Reactivating a Completed + Posted invoice from the selection bar returned `{"status":"error","message":"Factura contabilizada"}` and counted the row as failed, while the same action from the detail kebab worked. **Root cause:** the "reactivate unposts first" rule is declared as `preUnpost: true` on the `reactivate` menu action in `artifacts/sales-invoice/decisions.json`, but it was implemented *only* inside `tools/app-shell/src/components/contract-ui/DetailMoreActionsMenu.jsx` (and duplicated across its two branches). `BulkDocumentAction` knew nothing about the flag and sent a bare `docAction: 'RE'`, which Core rejects — `src-db/database/model/functions/C_INVOICE_POST.xml:948`, `IF (v_Posted='Y') THEN RAISE_APPLICATION_ERROR('@InvoiceDocumentPosted@')`, surfaced as "Factura contabilizada" via the `InvoiceDocumentPosted` `AD_MESSAGE`. **Fix:** the rule now lives in one place, `tools/app-shell/src/lib/preUnpost.js` (`isPosted(row)` — only `'Y'`/`true` count, since the AD Posted-status domain also carries `T`, `E`, `D`, `p`, `i`; and `runPreUnpost({recordId, record, enabled, execute})` → `{ran, success, message}`), called by both `DetailMoreActionsMenu.jsx` (behaviour unchanged) and `BulkDocumentAction.jsx`'s new `preUnpostActions` prop. `tools/app-shell/src/windows/custom/sales-invoice/index.jsx` mounts the confirm/reactivate instance with `preUnpostActions={['RE']}`. Each row runs unpost → `RE`; a failed unpost aborts that row (a document still carrying its accounting entries is never reactivated) and is reported with the translated backend message. `preUnpost.js` is deliberately a plain module, not a hook, because `BulkDocumentAction` is reached from a `bulkActions` slot that `ListView` invokes as a flat function call (the ETP-5209 Rules-of-Hooks constraint). Full reference: `docs/ui-customization.md` §9e.
-- **ETP-5302 — no standalone bulk "Descontabilizar" on this window, by design.** `BulkDocumentAction.jsx` also exports `buildUnpostActions`/`unpostRowFilter`, mounted by `goods-receipt` and `goods-shipment`. Sales-invoice deliberately does **not** mount them even though it mounts the post pair: on an invoice, reversing the accounting is a step *inside* Reactivate (`preUnpost`), never a user-facing action of its own. That is why the unpost pair is separate from `buildPostActions`/`postRowFilter` rather than the post builder being taught to also emit `unpost`.
+- **ETP-5692 — standalone "Descontabilizar" (reverses the ETP-5302 "no standalone unpost on invoices" decision).** ETP-5302 had deliberately kept invoice unposting *inside* Reactivate (`preUnpost`) only, so the one way to remove an invoice's accounting was to send it back to draft — which blocked accounting-only corrections (exchange rate, cost center / project) and is not viable at all on a paid invoice. The invoice now offers **Descontabilizar** as an action of its own, in all three places, all hitting `POST /sws/neo/sales-invoice/header/{id}/action/unpost` (`DocumentPostingService.unpost()` via `SalesInvoiceHeaderHandler` — the same call Reactivate's `preUnpost` step already made, so no backend change):
+  - **Detail kebab:** an `unpost` entry in `artifacts/sales-invoice/decisions.json → window.menuActions` (`action: "unpost"`, `visibleWhenStatus: "CO"`, `visibleWhenFieldTrue: "posted"`, `successKey: "documentUnposted"`, `destructive: true`) — goods-receipt's entry plus the status condition (the two combine with AND). `destructive` only paints the item red; like every Descontabilizar in the SPA it asks for no confirmation.
+  - **Row kebab:** `buildInvoiceRowQuickActions()` in `tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js` (shared with purchase-invoice) emits `{ key: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }` only when the row is `documentStatus === 'CO'` and posted (`isPosted` from `lib/preUnpost.js` — only `'Y'`/`true` count, so `posted: 'i'`/`'E'` keep offering Post). Menu order is Reactivar → Contabilizar / Descontabilizar (the last two are mutually exclusive). Its `onMenuActionExecuted` now reuses `buildMenuActionExecutedHandler` from `shared/buildDocumentRowQuickActions.js`, which forwards `messageKeys`/`messageParams`, so a rejection for a closed period (`PeriodClosedForUnPosting`) is shown translated in the UI locale.
+  - **Bulk bar:** `SalesInvoiceBulkAction` mounts a third `BulkDocumentAction` (`actionMode="neoAction"`, `buildActions={buildInvoiceUnpostActions}`, `rowFilter={invoiceUnpostRowFilter}`, `labelKey="unpost"`). The pair lives in `shared/useInvoiceWindow.js`, not in `BulkDocumentAction.jsx`: unlike the albaranes' posted-only `buildUnpostActions`/`unpostRowFilter` (left unchanged), it also requires status `CO`. In the selection, a not-posted row (`invoiceUnpostRowFilter` → `bulkRowNotPosted`) and a posted row in any other status, e.g. voided (→ `bulkRowNotCompleted`), are skipped and counted under *omitidos (no elegibles)*. The result toast shows only the counters — `useBulkActionToast.js` deliberately drops the per-row reasons (ETP-5316) — so neither text is shown to the user.
+  - **Visibility:** the gate is the record's `posted` value. The `posted` grid column is hidden from roles without the `showAccountingFields` capability, but that gate is presentational only — NEO still returns `posted` in list and detail payloads — so, exactly like **Contabilizar** today, the posting actions stay visible to those roles.
+  - Reactivar is unchanged: it still unposts first (`preUnpost: true` / `preUnpostActions={['RE']}`) and then returns the invoice to draft.
+  - **Header dimensions are savable after unposting:** `project` and `costcenter` are locked while posted and editable once unposted (see the CO-only note below for the exact `readOnlyLogic`), and they are now in `draftMode.keepSaveWhenCompletedFields` (`["accountingDate", "project", "costcenter"]` — in `decisions.json` AND in `index.jsx`'s `getInvoiceDraftMode` override, which is the one that actually reaches `DetailView`), so the generic `buildCompletedFieldsGate` lets Save persist them on a Completed invoice. Core agrees: `C_INVOICE_TRG` rejects changes to `DateAcct`, `C_Campaign_ID`, `C_Project_ID`, `C_Activity_ID`, `User1_ID`, `User2_ID`, `A_Asset_ID` only while `Posted='Y'` (its `Processed='Y'` list does not include them), and `C_Costcenter_ID` is in neither list. These are the only header dimensions this window exposes.
+  - **Line dimensions are savable after unposting too:** core accepts it (`C_INVLINE_CHK_RESTRICTIONS_TRG` locks line `C_Project_ID`/`C_Costcenter_ID`/`A_Asset_ID`/`User1_ID`/`User2_ID` only while the invoice is posted, and no line dimension column has an AD callout). The window declares `draftMode.editableLineFieldsWhenCompleted: ["project", "costcenter"]` (decisions.json AND the `index.jsx` `getInvoiceDraftMode` override — kept in sync, guarded by the `passes the decisions.json completed-document allowlists through the draftMode override` test in this window's `__tests__/index.vitest.jsx`). On a Completed invoice the lines grid stays locked except for those two fields in the row's **Dimensiones contables** expand panel; each still obeys its own `readOnlyLogic` (CO-only, see below), evaluated against the line merged over the header (`c_invoiceline` has no `posted` column), so they are editable only while the invoice is unposted. A change is saved immediately as a one-field PATCH (`inlineLineUpdateHandlers.js` → `buildCompletedLineFieldUpdateHandler`), with no callout and no price recompute. Mechanism: `docs/decisions-reference.md` → `draftMode.editableLineFieldsWhenCompleted`, `docs/ui-customization.md` §14b.
+  - **Only on a Completed (`CO`) invoice (ETP-5692, review S5):** in both header and lines, `project` / `costcenter` carry a decisions.json `readOnlyLogic` override, `@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')` (generated JS: posted, or processed with `documentStatus !== 'CO'`), instead of the AD's bare `@Posted@='Y'`. So they are editable on a draft and on a Completed, unposted invoice, and read-only once posted or in any other processed status — a voided (`VO`) invoice that is not posted keeps them read-only, not merely save-blocked. On the lines the status is read from the header (the gate evaluates the logic on `{ ...header, ...line }`). The restriction lives on these four fields only: `accountingDate` (and `orderReference` on purchase) keep their existing rules, so their behaviour on a voided invoice is unchanged. Guarded by the `real invoice contracts` block of `tools/app-shell/src/lib/__tests__/completedLineEdits.test.js`, which evaluates the real `contract.json` logic for both invoices.
+  - **Caveat — project callout:** on a sales invoice, choosing a project fires `SE_Invoice_Project`, which also proposes that project's payment method and payment terms. If they differ from the invoice's, those fields become dirty too and the fail-closed save gate blocks Save, naming them (they are not in the allowlist, and core rejects a payment-terms change on a processed invoice anyway). Purchase invoices are unaffected — the callout only acts when `IsSOTrx='Y'`.
 - **ETP-5302 — the bulk action no longer reloads the page.** `ListView.jsx` now passes `refresh` in the `bulkActions` slot context, and `BulkDocumentAction` ends with `clearSelection()` → toast → `refresh()`. The old `sessionStorage` + `window.location.reload()` path survives only as a fallback for a host mounted outside that slot. The dialog's confirm button reads `ui('accept')` ("Aceptar" / "Accept"); it used to read `ui('done')` ("Completado"), which is the name of a document state shown in this very list's "Estado doc." column, so it read as though it would mark the documents completed. `done` was left untouched — `RecordCreateModal.jsx` still uses it.
 - `tools/app-shell/src/windows/custom/sales-invoice/SalesInvoiceTopbar.jsx` proves clone-from-detail behavior and the use of the custom payment-status topbar component. The clone button is icon-only, styled as Secondary Outline, and delegates to the shared `CloneButton` component (`tools/app-shell/src/windows/custom/shared/CloneButton.jsx`).
 - `tools/app-shell/src/windows/custom/shared/InvoicePreview.jsx` and `tools/app-shell/src/windows/custom/shared/useInvoicePreview.js` prove that sales invoices use the shared invoice preview shell (with the optional `relatedDocs` prop set to `SALES_RELATED_DOCS['sales-invoice']` by `tools/app-shell/src/windows/custom/sales-invoice/index.jsx`, ETP-5527) with a PDF preview, `General | Messages | History` tabs, payment-plan fetching, payment-history fetching, edit/send actions, and placeholder `Messages`/`History` states. `GenericPreviewModal` manages the left panel: for completed invoices it auto-caches the generated PDF on first open (`autoFetch=true`, `storeCondition=isCompleted`) and serves it from `ETGO_PREVIEW_FILE` on subsequent opens; for draft invoices it passes the live PDF viewer through without caching (`storeCondition=false`).
@@ -1687,9 +1774,20 @@ taxes/totals, creates the payment plan), `DR -> VO` voids, `CO -> RE` reactivate
 first** when the invoice was already posted (the Reactivate menu action carries
 `preUnpost: true`; since ETP-5302 the same two-step sequence runs from the list's bulk bar too,
 via `preUnpostActions={['RE']}`, and both paths share `tools/app-shell/src/lib/preUnpost.js`),
-`CO -> CL` closes. Posting is a **separate** action on this window
-(`menuActions` key `post`, gated on `processed && !posted`) and is **not** a `documentAction`
-value — the prompt explicitly tells the agent never to send `PO` here.
+`CO -> CL` closes.
+Posting is **not** a `documentAction` value — the prompt explicitly tells the agent never to send
+`PO` here. Since ETP-5692 the header declares two MCP action contracts for the ledger, and the
+prompt names both (the raw AD `posted` button is hidden from agents):
+
+    etendo_action { spec: "sales-invoice", entity: "header", id: "<invoiceId>", action: "post" }
+    etendo_action { spec: "sales-invoice", entity: "header", id: "<invoiceId>", action: "unpost" }
+
+`post` books a Completed, not-posted invoice (the SPA's `menuActions` key `post`, gated on
+`processed && !posted`); `unpost` removes the accounting entries of a Completed **and** posted
+invoice and leaves it `CO` — it is **not** reactivation (`RE`). After unposting, the agent can
+correct accountingDate, project, costcenter, the line project / costcenter and the
+exchange rates, then `post` again. The prompt tells the agent to do unpost → fix → post in one go,
+because a background accounting process may re-post an unposted invoice within ~5 minutes.
 
 **Send to SII from the detail topbar (ETP-4888 point 2):** before this change, the sales-invoice
 **detail view** had no way at all to trigger an SII send — the only existing path was the list
@@ -2093,13 +2191,18 @@ concurrently would report whichever failed first while the others had already la
 
 Etendo GO's per-role window-access tier (`useWindowAccess('167')` → `'none' | 'read-only' |
 'full'`) must hide every mutating control in a window the Solo Lectura role can see. For this
-window: "Enviar a SII/TBAI" (`SendToSifButton`, rendered inside `InvoiceTopbarExtra`, gated on its
-own `isDocumentReadOnly` prop), the secondary-actions bar's Clone/Send (shared
+window: the fiscal send button (`SendToSifButton`, rendered inside `InvoiceTopbarExtra`), the secondary-actions bar's Clone/Send (shared
 `DocumentSecondaryActions` via `topbarSecondary`), the bulk-selection toolbar's document actions,
 and the notes field / total-discount input (shared `DetailView`/`LinesBottomSection` fix). Not
 live-testable in this session — this role has `full`, not `read-only`, access to Sales Invoice, and
 `lockWhenProcessed` is `null` in `decisions.json`, so no completed-invoice state can be reached
 either way; relies on unit-test coverage.
+
+**Corrected by ETP-5700.** This ticket gated `SendToSifButton` on `isDocumentReadOnly`, but
+`DetailView` also sets that prop for every processed document, i.e. for every completed invoice —
+the only state in which sending applies — so the button never showed. It now reads
+`windowReadOnly` (the Solo Lectura tier only). The ETP-5700 form kebab and grid row kebab entries
+are hidden under the same tier.
 
 ### QA reject pasada 1 — Send and attachment writes (ETP-5205, 2026-09-29)
 
@@ -2120,7 +2223,7 @@ does not trigger any of this):
   → "No tenés autorización para enviar este documento") and every attachment write
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
-- Preview also hides **Añadir cobro** and **Enviar a SIF** under the tier (both write).
+- Preview also hides **Añadir cobro** and the fiscal send button (`Envío SII/TBAI`, ETP-5700) under the tier (both write).
 
 ## Payment ids scoped to the invoice and the tenant — ETP-5558
 
@@ -2223,18 +2326,27 @@ with the full text on hover. See `docs/ui-customization.md` §7.a for the shared
 
 - Preview panel progress row (ETP-5549): the `InvoicePreview` General tab shows a "Delivered: [PercentBar] N%" row under Status, fed by the invoice's `eTGODeliveryStatus` (`em_etgo_delivery_status`, the same field as the grid column and header badge). Like the order preview it renders whenever the value is non-null, regardless of document status. `PercentBar` renders the shared `ProgressCircle` (circle first, label beside it; grey track at 0%, black arc at 1-99%, green at 100% or more, label always black; above 100% the arc is clamped but the label shows the real value), so the preview matches the grid column (ETP-5545).
 
-## List toolbar: tab group on its own row — ETP-5509
+## List toolbar: tab group wraps only when it does not fit — ETP-5509
 
-The list toolbar is laid out by the shared `ListView` in up to two rows: quick filters, "Filtros"
-and the main actions (sort, refresh, print, "New …") on the first, and the **Todos / Facturas / Facturas rectificativas** subset tabs on a second row
-below it, followed by a gray separator line between toolbar and body. Before ETP-5509 the tab
-group opened the first row and, at 1280×720 with the navigation rail expanded, competed for width
-with the filters and the actions. The tabs are on the second row at every width, and they behave
-as before: choosing another entry filters the grid and highlights the selection.
+The list toolbar is laid out by the shared `ListView` as **one row**: the **Todos / Facturas / Facturas rectificativas** subset
+tabs, the status and date filters and "Filtros" on the left and the main actions (sort, refresh, print, "New …") on the right, followed by a gray
+separator line between toolbar and body. The tabs move — alone, the same element, so a focused tab keeps focus — to a line of their own
+below only when
+the whole row does not fit at the current width (a measurement, not a breakpoint), so no grid row
+is lost when there is room. The filters and the actions always keep at least 16px between them.
+At 1280×720 with the rail expanded the extra Print button makes the row too wide, so the tabs sit on the second row there; at 1920×1080 everything is one row. The tabs behave the same in either row: choosing another entry filters the grid and
+highlights the selection.
 
-Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
-(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+ETP-5509 review: the first iteration put the tabs on the second row at every width, which cost a
+visible grid row even where everything fit; UX asked for a single row that wraps only when needed.
 
-Manual verification: at 1280×720 with the rail expanded, open `/sales-invoice` and confirm the status and date
-filters and "Filtros" sit on the first row with the main actions on the right, untruncated; the
-three tabs sit on the second row; switching tab still filters the grid.
+Nothing changed in this window's own files or in `decisions.json` — the layout, the fit check
+(`useListToolbarTabsFit`), the test ids (`list-toolbar-tabs`, `data-tabs-placement`) and the
+reasoning live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: with the rail expanded, open `/sales-invoice` at 1920×1080 and confirm one toolbar
+row (tabs, filters, "Filtros", then the actions on the right, untruncated). Narrow the window
+until it no longer fits and confirm only the tabs drop to a second row, with no gap collapse
+between "Filtros" and the actions; widen it again and confirm they come back. Switching tab
+filters the grid from either row.
+

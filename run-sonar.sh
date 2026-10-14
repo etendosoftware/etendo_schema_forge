@@ -1090,8 +1090,8 @@ fi
 # ── Coverage-decrease gate (opt-in via --compare-coverage) ──────────
 # Mirrors Jenkins' "Compare Coverage Results" stage (sonarUtils.compareCoverage):
 # block when THIS branch's OVERALL project coverage is more than COVERAGE_TOLERANCE
-# (pp, default 1) below the base branch's, or below the absolute COVERAGE_MINIMUM
-# (default 70). The Sonar Quality Gate only evaluates NEW code, so adding files
+# pp below the base branch's, or below the absolute COVERAGE_MINIMUM (defaults in
+# scripts/compare-sonar-coverage.js). The Sonar Quality Gate only evaluates NEW code, so adding files
 # that dilute the total passes --fail-on-gate yet fails Jenkins; this closes that
 # gap locally. Current and base coverage are queried live from Sonar.
 CMP_RC=0
@@ -1105,105 +1105,22 @@ if [[ "$COMPARE_COVERAGE" == "true" ]]; then
   else
     echo "==> Comparing overall coverage: $GATE_BRANCH vs $CMP_BRANCH ..."
     set +e
-    CMP_BRANCH="$CMP_BRANCH" \
-    GATE_BRANCH="$GATE_BRANCH" SONAR_HOST_URL="$SONAR_HOST_URL" \
-    SONAR_TOKEN="$SONAR_TOKEN" PROJECT_KEY="$PROJECT_KEY" \
-    SONAR_PR_KEY="${SONAR_PR_KEY:-}" \
-    COVERAGE_TOLERANCE="${COVERAGE_TOLERANCE:-1}" COVERAGE_MINIMUM="${COVERAGE_MINIMUM:-70}" \
-    python3 - <<'PYEOF'
-import base64 as b64, json, os, sys, urllib.error, urllib.parse, urllib.request
-
-base = os.environ["SONAR_HOST_URL"].rstrip("/")
-token = os.environ["SONAR_TOKEN"]
-project = os.environ["PROJECT_KEY"]
-cmp_branch = os.environ["CMP_BRANCH"]
-gate_branch = os.environ["GATE_BRANCH"]
-pr_key = os.environ.get("SONAR_PR_KEY", "")
-credentials = b64.b64encode(f"{token}:".encode()).decode()
-
-def api_get(path):
-    req = urllib.request.Request(f"{base}{path}")
-    req.add_header("Authorization", f"Basic {credentials}")
-    try:
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        print(f"    WARNING: {e.code} on {path}", file=sys.stderr)
-        return None
-    except Exception as e:  # network/DNS — never hard-block on tooling failure
-        print(f"    WARNING: {e} on {path}", file=sys.stderr)
-        return None
-
-def read_metric(doc, metric):
-    """Read a coverage metric from an /api/measures/component response.
-    New-code metrics (new_coverage) carry their value under measures[].period.value;
-    plain metrics (coverage) under measures[].value. Handle both, like measure_values()."""
-    if not doc:
-        return None
-    for m in doc.get("component", {}).get("measures", []):
-        if m.get("metric") != metric:
-            continue
-        v = m.get("value")
-        if v in (None, ""):
-            v = (m.get("period") or {}).get("value")
-        if v in (None, ""):
-            return None
-        try:
-            return float(v)
-        except ValueError:
-            return None
-    return None
-
-tolerance = float(os.environ.get("COVERAGE_TOLERANCE") or "1")
-min_coverage = float(os.environ.get("COVERAGE_MINIMUM") or "70")
-
-pr_q = f"&pullRequest={urllib.parse.quote_plus(pr_key)}" if pr_key else ""
-# Current branch OVERALL coverage.
-current = read_metric(
-    api_get(f"/api/measures/component?component={project}&metricKeys=coverage{pr_q}"),
-    "coverage")
-
-# Base branch OVERALL coverage, queried live like sonarUtils.getCoverageWithRetry.
-enc = urllib.parse.quote(cmp_branch)
-base_cov = read_metric(
-    api_get(f"/api/measures/component?component={project}&branch={enc}&metricKeys=coverage"),
-    "coverage")
-
-if current is None:
-    print("    SKIPPED ⚠️  Could not read this branch's coverage from Sonar — not blocking.")
-    sys.exit(0)
-
-# Absolute floor: below the minimum the push is blocked outright, no base comparison.
-if current < min_coverage:
-    print(f"    {gate_branch} coverage: {current:.2f}%")
-    print(f"\n❌ COVERAGE BELOW MINIMUM — {current:.2f}% < {min_coverage:.2f}% required.")
-    print( "   Add tests until overall coverage reaches the minimum, then re-push.")
-    print( "   Bypass with 'git push --no-verify' (WIP only).")
-    sys.exit(1)
-
-if base_cov is None:
-    print(f"    SKIPPED ⚠️  No coverage on Sonar for '{cmp_branch}' yet — not blocking "
-          "(matches CI, which treats a missing baseline as 0%).")
-    sys.exit(0)
-
-min_required = base_cov - tolerance
-print(f"    {gate_branch} coverage: {current:.2f}%")
-print(f"    {cmp_branch} coverage: {base_cov:.2f}% (min required with {tolerance:.2f}pp tolerance: {min_required:.2f}%)")
-
-# current >= base_cov - tolerance: overall coverage is not more than the tolerance
-# below the base branch's.
-if current < min_required:
-    short = min_required - current
-    print(f"\n❌ COVERAGE DECREASED — this push would fail Jenkins' 'Compare Coverage Results'.")
-    print(f"   {current:.2f}% < {min_required:.2f}% (base {base_cov:.2f}% − {tolerance:.2f}pp) on '{cmp_branch}' (short {short:.2f}pp).")
-    print( "   Add tests until overall coverage is >= the base (minus tolerance), then re-push.")
-    print( "   Bypass with 'git push --no-verify' (WIP only).")
-    sys.exit(1)
-
-print("    Coverage is OK ✅ (not below base − tolerance, and above the minimum).")
-sys.exit(0)
-PYEOF
-    CMP_RC=$?
+    # In this repo the rule, its thresholds and its messages live in one place,
+    # shared with the GitHub `Sonar Build` job: scripts/compare-sonar-coverage.js.
+    # (com.etendoerp.go/run-sonar.sh still carries its own Python copy.)
+    CMP_ARGS=(--base-branch "$CMP_BRANCH" --label "$GATE_BRANCH" --project-key "$PROJECT_KEY")
+    if [[ -n "${SONAR_PR_KEY:-}" ]]; then
+      CMP_ARGS+=(--pull-request "$SONAR_PR_KEY")
+    fi
+    if ! command -v node >/dev/null 2>&1; then
+      echo "❌ COVERAGE NOT EVALUATED — 'node' is not on PATH; the coverage gate needs Node.js 22."
+      echo "   Install Node 22 (or fix PATH for git hooks), then push again."
+      CMP_RC=1
+    else
+      SONAR_HOST_URL="$SONAR_HOST_URL" SONAR_TOKEN="$SONAR_TOKEN" \
+        node "$SCRIPT_DIR/scripts/compare-sonar-coverage.js" "${CMP_ARGS[@]}"
+      CMP_RC=$?
+    fi
     set -e
   fi
 fi

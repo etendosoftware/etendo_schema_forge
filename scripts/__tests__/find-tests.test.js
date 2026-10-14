@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isolatedGitEnv } from './isolatedGitEnv.js';
 import {
   findFunctionalTests,
   findJavaTests,
@@ -22,7 +23,6 @@ import {
   resolveSpecifier,
   resolveTarget,
 } from '../find-tests.js';
-import { sanitizedGitEnv } from '../lib/git-env.js';
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'find-tests.js');
 
@@ -35,7 +35,7 @@ function writeTree(root, files) {
 }
 
 function gitInit(root) {
-  const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'ignore', env: sanitizedGitEnv() });
+  const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'ignore', env: isolatedGitEnv() });
   git('init', '-q');
   git('add', '-A');
   git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'init', '--no-gpg-sign');
@@ -502,7 +502,7 @@ describe('main', () => {
         'src/lib/__tests__/foo.test.js': "// @covers src/lib/foo.js\nimport { foo } from '../foo.js';\n",
       });
       gitInit(sf);
-      env = { ...process.env, SF_ROOT: sf, GO_ROOT: join(tmp, 'go') };
+      env = isolatedGitEnv({ SF_ROOT: sf, GO_ROOT: join(tmp, 'go') });
     });
 
     after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -547,7 +547,7 @@ describe('main', () => {
 describe('git environment isolation (pre-push hook)', () => {
   const GIT_KEYS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE'];
   const plainGit = (cwd, ...args) =>
-    execFileSync('git', args, { cwd, encoding: 'utf8', env: sanitizedGitEnv() }).trim();
+    execFileSync('git', args, { cwd, encoding: 'utf8', env: isolatedGitEnv() }).trim();
   let tmp;
   let decoy;
   let decoyHead;

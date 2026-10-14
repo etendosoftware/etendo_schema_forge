@@ -27,7 +27,7 @@ Use this window to register stock consumed inside the organization rather than s
 - **Columns, in order:** Movement Date, Name, Status, Posted ("Fecha del movimiento", "Nombre", "Estado", "Contabilizado"). Status comes before Posted, consistent with the other document windows — driven by `gridOrder` 3 on `status` and 4 on `posted` in `decisions.json` (grid only; the form is unaffected).
 - **Posted badge:** `posted` is a read-only boolean badge — green **Posted / Contabilizado** or yellow **Not posted / Sin contabilizar** (a failed posting shows red with its reason). Colours come from `lib/postedStatus.js`, not from the window (ETP-5647). It is not a form field (`form: false`).
 - **Toolbar trimmed:** the per-row link icon (`hideLink`), the Print button (`hidePrint`), and the **All statuses** filter dropdown (`hideStatusFilter`) are all hidden. Only the date filter and **Filters** remain on the left; sort and refresh remain on the right.
-- **Custom toolbar icons:** sort and refresh use the same icon set as Contacts/Warehouse (`customListIcons`, which emits `SortIcon` / `RefreshIcon` from `@/components/ui/custom-icons`).
+- **Toolbar icons:** sort and refresh use the default `ListView` icons, same as `/sales-order` (ETP-5601; `customListIcons` is no longer set).
 - **Tighter padding:** the list toolbar and table use `px-2` (8 px) horizontal padding. `px-2` is now the global `ListView` default, so the window relies on the default rather than per-window overrides.
 - **No status dot on the date column:** `movementDate` sets `dot: false`, so the list does not render the red date indicator next to Movement Date.
 
@@ -93,7 +93,7 @@ Use this window to register stock consumed inside the organization rather than s
 ### List view
 1. Open `/internal-consumption` and confirm the toolbar shows the date filter and **Filters**, but no **All statuses** dropdown, no Print button, and no per-row link icon.
 2. Confirm the columns read Movement Date, Name, Status, Posted in that order, and that Posted shows a green **Contabilizado** or yellow **Sin contabilizar** badge.
-3. Confirm the sort and refresh icons match the Contacts/Warehouse style, the toolbar/table padding is tight (8 px), and there is no red dot next to the Movement Date values.
+3. Confirm the sort and refresh icons are the default `ListView` icons (same as `/sales-order`), the toolbar/table padding is tight (8 px), and there is no red dot next to the Movement Date values.
 
 ### Detail view — draft and Confirm
 4. Create a new header; confirm Movement Date and Name are required and that the header fields render without a surrounding card border. Confirm there is no **Others** tab.
@@ -118,7 +118,7 @@ Use this window to register stock consumed inside the organization rather than s
 
 ### Cross-window
 17. Open "Documentos no contabilizados" (`/not-posted-documents`) and confirm Internal Consumption appears as a document-type filter option and that an unposted Internal Consumption row can be posted from there.
-18. Open a saved record and confirm the **Attachments** tab works (upload, download, delete; 'Download all (ZIP)' and 'Delete all' with confirmation when multiple files exist).
+18. Open a saved record and confirm the **Attachments** tab works (upload, download, delete; with two rows ticked, the selection bar offers a ZIP download of just those and a delete with confirmation — the header has no bulk controls since ETP-5526).
 
 ## Automated evidence
 
@@ -127,7 +127,7 @@ Use this window to register stock consumed inside the organization rather than s
 - `tools/app-shell/src/lib/__tests__/backendErrors.test.js` — `translateBackendError — document-level NotCalculatedCost (ETP-5445)` maps both the en_US and es_ES core literals to `backendError.costNotCalculated`.
 - `com.etendoerp.go`: `InternalConsumptionHeaderHandlerTest` (delegation to `DocumentPostingService`), `InternalConsumptionLineHandlerTest` (stock strip only on a product-triggered callout; conversion callout untouched), `DocumentPostingServiceTest` (cost pre-check for `M_Internal_Consumption`), `NotPostedDocumentsHandlerTest` (`"Internal Consumption"` → `800168` row enrichment).
 - `cli/test/data-fixes-r40-internal-consumption-table-active.test.js` — data-fix R40 shape and behavior.
-- `artifacts/internal-consumption/contract.json` and `generated/web/internal-consumption/InternalConsumptionPage.jsx` show the master-child structure, the Draft/Completed/Voided enum, the `draftMode` Save/Confirm workflow with `extraParams`, the `posted` status pill, the list-view trims (`hidePrint`, `hideLink`, `hideStatusFilter`, `customListIcons`), `noHeaderBorder`, the kebab `customMenuContent` + `menuActions` injection, child selectors, and the `processNow` action endpoint. `InternalConsumptionTable.jsx` shows the column order and the `posted` badge.
+- `artifacts/internal-consumption/contract.json` and `generated/web/internal-consumption/InternalConsumptionPage.jsx` show the master-child structure, the Draft/Completed/Voided enum, the `draftMode` Save/Confirm workflow with `extraParams`, the `posted` status pill, the list-view trims (`hidePrint`, `hideLink`, `hideStatusFilter`), `noHeaderBorder`, the kebab `customMenuContent` + `menuActions` injection, child selectors, and the `processNow` action endpoint. `InternalConsumptionTable.jsx` shows the column order and the `posted` badge.
 - `artifacts/internal-consumption/custom/InternalConsumptionActions.jsx` is the kebab Void action: it renders only when `status === 'CO'`, POSTs `{ action: 'VO' }` to the `processNow` endpoint, refreshes after success, disables while processing, and uses neutral styling.
 - `artifacts/internal-consumption/custom/InternalConsumptionBottomPanel.jsx` exposes the shared `LinesEmptyState` as its `linesEmptyState` static.
 - `tools/app-shell/src/components/contract-ui/__tests__/ListFilterBar.vitest.jsx` covers the generic `hideStatusFilter` behavior used by this window's list view.
@@ -161,3 +161,16 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Design changes — ETP-5681
+
+- **The line form opens the same product drawer as the grid.** `EntityForm.LookupFormField` used to hardcode
+  `ProductSearchDrawer` and ignore the field's `lookupDrawer`. It now resolves the drawer through
+  `lookupDrawers.js`, so the line form opens the declared `product-stock` drawer as the add row and the inline
+  edit already did.
+- `onSelectMappings` (the storage-bin fill from `_aux._LOC`) is still applied caller-side by the grid only
+  (`DataTable.applyOnSelectMappings`), so the form behaves as before for that mapping.
+- `decisions.json`: only the `lookupTitle` removal below.
+- **Drawer title translated.** The product field no longer declares `lookupTitle`, which was a literal English string
+  ("Product" / "Product + Warehouse") that made the drawer search read "Buscar Product..." in Spanish. The title and the
+  placeholder now come from the field's translated label ("Buscar Producto...").

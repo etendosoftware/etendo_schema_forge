@@ -1,3 +1,5 @@
+// @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 import { installHeaderConfirmMock } from '../../helpers/confirmMocks.js';
@@ -202,13 +204,11 @@ test.describe('Purchase Order — Confirm Modal idempotency (mocked)', () => {
 
     await clickConfirm(page);
 
-    // Match the exact confirmed-result title ("Pedido de compra confirmado" /
-    // "Purchase order confirmed"), NOT a loose `.*` pattern — the still-open
-    // ConfirmModal's own static content (title "Confirmar pedido #X" + the
-    // "Una vez confirmado..." warning banner) concatenates to a false match
-    // for /Pedido.*confirmado/i, resolving toBeVisible() before the retry's
-    // createPurchaseInvoice request actually completes.
-    await expect(page.getByText(/Pedido de compra confirmado|Purchase order confirmed/i)).toBeVisible({ timeout: 5000 });
+    // Wait on the result popup's own title (scoped by test id), NOT on loose page text —
+    // the still-open ConfirmModal's static content (title "Confirmar pedido #X" + the
+    // "Una vez confirmado..." warning banner) could otherwise match before the retry's
+    // createPurchaseInvoice request actually completes. Two documents → the plural title.
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Documentos creados|Documents created/i, { timeout: 5000 });
 
     expect(state.calls.documentAction).toBe(1);
     expect(state.calls.createGoodsReceipt).toBe(1);
@@ -244,9 +244,8 @@ test.describe('Purchase Order — Confirm Modal idempotency (mocked)', () => {
     // Retry — receipt mock now succeeds, invoice is locked and skipped by the !invoiceResult guard
     await clickConfirm(page);
 
-    // See the exact-phrase note above — avoid the `.*` false match against the
-    // still-open ConfirmModal's own title + warning banner text.
-    await expect(page.getByText(/Pedido de compra confirmado|Purchase order confirmed/i)).toBeVisible({ timeout: 5000 });
+    // See the scoping note above — wait on the result popup's own title.
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/Documentos creados|Documents created/i, { timeout: 5000 });
 
     expect(state.calls.documentAction).toBe(1);
     expect(state.calls.createGoodsReceipt).toBe(2);

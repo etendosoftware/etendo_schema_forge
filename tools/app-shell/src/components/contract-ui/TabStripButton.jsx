@@ -1,14 +1,5 @@
 import React from 'react';
-import { List, Shield } from 'lucide-react';
-import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
-import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
-
-const TAB_ICONS = {
-  'custom:attachments': AttachmentIcon,
-  'custom:sif': Shield,
-  'custom:pricing': PricingIcon,
-  'products': WarehouseProductsIcon,
-};
+import { resolveTabIcon } from './tabIcons.js';
 
 /**
  * One button of DetailView's secondary tab strips.
@@ -37,7 +28,7 @@ export default function TabStripButton({
         disabled && 'opacity-50 cursor-not-allowed',
       ].filter(Boolean).join(' ')}
     >
-      {React.createElement(TAB_ICONS[iconKey] ?? List, { className: 'h-4 w-4' })}
+      {React.createElement(resolveTabIcon(iconKey), { className: 'h-4 w-4' })}
       {tMenu(label)}
       {count != null && (
         <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground">

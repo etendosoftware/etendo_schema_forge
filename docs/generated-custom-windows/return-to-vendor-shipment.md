@@ -88,7 +88,7 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
 7. Process the shipment and confirm the document moves out of draft and the draft-only actions disappear or become unavailable.
 8. If related documents exist, open the Related Documents tab and verify it links the shipment back to the surrounding return flow.
 9. If stock-movement behavior is important for the rollout, verify separately in the ERP/backend that processing this shipment produces the expected outbound inventory effect, because that consequence is not directly proven by current SPA evidence.
-10. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+10. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 11. In the list, select 0, then 1, then 2+ shipments and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/return-to-vendor-shipment/<id>`. Open a saved shipment and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
 12. **ETP-4737:** open a draft return-to-vendor shipment and confirm the confirm-flow card reads **"Create Rectificative Invoice"** (not "Nota de Crédito" or any "factura de devolución" wording) in all 3 locales. Confirm and generate the invoice, then confirm it lands under the purchase-invoice "Facturas rectificativas" tab with negative line quantities/totals — and, since ETP-5381, in **Confirmado** rather than Borrador. On a completed shipment with no invoice yet, confirm the secondary pill button still reads the generic "Crear Factura de Devolución" label (known residual gap, not fixed here).
 13. **ETP-5124 (Send):** on a Confirmado shipment, confirm the row-hover Email icon in the list AND the "Enviar" button in the row-preview panel both open the send modal (they used to be either absent — ETP-4717 — or present-but-broken — ETP-4718). Send a test email; confirm it succeeds (no "Unknown email contract" error) and that the "Emails" card in the preview's General tab shows the new send after the modal closes, without needing to reopen the panel. On a Borrador shipment, confirm neither trigger is offered.
@@ -453,3 +453,30 @@ Under the runtime Solo-Lectura tier, the list row "Enviar" is hidden generically
 Backend: the email send contract and every attachment write answer 403 for this tier
 (`com.etendoerp.go` — `DefaultDocumentSendEmailContract.authorize`, `NeoAttachmentAuthorizer`).
 Print and Download PDF are deliberately NOT restricted (they only expose readable data).
+
+## Generated-documents popup — ETP-5674
+
+The purchase rectificative invoice this window creates — detail **Confirmar** on a Borrador
+shipment, post-completion «Crear Factura Rectificativa» (`ConfirmWithCreditButtonBase.jsx` via
+`useConfirmWithCredit`, `invoiceType="facturaRectificativaCompra"`) and the grid row **Confirmar**
+(`ReturnWindowShell` → `useRowConfirmAction`, `invoiceDocType: 'facturaRectificativaCompra'`) — is
+announced by the shared `ConfirmResultModal` as a `facturaRectificativaCompra` doc (it used to be
+typed `facturaCompra`, titled by `returnToVendor.invoiceCreatedTitle`, now removed). The popup reads
+«Factura rectificativa de compra creada», one card «Factura rectificativa de compra · Completada ·
+Nº …» (no amount), «Cerrar» + «Ver factura» → `/purchase-invoice/{id}`. Contract, type table and `data-testid`s: `docs/ui-customization.md` §21.
+
+**Manual verification.** On a completed shipment with no invoice, run «Crear Factura Rectificativa»
+and verify the title, the «Completada» badge and that «Ver factura» opens the new purchase invoice.
+
+**Automated evidence.** `tools/app-shell/src/windows/custom/return-to-vendor-shipment/__tests__/ConfirmWithCreditButton.spec.jsx`,
+`tools/app-shell/src/windows/custom/return-to-vendor-shipment/__tests__/index.test.js`,
+`e2e/tests/flows/purchases/return-to-vendor-shipment.mocked.spec.js`.
+
+## Related documents — form and list preview share one definition — ETP-5539
+
+The form's Related Documents tab (`artifacts/return-to-vendor-shipment/custom/RelatedDocuments.jsx`,
+now a thin wrapper over `RelatedDocumentsSection`) and the preview card
+(`ReturnToVendorShipmentPreview.jsx`) render `PURCHASE_RELATED_DOCS['return-to-vendor-shipment']`:
+source goods receipts (`sourceReceipts`) and return invoices (`returnInvoices`). The preview passes
+`relatedLoadsDetail` so the card loads the detail record instead of reading the list row. See
+`docs/ui-customization.md` §7.a.

@@ -14,6 +14,7 @@ import {
   parseApiError,
   serializeBooleanFields,
 } from './fiscalConfig.utils.js';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
 
 // Confirmed from artifacts/tbai-config/contract.json → backendContract.window.primaryEntity
 const TBAI_ENTITY = 'header';
@@ -80,7 +81,7 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
           // validatePreviousInvoice here — overriding them would silently revert any
           // change the user made in Classic (e.g. productionEnv='N' for testing). (ETP-4783)
           invoiceDescription:      record?.invoiceDescription ?? 'Descripcion Factura',
-          tbaisystemdate:          normalizeDateInputValue(record?.tbaisystemdate) || new Date().toISOString().slice(0, 10),
+          tbaisystemdate:          normalizeDateInputValue(record?.tbaisystemdate) || todayCalendarISO(),
         }, ['autoSendInvoices'])),
       });
       if (!res.ok) throw new Error(await parseApiError(res));

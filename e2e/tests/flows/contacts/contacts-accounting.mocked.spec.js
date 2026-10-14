@@ -1,3 +1,6 @@
+// @covers artifacts/contacts/decisions.json
+// @covers tools/app-shell/src/components/contract-ui/AccountLookupPopup.jsx
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 import { clickEmptyStateAddLine } from '../../helpers/secondaryTabsInteractions.js';
@@ -143,5 +146,27 @@ test.describe('Contacts — Customer Accounting tab (empty state)', () => {
 
     // CustomerAccountingHandler auto-fills accountingSchema server-side.
     await expect(page.getByTestId('inline-add-field-accountingSchema')).toHaveCount(0);
+  });
+
+  // ETP-5681 — every ValidCombination field of a generated accounting tab declares
+  // `"lookupDrawer": "account"`, so it opens the shared account search popup over its selector.
+  test('the GL account field opens the account popup and fills the pick', async ({ page }) => {
+    const account = { id: 'gl-430', label: '43000000 - Clientes (euros), cuenta de deudores por operaciones de tráfico' };
+    await page.route('**/sws/neo/contacts/customerAccounting/selectors/C_Receivable_Acct**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [account], hasMore: false }) }));
+
+    await page.getByTestId('tab-customerAccounting').click();
+    await clickEmptyStateAddLine(page);
+    const field = page.getByTestId('inline-add-field-customerReceivablesNo');
+    await field.click();
+
+    const popup = page.getByTestId('account-lookup-popup');
+    await expect(popup).toBeVisible();
+    await expect(popup.getByRole('heading')).toHaveText((await field.textContent()).trim());
+    await expect(popup.getByTestId(`account-lookup-popup-option-${account.id}`)).toHaveText(account.label);
+
+    await popup.getByTestId(`account-lookup-popup-option-${account.id}`).click();
+    await expect(popup).toHaveCount(0);
+    await expect(field).toContainText(account.label);
   });
 });

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 // @covers artifacts/sales-quotation/custom/QuotationConfirmModal.jsx
 // @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 // @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
@@ -389,6 +390,11 @@ async function readLinesByProduct(page, lines, { stage, qtyKey, grossKey }) {
   await expect(page.locator('[data-testid^="line-row-"]'),
     `${stage} should render exactly ${lines.length} line rows`,
   ).toHaveCount(lines.length, { timeout: 15_000 });
+  // A hovered line row swaps its trailing amount cell for the edit/delete action
+  // strip (InlineLinesPanel), so `grossKey` would not be in the DOM. Arriving via
+  // the result popup's «Ver …» button leaves the cursor over the first line row
+  // (ETP-5674 moved that button), so park it on the panel's header corner first.
+  await page.getByTestId('inline-lines-panel').hover({ position: { x: 2, y: 2 } });
   const byProduct = {};
   for (const { product } of lines) {
     const row = lineRowByProduct(page, product.name);
@@ -784,8 +790,8 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await orderConfirmCard.getByRole('button', { name: /Confirmar \+ albarán/i }).click();
     await slow(page);
 
-    const orderResultTitle = page.getByText(/pedido confirmado|documentos creados/i);
-    await expect(orderResultTitle).toBeVisible({ timeout: 30_000 });
+    // ETP-5674: only the shipment was created, so the result popup is titled after it.
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/albarán creado|shipment created/i, { timeout: 30_000 });
 
     const viewShipmentBtn = page.getByRole('button', { name: /ver albarán|view shipment/i });
     await expect(viewShipmentBtn).toBeVisible({ timeout: 10_000 });
@@ -1225,8 +1231,8 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     expect(shipment?.id, '[ETP-4567] createShipment should return the new shipment id').toBeTruthy();
     await slow(page);
 
-    const orderResultTitle = page.getByText(/pedido confirmado|documentos creados/i);
-    await expect(orderResultTitle).toBeVisible({ timeout: 30_000 });
+    // ETP-5674: only the shipment was created, so the result popup is titled after it.
+    await expect(page.getByTestId('confirm-result-title')).toHaveText(/albarán creado|shipment created/i, { timeout: 30_000 });
     await expect(page.getByText(/no pending lines|no hay líneas pendientes/i),
       '[ETP-4567] The order result must not show "No pending lines to invoice"',
     ).toHaveCount(0);

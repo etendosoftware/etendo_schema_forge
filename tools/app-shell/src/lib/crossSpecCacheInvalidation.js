@@ -17,16 +17,24 @@
  * direction: a stale mark costs at most one extra GET on the next read.
  *
  * Add an entry when a new spec starts showing values derived from another spec's documents.
- * Only the Sales side is declared (ETP-5525 is a Sales ticket): the Purchase equivalent
- * (`goods-receipt` / `purchase-invoice` → `purchase-order`) is owned by the Purchase cell and
- * is just two more entries here.
+ * The order side is declared for Sales only (ETP-5525 is a Sales ticket): the Purchase
+ * equivalent (`goods-receipt` / `purchase-invoice` → `purchase-order`) is owned by the Purchase
+ * cell and is just two more entries here.
+ *
+ * ETP-5576 — the invoices also show values derived from their shipments / receipts: the
+ * `followUp` annotation («Gestionar envío / recepción»), the delivery status and the
+ * `linkedShipments` / `linkedReceipts` Related Documents chips. Completing (or editing, voiding,
+ * deleting) the follow-up document created from an invoice therefore marks the invoice stale,
+ * so returning to it — the back button, a Related Documents chip — refetches it instead of
+ * showing the pre-completion status for `recordStaleTime`.
  *
  * ETP-5571 adds a second map, `WRITE_INVALIDATES_ENTITIES`, for caches keyed by entity rather
  * than by spec — see its own comment below.
  */
 export const WRITE_INVALIDATES_SPECS = Object.freeze({
-  'goods-shipment': Object.freeze(['sales-order']),
+  'goods-shipment': Object.freeze(['sales-order', 'sales-invoice']),
   'sales-invoice': Object.freeze(['sales-order']),
+  'goods-receipt': Object.freeze(['purchase-invoice']),
 });
 
 /**
@@ -41,9 +49,16 @@ export const WRITE_INVALIDATES_SPECS = Object.freeze({
  * a selector entry does not say which table its options come from, and a stale mark costs at
  * most one extra GET the next time a selector is opened. Deliberately scoped to `contacts`;
  * other master-data specs are added here when a ticket needs them.
+ *
+ * ETP-5681 — the accounting dimensions: deactivating (or renaming) a cost center or a project
+ * left the document Cost Center / Project selectors listing it until the cache window ran out.
+ * `project` and `service-project` both write `C_Project`.
  */
 export const WRITE_INVALIDATES_ENTITIES = Object.freeze({
   contacts: Object.freeze(['selector']),
+  'cost-center': Object.freeze(['selector']),
+  project: Object.freeze(['selector']),
+  'service-project': Object.freeze(['selector']),
 });
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

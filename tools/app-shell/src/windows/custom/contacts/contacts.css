@@ -96,3 +96,12 @@
   box-shadow: none;
   opacity: 1;
 }
+
+/* ── Header form row gap (ETP-5600, Figma "Nuevo contacto General") ─────────
+   20px between inputs both ways. Horizontal is already EntityForm's gap-x-5;
+   the vertical gap comes from the core ROW_GAP_Y token (gap-y-3, 12px) shared by
+   every window, so it is overridden here only for the Contacts header form
+   (wrapper set in ContactsBusinessPartnerForm.jsx). */
+.contacts-header-form .grid.gap-x-5 {
+  row-gap: 1.25rem;
+}

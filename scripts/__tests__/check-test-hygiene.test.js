@@ -7,7 +7,6 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sanitizedGitEnv } from '../lib/git-env.js';
 import {
   checkFile,
   findAssertionlessBlocks,
@@ -21,6 +20,7 @@ import {
   parseCoversWithLines,
   parseNameStatus,
 } from '../check-test-hygiene.js';
+import { isolatedGitEnv } from './isolatedGitEnv.js';
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'check-test-hygiene.js');
 
@@ -350,7 +350,7 @@ describe('main', () => {
     let dirty;
     let clean;
 
-    const git = (...args) => execFileSync('git', args, { cwd: tmp, encoding: 'utf8', env: sanitizedGitEnv() }).trim();
+    const git = (...args) => execFileSync('git', args, { cwd: tmp, encoding: 'utf8', env: isolatedGitEnv() }).trim();
     const write = (rel, content) => {
       mkdirSync(dirname(join(tmp, rel)), { recursive: true });
       writeFileSync(join(tmp, rel), content);
@@ -375,7 +375,7 @@ describe('main', () => {
     after(() => rmSync(tmp, { recursive: true, force: true }));
 
     const run = (args, extraEnv = {}) => {
-      const env = { ...sanitizedGitEnv(), SF_ROOT: tmp };
+      const env = isolatedGitEnv({ SF_ROOT: tmp });
       delete env.TEST_HYGIENE_MODE;
       Object.assign(env, extraEnv);
       return spawnSync(process.execPath, [SCRIPT, ...args], { cwd: tmp, env, encoding: 'utf8' });
@@ -419,7 +419,7 @@ describe('main', () => {
       mkdirSync(dir, { recursive: true });
       const link = join(dir, 'check-test-hygiene.js');
       symlinkSync(SCRIPT, link);
-      const env = { ...sanitizedGitEnv(), SF_ROOT: tmp };
+      const env = isolatedGitEnv({ SF_ROOT: tmp });
       delete env.TEST_HYGIENE_MODE;
       const res = spawnSync(process.execPath, [link, '--base', base, '--head', dirty], { cwd: tmp, env, encoding: 'utf8' });
       assert.equal(res.status, 0, res.stderr);

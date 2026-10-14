@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import RecordCreateModal from './RecordCreateModal.jsx';
+import { useContactCategorySeed } from './useContactCategorySeed.js';
 import { LOOKUP_CREATE_TARGETS, buildContactSeed, resolveContactName } from './lookupCreateTargets.js';
 
 import { buildHeaders } from '@/auth/api.js';
@@ -42,9 +43,15 @@ export function useCreateContactModal({ apiBaseUrl, token, documentType = 'sale'
   );
 
   const query = createContactState?.query ?? '';
+  // The category id is per client, so it is looked up before the popup mounts (the embedded
+  // window reads its seed once, on mount). A failed lookup still reports ready, with no
+  // category, and the form's own default applies.
+  const { ready: categoryReady, categorySeed } = useContactCategorySeed({
+    contactsApiBaseUrl: bpApiBaseUrl, documentType, active: !!createContactState,
+  });
   const initialData = useMemo(
-    () => buildContactSeed(query, { documentType }),
-    [query, documentType],
+    () => ({ ...buildContactSeed(query, { documentType }), ...categorySeed }),
+    [query, documentType, categorySeed],
   );
 
   const handleCreated = useCallback((record) => {
@@ -52,7 +59,7 @@ export function useCreateContactModal({ apiBaseUrl, token, documentType = 'sale'
     setCreateContactState(null);
   }, [createContactState]);
 
-  const contactPortal = createContactState ? (
+  const contactPortal = createContactState && categoryReady ? (
     <RecordCreateModal
       open
       target={target}
