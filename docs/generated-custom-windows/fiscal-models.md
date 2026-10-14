@@ -40,15 +40,16 @@ Every AEAT model this window knows is declared once, in `modelRegistry.js`. No s
 window compares against a model id (`'303'`, `'349'`) any more: the catalog, the "Nueva
 declaración" modal, the config drawer, the list (model filter, "Resultado" auto-compute, row
 result), the detail-page switch in `FiscalModelsPage` and the AEAT monthly deadline all read the
-model's entry or its bindings. Display order is registry order (303, then 349) and the default
-model is the first entry (`DEFAULT_MODEL_ID`, 303).
+model's entry or its bindings. Display order is registry order (303, 349, then 390) and the
+default model is the first entry (`DEFAULT_MODEL_ID`, 303).
 
 | Module | Holds | Imported by |
 |---|---|---|
-| `modelRegistry.js` | One entry per model: `id`, `periodicities`, `defaultActive`, `locked`, `badgeVariant`, `monthlyDeadline(year, month)`, `iaeReminderOnActivate`, `iaeReminderOnYearEndPeriod`, `telematicFiling`, `syncDraftComputeToDetail`. Accessors `listModels`, `getModel`, `isKnownModel`, `getModelOrDefault`, `modelTitleKey`, `DEFAULT_MODEL_ID`. | everything, including `fiscalModelsUtils.js` |
+| `modelRegistry.js` | One entry per model: `id`, `periodicities`, `defaultActive`, `locked`, `badgeVariant`, `monthlyDeadline(year, month)` (or `null`: never monthly), `annualDeadline(year)` (or `null`: never annual), `iaeReminderOnActivate`, `iaeReminderOnYearEndPeriod`, `telematicFiling`, `syncDraftComputeToDetail`, `siiWarningOnActivate`, `singleOrdinaryPerYear`, `newDeclWarning(existingDecls, year)` (or `null`). Accessors `listModels`, `getModel`, `isKnownModel`, `getModelOrDefault`, `modelTitleKey`, `DEFAULT_MODEL_ID`. | everything, including `fiscalModelsUtils.js` |
 | `modelRegistryList.js` | id → `models/<id>/listBehavior<id>.js`: `computeFn`, `checkModifiedFn`, `deriveListResult(decl, computed)` | `FmListPage.jsx` |
 | `modelRegistryPages.js` | id → detail page (`models/<id>/FmModel<id>Page.jsx`) | `FiscalModelsPage.jsx` |
-| `modelRegistryConfig.js` | id → config drawer section (`models/<id>/ConfigSection<id>.jsx`) | `FmOverlays.jsx` (`ConfigDrawer`) |
+| `modelRegistryConfig.js` | id → config drawer section (`models/<id>/ConfigSection<id>.jsx`). **Optional** (ETP-5716): a model with nothing to configure (390) has none and `ConfigDrawer` shows only "Declarante" | `FmOverlays.jsx` (`ConfigDrawer`) |
+| `fiscalPeriods.js` | Period codes shared by every model: `ANNUAL_PERIOD` (`'0A'`), `isAnnualPeriod`, `isAnnualOnlyModel(entry)` (`periodicities` exactly `['annual']`). A leaf, kept out of `fiscalModelsUtils.js` because many suites mock that module with an explicit export list | `FmOverlays.jsx`, `FmListPage.jsx`, `FmDetailChrome.jsx`, `fiscalModelsUtils.js` |
 
 Why four modules and not one: `modelRegistry.js` is a leaf (no React, no `@/` alias, plain `.js`
 imports) because `fiscalModelsUtils.js` imports it and is itself loaded by plain `node --test`
@@ -62,16 +63,19 @@ Two call sites keep their pre-registry fallback for an unknown model id on purpo
 computed-map lookup and row result (an unknown model reads the 303 maps and derivation). Every
 other surface ignores an unknown model (no detail page, no "computing" spinner, not in the catalog).
 
-**Adding a model** (e.g. 390):
+**Adding a model** (done for 390 in ETP-5716 — see "Modelo 390 detail page" below):
 
 1. Add its entry to `modelRegistry.js`, in display order.
-2. Create `models/<id>/` with its detail page, `deadline<id>.js` (monthly rule), `listBehavior<id>.js`
-   and `ConfigSection<id>.jsx`, and bind each in the matching `modelRegistry*.js` module.
+2. Create `models/<id>/` with its detail page, `deadline<id>.js` (monthly and/or annual rule),
+   `listBehavior<id>.js` and, only if it has something to configure, `ConfigSection<id>.jsx`; bind
+   each in the matching `modelRegistry*.js` module.
 3. Add its i18n keys (`fm.catalog.<id>.name`/`.desc`, `fm.config.m<id>.title`, …) to both locales
    and its badge colours (`fm-model-badge--<id>`, `fm-catalog-card__badge--<variant>`) to
    `fiscal-models.css`.
-4. `__tests__/modelRegistry.vitest.js` checks that the entry has every field with the right type and
-   that all three bindings exist; its guardrail fails if a shared file of the window spells a model
+4. `__tests__/modelRegistry.vitest.js` checks that the entry has every field with the right type
+   (a model filed monthly has a `monthlyDeadline`, a model filed annually an `annualDeadline`), that
+   the list behaviour and the detail page are bound and that a config section, if bound, is a
+   component; its guardrail fails if a shared file of the window spells a model
    id (3-digit quoted literal) outside the registry modules and `models/<id>/`. The only exception
    is the developer-only `FmDebugPanel.jsx` (fixture declarations), listed with its reason in the
    test's allowlist.
@@ -79,7 +83,7 @@ other surface ignores an unknown model (no detail page, no "computing" spinner, 
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
 `FmListPage` (through its local `useDeclarationsAutoCompute` hook) calls `useFiscalAutoCompute`
-**once per (bucket × registered model)** — six times for 303 + 349 — because drafts,
+**once per (bucket × registered model)** — nine times for 303 + 349 + 390 — because drafts,
 non-draft/non-submitted declarations, and submitted-family declarations each need different
 refresh semantics. The calls loop over the registry (a module-level constant, so the number and
 order of hook calls never changes between renders): every model's draft bucket, then every model's
@@ -3419,6 +3423,122 @@ ETP-5456 deployment trap above applies: verify in a fresh tab after deploying.
 
 `FiscalModelsPage` keeps `FmListPage` mounted (hidden) while in a detail view so the auto-compute polling interval stays alive. When polling fires, `onComputeUpdate` propagates the updated `_precomputed` to `FmModel349Page` via a `useEffect` on `decl._precomputed`.
 
+## Modelo 390 detail page (`FmModel390Page`)
+
+ETP-5716, phase "skeleton + boxes". The annual VAT summary, built on the classic module through
+`/fiscal390/*` (backend contract: `{etendo_root}/modules/com.etendoerp.go/docs/aeat-390-endpoints.md`).
+Everything 390-specific lives in `models/390/`; the shared surfaces only read the registry.
+Later phases plug in where noted: invoices tab, incident rules, 303 preload, telematic filing and
+the substitute-from-presented flow.
+
+### Registry entry and shared surfaces
+
+| Surface | 390 behaviour | Driven by |
+|---|---|---|
+| Catalog | Card "390" with the single chip "Anual"; SII warning on activation (see "Model catalog") | `periodicities: ['annual']`, `siiWarningOnActivate` |
+| Nueva declaración | Year only (no Frecuencia / Período), footer "Se creará como Modelo 390 · Anual <año>" (`fm.new_decl.preview_annual`); period sent is `'0A'` | `isAnnualOnlyModel` (`fiscalPeriods.js`) |
+| Nueva declaración | An ordinary 390 of the selected year already in the list → inline notice "Ya existe el Modelo 390 de <año>" + **Abrir declaración** (`onOpenExisting`) and "Crear declaración" disabled. A substitute (`type: 'com'`) does not block | `singleOrdinaryPerYear` |
+| Nueva declaración | Amber, non-blocking "Faltan Modelos 303 de <año> (T4)…" when 303s of the year are not in the list. Quarterly filer by default (T1-T4); once the year has a monthly 303, every month 01-12 is expected; any status counts | `newDeclWarning` → `newDeclWarning390.js` |
+| List | Period column "Anual" (`fm.period.annual`); sorts after December/T4; "Resultado" = `summary.annualResult` ([86], or [94] in territory mode) with the shared `deriveResultKind` (activity = [47] or [64] ≠ 0); draft polling through `/fiscal390/modified` | `listBehavior390.js` |
+| List | A `POST` answered `409 DUPLICATE_ORDINARY` (e.g. the list was stale) shows a toast "Ya existe el Modelo 390 de <año>" with **Abrir declaración**, which opens `existingId` (from the list, or re-read with `fetchDeclaration`) | `duplicateOrdinaryId` in `FmListPage.jsx` |
+| "Por vencer" | January 30 of year+1 | `annualDeadline` → `deadline390.js` |
+| Detail title | "Modelo 390 - 2026" (no period) | `formatDeclPeriod` |
+| Config drawer | No 390 section (nothing to configure) | optional `modelRegistryConfig.js` binding |
+
+### Header, cards and tabs
+
+- **Action bar** (same chrome as 303/349): left Cancelar, status chip and **Tipo: Normal | Sustitutiva**;
+  right **Calcular**, **Generar fichero 390**, **Guardar** and **Registrar/Presentar** (primary). The
+  right group is hidden once presented. Generar and Registrar/Presentar are disabled while the
+  declaration has blocking incidents (tooltip `fm.m390.blocked_by_incidents`) or nothing is computed.
+- **Registrar/Presentar** opens the shared `PresentModal` WITHOUT the AEAT path
+  (`telematicFiling: false`): it registers a filing made elsewhere (with or without receipt). The
+  telematic filing is a later phase (`telematicFiling: true` + a submit flow).
+- **Sustitutiva** shows the amber banner (shared `.fm-substitutive-banner`, same as 349) with
+  **Identificador declaración anterior** (digits only, `sanitizeFormerStatementInput`; inline error
+  `fm.m390.substitutive.id_invalid` until it has exactly 13 digits, the shared
+  `isValidFormerStatement` rule) and the checkbox **Sustitutiva por rectificación de cuotas**.
+  Generar and Registrar/Presentar refuse an invalid identifier with a toast. Persisted as
+  `manualData.identification.{sustitutiva, formerStatement, rectificacionCuotas}` — the list "Tipo"
+  column reads `sustitutiva` like 349's. `rectificacionCuotas` is deliberately not named
+  `rectificativa` (that one means "Rectificativa" in the list).
+- **Cards:** Incidencias (persisted incidents of `/fiscal390/incidents`; the 390 rules arrive in the
+  incidents phase), IVA devengado [47], IVA deducible [64], Resultado [86] — or [94] when filing to
+  several administrations — with the result-kind badge. The "cuadre con los 303" line under
+  Resultado belongs to the 303-preload phase. Cards go 2×2 below 1100 px (`.fm-390-kpis`).
+- **Tabs:** Casillas, Incidencias (shared `IncidentsTab`), Justificante (shared `AttachmentsTab`).
+  Facturas arrives with the invoices phase.
+
+### "Casillas" tab (`FmBoxes390.jsx` + `fm390Layouts.js`)
+
+Declarative layout, one block at a time with a sticky index of the 11 blocks (folded into a select
+below 1200 px) and Anterior / Siguiente at the bottom:
+
+| # | Block | Content | Origin |
+|---|---|---|---|
+| 1 | Identificación | NIF, razón social; marks "Inscrito en el registro de devolución mensual" (`ISMONTHLYRETURN`), "Declarado en concurso de acreedores en el ejercicio" (`ConcursoAcr`) and, under it, "… en el último periodo" (`ConcursoUltPer`) | NIF/name from `/session`, read-only; marks manual |
+| 2 | Devengo | Ejercicio, tipo, identificador anterior, "por rectificación de cuotas" | read-only reflection of the header Tipo |
+| 3 | Datos estadísticos | IAE activities (activity, key, epígrafe, principal first); mark "operaciones con terceras personas" (`YEARLY_BP_DECLARATION`) | `organization/actividadesDelIae`, read-only + "Editar en Organización" |
+| 4 | Representante | Natural person: `information.aeat390RepNif/RepName`; otherwise the first 3 `representanteLegal` rows by line (NIF, name, power date, notary) | Organization, read-only + "Editar en Organización" |
+| 5 | IVA devengado | Régimen ordinario and intra-EU goods/services by rate (0, 2, 4, 5, 7.5, 10, 21 %), [27]/[28], [29]/[30], [31]/[32], totals [33]/[34] and [47] | calculated |
+| 6 | IVA deducible | Interior corrientes / bienes de inversión, importaciones, intra-EU (per rate + group totals [48]…[59], [597]/[598]), [639]/[62], [63]; manual [660]/[661]; total [64] | calculated; [660]/[661] manual |
+| 7 | Resultado liquidación anual | [65] total, [658] manual, [84] total, [659] manual, [85] manual (disabled in territory mode), [86] total | |
+| 8 | Tributación por territorio | Toggle "Tributo a varias Administraciones"; % [87]–[91], [92] total, [93] manual, [94] total; inline error when the percentages do not add up to 100 % | turning the toggle off clears the territory inputs |
+| 9 | Resultado de las liquidaciones | Per month "A ingresar" / "A devolver" (`INGRESAR_xx` / `DEVOLVER_xx`), totals [95] / [96], [97], [98], [662] manual | preloaded from the 303s in a later phase |
+| 10 | Volumen de operaciones | [99] [103] [104] [105] [110] [125] [126] calculated, [127] [128] manual, [106] [107] (subtracted), total [108], [112] manual (not added) | |
+| 11 | Operaciones específicas | [230] [109] [231] [232] [113] [523] calculated, [111] manual | |
+
+Out of scope and not shown (the backend may still return them): criterio de caja, recargo de
+equivalencia, régimen simplificado, REAGYP, bienes usados, agencias de viajes, grupo de entidades,
+prorrata. A layout for another design year plugs in through `getLayout390(layoutYear)`.
+
+- **Cells:** calculated = grey, read-only; manual = white `<input>` with a pencil (always an input, so
+  Tab walks only the editable fields; the stored value is shown formatted, the raw text while
+  editing; Enter/blur commit, Esc reverts); totals in bold with the formula. Amounts with
+  `formatAmount`, percentages with `formatPercent`. Inputs accept a decimal comma and are stored
+  normalised (`"40.50"`); a non-number, a negative [85]/[93] or a percentage outside 0–100 is refused
+  with a toast.
+- **Rates without operations** are folded behind "Sin operaciones (N tipos) · Mostrar".
+- **Live derivation:** the input-dependent boxes ([84]–[86], [92]–[94], [95]/[96], echoed inputs,
+  [108]) are recomputed on screen by `deriveInputBoxes`, a mirror of the backend's
+  `Fiscal390DerivedBoxes` (same formulas, cents arithmetic). The backend stays authoritative:
+  Calcular and the generated file recompute server-side.
+- **Box search:** "Buscar casilla" + Enter — a number (`86`, `[86]`, `086`) or a concept fragment
+  (accent/case-insensitive) — opens the block, scrolls to the cell, focuses it if editable and
+  highlights it for 2.5 s; "No se encontró la casilla" otherwise.
+- **Origin legend:** Calculado, Manual o precargado, Modificado, Total. "Modificado" (amber border +
+  ↺ "Restaurar valor calculado") applies to an input whose value differs from
+  `manualData.aeatPreloaded[key]` — empty until the 303-preload phase fills it, so today every
+  input reads "Manual".
+- **Design year note:** when `taxReport.fallback` is true (e.g. 2026 computed with the classic
+  `AEAT390_2025_Y`), a muted "Diseño de registro 2025" with an explanatory tooltip.
+- **Backend warnings** (`UNSUPPORTED_RATE`, `NO_BOX`) are listed in an amber note above the block
+  (they make the classic file fail or differ); they become incidents in the incidents phase.
+
+### Save flow
+
+`manualData` = previous manualData (unknown keys kept) + `identification` + `aeatInputs`
+(`buildManualData390`). The classic substitute flags are written into `aeatInputs` on every save so
+the backend forwards them to the classic generator: ordinary → `ISSUPPLEMENTARY: 'N'`,
+`ISRECTIFICATION: 'N'`; substitute → `ISSUPPLEMENTARY: 'Y'` (or `ISRECTIFICATION: 'Y'` with
+"por rectificación de cuotas" — classic treats them as exclusive) and `SUPPLEMENTARYNO` = identifier.
+
+| Action | Requests |
+|---|---|
+| Guardar | `PUT manualData` |
+| Calcular | `GET /fiscal390/boxes` with the on-screen inputs as query params (the backend overrides the stored ones with them), then `PUT manualData` when dirty |
+| Generar fichero 390 | `PUT manualData` when dirty (a failed save aborts) → `GET /fiscal390/generate` (reads the STORED inputs; body read as a Blob, ISO-8859-1 untouched; default name `390_0A_<año>.txt`, editable in `FileGenModal390`) |
+| Registrar/Presentar | `PUT manualData` when dirty → a SEPARATE `PUT status` — never the same PUT: the backend freezes the submission snapshot from the stored inputs before applying a same-request manualData |
+
+Every successful save invalidates the list's session cache for the declaration
+(`invalidateFiscalComputeCache`) and patches the list (`onManualDataSaved`).
+
+### Presented declaration
+
+Read-only, like 303/349: the boxes come from `decl.submittedSnapshot` (the backend also answers
+`/fiscal390/boxes` from it and refuses `generate` with 409), the action group is hidden, Tipo and
+every input are disabled, and no compute runs on mount.
+
 ## List page toolbar (`FmListPage`)
 
 ### List page header (app TopBar) and declarations toolbar (ETP-5584)
@@ -3785,12 +3905,30 @@ that was stale.
 
 The catalog drawer is opened from the toolbar button described above — **"Catálogo de modelos (N)"**. It reuses `fm.catalog.title` for its label and calls `setShowCatalog(true)` inline on click. It is an app `Button variant="outline" size="sm"` (`fm-list-catalog-button`), so it reads as a secondary action next to the dark primary "+ Nueva declaración" `Button`.
 
-The catalog drawer lists the tax forms the tenant can enable/disable. It currently exposes only the two supported forms — no locked/"coming soon" entries:
+The catalog drawer lists the tax forms the tenant can enable/disable — no locked/"coming soon" entries:
 
 | Model | Name | Periodicity tags | Description |
 |-------|------|-------------------|--------------|
 | `303` | Modelo 303 - Autoliquidación IVA | Trimestral + Mensual | Autoliquidación del IVA |
 | `349` | Modelo 349 — Operaciones intracomunitarias | Mensual + Trimestral | Declaración informativa de operaciones con empresas de la Unión Europea |
+| `390` | Modelo 390 — Resumen anual de IVA | Anual | Declaración resumen anual de las autoliquidaciones de IVA del ejercicio (ETP-5716) |
+
+### SII warning when activating the 390 (ETP-5716)
+
+Entities in the SII are not obliged to file the Modelo 390. Turning ON a model whose registry entry
+sets `siiWarningOnActivate` (only 390) first asks `useOrgSiiStatus.js` whether the selected
+organization is in the SII:
+
+- **Source:** `GET {neo}/sii-config/siiConfiguration?organization=<orgId>` — the same NEO entity
+  (`aeatsii_config`) the fiscal-config window reads. Only an ACTIVE row counts (`isActiveRecord`,
+  NEO also returns inactive "Change SIF" trace rows) and a row with `acogidaAlSII = 'N'` does not
+  (`hasActiveSiiConfig`). Fetched once per drawer, lazily, on the first such activation.
+- **In the SII:** the switch stays off and an amber inline notice appears under the card
+  (`fm.catalog.sii_warning`) with **Cancelar** (leave it off) and **Activar** (`fm.catalog.activate`,
+  turns it on). Non-blocking: the user can always activate it.
+- **Not in the SII, or the status cannot be read** (no organization, no SII module, network error):
+  the model is activated right away — "unknown" never warns.
+- Deactivating, and activating 303/349, never ask.
 
 Each catalog entry declares a `periodicities: string[]` array (not a single `periodicity` string) — `FmCatalogPage` renders one `.fm-catalog-card__pill` per value, reusing the existing `fm.catalog.periodicity.monthly/quarterly/annual` locale keys. The header's model-count badge (`CATALOG.length`) and the "active models" counter are always derived from the `CATALOG` array, never hardcoded. Since ETP-5716 `CATALOG` is the model registry itself (`listModels()`, see "Model registry" above).
 
@@ -4027,6 +4165,14 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels); option `disabledWhen`, field `labelKeyWhen`, `getInvalidSelectedOptions`/`resolveFieldLabelKey` (ETP-5597) |
 | `models/303/AeatSubmitFlow.jsx` | AEAT electronic submission flow (ETP-4456) — confirm/submit/result, `POST /fiscal303/submit` |
 | `models/349/FmModel349Page.jsx` | Modelo 349 detail — incl. `DeclarationTypeControl` / `SubstitutiveBanner` (ETP-5597) |
+| `models/390/FmModel390Page.jsx` | Modelo 390 detail (ETP-5716) — header, Tipo Normal/Sustitutiva, KPIs, save/compute/generate/register flows |
+| `models/390/FmBoxes390.jsx` | Modelo 390 "Casillas" tab — block index, box search, origin legend, blocks |
+| `models/390/fm390Layouts.js` | Modelo 390 declarative layout (11 blocks), search index, `deriveInputBoxes`, `buildManualData390` |
+| `models/390/fm390Api.js` | `/fiscal390/boxes`, `/modified`, `/generate` requests |
+| `models/390/useOrg390Identity.js` | Organization data of the read-only blocks (session, information, IAE activities, legal representatives) |
+| `models/390/newDeclWarning390.js` | "Nueva declaración" notice: 303s of the year missing |
+| `fiscalPeriods.js` | `ANNUAL_PERIOD` (`'0A'`) and annual helpers |
+| `useOrgSiiStatus.js` | Is the selected organization in the SII (catalog warning for 390) |
 | `FmDetailChrome.jsx` | Detail-page chrome shared by 303/349 (ETP-5584): `useFmDetailPageMeta` + `buildDeclTitle` (TopBar title/breadcrumb/badge/kebab), `FmDetailHeader`/`FmDetailActionBar`/`FmDetailButton`, `FmStatusChip` + `statusLabelKey`, `tabCount`/`incidentsTabBadge`, `FmEmptyState` |
 | `FmCommon.jsx` | Shared components: `KpiWidget`, `Tabs`, `NumberedStepper`, `ResultPill`, `SummaryCard`, `EmptyState` (re-export of `FmEmptyState`) |
 | `FmOverlays.jsx` | Modals and drawers: `PresentModal` (2 manual paths + opt-in `aeat_telematic` sentinel path), `FileGenModal`, `NewDeclModal`, `ConfigDrawer` |
@@ -4051,6 +4197,11 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `GET` | `/session` | FmModel303Page — org NIF/nombre for file header |
 | `GET` | `/fiscal349/operators?year=&period=` | `compute349Operators` — returns operators (regular + corrective, see ETP-5027 above) + `summary` + `rectificativeSummary` + invoices (one row per (invoice, AEAT349 key), each with `id`/`accountingDate` — ETP-5597, see "Mixed goods + services invoices" above) + rectifications + orgNif/orgName |
 | `GET` | `/fiscal349/modified?year=&period=&since=` | `checkModified349` |
+| `GET` | `/fiscal390/boxes?year=&period=0A[&<input>=…]` | `fetchBoxes390` (list "Resultado" and the 390 page; the page's "Calcular" sends the on-screen inputs) |
+| `GET` | `/fiscal390/modified?year=&period=0A&since=` | `checkModified390` |
+| `GET` | `/fiscal390/generate?year=&period=0A` | `generate390File` — reads the STORED inputs, so the page saves first |
+| `GET` | `/fiscal390/incidents?id=` | `fetchDeclarationIncidents(id, { model: '390' })` |
+| `GET` | `/sii-config/siiConfiguration?organization=` | `useOrgSiiStatus` — catalog SII warning |
 | `POST` | `/fiscal349/generate` (body: year, period, phone, contact, fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa) | `generate349File` |
 
 All query parameters are built with `URLSearchParams` to ensure correct encoding.
