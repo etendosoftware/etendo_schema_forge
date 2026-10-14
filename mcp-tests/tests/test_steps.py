@@ -58,6 +58,41 @@ class LoaderTest(unittest.TestCase):
         self.assertEqual(probe.setup, ())
         self.assertEqual(probe.teardown, ())
 
+    def test_exclusive_must_be_a_boolean(self):
+        for value in ('"yes"', "1", "[true]"):
+            with self.subTest(exclusive=value), self.assertRaisesRegex(ValueError, "exclusive must be true or false"):
+                load_suite(_suite(f"""
+                    probes:
+                      - id: p
+                        prompt: hi
+                        exclusive: {value}
+                """))
+        probe = load_suite(_suite("""
+            probes:
+              - id: p
+                prompt: hi
+                exclusive: true
+        """)).probe("p")
+        self.assertTrue(probe.exclusive)
+
+    def test_decision_must_be_a_mapping(self):
+        for value in ("1", "[ruleVersion]", '"strict"'):
+            with self.subTest(decision=value), self.assertRaisesRegex(ValueError, "decision must be a mapping"):
+                load_suite(_suite(f"""
+                    decision: {value}
+                    probes:
+                      - id: p
+                        prompt: hi
+                """))
+        suite = load_suite(_suite("""
+            decision: { ruleVersion: 1, callsMargin: 0.3 }
+            probes:
+              - id: p
+                prompt: hi
+        """))
+        self.assertEqual(suite.decision, {"ruleVersion": 1, "callsMargin": 0.3})
+        self.assertIsNone(load_suite(_suite("probes: [{id: p, prompt: hi}]")).decision)
+
     def test_rejects_a_step_without_tool(self):
         with self.assertRaisesRegex(ValueError, r"setup\[0\] needs a `tool`"):
             parse_steps([{"args": {}}], probe_id="p", phase="setup")

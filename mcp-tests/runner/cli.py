@@ -10,7 +10,11 @@ Each run writes `run.json`, one `probes/<id>/attempt-<n>.json` per attempt, and 
 tails. The UI is a separate process that shells out to this CLI: nothing here
 knows it exists (D11).
 
-Still out of scope here: redaction and multi-target comparison.
+`--targets a,b` runs a comparison (D44): one `runs/<compareId>/` holding
+`compare.json` and one ordinary run per target under `targets/<name>/`, run
+concurrently, followed by the report (`runner/report.py`).
+
+Still out of scope here: redaction.
 """
 
 from __future__ import annotations
@@ -19,16 +23,19 @@ import argparse
 import asyncio
 import datetime as dt
 import json
+import random
 import secrets
 import subprocess
 import sys
 import traceback
 import webbrowser
-from dataclasses import replace
+from collections import deque
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from . import config as cfg
+from . import decide as rule
 from .agent import PROMPT_VERSION, ProbeAborted, check_model, run_probe
 from .events import (
     EFFECT_CHECKED,
@@ -54,6 +61,7 @@ from .mcp_client import (
 )
 from .steps import StepError, resolve_refs, run_steps
 from .suite import Probe, Suite, attempt_marker, interpolate, interpolate_args, load_suite
+from .verdict import VERDICT_SCHEMA_VERSION
 
 HARNESS_ROOT = Path(__file__).resolve().parent.parent
 SUITES_DIR = HARNESS_ROOT / "suites"
@@ -77,7 +85,19 @@ RUNS_DIR = HARNESS_ROOT / "runs"
 #: carries `attempt`, `replaces` and `marker`, and `{{marker}}` becomes
 #: `<runId>-<probeId>-a<n>`. run.json.repeat is the requested N. The layout
 #: change is what the version is for: a reader picks the layout from it.
-RUN_SCHEMA_VERSION = 5
+#: v6 (ETP-5750 S3, D44) adds the comparison: each attempt records its real
+#: `startedAt`/`finishedAt` (ms) and `workerSlot`; run.json gains `platform`,
+#: `compareId`, `concurrency` and `schedule`. A comparison writes one ordinary
+#: run per target under `runs/<compareId>/targets/<target>/`. The probe-file
+#: layout is unchanged from v5.
+RUN_SCHEMA_VERSION = 6
+
+#: `compare.json` shape (plan §5.2, §6). Read by `report.py`.
+COMPARE_SCHEMA_VERSION = 1
+#: Plan §5.1 / decision 11: a comparison repeats 3 times and runs 4 attempts at
+#: once per target unless told otherwise. A single `mcp-test` stays at 1 / 1.
+COMPARE_DEFAULT_REPEAT = 3
+COMPARE_DEFAULT_CONCURRENCY = 4
 
 
 def _unwrap(exc: BaseException) -> BaseException:
@@ -128,12 +148,21 @@ def _find_probe_aborted(exc: BaseException) -> ProbeAborted | None:
 
 
 def _provider_status(exc: BaseException) -> int | None:
-    """HTTP status of a provider error, when it carries one."""
+    """HTTP status of a provider error, when it carries one.
+
+    `response.status_code` covers an httpx error raised by the MCP transport.
+    """
     for attr in ("status_code", "http_status", "code"):
         value = getattr(exc, attr, None)
         if isinstance(value, int):
             return value
-    return None
+    value = getattr(getattr(exc, "response", None), "status_code", None)
+    return value if isinstance(value, int) else None
+
+
+def _is_rate_limited(exc: BaseException) -> bool:
+    """A 429, from the LLM gateway or the MCP server (plan §5.2)."""
+    return _provider_status(_unwrap(exc)) == 429
 
 
 def _error_detail(exc: BaseException) -> str:
@@ -167,6 +196,16 @@ def _open_browser(url: str) -> None:
     print("  opening your browser to authorize this target...")
     print(f"  if it does not open, visit:\n    {url}")
     webbrowser.open(url)
+
+
+def _now_ms() -> str:
+    """UTC, millisecond precision: enough to read a concurrent schedule back."""
+    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _new_compare_id(now: dt.datetime) -> str:
+    """e.g. 20261014T1402-cmp-a3f1 (plan §5.2)."""
+    return f"{now.strftime('%Y%m%dT%H%M')}-cmp-{secrets.token_hex(2)}"
 
 
 def _new_run_id(target: str, now: dt.datetime) -> str:
@@ -263,12 +302,21 @@ def _run_header(
     harness: dict[str, Any] | None = None,
     server: dict[str, Any] | None = None,
     repeat: int = 1,
+    concurrency: int = 1,
+    seed: int | None = None,
+    compare_id: str | None = None,
 ) -> dict[str, Any]:
     return {
         "schemaVersion": RUN_SCHEMA_VERSION,
         "runId": run_id,
+        # The comparison this run belongs to; null for a single `mcp-test`.
+        "compareId": compare_id,
         "startedAt": started_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "target": {"name": target["name"], "url": target["url"]},
+        "platform": target.get("platform"),
+        "concurrency": concurrency,
+        # null seed = suite order, not shuffled (a plain mcp-test).
+        "schedule": {"seed": seed, "shuffled": seed is not None},
         # Still null (D1): Etendo's `serverInfo.version` is a constant of the MCP
         # implementation, not the module build, so it cannot stand in for one.
         # `server.catalogue.sha` is the proxy that tells two builds apart.
@@ -315,21 +363,20 @@ async def _verify_effect(
         # A check may name what setup created (`{{steps.invoice.id}}`, D41).
         call_args = resolve_refs(call_args, saved or {})
     except StepError as exc:
-        return None, None, {"kind": "verification", "detail": f"effect check: {exc}"}
+        return None, None, {"kind": "verification", "phase": "effectCheck", "detail": f"effect check: {exc}"}
     try:
         # A session of its own, so nothing the agent's session held can reach it.
         async with mcp_session(target) as session:
             payload = await call_tool(session, effect.tool, call_args)
             rows = count_rows(payload)
     except AuthError as exc:
-        return None, None, {"kind": "auth", "detail": f"effect check: {exc}"}
-    except VerificationError as exc:
-        return None, None, {"kind": "verification", "detail": str(exc)}
-    except Exception as exc:  # noqa: BLE001
-        return None, None, {
-            "kind": "verification",
-            "detail": f"effect check: {type(exc).__name__}: {exc}",
-        }
+        return None, None, {"kind": "auth", "phase": "effectCheck", "detail": f"effect check: {exc}"}
+    except Exception as exc:  # noqa: BLE001 - VerificationError included
+        detail = str(exc) if isinstance(exc, VerificationError) else (
+            f"effect check: {type(exc).__name__}: {exc}"
+        )
+        kind = "rateLimited" if _is_rate_limited(exc) else "verification"
+        return None, None, {"kind": kind, "phase": "effectCheck", "detail": detail}
 
     verified = rows >= 1 if effect.expect == "atLeastOne" else rows == 0
     detail = {"tool": effect.tool, "args": call_args, "expect": effect.expect, "rows": rows}
@@ -337,7 +384,16 @@ async def _verify_effect(
 
 
 class SetupFailed(RuntimeError):
-    """A probe's setup did not reach the state the probe needs (D41)."""
+    """A probe's setup did not reach the state the probe needs (D41).
+
+    `rate_limited` when the step that failed was answered with a 429: then
+    the failure is throttling, not a setup defect, and is classified (and
+    backed off) as `rateLimited`.
+    """
+
+    def __init__(self, message: str, *, rate_limited: bool = False) -> None:
+        super().__init__(message)
+        self.rate_limited = rate_limited
 
 
 async def _run_phase(
@@ -372,8 +428,21 @@ async def _run_phase(
     ]
     event_type = SETUP_STEP if phase == "setup" else TEARDOWN_STEP
     records: list[dict[str, Any]] = []
+    # steps.py stores a failure as text; the 429 is noticed here, on the way
+    # through, and stamped on the record of the step it belongs to.
+    throttled = [False]
+
+    async def call(session: Any, tool: str, args: dict[str, Any]) -> Any:
+        try:
+            return await call_tool(session, tool, args)
+        except Exception as exc:
+            throttled[0] = _is_rate_limited(exc)
+            raise
 
     def on_record(rec: dict[str, Any]) -> None:
+        if not rec["ok"] and throttled[0]:
+            rec["rateLimited"] = True
+            throttled[0] = False
         records.append(rec)
         events.emit(
             event_type,
@@ -390,7 +459,7 @@ async def _run_phase(
         async with mcp_session(target) as session:
             await run_steps(
                 steps,
-                lambda tool, args: call_tool(session, tool, args),
+                lambda tool, args: call(session, tool, args),
                 phase=phase,
                 saved=saved,
                 stop_on_error=phase == "setup",
@@ -398,9 +467,441 @@ async def _run_phase(
                 on_record=on_record,
             )
     except Exception as exc:  # noqa: BLE001 - the session itself failed
+        throttled[0] = _is_rate_limited(exc)
         on_record({"phase": phase, "index": None, "tool": None, "ok": False,
                    "error": f"session: {type(exc).__name__}: {exc}"})
     return records
+
+
+@dataclass(frozen=True)
+class AttemptContext:
+    """Everything one target's attempts read, and nothing they share (D44).
+
+    `run_id` names the target's run on disk. `token_run_id` is what
+    `{{runId}}` expands to and `marker_prefix` what `{{marker}}` starts with:
+    both are the run id in a single-target run and the `compareId` in a
+    comparison, so the prompt text is byte-identical across targets.
+    """
+
+    target: dict[str, Any]
+    provider: dict[str, Any]
+    run_id: str
+    run_dir: Path
+    events: Any
+    max_steps: int
+    max_result_chars: int
+    repeat: int
+    marker_prefix: str
+    token_run_id: str
+    preflight_error: dict[str, Any] | None = None
+    #: Console prefix; `[<target>] ` in a comparison, where lines interleave.
+    tag: str = ""
+
+
+@dataclass(frozen=True)
+class _Work:
+    probe: Probe
+    attempt: int
+    replaces: int | None
+    #: Seconds to wait before starting (rate-limit backoff); 0 for planned work.
+    delay: float = 0.0
+
+
+def build_worklist(probes: list[Probe], repeat: int, seed: int | None) -> list[_Work]:
+    """The planned attempts of one target: probes x 1..repeat (D44).
+
+    With a seed the list is shuffled by `random.Random(seed)` — the same seed
+    gives the same order on every target and every machine — so attempt 1 of
+    every probe is not systematically first, and provider drift over the run
+    does not correlate with one probe. Without a seed (a plain `mcp-test`) it
+    stays in suite order, probe-major, exactly as before REPEAT.
+    """
+    items = [_Work(p, n, None) for p in probes for n in range(1, repeat + 1)]
+    if seed is not None:
+        random.Random(seed).shuffle(items)
+    return items
+
+
+@dataclass
+class TargetOutcome:
+    records: list[dict[str, Any]]
+    #: The provider rejected the model outright (401/403/404): nothing more ran.
+    stopped: bool = False
+
+
+async def run_attempt(
+    ctx: AttemptContext,
+    probe: Probe,
+    attempt: int,
+    replaces: int | None,
+    *,
+    slot: int | None = None,
+) -> tuple[dict[str, Any], bool]:
+    """One attempt of one probe: setup, agent, effect check, teardown (D41, D43).
+
+    Writes `probes/<probeId>/attempt-<n>.json` and returns (record,
+    stop_run). Each attempt is a fresh MCP session and a fresh conversation,
+    and its own `{{marker}}`, so attempts never see each other's records.
+
+    Module-level and free of shared mutable state (D44): everything it reads
+    is in `ctx`, everything it produces is the returned record, and the only
+    thing it writes besides its own file is the target's event stream. Tallies
+    and exit codes are derived from the records by the caller.
+    """
+    timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    started_at = _now_ms()
+    marker = attempt_marker(ctx.marker_prefix, probe.id, attempt)
+    prompt = interpolate(
+        probe.prompt, run_id=ctx.token_run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+    )
+    tag = f"{ctx.tag}{probe.id} a{attempt}"
+    again = f", replaces {replaces}" if replaces else ""
+    print(f"  {tag} ({probe.mode}) attempt {attempt}/{ctx.repeat}{again} ...", flush=True)
+    ctx.events.emit(PROBE_STARTED, probe=probe.id, attempt=attempt, mode=probe.mode,
+                **({"replaces": replaces} if replaces else {}))
+    # The agent never learns which probe it is running: the probe id is
+    # stamped on here, by the owner of the stream.
+    on_event = lambda t, fields: ctx.events.emit(t, probe=probe.id, attempt=attempt, **fields)  # noqa: E731
+
+    result: dict[str, Any] = {
+        "schemaVersion": RUN_SCHEMA_VERSION,
+        "runId": ctx.run_id,
+        "probeId": probe.id,
+        # 1-based, unique per probe within the run (D43). A replacement for
+        # an attempt that hit a harness error gets the next free number and
+        # names the one it replaces; the errored attempt stays on file.
+        "attempt": attempt,
+        "replaces": replaces,
+        "marker": marker,
+        "mode": probe.mode,
+        "prompt": prompt,
+        # Real wall clock, ms precision, and the pool slot that ran it (D44):
+        # the actual schedule, on file, not inferred.
+        "startedAt": started_at,
+        "workerSlot": slot,
+        # Third axis, alongside outcome and harnessError. None = not checked
+        # or not verifiable; never conflated with "verified absent".
+        "effectVerified": None,
+        "effectCheck": None,
+        # Persisted, not just printed (plan §3 item 8). See _silent_wrong.
+        "silentWrong": None,
+        # None until the agent ran; then always present (agent.run_probe).
+        "finalAnswer": None,
+        "usage": None,
+        "servedModel": None,
+        "setup": [],
+        "teardown": [],
+        # None = the probe declares no teardown; False = something it
+        # created may still be on the server.
+        "teardownClean": None,
+    }
+    saved: dict[str, Any] = {}
+    stop_run = False
+    cancelled = False
+    # Which part of the attempt was running, stamped on any harnessError:
+    # setup | agent | effectCheck (plus preflight, set by the caller).
+    phase = "setup"
+
+    if ctx.preflight_error:
+        result["harnessError"] = ctx.preflight_error
+        result["verdict"] = None
+        result["finishedAt"] = _now_ms()
+        _write_json(attempt_path(ctx.run_dir, probe.id, attempt), result)
+        ctx.events.emit(PROBE_ABORTED, probe=probe.id, attempt=attempt, kind="auth",
+                    detail=ctx.preflight_error["detail"], toolCalls=0)
+        print(f"    {tag} not measured (auth)", file=sys.stderr)
+        return result, False
+
+    try:
+        result["setup"] = await _run_phase(
+            probe, "setup", ctx.target, run_id=ctx.token_run_id, timestamp=timestamp, marker=marker, attempt=attempt,
+            saved=saved, max_result_chars=ctx.max_result_chars, events=ctx.events,
+        )
+        failed = next((r for r in result["setup"] if not r["ok"]), None)
+        if failed:
+            raise SetupFailed(f"setup[{failed['index']}] {failed['tool']}: {failed['error']}",
+                              rate_limited=bool(failed.get("rateLimited")))
+        try:
+            prompt = resolve_refs(prompt, saved)
+        except StepError as exc:
+            raise SetupFailed(f"prompt: {exc}") from exc
+        result["prompt"] = prompt
+
+        # A fresh MCP session per attempt: attempts are fully independent (§3).
+        phase = "agent"
+        async with mcp_session(ctx.target) as session:
+            outcome = await run_probe(
+                session=session,
+                provider=ctx.provider,
+                prompt=prompt,
+                max_steps=ctx.max_steps,
+                max_result_chars=ctx.max_result_chars,
+                on_event=on_event,
+            )
+        result.update(outcome)
+        # harnessError is a separate axis from outcome (D12). Classification
+        # of failure kinds is not built in this slice; the field exists so
+        # the file shape is already right.
+        result["harnessError"] = None
+        verdict = result["verdict"]
+        print(
+            f"    {tag} {verdict['outcome']} · {result['toolCallCount']} tool calls · "
+            f"{verdict['summary']}"
+        )
+
+        phase = "effectCheck"
+        verified, detail, check_error = await _verify_effect(
+            probe, ctx.target, run_id=ctx.token_run_id, timestamp=timestamp, saved=saved, marker=marker
+        )
+        result["effectVerified"] = verified
+        result["effectCheck"] = detail
+        result["silentWrong"] = _silent_wrong(verdict, verified)
+        if check_error:
+            result["harnessError"] = check_error
+            print(f"    {tag} effect NOT VERIFIABLE: {check_error['detail']}", file=sys.stderr)
+        elif verified is False:
+            # The headline case this amendment exists for.
+            claim = " despite the agent reporting OKAY" if verdict["outcome"] == "OKAY" else ""
+            print(f"    {tag} effect ABSENT{claim} ({detail['tool']} -> {detail['rows']} rows)")
+        elif verified is True:
+            print(f"    {tag} effect verified ({detail['tool']} -> {detail['rows']} rows)")
+
+        ctx.events.emit(
+            PROBE_FINISHED,
+            probe=probe.id, attempt=attempt,
+            outcome=verdict["outcome"],
+            steps=result["toolCallCount"],
+            exhausted=result.get("exhausted", False),
+        )
+        if probe.expect_effect is not None:
+            ctx.events.emit(
+                EFFECT_CHECKED,
+                probe=probe.id, attempt=attempt,
+                verified=verified,
+                rows=None if detail is None else detail.get("rows"),
+            )
+    except SetupFailed as exc:
+        # The agent never ran: there is nothing to measure (D41). A 429 is
+        # throttling whatever the phase, so it is classified (and backed off)
+        # as rateLimited; `phase` keeps where it happened.
+        kind = "rateLimited" if exc.rate_limited else "setup"
+        result["harnessError"] = {"kind": kind, "phase": "setup", "detail": str(exc)}
+        result["verdict"] = None
+        ctx.events.emit(PROBE_ABORTED, probe=probe.id, attempt=attempt, kind=kind, detail=str(exc), toolCalls=0)
+        print(f"    {tag} not measured ({kind}): {exc}", file=sys.stderr)
+    except AuthError as exc:
+        result["harnessError"] = {"kind": "auth", "phase": phase, "detail": str(exc)}
+        result["verdict"] = None
+        ctx.events.emit(PROBE_ABORTED, probe=probe.id, attempt=attempt, kind="auth", detail=str(exc), toolCalls=0)
+        print(f"    {tag} not measured (auth): {exc}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001 - a crash must still leave evidence
+        # A ProbeAborted carries the tool calls recorded before the crash.
+        # They are merged FIRST, so the evidence is written down even though
+        # the probe has no verdict; `cause` is the real exception, so the
+        # detail line and the stop-the-run check behave exactly as before.
+        cause: BaseException = exc
+        salvaged = 0
+        aborted = _find_probe_aborted(exc)
+        if aborted is not None:
+            result.update(aborted.partial)
+            cause = aborted.cause
+            salvaged = result.get("toolCallCount", 0)
+        detail = _error_detail(cause)
+        result["harnessError"] = {
+            # A 429 is throttling — ours or the provider's — never a product
+            # result (plan §5.2). Named apart so a run full of them says so;
+            # like any harness error it is replaced (D43).
+            "kind": "rateLimited" if _is_rate_limited(cause) else "provider",
+            "phase": phase,
+            "detail": detail,
+            # The full traceback stays: it is the only reason a nested
+            # failure like this is diagnosable at all.
+            "traceback": traceback.format_exc(),
+        }
+        # A failed probe has no verdict. The partial toolCalls above are the
+        # objective record and must never be mistaken for one.
+        result["verdict"] = None
+        salvage_note = f" ({salvaged} tool calls recorded)" if salvaged else ""
+        # The terminal event for a probe that has no outcome. Without it a
+        # tailing UI would spin forever on a probe that is already dead.
+        ctx.events.emit(
+            PROBE_ABORTED, probe=probe.id, attempt=attempt, kind=result["harnessError"]["kind"], detail=detail, toolCalls=salvaged
+        )
+        print(f"    {tag} not measured: {detail}{salvage_note}", file=sys.stderr)
+        stop_run = _is_provider_config_error(cause)
+    except asyncio.CancelledError:
+        # The run is being cancelled (Ctrl-C, or run_target cancelling its pool).
+        # Not an attempt result: recorded as a harness error so the file says
+        # what happened, teardown still runs below, then the cancellation goes on.
+        cancelled = True
+        result["harnessError"] = {"kind": "cancelled", "phase": phase,
+                                  "detail": "the run was cancelled mid-attempt"}
+        result["verdict"] = None
+        raise
+    finally:
+        # Always, whatever happened above — including a setup that got
+        # halfway: teardown is what keeps the tenant clean (D41).
+        if probe.teardown:
+            result["teardown"] = await _run_phase(
+                probe, "teardown", ctx.target, run_id=ctx.token_run_id, timestamp=timestamp, marker=marker,
+                attempt=attempt,
+                saved=saved, max_result_chars=ctx.max_result_chars, events=ctx.events,
+            )
+            result["teardownClean"] = all(r["ok"] for r in result["teardown"])
+            if not result["teardownClean"]:
+                bad = sum(1 for r in result["teardown"] if not r["ok"])
+                print(f"    {tag} teardown INCOMPLETE ({bad} failed step(s)): data may be left behind",
+                      file=sys.stderr)
+        if cancelled:
+            # Partial record, written before the cancellation propagates.
+            result["finishedAt"] = _now_ms()
+            _write_json(attempt_path(ctx.run_dir, probe.id, attempt), result)
+
+    result["finishedAt"] = _now_ms()
+    _write_json(attempt_path(ctx.run_dir, probe.id, attempt), result)
+    return result, stop_run
+
+
+async def run_target(
+    ctx: AttemptContext,
+    probes: list[Probe],
+    *,
+    concurrency: int = 1,
+    seed: int | None = None,
+    stop: asyncio.Event | None = None,
+) -> TargetOutcome:
+    """Run every attempt of one target through a pool of `concurrency` slots (D43, D44).
+
+    - Planned attempts come from `build_worklist`; a harness-errored attempt
+      is replaced by one appended at the END of the queue, at most `repeat`
+      replacements per probe, never after a preflight failure (D43).
+    - An `exclusive` probe runs alone: the pool drains before it starts and
+      nothing else starts until it finishes.
+    - One attempt's failure never cancels a sibling: failures are records.
+    - `stop` is shared by every target of a comparison. A provider config
+      error sets it; running attempts finish (teardown included), queued ones
+      never start.
+    """
+    stop = stop or asyncio.Event()
+    pending = deque(build_worklist(probes, ctx.repeat, seed))
+    last_number = {p.id: ctx.repeat for p in probes}
+    replacements = {p.id: 0 for p in probes}
+    free = list(range(max(concurrency, 1)))
+    running: dict[asyncio.Task, tuple[_Work, int]] = {}
+    outcome = TargetOutcome(records=[])
+
+    try:
+        await _drive_pool(ctx, pending, running, free, last_number, replacements, stop, outcome)
+    except asyncio.CancelledError:
+        # Cancelled from outside: cancel every attempt in flight and WAIT for
+        # them, so each one's teardown (in its `finally`) completes before the
+        # cancellation reaches the caller. Each writes a `cancelled` record.
+        for task in running:
+            task.cancel()
+        await asyncio.gather(*running, return_exceptions=True)
+        raise
+    return outcome
+
+
+#: Backoff before a `rateLimited` attempt's replacement starts (plan §5.2):
+#: exponential in the number of replacements the probe has had, capped, with
+#: jitter so parallel slots do not retry in lockstep. The wait holds the slot,
+#: which is the point — it lowers the pressure on whoever is throttling.
+RATE_LIMIT_BACKOFF_BASE = 2.0
+RATE_LIMIT_BACKOFF_CAP = 30.0
+#: Injection points for tests.
+_backoff_sleep = asyncio.sleep
+_backoff_jitter = random.random
+
+
+def rate_limit_delay(nth_replacement: int) -> float:
+    """Seconds to wait before the n-th (1-based) replacement of a throttled probe."""
+    ceiling = min(RATE_LIMIT_BACKOFF_CAP, RATE_LIMIT_BACKOFF_BASE * 2 ** (nth_replacement - 1))
+    return ceiling * (0.5 + 0.5 * _backoff_jitter())
+
+
+async def _attempt_after(delay: float, ctx: AttemptContext, work: _Work, slot: int):
+    if delay > 0:
+        await _backoff_sleep(delay)
+    return await run_attempt(ctx, work.probe, work.attempt, work.replaces, slot=slot)
+
+
+async def _drive_pool(ctx, pending, running, free, last_number, replacements, stop, outcome) -> None:
+    exclusive_running = False
+    while pending or running:
+        while pending and free and not exclusive_running and not stop.is_set():
+            work = pending[0]
+            if work.probe.exclusive and running:
+                break  # drain the pool first
+            pending.popleft()
+            slot = free.pop(0)
+            task = asyncio.create_task(_attempt_after(work.delay, ctx, work, slot))
+            running[task] = (work, slot)
+            if work.probe.exclusive:
+                exclusive_running = True
+        if not running:
+            break  # stopped with work left: it never starts
+        done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            work, slot = running.pop(task)
+            free.append(slot)
+            free.sort()
+            if work.probe.exclusive:
+                exclusive_running = False
+            try:
+                record, stop_run = task.result()
+            except BaseException:
+                # A bug in the runner itself, not an attempt result: let the
+                # attempts already in flight finish their teardown, then fail.
+                stop.set()
+                await asyncio.gather(*running, return_exceptions=True)
+                raise
+            outcome.records.append(record)
+            if stop_run:
+                outcome.stopped = True
+                stop.set()
+            pid = work.probe.id
+            if (
+                record.get("harnessError")
+                and not ctx.preflight_error
+                and replacements[pid] < ctx.repeat
+                and not stop.is_set()
+            ):
+                replacements[pid] += 1
+                last_number[pid] += 1
+                throttled = record["harnessError"].get("kind") == "rateLimited"
+                delay = rate_limit_delay(replacements[pid]) if throttled else 0.0
+                pending.append(_Work(work.probe, last_number[pid], work.attempt, delay))
+
+
+def _tally(records: list[dict[str, Any]]) -> dict[str, int]:
+    """The run_finished counts, derived from the records (never kept on the side).
+
+    A record with a harness error is `notMeasured` whatever its verdict says
+    (D12) — that includes an effect check that could not run.
+    """
+    tally = {"ok": 0, "error": 0, "mixed": 0, "notMeasured": 0}
+    for record in records:
+        verdict = record.get("verdict")
+        if record.get("harnessError") or not verdict:
+            tally["notMeasured"] += 1
+        else:
+            tally[{"OKAY": "ok", "ERROR": "error", "MIXED": "mixed"}.get(verdict["outcome"], "error")] += 1
+    return tally
+
+
+def _exit_code(records: list[dict[str, Any]]) -> int:
+    """1 when any attempt was not measured, replaced or not; 0 otherwise."""
+    return 1 if any(r.get("harnessError") for r in records) else 0
+
+
+def _stop_message(provider: dict[str, Any]) -> str:
+    return (
+        f"\nStopping the run: the provider rejected model "
+        f"{provider['model']!r} outright, so every remaining probe would "
+        f"fail identically. Check the model in your config — the startup "
+        f"banner above shows what was actually used."
+    )
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -408,7 +909,9 @@ async def _run(args: argparse.Namespace) -> int:
     provider = cfg.provider_settings(config, model=args.model)
     max_steps = cfg.max_steps(config, override=args.max_steps)
     max_result_chars = cfg.max_result_chars(config)
-    repeat = args.repeat
+    comparing = bool(args.targets)
+    # D2 keeps a single run at 1; a comparison defaults to 3 (D43, plan §5.1).
+    repeat = args.repeat or (COMPARE_DEFAULT_REPEAT if comparing else 1)
 
     if not provider["model"]:
         print("No model configured. Set provider.model in config.toml.", file=sys.stderr)
@@ -425,9 +928,13 @@ async def _run(args: argparse.Namespace) -> int:
         return 2
 
     try:
-        target = cfg.target_settings(config, args.target)
-    except KeyError as exc:
-        print(exc, file=sys.stderr)
+        names = _target_names(args) if comparing else [args.target]
+        targets = [cfg.target_settings(config, name) for name in names]
+        if comparing:
+            for target in targets:
+                cfg.target_platform(target)
+    except (KeyError, ValueError) as exc:
+        print(exc.args[0] if exc.args else exc, file=sys.stderr)
         return 2
 
     # `--interactive` exists for the UI: a run launched from Streamlit has no
@@ -454,6 +961,147 @@ async def _run(args: argparse.Namespace) -> int:
         )
         return 2
 
+    settings = {
+        "provider": provider,
+        "max_steps": max_steps,
+        "max_result_chars": max_result_chars,
+        "repeat": repeat,
+        "interactive": interactive,
+    }
+    if comparing:
+        return await _run_compare(args, config, targets, **settings)
+    return await _run_single(args, config, targets[0], **settings)
+
+
+def _target_names(args: argparse.Namespace) -> list[str]:
+    names = [n.strip() for n in args.targets.split(",") if n.strip()]
+    if len(names) != 2 or len(set(names)) != 2:
+        raise ValueError(
+            f"--targets needs exactly two distinct targets (subject and reference), got {names}."
+        )
+    if args.subject and args.subject not in names:
+        raise ValueError(f"--subject {args.subject!r} is not one of --targets {names}.")
+    return names
+
+
+def _open_target_run(
+    *,
+    run_id: str,
+    run_dir: Path,
+    started_at: dt.datetime,
+    target: dict[str, Any],
+    provider: dict[str, Any],
+    max_steps: int,
+    max_result_chars: int,
+    repeat: int,
+    suite: Suite,
+    probes: list[Probe],
+    server: dict[str, Any] | None,
+    harness: dict[str, Any],
+    concurrency: int,
+    seed: int | None,
+    compare_id: str | None,
+    preflight_error: dict[str, Any] | None,
+) -> AttemptContext:
+    """Write one target's run.json, open its event stream, print its banner."""
+    _write_json(
+        run_dir / "run.json",
+        _run_header(
+            run_id=run_id,
+            started_at=started_at,
+            target=target,
+            provider=provider,
+            max_steps=max_steps,
+            max_result_chars=max_result_chars,
+            suite=suite,
+            harness=harness,
+            server=server,
+            repeat=repeat,
+            concurrency=concurrency,
+            seed=seed,
+            compare_id=compare_id,
+        ),
+    )
+    # The live stream (§6.5). Additive and never authoritative: `run.json` and
+    # the probe files are the record, and if the two ever disagree the probe
+    # file wins.
+    events = EventWriter(run_dir / "events.ndjson")
+    if events.disabled_reason:
+        print(f"  (no event stream: {events.disabled_reason})", file=sys.stderr)
+    events.emit(
+        RUN_STARTED,
+        runId=run_id,
+        probes=len(probes),
+        target=target["name"],
+        model=provider["model"],
+        suite=suite.path.name,
+        maxSteps=max_steps,
+        repeat=repeat,
+    )
+
+    # The effective configuration on screen, before the first probe, so a
+    # misconfiguration is visible in second 1 rather than found afterwards in
+    # the metadata. Same values as run.json. The API key is never printed —
+    # only the name of the variable it came from.
+    print(f"run {run_id} -> {run_dir}")
+    if compare_id is None:
+        print(f"  provider    {provider['name']}")
+        print(f"  model       {provider['model']}")
+        print(f"  base_url    {provider['base_url'] or '(vendor default)'}")
+        print(f"  api key     from ${provider['api_key_env']}")
+        print(f"  temperature {provider['temperature']}")
+    print(f"  target      {target['name']} -> {target['url']} (auth={target.get('auth', 'bearer')})")
+    if compare_id is None:
+        print(f"  maxSteps    {max_steps}")
+        print(f"  repeat      {repeat}")
+        print(f"  maxResChars {max_result_chars}")
+        print(f"  promptVer   {PROMPT_VERSION}")
+        print(f"  suite       {suite.path.name} @ {suite.sha} ({len(probes)} probe(s))")
+    print(f"  concurrency {concurrency}")
+    if server and not server["error"]:
+        info, cat = server["serverInfo"], server["catalogue"]
+        # A server may omit either; say so rather than print "None None".
+        identity = " ".join(v for v in (info.get("name"), info.get("version")) if v)
+        print(f"  server      {identity or '(serverInfo without name/version)'} · "
+              f"{cat['toolCount']} tools · catalogue {cat['sha'][:12]}")
+
+    return AttemptContext(
+        target=target,
+        provider=provider,
+        run_id=run_id,
+        run_dir=run_dir,
+        events=events,
+        max_steps=max_steps,
+        max_result_chars=max_result_chars,
+        repeat=repeat,
+        marker_prefix=compare_id or run_id,
+        token_run_id=compare_id or run_id,
+        preflight_error=preflight_error,
+        tag=f"[{target['name']}] " if compare_id else "",
+    )
+
+
+def _finish_target(ctx: AttemptContext, outcome: TargetOutcome) -> None:
+    ctx.events.emit(RUN_FINISHED, **_tally(outcome.records))
+    ctx.events.close()
+
+
+async def _run_single(
+    args: argparse.Namespace,
+    config: dict[str, Any],
+    target: dict[str, Any],
+    *,
+    provider: dict[str, Any],
+    max_steps: int,
+    max_result_chars: int,
+    repeat: int,
+    interactive: bool,
+) -> int:
+    """One target, as `make mcp-test` has always run it.
+
+    Auth failure here is NOT fatal: the run still executes so the reason is
+    written down per probe and every probe reports "not measured" (D12).
+    """
     preflight_error: dict[str, Any] | None = None
     try:
         preflight(
@@ -466,9 +1114,7 @@ async def _run(args: argparse.Namespace) -> int:
         print(f"  preflight auth failed for target {target['name']!r}: {exc}", file=sys.stderr)
         if args.login:
             return 2
-        # Not a product defect (D12): the run still executes so the reasons are
-        # written down per probe, and every probe reports "not measured".
-        preflight_error = {"kind": "auth", "detail": f"preflight: {exc}"}
+        preflight_error = {"kind": "auth", "phase": "preflight", "detail": f"preflight: {exc}"}
 
     if args.login:
         print(f"target {target['name']!r}: authenticated.")
@@ -487,312 +1133,232 @@ async def _run(args: argparse.Namespace) -> int:
     started_at = dt.datetime.now(dt.timezone.utc)
     run_id = _new_run_id(target["name"], started_at)
     run_dir = RUNS_DIR / run_id
-
-    _write_json(
-        run_dir / "run.json",
-        _run_header(
-            run_id=run_id,
-            started_at=started_at,
-            target=target,
-            provider=provider,
-            max_steps=max_steps,
-            max_result_chars=max_result_chars,
-            suite=suite,
-            harness=_harness_revision(),
-            server=server,
-            repeat=repeat,
-        ),
+    # A plain mcp-test stays sequential unless asked on the command line:
+    # `run.concurrency` is the comparison's setting, not this one's (D44).
+    concurrency = args.concurrency or 1
+    ctx = _open_target_run(
+        run_id=run_id, run_dir=run_dir, started_at=started_at, target=target,
+        provider=provider, max_steps=max_steps, max_result_chars=max_result_chars,
+        repeat=repeat, suite=suite, probes=probes, server=server,
+        harness=_harness_revision(), concurrency=concurrency, seed=args.seed,
+        compare_id=None, preflight_error=preflight_error,
     )
-    # The effective configuration on screen, before the first probe, so a
-    # misconfiguration is visible in second 1 rather than found afterwards in
-    # the metadata. Same values as run.json. The API key is never printed —
-    # only the name of the variable it came from.
-    # The live stream (§6.5). Additive and never authoritative: `run.json` and
-    # `probes/<id>.json` are the record, and if the two ever disagree the probe
-    # file wins.
-    events = EventWriter(run_dir / "events.ndjson")
-    if events.disabled_reason:
-        print(f"  (no event stream: {events.disabled_reason})", file=sys.stderr)
-    events.emit(
-        RUN_STARTED,
-        runId=run_id,
-        probes=len(probes),
-        target=target["name"],
-        model=provider["model"],
-        suite=suite.path.name,
-        maxSteps=max_steps,
-        repeat=repeat,
-    )
+    outcome = await run_target(ctx, probes, concurrency=concurrency, seed=args.seed)
+    _finish_target(ctx, outcome)
+    if outcome.stopped:
+        print(_stop_message(provider), file=sys.stderr)
+    else:
+        print(f"done: {run_dir}")
+    return _exit_code(outcome.records)
 
-    print(f"run {run_id} -> {run_dir}")
-    print(f"  provider    {provider['name']}")
-    print(f"  model       {provider['model']}")
-    print(f"  base_url    {provider['base_url'] or '(vendor default)'}")
-    print(f"  api key     from ${provider['api_key_env']}")
-    print(f"  temperature {provider['temperature']}")
-    print(f"  target      {target['name']} -> {target['url']} (auth={target.get('auth', 'bearer')})")
-    print(f"  maxSteps    {max_steps}")
-    print(f"  repeat      {repeat}")
-    print(f"  maxResChars {max_result_chars}")
-    print(f"  promptVer   {PROMPT_VERSION}")
-    print(f"  suite       {suite.path.name} @ {suite.sha} ({len(probes)} probe(s))")
-    if server and not server["error"]:
-        info, cat = server["serverInfo"], server["catalogue"]
-        # A server may omit either; say so rather than print "None None".
-        identity = " ".join(v for v in (info.get("name"), info.get("version")) if v)
-        print(f"  server      {identity or '(serverInfo without name/version)'} · "
-              f"{cat['toolCount']} tools · catalogue {cat['sha'][:12]}")
 
-    exit_code = 0
-    tally = {"ok": 0, "error": 0, "mixed": 0, "notMeasured": 0}
+async def _run_compare(
+    args: argparse.Namespace,
+    config: dict[str, Any],
+    targets: list[dict[str, Any]],
+    *,
+    provider: dict[str, Any],
+    max_steps: int,
+    max_result_chars: int,
+    repeat: int,
+    interactive: bool,
+) -> int:
+    """Two targets, one compareId, run concurrently (D44, plan §5.2).
 
-    def finish_run() -> None:
-        events.emit(RUN_FINISHED, **tally)
-        events.close()
+    Preflight covers EVERY target before the first attempt — auth, then the
+    server identity and catalogue — and any failure aborts the whole
+    comparison with exit 2 and nothing written: a one-sided comparison cannot
+    produce a winner, and a missing catalogue sha is a missing pin. (A single
+    `mcp-test` keeps its softer rule: auth failure becomes per-probe "not
+    measured".)
+    """
+    if args.login:
+        print("--login takes one --target, not --targets.", file=sys.stderr)
+        return 2
+    suite = load_suite(_resolve_suite_path(args.suite))
+    probes = [suite.probe(args.probe)] if args.probe else list(suite.probes)
+    try:
+        rule.resolve_parameters(suite.decision)
+    except rule.RuleMismatch as exc:
+        print(f"suite {suite.path.name}: {exc}", file=sys.stderr)
+        return 2
 
-    async def run_attempt(
-        probe: Probe, attempt: int, replaces: int | None
-    ) -> tuple[dict[str, Any], bool]:
-        """One attempt of one probe: setup, agent, effect check, teardown (D41, D43).
+    # MUST stay before the pool starts: the OAuth browser flow blocks the event
+    # loop while it waits for the callback, which would stall every attempt in
+    # flight on every target (D19 + D44).
+    for target in targets:
+        try:
+            preflight(target, interactive=interactive, on_authorize_url=_open_browser,
+                      wait=args.auth_wait)
+        except AuthError as exc:
+            print(f"Comparison aborted: preflight auth failed for target {target['name']!r}: {exc}\n"
+                  f"Nothing was measured.", file=sys.stderr)
+            return 2
+    servers = await asyncio.gather(*(_describe_target(t) for t in targets))
+    for target, server in zip(targets, servers):
+        if server["error"]:
+            print(f"Comparison aborted: could not read target {target['name']!r} "
+                  f"({server['error']['detail']}). Nothing was measured.", file=sys.stderr)
+            return 2
 
-        Writes `probes/<probeId>/attempt-<n>.json` and returns (record,
-        stop_run). Each attempt is a fresh MCP session and a fresh conversation,
-        and its own `{{marker}}`, so attempts never see each other's records.
-        """
-        nonlocal exit_code
-        timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        marker = attempt_marker(run_id, probe.id, attempt)
-        prompt = interpolate(
-            probe.prompt, run_id=run_id, probe_id=probe.id, timestamp=timestamp, marker=marker
+    started_at = dt.datetime.now(dt.timezone.utc)
+    compare_id = _new_compare_id(started_at)
+    compare_dir = RUNS_DIR / compare_id
+    seed = args.seed if args.seed is not None else secrets.randbelow(2**31)
+    concurrency = cfg.concurrency(config, override=args.concurrency, default=COMPARE_DEFAULT_CONCURRENCY)
+    subject = args.subject or targets[0]["name"]
+    harness = _harness_revision()
+
+    contexts = []
+    target_meta = []
+    for target, server in zip(targets, servers):
+        k = cfg.target_concurrency(target, concurrency)
+        run_id = f"{compare_id}-{target['name']}"
+        ctx = _open_target_run(
+            run_id=run_id, run_dir=compare_dir / "targets" / target["name"],
+            started_at=started_at, target=target, provider=provider, max_steps=max_steps,
+            max_result_chars=max_result_chars, repeat=repeat, suite=suite, probes=probes,
+            server=server, harness=harness, concurrency=k, seed=seed,
+            compare_id=compare_id, preflight_error=None,
         )
-        again = f", replaces {replaces}" if replaces else ""
-        print(f"  probe {probe.id} ({probe.mode}) attempt {attempt}/{repeat}{again} ...", flush=True)
-        events.emit(PROBE_STARTED, probe=probe.id, attempt=attempt, mode=probe.mode,
-                    **({"replaces": replaces} if replaces else {}))
-        # The agent never learns which probe it is running: the probe id is
-        # stamped on here, by the owner of the stream.
-        on_event = lambda t, fields: events.emit(t, probe=probe.id, attempt=attempt, **fields)  # noqa: E731
-
-        result: dict[str, Any] = {
-            "schemaVersion": RUN_SCHEMA_VERSION,
+        contexts.append((ctx, k))
+        target_meta.append({
+            "name": target["name"],
+            "platform": cfg.target_platform(target),
+            "url": target["url"],
             "runId": run_id,
-            "probeId": probe.id,
-            # 1-based, unique per probe within the run (D43). A replacement for
-            # an attempt that hit a harness error gets the next free number and
-            # names the one it replaces; the errored attempt stays on file.
-            "attempt": attempt,
-            "replaces": replaces,
-            "marker": marker,
-            "mode": probe.mode,
-            "prompt": prompt,
-            "startedAt": timestamp,
-            # Third axis, alongside outcome and harnessError. None = not checked
-            # or not verifiable; never conflated with "verified absent".
-            "effectVerified": None,
-            "effectCheck": None,
-            # Persisted, not just printed (plan §3 item 8). See _silent_wrong.
-            "silentWrong": None,
-            # None until the agent ran; then always present (agent.run_probe).
-            "finalAnswer": None,
-            "usage": None,
-            "servedModel": None,
-            "setup": [],
-            "teardown": [],
-            # None = the probe declares no teardown; False = something it
-            # created may still be on the server.
-            "teardownClean": None,
-        }
-        saved: dict[str, Any] = {}
-        stop_run = False
+            "concurrency": k,
+            # S6 (D50) implements the freshness checks; until then every
+            # comparison is honestly "unknown", which the report reads as
+            # unofficial.
+            "freshness": {"status": "unknown", "checkedAt": None, "initializedAt": None},
+        })
 
-        if preflight_error:
-            result["harnessError"] = preflight_error
-            result["verdict"] = None
-            result["finishedAt"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            _write_json(attempt_path(run_dir, probe.id, attempt), result)
-            events.emit(PROBE_ABORTED, probe=probe.id, attempt=attempt, kind="auth",
-                        detail=preflight_error["detail"], toolCalls=0)
-            tally["notMeasured"] += 1
-            print("    not measured (auth)", file=sys.stderr)
-            exit_code = 1
-            return result, False
+    record = _compare_record(
+        compare_id=compare_id, started_at=_now_ms(), subject=subject, repeat=repeat,
+        suite=suite, probes=probes, seed=seed, concurrency=concurrency, provider=provider,
+        max_steps=max_steps, max_result_chars=max_result_chars, harness=harness,
+        targets=target_meta,
+    )
+    _write_json(compare_dir / "compare.json", record)
+    print(f"compare {compare_id} -> {compare_dir}")
+    print(f"  model {provider['model']} · repeat {repeat} · seed {seed} · subject {subject} · "
+          f"suite {suite.path.name} @ {suite.sha} ({len(probes)} probe(s))")
+
+    stop = asyncio.Event()
+    outcomes = await asyncio.gather(*(
+        run_target(ctx, probes, concurrency=k, seed=seed, stop=stop) for ctx, k in contexts
+    ))
+    for (ctx, _k), outcome in zip(contexts, outcomes):
+        _finish_target(ctx, outcome)
+
+    record["finishedAt"] = _now_ms()
+    _write_json(compare_dir / "compare.json", record)
+    if any(o.stopped for o in outcomes):
+        print(_stop_message(provider), file=sys.stderr)
+    else:
+        print(f"done: {compare_dir}")
+
+    # mcp-compare ends with the report (plan §5.6); `make mcp-report` re-derives
+    # it from the same files at any time. A report failure never loses the run.
+    if not args.no_report:
+        from . import report
 
         try:
-            result["setup"] = await _run_phase(
-                probe, "setup", target, run_id=run_id, timestamp=timestamp, marker=marker, attempt=attempt,
-                saved=saved, max_result_chars=max_result_chars, events=events,
-            )
-            failed = next((r for r in result["setup"] if not r["ok"]), None)
-            if failed:
-                raise SetupFailed(f"setup[{failed['index']}] {failed['tool']}: {failed['error']}")
-            try:
-                prompt = resolve_refs(prompt, saved)
-            except StepError as exc:
-                raise SetupFailed(f"prompt: {exc}") from exc
-            result["prompt"] = prompt
+            summary = report.write_summary(compare_dir)
+            print(f"  summary  {'official' if summary['official'] else 'UNOFFICIAL'} -> "
+                  f"{compare_dir / 'summary.md'}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  (summary not written: {type(exc).__name__}: {exc}; "
+                  f"re-run `make mcp-report RUN={compare_id}`)", file=sys.stderr)
+    return _exit_code([r for o in outcomes for r in o.records])
 
-            # A fresh MCP session per attempt: attempts are fully independent (§3).
-            async with mcp_session(target) as session:
-                outcome = await run_probe(
-                    session=session,
-                    provider=provider,
-                    prompt=prompt,
-                    max_steps=max_steps,
-                    max_result_chars=max_result_chars,
-                    on_event=on_event,
-                )
-            result.update(outcome)
-            # harnessError is a separate axis from outcome (D12). Classification
-            # of failure kinds is not built in this slice; the field exists so
-            # the file shape is already right.
-            result["harnessError"] = None
-            verdict = result["verdict"]
-            print(
-                f"    {verdict['outcome']} · {result['toolCallCount']} tool calls · "
-                f"{verdict['summary']}"
-            )
 
-            verified, detail, check_error = await _verify_effect(
-                probe, target, run_id=run_id, timestamp=timestamp, saved=saved, marker=marker
-            )
-            result["effectVerified"] = verified
-            result["effectCheck"] = detail
-            result["silentWrong"] = _silent_wrong(verdict, verified)
-            if check_error:
-                result["harnessError"] = check_error
-                print(f"    effect NOT VERIFIABLE: {check_error['detail']}", file=sys.stderr)
-            elif verified is False:
-                # The headline case this amendment exists for.
-                claim = " despite the agent reporting OKAY" if verdict["outcome"] == "OKAY" else ""
-                print(f"    effect ABSENT{claim} ({detail['tool']} -> {detail['rows']} rows)")
-            elif verified is True:
-                print(f"    effect verified ({detail['tool']} -> {detail['rows']} rows)")
+def _compare_record(
+    *,
+    compare_id: str,
+    started_at: str,
+    subject: str,
+    repeat: int,
+    suite: Suite,
+    probes: list[Probe],
+    seed: int,
+    concurrency: int,
+    provider: dict[str, Any],
+    max_steps: int,
+    max_result_chars: int,
+    harness: dict[str, Any],
+    targets: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """`compare.json` (plan §5.2, §6): what groups the target runs, and the pins.
 
-            events.emit(
-                PROBE_FINISHED,
-                probe=probe.id, attempt=attempt,
-                outcome=verdict["outcome"],
-                steps=result["toolCallCount"],
-                exhausted=result.get("exhausted", False),
-            )
-            if probe.expect_effect is not None:
-                events.emit(
-                    EFFECT_CHECKED,
-                    probe=probe.id, attempt=attempt,
-                    verified=verified,
-                    rows=None if detail is None else detail.get("rows"),
-                )
-            tally[{"OKAY": "ok", "ERROR": "error", "MIXED": "mixed"}.get(verdict["outcome"], "error")] += 1
-        except SetupFailed as exc:
-            # The agent never ran: there is nothing to measure (D41).
-            result["harnessError"] = {"kind": "setup", "detail": str(exc)}
-            result["verdict"] = None
-            events.emit(PROBE_ABORTED, probe=probe.id, attempt=attempt, kind="setup", detail=str(exc), toolCalls=0)
-            tally["notMeasured"] += 1
-            print(f"    not measured (setup): {exc}", file=sys.stderr)
-            exit_code = 1
-        except AuthError as exc:
-            result["harnessError"] = {"kind": "auth", "detail": str(exc)}
-            result["verdict"] = None
-            events.emit(PROBE_ABORTED, probe=probe.id, attempt=attempt, kind="auth", detail=str(exc), toolCalls=0)
-            tally["notMeasured"] += 1
-            print(f"    not measured (auth): {exc}", file=sys.stderr)
-            exit_code = 1
-        except Exception as exc:  # noqa: BLE001 - a crash must still leave evidence
-            # A ProbeAborted carries the tool calls recorded before the crash.
-            # They are merged FIRST, so the evidence is written down even though
-            # the probe has no verdict; `cause` is the real exception, so the
-            # detail line and the stop-the-run check behave exactly as before.
-            cause: BaseException = exc
-            salvaged = 0
-            aborted = _find_probe_aborted(exc)
-            if aborted is not None:
-                result.update(aborted.partial)
-                cause = aborted.cause
-                salvaged = result.get("toolCallCount", 0)
-            detail = _error_detail(cause)
-            result["harnessError"] = {
-                "kind": "provider",
-                "detail": detail,
-                # The full traceback stays: it is the only reason a nested
-                # failure like this is diagnosable at all.
-                "traceback": traceback.format_exc(),
-            }
-            # A failed probe has no verdict. The partial toolCalls above are the
-            # objective record and must never be mistaken for one.
-            result["verdict"] = None
-            salvage_note = f" ({salvaged} tool calls recorded)" if salvaged else ""
-            # The terminal event for a probe that has no outcome. Without it a
-            # tailing UI would spin forever on a probe that is already dead.
-            events.emit(
-                PROBE_ABORTED, probe=probe.id, attempt=attempt, kind="provider", detail=detail, toolCalls=salvaged
-            )
-            tally["notMeasured"] += 1
-            print(f"    not measured: {detail}{salvage_note}", file=sys.stderr)
-            exit_code = 1
-            stop_run = _is_provider_config_error(cause)
-        finally:
-            # Always, whatever happened above — including a setup that got
-            # halfway: teardown is what keeps the tenant clean (D41).
-            if probe.teardown:
-                result["teardown"] = await _run_phase(
-                    probe, "teardown", target, run_id=run_id, timestamp=timestamp, marker=marker,
-                    attempt=attempt,
-                    saved=saved, max_result_chars=max_result_chars, events=events,
-                )
-                result["teardownClean"] = all(r["ok"] for r in result["teardown"])
-                if not result["teardownClean"]:
-                    bad = sum(1 for r in result["teardown"] if not r["ok"])
-                    print(f"    teardown INCOMPLETE ({bad} failed step(s)): data may be left behind",
-                          file=sys.stderr)
-
-        result["finishedAt"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        _write_json(attempt_path(run_dir, probe.id, attempt), result)
-        return result, stop_run
-
-    for probe in probes:
-        # D43: `repeat` MEASURED attempts per probe. An attempt with a harness
-        # error is kept on file but does not count; a replacement is scheduled,
-        # at most `repeat` of them per probe, so a broken probe cannot loop. A
-        # preflight auth failure is never retried: it would fail identically.
-        # A probe still short of `repeat` measured attempts is "not evaluable"
-        # for the report (plan §5.1) — never silently padded.
-        # The N planned attempts run first; replacements follow, oldest error
-        # first, so `replaces` always names an attempt that already ran.
-        errored: list[int] = []
-        attempt = replacements = 0
-        stop_run = False
-        while not stop_run:
-            if attempt < repeat:
-                replaces = None
-            elif errored and not preflight_error and replacements < repeat:
-                replaces = errored.pop(0)
-                replacements += 1
-            else:
-                break
-            attempt += 1
-            result, stop_run = await run_attempt(probe, attempt, replaces)
-            if result.get("harnessError"):
-                errored.append(attempt)
-        if stop_run:
-            finish_run()
-            print(
-                f"\nStopping the run: the provider rejected model "
-                f"{provider['model']!r} outright, so every remaining probe would "
-                f"fail identically. Check the model in your config — the startup "
-                f"banner above shows what was actually used.",
-                file=sys.stderr,
-            )
-            return exit_code
-
-    finish_run()
-    print(f"done: {run_dir}")
-    return exit_code
+    Per-target pins (url, serverInfo, catalogue, model served …) live in each
+    target's run.json, where the report reads them. Everything under `pins`
+    must be equal for two comparisons to be a stability pair — the seed
+    included, so run B is started with `--seed` of run A.
+    """
+    return {
+        "compareSchemaVersion": COMPARE_SCHEMA_VERSION,
+        "compareId": compare_id,
+        "startedAt": started_at,
+        "finishedAt": None,
+        "subject": subject,
+        "repeat": repeat,
+        # The suite's `decision:` block, verbatim (D47); null = rule defaults.
+        "decision": suite.decision,
+        "suite": {"file": suite.path.name, "sha": suite.sha, "window": suite.window},
+        "probes": [p.id for p in probes],
+        "schedule": {"seed": seed, "concurrency": concurrency},
+        "pins": {
+            "harness": harness,
+            "provider": provider["name"],
+            "model": provider["model"],
+            "temperature": provider["temperature"],
+            "promptVersion": PROMPT_VERSION,
+            "verdictSchemaVersion": VERDICT_SCHEMA_VERSION,
+            "runSchemaVersion": RUN_SCHEMA_VERSION,
+            "ruleVersion": rule.RULE_VERSION,
+            "maxSteps": max_steps,
+            "maxResultChars": max_result_chars,
+            "repeat": repeat,
+            "seed": seed,
+            "suiteSha": suite.sha,
+        },
+        "targets": targets,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="mcp-test", description=__doc__)
     parser.add_argument("--target", default="local", help="Target name from config (default: local)")
+    parser.add_argument(
+        "--targets",
+        help="Compare two targets, e.g. local,holded (D44). One compareId, one run per "
+        "target under runs/<compareId>/targets/, run concurrently. Every target needs "
+        "`platform` in config.",
+    )
+    parser.add_argument(
+        "--subject", help="With --targets: the side whose win rate is the KR (default: the first)"
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        help="Attempts in flight per target (D44). With --targets: default run.concurrency, "
+        "else 4. Without: default 1 (run.concurrency is ignored). A target's own "
+        "`concurrency` caps it lower.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Shuffle the attempt order with this seed (recorded). Random by default with "
+        "--targets; without it a single run keeps suite order. Reuse a run's seed to "
+        "make a stability pair.",
+    )
+    parser.add_argument(
+        "--no-report",
+        action="store_true",
+        help="With --targets: skip summary.json/summary.md at the end (make mcp-report later).",
+    )
     parser.add_argument(
         "--suite", help="Suite file or bare name, e.g. sales-order (not needed with --login)"
     )
@@ -833,8 +1399,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--repeat",
         type=int,
-        default=1,
-        help="Measured attempts per probe (D43, default 1). Each attempt is a fresh "
+        help="Measured attempts per probe (D43; default 1, or 3 with --targets). Each attempt is a fresh "
         "session, conversation and {{marker}}. An attempt with a harness error is "
         "kept and replaced, at most REPEAT replacements per probe.",
     )
@@ -844,8 +1409,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--interactive and --no-interactive contradict each other")
     if not args.suite and not args.login:
         parser.error("--suite is required unless --login is given")
-    if args.repeat < 1:
+    if args.repeat is not None and args.repeat < 1:
         parser.error("--repeat must be at least 1")
+    if args.concurrency is not None and args.concurrency < 1:
+        parser.error("--concurrency must be at least 1")
+    if args.subject and not args.targets:
+        parser.error("--subject needs --targets")
     return asyncio.run(_run(args))
 
 

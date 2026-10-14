@@ -86,6 +86,46 @@ def max_result_chars(config: dict[str, Any]) -> int:
     return int(config.get("run", {}).get("max_result_chars", 20000))
 
 
+#: What a target IS, as opposed to what it is called (plan §5.2): `local`,
+#: `experimental` and `staging` are all `etendo-go`. Suites key their
+#: per-platform blocks by it (S5) and the report records it.
+PLATFORMS = ("etendo-go", "holded")
+
+
+def concurrency(config: dict[str, Any], *, override: int | None = None, default: int = 1) -> int:
+    """Attempts in flight per target (D44): `--concurrency`, else `run.concurrency`, else `default`.
+
+    The CLI flag is a visible escape hatch, like `--max-steps`, so it wins.
+    """
+    return max(int(override or config.get("run", {}).get("concurrency") or default), 1)
+
+
+def target_concurrency(target: dict[str, Any], global_limit: int) -> int:
+    """A target's own `concurrency` CAPS the global one, never raises it.
+
+    It exists for rate limits (a vendor MCP or gateway that throttles), which
+    is a reason to go lower on one target, never higher.
+    """
+    own = target.get("concurrency")
+    return min(global_limit, int(own)) if own else global_limit
+
+
+def target_platform(target: dict[str, Any]) -> str:
+    """The target's `platform`, required for a comparison and never guessed.
+
+    Guessing `etendo-go` for an unlabelled target would mislabel a vendor one,
+    and the report attributes capability gaps by platform.
+    """
+    platform = target.get("platform")
+    if platform not in PLATFORMS:
+        raise ValueError(
+            f"Target {target['name']!r} needs `platform = \"etendo-go\"` or "
+            f"`platform = \"holded\"` in config.toml to take part in a comparison "
+            f"(got {platform!r})."
+        )
+    return platform
+
+
 def target_settings(config: dict[str, Any], name: str) -> dict[str, Any]:
     targets = config.get("targets", {})
     if name not in targets:

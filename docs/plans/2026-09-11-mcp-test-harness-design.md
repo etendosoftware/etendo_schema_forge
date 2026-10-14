@@ -41,7 +41,8 @@ endpoint and returns structured feedback, so the same suite can be re-run after 
 - Not a unit test suite for the Java MCP code (that already exists).
 - Not a replacement for the IMP-* registry. **Status still lives only in the registry.** The harness
   produces *evidence*; a human decides what it means.
-- Not (in v1) a Holded comparison. Single-target only.
+- Not (in v1) a Holded comparison. Single-target only. *(Superseded 2026-10-14: D44 adds a
+  two-target comparison, `make mcp-compare` — §6.1, run schema v6.)*
 - Not a CI gate. It is a measurement instrument (§7).
 
 ---
@@ -673,9 +674,11 @@ Rules, all in `cli.py` (the `for probe in probes` scheduler around `run_attempt`
 
 - Each attempt is independent: its own setup, MCP session, agent conversation, effect check and
   teardown — teardown in `finally`, per attempt, exactly as D41 had it per probe.
-- **A harness error does not count.** The errored attempt stays on file; after the N planned
-  attempts, replacements run oldest error first, **at most N per probe**. A replacement that errors
-  is itself eligible for replacement while the cap lasts.
+- **A harness error does not count.** The errored attempt stays on file; its replacement is
+  appended to the **end** of the work queue as soon as the error is known (so, run sequentially,
+  after the planned attempts, oldest error first), **at most N per probe**. A replacement that
+  errors is itself eligible for replacement while the cap lasts. Since S3 the queue is shared by
+  every probe of the target, so a replacement may run after other probes' planned attempts.
 - A preflight auth failure is **never** rescheduled (it would fail identically): every planned
   attempt is written with that `harnessError`, no replacement.
 - A probe that ends with fewer than N measured attempts (`harnessError == null`) is *not
@@ -692,6 +695,96 @@ whatever is on disk) and exposes `probe_files`, `attempt_numbers(run, probe)` an
 `load_probe(run, probe, attempt=1)`; an older run is attempt 1 of each probe. Report code (S4)
 should read through the same rule.
 
+#### 2026-10-14: run schema v6 — comparisons (ETP-5750 S3, D44)
+
+**`RUN_SCHEMA_VERSION` 5 → 6.** The probe-file layout is unchanged; what is new is that a run can
+be one side of a comparison, and that attempts can run in parallel.
+
+`--targets a,b` (`make mcp-compare SUITE= TARGETS= REPEAT= CONCURRENCY= SUBJECT= SEED=`) writes:
+
+```
+runs/<compareId>/                 # <UTC>-cmp-<hex4>, e.g. 20261014T1402-cmp-a3f1
+  compare.json
+  summary.json  summary.md        # runner/report.py, run at the end (skip: --no-report)
+  targets/<target>/               # an ordinary run dir: run.json, events.ndjson,
+                                  #   probes/<probeId>/attempt-<n>.json
+```
+
+`compare.json` (`COMPARE_SCHEMA_VERSION` 1 — the contract `report.py` reads):
+
+```jsonc
+{
+  "compareSchemaVersion": 1,
+  "compareId": "20261014T1402-cmp-a3f1",
+  "startedAt": "2026-10-14T14:02:11.123Z", "finishedAt": "…",   // finishedAt null while running
+  "subject": "local",                  // --subject, default the first of --targets
+  "repeat": 3,                         // default 3 with --targets (D43), 1 for mcp-test
+  "decision": { "ruleVersion": 1, "callsMargin": 0.2 },   // the suite's decision: block, verbatim; null = defaults
+  "suite": { "file": "okr.yaml", "sha": "e3b0c442", "window": "okr" },
+  "probes": ["q-…", "w-…"],            // suite order
+  "schedule": { "seed": 1234, "concurrency": 4 },
+  "pins": {                            // all must match for a stability pair (plan §6)
+    "harness": { "commit": "…", "dirty": false }, "provider": "openai", "model": "openai/gpt-5.2",
+    "temperature": 0, "promptVersion": 4, "verdictSchemaVersion": 3, "runSchemaVersion": 6,
+    "ruleVersion": 1, "maxSteps": 25, "maxResultChars": 20000, "repeat": 3, "seed": 1234,
+    "suiteSha": "e3b0c442"
+  },
+  "targets": [
+    { "name": "local", "platform": "etendo-go", "url": "…", "runId": "<compareId>-local",
+      "concurrency": 4,
+      "freshness": { "status": "unknown", "checkedAt": null, "initializedAt": null } }
+  ]
+}
+```
+
+Per-target pins (server identity, catalogue sha/bytes, served model) stay in each target's
+`run.json`; the report reads them there. **`freshness.status` is always `unknown` until S6 (D50)
+implements the checks**, so every comparison is reported *unofficial* until then.
+
+Rules:
+
+- **Preflight is all-or-nothing.** The model is checked once; then auth for every target, then
+  `describe_server` for every target. Any failure aborts the comparison with exit 2 and **nothing
+  written**: a one-sided comparison cannot produce a winner, and a missing catalogue is a missing
+  pin. (A single `mcp-test` keeps its softer rule — auth failure becomes per-probe "not measured".)
+  A suite whose `decision.ruleVersion` the code does not implement is refused at the same point.
+- **`platform` is required** on every compared target (`etendo-go` | `holded`) and never guessed.
+- **Same prompt on both sides.** `{{marker}}` is `<compareId>-<probeId>-a<n>` and `{{runId}}` expands
+  to the `compareId`, so the prompt of attempt *n* is byte-identical on every target.
+- **Concurrency.** Targets run concurrently; within a target, attempts run in a pool of K slots:
+  `--concurrency`, else `run.concurrency`, else 4. A plain `mcp-test` **ignores** `run.concurrency`
+  and stays at 1 unless `--concurrency` (`CONCURRENCY=`) is given. A target's own `concurrency` in
+  config **caps** K for that target (rate limits) and never raises it.
+- **Seeded order.** The work list per target is probes × 1..N shuffled with `random.Random(seed)`;
+  the same seed gives the same order on every target. `--seed` reuses a seed; otherwise a random
+  one is drawn and recorded. The seed is a pin, so run B of a stability pair takes `SEED=` of run A.
+  A plain `mcp-test` without `--seed` keeps suite order.
+- **`exclusive: true`** on a probe makes it run alone: the pool drains before it starts and
+  nothing starts until it finishes.
+- **The real schedule is on file:** every attempt has `startedAt` / `finishedAt` (UTC, ms) and
+  `workerSlot` (0-based pool slot).
+- **429 is a harness error, `kind: rateLimited`** — from the LLM gateway or the MCP transport, **in
+  any phase**: setup, agent loop or effect check (a 429 in setup is no longer reported as `setup`).
+  A setup or teardown step answered with a 429 also carries `rateLimited: true` on its step record;
+  a 429 in teardown sets no harness error (the measurement stands) but shows up as
+  `teardownClean: false`. Every `harnessError` now carries **`phase`** — `preflight` | `setup` |
+  `agent` | `effectCheck` — so where it happened stays visible. It is replaced like any other (D43),
+  **after a backoff**: `min(30, 2 × 2^(n−1))` seconds for the
+  probe's n-th replacement, times a jitter in [0.5, 1] so parallel slots do not retry in lockstep
+  (`RATE_LIMIT_BACKOFF_BASE` / `_CAP`). The wait holds the pool slot on purpose — it lowers the
+  pressure on whoever is throttling. Other harness errors are replaced at once. It never stops the run; a 401/403/404 from the provider does,
+  on **every** target (the stop is shared), letting attempts in flight finish their teardown.
+- **Cancellation** (Ctrl-C, or the caller cancelling `run_target`): every attempt in flight is
+  cancelled and **awaited**, so its teardown (in `finally`) completes before the cancellation
+  reaches the caller. Such an attempt writes a partial record with `harnessError.kind:
+  cancelled`. An attempt still waiting out a backoff had not started: no file, nothing to tear down.
+- One attempt's failure never cancels a sibling. `run_attempt` is module-level and keeps no shared
+  state: tallies and exit codes are derived from the records it returns. The exit code is 1 when any
+  attempt has a `harnessError` (an effect check that could not run included), 0 otherwise.
+
+run.json gains `compareId` (null for a single run), `platform`, `concurrency` and
+`schedule: {seed, shuffled}`.
+
 ### 6.2 Run metadata header (`run.json`, written before the first probe)
 
 Without this a run is unreadable three weeks later.
@@ -700,10 +793,14 @@ As implemented:
 
 ```jsonc
 {
-  "schemaVersion": 5,               // 1 -> 2 on 2026-09-14, 3 -> 4 and 4 -> 5 on 2026-10-14, see §6.1
-  "runId": "20260911T1402-local-a3f1",
+  "schemaVersion": 6,               // 1 -> 2 on 2026-09-14, 3 -> 4 -> 5 -> 6 on 2026-10-14, see §6.1
+  "runId": "20260911T1402-local-a3f1",   // in a comparison: <compareId>-<target>
+  "compareId": null,                // v6: the comparison it belongs to
   "startedAt": "2026-09-11T14:02:11Z",
   "target": { "name": "local", "url": "http://..." },
+  "platform": "etendo-go",          // v6: from config; required only to be compared
+  "concurrency": 1,                 // v6: attempts in flight for this target
+  "schedule": { "seed": null, "shuffled": false },   // v6
   "serverBuild": null,              // ALWAYS null: not resolved, see below
   "server": {                       // v4: read once at preflight, after auth
     "serverInfo": { "name": "...", "version": "1.0.0" },   // the MCP initialize answer
@@ -1185,10 +1282,11 @@ in a changelog.
 | # | Decision | Date | Note |
 |---|---|---|---|
 | D1 | **The harness lives in the functional module** (`etendo_schema_forge`, this repo). | 2026-09-11 | Tentative (*"en principio"*). Puts it next to `docs/mcp-evaluation/`, which consumes its output. Accepted consequence: the thing under test (the Java MCP server) lives in the other repo, so a run pins a `.go` build id it does not own — hence `serverBuild` in the run header. |
-| D2 | **`REPEAT` defaults to `1`.** | 2026-09-11 | Non-determinism is real but not paid for on every run. §7. Raisable since D43 (`--repeat N`); the default is unchanged. Even at `REPEAT=1` a harness-errored probe is now retried once (D43's replacement rule), so a write probe that crashed mid-loop can leave a **second agent-created record** on the tenant: teardown only removes what setup created, never what the agent wrote. |
+| D2 | **`REPEAT` defaults to `1`.** | 2026-09-11 | Non-determinism is real but not paid for on every run. §7. Raisable since D43 (`--repeat N`); the default is unchanged. Exit code 1 now also covers a probe whose only harness error was an effect check that could not run (D43). Even at `REPEAT=1` a harness-errored probe is now retried once (D43's replacement rule), so a write probe that crashed mid-loop can leave a **second agent-created record** on the tenant: teardown only removes what setup created, never what the agent wrote. |
 | D3 | **No enforced data-hygiene policy.** Writes are a per-probe decision by the suite author; the runner offers `{{marker}}` instead of a rule. | 2026-09-11 | §8 — the token is `{{marker}}` (`<runId>-<probeId>`) rather than the `{{runId}}` this row originally named; D34 needed per-probe uniqueness. Accepted consequence: the tenant accumulates records and nothing prevents it — the marker makes the sweep cheap, it does not perform it. |
 | D4 | **Probes are hand-written, grown incrementally.** The first one is deliberately simple in *what it asks for* (a sales order for the default customer, no lines) so that the first failure is unambiguous while the harness itself is still unproven. | 2026-09-11 | Simple in scope — **not** simple in phrasing; see D21. |
-| D43 | **`--repeat N` runs each probe N times, each attempt in its own MCP session, conversation and `{{marker}}`; every attempt is kept as `probes/<id>/attempt-<n>.json`, never averaged away.** A harness-errored attempt does not count and is replaced after the planned ones, at most N replacements per probe; a preflight auth failure is never replaced. | 2026-10-14 | ETP-5750 S2; plan `2026-10-14-mcp-tests-reproducible-comparison-plan.md` §5.1. Variance was unmeasured (§11 q4). Replacing harness errors keeps a transient provider fault from shrinking N, and the cap keeps a deterministically broken probe from looping. The `mcp-compare` default of 3 lands with S3. |
+| D44 | **A comparison groups one standard run per target under one `compareId`.** Targets run concurrently; attempts within a target run in a pool of K (`--concurrency` / `run.concurrency`, default 4; a target's own `concurrency` only caps it), in a seeded shuffled order whose seed is recorded and pinned; `exclusive` probes run alone; every attempt records its real start, finish and worker slot. Preflight covers every target and any failure aborts the whole comparison. | 2026-10-14 | ETP-5750 S3; plan §5.2. Parallel from v1 was a user decision (plan §9.3). All-or-nothing preflight because one side alone produces no winner. The seed is a pin so that a stability pair runs the same order; parallelism is a variance source, so the schedule is recorded rather than inferred. |
+| D43 | **`--repeat N` runs each probe N times, each attempt in its own MCP session, conversation and `{{marker}}`; every attempt is kept as `probes/<id>/attempt-<n>.json`, never averaged away.** A harness-errored attempt does not count and is replaced after the planned ones, at most N replacements per probe; a preflight auth failure is never replaced. | 2026-10-14 | ETP-5750 S2; plan `2026-10-14-mcp-tests-reproducible-comparison-plan.md` §5.1. Variance was unmeasured (§11 q4). Replacing harness errors keeps a transient provider fault from shrinking N, and the cap keeps a deterministically broken probe from looping. `mcp-compare` defaults to 3 (D44). **Behaviour change (S3):** the exit code is 1 whenever any attempt has a `harnessError` — a replaced transient error, or an effect check that could not run (before S3 the latter exited 0). |
 | D47 | **The decision rule is code (`runner/decide.py`, `RULE_VERSION`) and its thresholds are data** (the suite's `decision:` block, copied into `compare.json`, over `DEFAULT_PARAMETERS`). Every summary records the version, the parameters and their sha. | 2026-10-14 | ETP-5750 S4; plan §5.6. A KR figure without the rule that produced it is unreadable later, and a rule tweak must be re-appliable to an old run (`make mcp-report`) and visible in the diff. A declared `ruleVersion` the code does not implement is refused, never silently re-interpreted. |
 | D48 | **Metrics come only from `compare.json`, `run.json` and the probe files; `events.ndjson` is never read by the report.** | 2026-10-14 | ETP-5750 S4. Restates §6.5 rule 1 as a property of the report and guards it with a test that deletes the event files and asserts a byte-identical summary. |
 | D42 | **An empty model turn is asked again, not read as the end of the probe.** A turn with no text and no tool call is retried from the same state, the empty message dropped, at most `MAX_EMPTY_COMPLETIONS` (3) times, then the probe is a provider failure (`harnessError.kind: provider`, `EmptyCompletion`). The count is recorded as `emptyCompletions`. | 2026-10-01 | Run `20261001T1912-local-45e9`: three probes ended with 0 tool calls and a verdict saying *"no tools were provided"* while 28 tools were bound — the Gemini route of the gateway answered the first turn with an empty `stop` 4 times out of 5 in a direct reproduction. LangGraph reads that as *the agent is done*, so a provider fault was being reported as a product result. Not a change to the instrument: an empty turn carries no decision, so asking again is the call that never answered, not a second chance at one. A resumed stream gets only the remaining step budget. |
@@ -1264,7 +1362,7 @@ classified). What the first three days of real runs opened instead:
 | 6b | Credential redaction | ❌ **not built** (§6.7) |
 | 6c | Naive versioned system prompt (D20) | ✅ at promptVersion 4 |
 | 7 | `bearer` + `oauth` (auth code + PKCE), token cache, silent refresh | ✅ · `oauth_client_credentials` ❌ by choice |
-| 8 | `make mcp-test` / `mcp-login` / `mcp-ui` | ✅ · `REPEAT=` (`--repeat`, D43) · `MODE` ❌ (§5, §7) |
+| 8 | `make mcp-test` / `mcp-login` / `mcp-ui` | ✅ · `REPEAT=` (`--repeat`, D43) · `make mcp-compare` (D44) · `MODE` ❌ (§5, §7) |
 | — | The Streamlit UI (§9) | ✅ all four v1 views |
 | — | `expectEffect` post-condition (D34) | ✅ — added after the design, not in the original scope |
 | — | `findings/` (D35) | ✅ eight findings written |
@@ -1272,7 +1370,7 @@ classified). What the first three days of real runs opened instead:
 
 Still deferred as designed: chained scenarios (though `full-flows.yaml` is one long chained write
 task inside a single probe, which is not the same thing), `expect` assertions beyond D34, run
-comparison, CI gating, Holded comparison, auto-updating the IMP-* registry, global cost budget.
+comparison, CI gating, auto-updating the IMP-* registry, global cost budget.
 
 **The honest one-line summary:** the measuring half is built and has already produced findings; the
 *reporting* half (`report.py`, metrics, redaction, repeat) is not, and neither is any test.

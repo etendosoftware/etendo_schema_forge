@@ -113,6 +113,31 @@ class AttemptLayoutTest(unittest.TestCase):
         self.assertIsNone(runs.load_probe(self.run_dir, "p", 2))
         self.assertEqual(runs.load_probe(self.run_dir, "p", 1)["attempt"], 1)
 
+    def test_a_comparison_is_read_one_target_dir_at_a_time(self):
+        # runs/<compareId>/targets/<t>/ is an ordinary run directory (v6).
+        compare = self.run_dir / "cmp"
+        (compare / "compare.json").parent.mkdir()
+        (compare / "compare.json").write_text(json.dumps({"compareId": "cmp"}))
+        for name in ("t", "h"):
+            target = compare / "targets" / name
+            (target / "probes" / "p").mkdir(parents=True)
+            (target / "run.json").write_text(json.dumps({"schemaVersion": 6}))
+            for n in (1, 2):
+                (target / "probes" / "p" / f"attempt-{n}.json").write_text(json.dumps({"attempt": n}))
+        target = compare / "targets" / "t"
+        self.assertTrue(runs.uses_attempt_layout(target))
+        self.assertEqual(runs.probe_files(target), ["p"])
+        self.assertEqual(runs.attempt_numbers(target, "p"), [1, 2])
+        self.assertEqual(runs.load_probe(target, "p", 2), {"attempt": 2})
+        # Current behaviour, documented rather than endorsed: the history view
+        # lists the COMPARE ROOT as one header-less run with no probes — it
+        # does not descend into targets/. Rewrite this when the UI learns
+        # comparisons.
+        listed = {r.run_id: r for r in runs.list_runs(self.run_dir)}
+        self.assertIsNone(listed["cmp"].header)
+        self.assertEqual(listed["cmp"].probe_count, 0)
+        self.assertEqual(runs.probe_files(compare), [])
+
     def test_a_v4_run_is_one_attempt_per_probe(self):
         self._header(4)
         (self.run_dir / "probes" / "p.json").write_text(json.dumps(V4))

@@ -1057,8 +1057,21 @@ MODEL  ?=
 REPEAT ?=
 
 .PHONY: mcp-test
-mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=, REPEAT=)
-	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL)) $(if $(REPEAT),--repeat $(REPEAT))
+mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=, REPEAT=, CONCURRENCY=)
+	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY))
+
+TARGETS     ?= local,holded
+SUBJECT     ?=
+CONCURRENCY ?=
+SEED        ?=
+
+# D44: one compareId, one run per target under runs/<compareId>/targets/, run
+# concurrently, then summary.json + summary.md. REPEAT defaults to 3 here, 1 in
+# mcp-test. Every target needs `platform` in config.toml. Pass SEED=<run A's
+# seed> to start the second run of a stability pair.
+.PHONY: mcp-compare
+mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, REPEAT=, CONCURRENCY=, SEED=, MODEL=)
+	cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $(SUITE) $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(SEED),--seed $(SEED)) $(if $(MODEL),--model $(MODEL))
 
 .PHONY: mcp-login
 mcp-login: ## Pre-warm or refresh a target's OAuth token (TARGET=). Never a prerequisite for mcp-test.

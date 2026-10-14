@@ -137,8 +137,15 @@ Proposed as new rows in the design's §10, each landing with the slice that impl
   partner's credit, a product's stock). The pilot of each new task runs it at K=1 and at K=4; a task
   whose result differs is marked `exclusive`.
 - **Rate limits.** Holded's MCP and the LLM gateway may throttle. A 429 is a harness error
-  (rescheduled, §5.1), never a product result; the per-target `concurrency` can be set lower than the
-  global default in its config block.
+  (`kind: rateLimited`, rescheduled, §5.1), never a product result; the per-target `concurrency` can
+  be set lower than the global default in its config block (it caps, never raises). As built (S3):
+  the replacement of a `rateLimited` attempt waits `min(30, 2 × 2^(n−1))` seconds for the probe's
+  n-th replacement, times a jitter in [0.5, 1], **holding its pool slot** so the pressure on whoever
+  throttles actually drops; other harness errors are replaced at once.
+- **Cancellation** (Ctrl-C, or the caller cancelling a target's pool): every attempt in flight is
+  cancelled and awaited, so its teardown completes before the cancellation propagates, and it
+  writes a partial record with `harnessError.kind: cancelled`. An attempt still in its backoff
+  had not started and writes nothing. Design doc §6.1 (run schema v6) is the reference.
 - `asyncio` already drives the runner (`cli.py:679`), so this is a task pool around the existing
   per-probe body (`cli.py:446-616`), which first has to be extracted into a function with no shared
   mutable state other than the event writer (one writer per target run, already serialised by its

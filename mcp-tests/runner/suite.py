@@ -54,6 +54,9 @@ class Probe:
     # Deterministic tool calls the runner makes itself, outside the agent (D41).
     setup: tuple[Step, ...] = ()
     teardown: tuple[Step, ...] = ()
+    # Runs alone when attempts run in parallel (D44, plan §5.2): for a probe
+    # that cannot keep to records tagged with its own {{marker}}.
+    exclusive: bool = False
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,9 @@ class Suite:
     path: Path
     window: str
     probes: list[Probe]
+    # The suite's `decision:` block, verbatim (D47): ruleVersion and the margins
+    # of runner/decide.py. None = the rule's defaults. Copied into compare.json.
+    decision: dict[str, Any] | None = None
 
     @property
     def sha(self) -> str:
@@ -88,6 +94,9 @@ def load_suite(path: str | Path) -> Suite:
             raise ValueError(f"Duplicate probe id {probe_id!r} in {path.name}")
         seen.add(probe_id)
         mode = entry.get("mode", "read")
+        exclusive = entry.get("exclusive", False)
+        if not isinstance(exclusive, bool):
+            raise ValueError(f"Probe {probe_id!r}: exclusive must be true or false.")
         raw_effect = entry.get("expectEffect")
         if raw_effect and mode != "write":
             raise ValueError(
@@ -115,10 +124,14 @@ def load_suite(path: str | Path) -> Suite:
                 teardown=tuple(
                     parse_steps(entry.get("teardown"), probe_id=probe_id, phase="teardown")
                 ),
+                exclusive=exclusive,
             )
         )
 
-    return Suite(path=path, window=data.get("window", path.stem), probes=probes)
+    decision = data.get("decision")
+    if decision is not None and not isinstance(decision, dict):
+        raise ValueError(f"{path.name}: decision must be a mapping.")
+    return Suite(path=path, window=data.get("window", path.stem), probes=probes, decision=decision)
 
 
 def attempt_marker(prefix: str, probe_id: str, attempt: int) -> str:
