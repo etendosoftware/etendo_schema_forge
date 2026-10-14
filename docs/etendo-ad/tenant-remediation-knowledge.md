@@ -3466,12 +3466,22 @@ restart — but it argues for running this fix close to a restart.
   chooses: `make data-fixes FIX=R37-tenant-subscription-backfill`, then the system preference
   `ETGO_SubscriptionModel`. Delivered as a generic header `-- @optIn: true` (parse-fix.js;
   `true`/`false` only, anything else throws).
-- **Verification = three checks, kept identical on both sides** (R37 header + go design doc §6.2):
+- **Verification = three checks** (R37 header; go design doc §6.2 must carry the same text):
   R37's ledger rows all `APPLIED`/`SKIPPED_NOT_NEEDED`; 0 active `ETGO_TenantPlan='PRODUCTIVE'`
-  markers; exactly 1 active `ETGO_SubscriptionModel` row with value `Y`. That preference is a LIST
-  property (`AD_Preference.Property`, `ISPROPERTYLIST='Y'`, NOT `attribute`), counted only at System
-  (`AD_CLIENT_ID='0'`, visible-at client/org NULL or `'0'`, no role/user/window); no row ships as
-  module data, so every environment starts OFF (local etendo_core3 2026-10-14: count 0).
+  markers; and the `ETGO_SubscriptionModel` query returns exactly ONE row whose `trim(value)='Y'`.
+  That preference is a LIST property (`AD_Preference.Property`, `ISPROPERTYLIST='Y'`, NOT
+  `attribute`); no row ships as module data, so every environment starts OFF (local etendo_core3
+  2026-10-14: no row).
+  - **Correction (2026-10-14, Alex review):** the first version counted rows with `value = 'Y'` and
+    expected 1. Wrong: the reader `SubscriptionModelSwitch` filters active + `AD_CLIENT_ID='0'` +
+    visible-at client/org NULL or `'0'` + no role/user/window, takes the NEWEST row (`created desc`,
+    max 1) and TRIMS the value. A `'Y'` row plus a newer `'N'` row passed while the switch was OFF,
+    and `'Y '` (ON for the reader) counted 0. **Apply:** mirror the reader's filters exactly, never
+    filter on the value; select `ad_preference_id, value, created ... order by created desc`;
+    expect one row with `trim(value)='Y'`.
+  - **While the switch is OFF** a purchase still writes the marker and opens NO row, so "every
+    tenant paid since ETP-5046 has a row" / "R37 is a 0-row skip for a new tenant" hold only with
+    `ETGO_SubscriptionModel` ON. Run R37 before (or right after) setting the switch.
 - **Trap the naive version falls into — watermark.** A `--fix` run's `APPLIED` row used to count
   toward the tenant's watermark like any other. Applying R37 (2026-10-05T18:00Z) to a tenant still
   behind would have pushed its watermark past every unprocessed earlier chain fix (e.g. R47,
@@ -3493,3 +3503,14 @@ restart — but it argues for running this fix close to a restart.
   only `__baseline__` / `__costing-cadence-30s__` rows), so editing R37's header changed nothing
   applied; R37 is not in `retired.json`, so no recorded checksum moved. `--fix R37 --dry-run`
   reports every local tenant `BLOCKED_CHAIN_BEHIND` (watermark none or the 2026-09-02 BASELINE).
+- **Correction (2026-10-14, Alex review) — opt-in gate.** The first gate (`watermark >= fix
+  timestamp`) was stricter than the intent "caught up to the opt-in fix's date": a tenant whose only
+  lagging fix is NEWER (R48 FAILED → watermark stays at R47 < R37) was blocked, and an opt-in fix
+  authored as the newest file could never run until a later chain fix shipped. **Apply:** block only
+  if a non-retired, non-opt-in chain fix dated <= the opt-in fix is above the watermark and not
+  PROCESSED (`optInChainGate` returns those as `lagging`). Same ordering guarantee for R31/R42: they
+  are dated before R37, so they must be at or below the watermark for the gate to open.
+- **`--mark-fixed` stored the id as typed (fixed 2026-10-14).** `--mark-fixed --fix R37-tenant-
+  subscription-backfill` wrote a ledger row under the SHORT id, which matches no catalog `fixId`, so
+  the watermark and `--list-clients` ignored it (OPT-IN stayed 0/1). Now resolved to the full
+  `fix_id` exactly like `--fix`, and an unknown id is rejected.

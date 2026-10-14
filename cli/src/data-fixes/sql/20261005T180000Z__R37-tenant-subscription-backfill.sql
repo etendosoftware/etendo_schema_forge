@@ -17,15 +17,22 @@
 --        make data-fixes FIX=R37-tenant-subscription-backfill
 --   2. set the system preference ETGO_SubscriptionModel (com.etendoerp.go), so that new purchases
 --      open subscription rows instead of writing the ETGO_TenantPlan marker. It is a LIST property
---      (AD_Preference.Property, ISPROPERTYLIST='Y') that counts only as one active System row
---      (AD_CLIENT_ID='0', visible-at client/org empty or '0', no role/user/window) and is ON only
---      for value 'Y'. No row ships as module data: every environment starts OFF.
+--      (AD_Preference.Property, ISPROPERTYLIST='Y'). The reader (SubscriptionModelSwitch) looks only
+--      at active, unrestricted System rows (AD_CLIENT_ID='0', visible-at client/org empty or '0',
+--      no role/user/window), takes the NEWEST of them (created desc) and is ON only when its
+--      trimmed value is 'Y'. No row ships as module data: every environment starts OFF.
 -- Until step 1 has run, an environment keeps answering from the preference exactly as before.
+-- While the switch is OFF -- every environment's starting state -- a purchase still writes the
+-- ETGO_TenantPlan marker and opens NO subscription row, so every tenant paid before step 2 is a
+-- backfill candidate exactly like a pre-ETP-5046 one. Run step 1 BEFORE step 2 (or repeat it right
+-- after) so no tenant paid in between is left on the marker.
 --
 -- Precondition the runner enforces: FIX= on an opt-in fix runs only for a tenant whose chain is
--- current up to this file's date (its watermark >= 2026-10-05T18:00:00Z). A tenant behind it is
--- reported BLOCKED_CHAIN_BEHIND, gets no ledger row and makes the run exit non-zero: run the full
--- `make data-fixes` first, then repeat step 1. This is what keeps the ORDERING INVARIANT below true
+-- caught up to this file's date (2026-10-05T18:00:00Z) -- no chain fix (not retired, not opt-in)
+-- dated at or before it is still unprocessed for that tenant (run.js optInChainGate). Fixes dated
+-- AFTER it do not matter: a FAILED newer fix does not block. A tenant behind it is reported
+-- BLOCKED_CHAIN_BEHIND (listed apart from FAILED in the run summary), gets no ledger row and makes
+-- the run exit non-zero: run the full `make data-fixes` first, then repeat step 1. This is what keeps the ORDERING INVARIANT below true
 -- now that this fix is no longer visited in chain order.
 --
 -- Verification -- the same three checks the com.etendoerp.go design doc (§6.2) lists:
@@ -38,12 +45,15 @@
 --   select count(*) from ad_preference
 --    where attribute = 'ETGO_TenantPlan' and isactive = 'Y' and upper(trim(value)) = 'PRODUCTIVE';
 --     -- must be 0: every active productive marker has become an open subscription row.
---   select count(*) from ad_preference
+--   select ad_preference_id, value, created from ad_preference
 --    where property = 'ETGO_SubscriptionModel' and ispropertylist = 'Y' and isactive = 'Y'
 --      and ad_client_id = '0' and coalesce(visibleat_client_id, '0') = '0'
 --      and coalesce(visibleat_org_id, '0') = '0' and visibleat_role_id is null
---      and ad_user_id is null and ad_window_id is null and value = 'Y';
---     -- must be exactly 1 after step 2: the switch is ON, through a single System row.
+--      and ad_user_id is null and ad_window_id is null
+--    order by created desc;
+--     -- after step 2: exactly ONE row, and trim(value) = 'Y' -- the switch is ON. Filtered like
+--     -- the reader and NOT on the value: a 'Y' row next to a newer 'N' row is OFF for the reader,
+--     -- and 'Y ' is ON for it. More than one row => deactivate the extras, the newest one decides.
 
 -- Why this file is dated 2026-10-05 (READ BEFORE RE-DATING IT)
 -- --------------------------------------------------------------------------------------------
@@ -160,6 +170,9 @@
 -- write path is retired, a newly onboarded tenant never gets the preference at all, so @check's
 -- `EXISTS (productive preference)` is a cheap 0-row skip (SKIPPED_NOT_NEEDED) for every new tenant
 -- regardless of the CUT -- shipping without the bump is redundant here, never incorrect.
+-- That holds only once the environment has set ETGO_SubscriptionModel: while it is OFF, a new paid
+-- tenant DOES get the marker and no row, and @check selects it like any legacy tenant (see OPT-IN
+-- above) -- also correct, and also independent of the CUT.
 --
 -- PER-TENANT RETIREMENT OF ETGO_TenantPlan (statement 3 of @apply)
 -- --------------------------------------------------------------------------------------------
@@ -250,13 +263,14 @@
 -- file name (the UTC timestamp prefix makes lexical order == chronological order) and applies, per
 -- tenant, only fixes strictly newer than that tenant's watermark -- the newest timestamp among its
 -- PROCESSED ledger rows -- and, because this fix is opt-in, applies THIS fix only through FIX= and
--- only once that watermark is already >= 2026-10-05T18:00:00Z (run.js optInChainGate). So for any
+-- only once no chain fix dated at or before 2026-10-05T18:00:00Z is left unprocessed for the
+-- tenant (run.js optInChainGate), i.e. every such fix is at or below its watermark. So for any
 -- single tenant:
 --   * R31 (2026-09-01) is at or below the watermark before this fix can run at all, so R31 is
 --     skipped on every later run -- including the case where R31 itself FAILED, because the
 --     watermark is a date, not a per-fix flag;
---   * a tenant whose chain has not reached that date is refused (BLOCKED_CHAIN_BEHIND), never
---     applied out of order.
+--   * a tenant whose chain has not reached that date (R31 included, FAILED or not run) is refused
+--     (BLOCKED_CHAIN_BEHIND), never applied out of order.
 -- R31 can therefore never execute against a tenant whose preference this fix has already retired.
 -- Neither R31 nor R32 is edited here: an applied data-fix is immutable (sql/README.md rule 3) and
 -- is superseded by a new dated file, never edited in place.

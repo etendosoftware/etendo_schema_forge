@@ -174,7 +174,9 @@ re-test for replay protection.
 
 **Where the outcome is stored depends on the tenant (ETP-5046).**
 
-- **Tenant with an open `ETGO_SUBSCRIPTION` row** — every tenant paid since ETP-5046, and every
+- **Tenant with an open `ETGO_SUBSCRIPTION` row** — every tenant paid since its environment set
+  the system preference `ETGO_SubscriptionModel` to `Y` (with the switch OFF — every environment's
+  starting state — a purchase writes the `ETGO_TenantPlan` marker and opens no row), and every
   older one once the R37 backfill has run (R37 is opt-in: an environment runs it with
   `make data-fixes FIX=R37-tenant-subscription-backfill` when it switches to the subscription
   model — a plain `make data-fixes` never does): the event writes the row. `CURRENT` → `STATUS = active`,
@@ -751,8 +753,8 @@ with `status`/`recover` above, not `stripe subscriptions retrieve`'s `status` fi
 lifecycle actually moved.
 
 **Which store the script reads (ETP-5046).** The webhook writes the lifecycle outcome to the
-tenant's **open `etgo_subscription` row** when it has one — every purchase since ETP-5046, and every
-tenant backfilled by R37 — and to the `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt`
+tenant's **open `etgo_subscription` row** when it has one — every purchase made with the system
+preference `ETGO_SubscriptionModel` ON, and every tenant backfilled by R37 — and to the `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt`
 preferences only when it has none (§1, "Where the outcome is stored"). The script reads the same
 store, re-checked on every poll: the row's `STATUS` (reported as `CURRENT` / `PAST_DUE` / `EXPIRED`
 for `active` / `past_due` / `canceled`, so both stores compare alike) and `CURRENT_PERIOD_END` as the
