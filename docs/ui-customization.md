@@ -1960,7 +1960,7 @@ the rule is generic, so it applies to every window, declarative or custom.
   "Más" at narrow widths or high zoom and tabs never overlap the side panel. The rest of the rules
   (slot, reset, active tab always visible) hold for any count. Floor: 1 fixed tab + the slot; if
   even that does not fit, the strip clips (`min-w-0 overflow-hidden`) instead of overlapping.
-  Natural widths come from an invisible probe row rendered inside the strip; a `ResizeObserver`
+  Natural widths come from an invisible probe row rendered inside the strip (same box classes as `TabStripButton`, shared via `tabStripButtonBaseCls`; labels and counters are drawn with CSS `::after{content:attr(data-text)}`, so the probe adds no text nodes, test ids or focusable elements to the DOM); a `ResizeObserver`
   on the strip and the probe re-measures on resize, sidebar open/close, zoom and font changes.
   Without layout (jsdom, no `ResizeObserver`, zero width) it falls back to the count-only rule.
 - **Counters** (e.g. "Dirección 1") and the save-first disabled hint travel with the tab into and
