@@ -20121,7 +20121,7 @@
     "onboardingReadinessDefaults": "Sales invoice defaults are not ready.",
     "onboardingReadinessPaymentTerms": "Sales invoice payment terms are not available.",
     "onboardingReadinessDocumentType": "Sales invoice document type is missing or invalid.",
-    "onboardingBrandName": "Etendo",
+    "onboardingBrandName": "etendo.ai",
     "organization": "Organization",
     "selectOrg": "Select org...",
     "apply": "Apply",

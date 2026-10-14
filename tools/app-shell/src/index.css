@@ -2,36 +2,80 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 
 /*
- * Etendo AI visual identity handoff (30 Sep 2026).
- *
- * The email identifies the primary interaction colour and Navigation Rail as
- * the first transversal changes. Keep them as semantic overrides here so the
- * published app-shell theme remains the source for every window and state.
- * Inter stays on body copy and data-heavy surfaces; headings use Plus Jakarta
- * Sans and code/widget labels can opt into Space Mono.
+ * Etendo AI visual identity (30 Sep 2026 email + Confluence brand manual).
+ * Keep the identity at the semantic-token boundary so generated windows and
+ * pipeline re-runs inherit it automatically.
  */
 :root {
-  --primary: 213 83% 48%;
+  --brand-ink: 270 8% 11%;
+  --brand-blue: 229 100% 60%;
+  --brand-lime: 84 95% 65%;
+  --brand-lavender: 251 100% 82%;
+  --brand-blue-hex: #325CFF;
+  --brand-blue-hover: #2849CC;
+  --primary-hover: var(--brand-blue-hover);
+  --brand-lime-hex: #B8FA50;
+  --brand-lavender-hex: #B3A1FF;
+  --foreground: var(--brand-ink);
+  --text-primary: var(--brand-ink);
+  --primary: var(--brand-blue);
   --primary-foreground: 0 0% 100%;
-  --focus-ring: 213 83% 48%;
-  --sidebar-primary: 213 83% 48%;
+  --focus-ring: var(--brand-blue);
+  --sidebar-primary: var(--brand-blue);
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 213 100% 97%;
-  --sidebar-accent-foreground: 213 83% 36%;
+  --sidebar-accent: 229 100% 97%;
+  --sidebar-accent-foreground: 229 74% 42%;
+  --accent-highlight: var(--brand-lime);
+  --accent-highlight-foreground: var(--brand-ink);
+  --eg-ink: #1B1A1F;
+  --eg-yellow: var(--brand-lime-hex);
+  --ai-accent: var(--brand-lavender-hex);
 }
 
 .dark {
-  --primary: 217 91% 60%;
-  --primary-foreground: 222 47% 11%;
-  --focus-ring: 217 91% 60%;
-  --sidebar-primary: 217 91% 60%;
+  --foreground: 0 0% 98%;
+  --text-primary: 0 0% 98%;
+  --primary: var(--brand-blue);
+  --primary-foreground: 0 0% 100%;
+  --focus-ring: var(--brand-blue);
+  --sidebar-primary: var(--brand-blue);
   --sidebar-primary-foreground: 222 47% 11%;
-  --sidebar-accent: 217 35% 22%;
+  --sidebar-accent: 229 35% 22%;
   --sidebar-accent-foreground: 210 20% 98%;
+  --accent-highlight: var(--brand-lime);
+  --accent-highlight-foreground: var(--brand-ink);
+  --eg-yellow: var(--brand-lime-hex);
+  --ai-accent: var(--brand-lavender-hex);
 }
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/*
+ * The onboarding core owns the login markup, so its primary buttons arrive with a
+ * literal legacy background class. Keep the auth flow in the shared package while
+ * applying this app's official Etendo AI action colour at the host boundary.
+ */
+button[class~="bg-[#121217]"] {
+  background-color: var(--brand-blue-hex) !important;
+}
+
+button[class~="bg-[#121217]"]:hover {
+  background-color: var(--primary-hover) !important;
+}
+
+/* Primary action hover follows the darker-blue Figma state, never the lime accent. */
+button[class~="hover:bg-accent-highlight"][class~="text-primary-foreground"]:hover,
+button[class~="hover:bg-accent-highlight"][class~="text-white"]:hover,
+button[class*="hover:bg-[hsl(var(--accent-highlight))]"][class*="text-primary-foreground"]:not(:disabled):hover,
+button[class*="enabled:hover:bg-[hsl(var(--accent-highlight))]"][class*="text-primary-foreground"]:enabled:hover {
+  background-color: var(--primary-hover) !important;
+  color: white !important;
+}
+
+img[src="/favicon.png"] {
+  box-shadow: none !important;
 }
 
 h1,
