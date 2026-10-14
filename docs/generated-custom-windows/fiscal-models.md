@@ -3709,6 +3709,17 @@ from a `Date`. There was no locale leak to fix on 303.
 
 **Search** was removed entirely — the search input/icon button is gone from the toolbar. Narrowing the list is handled by the existing year/model/status `FilterDropdown` filters instead.
 
+### Row hover look (ETP-5600)
+
+`.fm-table` is a hand-built table, not `DataTable`, but its hovered row matches the shared list row
+(`docs/ui-customization.md` §13 → *List row visuals*): white cells, Shadows/lg
+(`0 4px 6px -2px rgba(18,18,23,.05), 0 10px 15px -3px rgba(18,18,23,.08)`), no transition. The
+raised row (`position: relative; z-index: 2`) used to paint over the line above it (the previous
+row's `border-bottom` in the collapsed-border grid); `.fm-table tbody tr:hover td` now redraws it as
+`box-shadow: inset 0 1px 0 var(--fm-border-1)`. `.fm-table__row--selected` keeps its own inset
+borders: both rules have the same specificity (0,2,3), so it wins by source order (it is declared
+after the hover rule in `fiscal-models.css`).
+
 ### Row hover actions — Edit/Delete/Reactivar (`FmRowActions`, ETP-5187, ETP-5338)
 
 Each **draft** declaration row (`decl.status === 'draft'`) reveals a small Edit/Delete icon pair on

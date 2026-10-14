@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/RowQuickActions.jsx
 import { render, screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
@@ -42,6 +43,13 @@ vi.mock('sonner', () => ({
 // ETP-5684 — posting entries are gated on capabilities.showAccountingFields (fail closed).
 vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
   (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
+// Stub the Iconic trash on top of the real custom-icons module: makes the rendered icon
+// observable and keeps the file independent of the core version that ships it.
+vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+  ...(await importOriginal()),
+  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+}));
 
 import RowQuickActions from '../RowQuickActions.jsx';
 import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
@@ -188,11 +196,14 @@ describe('RowQuickActions', () => {
     expect(onEmail).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onDelete when Delete is clicked', async () => {
+  it('renders Delete with the Iconic trash icon and calls onDelete with the row', async () => {
     const user = userEvent.setup();
     const { onDelete } = setup();
-    await user.click(screen.getByTestId('row-quick-action-delete'));
+    const btn = screen.getByTestId('row-quick-action-delete');
+    expect(within(btn).getByTestId('IconicTrashIcon__ec6673')).toHaveAttribute('data-icon', 'iconic-trash');
+    await user.click(btn);
     expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onDelete).toHaveBeenCalledWith(DRAFT_ROW);
   });
 
   it('dispatches documentAction via useDocumentAction when kebab item declares one', async () => {
@@ -234,6 +245,21 @@ describe('RowQuickActions', () => {
       // Resolve and let React flush
       resolveEdit();
       await new Promise((r) => setTimeout(r, 0));
+    });
+
+    it('swaps the Delete trash icon for a spinner while onDelete is pending', async () => {
+      const user = userEvent.setup();
+      let resolveDelete;
+      const onDelete = vi.fn(() => new Promise((res) => { resolveDelete = res; }));
+      setup({ onDelete });
+      const btn = screen.getByTestId('row-quick-action-delete');
+      await user.click(btn);
+      expect(btn).toBeDisabled();
+      expect(within(btn).getByTestId('Loader2__ec6673')).toBeInTheDocument();
+      expect(within(btn).queryByTestId('IconicTrashIcon__ec6673')).toBeNull();
+      await act(async () => { resolveDelete(); });
+      expect(within(btn).getByTestId('IconicTrashIcon__ec6673')).toBeInTheDocument();
+      expect(btn).not.toBeDisabled();
     });
 
     it('shows a spinner inside the kebab item while documentAction is in flight', async () => {
