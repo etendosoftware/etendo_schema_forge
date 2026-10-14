@@ -1,10 +1,13 @@
+// @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+// @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
+// @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../../helpers/auth.js';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
-  addProductLine, ensureVendorSetup, dismissSuccessModal,
+  addProductLine, ensureVendorSetup, dismissSuccessModal, openGeneratedDocument,
   expectStatusPill, expectDocumentStatus, pickRectifiableInvoice,
   VENDOR_FIXTURE_NAME,
 } from '../../helpers/purchase-helpers.js';
@@ -180,14 +183,8 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
     });
 
     await test.step('Navigate to the generated receipt', async () => {
-      const orderConfirmedMsg = page.getByText(/pedido.*confirmado|order.*confirmed/i);
-      await expect(orderConfirmedMsg).toBeVisible({ timeout: 30_000 });
-      await slow(page);
-
-      const viewReceiptBtn = page.getByRole('button', { name: 'Ver albarán', exact: true });
-      await expect(viewReceiptBtn).toBeVisible({ timeout: 10_000 });
-      await viewReceiptBtn.click();
-      await slow(page);
+      // ETP-5674: the result popup names the created receipt, not the confirmed order.
+      await openGeneratedDocument(page, { title: /^(Albarán creado|Receipt created)$/ });
 
       await expect(page).toHaveURL(/\/goods-receipt\/[a-zA-Z0-9]+/, { timeout: 15_000 });
       await waitForDetailReady(page);
@@ -260,14 +257,8 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await returnConfirmPromise;
       await slow(page);
 
-      const returnCreatedMsg = page.getByText('Devolución de compra creada', { exact: true });
-      await expect(returnCreatedMsg).toBeVisible({ timeout: 30_000 });
-      await slow(page);
-
-      const viewShipmentBtn = page.getByRole('button', { name: 'Ver albarán', exact: true });
-      await expect(viewShipmentBtn).toBeVisible({ timeout: 10_000 });
-      await viewShipmentBtn.click();
-      await slow(page);
+      // ETP-5674: a purchase return is announced as such («Ver devolución»).
+      await openGeneratedDocument(page, { title: /^(Devolución de compra creada|Purchase return created)$/ });
 
       await expect(page).toHaveURL(/\/return-to-vendor-shipment\/[a-zA-Z0-9]+/, { timeout: 15_000 });
       await waitForDetailReady(page);

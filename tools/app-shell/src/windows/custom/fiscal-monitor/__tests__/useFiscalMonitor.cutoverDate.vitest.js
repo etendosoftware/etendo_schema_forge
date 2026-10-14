@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-monitor/useFiscalMonitor.js
 // ETP-5229 #13 — earliest-cutover-date gate for the TBAI monitor.
 //
 // useFiscalMonitor.js now fetches ALL tbai-config rows (active + inactive
@@ -82,7 +83,7 @@ describe('useFiscalMonitor — earliestTbaiCutoverDate derivation (ETP-5229 #13a
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.profile).toBe('tbai');
-    expect(result.current.earliestTbaiCutoverDate).toBe(new Date('2025-01-15').toISOString());
+    expect(result.current.earliestTbaiCutoverDate).toBe('2025-01-15'); // ETP-5700: the row's own value, never re-serialised to UTC
   });
 
   it('falls back to null when no tbai config row carries a cutover date', async () => {

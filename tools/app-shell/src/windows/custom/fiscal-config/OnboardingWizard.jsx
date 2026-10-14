@@ -660,11 +660,12 @@ function NationalOptionCard({ label, desc, extra, selected, onPick }) {
   );
 }
 
-function SelectableCard({ selected, onPick, children }) {
+function SelectableCard({ selected, onPick, children, 'data-testid': testId }) {
   return (
     <button
       type="button"
       onClick={onPick}
+      data-testid={testId}
       className={`relative flex flex-col text-left cursor-pointer rounded-xl transition-all w-full
         ${selected ? 'border-2 border-foreground' : 'border border-border-subtle hover:bg-muted/40'}`}
       style={{
@@ -712,9 +713,9 @@ function ObligationCard({ label, paragraphs, note, info, selected, onPick }) {
   );
 }
 
-function BulletOptionCard({ label, bullets, selected, onPick }) {
+function BulletOptionCard({ label, bullets, selected, onPick, 'data-testid': testId }) {
   return (
-    <SelectableCard selected={selected} onPick={onPick} data-testid="SelectableCard__e9ef3f">
+    <SelectableCard selected={selected} onPick={onPick} data-testid={testId ?? 'SelectableCard__e9ef3f'}>
       <span className="text-sm font-semibold pr-5" style={{ color: 'hsl(var(--foreground))' }}>{label}</span>
       <ul className="flex flex-col gap-1.5">
         {bullets.map((b) => (
@@ -1044,17 +1045,9 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
                   {ui('fiscal.onboarding.subq.choice.subtitle')}
                 </p>
               </div>
+              {/* ETP-5597 — SIF options follow the order SII → TicketBAI → VERI*FACTU; this
+                  low-volume choice offers only SII and VERI*FACTU, so SII comes first. */}
               <div className="grid grid-cols-2 gap-4">
-                <BulletOptionCard
-                  label={ui('fiscal.onboarding.subq.verifactu.label')}
-                  bullets={[
-                    ui('fiscal.onboarding.subq.verifactu.bullet1'),
-                    ui('fiscal.onboarding.subq.verifactu.bullet2'),
-                    ui('fiscal.onboarding.subq.verifactu.bullet3'),
-                  ]}
-                  selected={lowChoice === 'verifactu'}
-                  onPick={() => onSetLowChoice('verifactu')}
-                  data-testid="BulletOptionCard__e9ef3f" />
                 <BulletOptionCard
                   label={ui('fiscal.onboarding.subq.sii.vol.label')}
                   bullets={[
@@ -1064,7 +1057,17 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
                   ]}
                   selected={lowChoice === 'sii'}
                   onPick={() => onSetLowChoice('sii')}
-                  data-testid="BulletOptionCard__e9ef3f" />
+                  data-testid="BulletOptionCard__sii" />
+                <BulletOptionCard
+                  label={ui('fiscal.onboarding.subq.verifactu.label')}
+                  bullets={[
+                    ui('fiscal.onboarding.subq.verifactu.bullet1'),
+                    ui('fiscal.onboarding.subq.verifactu.bullet2'),
+                    ui('fiscal.onboarding.subq.verifactu.bullet3'),
+                  ]}
+                  selected={lowChoice === 'verifactu'}
+                  onPick={() => onSetLowChoice('verifactu')}
+                  data-testid="BulletOptionCard__verifactu" />
               </div>
 
               <div className="mt-4 rounded-xl px-4 py-3 flex gap-2.5 text-sm" style={{ background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>

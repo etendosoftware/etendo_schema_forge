@@ -8,6 +8,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import CertSection from './CertSection.jsx';
 import SectionSaveButton from './SectionSaveButton.jsx';
 import { getFiscalRecordId, isEtendoTrue, mapSiiRecordToForm, normalizeDateInputValue, parseApiError, serializeBooleanFields } from './fiscalConfig.utils.js';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
 
 const SII_ENTITY = 'siiConfiguration';
 
@@ -55,7 +56,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
     setSaving(true);
     setError(null);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayCalendarISO();
       const res = await apiFetch(`/sii-config/${SII_ENTITY}/${recordId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

@@ -135,7 +135,7 @@ The Contacts window should let users maintain a shared business-partner master r
 26. With rows selected, click the X button in the selection bar. Confirm the selection bar disappears AND all row checkboxes are visually unchecked.
 27. In the advanced filter panel, confirm "Tipo" appears as a filterable field with "Cliente" and "Proveedor" options. Apply `Tipo = Cliente` and confirm only customer contacts are shown. Apply `Tipo = Proveedor` and confirm only vendor contacts are shown.
 28. Confirm the Tipo column shows **Cliente** in purple (`#F4F1FD` bg / `#4316CA` text) and **Proveedor** in blue (`#F0FAFF` bg / `#0075AD` text).
-29. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+29. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 30. **New split button (ETP-5600).** In the list toolbar confirm there is no standalone import icon; open the chevron of **"Nuevo contacto"** and confirm **"Importar contactos"** opens the import dialog. With a read-only role, confirm the New button is gone and the standalone import icon is back.
 31. **List cells.** Confirm Razón Social is semibold. On a contact with a website, confirm the Website cell is a grey tag (radius md, not a pill) with a link icon and the address without `https://`; hovering darkens the tag slightly and shows the full address; clicking opens `https://<address>` in a new tab and does **not** open the record.
 32. **Empty state.** On a tenant with no contacts, open `/contacts` and confirm the empty state replaces the grid: drop zone, title/subtitle, **"Pídeselo a Copilot"** (opens the Copilot panel), **"Nuevo contacto"** (opens the new-contact form) and the banner whose **"Ver guía"** starts the "create contact" tutorial. Drop a CSV on the drop zone and confirm the import dialog opens with "Procesando..." and then the review step for that file. Then confirm the grid (not the empty state) shows: while loading, when the list request fails, with a search or filter that matches nothing, and on the Personas or Empresas subset when it is empty but other contacts exist.
@@ -1461,3 +1461,14 @@ handler raises an exception instead (for example a value too long for a C_Locati
 of the chunk as `persisted`; the engine then cannot prove a clean rollback, so ALL rows of that chunk
 are shown as failed/unknown and are not resent automatically (nothing is duplicated; re-check and
 retry the rows once the data is fixed).
+
+## Account selectors — ETP-5681
+
+Every account field of the **Customer Accounting / Vendor Accounting** tab (the receivable/payable account fields) declares `"lookup": true` +
+`"lookupDrawer": "account"` in `decisions.json`: the cell (inline edit and add row) and the side
+form open the shared centered account search popup (`AccountLookupPopup` → `SearchPopup`, the one
+the report filters use for "Desde la cuenta") instead of a dropdown that cut long names off. The
+popup is titled with the translated field label, shows each `"<code> - <name>"` in full, searches
+by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
+`com.etendoerp.go` hides summary headings).
+

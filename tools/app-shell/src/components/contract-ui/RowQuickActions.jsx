@@ -7,7 +7,7 @@ import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
-import { runPreUnpost } from '@/lib/preUnpost.js';
+import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { ROW_ACTION_BUTTON_NEUTRAL, ROW_ACTION_BUTTON_DESTRUCTIVE } from './rowVisuals.js';
 
@@ -282,7 +282,7 @@ export default function RowQuickActions({
           // never runs, so there is no `result` for the host's `onMenuActionExecuted` to
           // report on its own. Toasting here (mirroring `DetailMoreActionsMenu.jsx`'s own
           // identical preUnpost failure handling) is the one exception to that rule.
-          toast.error(translateBackendError(pre.message, ui) || ui('actionFailed'));
+          toast.error(translateBackendError(pre.message, ui, preUnpostErrorIdentity(pre)) || ui('actionFailed'));
           onMenuActionExecuted?.(action, { success: false, message: pre.message });
           return;
         }
