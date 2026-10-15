@@ -1051,14 +1051,17 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `attachments-tab-panel` | — | AttachmentsTab root container |
 | `attachments-dropzone` | — | UploadDropzone drag-and-drop area |
 | `attachments-file-input` | — | Hidden `<input type="file">` — use `setInputFiles()` |
-| `attachments-table` | — | AttachmentsTable `<table>` element |
+| `attachments-table` | — | AttachmentsTable root (wraps the generic `DataTable`, ETP-5526) |
 | `attachments-empty-state` | — | Empty state shown when no files exist |
-| `attachments-download-all` | — | "Download All (ZIP)" header button |
-| `attachments-delete-all` | — | "Delete All" header button |
-| `attachment-row-{id}` | `attachment-row-att-001` | Individual attachment row |
+| `attachments-download-all` | — | "Download All (ZIP)" link above the grid (only callers passing `onDownloadAll`, e.g. SifAttachmentsSection) |
+| `attachments-table-toolbar` | — | Row above the grid holding `attachments-download-all` (only rendered when `onDownloadAll` is passed) |
+| `attachments-table-body` | — | Wrapper around the attachments `DataTable` |
+| `row-{id}` | `row-att-001` | Individual attachment row — DataTable's own row testid since ETP-5526 (was `attachment-row-{id}`). Row checkboxes and the select-all are DataTable's (`Checkbox__eb5261`); the old `attachment-select-{id}` / `attachments-select-all` are gone |
+| `attachment-uploading-{id}` | — | Name cell of an in-flight upload row (spinner, disabled checkbox when selection is on, no actions) |
+| `attachment-actions-{id}` | `attachment-actions-att-001` | Hover action strip of a row (inside DataTable's quick-actions cell) |
 | `attachment-name-{id}` | `attachment-name-att-001` | File name cell |
-| `attachment-download-{id}` | `attachment-download-att-001` | Per-row download button (revealed on hover) |
-| `attachment-delete-{id}` | `attachment-delete-att-001` | Per-row delete button (revealed on hover) |
+| `attachment-download-{id}` | `attachment-download-att-001` | Per-row download button (revealed on hover, `ROW_ACTION_BUTTON_NEUTRAL`) |
+| `attachment-delete-{id}` | `attachment-delete-att-001` | Per-row delete button (revealed on hover, `ROW_ACTION_BUTTON_DESTRUCTIVE` + `IconicTrashIcon`) |
 | `confirm-delete-dialog` | — | ConfirmDeleteDialog content (also used for replace confirmation) |
 | `confirm-delete-confirm` | — | Confirm button inside the dialog |
 | `confirm-delete-cancel` | — | Cancel button inside the dialog |

@@ -3081,8 +3081,8 @@ rules apply to both 303 and 349.
   - The operator "origin" filter empties use the same component, with the filter message as the
     title.
   - **Why no app-wide component is reused.** The app has no shared generic empty-state
-    component: `LinesEmptyState` is specific to adding lines, and `AttachmentsTable`'s empty row
-    is inline markup.
+    component: `LinesEmptyState` is specific to adding lines, and `AttachmentsTable` uses the
+    generic `DataTable` empty state (`emptyState` override, since ETP-5526).
   - **Justificante** keeps the app's own `AttachmentsTab` empty state, which is also an icon plus
     a text. Its wording belongs to the formats work (P13).
 - **Sticky operators column header (P15).**

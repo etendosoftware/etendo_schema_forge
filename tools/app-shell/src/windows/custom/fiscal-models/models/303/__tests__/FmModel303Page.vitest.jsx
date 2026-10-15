@@ -7,6 +7,8 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 
 const navigateMock = vi.fn();
 
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useUI: () => (key) => key,

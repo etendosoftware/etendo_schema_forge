@@ -22,7 +22,7 @@ const DENYLISTED_PROPERTY_KEYS = new Set([
   'url',
 ]);
 
-const SAFE_EVENT_PROPERTY_KEYS = new Set([
+export const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'account_id',
   'action',
   'accuracy',

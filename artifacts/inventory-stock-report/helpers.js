@@ -24,7 +24,17 @@
 // (never more), not padding to exactly 2.
 
 function round2(value) {
+  // A product with no cost arrives as null: keep the cell blank instead of 0.
+  if (value == null || value === '') return '';
   var num = Number(value);
   if (isNaN(num)) return 0;
   return Math.round(num * 100) / 100;
+}
+
+// numCellType — html-to-xlsx writes a data-cell-type="number" cell holding no
+// number as the literal NaN. A product with no cost (null unitCost /
+// totalValuation) must be a genuinely empty cell, so the template asks for the
+// cell type per value: "number" when there is one, "string" when there is not.
+function numCellType(value) {
+  return value == null || value === '' ? 'string' : 'number';
 }

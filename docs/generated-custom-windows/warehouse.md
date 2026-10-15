@@ -120,7 +120,7 @@ Fetch sequence on warehouse selection:
 3. Flatten all bin contents, call `aggregateProducts(allContents, uomMap)` to produce the `products` array.
 4. Flatten all transaction rows, expose as `transactions`.
 
-`aggregateProducts` (`warehouseUtils.js`): deduplicates `M_Storage_Detail` rows by `product` ID, summing `quantityOnHand` and `etgoValuation` (the latter injected live per row by `BinContentsHandler` — see Valuation mechanism). It returns **all** aggregated products, including zero and negative summed quantities — it applies no qty filter itself. UOM is resolved from the `uomMap` selector cache first, then from `uOM$_identifier`, then from the raw UOM ID. Each consumer applies its own qty predicate on the returned array; see "Stock filtering semantics" below.
+`aggregateProducts` (`warehouseUtils.js`): deduplicates `M_Storage_Detail` rows by `product` ID, summing `quantityOnHand` and `etgoValuation` (the latter is a stored computed column — see Valuation mechanism). It returns **all** aggregated products, including zero and negative summed quantities — it applies no qty filter itself. UOM is resolved from the `uomMap` selector cache first, then from `uOM$_identifier`, then from the raw UOM ID. Each consumer applies its own qty predicate on the returned array; see "Stock filtering semantics" below.
 
 The `WarehouseCustomTable` product-count cell runs the same fetch sequence independently (no shared state with the detail hook).
 
@@ -136,7 +136,7 @@ The `WarehouseCustomTable` product-count cell runs the same fetch sequence indep
 
 This is an intentional, permanent split, not an inconsistency to "unify": the list/detail views and the KPI answer different questions. Do not make the KPI use `!= 0` or make the list use `> 0` without confirming the semantic change is wanted.
 
-The NEO backend (`BinContentsHandler`) already returns negative and zero rows unfiltered; the `!= 0` vs `> 0` split above is a frontend-only concern, applied at each call site after `aggregateProducts`.
+The NEO backend already returns negative and zero rows unfiltered; the `!= 0` vs `> 0` split above is a frontend-only concern, applied at each call site after `aggregateProducts`.
 
 ## Tabs
 
@@ -235,43 +235,62 @@ Calls `onCount(transactions.length)` after load.
 
 ## Valuation mechanism
 
-Each `binContents` row exposes `etgoValuation = qtyonhand × current cost`, where the
-current cost is the most recent permanent, active, not-yet-expired `M_Costing` row for
-the product. This value is **computed at read time**, not read from a persisted column.
+Each `binContents` row (`M_Storage_Detail`) carries two **stored computed columns**
+(engine EPL-1807, `Computation_Mode = 'S'`, `Refresh_Mode = 'S'`), so they are real,
+filterable and sortable columns in the Products tab:
 
-- **`BinContentsHandler`** (`@Named("binContentsHandler")`, NEO post-hook on the
-  `binContents` entity): `afterHandle` injects `etgoValuation` into every row of a GET
-  response via one batched native SQL query (`qtyonhand × current cost`). Because it
-  computes live from the current quantity on hand and the current cost, the value is
-  always correct regardless of how stock moved. The `binContents` entity declares
-  `javaQualifier: "binContentsHandler"` in `decisions.json`.
+| Column | Field | Value |
+|---|---|---|
+| `EM_Etgo_Cost` | `etgoCost` | `etgo_product_cost(m_product_id)` — the product's current unit cost |
+| `EM_Etgo_Valuation` | `etgoValuation` | `qtyonhand × etgo_product_cost(m_product_id)` |
 
-### Why read-time (and not event handlers)
+Both are `NULL` when the product has no cost (the panel shows a blank "—", never `0`).
+The functions behind them are `etgo_storage_detail_cost` / `etgo_storage_detail_valuation`
+(total, `NULL` on any problem — a synchronous refresh error would roll back the whole
+transaction). The `binContents` entity in `decisions.json` exposes both as read-only grid
+columns (`grid: true, form: false, visibility: "readOnly"`), and `aggregateProducts` sums
+`etgoValuation` per product for the sidebar and warehouse totals (a `NULL` valuation counts
+as 0 in the total).
 
-The original design persisted the value in an `EM_ETGO_VALUATION` column maintained by
-EventHandlers, but that left the column stale after any stock-out. Two facts make DAL
-event handlers unreliable for stock valuation:
+### One definition of "current cost"
 
-1. Outbound documents (shipments, internal consumption) do **not** create an `M_Costing`
-   row in Average costing, so a costing-event handler never fires on a sale.
-2. `M_Storage_Detail.qtyonhand` is updated during document processing by the
-   `M_Update_Inventory` database routine (raw SQL), **not** through the Java DAL — so an
-   `EntityPersistenceEventObserver` on the storage detail never fires on a stock movement.
+`etgo_product_cost(m_product_id)` is the single source of truth for every reader — the
+product `EM_ETGO_Cost` column, these two columns and the Inventory Stock Report. It takes the
+`M_Costing` row of type `STA`/`AVA` that has already started (`datefrom <= now()`), most
+recent `datefrom` first, then `dateto`, then the org-wide row before a warehouse-specific
+one, then `created` and `id` as a deterministic tie-break. It does **not** filter by
+`ispermanent`: a cost typed by hand on the product's Cost tab is `permanent = N` and is a
+valid current cost. A future-dated cost is not applied until its start date.
 
-As a result the persisted column only refreshed on inbound costing events (purchase
-receipt, physical inventory), never on sales. Both valuation EventHandlers
-(`StorageDetailValuationHandler` and `CostingValuationHandler`) were therefore removed —
-read-time computation is the single source of truth.
+### What keeps the columns fresh
 
-The `EM_ETGO_VALUATION` column still exists on `M_Storage_Detail` (its AD definition is
-required for the `etgoValuation` field to exist in the contract), but nothing writes to
-it anymore — it stays inert/empty. The GO frontend always uses the live value injected by
-`BinContentsHandler`.
+The engine recomputes them in the same transaction (deferred constraint trigger at commit):
 
-The `binContents` entity in `decisions.json` exposes `etgoValuation` as a read-only grid
-column (`grid: true, form: false, visibility: "readOnly"`). The `aggregateProducts`
-helper sums it across all bin-content rows for each product to produce the per-product
-and warehouse-total valuations shown in the sidebar and Products tab.
+- on `M_Costing` insert/update/delete of the watched columns (`Cost`, `DateFrom`, `DateTo`,
+  `CostType`, `M_Warehouse_ID`) — the affected storage rows are the ones of the product;
+- on `M_Storage_Detail` insert, and on `qtyonhand` update (valuation only).
+
+Stock leaves the warehouse through `M_Update_Inventory` (raw SQL, no Java DAL), but the engine
+triggers sit in the database, so shipments, consumptions, voids and physical inventories are
+all covered. `ad_scd_check(...)` reports drift and `ad_scd_rebuild(...)` repopulates.
+
+### Known limits
+
+- `etgo_product_cost` depends on `now()`. A cost whose start date arrives later is picked up
+  the next time any `M_Costing` row of that product changes (or on `ad_scd_rebuild`), not at
+  midnight.
+- Deactivating a cost (`isactive`) does not recompute: the function has no `isactive` filter
+  and the column is not watched.
+
+### History
+
+An earlier design computed the value at read time in a `BinContentsHandler` post-hook that
+injected `etgoCost`/`etgoValuation` into the GET response (and before that, persisted it with
+event handlers, which went stale because `qtyonhand` is changed by `M_Update_Inventory`).
+That injector used its own cost rule (`ispermanent = 'Y'`, not expired) that diverged from the
+Cost tab, and an injected field cannot be filtered or sorted. It was retired (ETP-5555): the
+panel reads the stored columns like any other field and `binContents` no longer declares a
+`javaQualifier`.
 
 ## Accounting subtab (`accounting` entity)
 

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Loader2, Search } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover';
 import {
   deriveEntityEndpoint,
-  useClickOutside,
   useEntitySearch,
 } from './entityLookup';
 
@@ -25,8 +25,6 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
     if (open) setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
 
-  useClickOutside(wrapRef, open, () => setOpen(false));
-
   const { items, loading } = useEntitySearch({
     open,
     endpoint,
@@ -37,45 +35,62 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
   });
 
   const chipLabel = value?.label || ui(column.emptyOptionLabel || 'ocrLinesTaxDefault');
-  const chipDim = value ? '' : 'italic text-muted-foreground';
+  const chipDim = value?.label ? '' : 'italic text-muted-foreground';
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          setQuery(value?.label || '');
-          setOpen(true);
-        }}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-border-subtle bg-card px-2 py-1.5 text-sm hover:border-border-control"
-      >
-        <span className={`truncate text-left ${chipDim}`}>{chipLabel}</span>
-        <ChevronDown
-          size={14}
-          className="shrink-0 text-muted-foreground"
-          data-testid="ChevronDown__65a761" />
-      </button>
-    );
-  }
-
+  // Layout contract (ETP-5585): the cell never changes its own box. Closed and open share the
+  // same border/padding, long labels truncate (full text in `title`), and the results list lives
+  // in a Popover PORTAL, not as an `absolute` child of the modal's `overflow-auto` body — there it
+  // grew the scroll area, added a vertical scrollbar and reflowed every column.
   return (
-    <div className="relative" ref={wrapRef}>
-      <div className="flex items-center gap-2 rounded-md border border-foreground bg-card px-2 py-1.5">
-        <Search size={12} className="shrink-0 text-muted-foreground" data-testid="Search__65a761" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={ui(column.searchPlaceholder || 'ocrLinesTaxSearch')}
-          className="flex-1 text-sm text-foreground placeholder-gray-500 outline-none"
-        />
-        {loading && <Loader2
-          size={12}
-          className="animate-spin text-muted-foreground"
-          data-testid="Loader2__65a761" />}
-      </div>
-      <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border-subtle bg-card shadow-lg">
+    <Popover open={open} onOpenChange={setOpen} data-testid="Popover__65a761">
+      <PopoverAnchor asChild data-testid="PopoverAnchor__65a761">
+        <div ref={wrapRef} className="min-w-0">
+          {open ? (
+            <div className="flex w-full min-w-0 items-center gap-2 rounded-md border border-foreground bg-card px-2 py-1.5 text-sm">
+              <Search size={12} className="shrink-0 text-muted-foreground" data-testid="Search__65a761" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={ui(column.searchPlaceholder || 'ocrLinesTaxSearch')}
+                className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder-gray-500 outline-none"
+              />
+              {loading && <Loader2
+                size={12}
+                className="shrink-0 animate-spin text-muted-foreground"
+                data-testid="Loader2__65a761" />}
+            </div>
+          ) : (
+            <button
+              type="button"
+              title={value?.label || undefined}
+              onClick={() => {
+                setQuery(value?.label || '');
+                setOpen(true);
+              }}
+              className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border-subtle bg-card px-2 py-1.5 text-sm hover:border-border-control"
+            >
+              <span className={`min-w-0 flex-1 truncate text-left ${chipDim}`}>{chipLabel}</span>
+              <ChevronDown
+                size={14}
+                className="shrink-0 text-muted-foreground"
+                data-testid="ChevronDown__65a761" />
+            </button>
+          )}
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        collisionPadding={8}
+        className="z-[60] max-h-[min(14rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] min-w-64 overflow-auto p-0"
+        onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }}
+        // The search input lives in the anchor, outside the content: do not read it as an outside click.
+        onInteractOutside={(event) => {
+          if (wrapRef.current?.contains(event.target)) event.preventDefault();
+        }}
+        data-testid="entity-cell-results"
+      >
         <button
           type="button"
           onClick={() => {
@@ -99,6 +114,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
             <button
               key={item.id}
               type="button"
+              title={label}
               onClick={() => {
                 onChange({ id: item.id, label });
                 setOpen(false);
@@ -106,11 +122,11 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
               className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted ${itemCls}`}
             >
               <span className="w-4 shrink-0">{selected ? <Check size={14} data-testid="Check__65a761" /> : null}</span>
-              <span className="truncate">{label}</span>
+              <span className="min-w-0 truncate">{label}</span>
             </button>
           );
         })}
-      </div>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }

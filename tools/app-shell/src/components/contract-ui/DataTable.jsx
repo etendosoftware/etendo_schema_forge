@@ -149,8 +149,8 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 // which sets no background of its own), composited to match the row's own
 // translucent hover tint (see quickActionsColumnClassName's own comment for
 // the exact math) while staying solid enough to mask real data underneath
-// while floating. (ETP-5600: no longer solid — a fade to the row hover
-// colour, see the class list below.)
+// while floating. (ETP-5600: solid under the buttons in the row hover colour,
+// with a fade across the cell's left padding — see the class list below.)
 function quickActionsColumnClassName(extraClassName) {
   // `relative` (not `sticky`) is the resting state — gives RowQuickActions'
   // `position: absolute` pill a containing block scoped to this cell either
@@ -171,14 +171,16 @@ function quickActionsColumnClassName(extraClassName) {
     // `has-[[data-state=open]]` keeps the cell sticky while a row kebab menu is open: the
     // portaled menu takes the pointer, the row loses `group-hover/row`, and without this the
     // cell falls back to its in-flow spot at the table's end and Radix re-anchors the menu there.
-    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card))))] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card))))]',
-    // ETP-5600 — Figma "Fila / Hover": a left-to-right fade from transparent to the row's own
-    // background instead of a solid band, so the column it floats over fades out under the
-    // buttons rather than being cut off. The end colour is `--row-hover-bg`, which every data
-    // row sets for its own state in getRowClassName (white on a lifted hover, the selected
-    // colour on a checked/active row, the composited tint under rowHoverStyle="tint"), so no
-    // window needs its own CSS variable. The `hsl(var(--card))` fallback only covers a row
-    // that does not set it (the header row never hovers as a group, so it never shows).
+    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]',
+    // ETP-5600 — Figma "Fila Contactos / State=Hover", layer "Sticky Acciones": a white
+    // linear gradient (0% -> 100% opacity) whose fade lives in the cell's 12px left padding
+    // (RowQuickActions' `px-3`, QUICK_ACTIONS_CONTAINER_PADDING_PX) and is OPAQUE from there
+    // on, so the column it floats over fades out at the edge and never shows through the
+    // buttons. The end colour is `--row-hover-bg`, which every data row sets for its own
+    // state in getRowClassName (white on a lifted hover, the selected colour on a
+    // checked/active row, the composited tint under rowHoverStyle="tint"), so no window needs
+    // its own CSS variable. The `hsl(var(--card))` fallback only covers a row that does not
+    // set it (the header row never hovers as a group, so it never shows).
     extraClassName,
   ].filter(Boolean).join(' ');
 }
@@ -2069,6 +2071,16 @@ function isLiftHover(rowHoverStyle) {
   return rowHoverStyle !== 'tint';
 }
 
+/**
+ * Whether a row raises on hover. Under `lift` only a clickable row does; `lift-always`
+ * (ETP-5526) lifts every row, for a grid whose rows have no click target of their own but
+ * expose hover actions (the attachments table), so it still reads like every other list.
+ */
+function rowLifts(rowHoverStyle, clickable) {
+  if (rowHoverStyle === 'lift-always') return true;
+  return Boolean(clickable) && isLiftHover(rowHoverStyle);
+}
+
 function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine }) {
   // Inline-lines focus keeps its own look: a muted fill plus the focus ring.
   if (isSelectedLine) return 'bg-muted ring-1 ring-focus-ring hover:bg-muted [--row-hover-bg:hsl(var(--muted))]';
@@ -2089,6 +2101,8 @@ function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelect
  *     `elevated` is the former name of this style and stays an alias.
  *   - `tint`: the pre-ETP-5600 translucent `bg-muted/50` wash, kept as an explicit
  *     opt-out for a grid where a raised white row would read wrong.
+ *   - `lift-always` (ETP-5526): the `lift` look on EVERY row, clickable or not — for a
+ *     grid with hover actions but no row click (attachments). The cursor stays default.
  * Selection always wins over hover: a checked / active row keeps its selection colour
  * when hovered. Under `lift` it still gets the shadow, so the pointer feedback stays
  * the same on every clickable row. Every row also sets `--row-hover-bg` to its own
@@ -2099,8 +2113,9 @@ function getRowClassName({
   rowHoverStyle = 'lift',
 }) {
   const clickable = onRowClick || onNavigate;
-  // Only a clickable row lifts; a non-clickable row renders as it did before ETP-5600.
-  const liftRow = clickable && isLiftHover(rowHoverStyle);
+  // Only a clickable row lifts (non-clickable rows render as before ETP-5600), unless
+  // the caller opted into `lift-always`.
+  const liftRow = rowLifts(rowHoverStyle, clickable);
   const selectionClass = rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine });
   let hoverClass = '';
   if (liftRow && !isSelectedLine) {
@@ -3548,8 +3563,8 @@ export function DataTable({
         table.jsx: `<div className="relative w-full overflow-auto">`, this div's direct
         child — the same one `[&>div]` reaches below for the scrollbar): it sizes itself
         to exactly the `<table>`'s content height with zero slack. `[&>div]:pb-6` pads
-        that inner box so the shadow has room. Only when rows can be clicked (no lift
-        otherwise), and not for `inlineEditable`, whose wrapper is `overflow-visible`.
+        that inner box so the shadow has room. Only when rows lift (clickable rows, or
+        `lift-always`), and not for `inlineEditable`, whose wrapper is `overflow-visible`.
 
         ETP-5600 — that room must not read as a 24px gap under the last row (Figma ends a
         list at its last row / totals row, and a tab grid runs straight into its add-line
@@ -3595,7 +3610,7 @@ export function DataTable({
             // above this thumb once scrolled into view ("al final se ven
             // 2") — the `[&>div]` combinator reaches into that child instead.
             : 'overflow-x-auto overflow-y-visible [&>div]:[scrollbar-width:none] [&>div::-webkit-scrollbar]:hidden',
-          linesLayout !== 'inlineEditable' && isLiftHover(rowHoverStyle) && (onRowClick || onNavigate)
+          linesLayout !== 'inlineEditable' && rowLifts(rowHoverStyle, onRowClick || onNavigate)
             ? '!-mb-6 [&>div]:pb-6 [&>div]:pointer-events-none [&>div>table]:pointer-events-auto'
             : '',
         ].filter(Boolean).join(' ')}
