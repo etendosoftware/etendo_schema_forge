@@ -58,7 +58,7 @@ const IF_MATCH_PARAMETER = {
 };
 const PRECONDITION_RESPONSES = {
   '412': { description: 'If-Match does not match the current version: the record changed since it was read, or the value is not a valid ETag.' },
-  '428': { description: 'If-Match is missing.' },
+  '428': { description: 'If-Match is missing, or is `*`, which is not accepted.' },
 };
 
 function withEtagHeader(responses: OpenApiOperation['responses']) {
@@ -70,7 +70,13 @@ function isVersioned(entity: PublicApiEntity): boolean {
   return Boolean(entity.fields.updated);
 }
 
-function resourceSchema(entityName: string, entity: PublicApiEntity, properties: Record<string, FieldSchema>): JsonSchema {
+// `meta.etag` is response-only: the version travels in If-Match, never in a body.
+function resourceSchema(
+  entityName: string,
+  entity: PublicApiEntity,
+  properties: Record<string, FieldSchema>,
+  { request = false }: { request?: boolean } = {},
+): JsonSchema {
   const relationshipProperties: Record<string, FieldSchema> = {};
   const attributeProperties = { ...properties };
   for (const [fieldName, field] of Object.entries(entity.fields) as Array<[string, typeof entity.fields[string] & { relationship?: { resource: string; foreignKey?: string } }]>) {
@@ -99,7 +105,7 @@ function resourceSchema(entityName: string, entity: PublicApiEntity, properties:
       ...(Object.keys(relationshipProperties).length
         ? { relationships: { type: 'object', properties: relationshipProperties } }
         : {}),
-      ...(isVersioned(entity)
+      ...(isVersioned(entity) && !request
         ? { meta: { type: 'object', properties: { etag: { type: 'string', description: 'Same value as the ETag header; send it in If-Match to update this record.' } } } }
         : {}),
     },
@@ -156,7 +162,7 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
       collection.post = {
         operationId: `create_${entityName}`, summary: `Create ${title}`,
         tags: [tag], description,
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } } } } },
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { data: resourceSchema(entityName, entity, properties, { request: true }) as any } } } } },
         responses: response(`${title} record created`, { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } }, '201'),
         security: [{ bearerAuth: [] }],
       };
@@ -168,7 +174,7 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
         operationId: `${method.toLowerCase()}_${entityName}`, summary: `${method === 'PATCH' ? 'Partially update' : 'Update'} ${title}`,
         tags: [tag], description,
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
-        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } } } } },
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { data: resourceSchema(entityName, entity, properties, { request: true }) as any } } } } },
         responses: response(`${title} record updated`, { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } }),
         security: [{ bearerAuth: [] }],
       };

@@ -40,9 +40,12 @@ type HeaderSink = { setHeader(name: string, value: string): unknown };
 const CONCURRENCY_FIELD = 'updated';
 const NEO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/;
 
+// Only a canonical NeoServlet timestamp becomes an ETag: any other value could
+// never pass versionFromIfMatch, so the client would get a version it can
+// never use and every retry would fail with 412.
 export function toEtag(version: unknown): string | undefined {
-  if (version === null || version === undefined || version === '') return undefined;
-  return `"${Buffer.from(String(version), 'utf8').toString('base64url')}"`;
+  if (typeof version !== 'string' || !NEO_TIMESTAMP.test(version)) return undefined;
+  return `"${Buffer.from(version, 'utf8').toString('base64url')}"`;
 }
 
 // Returns the `updated` value an If-Match header stands for. A missing header
@@ -56,7 +59,9 @@ export function versionFromIfMatch(ifMatch: string | undefined): string {
       {
         statusCode: HttpStatus.PRECONDITION_REQUIRED,
         error: 'Precondition Required',
-        message: 'Updates require an If-Match header carrying the ETag returned when the record was read.',
+        message: value === '*'
+          ? 'If-Match: * is not accepted. Send the ETag returned when the record was read.'
+          : 'Updates require an If-Match header carrying the ETag returned when the record was read.',
       },
       HttpStatus.PRECONDITION_REQUIRED,
     );
@@ -294,7 +299,8 @@ export class PublicApiController {
   }
 
   // Internal path of the field NeoServlet uses for optimistic concurrency, when
-  // the resource publishes it. Resources without it are not version-checked.
+  // the resource publishes it. The gateway does not require If-Match for
+  // resources without it.
   private concurrencyPath(entityName: string): string | undefined {
     return (this.entityOrThrow(entityName).fields[CONCURRENCY_FIELD] as PublicApiField | undefined)?.internalPath;
   }

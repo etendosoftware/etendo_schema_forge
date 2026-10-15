@@ -1,3 +1,4 @@
+// @covers gateway/src/openapi/build-per-entity-paths.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildPerEntityOpenApiPaths } from '../../src/openapi/build-per-entity-paths.ts';
@@ -173,4 +174,51 @@ test('does not ask for If-Match on resources that do not publish updated', () =>
   assert.equal(item.patch.parameters?.some((parameter) => parameter.name === 'If-Match'), false);
   assert.equal(item.patch.responses['428'], undefined);
   assert.equal(item.get.responses['200'].headers, undefined);
+});
+
+test('meta.etag is documented on responses only, never in a request body', () => {
+  const paths = buildPerEntityOpenApiPaths(versionedSchema());
+  const requestData = (operation: any) => operation.requestBody.content['application/json'].schema.properties.data;
+  assert.equal(requestData(paths['/api/v1/product'].post).properties.meta, undefined);
+  assert.equal(requestData(paths['/api/v1/product/{id}'].put).properties.meta, undefined);
+  assert.equal(requestData(paths['/api/v1/product/{id}'].patch).properties.meta, undefined);
+  const responseData = paths['/api/v1/product/{id}'].patch.responses['200'].content!['application/json'].schema.properties!.data as any;
+  assert.ok(responseData.properties.meta.properties.etag);
+});
+
+test('a versioned child documents If-Match on its updates and never on DELETE', () => {
+  const childSchema = versionedSchema();
+  childSchema.entities.productLines = {
+    publicApi: true,
+    publicName: 'product-lines',
+    specName: 'product',
+    entityName: 'lines',
+    operations: ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    parent: { resource: 'product', pathSegment: 'lines', foreignKey: 'product' },
+    fields: {
+      quantity: { publicApi: true, direction: 'inout', internalPath: 'quantity', type: 'passthrough', dataType: { type: 'number' }, handlerId: null },
+      updated: { publicApi: true, direction: 'out', internalPath: 'updated', type: 'passthrough', dataType: { type: 'string' }, handlerId: null },
+    },
+    functional: { functionalName: 'Products — Lines' },
+  };
+  const paths = buildPerEntityOpenApiPaths(childSchema);
+  for (const item of [paths['/api/v1/product/{parentId}/lines/{id}'], paths['/api/v1/product/{id}']]) {
+    for (const method of ['put', 'patch']) {
+      assert.ok(item[method].parameters?.some((parameter) => parameter.name === 'If-Match'), method);
+    }
+    assert.equal(item.delete.parameters?.some((parameter) => parameter.name === 'If-Match'), false);
+    assert.equal(item.delete.responses['428'], undefined);
+  }
+});
+
+test('each update documents its own 412/428 objects', () => {
+  const item = buildPerEntityOpenApiPaths(versionedSchema())['/api/v1/product/{id}'];
+  assert.notEqual(item.put.responses['412'], item.patch.responses['412']);
+  assert.notEqual(item.put.responses['428'], item.patch.responses['428']);
+});
+
+test('a read-only resource documents no write operation', () => {
+  const paths = buildPerEntityOpenApiPaths(schema);
+  assert.deepEqual(Object.keys(paths['/api/v1/product']), ['get']);
+  assert.deepEqual(Object.keys(paths['/api/v1/product/{id}']), ['get']);
 });
