@@ -22090,6 +22090,7 @@
     "fm.catalog.390.desc": "Annual summary return of the VAT self-assessments of the fiscal year",
     "fm.config.m390.title": "Form 390",
     "fm.catalog.sii_warning": "This organization has SII enabled. Entities registered in SII are not required to file Form 390. Do you want to activate it anyway?",
+    "fm.catalog.sii_warning_since": "This organization has been in SII since {date}. The Form 390 exemption applies to the years kept through SII: check whether you must file it for the year you joined or for earlier years. Do you want to activate it?",
     "fm.period.annual": "Annual",
     "fm.new_decl.preview_annual": "Form {model} · Annual {year}",
     "fm.new_decl.duplicate_ordinary": "Form {model} for {year} already exists.",

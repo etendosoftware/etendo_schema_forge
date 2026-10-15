@@ -5,7 +5,8 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('lucide-react', () => ({
@@ -24,10 +25,14 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
 // ETP-5716 — the organization's SII status (controls the 390 activation warning). Not in the SII
 // by default, so every pre-existing test toggles straight away.
-const sii = vi.hoisted(() => ({ active: false, calls: 0 }));
-vi.mock('../useOrgSiiStatus.js', () => ({
-  default: () => () => { sii.calls += 1; return Promise.resolve(sii.active); },
-}));
+const sii = vi.hoisted(() => ({ active: false, since: null, calls: 0 }));
+vi.mock('../useOrgSiiStatus.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    default: () => () => { sii.calls += 1; return Promise.resolve({ active: sii.active, since: sii.since }); },
+  };
+});
 
 import FmCatalogPage from '../FmCatalogPage.jsx';
 
@@ -40,6 +45,7 @@ const defaultProps = {
 beforeEach(() => {
   vi.clearAllMocks();
   sii.active = false;
+  sii.since = null;
   sii.calls = 0;
 });
 
@@ -366,6 +372,26 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true');
     fireEvent.click(container.querySelector('.fm-catalog-header__back'));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '390': true }));
+  });
+
+  it('organization that joined the SII this year: the warning says "since <date>", not exempt', async () => {
+    sii.active = true;
+    const year = new Date().getFullYear();
+    sii.since = `${year}-09-15`;
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    fireEvent.click(switchOf(container, '390'));
+    const warning = await screen.findByTestId('FmCatalogPage__siiWarning');
+    expect(warning.textContent).toContain('fm.catalog.sii_warning_since');
+    expect(warning.textContent).toContain(`15/09/${year}`);
+  });
+
+  it('organization in the SII since a previous year (or since 1 January): the plain warning', async () => {
+    sii.active = true;
+    sii.since = `${new Date().getFullYear()}-01-01`;
+    const { container } = render(<FmCatalogPage {...defaultProps} />);
+    fireEvent.click(switchOf(container, '390'));
+    const warning = await screen.findByTestId('FmCatalogPage__siiWarning');
+    expect(warning.textContent).toBe('fm.catalog.sii_warningfm.action.cancelfm.catalog.activate');
   });
 
   it('organization in the SII: "Cancelar" leaves it inactive', async () => {

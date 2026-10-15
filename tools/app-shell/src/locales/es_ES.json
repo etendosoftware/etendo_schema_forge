@@ -22326,6 +22326,7 @@
     "fm.catalog.390.desc": "Declaración resumen anual de las autoliquidaciones de IVA del ejercicio",
     "fm.config.m390.title": "Modelo 390",
     "fm.catalog.sii_warning": "Esta organización tiene el SII activo. Las entidades acogidas al SII no están obligadas a presentar el Modelo 390. ¿Desea activarlo igualmente?",
+    "fm.catalog.sii_warning_since": "La organización está en el SII desde el {date}. La exoneración del Modelo 390 se aplica a los ejercicios llevados por el SII: revise si debe presentarlo para el ejercicio de alta o para los anteriores. ¿Desea activarlo?",
     "fm.period.annual": "Anual",
     "fm.new_decl.preview_annual": "Modelo {model} · Anual {year}",
     "fm.new_decl.duplicate_ordinary": "Ya existe el Modelo {model} de {year}.",

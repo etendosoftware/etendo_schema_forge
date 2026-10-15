@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmCatalogPage.jsx
 // Vitest tests for FmCatalogPage's ETP-5187 IAE-activity reminder trigger:
 // `toggleModel` calls `showIaeActivityReminder` ONLY on Modelo 303's
 // inactive → active transition — never on deactivation, never for any other
@@ -9,6 +10,7 @@ import { render, fireEvent } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('lucide-react', () => ({

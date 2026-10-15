@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { X } from 'lucide-react';
 import { ConfigDrawer } from './FmOverlays.jsx';
 import { showIaeActivityReminder } from './fiscalModelsUtils.js';
 import { listModels, getModel } from './modelRegistry.js';
-import useOrgSiiStatus from './useOrgSiiStatus.js';
+import useOrgSiiStatus, { isSiiJoinedDuringYear } from './useOrgSiiStatus.js';
 
 // The catalog lists every registered model (id, periodicities, default state, lock, badge
 // variant) — see modelRegistry.js.
@@ -15,10 +16,13 @@ const ANY_SII_WARNING = CATALOG.some(m => m.siiWarningOnActivate);
 // ETP-5716 — inline, non-blocking confirmation under a card whose model asks for it
 // (`siiWarningOnActivate`) when the organization is in the SII: "Cancelar" leaves it off,
 // "Activar" activates it. Amber (warning role), inside the card list so it needs no extra layer.
-function SiiActivationWarning({ onCancel, onConfirm, t }) {
+// When the organization joined the SII after 1 January of the current year (`sinceLabel`), it was
+// not in the SII for the whole year: the text says "en el SII desde <fecha>" instead of implying
+// an exemption for the year.
+function SiiActivationWarning({ sinceLabel, onCancel, onConfirm, t }) {
   return (
     <div className="fm-banner fm-banner--warning fm-catalog-sii-warning" role="alertdialog" aria-live="polite" data-testid="FmCatalogPage__siiWarning">
-      <span>{t('fm.catalog.sii_warning')}</span>
+      <span>{sinceLabel ? t('fm.catalog.sii_warning_since', { date: sinceLabel }) : t('fm.catalog.sii_warning')}</span>
       <div className="fm-catalog-sii-warning__actions">
         <button type="button" className="fm-btn fm-btn--cancel-pill" onClick={onCancel} data-testid="FmCatalogPage__siiCancel">
           {t('fm.action.cancel')}
@@ -60,14 +64,17 @@ function ToggleSwitch({ checked, onChange, disabled }) {
 
 export default function FmCatalogPage({ onBack, onSave, activeModels, token, apiBaseUrl }) {
   const t = useUI();
+  const { locale } = useLocaleSwitch();
   const navigate = useNavigate();
   const [active, setActive] = useState(
     () => activeModels ?? Object.fromEntries(CATALOG.map(m => [m.id, m.defaultActive]))
   );
   const [configModel, setConfigModel] = useState(null);
-  // ETP-5716 — the model awaiting the SII confirmation (see SiiActivationWarning), or null.
+  // ETP-5716 — the model awaiting the SII confirmation (see SiiActivationWarning), or null, and
+  // the formatted SII date when the organization joined during the current year.
   const [siiPendingId, setSiiPendingId] = useState(null);
-  const getSiiActive = useOrgSiiStatus({ apiBaseUrl, enabled: ANY_SII_WARNING });
+  const [siiSinceLabel, setSiiSinceLabel] = useState(null);
+  const getSiiStatus = useOrgSiiStatus({ apiBaseUrl, enabled: ANY_SII_WARNING });
 
   const handleClose = () => { onSave?.(active); onBack?.(); };
 
@@ -88,8 +95,14 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
       applyToggle(id);
       return;
     }
-    if (await getSiiActive()) setSiiPendingId(id);
-    else applyToggle(id);
+    const status = await getSiiStatus();
+    if (!status?.active) {
+      applyToggle(id);
+      return;
+    }
+    const joinedThisYear = isSiiJoinedDuringYear(status.since, new Date().getFullYear());
+    setSiiSinceLabel(joinedThisYear ? formatCalendarDate(status.since, locale || 'es-ES') : null);
+    setSiiPendingId(id);
   };
   const lockedIds = new Set(CATALOG.filter(m => m.locked).map(m => m.id));
   const activeCount = Object.entries(active).filter(([id, v]) => v && !lockedIds.has(id)).length;
@@ -162,6 +175,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
                   {siiPendingId === model.id && (
                     <SiiActivationWarning
                       t={t}
+                      sinceLabel={siiSinceLabel}
                       onCancel={() => setSiiPendingId(null)}
                       onConfirm={() => { setSiiPendingId(null); applyToggle(model.id); }} />
                   )}
