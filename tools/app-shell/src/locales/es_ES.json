@@ -16945,6 +16945,8 @@
     "importFieldProductType": "Tipo de producto",
     "noAccessNoRoleTitle": "Todavía no tienes un rol asignado",
     "noAccessNoRoleMessage": "Formas parte de {companyName}, pero aún no te han asignado ningún rol, así que no hay nada que puedas abrir. Pide a un administrador de {companyName} que te asigne uno.",
+    "accessLoadErrorTitle": "No pudimos cargar tu acceso",
+    "accessLoadErrorMessage": "Tu sesión sigue activa, pero el servidor rechazó la petición que carga tu menú y tus permisos. Inténtalo de nuevo; si persiste, cierra sesión y vuelve a entrar.",
     "noAccessRoleTitle": "Tu rol no tiene acceso",
     "noAccessRoleMessage": "Tu rol en {companyName} no da acceso a ninguna ventana. Pide a un administrador que revise los permisos de tu rol.",
     "blockedAccessDemoExpiredTitle": "Tu período de prueba terminó",
