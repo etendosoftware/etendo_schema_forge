@@ -17243,6 +17243,7 @@
     "noLines": "Sin líneas",
     "backendError.amortizationCurrencyRequired": "El campo Moneda no puede estar vacío.",
     "backendError.staleRecord": "Otra persona modificó este registro mientras lo editabas, así que tus cambios no se guardaron. Recarga el registro para ver los valores actuales.",
+    "backendError.invoiceLinesWithoutAmount": "No se puede completar la factura: las líneas de {products} tienen cantidad y precio pero importe neto 0. Vuelve a guardar esas líneas para que se recalcule el importe y después complétala.",
     "backendError.costingNoProduct": "Una línea de costo debe pertenecer a un producto.",
     "backendError.costingCostRequired": "Introduce el costo.",
     "backendError.costingCostNegative": "El costo no puede ser negativo.",

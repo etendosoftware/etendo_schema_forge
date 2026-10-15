@@ -2086,6 +2086,50 @@ describe('translateBackendError — "zero or negative quantity (process)" parame
   });
 });
 
+// InvoiceCompletionLineGuard.java (com.etendoerp.go — ETP-5710). The server refuses to complete an
+// invoice whose lines kept a net amount of 0 and names the lines by PRODUCT (their line numbers are
+// internal). The SPA renders the same sentence in the user's locale; `error.code` stays
+// `invoiceLinesWithoutAmount` for machine readers, but every consumer that already routes a failed
+// completion through translateBackendError (the confirm modal, the row quick action, the bulk
+// toast) gets the translation here with no per-flow plumbing.
+describe('translateBackendError — invoice lines without amount (ETP-5710)', () => {
+  const KEY = 'backendError.invoiceLinesWithoutAmount';
+  const es = fakeUiTranslator({
+    [KEY]: 'No se puede completar la factura: las líneas de {products} tienen cantidad y precio pero importe neto 0. Vuelve a guardar esas líneas para que se recalcule el importe y después complétala.',
+  });
+  const raw = (products) => `The invoice cannot be completed: the lines of ${products} have a quantity and a price but a net amount of 0, so the totals would be wrong. Save those lines again so the amount is recalculated, then complete.`;
+
+  it('translates the product list into es_ES', () => {
+    assert.equal(
+      translateBackendError(raw('Agua, Cerveza, Queso Sardo'), es),
+      'No se puede completar la factura: las líneas de Agua, Cerveza, Queso Sardo tienen cantidad y precio pero importe neto 0. Vuelve a guardar esas líneas para que se recalcule el importe y después complétala.',
+    );
+  });
+
+  it('handles a single product', () => {
+    assert.match(translateBackendError(raw('Agua'), es), /las líneas de Agua tienen/);
+  });
+
+  it('leaves an unknown message untouched', () => {
+    const other = 'The invoice cannot be completed: something else.';
+    assert.equal(translateBackendError(other, es), other);
+  });
+
+  it('returns the original message when the key is missing from the locale', () => {
+    const missing = (k) => k;
+    assert.equal(translateBackendError(raw('Agua'), missing), raw('Agua'));
+  });
+
+  it('has the key in en_US, es_ES and es_AR with the {products} placeholder', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const dict = JSON.parse(readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8'));
+      const flat = JSON.stringify(dict);
+      assert.ok(flat.includes(`"${KEY}"`), `${loc} is missing ${KEY}`);
+      assert.ok(flat.match(new RegExp(`"${KEY}":\\s*"[^"]*\\{products\\}`)), `${loc} lost {products}`);
+    }
+  });
+});
+
 // AmortizationConfirmGuard.java (com.etendoerp.go — ETP-5414). Simple exact-match
 // BACKEND_ERROR_MAP entries, same shape as the "duplicate email" block above — no dynamic
 // value, so no fakeUiTranslator/regex match needed. Three of the four reuse the SAME key
