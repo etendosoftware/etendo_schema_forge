@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import {
   useCashClosePending,
@@ -102,7 +103,15 @@ export function CashCloseTab({ account, onCloseSuccess, windowReadOnly = false }
   // The handler's rejections are hardcoded English literals with no AD_Message behind them, so
   // they have to be mapped to the app's own i18n before reaching a toast.
   const errorMessage = (err) =>
-    translateBackendError(err?.message, ui) || ui('financeAccountCashCloseError');
+    translateBackendError(err?.message, ui, { messageKeys: err?.messageKeys })
+    || ui('financeAccountCashCloseError');
+
+  // ETP-5577 — a close refused for a period that is not open offers the calendar of its date.
+  const toastError = (err) => {
+    const recovery = periodNotAvailableToastOptions(err?.messageKeys, ui, { date: statementDate });
+    if (Object.keys(recovery).length > 0) toast.error(errorMessage(err), recovery);
+    else toast.error(errorMessage(err));
+  };
 
   const handleSaveDraft = async () => {
     if (windowReadOnly) return;
@@ -111,7 +120,7 @@ export function CashCloseTab({ account, onCloseSuccess, windowReadOnly = false }
       toast.success(ui('financeAccountCashCloseDraftSaved'));
       reload();
     } catch (err) {
-      toast.error(errorMessage(err));
+      toastError(err);
     }
   };
 
@@ -135,7 +144,7 @@ export function CashCloseTab({ account, onCloseSuccess, windowReadOnly = false }
       reload();
       onCloseSuccess?.();
     } catch (err) {
-      toast.error(errorMessage(err));
+      toastError(err);
     }
   };
 

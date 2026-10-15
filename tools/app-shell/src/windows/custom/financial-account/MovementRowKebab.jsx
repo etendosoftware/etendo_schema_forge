@@ -16,6 +16,7 @@ import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
 import { resolveMovementDeleteBlock, resolveMovementReactivateBlock, movementHasUndoableState } from './movementActionEligibility.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 // Post (contabilizar) / Unpost (descontabilizar) go through the financial-account spec's
@@ -34,8 +35,9 @@ async function callTransactionAction(apiFetch, url, token) {
   const body = await res.json().catch(() => null);
   const nested = body?.response?.data?.[0];
   const message = nested?.message ?? body?.response?.message ?? body?.message;
+  const messageKeys = nested?.messageKeys ?? body?.messageKeys;
   const success = res.ok && (nested?.success ?? body?.success ?? true);
-  return { success, message };
+  return { success, message, messageKeys };
 }
 
 /**
@@ -133,6 +135,14 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
   // exactly the row whose delete refusal we now have to explain.
   const busy = posting || unposting || processing || reactivating || deleting;
 
+  // ETP-5577 — a refusal for a period that is not open offers the calendar of the movement's date.
+  const toastRefusal = (text, messageKeys) => {
+    const recovery = periodNotAvailableToastOptions(messageKeys, ui,
+      { date: documentPeriodDate(movement) ?? movement.date });
+    if (Object.keys(recovery).length > 0) toast.error(text, recovery);
+    else toast.error(text);
+  };
+
   async function runLifecycle(fn, successKey, errorKey) {
     if (busy) return;
     try {
@@ -143,7 +153,8 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
       // The hooks now throw the backend's own business message (useCreateMovement.postAction), so
       // it goes through the shared translator before being shown — otherwise the user reads it in
       // English. Falls back to the generic per-action key when there was no message at all.
-      toast.error(translateBackendError(e?.message, ui) || ui(errorKey));
+      toastRefusal(translateBackendError(e?.message, ui, { messageKeys: e?.messageKeys }) || ui(errorKey),
+        e?.messageKeys);
     }
   }
 
@@ -193,12 +204,13 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
     if (busy) return;
     setPosting(true);
     try {
-      const { success, message } = await callTransactionAction(apiFetch, POST_URL(movement.id), token);
+      const { success, message, messageKeys } = await callTransactionAction(apiFetch, POST_URL(movement.id), token);
       if (success) {
         toast.success(ui('documentPosted'));
         onReload?.();
       } else {
-        toast.error(message ? translateBackendError(message, ui) : ui('financeAccountMovementsRowPostError'));
+        toastRefusal(translateBackendError(message, ui, { messageKeys }) || ui('financeAccountMovementsRowPostError'),
+          messageKeys);
       }
     } catch {
       toast.error(ui('financeAccountMovementsRowPostError'));

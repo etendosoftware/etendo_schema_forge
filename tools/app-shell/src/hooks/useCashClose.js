@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useNeoResource, getApiBase } from './useNeoResource';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { extractBackendMessageKeys } from '@/lib/backendErrors.js';
 /**
  * Data access for the cash-close screen of cash-type financial accounts (ETP-4795).
  *
@@ -55,6 +56,7 @@ function useNeoPost(action) {
         const message = json?.error?.message || `HTTP ${res.status}`;
         const err = new Error(message);
         err.status = json?.error?.status ?? res.status;
+        err.messageKeys = extractBackendMessageKeys(json);
         throw err;
       }
       return json?.response?.data ?? {};

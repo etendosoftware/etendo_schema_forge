@@ -193,7 +193,7 @@ describe('ConfirmInOutModal', () => {
       const onClose = vi.fn();
       render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={false} periodDate="2027-01-15" onClose={onClose} />);
       fireEvent.click(screen.getByText('Confirm'));
-      const link = await screen.findByTestId('ConfirmInOutModal__periodRecovery');
+      const link = await screen.findByTestId('PeriodRecoveryLink');
       expect(link).toHaveTextContent('periodNotAvailableOpenCalendar');
       fireEvent.click(link);
       expect(onClose).toHaveBeenCalled();

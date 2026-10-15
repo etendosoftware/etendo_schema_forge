@@ -5,6 +5,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
+import { PeriodRecoveryLink } from './PeriodRecoveryLink.jsx';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
 
@@ -346,16 +347,7 @@ export default function ConfirmInOutModal({
           {error && (
             <div style={{ fontSize: 12, color: 'hsl(var(--destructive))', background: 'var(--status-destructive-bg)', padding: '8px 12px', borderRadius: 6 }}>
               {error}
-              {errorRecovery.description && <div style={{ marginTop: 4 }}>{errorRecovery.description}</div>}
-              {errorRecovery.action && (
-                <button
-                  type="button"
-                  onClick={() => { onClose(); errorRecovery.action.onClick(); }}
-                  style={{ display: 'block', marginTop: 4, padding: 0, background: 'none', border: 'none', color: 'inherit', fontWeight: 600, textDecoration: 'underline', cursor: 'pointer' }}
-                  data-testid="ConfirmInOutModal__periodRecovery">
-                  {errorRecovery.action.label}
-                </button>
-              )}
+              <PeriodRecoveryLink recovery={errorRecovery} onBeforeGo={onClose} />
             </div>
           )}
         </div>

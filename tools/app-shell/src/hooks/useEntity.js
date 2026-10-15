@@ -283,7 +283,7 @@ export async function extractErrorMessage(res, ui) {
 
 // ETP-5577 — a refusal's `messageKeys`, read from a clone so the body stays readable. Never
 // throws: a response that cannot be cloned or parsed simply has no keys.
-async function readMessageKeys(res) {
+export async function readMessageKeys(res) {
     try {
         return extractBackendMessageKeys(await res.clone().json());
     } catch {
@@ -1065,6 +1065,7 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
     // extraction for any other error shape.
     let backendFieldErrors = null;
     let staleConflict = false;
+    let messageKeys;
     try {
         const cloned = res.clone();
         const body = await cloned.json();
@@ -1079,6 +1080,8 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
         // rejection is also a 409 and its remedy is the opposite (change your data, not your
         // baseline).
         staleConflict = body?.error === 'stale_record';
+        // ETP-5577 — read here: the body is consumed below, so a later clone() would fail.
+        messageKeys = extractBackendMessageKeys(body);
     } catch {
         // ignore — fall through to the legacy extractor
     }
@@ -1118,7 +1121,7 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
     setSaveError(msg);
     // ETP-5577 — a save refused for the document's period (GL_JOURNAL's trigger) offers the
     // calendar, opened on the fiscal year of the record's date.
-    const recovery = periodNotAvailableToastOptions(await readMessageKeys(res), ui,
+    const recovery = periodNotAvailableToastOptions(messageKeys, ui,
         { date: documentPeriodDate(record) });
     if (Object.keys(recovery).length > 0) toast.error(msg, recovery);
     else toast.error(msg);

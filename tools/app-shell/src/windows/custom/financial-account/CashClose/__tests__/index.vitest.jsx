@@ -80,6 +80,8 @@ vi.mock('../CashCloseConfirmDialog.jsx', () => ({
   ),
 }));
 
+import { toast } from 'sonner';
+import { setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import { CashCloseTab } from '../index.jsx';
 
 const MOVEMENTS = [
@@ -228,5 +230,23 @@ describe('CashCloseTab — window read-only access tier (ETP-5457)', () => {
     fireEvent.click(screen.getByTestId('stub-confirm-run'));
     await waitFor(() => expect(writes.confirmClose).toHaveBeenCalledTimes(1));
     expect(writes.confirmClose.mock.calls[0][0]).toMatchObject({ declaredBalance: 50 });
+  });
+
+  it('ETP-5577: a close refused for a closed period offers the calendar', async () => {
+    const go = vi.fn();
+    setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
+    writes.confirmClose = vi.fn().mockRejectedValue(
+      Object.assign(new Error('El Periodo no existe'), { messageKeys: ['PeriodNotAvailable'] }));
+    try {
+      renderTab();
+      fireEvent.click(screen.getByTestId('stub-side-confirm'));
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      const options = toast.error.mock.calls.at(-1)[1];
+      expect(options.action.label).toBe('periodNotAvailableOpenCalendar');
+      options.action.onClick();
+      expect(go).toHaveBeenCalledTimes(1);
+    } finally {
+      setPeriodRecovery(null);
+    }
   });
 });

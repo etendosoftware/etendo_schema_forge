@@ -1069,14 +1069,19 @@ describe('handleSaveErrorResponse', () => {
   const ui = (key) => key;
 
   // Minimal fake Response: clone() returns an object whose json() resolves to `body`.
-  const fakeResponse = (body, status = 400) => ({
-    status,
-    clone() {
-      return { json: async () => body };
-    },
-    // extractErrorMessage reads res.json() on the original (used in the fallback path).
-    json: async () => body,
-  });
+  // Like a real Response, the body can be read once: clone() after json() throws.
+  const fakeResponse = (body, status = 400) => {
+    let used = false;
+    return {
+      status,
+      clone() {
+        if (used) throw new TypeError('Response body is already used');
+        return { json: async () => body };
+      },
+      // extractErrorMessage reads res.json() on the original (used in the fallback path).
+      json: async () => { used = true; return body; },
+    };
+  };
 
   it('maps a MISSING_REQUIRED_FIELDS error to per-field errors', async () => {
     const fieldErrorCalls = [];
