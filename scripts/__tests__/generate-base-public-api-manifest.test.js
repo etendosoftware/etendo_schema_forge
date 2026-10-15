@@ -5,7 +5,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  artifactsWithoutRawSchema,
   buildEntity,
   fiscalMonitorWindows,
   generateManifest,
@@ -13,6 +12,7 @@ import {
   isPublicField,
   neverExposedFields,
   publicFieldName,
+  publicFunctionalText,
 } from '../generate-base-public-api-manifest.mjs';
 
 const functional = {
@@ -79,9 +79,10 @@ describe('isPublicField', () => {
     }
   });
 
-  it('keeps the tenant, the portal-access grant, bank data and bulk-posting fields excluded', () => {
+  it('keeps the tenant, the organization, the portal-access grant, bank data and bulk-posting fields excluded', () => {
     for (const name of [
       'client',
+      'organization',
       'grantPortalAccess',
       'accountNo',
       'bankName',
@@ -151,6 +152,46 @@ describe('buildEntity — fiscal monitors are not derived', () => {
 
   it('covers the three monitors owned by the localization team', () => {
     assert.deepEqual([...fiscalMonitorWindows].sort(), ['monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']);
+  });
+
+  it('publishes the curation of a curated fiscal monitor, still without excluded fields', () => {
+    const entity = build('sii-monitor', [
+      { name: 'documentNo', visibility: 'readOnly', form: true, type: 'string', publicApi: { exposed: true } },
+      { name: 'client', visibility: 'readOnly', form: true, type: 'foreignKey', publicApi: { exposed: true } },
+      { name: 'orderDate', visibility: 'editable', form: true, type: 'date' },
+    ]);
+    assert.deepEqual(Object.keys(entity.fields).sort(), ['document_no', 'id']);
+    assert.deepEqual(entity.operations, ['GET', 'LIST']);
+  });
+});
+
+describe('buildEntity — operations', () => {
+  it('makes a resource with no writable field read-only, even if its window accepts writes', () => {
+    const entity = build('matched-purchase-invoices', [
+      { name: 'quantity', visibility: 'readOnly', form: true, type: 'decimal' },
+      { name: 'processed', visibility: 'readOnly', form: true, type: 'boolean' },
+    ]);
+    assert.deepEqual(entity.operations, ['GET', 'LIST']);
+  });
+
+  it('keeps every write operation, PATCH included, when the resource has a writable field', () => {
+    const entity = build('sales-order', formFields);
+    assert.deepEqual([...entity.operations].sort(), ['DELETE', 'GET', 'LIST', 'PATCH', 'POST', 'PUT']);
+  });
+});
+
+describe('publicFunctionalText', () => {
+  it('drops capability lines and summary sentences that cite a ticket or Jira', () => {
+    const { summary, capabilities } = publicFunctionalText({
+      summary: 'Register receipts. Totals follow ETP-1234. Lines are editable.',
+      capabilities: ['Create a receipt', 'Reactivate (agreed in a Jira comment by a teammate)', 'Undo per ETP-42', 'Print'],
+    });
+    assert.equal(summary, 'Register receipts. Lines are editable.');
+    assert.deepEqual(capabilities, ['Create a receipt', 'Print']);
+  });
+
+  it('returns an empty summary when every sentence is internal, so the caller can fall back', () => {
+    assert.equal(publicFunctionalText({ summary: 'See ETP-1.', capabilities: [] }).summary, '');
   });
 });
 
@@ -235,16 +276,74 @@ describe('generateManifest — schema-raw.json is required', () => {
     rmSync(join(root, 'sales-order'), { recursive: true, force: true });
   });
 
-  it('tolerates the legacy artifacts published without schema-raw.json', async () => {
-    assert.deepEqual([...artifactsWithoutRawSchema].sort(), ['document', 'project', 'uom']);
-    writeArtifact(root, 'uom', contractFor('uom', formFields), { rawSchema: false });
+  it('does not publish the legacy windows that have no NeoServlet spec', async () => {
+    for (const specName of ['document', 'project', 'uom']) {
+      writeArtifact(root, specName, contractFor(specName, formFields), { rawSchema: false });
+    }
     const manifest = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
-    assert.deepEqual(Object.keys(manifest.entities.uom.fields).sort(), ['business_partner', 'document_no', 'id', 'order_date']);
+    assert.deepEqual(Object.keys(manifest.entities), []);
   });
 
   it('does not require schema-raw.json for windows that are not published', async () => {
     writeArtifact(root, 'absence', contractFor('absence', formFields), { rawSchema: false });
     const manifest = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
     assert.equal(manifest.entities.absence, undefined);
+  });
+});
+
+describe('generateManifest — child tabs and functional texts', () => {
+  let root;
+
+  before(() => {
+    root = mkdtempSync(join(tmpdir(), 'public-api-manifest-children-'));
+    const tab = (tableName, tabName) => ({ tableName, tabName, fields: [{ name: 'description', visibility: 'editable', form: true, type: 'string' }] });
+    const contract = {
+      version: '1.0.0',
+      frontendContract: {
+        window: { name: 'Contacts', primaryEntity: 'businessPartner', category: 'sales' },
+        entities: {
+          businessPartner: tab('c_bpartner', 'Business Partner'),
+          bankAccount: tab('c_bp_bankaccount', 'Bank Account'),
+          locationAddress: tab('c_bpartner_location', 'Location/Address'),
+        },
+      },
+      backendContract: {
+        entities: {},
+        endpoints: ['businessPartner', 'bankAccount', 'locationAddress'].map((entity) => ({ entity, method: 'POST' })),
+        processEndpoints: [],
+      },
+    };
+    const child = (tableName) => ({
+      tableName,
+      fields: [
+        { name: 'id', type: 'id', visibility: 'system', columnName: `${tableName}_id` },
+        { name: 'businessPartner', type: 'foreignKey', visibility: 'system', reference: { targetTable: 'c_bpartner', keyColumn: 'c_bpartner_id' } },
+      ],
+    });
+    mkdirSync(join(root, 'contacts'), { recursive: true });
+    writeFileSync(join(root, 'contacts', 'contract.json'), JSON.stringify(contract));
+    writeFileSync(join(root, 'contacts', 'schema-raw.json'), JSON.stringify({
+      entities: [
+        { tableName: 'c_bpartner', fields: [{ name: 'id', type: 'id', visibility: 'system', columnName: 'c_bpartner_id' }] },
+        child('c_bp_bankaccount'),
+        child('c_bpartner_location'),
+      ],
+    }));
+    mkdirSync(join(root, 'docs'), { recursive: true });
+    writeFileSync(join(root, 'docs', 'contacts.md'), '# Contacts\n\n## Intent\nAgreed in ETP-99.\n\n## What this window should allow\n- Create a contact\n- Merge contacts (Jira thread)\n\n## Next\n');
+  });
+
+  after(() => rmSync(root, { recursive: true, force: true }));
+
+  it('does not publish the bank account tab, but keeps the other linked children', async () => {
+    const manifest = await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') });
+    assert.deepEqual(Object.keys(manifest.entities).sort(), ['contacts', 'contacts-locationAddress']);
+    assert.ok(manifest.policy.excludedChildTabs.includes('^bank account$'));
+  });
+
+  it('publishes no internal reference and falls back to the default summary', async () => {
+    const { functional } = (await generateManifest({ artifactsRoot: root, functionalDocsRoot: join(root, 'docs') })).entities.contacts;
+    assert.equal(functional.functionalSummary, 'Public API resource for the Contacts window.');
+    assert.deepEqual(functional.functionalCapabilities, ['Create a contact']);
   });
 });

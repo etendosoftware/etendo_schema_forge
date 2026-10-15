@@ -37,9 +37,21 @@ const excludedWindows = new Set([
   'stock-reservation',
   'time-tracking',
   'warehouse-picking-list',
+  // Legacy artifacts with no NeoServlet spec (no ETGO_SF_SPEC row): every
+  // request to them answers "Spec not found", so publishing them would
+  // advertise resources that cannot work.
+  'document',
+  'project',
+  'uom',
 ]);
 
-const excludedChildTabs = [/accounting/i];
+const excludedChildTabs = [
+  /accounting/i,
+  // Bank accounts of a business partner. Their identifiers are excluded
+  // fields, and what remains has no legitimate use on its own; the tab comes
+  // back when the team that owns banking data decides on it.
+  /^bank account$/i,
+];
 
 export const fiscalMonitorWindows = new Set([
   'monitor-verifactu',
@@ -52,8 +64,11 @@ export const fiscalMonitorWindows = new Set([
 // the safety net for values that are visible to a logged-in user but must not
 // be readable or writable by an external integration.
 export const neverExposedFields = new Set([
-  // Tenant ownership is derived from the API key, never chosen by the caller.
+  // Tenant and organization ownership come from the API key, never from the
+  // caller. NeoServlet also drops `organization` on writes; this keeps it out
+  // of the contract too.
   'client',
+  'organization',
   // Grants a contact access to the customer portal: a security decision that
   // stays in the application.
   'grantPortalAccess',
@@ -70,11 +85,21 @@ export const neverExposedFields = new Set([
   'etblkpBulkposting',
 ]);
 
-// Legacy artifacts that are published without an extracted schema-raw.json.
-// Every other published window needs it: child resources, `id` and `updated`
-// come from it. schema-raw.json is gitignored, so a clean checkout lacks it and
-// would silently produce a degraded manifest; generation fails instead.
-export const artifactsWithoutRawSchema = new Set(['document', 'project', 'uom']);
+// Internal references must not reach the public OpenAPI document: the
+// functional texts are written for the team and may cite tickets or people.
+const internalReference = /\bETP-\d+\b|\bjira\b/i;
+
+// Keeps the functional text that is safe to publish: capability lines that cite
+// an internal reference are dropped, and so are such sentences of the summary.
+export function publicFunctionalText({ summary, capabilities }) {
+  return {
+    summary: summary
+      .split(/(?<=[.!?])\s+/)
+      .filter((sentence) => !internalReference.test(sentence))
+      .join(' '),
+    capabilities: capabilities.filter((capability) => !internalReference.test(capability)),
+  };
+}
 
 // An entity is curated when at least one of its fields declares
 // `publicApi.exposed: true`. A curated entity publishes exactly its curation.
@@ -264,6 +289,11 @@ export function buildEntity({ specName, entityName, contract, functional, parent
   // source to the actual NEO response key.
   if (fields.id) fields.id.internalPath = 'id';
 
+  // A resource with nothing to write is read-only: create, update and delete
+  // would bypass the processes that own those rows (matching, tax recompute).
+  const hasWritableField = Object.values(fields).some((field) => field.direction !== 'out');
+  if (!hasWritableField) operations = operations.filter((operation) => operation === 'GET' || operation === 'LIST');
+
   return {
     publicName: publicName(specName, entityName, contract.frontendContract.window.primaryEntity),
     specName,
@@ -319,7 +349,7 @@ export async function generateManifest({
     } catch {
       rawContract = null;
     }
-    if (!rawContract && !artifactsWithoutRawSchema.has(entry.name)) {
+    if (!rawContract) {
       throw new Error(
         `Missing ${join(artifactsRoot, entry.name, 'schema-raw.json')}. It is gitignored, so a clean `
         + 'checkout does not have it; without it the manifest loses child resources and `updated`. '
@@ -377,11 +407,16 @@ export async function generateManifest({
         const intent = markdown.match(/^## Intent\n([\s\S]*?)(?=\n## )/m)?.[1]?.trim();
         if (intent) functional.functionalSummary = intent.split(/\n\s*\n/)[0].replace(/\s+/g, ' ');
         const capabilities = markdown.match(/^## What this window should allow\n([\s\S]*?)(?=\n## )/m)?.[1] ?? '';
-        functional.functionalCapabilities = capabilities
-          .split('\n')
-          .map((line) => line.match(/^[-*]\s+(.*)$/)?.[1]?.trim())
-          .filter(Boolean)
-          .slice(0, 8);
+        const published = publicFunctionalText({
+          summary: functional.functionalSummary,
+          capabilities: capabilities
+            .split('\n')
+            .map((line) => line.match(/^[-*]\s+(.*)$/)?.[1]?.trim())
+            .filter(Boolean),
+        });
+        functional.functionalSummary = published.summary
+          || `Public API resource for the ${functional.functionalName} window.`;
+        functional.functionalCapabilities = published.capabilities.slice(0, 8);
         functional.functionalDoc = functionalPath;
       } catch {
         // Keep the generated resource available, but make the missing guide
