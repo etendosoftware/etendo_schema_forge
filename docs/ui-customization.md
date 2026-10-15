@@ -638,13 +638,15 @@ generator compiles into the `listViewOptions` prop it passes to `ListView`),
 `hideBulkDelete` has **no decisions.json/generator wiring yet** — that
 compilation step lives in the generator (`schema_forge_core`, out of scope for
 this sub-task). Today the only way to set it is to pass `listViewOptions`
-directly from a hand-written `windows/custom/{window}/index.jsx` wrapper, the
-same way `contacts` does it. **That object REPLACES — it does not merge with —
+directly from a hand-written `windows/custom/{window}/index.jsx` wrapper (no
+window does so today — `contacts`, the only former user, migrated to the
+generic action in ETP-5758). **That object REPLACES — it does not merge with —
 the `listViewOptions` the generated page already passes to `ListView`**, so the
 wrapper must repeat every flag the generated page sets (`hidePrint`,
 `hideCounter`, `hideLink`, …) alongside `hideBulkDelete`, or those get silently
-dropped. See `tools/app-shell/src/windows/custom/contacts/index.jsx` for the
-canonical example.
+dropped. `tools/app-shell/src/windows/custom/contacts/index.jsx` shows the
+replace-not-merge pattern (it repeats the generated flags, without
+`hideBulkDelete`).
 
 > **ETP-4644:** the selection bar's "Vista Previa" (eye) button — and its
 > `listViewOptions.hideEye` / `hideEyeCount` opt-out flags — were removed
@@ -652,13 +654,15 @@ canonical example.
 > apply to any window, so it is gone unconditionally, with no flag needed or
 > supported anymore.
 
-**Known gap — `contacts`:** `contacts` sets `hideBulkDelete: true`, but this
-does **not** mean "this window has no bulk delete." `contacts` has its own,
-older bulk-delete affordance (a trash + X button pair rendered via
-`selectionBarRightActions`, predating this mechanism) that was **not**
-unified with `useBulkRowDelete` in this sub-task — that migration is tracked
-as a follow-up. Read `hideBulkDelete: true` on a window as "has a different,
-not-yet-migrated bulk-delete," never as "has none."
+**`contacts` migrated (ETP-5758):** `contacts` used to set `hideBulkDelete: true`
+and render its own, older bulk delete (a trash button via
+`selectionBarRightActions` plus its own confirm dialog). That dialog closed
+before the deletes ran and left the trash button enabled, so a user could
+launch several batches over the same rows. It now uses the generic action,
+whose dialog stays open and read-only (buttons disabled, no Esc/overlay close)
+until the batch settles, while the toolbar button is `disabled={bulkDeleting}`.
+A window that opts out with `hideBulkDelete` and rolls its own bulk delete must
+give it the same in-flight guard.
 
 **`listViewOptions.hideListBar` gates only the IDLE list bar — never the
 selection bar (ETP-4658 regression fix).** `hideListBar` exists for windows whose
@@ -963,7 +967,7 @@ auto-inserted after each):
 
 Because the shell no longer provides its own cancel/X affordance for callers
 to duplicate, any caller migrating from the old `LinesSelectionBar` (or a
-hand-rolled bar, like `contacts`' `selectionBarRightActions` and Financial
+hand-rolled bar, like `contacts`' former `selectionBarRightActions` and Financial
 Accounts' `BulkDeleteSelectionBar`) should **drop its own standalone X
 button** — `SelectionToolbar` always renders one as the trailing segment.
 

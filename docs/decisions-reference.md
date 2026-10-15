@@ -213,7 +213,7 @@ regressions were caught during review because of this split, with two different 
   (`sales-order`, `sales-quotation`, `sales-invoice`, `purchase-order`); only the detail-view
   `hidePrintWhen` gate applies anywhere now. `listViewOptions.hidePrint` remains legitimately
   in use elsewhere for non-document master-data windows with their own unrelated reason to
-  suppress print (e.g. `contacts`, alongside `hideCounter`/`hideLink`/`hideBulkDelete`) — but
+  suppress print (e.g. `contacts`, alongside `hideCounter`/`hideLink`) — but
   for the sales/purchase document windows specifically, before reintroducing it, re-check
   whether the list-level suppression is genuinely intended (product decision) rather than an
   accidental carry-over from an unrelated `hidePrintWhen` change, per the pitfall above.
