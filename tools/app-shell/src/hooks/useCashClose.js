@@ -57,6 +57,8 @@ function useNeoPost(action) {
         const err = new Error(message);
         err.status = json?.error?.status ?? res.status;
         err.messageKeys = extractBackendMessageKeys(json);
+        // ETP-5577 — the date a period refusal is about, when it is not the close's own.
+        err.periodDate = json?.error?.periodDate;
         throw err;
       }
       return json?.response?.data ?? {};

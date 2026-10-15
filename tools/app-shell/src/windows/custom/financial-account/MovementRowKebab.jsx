@@ -15,7 +15,7 @@ import {
 import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
 import { resolveMovementDeleteBlock, resolveMovementReactivateBlock, movementHasUndoableState } from './movementActionEligibility.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, extractBackendMessageKeys } from '@/lib/backendErrors.js';
 import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -35,7 +35,7 @@ async function callTransactionAction(apiFetch, url, token) {
   const body = await res.json().catch(() => null);
   const nested = body?.response?.data?.[0];
   const message = nested?.message ?? body?.response?.message ?? body?.message;
-  const messageKeys = nested?.messageKeys ?? body?.messageKeys;
+  const messageKeys = extractBackendMessageKeys(nested) ?? extractBackendMessageKeys(body);
   const success = res.ok && (nested?.success ?? body?.success ?? true);
   return { success, message, messageKeys };
 }

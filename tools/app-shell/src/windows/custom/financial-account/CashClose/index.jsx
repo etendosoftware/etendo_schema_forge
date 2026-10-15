@@ -102,13 +102,20 @@ export function CashCloseTab({ account, onCloseSuccess, windowReadOnly = false }
 
   // The handler's rejections are hardcoded English literals with no AD_Message behind them, so
   // they have to be mapped to the app's own i18n before reaching a toast.
-  const errorMessage = (err) =>
-    translateBackendError(err?.message, ui, { messageKeys: err?.messageKeys })
-    || ui('financeAccountCashCloseError');
+  // ETP-5577 — the text route first: a refusal that names a movement in a closed period keeps
+  // that sentence; the key only words the generic refusal of the close date.
+  const errorMessage = (err) => {
+    const byText = translateBackendError(err?.message, ui);
+    if (byText && byText !== err?.message) return byText;
+    return translateBackendError(err?.message, ui, { messageKeys: err?.messageKeys })
+      || ui('financeAccountCashCloseError');
+  };
 
-  // ETP-5577 — a close refused for a period that is not open offers the calendar of its date.
+  // ETP-5577 — a close refused for a period that is not open offers the calendar of its date:
+  // the blocking movement's when the backend names one, else the close's.
   const toastError = (err) => {
-    const recovery = periodNotAvailableToastOptions(err?.messageKeys, ui, { date: statementDate });
+    const recovery = periodNotAvailableToastOptions(err?.messageKeys, ui,
+      { date: err?.periodDate ?? statementDate });
     if (Object.keys(recovery).length > 0) toast.error(errorMessage(err), recovery);
     else toast.error(errorMessage(err));
   };
