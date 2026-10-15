@@ -11,9 +11,13 @@ import { resolveTabIcon } from './tabIcons.js';
  */
 export default function TabStripButton({
   iconKey, label, count, isActive, onClick,
-  paddingY = 'py-2.5', showHoverLine = false, indicatorCls, tMenu, testId, disabledHint = null,
+  paddingY = 'py-2.5', showHoverLine = true, indicatorCls, tMenu, testId, disabledHint = null,
+  hoverDarkText = false,
 }) {
-  const defaultCls = 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full';
+  const defaultGeometry = 'absolute bottom-0 left-2 right-2 h-0.5 rounded-full';
+  const effectiveIndicatorGeometry = indicatorCls
+    ? indicatorCls.replace(/\bbg-\S+/g, '').trim()
+    : defaultGeometry;
   const disabled = disabledHint != null;
   return (
     <button
@@ -24,7 +28,7 @@ export default function TabStripButton({
       className={[
         `${showHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${paddingY} text-sm font-medium transition-colors relative`,
         isActive ? 'text-foreground' : 'text-muted-foreground',
-        !isActive && !disabled && 'hover:text-foreground',
+        !isActive && !disabled && hoverDarkText && 'hover:text-foreground',
         disabled && 'opacity-50 cursor-not-allowed',
       ].filter(Boolean).join(' ')}
     >
@@ -37,12 +41,13 @@ export default function TabStripButton({
       )}
       {showHoverLine ? (
         <span className={[
-          'absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-colors',
+          effectiveIndicatorGeometry,
+          'transition-colors',
           isActive ? 'bg-foreground' : 'bg-transparent',
           !isActive && !disabled && 'group-hover:bg-muted-foreground/30',
         ].filter(Boolean).join(' ')} />
       ) : (
-        isActive && <span className={indicatorCls || defaultCls} />
+        isActive && <span className={indicatorCls || `${defaultGeometry} bg-foreground`} />
       )}
     </button>
   );

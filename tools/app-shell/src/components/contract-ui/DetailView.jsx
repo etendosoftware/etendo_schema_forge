@@ -1041,7 +1041,7 @@ export function DetailView({
   primaryTabsVariant = 'default',
   refetchAfterSave = false,
   secondaryTabsPaddingY = 'py-2.5',
-  secondaryTabsShowHoverLine = false,
+  secondaryTabsShowHoverLine = true,
   tabsSeparator = false,
   saveBeforeProcesses = false,
   // Toolbar order only: when true, Save renders to the LEFT of the process buttons, so the
