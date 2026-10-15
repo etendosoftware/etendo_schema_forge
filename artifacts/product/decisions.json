@@ -18,7 +18,6 @@
     "formCardPadding": "px-2",
     "compactSidebarPadding": true,
     "tabsBarPaddingX": "px-2",
-    "primaryTabsVariant": "pill",
     "toolbarPaddingX": "px-2",
     "toolbarBorderBottom": true,
     "autoSaveOnBlur": true,
@@ -41,10 +40,12 @@
         "M_Product_Category_ID": "Categoría",
         "ProductType": "Tipo",
         "Value": "Código",
+        "IsStocked": "Almacenable",
         "DateFrom": "Fecha de inicio",
         "DateTo": "Fecha de expiración"
       },
       "es_AR": {
+        "IsStocked": "Almacenable",
         "DateFrom": "Fecha de inicio",
         "DateTo": "Fecha de expiración"
       }
@@ -53,10 +54,6 @@
     "customComponents": {
       "subHeader": "ProductCostBanner"
     },
-    "primaryTabs": [
-      { "key": "general", "label": "General" },
-      { "key": "additionalInfo", "label": "Additional Info", "panel": "ProductAdditionalInfoPanel" }
-    ],
     "secondaryTabs": {
       "costing": {
         "tabOrder": 500,
@@ -135,7 +132,7 @@
         "description": {
           "type": "textarea",
           "section": "principal",
-          "seq": 7,
+          "seq": 10,
           "span": 3,
           "publicApi": { "exposed": true, "name": "description", "type": "passthrough", "handlerId": null }
         },
@@ -172,30 +169,36 @@
           "type": "image",
           "inline": false,
           "section": "principal",
-          "seq": 8
+          "seq": 11
         },
         "taxCategory": {
-          "section": "other",
+          "section": "principal",
+          "seq": 6,
           "displayLogic": null
         },
         "brand": {
+          "form": false,
           "section": "other"
         },
         "attributeSet": {
+          "form": false,
           "section": "other"
         },
         "uPCEAN": {
           "searchable": true,
+          "form": false,
           "section": "other",
           "displayLogic": null
         },
         "sale": {
           "grid": false,
+          "form": false,
           "section": "other",
           "displayLogic": null
         },
         "purchase": {
           "grid": false,
+          "form": false,
           "section": "other",
           "displayLogic": null
         },
@@ -226,23 +229,28 @@
           "publicApi": { "exposed": true, "name": "stock", "type": "passthrough", "handlerId": null }
         },
         "stocked": {
-          "section": "other",
+          "section": "principal",
+          "seq": 7,
           "readOnlyLogic": null,
-          "displayLogic": null
+          "displayLogic": null,
+          "displayLogicJs": "record.productType === 'I'"
         },
         "mProductStatusID": {
           "reference": "ProductStatus",
+          "form": false,
           "section": "other"
         },
         "returnable": {
-          "section": "other",
-          "displayLogic": null
+          "section": "principal",
+          "seq": 8,
+          "displayLogic": null,
+          "displayLogicJs": "record.productType === 'I'"
         },
         "active": {
           "visibility": "editable",
           "grid": false,
           "section": "principal",
-          "seq": 6,
+          "seq": 9,
           "readOnlyLogic": null,
           "displayLogic": null
         },
@@ -263,10 +271,12 @@
         },
         "weight": {
           "visibility": "editable",
+          "form": false,
           "section": "other"
         },
         "uOMForWeight": {
           "visibility": "editable",
+          "form": false,
           "section": "other",
           "reference": "UOM",
           "inputMode": "selector"

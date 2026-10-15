@@ -73,7 +73,7 @@ const columns = [
   //   - `backendSortKey` / `backendFilterKey` map the display key to that property
   //     (the column `key` is display-only, for React + render). The price keys are
   //     'salePrice'/'purchasePrice', NOT 'sale'/'purchase': those names belong to the
-  //     contract's IsSold/IsPurchased booleans (see ProductAdditionalInfoPanel), and
+  //     contract's IsSold/IsPurchased booleans (hidden Sale/Purchase flags), and
   //     reusing them here made one key mean two things in the same window — which
   //     the F19 validator rule reports as a required-flag divergence.
   //   - `filterMode: 'numeric'` so the advanced filter offers numeric operators
