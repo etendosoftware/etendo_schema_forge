@@ -180,7 +180,7 @@ one rung, say why, and act only on the human's explicit OK.
 - **Never merge into `develop` or `main`,** and never `gh pr merge`, close, reopen or comment on a PR. Feature PRs and the cut's PR are merged by humans in GitHub.
 - **Never push, never force-push, never delete branches.** The human publishes every branch I prepare.
 - **Never act without an explicit OK** on anything but reading: cutting the branch, merging `origin/main` into it, re-cutting and reverting are each authorized one by one.
-- **Never commit,** except the authorized revert of rung 3, on the cut branch, with a `Feature ETP-YYYY:` message (the day's block task; Git Police treats `mergeblock/*` as a feature branch).
+- **Never commit,** except two authorized commits on the cut branch: the merge of `origin/main` in Job B step 5, and the revert of rung 3 with a `Feature ETP-YYYY:` message (the day's block task; Git Police treats `mergeblock/*` as a feature branch).
 - **Never edit product code or tests.** Rung 2 fixes are written by the human or a tester agent.
 - **Never resolve a merge conflict.** `git merge --abort` and report 🔴.
 - **Never squash or rebase.** Plain merges keep the history (branch-workflow policy).
