@@ -57,7 +57,9 @@ MANIFEST_VERSION = 1
 FRESHNESS_STATUSES = ("dirty", "unverified", "clean", "fresh", "unknown")
 #: What one check's outcome makes of the whole environment.
 _CHECK_STATUS = {"dirty": "dirty", "unverified": "unverified", "leftover": "clean", "ok": "fresh"}
-#: `detail` of an entity whose list tool the live catalogue does not carry.
+#: `reason` of a check whose list / read tool the live catalogue does not carry.
+#: The ONLY `unverified` cause that does not block `fresh` (plan §9 q14,
+#: decided 2026-10-15): the entity is listed under `unverifiable` instead.
 TOOL_NOT_OFFERED = "tool not offered"
 
 #: A harness marker anywhere in a value: `suite.attempt_marker` writes
@@ -296,7 +298,7 @@ def new_seed_id() -> str:
 
 
 async def verify_baseline(fixture: Fixture, platform: str, call: CallFn,
-                          manifest: dict[str, Any] | None) -> dict[str, Any]:
+                          manifest: dict[str, Any] | None, *, tools: set[str] | None = None) -> dict[str, Any]:
     """Read every baseline record back through the MCP (plan §5.4).
 
     Per record: `ok`, `missing` (find returns no such row), `duplicated` (more
@@ -305,6 +307,11 @@ async def verify_baseline(fixture: Fixture, platform: str, call: CallFn,
     (no `find` on this platform, or the read failed). The status is `dirty` if
     any record is missing / duplicated / changed / replaced, else `unverified`
     if any is unverified, else `ok`.
+
+    `tools` is the live catalogue: a `find` whose tool it does not carry is not
+    called — the record is `unverified` with `reason: "tool not offered"`, its
+    id from the seed manifest, and the run the vendor adds the tool it is read
+    for real. None (no catalogue known) calls every `find`.
 
     `fixtureHash` covers the fixture file and the values read back — NOT the
     ids, which differ after every re-initialization, so the two runs of a
@@ -320,6 +327,13 @@ async def verify_baseline(fixture: Fixture, platform: str, call: CallFn,
             records[rec] = {"status": "unverified", "id": ids[rec],
                             "detail": "this platform's MCP cannot read the record back; id from the seed manifest",
                             "observed": None}
+            continue
+        if tools is not None and plan.find.tool not in tools:
+            ids[rec] = seeded.get(rec)
+            records[rec] = {"status": "unverified", "id": ids[rec], "observed": None,
+                            "tool": plan.find.tool, "reason": TOOL_NOT_OFFERED,
+                            "detail": f"{TOOL_NOT_OFFERED}: {plan.find.tool} is not in the live catalogue; "
+                                      f"id from the seed manifest"}
             continue
         table = fixture.table(ids)
         try:
@@ -471,6 +485,13 @@ async def assess_freshness(
     Status: the most severe across checks, in FRESHNESS_STATUSES order —
     dirty > unverified > clean > fresh.
 
+    One exception (plan §9 q14, decided 2026-10-15): a check whose ONLY problem
+    is "tool not offered" does not block `fresh`. It counts as ok for the
+    status and is listed under `unverifiable` ({entity, tool, reason}), so an
+    official run says what it could not see. Every other `unverified` cause
+    still blocks, and at least one document / master-data check must actually
+    have run: a catalogue that offers none of them proves nothing.
+
     `baseline` None means "not known" (the suite has no fixture): a master-data
     row that may be a baseline record is then `unverified`, never `dirty`. A
     caller that KNOWS nothing is seeded yet (the seed preflight) passes the
@@ -483,21 +504,26 @@ async def assess_freshness(
         "fixtureHash": (baseline or {}).get("fixtureHash"),
     }
     if checklist is None:
-        return {"status": "unknown", **base, "checklist": None,
+        return {"status": "unknown", **base, "unverifiable": [], "checklist": None,
                 "details": {"reason": f"no fixtures/fresh.<platform>.yaml for this platform"}}
 
     async def read(tool: str, args: dict[str, Any]) -> tuple[Any, str | None]:
-        if tool not in tools:
-            return None, f"{TOOL_NOT_OFFERED}: {tool} is not in the live catalogue"
         try:
             return await call(tool, args or {}), None
         except Exception as exc:  # noqa: BLE001 - recorded as unverified, never clean
             return None, f"{type(exc).__name__}: {exc}"
 
+    def not_offered(entry: dict[str, Any]) -> dict[str, Any]:
+        return {**entry, "status": "unverified", "reason": TOOL_NOT_OFFERED,
+                "detail": f"{TOOL_NOT_OFFERED}: {entry['tool']} is not in the live catalogue"}
+
     markers: list[dict[str, Any]] = []
     documents = []
     for doc in checklist.documents:
         entry = {"name": doc["name"], "tool": doc["tool"]}
+        if doc["tool"] not in tools:
+            documents.append(not_offered(entry))
+            continue
         payload, error = await read(doc["tool"], doc.get("args") or {})
         if error:
             documents.append({**entry, "status": "unverified", "detail": error})
@@ -528,6 +554,9 @@ async def assess_freshness(
     master = []
     for ent in checklist.master_data:
         entry = {"name": ent["name"], "tool": ent["tool"]}
+        if ent["tool"] not in tools:
+            master.append(not_offered(entry))
+            continue
         payload, error = await read(ent["tool"], ent.get("args") or {})
         if error:
             master.append({**entry, "status": "unverified", "detail": error})
@@ -563,12 +592,27 @@ async def assess_freshness(
                        **({"detail": detail} if detail else {})})
 
     seed = _manifest_check(target, fixture, baseline, manifest)
-    checks = ([d["status"] for d in documents] + [m["status"] for m in master]
-              + [seed["status"]] + ["leftover" if markers else "ok"])
+    unverifiable = [{"check": kind, "entity": c["name"], "tool": c["tool"], "reason": TOOL_NOT_OFFERED}
+                    for kind, entries in (("documents", documents), ("masterData", master))
+                    for c in entries if c.get("reason") == TOOL_NOT_OFFERED]
+    unverifiable += [{"check": "baseline", "entity": rec, "tool": r["tool"], "reason": TOOL_NOT_OFFERED}
+                     for rec, r in ((baseline or {}).get("records") or {}).items()
+                     if r.get("reason") == TOOL_NOT_OFFERED]
+
+    def effective(check: dict[str, Any]) -> str:
+        return "ok" if check.get("reason") == TOOL_NOT_OFFERED else check["status"]
+
+    checks = ([effective(d) for d in documents] + [effective(m) for m in master]
+              + [effective(seed)] + ["leftover" if markers else "ok"])
+    ran = [c for c in documents + master if c.get("reason") != TOOL_NOT_OFFERED]
+    if not ran:
+        checks.append("unverified")  # nothing was read: tool-not-offered everywhere proves nothing
     status = min((_CHECK_STATUS[c] for c in checks), key=FRESHNESS_STATUSES.index)
     return {
         "status": status,
         **base,
+        # What an official run could not see (plan §9 q14): listed, never hidden.
+        "unverifiable": unverifiable,
         "checklist": {"file": checklist.path.name, "sha": checklist.sha,
                       "allowlistCaptured": checklist.allowlist_captured},
         "details": {
@@ -605,6 +649,11 @@ def _manifest_check(target: dict[str, Any], fixture: Fixture | None, baseline: d
     if problems:
         return {"status": "dirty", "detail": "; ".join(problems)}
     if baseline and baseline["status"] == "unverified":
+        unread = [r for r in baseline["records"].values() if r["status"] == "unverified"]
+        if all(r.get("reason") == TOOL_NOT_OFFERED for r in unread):
+            # The manifest holds (above); only the read-back tool is missing.
+            return {"status": "unverified", "reason": TOOL_NOT_OFFERED,
+                    "detail": "some baseline records cannot be read back: their read tool is not offered"}
         return {"status": "unverified", "detail": "some baseline records cannot be read back on this platform"}
     return {"status": "ok", "detail": None}
 

@@ -837,7 +837,7 @@ runs/<compareId>/                 # <UTC>-cmp-<hex4>, e.g. 20261014T140233-cmp-a
 
 ```jsonc
 {
-  "compareSchemaVersion": 1,          // 2 since S6 — see *baseline and freshness* below
+  "compareSchemaVersion": 1,          // 2 since S6, 3 since 2026-10-15 — see *baseline and freshness* below
   "compareId": "20261014T140233-cmp-a3f1",
   "startedAt": "2026-10-14T14:02:11.123Z", "finishedAt": "…",   // finishedAt null while running
   "subject": "local",                  // --subject, default the first of --targets
@@ -1002,11 +1002,14 @@ refuses only what it can **prove**: documents, master-data rows it can show are 
 judge — an entity whose list tool the live catalogue does not offer, a failed read, a partial page,
 master data while `allowlistCaptured: false` — is `unverified`: printed to stderr, one line per
 check, and the seed goes on (refusing would make a platform without list tools unseedable; the
-comparison reads the same checks as `unverified`, so it stays unofficial). The seed writes the
+comparison reads the same checks as `unverified` — unofficial, except a "tool not offered" one, which
+is only listed, see *"Tool not offered" is listed, not blocking* below). The seed needs the
+fixture's **create** tools only: a `find` tool the target does not offer leaves its record
+`unverified` ("tool not offered") in the manifest's read-back, never refuses the seed. The seed writes the
 manifest `complete: false` with its `seedId` **before the first create** and replaces it only at the
 end: a failed create, a Ctrl-C, a cancellation or a session that fails while closing all leave it
 incomplete (with the ids created so far), which blocks the next seed and makes the target dirty. A
-record the platform cannot read back (Holded has no `find`) is protected only by that manifest —
+record the platform cannot read back (Holded: its `find` tool is not offered) is protected only by that manifest —
 never delete a seeded target's manifest. The converse holds after a **re-initialization**: the manifest then
 describes an environment that no longer exists. `INITIALIZED_AT` is the explicit re-initialization
 claim: when it differs from the manifest's `initializedAt`, the seed treats the target as a new
@@ -1025,7 +1028,10 @@ offer prints `NOT CAPTURED: tool not offered: <tool>` and is never called; a fai
 
 **Baseline verify** (preflight, every comparison and every v2 single run whose suite has a
 fixture). Per record: `ok` | `missing` | `duplicated` | `changed` (an `expect` value differs) |
-`replaced` (found under another id than seeded) | `unverified` (no `find`, or the read failed).
+`replaced` (found under another id than seeded) | `unverified` (no `find`, the read failed, or —
+with `reason: "tool not offered"` and `tool` — the `find` tool is absent from the live catalogue:
+it is not called and the id comes from the seed manifest; the run the vendor adds it, the record is
+read for real). Holded's records name the would-be `list_contacts` / `list_products` as `find`.
 `missing`, `duplicated` or `changed` **stops the run** (exit 2, nothing written); so does a
 `{{fixture.<r>.id}}` that has no id on that target (not seeded). `fixtureHash` = sha256 of the
 fixture file sha, the platform and, per record, its status and the values read back — **not the
@@ -1048,7 +1054,8 @@ the MCP only). Four checks (plan §5.9), each reaching `ok`, `leftover`, `unveri
 4. **baseline** — the seed manifest exists, is complete, matches the target URL, the suite's
    fixture and sha, and (when the baseline read back fully) the recomputed `fixtureHash`; the
    baseline read back without `missing/duplicated/changed/replaced`. Mismatch → `dirty`; no
-   manifest, no fixture, or an unreadable baseline → `unverified`.
+   manifest, no fixture, or an unreadable baseline → `unverified` (with `reason: "tool not
+   offered"` when every unread record is unread only because its `find` tool is absent).
 
 Anything that cannot be read — a tool absent from the live catalogue, a failed call, an unknown
 shape, a partial page (`totalRows` above the page, or a cursor page with `has_more: true`) — is
@@ -1066,8 +1073,25 @@ tool is looked up in the live `tools/list`: present → the check runs for real;
 adds is used on the next run with no edit, and one it removes degrades its entity to `unverified`.
 The old static `unverified:` list is gone; the loader refuses it with a pointer to this form.
 
-`compare.json` **v2** (`COMPARE_SCHEMA_VERSION` 1 → 2): `targets[].freshness` =
-`{status, checkedAt, initializedAt, seedId, fixtureHash, checklist: {file, sha, allowlistCaptured},
+**"Tool not offered" is listed, not blocking** (user decision, 2026-10-15, plan §9 q14). A check
+whose ONLY problem is "tool not offered" (`reason: "tool not offered"` on a document, master-data or
+baseline check) counts as `ok` for the status — provided everything else holds: every check that
+can run is `ok`, the seed manifest is complete and matches (check 4), and nothing is dirty or a
+leftover. Every other `unverified` cause still blocks `fresh`: a failed call, an unknown shape, a
+partial page, an uncaptured allowlist, no baseline to judge by, no manifest. At least one document
+or master-data check must actually run; when the catalogue offers none of them the status is
+`unverified` (a checklist that read nothing proves nothing). What could not be checked is recorded
+on the freshness record as `unverifiable: [{check, entity, tool, reason}]` (`check` =
+`documents` | `masterData` | `baseline`, `entity` = the checklist entity or the baseline record),
+whatever the final status. The official headline names the count per target, `OFFICIAL — N
+entities not verifiable on <target> (tools not offered)`, and the freshness table carries a *Not
+verifiable* column plus one line per entity. Such an entity is never among the `reasons` (why a
+target is not fresh). The live-catalogue rule above is unchanged: when the tool appears, the check
+runs for real and the entity leaves the list.
+
+`compare.json` **v2** (`COMPARE_SCHEMA_VERSION` 1 → 2; **v3** on 2026-10-15 adds
+`unverifiable[]`): `targets[].freshness` =
+`{status, checkedAt, initializedAt, seedId, fixtureHash, unverifiable[], checklist: {file, sha, allowlistCaptured},
 details: {documents[], masterData[], markers[], markerCount, baseline}}` (runs written before
 2026-10-15 may carry `declaredUnverified[]`; the report still reads it),
 `targets[].fixtureHash`, `pins.fixture` and `pins.fixtureHashes`. `summary.json` (summary v3,
@@ -1089,16 +1113,18 @@ placed by the stamp its `compareId` starts with; since that stamp had minute pre
 `MARKER_RE` accepts both stamps). A sibling whose `compare.json` or `run.json` is unreadable or not
 a JSON object is skipped. `status`: `changed` | `unchanged` | `noPrevious`
 (said so in `summary.md`) | `unknown` (this run recorded no tool list). `watched[]` flags every
-added or removed tool that a `notPossible.missingTools` entry or a freshness checklist entity of
-that target names (`namedBy`), because each such change can invalidate a declaration or turn a
+added or removed tool that a `notPossible.missingTools` entry, a freshness checklist entity or a
+baseline record's not-offered `find` of that target names (`namedBy`), because each such change can invalidate a declaration or turn a
 freshness check real. A capability the subject has and the reference lacks stays a capability win
 (`notPossible` → decision rule step 0); this section is what tells the reader when that changes.
 
 **Consequence with today's Holded catalogue.** Holded's MCP (2026-10-14) offers none of the list
-tools above, so those entities read `unverified` and a Holded target is at best `unverified` —
-**never `fresh`, so no comparison against it can be official** under D50 as written. Recorded as
-an open decision (plan §9 #14). Because the check follows the live catalogue, the day Holded ships
-those tools the same checklist proves them, with no edit.
+tools above, so those entities read "tool not offered". Until 2026-10-15 that kept a Holded target
+at best `unverified`, so no comparison against it could be official. Decided on 2026-10-15 (plan §9
+q14): those checks do not block `fresh`, so a freshly initialized and seeded Holded account can be
+`fresh`, and the run official, with its headline naming the entities not verifiable (*"Tool not
+offered" is listed, not blocking* above). Because the check follows the live catalogue, the day
+Holded ships those tools the same checklist proves them, with no edit.
 
 ### 6.2 Run metadata header (`run.json`, written before the first probe)
 
@@ -1408,22 +1434,24 @@ not implement is refused (`RuleMismatch`). Every summary records `rule.version`,
 `rule.parametersSha` and `rule.versionAtRun` (what `compare.json` declared), and the same block sits
 in `pins`.
 
-**`summary.json`** (`summarySchemaVersion` 4, `reportVersion` 4 — both started at 1 in S4; v2 added
+**`summary.json`** (`summarySchemaVersion` 5, `reportVersion` 5 — both started at 1 in S4; v2 added
 `selfReportedSuccess` (S5 review), v3 the freshness `seedId` / `fixtureHash` / `reasons` (S6), v4
-`catalogueChanges` (§6.1, 2026-10-15)): `kr` (subject vs reference, tasks,
+`catalogueChanges` (§6.1, 2026-10-15), v5 the freshness `unverifiable` (§6.1, plan §9 q14)): `kr` (subject vs reference, tasks,
 evaluated, wins split `byCapability` / `byMeasurement` for both sides, ties, `winRate` and its two
 halves, fragile count), `official` + `freshness` per target (official only when every target is
 `fresh`; a missing status is `unknown`; each target carries `status, checkedAt, initializedAt,
-seedId, fixtureHash, reasons`), `stumbleIndicators` per target (stumbles per counted
+seedId, fixtureHash, reasons, unverifiable`), `stumbleIndicators` per target (stumbles per counted
 attempt, tasks with any stumble), `tasks[]` (decision + both sides' items and per-attempt rows),
 `selfReportedSuccess`, `catalogueChanges` per target, `capabilityGaps`, `excluded`, `notEvaluable`,
 `backlog` (frictions by phase, suggestions by kind,
 verbatim; a legacy prose suggestion is `unclassified`), `cost` (per target: attempts incl.
 replacements, harness errors, loop and report tokens, attempts without usage, wall time), `pins`.
 
-**`summary.md`** is the projection, in this order: headline with OFFICIAL / UNOFFICIAL and the KR
-split, the rule line (version, parameters sha, REPEAT, report version), *Freshness* (status table +
-one line per check that is not ok), *Tasks* (one row per task × target, or `not possible (<kind>):
+**`summary.md`** is the projection, in this order: headline with OFFICIAL / UNOFFICIAL (an official
+run with entities not verifiable: `OFFICIAL — N entities not verifiable on <target> (tools not
+offered)`) and the KR split, the rule line (version, parameters sha, REPEAT, report version),
+*Freshness* (status table with a *Not verifiable* count + one line per check that is not ok + one
+line per entity not verifiable), *Tasks* (one row per task × target, or `not possible (<kind>):
 <reason>` / `invalid declaration (…)` / `not evaluable: …` in place of the items; `(fragile)` next to
 the winner), *Stumble indicators*, *Capability gaps*, *Catalogue changes since the previous
 comparison*, *Success on the agent's word* (only when there is any), *Not counted* (excluded and
@@ -1614,7 +1642,7 @@ in a changelog.
 | D43 | **`--repeat N` runs each probe N times, each attempt in its own MCP session, conversation and `{{marker}}`; every attempt is kept as `probes/<id>/attempt-<n>.json`, never averaged away.** A harness-errored attempt does not count and is replaced after the planned ones, at most N replacements per probe; a preflight auth failure is never replaced. | 2026-10-14 | ETP-5750 S2; plan `2026-10-14-mcp-tests-reproducible-comparison-plan.md` §5.1. Variance was unmeasured (§11 q4). Replacing harness errors keeps a transient provider fault from shrinking N, and the cap keeps a deterministically broken probe from looping. `mcp-compare` defaults to 3 (D44). **Behaviour change (S3):** the exit code is 1 whenever any attempt has a `harnessError` — a replaced transient error, or an effect check that could not run (before S3 the latter exited 0). |
 | D45 | **A suite v2 probe has one vendor-neutral prompt and a block per platform** (`setup`, `teardown`, `expectEffect` + client-side `where`, `expectAnswer`, `expectOutcome: refused`, or `notPossible`). The prompt never names a tool — enforced at load and against every target's live catalogue at preflight; every block verifies or is `notPossible`; a write refusal must prove `expect: none`; a `where` path absent from every row is not verifiable. `where` compares number-like scalars by value and refuses a partial page. v1 suites are unchanged. | 2026-10-14 | ETP-5750 S5; plan §5.3. Narrows D34 again: still one post-condition, now per platform. Neutrality enforced, not hoped for, because a prompt that names one vendor's tool hands that vendor the task. |
 | D46 | **`expectAnswer` is a deterministic, versioned matcher over `finalAnswer`** (`runner/matcher.py`, `MATCHER_VERSION`, 4 as of 2026-10-15 — history in §4 *Suite v2*; a pin in `compare.json`): locale-tolerant numbers (Spanish and English) that skip ids, dates, clock times, document numbers (`Nº 10`), phone numbers and percentages, `near:` anchors bound to their nearest number, `percent:`, whole-word accent-insensitive text, `all` / `none`; small literal integers need an anchor. No LLM judge. | 2026-10-14 | ETP-5750 S5; plan §5.5. A judge adds its own variance to criterion 1 and puts a second model inside the measurement. Conservative false negatives accepted, as in D34. |
-| D50 | **Official numbers come only from a fresh run** (plan §5.9): baseline seeded through each platform's own MCP (`make mcp-seed`, manifest + `fixtureHash` without ids), verified at preflight (a missing/duplicated/changed record stops the run), and four freshness checks through the MCP only; anything unreadable is `unverified`, never clean; status dirty > unverified > clean > fresh; official only if every target is `fresh`; a stability run B must carry a new `seedId` on every target. | 2026-10-14 | ETP-5750 S6; plan §5.4, §5.9 and §9 decisions 2, 5 and 13. Freshness is proven through the same MCP the agent uses, because seeding or checking through REST would measure a different surface. Unreadable means unverified because a check that cannot see a table must not certify it empty. The hash leaves ids out so that a re-initialized pair compares equal on what matters. Consequence: with Holded's current catalogue no comparison is official (§6.1, S6 note). 2026-10-15: whether an entity is checkable is decided by the LIVE `tools/list` at each preflight, never by the checklist — each entity names the tool it would use, an absent one is `unverified` ("tool not offered"); and every summary reports the catalogue changes since the target's previous comparison (§6.1). |
+| D50 | **Official numbers come only from a fresh run** (plan §5.9): baseline seeded through each platform's own MCP (`make mcp-seed`, manifest + `fixtureHash` without ids), verified at preflight (a missing/duplicated/changed record stops the run), and four freshness checks through the MCP only; anything unreadable is `unverified`, never clean; status dirty > unverified > clean > fresh; official only if every target is `fresh`; a stability run B must carry a new `seedId` on every target. | 2026-10-14 | ETP-5750 S6; plan §5.4, §5.9 and §9 decisions 2, 5 and 13. Freshness is proven through the same MCP the agent uses, because seeding or checking through REST would measure a different surface. Unreadable means unverified because a check that cannot see a table must not certify it empty. The hash leaves ids out so that a re-initialized pair compares equal on what matters. 2026-10-15: whether an entity is checkable is decided by the LIVE `tools/list` at each preflight, never by the checklist — each entity (and each baseline record's `find`) names the tool it would use, an absent one is `unverified` ("tool not offered"); and every summary reports the catalogue changes since the target's previous comparison (§6.1). **2026-10-15, plan §9 q14 (user decision):** "tool not offered" alone does not block `fresh` — only if every check that can run is ok, the seed manifest is complete and matches, and nothing is dirty or leftover; every other `unverified` cause still blocks, and at least one document / master-data check must run. The entities are listed as `freshness.unverifiable` and named in the official headline (`OFFICIAL — N entities not verifiable on holded (tools not offered)`); `compare.json` v3, summary v5. Before that decision no comparison against Holded could be official. |
 | D49 | **"Not possible on this platform" is a first-class outcome**: declared per platform, checked against the live tools/list at preflight (`ok` / `invalidDeclaration` / `unchecked`), recorded as `not-possible.json`, never attempted and never worked around outside the MCP (no REST, no manual seeding). | 2026-10-14 | ETP-5750 S5; plan §5.10 and §9 decision 2. Declared rather than inferred because an agent cannot tell "does not exist" from "did not find it" (D38). |
 | D47 | **The decision rule is code (`runner/decide.py`, `RULE_VERSION`) and its thresholds are data** (the suite's `decision:` block, copied into `compare.json`, over `DEFAULT_PARAMETERS`). Every summary records the version, the parameters and their sha. | 2026-10-14 | ETP-5750 S4; plan §5.6. A KR figure without the rule that produced it is unreadable later, and a rule tweak must be re-appliable to an old run (`make mcp-report`) and visible in the diff. A declared `ruleVersion` the code does not implement is refused, never silently re-interpreted. |
 | D48 | **Metrics come only from `compare.json`, `run.json` and the probe files; `events.ndjson` is never read by the report.** | 2026-10-14 | ETP-5750 S4. Restates §6.5 rule 1 as a property of the report and guards it with a test that deletes the event files and asserts a byte-identical summary. |

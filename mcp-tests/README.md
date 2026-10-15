@@ -80,7 +80,8 @@ What each variable means:
 - **`CAPTURE=1`** — seeds nothing. On a freshly initialized, **not yet seeded** target it prints the
   master data initialization itself created, as `allow:` lists for `fixtures/fresh.<platform>.yaml`.
   Paste them, review them, set `allowlistCaptured: true`, and commit the checklist. Until that is
-  done for a platform, its master-data check reads `unverified` and no run on it can be official.
+  done for a platform, a master-data row it cannot explain reads `unverified` and no run on it can
+  be official.
 
 Exit codes: `0` ok · `1` the run completed but some attempt has a harness error · `2` refused before
 measuring anything (config, auth, preflight, a dirty or half-seeded target, an invalid stability
@@ -92,11 +93,16 @@ An **official** number needs every target `fresh` (D50): initialized for this co
 and with no other activity. Freshness is proven at preflight through each target's own MCP, never
 through REST or SQL. The order is always **initialize → seed → compare**.
 
-> **Holded cannot be `fresh` today.** Its MCP offers no list tool for contacts, products, sales
-> orders, estimates, proformas, purchase orders or waybills, so those checks read `unverified` and
-> every comparison against Holded is **UNOFFICIAL**. Whether to accept that is plan §9, open
-> question 14 — still undecided. The checks follow the *live* `tools/list`, so the day Holded adds
-> those tools they run for real with no edit. The workflow below is still the one to follow.
+> **Holded is `fresh` with entities it cannot list (plan §9 q14, decided 2026-10-15).** Its MCP
+> offers no list tool for contacts, products, sales orders, estimates, proformas, purchase orders
+> or waybills. A check whose *only* problem is "tool not offered" does not block `fresh`, as long
+> as every check that can run is ok, the seed manifest is complete and matches the target, and
+> nothing is dirty or a leftover. Those entities are listed, never hidden: the headline reads
+> `OFFICIAL — N entities not verifiable on holded (tools not offered)`. Every other reason a check
+> cannot be read (a failed call, an unknown payload, a partial page, an uncaptured allowlist, no
+> seed manifest) still makes the run **UNOFFICIAL**. The checks follow the *live* `tools/list`, so
+> the day Holded adds one of those tools it runs for real with no edit, and the entity drops off
+> the list.
 
 **Once per checklist** (when `allowlistCaptured: false`): initialize the environment, then run
 `make mcp-seed TARGET=<t> CAPTURE=1` *before* seeding, and commit the reviewed `allow:` lists.
@@ -157,7 +163,11 @@ reuses run A's `seedId` on any target. Concurrency may differ; it is shown, not 
 verdict text only, never tool results or the agent's final answer. Section by section:
 
 **Headline — official or not, and the KR split.** `OFFICIAL` only when every target is `fresh`;
-otherwise `UNOFFICIAL`, and the figure is still fully reported but is not a KR number. The KR line
+otherwise `UNOFFICIAL`, and the figure is still fully reported but is not a KR number. An official
+run whose targets could not check some entities because their MCP does not offer the tool says so:
+`OFFICIAL — 10 entities not verifiable on holded (tools not offered)`. Read it as official, with the
+listed entities taken on trust: their freshness rests on the account having been freshly
+initialized and seeded, not on a read. The KR line
 is *subject wins / evaluated tasks*, always split in two because they say different things about
 the product:
 
@@ -169,9 +179,13 @@ Ties count in the denominator; not-evaluable and excluded tasks do not. The next
 version, its parameters sha, `REPEAT` and the report version.
 
 **Freshness.** One row per target (`fresh` > `clean` > `unverified` > `dirty`, from least to most
-severe; `unknown` = no checklist), with the initialization instant and `seedId`, then one line per
-check that is not ok — e.g. `contacts: unverified — tool not offered: list_contacts …`. `clean` means
-only leftovers of earlier harness runs; it is a diagnostic label and never official.
+severe; `unknown` = no checklist), with the initialization instant, `seedId` and the number of
+entities it could not verify, then one line per check that is not ok — e.g. `invoices: unverified —
+RuntimeError: 503 …` — and one line per entity not verifiable, e.g. `holded: not verifiable —
+masterData contacts (list_contacts: tool not offered)` (`check` is `documents`, `masterData` or
+`baseline`, the last for a baseline record whose read-back tool is absent). A "tool not offered"
+entity is never a reason for not being `fresh`; it is only ever listed. `clean` means only leftovers
+of earlier harness runs; it is a diagnostic label and never official.
 
 **Tasks.** Two rows per task (subject, reference) with the nine items: success, consistency
 (successes/N), median calls, first-call success (k/N), unrecovered errors, self-corrected errors,

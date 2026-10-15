@@ -1,8 +1,9 @@
 # MCP tests — reproducible Etendo Go vs Holded comparison (ETP-5750) — Plan
 
 **Status:** S1–S6 implemented (ETP-5750, PR #1850, 2026-10-15); **S7 and S8 are out of scope of that
-PR** and not started (§7). User decisions of 2026-10-14 folded in (§9); **open question 14 (Holded
-freshness) is still undecided** and blocks any official number (§9). **Epic:** ETP-5339.
+PR** and not started (§7). User decisions of 2026-10-14 folded in (§9); question 14 (Holded
+freshness) was decided on 2026-10-15: "tool not offered" alone does not block `fresh` (§5.9, §9).
+**Epic:** ETP-5339.
 **Date:** 2026-10-14, last updated 2026-10-15.
 **Operator guide:** `mcp-tests/README.md` (prerequisites, commands, the official-run workflow, how
 to read `summary.md`).
@@ -392,6 +393,20 @@ initialized Holded account**. Proposed meaning and verification:
   An entity type the MCP cannot list is recorded as `unverified`, never assumed clean. That gap is
   confirmed on Holded (S6): its MCP lists no contacts, products, sales orders, estimates,
   proformas, purchase orders or waybills.
+- **"Tool not offered" does not block `fresh` (decided, §9 q14, 2026-10-15).** A check whose only
+  problem is that the entity's declared list/get tool is absent from the live catalogue does not
+  block `fresh`, provided every check that CAN run is ok, the seed manifest is complete and
+  matches the target, and nothing is dirty or a leftover. Every other `unverified` cause still
+  blocks: a call error, an unknown payload shape, a partial page, an uncaptured allowlist, no
+  manifest, a suite with no fixture. The target's status stays `fresh`, and its freshness record
+  lists what it could not check: `unverifiable: [{check, entity, tool, reason: "tool not
+  offered"}]`, `check` being `documents`, `masterData` or `baseline` (a baseline record whose
+  `find` tool is absent; Holded's fixture now names the would-be `list_contacts` /
+  `list_products`, as its checklist does). At least one document or master-data check must
+  actually run: a catalogue that offers none of them proves nothing and stays `unverified`. The
+  official headline says so — `OFFICIAL — N entities not verifiable on holded (tools not
+  offered)` — and the freshness table counts and lists them. The day a vendor adds such a tool
+  the live-catalogue rule below reads it for real, with no edit.
 - **Always against the LIVE catalogue (decided, 2026-10-15).** Vendors change their `tools/list`,
   so the checklist never declares what is unlistable. Each entity names the list/get tool it
   **would** use (Holded: `list_contacts`, `list_products`, `list_sales_orders`, `list_estimates`,
@@ -520,7 +535,8 @@ that PR, not started:**
   checklists exist but are **drafts**: never seeded on a fresh tenant, and `allowlistCaptured:
   false` on both platforms.
 - **S8 — the live official baseline and the acceptance pair.** No official comparison has been run.
-  It also depends on open question 14 (§9): with Holded's current catalogue no run can be official.
+  Question 14 (§9) is decided: with Holded's current catalogue a run can be official, its headline
+  naming the entities Holded's MCP cannot list.
 
 | # | Slice | Size | Depends on | Tests (tester-functional) |
 |---|---|---|---|---|
@@ -577,12 +593,8 @@ the new targets.
 | 11 | No token or time ceiling in v1: measure first. The first official baseline records the real cost (tokens, wall time), and that figure sets the ceiling later. Defaults: concurrency 4, REPEAT 3. | §5.6, §8 |
 | 12 | Frozen task 5 is split into `e-unknown-document` and `e-invalid-write`, so the seed suite has six probes. | §5.8, S7 |
 | 13 | Stability run B requires re-initializing both environments (local Etendo and Holded). `clean` is not accepted. | §5.9, S8 |
+| 14 | **Decided 2026-10-15.** A comparison can be OFFICIAL while Holded's MCP does not offer list tools for some entities. A freshness check whose only problem is "tool not offered" (the entity's declared list/get tool is absent from the live catalogue) does not block `fresh` — only if every check that can run is ok, the seed manifest is complete and matches, and nothing is dirty or leftover. Every other `unverified` cause (call error, unknown shape, partial page, uncaptured allowlist, no manifest) still blocks. The status stays `fresh`; the freshness record lists `unverifiable: [{check, entity, tool, reason: "tool not offered"}]`; the official headline reads `OFFICIAL — N entities not verifiable on <target> (tools not offered)` and the freshness table lists them. When such a tool appears, the live-catalogue rule runs the check for real. Raised in S6 (2026-10-14) with options (a) strict / (b) declared unverified set / (c) account creation date; this is a narrower form of (b) that needs no declared list, since the live catalogue decides. | §5.9, D50, design doc §6.1 |
 
 ### Still open — needs a user decision
 
-Until question 14 is decided the code behaves as option (a): D50 stays strict, and every comparison
-against Holded is reported **UNOFFICIAL**. That is the absence of a decision, not a choice of (a).
-
-| # | Question | Why it matters | Raised |
-|---|---|---|---|
-| 14 | **OPEN.** **Holded can never be `fresh` with its current MCP.** Contacts and products, the whole baseline, cannot be listed, so check 2 and the baseline read-back are `unverified` on Holded by construction, and D50 makes no comparison official. Options: (a) keep D50 strict and report every run as unofficial until Holded's MCP can list them; (b) accept a declared, versioned set of `unverified` entity types per platform as compatible with `fresh` (weaker: a dirty Holded account would pass); (c) prove freshness of Holded through the account's creation date plus an empty document check only. **Still open.** Since 2026-10-15 the checks follow the live catalogue, so under (a) Holded becomes provable the day its MCP offers those list tools, with no change here; and a capability Etendo's MCP has and Holded's lacks keeps counting as a capability win (`notPossible`, decision rule step 0). | S8 cannot produce an official number under (a) with today's catalogue. | S6, 2026-10-14 |
+None.

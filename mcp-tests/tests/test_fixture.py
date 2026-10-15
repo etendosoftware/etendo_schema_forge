@@ -97,8 +97,9 @@ class FixtureCase(unittest.TestCase):
     def write(self, name, text):
         (self.tmp / "fixtures" / name).write_text(textwrap.dedent(text), encoding="utf-8")
 
-    def verify(self, env, manifest=None, platform="etendo-go"):
-        return asyncio.run(fixtures.verify_baseline(fixtures.load_fixture("base"), platform, env.call, manifest))
+    def verify(self, env, manifest=None, platform="etendo-go", tools=None):
+        return asyncio.run(fixtures.verify_baseline(fixtures.load_fixture("base"), platform, env.call, manifest,
+                                                    tools=tools))
 
 
 class LoadFixtureTest(FixtureCase):
@@ -233,6 +234,23 @@ class VerifyBaselineTest(FixtureCase):
         self.assertEqual(result["ids"], {"customer": "H1", "product": "H2"})
         self.assertEqual(self.verify(Env(), platform="holded")["ids"], {"customer": None, "product": None})
 
+    def test_a_find_tool_the_live_catalogue_lacks_is_not_called_until_it_is_offered(self):
+        env = Env()
+        result = self.verify(env, manifest={"records": {"customer": "C1", "product": "P1"}}, tools={"etendo_create"})
+        self.assertEqual(result["status"], "unverified")
+        customer = result["records"]["customer"]
+        self.assertEqual((customer["status"], customer["reason"], customer["tool"]),
+                         ("unverified", fixtures.TOOL_NOT_OFFERED, "etendo_list"))
+        self.assertEqual(result["ids"], {"customer": "C1", "product": "P1"})  # from the manifest
+        self.assertEqual(env.calls, [])
+        # The vendor adds the tool: the same fixture, unedited, reads the record for real.
+        result = self.verify(env, tools={"etendo_create", "etendo_list"})
+        self.assertEqual(result["status"], "ok")
+        self.assertIn("etendo_list", [t for t, _a in env.calls])
+        # A read that fails is unverified with no such reason: it blocks `fresh`.
+        env.fail.add("product")
+        self.assertNotIn("reason", self.verify(env, tools={"etendo_list"})["records"]["product"])
+
 
 class FreshnessTest(FixtureCase):
     TARGET = {"name": "t", "url": "http://x/mcp"}
@@ -245,10 +263,12 @@ class FreshnessTest(FixtureCase):
                 "fixtureHash": baseline["fixtureHash"], "seedId": "s1", "initializedAt": "2026-10-20T09:00:00Z",
                 "records": baseline["ids"], **over}
 
-    def assess(self, env, manifest="default", checklist="etendo-go", tools=None, with_fixture=True):
+    def assess(self, env, manifest="default", checklist="etendo-go", tools=None, with_fixture=True,
+               baseline_tools=None):
         fx = fixtures.load_fixture("base") if with_fixture else None
         manifest = self.manifest(Env()) if manifest == "default" else manifest
-        baseline = asyncio.run(fixtures.verify_baseline(fx, "etendo-go", env.call, manifest)) if fx else None
+        baseline = asyncio.run(fixtures.verify_baseline(fx, "etendo-go", env.call, manifest,
+                                                        tools=baseline_tools)) if fx else None
         return asyncio.run(fixtures.assess_freshness(
             fixtures.load_checklist(checklist) if checklist else None, call=env.call,
             tools=self.TOOLS if tools is None else tools, target=self.TARGET, fixture=fx, baseline=baseline,
@@ -257,6 +277,7 @@ class FreshnessTest(FixtureCase):
     def test_fresh(self):
         result = self.assess(Env())
         self.assertEqual(result["status"], "fresh", result["details"])
+        self.assertEqual(result["unverifiable"], [])
         self.assertEqual((result["seedId"], result["initializedAt"]), ("s1", "2026-10-20T09:00:00Z"))
         self.assertEqual(result["checkedAt"], "2026-10-20T10:00:00.000Z")
 
@@ -295,7 +316,8 @@ class FreshnessTest(FixtureCase):
         env.fail.add("sales-order")
         self.assertEqual(self.assess(env)["status"], "unverified")
 
-    def test_an_entity_whose_tool_is_not_offered_is_unverified_until_the_catalogue_has_it(self):
+    def with_payments(self):
+        """`payments` declares list_payments, which TOOLS does not offer; `env.call` would answer it."""
         self.write("fresh.etendo-go.yaml",
                    CHECKLIST.replace("documents:\n", "documents:\n  - { name: payments, tool: list_payments }\n"))
         env = Env()
@@ -304,20 +326,105 @@ class FreshnessTest(FixtureCase):
         async def call(tool, args):
             if tool == "list_payments":
                 env.calls.append((tool, args))
-                return {"data": []}
+                return {"data": env.rows.get("payments", [])}
             return await original(tool, args)
 
         env.call = call
+        return env
+
+    def test_only_tool_not_offered_is_fresh_and_lists_the_entity_until_the_catalogue_has_it(self):
+        # Plan §9 q14 (decided 2026-10-15): "tool not offered" alone does not block `fresh`.
+        env = self.with_payments()
         result = self.assess(env)
-        self.assertEqual(result["status"], "unverified")
+        self.assertEqual(result["status"], "fresh", result["details"])
+        self.assertEqual(result["unverifiable"], [{"check": "documents", "entity": "payments",
+                                                   "tool": "list_payments", "reason": fixtures.TOOL_NOT_OFFERED}])
         payments = result["details"]["documents"][0]
-        self.assertEqual((payments["name"], payments["status"]), ("payments", "unverified"))
-        self.assertTrue(payments["detail"].startswith(fixtures.TOOL_NOT_OFFERED), payments["detail"])
+        self.assertEqual((payments["name"], payments["status"], payments["reason"]),
+                         ("payments", "unverified", fixtures.TOOL_NOT_OFFERED))
         self.assertNotIn("list_payments", [t for t, _a in env.calls])
         # The vendor adds the tool: the same checklist, unedited, now reads it for real.
         result = self.assess(env, tools=self.TOOLS | {"list_payments"})
-        self.assertEqual(result["status"], "fresh", result["details"])
+        self.assertEqual((result["status"], result["unverifiable"]), ("fresh", []))
         self.assertIn("list_payments", [t for t, _a in env.calls])
+        # ... and what it reads counts: a payment nobody explains is dirty.
+        env.rows["payments"] = [{"id": "PAY1"}]
+        self.assertEqual(self.assess(env, tools=self.TOOLS | {"list_payments"})["status"], "dirty")
+
+    def test_a_baseline_read_tool_not_offered_is_fresh_when_the_manifest_holds(self):
+        result = self.assess(Env(), baseline_tools={"etendo_create"})
+        self.assertEqual(result["status"], "fresh", result["details"])
+        self.assertEqual([(u["check"], u["entity"], u["tool"]) for u in result["unverifiable"]],
+                         [("baseline", "customer", "etendo_list"), ("baseline", "product", "etendo_list")])
+        self.assertEqual(result["details"]["baseline"]["reason"], fixtures.TOOL_NOT_OFFERED)
+        # The manifest is still required, complete and matching.
+        no_manifest = self.assess(Env(), manifest=None, baseline_tools={"etendo_create"})
+        self.assertNotEqual(no_manifest["status"], "fresh")
+        self.assertEqual(no_manifest["details"]["baseline"]["status"], "unverified")
+        self.assertNotIn("reason", no_manifest["details"]["baseline"])
+        self.assertEqual(self.assess(Env(), manifest=self.manifest(Env(), complete=False),
+                                     baseline_tools={"etendo_create"})["status"], "dirty")
+        self.assertEqual(self.assess(Env(), manifest=self.manifest(Env(), url="http://other/mcp"),
+                                     baseline_tools={"etendo_create"})["status"], "dirty")
+
+    def test_tool_not_offered_plus_any_other_unverified_cause_is_unverified(self):
+        def failed_read(env):
+            env.fail.add("sales-order")
+
+        def unknown_shape(env):
+            original = env.call
+
+            async def call(tool, args):
+                if args.get("spec") == "sales-order":
+                    return {"weird": 1}
+                return await original(tool, args)
+            env.call = call
+
+        def partial_page(env):
+            original = env.call
+
+            async def call(tool, args):
+                payload = await original(tool, args)
+                if args.get("spec") == "bp":
+                    payload["has_more"] = True
+                return payload
+            env.call = call
+
+        cases = {"call error": (failed_read, {}), "unknown shape": (unknown_shape, {}),
+                 "partial page": (partial_page, {}), "no manifest": (None, {"manifest": None})}
+        for why, (spoil, kw) in cases.items():
+            with self.subTest(why=why):
+                env = self.with_payments()
+                if spoil:
+                    spoil(env)
+                result = self.assess(env, **kw)
+                self.assertEqual(result["status"], "unverified", result["details"])
+                self.assertEqual([u["entity"] for u in result["unverifiable"]], ["payments"])
+        with self.subTest(why="uncaptured allowlist"):
+            env = self.with_payments()
+            self.write("fresh.etendo-go.yaml", (self.tmp / "fixtures" / "fresh.etendo-go.yaml").read_text()
+                       .replace("allowlistCaptured: true", "allowlistCaptured: false"))
+            env.rows["bp"].append({"id": "X", "name": "Who"})
+            self.assertEqual(self.assess(env)["status"], "unverified")
+        with self.subTest(why="a baseline record whose read failed"):
+            env = self.with_payments()
+            env.fail.add("product")
+            self.assertEqual(self.assess(env)["status"], "unverified")
+
+    def test_tool_not_offered_never_hides_dirty_or_leftover(self):
+        env = self.with_payments()
+        env.rows["bp"].append({"id": "X", "name": "Someone Else"})
+        self.assertEqual(self.assess(env)["status"], "dirty")
+        env = self.with_payments()
+        env.rows["sales-order"] = [{"id": "SO1", "description": "20261020T0900-cmp-a1b2-q-a1"}]
+        self.assertEqual(self.assess(env)["status"], "clean")
+
+    def test_when_no_checklist_tool_is_offered_nothing_proves_fresh(self):
+        # Every document / master-data check is "tool not offered" and the baseline reads back fine:
+        # the exception does not stretch to a checklist that read nothing.
+        result = self.assess(Env(), tools={"etendo_create"})
+        self.assertEqual(result["status"], "unverified")
+        self.assertEqual({u["entity"] for u in result["unverifiable"]}, {"sales-order", "bp"})
 
     def test_the_old_declared_unverified_list_is_refused(self):
         self.write("fresh.etendo-go.yaml", CHECKLIST + "unverified:\n  - { name: payments, reason: no list }\n")

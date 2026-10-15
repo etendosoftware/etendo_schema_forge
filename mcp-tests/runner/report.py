@@ -43,8 +43,11 @@ from . import decide as rule
 #: refuses a pair whose run B reuses run A's seeded environment.
 #: v4: `catalogueChanges` — per target, the tools added / removed since the
 #: previous comparison of the same target (name + URL) found under runs/.
-REPORT_VERSION = 4
-SUMMARY_SCHEMA_VERSION = 4
+#: v5 (plan §9 q14): freshness carries `unverifiable` — the entities a target
+#: could not check because its MCP does not offer their tool. A `fresh` target
+#: may have some; the official headline names how many, the table lists them.
+REPORT_VERSION = 5
+SUMMARY_SCHEMA_VERSION = 5
 STABILITY_TARGET = 0.90
 
 # A characters-per-token estimate for the tool catalogue's priming share
@@ -55,6 +58,9 @@ BYTES_PER_TOKEN = 4
 # Same place cli.py writes runs to; not imported from it, so the report never
 # drags in the agent's dependencies.
 RUNS_DIR = Path(__file__).resolve().parent.parent / "runs"
+
+# Same value as runner.fixture.TOOL_NOT_OFFERED (not imported: see RUNS_DIR).
+TOOL_NOT_OFFERED = "tool not offered"
 
 # Pins that legitimately differ between the two runs of a stability pair.
 _VOLATILE_PINS = {"compareId", "startedAt", "finishedAt", "initializedAt", "checkedAt",
@@ -442,6 +448,9 @@ def _watched_tools(rows: list[dict[str, Any]], target: str, freshness: dict[str,
         for entry in details.get(kind) or []:
             if entry.get("tool"):
                 watched.setdefault(entry["tool"], set()).add(f"freshness {entry.get('name')}")
+    for entry in (freshness or {}).get("unverifiable") or []:
+        if entry.get("check") == "baseline" and entry.get("tool"):
+            watched.setdefault(entry["tool"], set()).add(f"baseline {entry.get('entity')}")
     return {tool: sorted(names) for tool, names in watched.items()}
 
 
@@ -548,7 +557,9 @@ def build_summary(compare_dir: Path) -> dict[str, Any]:
                                    "initializedAt": fresh.get("initializedAt"),
                                    "seedId": fresh.get("seedId"),
                                    "fixtureHash": fresh.get("fixtureHash"),
-                                   "reasons": freshness_reasons(fresh)}
+                                   "reasons": freshness_reasons(fresh),
+                                   # Plan §9 q14: what a `fresh` target could not check.
+                                   "unverifiable": fresh.get("unverifiable") or []}
     official = all(f["status"] == "fresh" for f in freshness.values())
 
     starts = [compare.get("startedAt")] if compare.get("startedAt") else []
@@ -649,7 +660,7 @@ def _side_cells(side: dict[str, Any]) -> list[str]:
 
 def render_markdown(summary: dict[str, Any]) -> str:
     kr = summary["kr"]
-    label = "OFFICIAL" if summary["official"] else "UNOFFICIAL"
+    label = official_label(summary)
     lines = [
         f"# MCP comparison {summary['compareId']} — {label}",
         "",
@@ -670,13 +681,18 @@ def render_markdown(summary: dict[str, Any]) -> str:
     ]
     if not summary["official"]:
         lines += ["Unofficial: an official number needs every target `fresh` (plan §5.9).", ""]
-    lines += ["| Target | Status | Checked at | Initialized at | Seed |", "|---|---|---|---|---|"]
+    lines += ["| Target | Status | Checked at | Initialized at | Seed | Not verifiable |",
+              "|---|---|---|---|---|---|"]
     for name, fresh in summary["freshness"].items():
         lines.append(f"| {name} | {fresh['status']} | {_fmt(fresh['checkedAt'])} | {_fmt(fresh['initializedAt'])} "
-                     f"| {_fmt(fresh.get('seedId'))} |")
+                     f"| {_fmt(fresh.get('seedId'))} | {len(fresh.get('unverifiable') or [])} |")
     for name, fresh in summary["freshness"].items():
         for reason in fresh.get("reasons") or []:
             lines.append(f"- {name}: {reason}")
+    for name, fresh in summary["freshness"].items():
+        for u in fresh.get("unverifiable") or []:
+            lines.append(f"- {name}: not verifiable — {u.get('check')} {u['entity']} "
+                         f"({u['tool']}: {u.get('reason') or TOOL_NOT_OFFERED})")
 
     lines += ["", "## Tasks", "",
               "| Task | Target | Success | Consistency | Calls (median) | First call ok | Unrecovered "
@@ -784,15 +800,32 @@ def _flatten(value: Any, prefix: str = "") -> dict[str, Any]:
     return {prefix: value}
 
 
+def official_label(summary: dict[str, Any]) -> str:
+    """`OFFICIAL`, `UNOFFICIAL`, or `OFFICIAL — N entities not verifiable on <t> (tools not offered)`.
+
+    Plan §9 q14: a run may be official while a target's MCP does not offer the
+    tool some entities are checked with; the headline must say so.
+    """
+    if not summary["official"]:
+        return "UNOFFICIAL"
+    parts = [f"{len(f['unverifiable'])} entit{'y' if len(f['unverifiable']) == 1 else 'ies'} not verifiable on {name}"
+             for name, f in summary["freshness"].items() if f.get("unverifiable")]
+    return "OFFICIAL — " + "; ".join(parts) + " (tools not offered)" if parts else "OFFICIAL"
+
+
 def freshness_reasons(fresh: dict[str, Any]) -> list[str]:
-    """Why a target is not `fresh`, one line per check that is not ok (plan §5.9)."""
+    """Why a target is not `fresh`, one line per check that is not ok (plan §5.9).
+
+    A check whose only problem is "tool not offered" is not a reason: it is
+    listed under `unverifiable` instead (plan §9 q14).
+    """
     details = fresh.get("details") or {}
     if fresh.get("status") in (None, "unknown"):
         return [details.get("reason") or "freshness was not checked"]
     out = []
     for kind in ("documents", "masterData"):
         for c in details.get(kind) or []:
-            if c.get("status") != "ok":
+            if c.get("status") != "ok" and c.get("reason") != TOOL_NOT_OFFERED:
                 extra = c.get("count", c.get("extraCount"))
                 out.append(f"{c['name']}: {c['status']}" + (f" ({extra})" if extra else "")
                            + (f" — {c['detail']}" if c.get("detail") else ""))
@@ -801,7 +834,7 @@ def freshness_reasons(fresh: dict[str, Any]) -> list[str]:
     if details.get("markerCount"):
         out.append(f"{details['markerCount']} row(s) carry a harness marker")
     seed = details.get("baseline") or {}
-    if seed.get("status") not in (None, "ok"):
+    if seed.get("status") not in (None, "ok") and seed.get("reason") != TOOL_NOT_OFFERED:
         out.append(f"baseline: {seed['status']} — {seed.get('detail')}")
     return out
 

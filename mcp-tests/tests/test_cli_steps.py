@@ -1355,6 +1355,8 @@ platforms:
     customer:
       create: [{ tool: create_contact, args: { name: "{{fixture.customer.name}}" }, saveAs: c }]
       id: "{{steps.c.id}}"
+      find: { tool: list_contacts }
+      match: { name: "{{fixture.customer.name}}" }
 """
 
 FRESH_CHECKLISTS = {
@@ -1376,7 +1378,7 @@ masterData: [{ name: contacts, tool: list_contacts, key: name, baseline: [custom
 
 
 class FreshHarness(V2Harness):
-    """A seeded pair: Etendo reads its baseline back, Holded only has a manifest."""
+    """A seeded pair: Etendo reads its baseline back; Holded's catalogue lacks list_contacts unless readable."""
 
     def __init__(self, tmp, *, seeded=("t", "h"), bp=None, holded_readable=False, **kw):
         suite = V2_SUITE.replace("window: w\n", "window: w\nfixture: base\n").replace(
@@ -1388,11 +1390,8 @@ class FreshHarness(V2Harness):
         fx.mkdir(exist_ok=True)
         fixture_text, checklists = FRESH_FIXTURE, dict(FRESH_CHECKLISTS)
         if holded_readable:
-            # A Holded whose MCP could list contacts: the only way it can be fresh. The
-            # checklist is NOT edited — the live catalogue now offers list_contacts.
-            fixture_text = fixture_text.replace('      id: "{{steps.c.id}}"', '      id: "{{steps.c.id}}"\n'
-                                                '      find: { tool: list_contacts }\n'
-                                                '      match: { name: "{{fixture.customer.name}}" }')
+            # A Holded whose MCP lists contacts. Neither the fixture nor the checklist is
+            # edited — the live catalogue now offers list_contacts, so both checks run.
             self.holded_tools.append("list_contacts")
         (fx / "base.yaml").write_text(textwrap.dedent(fixture_text), encoding="utf-8")
         for name, text in checklists.items():
@@ -1409,6 +1408,7 @@ class FreshHarness(V2Harness):
                             "seedId": f"seed-{name}", "initializedAt": "2026-10-20T09:00:00Z", "records": records}
                 baseline = asyncio.run(fixtures.verify_baseline(fixture, platform, self._read, manifest))
                 fixtures.write_manifest(name, {**manifest, "fixtureHash": baseline["fixtureHash"]})
+        self.calls.clear()  # the seed read-backs above are not the comparison's calls
 
     async def _read(self, tool, args):
         return await self.call_tool(None, tool, args)
@@ -1427,6 +1427,7 @@ class FreshHarness(V2Harness):
         if name == "list_invoices":
             return {"data": [], "has_more": False}
         if name == "list_contacts":
+            self.calls.append((name, args))
             return {"data": [{"id": "H1", "name": "Cliente Paridad SL"}]}
         return await super().call_tool(session, name, args)
 
@@ -1443,9 +1444,15 @@ class FreshnessCompareTest(unittest.TestCase):
         self.assertEqual(h.exit_code, 0, h.stderr.getvalue())
         fresh = {t["name"]: t["freshness"] for t in compare["targets"]}
         self.assertEqual(fresh["t"]["status"], "fresh", fresh["t"]["details"])
-        self.assertEqual(fresh["h"]["status"], "unverified")
+        # Plan §9 q14: Holded lacks list_contacts, nothing else is wrong — fresh, and it says so.
+        self.assertEqual(fresh["h"]["status"], "fresh", fresh["h"]["details"])
+        self.assertEqual(fresh["h"]["unverifiable"], [
+            {"check": "masterData", "entity": "contacts", "tool": "list_contacts", "reason": "tool not offered"},
+            {"check": "baseline", "entity": "customer", "tool": "list_contacts", "reason": "tool not offered"}])
+        self.assertEqual(fresh["t"]["unverifiable"], [])
+        self.assertNotIn("list_contacts", [n for n, _a in h.calls])
         self.assertEqual((fresh["t"]["seedId"], fresh["t"]["initializedAt"]), ("seed-t", "2026-10-20T09:00:00Z"))
-        self.assertEqual(compare["compareSchemaVersion"], 2)
+        self.assertEqual(compare["compareSchemaVersion"], 3)
         self.assertEqual(set(compare["pins"]["fixtureHashes"]), {"t", "h"})
         self.assertEqual(compare["pins"]["fixture"]["name"], "base")
         # The id is the target's own; the shared prompt names the neutral value only.
@@ -1454,15 +1461,35 @@ class FreshnessCompareTest(unittest.TestCase):
         self.assertIn("Cliente Paridad SL", h.attempts("t", "w")[0]["prompt"])
         self.assertEqual(h.attempts("t", "w")[0]["prompt"], h.attempts("h", "w")[0]["prompt"])
         summary = json.loads((h.compare_dir / "summary.json").read_text())
-        self.assertFalse(summary["official"])
-        self.assertIn("contacts: unverified — tool not offered: list_contacts is not in the live catalogue",
-                      summary["freshness"]["h"]["reasons"])
+        self.assertTrue(summary["official"])
+        self.assertEqual(summary["freshness"]["h"]["reasons"], [])
+        headline = (h.compare_dir / "summary.md").read_text().splitlines()[0]
+        self.assertTrue(headline.endswith("OFFICIAL — 2 entities not verifiable on h (tools not offered)"), headline)
+
+    def test_tool_not_offered_plus_a_failed_read_is_unofficial(self):
+        h = FreshHarness(self.tmp)
+        original = h.call_tool
+
+        async def failing(session, name, args):
+            if name == "list_invoices":
+                raise RuntimeError("503 upstream")
+            return await original(session, name, args)
+
+        h.call_tool = failing
+        compare = h.compare("--repeat", "1")
+        self.assertEqual(h.exit_code, 0, h.stderr.getvalue())
+        self.assertEqual(compare["targets"][1]["freshness"]["status"], "unverified")
+        self.assertFalse(json.loads((h.compare_dir / "summary.json").read_text())["official"])
 
     def test_official_only_when_both_targets_are_fresh(self):
         h = FreshHarness(self.tmp, holded_readable=True)
         compare = h.compare("--repeat", "1")
         self.assertEqual([t["freshness"]["status"] for t in compare["targets"]], ["fresh", "fresh"])
         self.assertTrue(json.loads((h.compare_dir / "summary.json").read_text())["official"])
+        # Once the tool appears both checks run for real and nothing is left unverifiable.
+        self.assertEqual(compare["targets"][1]["freshness"]["unverifiable"], [])
+        self.assertIn("list_contacts", [n for n, _a in h.calls])
+        self.assertTrue((h.compare_dir / "summary.md").read_text().splitlines()[0].endswith(" — OFFICIAL"))
 
     def test_a_missing_baseline_record_stops_the_comparison(self):
         h = FreshHarness(self.tmp)

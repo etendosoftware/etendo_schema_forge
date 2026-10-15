@@ -13,9 +13,13 @@
 #                          {{fixture.<id>.<key>}}; {{fixture.<id>.id}} is the record's id on the
 #                          target being run (never in a shared prompt).
 #   platforms.<p>.<id>     create: steps (as setup steps, D41) · id: where the new id is ·
-#                          find + match: the read that picks the record back out (omit when the MCP
-#                          cannot read it: the record is then `unverified` and its id comes from the
-#                          seed manifest) · expect: values it must still hold · idPath (default id).
+#                          find + match: the read that picks the record back out. Name the tool it
+#                          WOULD use even when the platform does not offer it today: the live
+#                          tools/list decides at every run, and an absent tool makes the record
+#                          `unverified` ("tool not offered", id from the seed manifest), which does not
+#                          block an official run (plan §9 q14). Omit `find` only when no read could
+#                          ever exist: that `unverified` blocks. · expect: values it must still hold ·
+#                          idPath (default id).
 # Records are seeded in the order written; a record may name only records above it.
 # Ids are permanent: rename nothing, append new records at the end.
 schemaVersion: 1
@@ -86,8 +90,12 @@ platforms:
       expect: { name: "{{fixture.product-servicio.name}}" }
 
   holded:
-    # Holded's MCP has no list/get for contacts or products (tools/list, 2026-10-14): no `find`,
-    # so these records are `unverified` and their ids come from the seed manifest (plan §5.9).
+    # Holded's MCP has no list/get for contacts or products (tools/list, 2026-10-14). Each `find`
+    # names the tool it WOULD use (as fresh.holded.yaml does): while the live catalogue lacks it the
+    # record is `unverified` ("tool not offered", plan §9 q14) and its id comes from the seed
+    # manifest; the run Holded adds the tool, the record is read back for real. The `args` mirror the
+    # sibling list tools and are a guess until the tool exists: a wrong guess fails the read, which
+    # is `unverified` and blocks `fresh`.
     customer-paridad:
       create:
         - tool: create_contact
@@ -95,6 +103,8 @@ platforms:
                   type: client, is_person: false }
           saveAs: contact
       id: "{{steps.contact.id}}"
+      find: { tool: list_contacts, args: { limit: 200 } }
+      match: { name: "{{fixture.customer-paridad.name}}" }
     supplier-paridad:
       create:
         - tool: create_contact
@@ -102,6 +112,8 @@ platforms:
                   type: supplier, is_person: false }
           saveAs: contact
       id: "{{steps.contact.id}}"
+      find: { tool: list_contacts, args: { limit: 200 } }
+      match: { name: "{{fixture.supplier-paridad.name}}" }
     product-servicio:
       create:
         - tool: create_product
@@ -110,3 +122,5 @@ platforms:
                   for_sale: true, for_purchase: true }
           saveAs: product
       id: "{{steps.product.id}}"
+      find: { tool: list_products, args: { limit: 200 } }
+      match: { sku: "{{fixture.product-servicio.sku}}" }

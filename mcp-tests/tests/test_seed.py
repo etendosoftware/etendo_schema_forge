@@ -168,6 +168,15 @@ class SeedTest(unittest.TestCase):
         self.assertEqual(self.seed(), 2)
         self.assertEqual(self.tenant.calls, [])
 
+    def test_a_find_tool_the_target_lacks_seeds_with_the_records_unverified(self):
+        # Plan §9 q14: only the creates are required; the read-back waits for the tool.
+        self.tenant.tools = ["etendo_create"]
+        self.assertEqual(self.seed(), 0, self.err.getvalue())
+        manifest = self.manifest()
+        self.assertTrue(manifest["complete"])
+        self.assertEqual(manifest["verify"], {"customer": "unverified", "product": "unverified"})
+        self.assertEqual([t for t, _a in self.tenant.calls], ["etendo_create", "etendo_create"])
+
     def test_records_that_do_not_read_back_leave_an_incomplete_manifest(self):
         original = self.tenant.call_tool
 

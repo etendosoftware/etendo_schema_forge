@@ -7,9 +7,11 @@
 # The LIVE tools/list decides at every preflight: an entity whose tool is absent is `unverified`
 # ("tool not offered"); the run Holded adds the tool, the check runs for real with no edit here.
 # As read on 2026-10-14, list_contacts, list_products, list_sales_orders, list_estimates,
-# list_proformas, list_purchase_orders and list_waybills are absent, so a Holded target cannot
-# reach `fresh` with that catalogue. Their `args` mirror the sibling list tools and are a guess
-# until the tool exists: a wrong guess fails the read, which is `unverified`, never `fresh`.
+# list_proformas, list_purchase_orders and list_waybills are absent. "Tool not offered" alone does
+# not block `fresh` (plan §9 q14, decided 2026-10-15): those entities are listed as not verifiable in
+# the freshness record and the summary headline. Their `args` mirror the sibling list tools and are
+# a guess until the tool exists: a wrong guess fails the read, which is `unverified` and DOES block
+# `fresh`.
 schemaVersion: 1
 platform: holded
 allowlistCaptured: false

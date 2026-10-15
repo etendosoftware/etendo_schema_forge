@@ -109,8 +109,10 @@ RUN_SCHEMA_VERSION = 7
 
 #: `compare.json` shape (plan §5.2, §6). Read by `report.py`. v2 (S6): the real
 #: `targets[].freshness` (plan §5.9), `targets[].fixtureHash`, `pins.fixture`
-#: and `pins.fixtureHashes`.
-COMPARE_SCHEMA_VERSION = 2
+#: and `pins.fixtureHashes`. v3 (plan §9 q14): `targets[].freshness.unverifiable`
+#: lists the entities whose tool the target's MCP does not offer; with only
+#: those, the target is still `fresh`.
+COMPARE_SCHEMA_VERSION = 3
 #: Plan §5.1 / decision 11: a comparison repeats 3 times and runs 4 attempts at
 #: once per target unless told otherwise. A single `mcp-test` stays at 1 / 1.
 COMPARE_DEFAULT_REPEAT = 3
@@ -1305,11 +1307,12 @@ async def _assess_target(target: dict[str, Any], platform: str | None, server: d
             async def call(tool: str, args: dict[str, Any]) -> Any:
                 return await call_tool(session, tool, args)
 
+            live = set((server or {}).get("tools") or [])
             if fixture is not None:
-                baseline = await fixtures.verify_baseline(fixture, platform, call, manifest)
+                baseline = await fixtures.verify_baseline(fixture, platform, call, manifest, tools=live)
             if freshness:
                 fresh = await fixtures.assess_freshness(
-                    checklist, call=call, tools=set((server or {}).get("tools") or []), target=target,
+                    checklist, call=call, tools=live, target=target,
                     fixture=fixture, baseline=baseline, manifest=manifest, now=_now_ms())
     except Exception as exc:  # noqa: BLE001 - the session itself failed: nothing is known
         return None, None, f"baseline/freshness read failed: {type(exc).__name__}: {exc}"
@@ -1531,6 +1534,8 @@ async def _run_compare(
             "fixtureHash": (baseline or {}).get("fixtureHash"),
         })
         print(f"  [{target['name']}] freshness {fresh['status']}"
+              + (f" ({len(fresh['unverifiable'])} not verifiable: tool not offered)"
+                 if fresh.get("unverifiable") else "")
               + (f" · baseline {baseline['status']} {baseline['fixtureHash']}" if baseline else ""))
 
     record = _compare_record(

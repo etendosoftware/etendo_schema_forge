@@ -33,9 +33,12 @@ tool the live catalogue does not offer, a read that failed, a partial page, or
 master-data rows while the allowlist is not captured yet are `unverified`.
 Each one is printed to stderr as a warning and the seed goes on — refusing
 would make a platform with no list tools unseedable. The comparison reads
-those same checks as `unverified`, so the run stays unofficial anyway.
+those same checks as `unverified`: a read that failed, a partial page or an
+uncaptured allowlist keeps the run unofficial; a tool the catalogue does not
+offer is listed as not verifiable and does not (plan §9 q14).
 
-A record the platform cannot read back (no `find`, e.g. Holded contacts) can
+A record the platform cannot read back (its `find` tool is not offered, e.g.
+Holded contacts, or no `find` at all) can
 only be protected by the manifest: never delete `.seeds/<target>.json` of a
 seeded target, or a second seed would create those records again. That is why
 an INCOMPLETE manifest (with the seed's `seedId`) is written BEFORE the first
@@ -87,11 +90,15 @@ def _parse_instant(value: str) -> str:
 
 
 def _fixture_tools(fixture: fixtures.Fixture, platform: str) -> set[str]:
+    """The tools the seed cannot do without: the creates.
+
+    A `find` tool the target does not offer is not required: the record reads
+    back `unverified` ("tool not offered", plan §9 q14) and is read for real
+    the run the vendor adds the tool.
+    """
     tools = set()
     for plan in fixture.platforms[platform].values():
         tools.update(s.tool for s in plan.create)
-        if plan.find:
-            tools.add(plan.find.tool)
     return tools
 
 
@@ -128,7 +135,7 @@ async def seed(target: dict[str, Any], platform: str, fixture: fixtures.Fixture,
             async def call(tool: str, args: dict[str, Any]) -> Any:
                 return await call_tool(session, tool, args)
 
-            baseline = await fixtures.verify_baseline(fixture, platform, call, manifest)
+            baseline = await fixtures.verify_baseline(fixture, platform, call, manifest, tools=live)
             present = {rec: r for rec, r in baseline["records"].items() if r["status"] != "missing"
                        and r["status"] != "unverified"}
 
@@ -186,7 +193,8 @@ async def seed(target: dict[str, Any], platform: str, fixture: fixtures.Fixture,
             # `ids` fills as each record is created, so an interruption still
             # records what exists.
             _ids, log, error = await fixtures.seed_records(fixture, platform, call, ids=ids)
-            after = await fixtures.verify_baseline(fixture, platform, call, {"records": ids}) if not error else None
+            after = await fixtures.verify_baseline(fixture, platform, call, {"records": ids},
+                                                  tools=live) if not error else None
     except BaseException as exc:  # noqa: BLE001 - Ctrl-C, cancellation, a failed teardown: written down, re-raised
         if started:
             interrupted = f"seed interrupted: {type(exc).__name__}: {exc}"

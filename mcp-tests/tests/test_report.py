@@ -197,6 +197,60 @@ class SummaryTest(unittest.TestCase):
         self.assertTrue(summary["official"])
         self.assertIn("OFFICIAL", report.render_markdown(summary).splitlines()[0])
 
+    @staticmethod
+    def _fresh_with_unverifiable(unverifiable, status="fresh"):
+        def change(compare):
+            for t in compare["targets"]:
+                t["freshness"]["status"] = "fresh"
+                if t["name"] == "holded":
+                    t["freshness"].update(status=status, unverifiable=unverifiable, details={
+                        "documents": [{"name": u["entity"], "tool": u["tool"], "status": "unverified",
+                                       "reason": "tool not offered",
+                                       "detail": f"tool not offered: {u['tool']} is not in the live catalogue"}
+                                      for u in unverifiable if u["check"] == "documents"],
+                        "masterData": [], "markerCount": 0,
+                        "baseline": {"status": "unverified", "reason": "tool not offered", "detail": "x"}})
+        return change
+
+    def test_an_official_run_with_unverifiable_entities_says_so(self):
+        # Plan §9 q14: official, but the headline and the freshness table name what was not seen.
+        unverifiable = [{"check": "documents", "entity": "sales-orders", "tool": "list_sales_orders",
+                         "reason": "tool not offered"},
+                        {"check": "baseline", "entity": "customer-paridad", "tool": "list_contacts",
+                         "reason": "tool not offered"}]
+        cmp_dir = _copy_fixture()
+        _edit_compare(cmp_dir, self._fresh_with_unverifiable(unverifiable))
+        summary = report.build_summary(cmp_dir)
+        self.assertTrue(summary["official"])
+        self.assertEqual(summary["freshness"]["holded"]["unverifiable"], unverifiable)
+        self.assertEqual(summary["freshness"]["holded"]["reasons"], [])  # not a reason: listed instead
+        md = report.render_markdown(summary).splitlines()
+        self.assertEqual(md[0], f"# MCP comparison {summary['compareId']} — OFFICIAL — 2 entities not "
+                                f"verifiable on holded (tools not offered)")
+        self.assertIn("| Target | Status | Checked at | Initialized at | Seed | Not verifiable |", md)
+        self.assertTrue(any(line.startswith("| holded | fresh |") and line.endswith("| 2 |") for line in md), md)
+        self.assertIn("- holded: not verifiable — documents sales-orders (list_sales_orders: tool not offered)", md)
+        self.assertIn("- holded: not verifiable — baseline customer-paridad (list_contacts: tool not offered)", md)
+        # One entity reads in the singular; none is the plain label.
+        cmp_dir = _copy_fixture()
+        _edit_compare(cmp_dir, self._fresh_with_unverifiable(unverifiable[:1]))
+        self.assertTrue(report.render_markdown(report.build_summary(cmp_dir)).splitlines()[0].endswith(
+            "OFFICIAL — 1 entity not verifiable on holded (tools not offered)"))
+        cmp_dir = _copy_fixture()
+        _edit_compare(cmp_dir, self._fresh_with_unverifiable([]))
+        self.assertTrue(report.render_markdown(report.build_summary(cmp_dir)).splitlines()[0].endswith(" — OFFICIAL"))
+
+    def test_an_unofficial_run_lists_unverifiable_entities_without_the_official_wording(self):
+        unverifiable = [{"check": "documents", "entity": "sales-orders", "tool": "list_sales_orders",
+                         "reason": "tool not offered"}]
+        cmp_dir = _copy_fixture()
+        _edit_compare(cmp_dir, self._fresh_with_unverifiable(unverifiable, status="unverified"))
+        summary = report.build_summary(cmp_dir)
+        self.assertFalse(summary["official"])
+        md = report.render_markdown(summary).splitlines()
+        self.assertTrue(md[0].endswith(" — UNOFFICIAL"), md[0])
+        self.assertIn("- holded: not verifiable — documents sales-orders (list_sales_orders: tool not offered)", md)
+
     def test_a_comparison_needs_exactly_two_targets(self):
         cmp_dir = _copy_fixture()
         _edit_compare(cmp_dir, lambda c: c["targets"].append({"name": "third"}))
@@ -243,7 +297,8 @@ class SummaryTest(unittest.TestCase):
         summary = report.build_summary(cmp_dir)
         self.assertEqual(summary["freshness"]["holded"],
                          {"status": "unknown", "checkedAt": None, "initializedAt": None,
-                          "seedId": None, "fixtureHash": None, "reasons": ["freshness was not checked"]})
+                          "seedId": None, "fixtureHash": None, "reasons": ["freshness was not checked"],
+                          "unverifiable": []})
         self.assertFalse(summary["official"])
 
     def test_pipes_in_table_cells_are_escaped(self):
@@ -382,6 +437,17 @@ class CatalogueChangesTest(unittest.TestCase):
         self.assertEqual(watched["list_products"]["change"], "removed")
         md = report.render_markdown(report.build_summary(self.current))
         self.assertIn("**create_invoice added** — named by notPossible w-invoice-one-product-issued", md)
+
+    def test_a_baseline_read_tool_that_is_not_offered_is_watched(self):
+        def baseline_find(compare):
+            for t in compare["targets"]:
+                if t["name"] == "holded":
+                    t["freshness"]["unverifiable"] = [{"check": "baseline", "entity": "customer-paridad",
+                                                       "tool": "list_contacts", "reason": "tool not offered"}]
+        _edit_compare(self.current, baseline_find)
+        self._comparison("20261013T0900-cmp-prev", holded=["list_invoices", "create_invoice"])
+        watched = {w["tool"]: w for w in self.changes()["holded"]["watched"]}
+        self.assertEqual(watched["list_contacts"]["namedBy"], ["baseline customer-paridad", "freshness contacts"])
 
     def test_only_the_same_target_name_and_url_with_a_recorded_catalogue_counts(self):
         self._comparison("20261013T0900-cmp-moved", holded=["x"], holded_url="https://other.example/mcp")
