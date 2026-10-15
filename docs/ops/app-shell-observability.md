@@ -23,7 +23,10 @@ the core's `docs/security/telemetry-egress.md`.
 
 `observability/sdk.js` is the only file allowed to import a provider SDK;
 `test/no-direct-provider-sdk.test.js` fails on any other. Datadog and Mixpanel are lazy-loaded,
-only when enabled and not killed.
+only when enabled and not killed. The rule covers every provider SDK, not only the RUM/analytics
+ones: the Datadog **Feature Flags** SDK (`loadDatadogFlags`) lives there too, because flag
+exposure events are telemetry the SDK reports to Datadog on its own, and
+`lib/flags/bootstrap.js` receives it by injection (`createFlagProvider({ datadogLoader })`).
 
 | Provider | Enabled when |
 |----------|--------------|

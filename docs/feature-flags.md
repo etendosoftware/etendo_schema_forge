@@ -5,8 +5,11 @@ Feature Flags (ETP-5751), with ConfigCat kept as a fallback until the cutover.
 
 Components use `useFeatureFlag(key, fallback)` from `lib/flags` (numeric flags such as
 `import-batch-size`, ETP-5676, use `useNumberFlag(key, fallback)` with a numeric default in
-`flag-keys.js`); SDK imports stay
-in bootstrap/provider adapters. Flag keys and shipped safe boolean defaults are
+`flag-keys.js`). Provider SDKs are never imported here: `lib/observability/sdk.js` is the one
+file allowed to import them (ETP-4578), and the bootstrap receives the Datadog flags SDK by
+injection — `createFlagProvider({ datadogLoader })` defaults to `loadDatadogFlags` from that
+module. Flag exposure events are telemetry, so the flags SDK is a provider SDK like the RUM ones
+and must share their single egress point. Flag keys and shipped safe boolean defaults are
 centralized in `lib/flags/flag-keys.js`. Flags are visual gating only, never an
 authorization boundary; backend access checks are independent.
 

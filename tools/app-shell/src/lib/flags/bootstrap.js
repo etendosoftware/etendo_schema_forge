@@ -3,6 +3,7 @@ import { FLAG_DEFAULTS } from './flag-keys.js';
 import { createFlagExposureHook, resetExposureCache } from './flag-exposure.js';
 
 import { reset, identify, group } from '../observability.js';
+import { loadDatadogFlags } from '../observability/sdk.js';
 import { authHeaders, apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 import { clearSessionIdentity, getSessionIdentity } from '../sessionIdentity.js';
 /**
@@ -269,7 +270,10 @@ async function createConfigCatFlagProvider(env, logger, loader) {
 
 export async function createFlagProvider({ env = import.meta.env, logger = console,
   loader = () => import('@openfeature/config-cat-web-provider'),
-  datadogLoader = () => import('@datadog/openfeature-browser'),
+  // Injected, never imported here: the flags SDK reports exposure events to Datadog itself, so
+  // it is a provider SDK like any other and `lib/observability/sdk.js` is its one home
+  // (ETP-4578). The seam stays a default parameter, so tests still pass their own loader.
+  datadogLoader = loadDatadogFlags,
 } = {}) {
   const overrides = parseFlagConfig(env.VITE_FEATURE_FLAGS, logger);
   if (Object.keys(overrides).length > 0) {

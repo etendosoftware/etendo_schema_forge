@@ -24,3 +24,16 @@ export const loadDatadog = async () => {
   ]);
   return { datadogRum, reactPlugin };
 };
+
+/**
+ * The Datadog Feature Flags SDK (`@datadog/openfeature-browser`), for `lib/flags/bootstrap.js`
+ * (ETP-5751). It lives here for the same reason the RUM one does: flag **exposure events are
+ * telemetry**, and the SDK reports them to Datadog's intake on its own, so letting the flags
+ * module import it directly would open a second egress beside the sanitizing gateway. The
+ * bootstrap takes it by injection (`createFlagProvider({ datadogLoader })`), exactly as the
+ * provider adapters take theirs.
+ *
+ * Lazy on purpose, like the others: Datadog flags are opt-in and the SDK is only downloaded
+ * when a build is actually configured for them.
+ */
+export const loadDatadogFlags = () => import('@datadog/openfeature-browser');
