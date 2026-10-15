@@ -20372,6 +20372,8 @@
     "orgIaeEmpty": "No IAE activities yet",
     "orgIaeLoadError": "Failed to load IAE activities: {error}",
     "orgIaeDeleteError": "Failed to delete the activity: {error}",
+    "orgIaeCapHint": "Limit reached: 1 main activity and {max} others (Form 390 limit).",
+    "orgIaeOverCapWarning": "There are more than {max} non-main activities. Form 390 only accepts the main one plus {max} more: remove the extra ones before generating the file.",
     "orgIaeSaveError": "Failed to save the activity: {error}",
     "orgSection390": "Legal representative / Modelo 390",
     "orgSection390Desc": "Declarant and legal representative identity included in the AEAT Modelo 390 (annual VAT summary).",

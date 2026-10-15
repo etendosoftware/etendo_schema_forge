@@ -20608,6 +20608,8 @@
     "orgIaeEmpty": "Todavía no hay actividades del IAE",
     "orgIaeLoadError": "No se pudieron cargar las actividades del IAE: {error}",
     "orgIaeDeleteError": "No se pudo eliminar la actividad: {error}",
+    "orgIaeCapHint": "Máximo alcanzado: 1 actividad principal y {max} adicionales (límite del Modelo 390).",
+    "orgIaeOverCapWarning": "Hay más de {max} actividades no principales. El Modelo 390 solo admite la principal y {max} más: elimine las sobrantes antes de generar el fichero.",
     "orgIaeSaveError": "No se pudo guardar la actividad: {error}",
     "orgSection390": "Representante legal / Modelo 390",
     "orgSection390Desc": "Identidad del declarante y de sus representantes legales que se incluye en el modelo 390 (resumen anual de IVA) de la AEAT.",
