@@ -192,8 +192,9 @@ if [ "$SUITE" != "integration" ]; then
   quarantined="$(node "$REPO_DIR/scripts/lib/playwright-quarantine.js" count 2>/dev/null || echo 0)"
   if [ "$quarantined" -gt 0 ]; then
     echo "==> Playwright E2E — ${quarantined} quarantined mocked test(s), not blocking..."
+    # --retries=0: CI=true gives one retry, and a test that only passes on it is still flaky.
     if ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=1 BASE_URL="$BASE_URL" E2E_QUARANTINE=only \
-        npx playwright test --project=mocked --project=mocked-serial ); then
+        npx playwright test --project=mocked --project=mocked-serial --retries=0 ); then
       echo "==> Quarantined tests passed. If they keep passing, take them out of e2e/quarantine.json."
     else
       echo "==> Quarantined tests failed (not blocking: they are in e2e/quarantine.json)."
