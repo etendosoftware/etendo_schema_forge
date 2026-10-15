@@ -18364,7 +18364,7 @@
     "billingPreferences": "Billing Preferences",
     "billingPreferencesDesc": "Customer and vendor billing configuration.",
     "billingPreferencesAfterSave": "Save the contact to configure billing preferences.",
-    "fiscalDefaults": "SIF Defaults",
+    "fiscalDefaults": "SIF (Fiscal Information System) Defaults",
     "fiscalDefaultsDescription": "Used as defaults when sending this customer's invoices to SII/TicketBAI.",
     "fiscalDefaultsSiiBlock": "SII",
     "fiscalDefaultsTbaiBlock": "TicketBAI",
