@@ -324,6 +324,7 @@
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
+          "defaultExpr": "0",
           "grid": true,
           "gridOrder": 6,
           "section": "summary",
@@ -331,6 +332,7 @@
         },
         "summedLineAmount": {
           "visibility": "readOnly",
+          "defaultExpr": "0",
           "section": "summary"
         },
         "outstandingAmount": {

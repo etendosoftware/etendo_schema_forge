@@ -220,12 +220,14 @@
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
+          "defaultExpr": "0",
           "grid": true,
           "gridOrder": 5,
           "section": "summary"
         },
         "summedLineAmount": {
           "visibility": "readOnly",
+          "defaultExpr": "0",
           "grid": false,
           "section": "summary"
         },
