@@ -1665,7 +1665,7 @@ that already has values stored with the scheme included.
 Per-field opt-in that declares a field as part of the **public** REST API served by the gateway
 under `/api/v1/*`. Curating a single field switches the whole entity to curated mode: the entity
 then publishes **only** its curated fields. An entity with no curated field publishes, by default,
-the fields its window form shows (`form` not `false`, visibility `editable` or `readOnly`), so the
+the fields its window form shows (`form` not `false`, visibility not `system` or `discarded`), so the
 `form` flag above does affect the public API of non-curated entities. Curate an entity to narrow or
 rename what it publishes.
 
@@ -1688,8 +1688,8 @@ onto the field in `contract.json` (both in `schema_forge_core`). Fields with `vi
 portal access, bank account and bulk-posting fields), are skipped by the manifest generator (`scripts/generate-base-public-api-manifest.mjs`) even when `exposed: true`; the allowlist generator (`sf-generate-public-api-schema`) does not apply that filter. Real examples:
 `artifacts/contacts/decisions.json` and `artifacts/product/decisions.json` (6 fields each).
 
-Adding `publicApi` to a window is not enough to publish it: the public manifest
-(`public-api/base.v1.json`) is regenerated with `make generate-base-public-api-manifest`. The
+Changing `publicApi` (or a window's form fields) has no effect on the public API until the public
+manifest (`public-api/base.v1.json`) is regenerated with `make generate-base-public-api-manifest`. The
 full chain, the two generators and the gateway contract are documented in
 [public-api.md](public-api.md) (sections 2 and 3).
 

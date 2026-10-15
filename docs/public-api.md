@@ -44,7 +44,7 @@ Source locations are given as file paths. Paths without a prefix belong to this 
 |-------|--------------------|------------|--------------------|---------|
 | 1. UI flag | Does the user see the "Public API Keys" page? | `tools/app-shell` | not applicable (frontend gating) | [6](#6-ui-exposure) |
 | 2. Credential API | How is a key created, rotated, revoked? | `com.etendoerp.go` (`OAuth2Servlet`) | Etendo session (bearer JWT or cookie session) | [5](#5-api-key-management-contract-oauth2api-keys) |
-| 3. Resource API | How does an integrator read and write curated business data? | `gateway/` and `public-api/base.v1.json` | `Authorization: Bearer <clientId>:<clientSecret>` | [4](#4-public-resource-contract-apiv1) |
+| 3. Resource API | How does an integrator read and write the published business data? | `gateway/` and `public-api/base.v1.json` | `Authorization: Bearer <clientId>:<clientSecret>` | [4](#4-public-resource-contract-apiv1) |
 
 The feature flag controls only the visibility of the page. It does not enable or disable the
 credential API or the resource API.
@@ -88,7 +88,7 @@ Per-field key at `entities.<entity>.fields.<field>.publicApi`:
 
 | Property | Type | Meaning |
 |----------|------|---------|
-| `exposed` | boolean | Only the exact value `true` opts the field in. Absent, `false` or any other value means the field is not exposed. |
+| `exposed` | boolean | Only the exact value `true` opts the field in. In a curated entity, absent, `false` or any other value means the field is not exposed. In a non-curated entity it has no effect (see [Default exposure](#default-exposure-window-form)). |
 | `name` | string | Requested public field name. The manifest generator derives the final public name from it (see [Name derivation](#name-derivation)). |
 | `type` | `"passthrough"` \| `"custom"` | Mapping kind. The manifest generator always writes `passthrough`; the allowlist generator copies the declared value. |
 | `handlerId` | string \| null | Identifier of a custom handler. The manifest generator always writes `null`. |
@@ -108,7 +108,7 @@ For an entity that is not curated, the generator publishes every field of the en
 `artifacts/<window>/contract.json` (`frontendContract.entities.<entity>.fields`) that:
 
 - is shown in the window form: `form` is not `false` (a field without `form` counts as shown); and
-- has `visibility` `editable` or `readOnly`.
+- has a `visibility` other than `system` or `discarded` (in the contracts, `editable` or `readOnly`).
 
 Fields shown only in the grid (`form: false`) are not published. Each published field keeps the
 form's internal name as its internal path, and its public name follows [Name derivation](#name-derivation).
@@ -269,15 +269,15 @@ used on `/sws/neo/*` (see [section 8](#8-authentication-and-token-flow)).
 ### 4.5 Optimistic concurrency: `ETag` and `If-Match`
 
 Applies to versioned resources: those whose manifest entity publishes `updated`
-([Field rules](#field-rules-applied-by-the-manifest-generator)). Resources without `updated` are
-not version-checked and do not use these headers.
+([Field rules](#field-rules-applied-by-the-manifest-generator)). For resources without `updated` the gateway
+does not require `If-Match` and returns no `ETag`.
 
 | Case | Behavior |
 |------|----------|
 | `GET` of one record, `POST`, `PUT`, `PATCH` (top-level and child) | The response carries an `ETag` header with the record's current version. |
-| Every resource in a response, including list items | Carries the same value as `meta.etag`. |
+| Every resource in a response, including list items | Carries `meta.etag`; for a single-record response it equals the `ETag` header. |
 | `PUT` or `PATCH` without `If-Match`, or with `If-Match: *` | `428 Precondition Required`; nothing is sent to Etendo. |
-| `PUT` or `PATCH` with an `If-Match` that is not an ETag issued by the gateway (weak, unquoted or malformed) | `412 Precondition Failed`; nothing is sent to Etendo. |
+| `PUT` or `PATCH` with an `If-Match` that is not a strong, quoted ETag whose decoded value is a timestamp (weak, unquoted or malformed) | `412 Precondition Failed`; nothing is sent to Etendo. |
 | `PUT` or `PATCH` with an ETag of a version that is no longer current | `412 Precondition Failed`; the record is not changed. |
 | `PUT` or `PATCH` with the current ETag | The update is applied and the response carries the new `ETag`. |
 | `DELETE` | Does not use `If-Match`. |
@@ -515,7 +515,7 @@ Testable statements derived from this document, each linked to its section.
 
 ### Field selection and generation ([2](#2-field-selection-publicapi-curation-and-window-form-default), [3](#3-generation-chain))
 - [ ] A curated entity publishes only its fields with `publicApi.exposed === true` ([2](#2-field-selection-publicapi-curation-and-window-form-default))
-- [ ] A non-curated entity publishes its window form fields (`form` not `false`, visibility `editable` or `readOnly`) and no grid-only field ([2](#default-exposure-window-form))
+- [ ] A non-curated entity publishes its window form fields (`form` not `false`, visibility not `system` or `discarded`) and no grid-only field ([2](#default-exposure-window-form))
 - [ ] The fiscal monitors publish no form-derived field ([2](#2-field-selection-publicapi-curation-and-window-form-default))
 - [ ] No field in `policy.excludedFields` appears in the manifest, curated or derived ([2](#default-exposure-window-form))
 - [ ] The manifest declares `policy.fieldSelection` `curated-publicApi-else-window-form` and lists `policy.excludedFields` ([2](#2-field-selection-publicapi-curation-and-window-form-default))
@@ -547,7 +547,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] On a versioned resource, a single-record `GET`, `POST`, `PUT` and `PATCH` return an `ETag` header equal to `meta.etag`, and list items carry `meta.etag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `PUT` or `PATCH` without `If-Match`, or with `*`, returns `428` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `PUT` or `PATCH` with a stale ETag returns `412` and leaves the record unchanged; with a malformed one returns `412`, never `500` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
-- [ ] `PUT` or `PATCH` with the current ETag succeeds and returns a different `ETag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] `PUT` or `PATCH` with the current ETag succeeds and returns an `ETag` equal to the updated record's `meta.etag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] Sending `updated` in a write body returns `400` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 - [ ] `DELETE` succeeds without `If-Match` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 
