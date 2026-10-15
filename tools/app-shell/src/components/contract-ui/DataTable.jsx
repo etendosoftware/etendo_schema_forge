@@ -149,8 +149,8 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 // which sets no background of its own), composited to match the row's own
 // translucent hover tint (see quickActionsColumnClassName's own comment for
 // the exact math) while staying solid enough to mask real data underneath
-// while floating. (ETP-5600: no longer solid — a fade to the row hover
-// colour, see the class list below.)
+// while floating. (ETP-5600: solid under the buttons in the row hover colour,
+// with a fade across the cell's left padding — see the class list below.)
 function quickActionsColumnClassName(extraClassName) {
   // `relative` (not `sticky`) is the resting state — gives RowQuickActions'
   // `position: absolute` pill a containing block scoped to this cell either
@@ -171,14 +171,16 @@ function quickActionsColumnClassName(extraClassName) {
     // `has-[[data-state=open]]` keeps the cell sticky while a row kebab menu is open: the
     // portaled menu takes the pointer, the row loses `group-hover/row`, and without this the
     // cell falls back to its in-flow spot at the table's end and Radix re-anchors the menu there.
-    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card))))] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card))))]',
-    // ETP-5600 — Figma "Fila / Hover": a left-to-right fade from transparent to the row's own
-    // background instead of a solid band, so the column it floats over fades out under the
-    // buttons rather than being cut off. The end colour is `--row-hover-bg`, which every data
-    // row sets for its own state in getRowClassName (white on a lifted hover, the selected
-    // colour on a checked/active row, the composited tint under rowHoverStyle="tint"), so no
-    // window needs its own CSS variable. The `hsl(var(--card))` fallback only covers a row
-    // that does not set it (the header row never hovers as a group, so it never shows).
+    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]',
+    // ETP-5600 — Figma "Fila Contactos / State=Hover", layer "Sticky Acciones": a white
+    // linear gradient (0% -> 100% opacity) whose fade lives in the cell's 12px left padding
+    // (RowQuickActions' `px-3`, QUICK_ACTIONS_CONTAINER_PADDING_PX) and is OPAQUE from there
+    // on, so the column it floats over fades out at the edge and never shows through the
+    // buttons. The end colour is `--row-hover-bg`, which every data row sets for its own
+    // state in getRowClassName (white on a lifted hover, the selected colour on a
+    // checked/active row, the composited tint under rowHoverStyle="tint"), so no window needs
+    // its own CSS variable. The `hsl(var(--card))` fallback only covers a row that does not
+    // set it (the header row never hovers as a group, so it never shows).
     extraClassName,
   ].filter(Boolean).join(' ');
 }
