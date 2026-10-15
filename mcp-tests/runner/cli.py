@@ -36,6 +36,7 @@ from typing import Any
 
 from . import config as cfg
 from . import decide as rule
+from . import fixture as fixtures
 from .agent import PROMPT_VERSION, ProbeAborted, check_model, run_probe
 from .events import (
     EFFECT_CHECKED,
@@ -106,8 +107,10 @@ RUNS_DIR = HARNESS_ROOT / "runs"
 #: `probes/<id>/not-possible.json` and no attempt at all.
 RUN_SCHEMA_VERSION = 7
 
-#: `compare.json` shape (plan §5.2, §6). Read by `report.py`.
-COMPARE_SCHEMA_VERSION = 1
+#: `compare.json` shape (plan §5.2, §6). Read by `report.py`. v2 (S6): the real
+#: `targets[].freshness` (plan §5.9), `targets[].fixtureHash`, `pins.fixture`
+#: and `pins.fixtureHashes`.
+COMPARE_SCHEMA_VERSION = 2
 #: Plan §5.1 / decision 11: a comparison repeats 3 times and runs 4 attempts at
 #: once per target unless told otherwise. A single `mcp-test` stays at 1 / 1.
 COMPARE_DEFAULT_REPEAT = 3
@@ -218,8 +221,12 @@ def _now_ms() -> str:
 
 
 def _new_compare_id(now: dt.datetime) -> str:
-    """e.g. 20261014T1402-cmp-a3f1 (plan §5.2)."""
-    return f"{now.strftime('%Y%m%dT%H%M')}-cmp-{secrets.token_hex(2)}"
+    """e.g. 20261014T140233-cmp-a3f1 (plan §5.2).
+
+    Seconds since 2026-10-15 (minutes before): the report orders comparisons by
+    `startedAt` and falls back to this stamp for legacy runs without it.
+    """
+    return f"{now.strftime('%Y%m%dT%H%M%S')}-cmp-{secrets.token_hex(2)}"
 
 
 def _new_run_id(target: str, now: dt.datetime) -> str:
@@ -1270,6 +1277,63 @@ def _write_not_possible(ctx: AttemptContext, plan: TargetPlan) -> None:
               f"({record['declaration']['kind']}){note}")
 
 
+#: Baseline records a comparison cannot run on (plan §5.4: a mismatch stops it).
+_BASELINE_BROKEN = ("missing", "duplicated", "changed")
+
+
+async def _assess_target(target: dict[str, Any], platform: str | None, server: dict[str, Any] | None,
+                         suite: Suite, *, freshness: bool) -> tuple[dict[str, Any] | None,
+                                                                    dict[str, Any] | None, str | None]:
+    """Preflight step 4 (plan §5.2): the baseline read back and the freshness checks (S6, D50).
+
+    Returns (baseline, freshness, error). `error` stops the run: a baseline
+    record missing, duplicated or changed, a fixture without this platform,
+    a bad checklist, a session that failed. A non-fresh environment is NOT an
+    error — the comparison runs and is reported unofficial.
+    """
+    fixture = suite.fixture
+    if fixture is not None and platform not in fixture.platforms:
+        return None, None, f"fixture {fixture.name!r} declares no platform {platform!r}"
+    try:
+        checklist = fixtures.load_checklist(platform) if freshness and platform else None
+    except ValueError as exc:
+        return None, None, str(exc)
+    manifest = fixtures.read_manifest(target["name"])
+    baseline = fresh = None
+    try:
+        async with mcp_session(target) as session:
+            async def call(tool: str, args: dict[str, Any]) -> Any:
+                return await call_tool(session, tool, args)
+
+            if fixture is not None:
+                baseline = await fixtures.verify_baseline(fixture, platform, call, manifest)
+            if freshness:
+                fresh = await fixtures.assess_freshness(
+                    checklist, call=call, tools=set((server or {}).get("tools") or []), target=target,
+                    fixture=fixture, baseline=baseline, manifest=manifest, now=_now_ms())
+    except Exception as exc:  # noqa: BLE001 - the session itself failed: nothing is known
+        return None, None, f"baseline/freshness read failed: {type(exc).__name__}: {exc}"
+    if baseline:
+        broken = [f"{rec} {r['status']} ({r['detail']})" for rec, r in baseline["records"].items()
+                  if r["status"] in _BASELINE_BROKEN]
+        if broken:
+            return baseline, fresh, ("the baseline does not hold: " + "; ".join(broken)
+                                     + " — re-initialize and run `make mcp-seed`")
+    return baseline, fresh, None
+
+
+def _bind_fixture(suite: Suite, plan: TargetPlan, baseline: dict[str, Any] | None) -> str | None:
+    """Resolve `{{fixture.*}}` in every runnable probe for this target; an error message or None."""
+    if suite.fixture is None:
+        return None
+    table = suite.fixture.table((baseline or {}).get("ids") or {})
+    try:
+        plan.runnable[:] = [fixtures.resolve(p, table) for p in plan.runnable]
+    except fixtures.FixtureError as exc:
+        return f"{exc} — the record has no id here (not seeded? run `make mcp-seed`)"
+    return None
+
+
 def _finish_target(ctx: AttemptContext, outcome: TargetOutcome) -> None:
     ctx.events.emit(RUN_FINISHED, **_tally(outcome.records))
     ctx.events.close()
@@ -1336,6 +1400,11 @@ async def _run_single(
             return 2
     plan = plan_target(suite, probes, platform, server)
     problems = plan.problems + prompt_problems(probes, [server])
+    if not problems and suite.fixture is not None:
+        baseline, _fresh, error = await _assess_target(target, platform, server, suite, freshness=False)
+        error = error or _bind_fixture(suite, plan, baseline)
+        if error:
+            problems.append(error)
     if problems:
         print("Suite refused for this target:\n  " + "\n  ".join(problems), file=sys.stderr)
         return 2
@@ -1418,6 +1487,15 @@ async def _run_compare(
         print("Comparison aborted, the suite is not runnable as declared:\n  " + "\n  ".join(problems),
               file=sys.stderr)
         return 2
+    assessed = await asyncio.gather(*(
+        _assess_target(t, cfg.target_platform(t), srv, suite, freshness=True) for t, srv in zip(targets, servers)
+    ))
+    for target, plan, (baseline, _fresh, error) in zip(targets, plans, assessed):
+        error = error or _bind_fixture(suite, plan, baseline)
+        if error:
+            print(f"Comparison aborted: target {target['name']!r}: {error}. Nothing was measured.",
+                  file=sys.stderr)
+            return 2
 
     started_at = dt.datetime.now(dt.timezone.utc)
     compare_id = _new_compare_id(started_at)
@@ -1429,7 +1507,7 @@ async def _run_compare(
 
     contexts = []
     target_meta = []
-    for target, server, plan in zip(targets, servers, plans):
+    for target, server, plan, (baseline, fresh, _e) in zip(targets, servers, plans, assessed):
         k = cfg.target_concurrency(target, concurrency)
         run_id = f"{compare_id}-{target['name']}"
         ctx = _open_target_run(
@@ -1448,11 +1526,12 @@ async def _run_compare(
             "url": target["url"],
             "runId": run_id,
             "concurrency": k,
-            # S6 (D50) implements the freshness checks; until then every
-            # comparison is honestly "unknown", which the report reads as
-            # unofficial.
-            "freshness": {"status": "unknown", "checkedAt": None, "initializedAt": None},
+            # D50, plan §5.9: only `fresh` on every target is official.
+            "freshness": fresh,
+            "fixtureHash": (baseline or {}).get("fixtureHash"),
         })
+        print(f"  [{target['name']}] freshness {fresh['status']}"
+              + (f" · baseline {baseline['status']} {baseline['fixtureHash']}" if baseline else ""))
 
     record = _compare_record(
         compare_id=compare_id, started_at=_now_ms(), subject=subject, repeat=repeat,
@@ -1546,6 +1625,10 @@ def _compare_record(
             "suiteSha": suite.sha,
             "suiteSchemaVersion": suite.schema_version,
             "matcherVersion": MATCHER_VERSION,
+            # Ids excluded (plan §5.4): equal across a re-initialized pair that
+            # holds the same baseline. Freshness itself is checked apart.
+            "fixture": {"name": suite.fixture.name, "sha": suite.fixture.sha} if suite.fixture else None,
+            "fixtureHashes": {t["name"]: t.get("fixtureHash") for t in targets},
         },
         "targets": targets,
     }

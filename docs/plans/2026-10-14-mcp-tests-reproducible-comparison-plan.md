@@ -377,17 +377,39 @@ initialized Holded account**. Proposed meaning and verification:
   3. *No harness leftovers:* nothing carries a marker-shaped value.
   4. *Baseline hash matches* (`fixtureHash`, §5.4).
   An entity type the MCP cannot list is recorded as `unverified`, never assumed clean. That gap is
-  likely on Holded for contacts and products (§5.4).
-- **Recorded** in `compare.json` per target: `freshness.status` (`fresh` | `clean` | `dirty`),
-  each check with its counts, `checkedAt`, the tenant or account id, and an operator-declared
-  `--initialized-at`. A run is **official** only if both targets are `fresh`. Otherwise
+  confirmed on Holded (S6): its MCP lists no contacts, products, sales orders, estimates,
+  proformas, purchase orders or waybills.
+- **Always against the LIVE catalogue (decided, 2026-10-15).** Vendors change their `tools/list`,
+  so the checklist never declares what is unlistable. Each entity names the list/get tool it
+  **would** use (Holded: `list_contacts`, `list_products`, `list_sales_orders`, `list_estimates`,
+  `list_proformas`, `list_purchase_orders`, `list_waybills`); at preflight a tool present in the
+  live `tools/list` is called for real, an absent one makes its entity `unverified` with reason
+  "tool not offered". No checklist edit is needed when a vendor adds the tool. Every
+  `summary.json`/`summary.md` also lists, per target, the tools added and removed since the
+  previous comparison of the same target (name + URL) under `runs/`, and flags any change to a
+  tool a `notPossible.missingTools` or a freshness checklist names; the previous comparison is
+  picked deterministically and its `compareId` recorded, so the report stays byte-reproducible
+  (design doc §6.1).
+- **The seed refuses only what it can prove.** Its preflight refuses documents, master-data rows
+  it can show are unexplained, and marker leftovers; every `unverified` check is printed as a
+  warning and does not block it (otherwise a platform with no list tools could never be seeded).
+  It writes an incomplete manifest before the first create, so an interrupted seed still blocks
+  the next one.
+- **Recorded** in `compare.json` per target: `freshness.status` (`fresh` | `clean` | `dirty` |
+  `unverified` | `unknown`; most severe first dirty > unverified > clean > fresh; `unknown` = no
+  checklist for the platform), each check with its counts, `checkedAt`, the seed's `seedId`, and the
+  operator-declared initialization instant (`make mcp-seed … INITIALIZED_AT=`, kept in the seed
+  manifest). A run is **official** only if both targets are `fresh`. Otherwise
   `summary.md` says "unofficial" in its headline, and the run is still fully reported.
   `clean` (checks 1–3 fail only on records tagged with a previous run's markers) is recorded as a
   diagnostic label only; it is never official.
 - **The stability pair (decided, §9).** Run B requires re-initializing **both** environments
   (local Etendo and the Holded account), then seeding again, exactly like run A. `clean` is not
   accepted. `make mcp-stability` refuses a pair unless both runs are official, i.e. every target
-  was `fresh` in both.
+  was `fresh` in both, **and** every target carries a different `seedId` in run B than in run A
+  (a seed refuses a seeded environment, so a new `seedId` proves the re-initialization).
+- **Implemented in S6** — format, algorithm and the seed's idempotency rules: design doc §6.1
+  "baseline and freshness", D50.
 
 ### 5.10 "Not possible on this platform" (D49)
 
@@ -483,7 +505,7 @@ it touches before creating a new one (`docs/testing/test-reuse-policy.md`).
 | S3 | **Multi-target, parallel, compare orchestrator** (D44): extract the per-attempt body of `cli.py:446-616` into a function; `--targets`, `--subject`, `platform` in config; targets concurrent, in-target pool with `--concurrency` / `run.concurrency` (per-target override) and `exclusive` probes; seeded schedule; all-target preflight; `compare.json`; `make mcp-compare`; Holded target in `config.example.toml` (bearer first, OAuth fallback). | M–L | S2 | schedule deterministic for a seed; concurrency never exceeds K; an `exclusive` probe runs alone; a 429 is rescheduled as a harness error; one attempt's failure does not cancel its siblings; teardown still runs in `finally` under cancellation; preflight failure on one target aborts all; `compare.json` carries every pin of §6 |
 | S4 | **Metrics + decision rule + summary** (D47, D48): `report.py`, `decide.py` incl. step 0 capability, `summary.json` / `summary.md` with the KR split and the freshness/official label, `make mcp-report`, `make mcp-stability`. Can start in parallel with S2–S3 against hand-built fixture run directories. | M | S1 (shapes) | each of the 9 items from fixture files; every decision step incl. margin edges (19 % vs 20 %), both 0/N = tie, one side `notPossible` → other wins, both `notPossible` → excluded, tokens missing → bytes, not-evaluable tasks out of the denominator; KR split capability/measured; stumble indicators; unofficial label when a target is not `fresh`; report identical with `events.ndjson` deleted; stability agreement incl. tie = tie and pin mismatch |
 | S5 | **Suite v2** (D45, D46, D49): `platforms:` blocks, `{{fixture.*}}`, `expectAnswer` matcher, `expectOutcome: refused`, `where:`, `notPossible` declarations + their preflight catalogue check + `not-possible.json` record, Holded payload shapes in `count_rows`, tool-name lint, v1 suites unchanged. | M–L | S3 | number normalisation table (Spanish and English formats, currency signs); accent-insensitive text; `none:` lists; refusal rule; `notPossible` with a tool that now exists → `invalidDeclaration`; without `missingTools` → `unchecked`; no agent attempt runs for a `notPossible` platform; lint catches a tool name; v1 suite loads byte-for-byte as before |
-| S6 | **Baseline + freshness** (D50): `fixtures/okr-baseline.yaml`, `make mcp-seed` through each platform's MCP only (no REST, no SQL), preflight baseline verify + `fixtureHash`, `fixtures/fresh.<platform>.yaml` checklists + init allowlists captured from a freshly initialized environment, `freshness` in `compare.json`, `--initialized-at`. | M | S5 | verify detects a missing / changed baseline record; hash stable across runs; each freshness check: fresh / clean (only previous-run markers, diagnostic) / dirty; unlistable entity → `unverified`, never clean; `mcp-stability` refuses a pair that is not official on both sides |
+| S6 | **Baseline + freshness** (D50): `fixtures/okr-baseline.yaml`, `make mcp-seed` through each platform's MCP only (no REST, no SQL), preflight baseline verify + `fixtureHash`, `fixtures/fresh.<platform>.yaml` checklists + init allowlists captured from a freshly initialized environment (`make mcp-seed CAPTURE=1`; the capture itself runs in S8), `freshness` in `compare.json`, the initialization instant declared at seed time (`INITIALIZED_AT`). | M | S5 | verify detects a missing / changed baseline record; hash stable across runs; each freshness check: fresh / clean (only previous-run markers, diagnostic) / dirty; unlistable entity → `unverified`, never clean; `mcp-stability` refuses a pair that is not official on both sides |
 | S7 | **`okr` suite, seeded and extendable:** the six probes of §5.8 (the five `/mcp-comparison` tasks, task 5 split), with Holded `notPossible` declarations where they apply, each piloted on both fresh platforms at concurrency 1 and 4; append-only `suites/okr.ids`. Later tasks are added one at a time through the same approval + pilot loop, outside this ticket's critical path. | M | S5, S6 | id-list test (append-only, no rename); every probe declares, for every platform, either a verification or `notPossible` |
 | S8 | **Official baseline + acceptance:** freshly initialize local Etendo and the Holded account, seed, run the comparison (official); re-initialize **both** environments and seed again, run again; `mcp-stability`. If < 90 %, apply §6 levers with a rule version bump. Summary pasted into `docs/mcp-evaluation/` by hand (D6). | S–M | S7 | — (an acceptance run, not a test) |
 
@@ -533,4 +555,6 @@ code (self-documentation policy); `mcp-tests/README` / `make help` lines for the
 
 ### Still open
 
-None.
+| # | Question | Why it matters | Raised |
+|---|---|---|---|
+| 14 | **Holded can never be `fresh` with its current MCP.** Contacts and products, the whole baseline, cannot be listed, so check 2 and the baseline read-back are `unverified` on Holded by construction, and D50 makes no comparison official. Options: (a) keep D50 strict and report every run as unofficial until Holded's MCP can list them; (b) accept a declared, versioned set of `unverified` entity types per platform as compatible with `fresh` (weaker: a dirty Holded account would pass); (c) prove freshness of Holded through the account's creation date plus an empty document check only. **Still open.** Since 2026-10-15 the checks follow the live catalogue, so under (a) Holded becomes provable the day its MCP offers those list tools, with no change here; and a capability Etendo's MCP has and Holded's lacks keeps counting as a capability win (`notPossible`, decision rule step 0). | S8 cannot produce an official number under (a) with today's catalogue. | S6, 2026-10-14 |

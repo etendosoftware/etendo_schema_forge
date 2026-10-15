@@ -242,7 +242,8 @@ class SummaryTest(unittest.TestCase):
         _edit_compare(cmp_dir, fresh_but_one)
         summary = report.build_summary(cmp_dir)
         self.assertEqual(summary["freshness"]["holded"],
-                         {"status": "unknown", "checkedAt": None, "initializedAt": None})
+                         {"status": "unknown", "checkedAt": None, "initializedAt": None,
+                          "seedId": None, "fixtureHash": None, "reasons": ["freshness was not checked"]})
         self.assertFalse(summary["official"])
 
     def test_pipes_in_table_cells_are_escaped(self):
@@ -289,6 +290,187 @@ class SummaryTest(unittest.TestCase):
         self.assertIn("UNOFFICIAL", out.getvalue())
 
 
+class CatalogueChangesTest(unittest.TestCase):
+    """Per target, the tools added / removed since its previous comparison in runs/ (vendor drift)."""
+
+    CURRENT = "20261014T1000-cmp-fixture"
+
+    def setUp(self):
+        self.runs = Path(tempfile.mkdtemp())
+        self.current = self._comparison(self.CURRENT, holded=["list_invoices", "create_invoice", "list_contacts"])
+        _edit_compare(self.current, self._with_checklist)
+
+    @staticmethod
+    def _with_checklist(compare):
+        for t in compare["targets"]:
+            if t["name"] == "holded":
+                t["freshness"] = {**t["freshness"], "details": {
+                    "documents": [{"name": "invoices", "tool": "list_invoices", "status": "ok"}],
+                    "masterData": [{"name": "contacts", "tool": "list_contacts", "status": "unverified"},
+                                   {"name": "products", "tool": "list_products", "status": "unverified"}]}}
+
+    def _comparison(self, compare_id, *, holded, local=("etendo_list",), holded_url=None, started_at="stamp"):
+        """`started_at`: "stamp" derives it from the id's minute stamp, None writes a legacy compare.json."""
+        cmp_dir = self.runs / compare_id
+        shutil.copytree(FIXTURE, cmp_dir)
+        if started_at == "stamp":
+            stamp = compare_id.split("-")[0]
+            started_at = f"{stamp[:4]}-{stamp[4:6]}-{stamp[6:8]}T{stamp[9:11]}:{stamp[11:13]}:00.000Z"
+
+        def ids(compare):
+            compare.update(compareId=compare_id, startedAt=started_at)
+            if started_at is None:
+                del compare["startedAt"]
+
+        _edit_compare(cmp_dir, ids)
+        for name, tools in (("holded", holded), ("local", local)):
+            path = cmp_dir / "targets" / name / "run.json"
+            run = json.loads(path.read_text())
+            if tools is not None:
+                run["server"]["tools"] = sorted(tools)
+            if name == "holded" and holded_url:
+                run["target"]["url"] = holded_url
+            path.write_text(json.dumps(run))
+        return cmp_dir
+
+    def changes(self):
+        return report.build_summary(self.current)["catalogueChanges"]
+
+    def test_no_previous_comparison_is_said_so(self):
+        holded = self.changes()["holded"]
+        self.assertEqual((holded["status"], holded["previous"]), ("noPrevious", None))
+        self.assertIn("Catalogue changes since the previous comparison", report.render_markdown(
+            report.build_summary(self.current)))
+
+    def test_added_and_removed_tools_against_the_most_recent_earlier_comparison(self):
+        self._comparison("20261012T0900-cmp-old", holded=["list_invoices"])
+        self._comparison("20261013T0900-cmp-prev", holded=["list_invoices", "list_products", "get_usage"])
+        self._comparison("20261015T0900-cmp-later", holded=["everything_changed"])  # after: never read
+        holded = self.changes()["holded"]
+        self.assertEqual(holded["previous"], "20261013T0900-cmp-prev")
+        self.assertEqual(holded["added"], ["create_invoice", "list_contacts"])
+        self.assertEqual(holded["removed"], ["get_usage", "list_products"])
+        self.assertEqual(self.changes()["local"]["status"], "unchanged")
+
+    def test_a_tool_named_by_a_not_possible_or_a_checklist_is_flagged(self):
+        self._comparison("20261013T0900-cmp-prev", holded=["list_invoices", "list_products"])
+        watched = {w["tool"]: w for w in self.changes()["holded"]["watched"]}
+        self.assertEqual(set(watched), {"create_invoice", "list_contacts", "list_products"})
+        self.assertEqual(watched["create_invoice"]["change"], "added")
+        self.assertEqual(watched["create_invoice"]["namedBy"], ["notPossible w-invoice-one-product-issued"])
+        self.assertEqual(watched["list_contacts"]["namedBy"], ["freshness contacts"])
+        self.assertEqual(watched["list_products"]["change"], "removed")
+        md = report.render_markdown(report.build_summary(self.current))
+        self.assertIn("**create_invoice added** — named by notPossible w-invoice-one-product-issued", md)
+
+    def test_only_the_same_target_name_and_url_with_a_recorded_catalogue_counts(self):
+        self._comparison("20261013T0900-cmp-moved", holded=["x"], holded_url="https://other.example/mcp")
+        self._comparison("20261013T0800-cmp-blind", holded=None)  # run.json without tools
+        self._comparison("20261012T0900-cmp-match", holded=["list_invoices"])
+        self.assertEqual(self.changes()["holded"]["previous"], "20261012T0900-cmp-match")
+
+    def test_a_run_without_its_tool_list_is_unknown(self):
+        self.assertEqual(report.build_summary(FIXTURE)["catalogueChanges"]["holded"]["status"], "unknown")
+
+    def test_the_summary_stays_byte_stable_and_records_the_previous_id(self):
+        self._comparison("20261013T0900-cmp-prev", holded=["list_invoices"])
+        report.write_summary(self.current)
+        first = (self.current / "summary.json").read_bytes()
+        self._comparison("20261016T0900-cmp-newer", holded=["anything"])
+        report.write_summary(self.current)
+        self.assertEqual(first, (self.current / "summary.json").read_bytes())
+        self.assertIn(b'"previous": "20261013T0900-cmp-prev"', first)
+
+
+    def test_two_earlier_legacy_comparisons_in_the_same_minute_resolve_by_compare_id(self):
+        # Legacy compare.json without startedAt: the id's minute stamp is all there is,
+        # so the random suffix breaks the tie — deterministic, documented, not chronological.
+        self._comparison("20261013T0900-cmp-ffff", holded=["list_invoices", "from_ffff"], started_at=None)
+        self._comparison("20261013T0900-cmp-0a0a", holded=["list_invoices", "from_0a0a"], started_at=None)
+        first = self.changes()["holded"]
+        self.assertEqual(first["previous"], "20261013T0900-cmp-ffff")
+        self.assertEqual(first["removed"], ["from_ffff"])
+        self.assertEqual(self.changes(), self.changes())
+
+    def test_within_one_minute_the_start_instant_decides_not_the_random_suffix(self):
+        # The current comparison started at 10:00:30. Same minute, suffixes chosen AGAINST the
+        # start order: the earlier one has the larger id, the later one the smaller. The later
+        # one must never be "previous", and adding it changes nothing.
+        _edit_compare(self.current, lambda c: c.update(startedAt="2026-10-14T10:00:30.000Z"))
+        self._comparison("20261014T1000-cmp-zzzz", holded=["list_invoices", "earlier"],
+                         started_at="2026-10-14T10:00:10.000Z")
+        report.write_summary(self.current)
+        before = ((self.current / "summary.json").read_bytes(), (self.current / "summary.md").read_bytes())
+        self.assertEqual(self.changes()["holded"]["previous"], "20261014T1000-cmp-zzzz")
+        later = self._comparison("20261014T1000-cmp-0000", holded=["later"], started_at="2026-10-14T10:00:50.000Z")
+        report.write_summary(self.current)
+        self.assertEqual(before, ((self.current / "summary.json").read_bytes(), (self.current / "summary.md").read_bytes()))
+        # ...and from the later one's side, the current comparison IS its previous.
+        self.assertEqual(report.build_summary(later)["catalogueChanges"]["holded"]["previous"], "20261014T1000-cmp-fixture")
+
+    def test_equal_start_instants_fall_back_to_the_compare_id(self):
+        _edit_compare(self.current, lambda c: c.update(startedAt="2026-10-14T10:00:30.000Z"))
+        self._comparison("20261014T1000-cmp-aaaa", holded=["a"], started_at="2026-10-14T10:00:30.000Z")
+        self._comparison("20261014T1000-cmp-zzzz", holded=["z"], started_at="2026-10-14T10:00:30.000Z")
+        # "...-cmp-aaaa" < "...-cmp-fixture" < "...-cmp-zzzz"
+        self.assertEqual(self.changes()["holded"]["previous"], "20261014T1000-cmp-aaaa")
+
+    def test_a_legacy_sibling_is_placed_by_its_id_stamp(self):
+        self._comparison("20261014T0959-cmp-legacy", holded=["legacy"], started_at=None)
+        self._comparison("20261014T0958-cmp-new", holded=["new"])
+        self.assertEqual(self.changes()["holded"]["previous"], "20261014T0959-cmp-legacy")
+
+    def test_a_sibling_whose_json_is_not_an_object_is_skipped(self):
+        self._comparison("20261012T0900-cmp-good", holded=["list_invoices"])
+        for compare_id, payload in (("20261013T0900-cmp-list", "[]"), ("20261013T0901-cmp-str", '"x"')):
+            (self.runs / compare_id).mkdir()
+            (self.runs / compare_id / "compare.json").write_text(payload, encoding="utf-8")
+        for compare_id, payload in (("20261013T1000-cmp-runlist", "[]"), ("20261013T1001-cmp-runstr", '"x"')):
+            bad = self._comparison(compare_id, holded=["x"])
+            (bad / "targets" / "holded" / "run.json").write_text(payload, encoding="utf-8")
+        holded = self.changes()["holded"]
+        self.assertEqual((holded["status"], holded["previous"]), ("changed", "20261012T0900-cmp-good"))
+
+    def test_a_sibling_with_an_unreadable_compare_or_run_is_skipped(self):
+        self._comparison("20261012T0900-cmp-good", holded=["list_invoices"])
+        corrupt = self.runs / "20261013T0900-cmp-corrupt"
+        corrupt.mkdir()
+        (corrupt / "compare.json").write_text("{not json", encoding="utf-8")
+        broken_run = self._comparison("20261013T1000-cmp-brokenrun", holded=["x"])
+        (broken_run / "targets" / "holded" / "run.json").write_text("{truncated", encoding="utf-8")
+        (self.runs / "20261013T1100-cmp-empty").mkdir()  # no compare.json at all
+        (self.runs / "stray.txt").write_text("not a comparison", encoding="utf-8")
+        holded = self.changes()["holded"]
+        self.assertEqual((holded["status"], holded["previous"]), ("changed", "20261012T0900-cmp-good"))
+
+    def test_a_target_absent_from_the_previous_comparison_has_no_previous(self):
+        renamed = self._comparison("20261013T0900-cmp-renamed", holded=["list_invoices"])
+        (renamed / "targets" / "holded").rename(renamed / "targets" / "holded-v1")
+        changes = self.changes()
+        self.assertEqual((changes["holded"]["status"], changes["holded"]["previous"]), ("noPrevious", None))
+        self.assertEqual(changes["local"]["previous"], "20261013T0900-cmp-renamed")  # the other one still pairs
+
+    def test_a_target_added_since_the_previous_comparison_has_no_previous(self):
+        older = self._comparison("20261013T0900-cmp-localonly", holded=["list_invoices"])
+        shutil.rmtree(older / "targets" / "holded")
+        self.assertEqual(self.changes()["holded"]["status"], "noPrevious")
+        self.assertEqual(self.changes()["local"]["status"], "unchanged")
+
+    def test_a_legacy_run_with_declared_unverified_is_still_read(self):
+        def legacy(compare):
+            for t in compare["targets"]:
+                if t["name"] == "holded":  # written before the live-catalogue checklist
+                    t["freshness"] = {"status": "unverified", "details": {
+                        "declaredUnverified": [{"name": "payments", "reason": "no list tool"}]}}
+
+        _edit_compare(self.current, legacy)
+        self._comparison("20261013T0900-cmp-prev", holded=["list_invoices", "create_invoice"])
+        summary = report.build_summary(self.current)
+        self.assertIn("payments: unverified — no list tool", summary["freshness"]["holded"]["reasons"])
+        holded = summary["catalogueChanges"]["holded"]
+        self.assertEqual(holded["added"], ["list_contacts"])
+        self.assertEqual([w["tool"] for w in holded["watched"]], [])  # a legacy entry names no tool
+
 class StabilityTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -330,6 +512,20 @@ class StabilityTest(unittest.TestCase):
         result = report.stability(self.base, b)
         self.assertFalse(result["valid"])
         self.assertEqual(result["agreement"]["ratio"], 1.0, "still computed, just not valid")
+
+    def test_run_b_must_reseed_every_target(self):
+        # Plan §5.9 / decision 13: run B re-initializes and re-seeds every
+        # target; a seed refuses a seeded environment, so a new seedId proves it.
+        a, b = copy.deepcopy(self.base), copy.deepcopy(self.base)
+        for run, seeds in ((a, {"local": "sa1", "holded": "sa2"}), (b, {"local": "sb1", "holded": "sa2"})):
+            for name, seed_id in seeds.items():
+                run["freshness"][name]["seedId"] = seed_id
+        result = report.stability(a, b)
+        self.assertFalse(result["valid"])
+        self.assertIn("re-seed", result["refusals"][0])
+        self.assertIn("holded", result["refusals"][0])
+        b["freshness"]["holded"]["seedId"] = "sb2"
+        self.assertTrue(report.stability(a, b)["valid"])
 
     def test_self_reported_tasks_are_flagged_but_decided_and_compared_as_any_other(self):
         # Documents the S5 contract: `successBasis: selfReport` is VISIBLE

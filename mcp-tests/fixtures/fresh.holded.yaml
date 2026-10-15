@@ -1,0 +1,47 @@
+# Freshness checklist for Holded targets (plan §5.9, D50). Read through Holded's MCP only — no REST.
+#
+# Holded's lists are cursor-paginated (`has_more`): a page that says more follow is partial and
+# reads as `unverified`, never as a count. `limit: 200` is the documented maximum.
+#
+# Every entity names the list tool it WOULD be read with, whether Holded offers it today or not.
+# The LIVE tools/list decides at every preflight: an entity whose tool is absent is `unverified`
+# ("tool not offered"); the run Holded adds the tool, the check runs for real with no edit here.
+# As read on 2026-10-14, list_contacts, list_products, list_sales_orders, list_estimates,
+# list_proformas, list_purchase_orders and list_waybills are absent, so a Holded target cannot
+# reach `fresh` with that catalogue. Their `args` mirror the sibling list tools and are a guess
+# until the tool exists: a wrong guess fails the read, which is `unverified`, never `fresh`.
+schemaVersion: 1
+platform: holded
+allowlistCaptured: false
+
+documents:
+  - { name: invoices,         tool: list_invoices,         args: { limit: 200 } }
+  - { name: credit-notes,     tool: list_credit_notes,     args: { limit: 200 } }
+  - { name: purchases,        tool: list_purchases,        args: { limit: 200 } }
+  - { name: purchase-refunds, tool: list_purchase_refunds, args: { limit: 200 } }
+  - { name: payments,         tool: list_payments,         args: { limit: 200 } }
+  - { name: sales-receipts,   tool: list_sales_receipts,   args: { limit: 200 } }
+  - { name: receipt-notes,    tool: list_receipt_notes,    args: { limit: 200 } }
+  - { name: remittances,      tool: list_remittances,      args: { limit: 200 } }
+
+  # Not offered on 2026-10-14 (see the header): unverified until the live catalogue carries them.
+  - { name: sales-orders,     tool: list_sales_orders,     args: { limit: 200 } }
+  - { name: estimates,        tool: list_estimates,        args: { limit: 200 } }
+  - { name: proformas,        tool: list_proformas,        args: { limit: 200 } }
+  - { name: purchase-orders,  tool: list_purchase_orders,  args: { limit: 200 } }
+  - { name: waybills,         tool: list_waybills,         args: { limit: 200 } }
+
+# Not offered on 2026-10-14. The baseline records are told apart by the ids in the seed manifest.
+masterData:
+  - name: contacts
+    tool: list_contacts
+    args: { limit: 200 }
+    key: name
+    baseline: [customer-paridad, supplier-paridad]
+    allow: []
+  - name: products
+    tool: list_products
+    args: { limit: 200 }
+    key: name
+    baseline: [product-servicio]
+    allow: []

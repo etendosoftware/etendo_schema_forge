@@ -326,7 +326,7 @@ class SuiteV2Test(unittest.TestCase):
                       "belongs inside")
         self._rejects(V2.replace("expectAnswer: [{ number: 121, tolerance: 0.01 }]",
                                  "expectOutcome: accepted"), "refused")
-        self._rejects(V2.replace("{{marker}}?", "{{fixture.customer.name}}?"), "S6")
+        self._rejects(V2.replace("{{marker}}?", "{{fixture.customer.name}}?"), "declares no `fixture:`")
         self._rejects(V2.replace("schemaVersion: 2", "schemaVersion: 3"), "not supported")
 
     def test_a_write_refusal_must_prove_no_effect(self):

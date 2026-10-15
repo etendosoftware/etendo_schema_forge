@@ -13,6 +13,7 @@ from typing import Any
 
 import yaml
 
+from . import fixture as fixtures
 from .matcher import is_small_literal, normalize_spec
 from .steps import Step, parse_steps
 
@@ -159,6 +160,9 @@ class Suite:
     # of runner/decide.py. None = the rule's defaults. Copied into compare.json.
     decision: dict[str, Any] | None = None
     schema_version: int = 1
+    #: v2 `fixture: <name>`: the baseline dataset its `{{fixture.*}}` refs name
+    #: (plan §5.4, S6). Resolved per target at preflight; None = no baseline.
+    fixture: "fixtures.Fixture | None" = None
 
     @property
     def sha(self) -> str:
@@ -200,9 +204,39 @@ def load_suite(path: str | Path) -> Suite:
         raise ValueError(f"{path.name}: decision must be a mapping.")
     window = data.get("window", path.stem)
     if version == 2:
-        return Suite(path=path, window=window, probes=_load_v2_probes(data, path),
-                     decision=decision, schema_version=2)
+        fixture = fixtures.load_fixture(data["fixture"]) if data.get("fixture") else None
+        probes = _load_v2_probes(data, path)
+        _check_fixture_refs(data, path, fixture)
+        return Suite(path=path, window=window, probes=probes, decision=decision, schema_version=2,
+                     fixture=fixture)
+    if fixtures.refs_in(data.get("probes") or []) or data.get("fixture"):
+        raise ValueError(f"{path.name}: `fixture:` and {{{{fixture.*}}}} need a v2 suite (schemaVersion: 2).")
     return Suite(path=path, window=window, probes=_load_v1_probes(data, path), decision=decision)
+
+
+def _check_fixture_refs(data: dict[str, Any], path: Path, fixture: "fixtures.Fixture | None") -> None:
+    """Every `{{fixture.<record>.<key>}}` names a baseline record and a key it has.
+
+    The shared prompt may name a record's vendor-neutral values but never its
+    `id`: ids differ per target, and the prompt is byte-identical across
+    targets (plan §5.2).
+    """
+    for entry in data.get("probes") or []:
+        refs = fixtures.refs_in(entry)
+        if not refs:
+            continue
+        where = f"{path.name} probe {entry.get('id')!r}"
+        if fixture is None:
+            raise ValueError(f"{where}: uses {{{{fixture.*}}}} but the suite declares no `fixture:`.")
+        table = {rec: set(values) | {"id"} for rec, values in fixture.records.items()}
+        fixtures.check_refs(table, refs, where)
+        for rec, key in fixtures.refs_in(entry.get("prompt") or ""):
+            if key == "id":
+                raise ValueError(f"{where}: the shared prompt names {{{{fixture.{rec}.id}}}}; ids differ per "
+                                 f"target — name the record by a vendor-neutral value instead.")
+        for platform in (entry.get("platforms") or {}):
+            if platform not in fixture.platforms:
+                raise ValueError(f"{where}: fixture {fixture.name!r} declares no `platforms.{platform}`.")
 
 
 def _load_v1_probes(data: dict[str, Any], path: Path) -> list[Probe]:
@@ -377,8 +411,6 @@ def prompt_tool_mentions(prompt: str, tool_names: Any) -> list[str]:
 
 
 def _lint_prompt(probe: Probe) -> None:
-    if "{{fixture." in probe.prompt.replace(" ", ""):
-        raise ValueError(f"Probe {probe.id!r}: {{{{fixture.*}}}} lands with the baseline dataset (S6).")
     mentions = prompt_tool_mentions(probe.prompt, _suite_tools(probe))
     if mentions:
         raise ValueError(f"Probe {probe.id!r}: the shared prompt names tool(s) {mentions}; a v2 "

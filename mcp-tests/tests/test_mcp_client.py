@@ -153,6 +153,13 @@ class WhereTest(unittest.TestCase):
         self.assertIn("1 of 50", str(ctx.exception))
         self.assertEqual(mcp_client.count_matching({"data": [{"a": 1}], "totalRows": 1}, {"a": 1}), 1)
 
+    def test_a_cursor_page_that_says_more_follow_is_partial(self):
+        # Holded's lists are cursor-paginated: `has_more: true` means this page is not the answer.
+        for payload in ({"data": [{"a": 1}], "has_more": True}, {"items": [], "hasMore": True}):
+            with self.subTest(payload=payload), self.assertRaises(mcp_client.VerificationError):
+                mcp_client.extract_rows(payload)
+        self.assertEqual(mcp_client.extract_rows({"data": [{"a": 1}], "has_more": False}), [{"a": 1}])
+
     def test_without_where_a_partial_page_is_counted_by_its_total(self):
         # The count path (no `where`) trusts the server's total, which is the
         # complete answer to the server-side filter: it is verifiable, unlike

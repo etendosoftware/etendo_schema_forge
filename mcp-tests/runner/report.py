@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import statistics
 import sys
 from dataclasses import dataclass, field
@@ -38,8 +39,12 @@ from . import decide as rule
 
 #: v2 (S5 review): `selfReportedSuccess` — tasks whose success rests on the
 #: agent's own report (a refusal with no objective check) are listed, never hidden.
-REPORT_VERSION = 2
-SUMMARY_SCHEMA_VERSION = 2
+#: v3 (S6): freshness carries `seedId`, `fixtureHash` and `reasons`; stability
+#: refuses a pair whose run B reuses run A's seeded environment.
+#: v4: `catalogueChanges` — per target, the tools added / removed since the
+#: previous comparison of the same target (name + URL) found under runs/.
+REPORT_VERSION = 4
+SUMMARY_SCHEMA_VERSION = 4
 STABILITY_TARGET = 0.90
 
 # A characters-per-token estimate for the tool catalogue's priming share
@@ -356,6 +361,115 @@ def _target_pins(target: TargetRecords, meta: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _run_tools(run: dict[str, Any]) -> list[str] | None:
+    tools = (run.get("server") or {}).get("tools")
+    return sorted(str(t) for t in tools) if isinstance(tools, list) else None
+
+
+#: compareId stamps: `%Y%m%dT%H%M%S` since 2026-10-15, `%Y%m%dT%H%M` before.
+_ID_STAMP_RE = re.compile(r"^(\d{8}T\d{4}(?:\d{2})?)-")
+_EPOCH = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+
+
+def _utc(moment: dt.datetime | None) -> dt.datetime | None:
+    if moment is None:
+        return None
+    return moment.replace(tzinfo=dt.timezone.utc) if moment.tzinfo is None else moment
+
+
+def comparison_order(compare: dict[str, Any], fallback_id: str) -> tuple[dt.datetime, str]:
+    """Sort key of a comparison: (when it started, compareId).
+
+    `startedAt` (ms, UTC) decides, the compareId breaks ties. A legacy
+    compare.json without `startedAt` falls back to the stamp its compareId
+    starts with (minute precision before 2026-10-15), so two legacy
+    comparisons of the same minute are still ordered by their random suffix —
+    deterministic, but not chronological. An id with no stamp sorts first.
+    """
+    compare_id = str(compare.get("compareId") or fallback_id)
+    started = _utc(_parse_ts(compare.get("startedAt")))
+    if started is None:
+        match = _ID_STAMP_RE.match(compare_id)
+        if match:
+            stamp = match.group(1)
+            started = dt.datetime.strptime(stamp, "%Y%m%dT%H%M%S" if len(stamp) == 15 else "%Y%m%dT%H%M"
+                                           ).replace(tzinfo=dt.timezone.utc)
+    return (started or _EPOCH, compare_id)
+
+
+def _previous_run(compare_dir: Path, current: tuple[dt.datetime, str], name: str, url: str | None
+                  ) -> tuple[str, dict[str, Any]] | None:
+    """The most recent EARLIER comparison of the same target (name + URL) that recorded its tools.
+
+    Deterministic, so the summary stays byte-reproducible: candidates are the
+    sibling comparison directories ordered by `comparison_order`, and only
+    those strictly before this one count — a comparison started later, even in
+    the same minute, never changes this one's report. A sibling whose
+    compare.json or run.json is unreadable or not a JSON object is skipped.
+    """
+    if url is None:
+        return None
+    candidates = []
+    for other in compare_dir.parent.iterdir() if compare_dir.parent.is_dir() else ():
+        if other.resolve() == compare_dir.resolve() or not other.is_dir():
+            continue
+        compare = _read_json(other / "compare.json")
+        if not isinstance(compare, dict):
+            continue
+        key = comparison_order(compare, other.name)
+        if key < current:
+            candidates.append((key, other))
+    for key, other in sorted(candidates, reverse=True):
+        run = _read_json(other / "targets" / name / "run.json")
+        if not isinstance(run, dict):
+            continue
+        if (run.get("target") or {}).get("url") == url and _run_tools(run) is not None:
+            return key[1], run
+    return None
+
+
+def _watched_tools(rows: list[dict[str, Any]], target: str, freshness: dict[str, Any]) -> dict[str, list[str]]:
+    """tool -> what names it: a `notPossible.missingTools` entry or a freshness checklist entity."""
+    watched: dict[str, set[str]] = {}
+    for row in rows:
+        for key in ("subject", "reference"):
+            side = row[key]
+            if side.get("target") == target and side.get("notPossible"):
+                for tool in side["notPossible"].get("missingTools") or []:
+                    watched.setdefault(tool, set()).add(f"notPossible {row['task']}")
+    details = (freshness or {}).get("details") or {}
+    for kind in ("documents", "masterData"):
+        for entry in details.get(kind) or []:
+            if entry.get("tool"):
+                watched.setdefault(entry["tool"], set()).add(f"freshness {entry.get('name')}")
+    return {tool: sorted(names) for tool, names in watched.items()}
+
+
+def catalogue_changes(compare_dir: Path, order: tuple[dt.datetime, str], target: TargetRecords,
+                      meta: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Tools added and removed since the previous comparison of this target (vendor catalogues move)."""
+    url = (target.run.get("target") or {}).get("url")
+    current = _run_tools(target.run)
+    sha = ((target.run.get("server") or {}).get("catalogue") or {}).get("sha")
+    base = {"url": url, "catalogueSha": sha, "previous": None, "previousCatalogueSha": None,
+            "added": [], "removed": [], "watched": []}
+    if current is None:
+        return {**base, "status": "unknown", "note": "this run recorded no tool list"}
+    found = _previous_run(compare_dir, order, target.name, url)
+    if found is None:
+        return {**base, "status": "noPrevious",
+                "note": "no earlier comparison of this target (same name and URL) in runs/"}
+    previous_id, previous = found
+    before = set(_run_tools(previous) or [])
+    added, removed = sorted(set(current) - before), sorted(before - set(current))
+    watched = _watched_tools(rows, target.name, meta.get("freshness") or {})
+    flagged = [{"tool": t, "change": change, "namedBy": watched[t]}
+               for change, tools in (("added", added), ("removed", removed)) for t in tools if t in watched]
+    return {**base, "status": "changed" if added or removed else "unchanged", "previous": previous_id,
+            "previousCatalogueSha": ((previous.get("server") or {}).get("catalogue") or {}).get("sha"),
+            "added": added, "removed": removed, "watched": flagged}
+
+
 def _self_reported(tasks: list[str], targets: tuple[TargetRecords, ...]) -> dict[str, Any]:
     """Tasks whose success, on some target, rests on `successBasis: selfReport`."""
     rows = []
@@ -431,7 +545,10 @@ def build_summary(compare_dir: Path) -> dict[str, Any]:
         fresh = meta.get("freshness") or {}
         freshness[meta["name"]] = {"status": fresh.get("status") or "unknown",
                                    "checkedAt": fresh.get("checkedAt"),
-                                   "initializedAt": fresh.get("initializedAt")}
+                                   "initializedAt": fresh.get("initializedAt"),
+                                   "seedId": fresh.get("seedId"),
+                                   "fixtureHash": fresh.get("fixtureHash"),
+                                   "reasons": freshness_reasons(fresh)}
     official = all(f["status"] == "fresh" for f in freshness.values())
 
     starts = [compare.get("startedAt")] if compare.get("startedAt") else []
@@ -458,6 +575,13 @@ def build_summary(compare_dir: Path) -> dict[str, Any]:
         # refusal with no objective check) is allowed, but never hidden in the
         # success count — every such task is listed here.
         "selfReportedSuccess": _self_reported(tasks, (subject, reference)),
+        # A vendor's tools/list moves: what changed since this target's previous
+        # comparison, and above all any tool a notPossible or a freshness check names.
+        "catalogueChanges": {
+            m["name"]: catalogue_changes(compare_dir, comparison_order(compare, compare_dir.name),
+                                         targets[m["name"]], m, task_rows)
+            for m in ordered
+        },
         "capabilityGaps": [
             {"task": r["task"], "target": side["target"], **side["notPossible"]}
             for r in task_rows for side in (r["subject"], r["reference"])
@@ -546,9 +670,13 @@ def render_markdown(summary: dict[str, Any]) -> str:
     ]
     if not summary["official"]:
         lines += ["Unofficial: an official number needs every target `fresh` (plan §5.9).", ""]
-    lines += ["| Target | Status | Checked at | Initialized at |", "|---|---|---|---|"]
+    lines += ["| Target | Status | Checked at | Initialized at | Seed |", "|---|---|---|---|---|"]
     for name, fresh in summary["freshness"].items():
-        lines.append(f"| {name} | {fresh['status']} | {_fmt(fresh['checkedAt'])} | {_fmt(fresh['initializedAt'])} |")
+        lines.append(f"| {name} | {fresh['status']} | {_fmt(fresh['checkedAt'])} | {_fmt(fresh['initializedAt'])} "
+                     f"| {_fmt(fresh.get('seedId'))} |")
+    for name, fresh in summary["freshness"].items():
+        for reason in fresh.get("reasons") or []:
+            lines.append(f"- {name}: {reason}")
 
     lines += ["", "## Tasks", "",
               "| Task | Target | Success | Consistency | Calls (median) | First call ok | Unrecovered "
@@ -578,6 +706,20 @@ def render_markdown(summary: dict[str, Any]) -> str:
         for gap in summary["capabilityGaps"]:
             tools = ", ".join(gap["missingTools"]) or "no tools declared (unchecked)"
             lines.append(f"- **{gap['task']}** on {gap['target']} ({gap['kind']}): {gap['reason']} — missing: {tools}")
+    lines += ["", "## Catalogue changes since the previous comparison", ""]
+    for name, change in (summary.get("catalogueChanges") or {}).items():
+        if change["status"] in ("unknown", "noPrevious"):
+            lines.append(f"- {name}: {change['note']}.")
+            continue
+        head = f"- {name}: versus {change['previous']}"
+        if change["status"] == "unchanged":
+            lines.append(f"{head} — no tool added or removed.")
+            continue
+        lines.append(f"{head} — added {', '.join(change['added']) or 'none'}; "
+                     f"removed {', '.join(change['removed']) or 'none'}.")
+        for w in change["watched"]:
+            lines.append(f"  - **{w['tool']} {w['change']}** — named by {', '.join(w['namedBy'])}: "
+                         f"review that declaration.")
     self_reported = summary.get("selfReportedSuccess") or {}
     if self_reported.get("count"):
         lines += ["", "## Success on the agent's word", "",
@@ -642,6 +784,28 @@ def _flatten(value: Any, prefix: str = "") -> dict[str, Any]:
     return {prefix: value}
 
 
+def freshness_reasons(fresh: dict[str, Any]) -> list[str]:
+    """Why a target is not `fresh`, one line per check that is not ok (plan §5.9)."""
+    details = fresh.get("details") or {}
+    if fresh.get("status") in (None, "unknown"):
+        return [details.get("reason") or "freshness was not checked"]
+    out = []
+    for kind in ("documents", "masterData"):
+        for c in details.get(kind) or []:
+            if c.get("status") != "ok":
+                extra = c.get("count", c.get("extraCount"))
+                out.append(f"{c['name']}: {c['status']}" + (f" ({extra})" if extra else "")
+                           + (f" — {c['detail']}" if c.get("detail") else ""))
+    # Runs written before the live-catalogue checklist (no `unverified:` list any more).
+    out += [f"{u['name']}: unverified — {u['reason']}" for u in details.get("declaredUnverified") or []]
+    if details.get("markerCount"):
+        out.append(f"{details['markerCount']} row(s) carry a harness marker")
+    seed = details.get("baseline") or {}
+    if seed.get("status") not in (None, "ok"):
+        out.append(f"baseline: {seed['status']} — {seed.get('detail')}")
+    return out
+
+
 def pin_differences(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
     fa, fb = _flatten(a["pins"]), _flatten(b["pins"])
     return [{"pin": k, "a": fa.get(k), "b": fb.get(k)} for k in sorted(set(fa) | set(fb)) if fa.get(k) != fb.get(k)]
@@ -673,6 +837,13 @@ def stability(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         refusals.append("pins differ")
     if not (a["official"] and b["official"]):
         refusals.append("both runs must be official (every target fresh)")
+    # Plan §5.9 / decision 13: run B re-initializes AND re-seeds every target.
+    # A seed refuses a seeded environment, so a new seedId is the proof.
+    reused = sorted(name for name, fa in (a.get("freshness") or {}).items()
+                    if fa.get("seedId") and fa.get("seedId") == ((b.get("freshness") or {}).get(name) or {}).get("seedId"))
+    if reused:
+        refusals.append(f"run B reuses run A's seeded environment on {reused}: re-initialize and "
+                        f"re-seed every target before run B")
     return {
         "a": a["compareId"], "b": b["compareId"],
         "valid": not refusals, "refusals": refusals,

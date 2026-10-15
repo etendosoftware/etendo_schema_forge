@@ -111,6 +111,13 @@ mcp-tests/
     redact.py                     ❌  NOT BUILT — D15 is unimplemented, see §6.7
     report.py                     ✅  comparison metrics, KR summary, stability (§6.6, D48) — reads files only
     decide.py                     ✅  the versioned decision rule, `RULE_VERSION` (§6.6, D47)
+    fixture.py                    ✅  baseline dataset, `{{fixture.*}}`, baseline verify, freshness checks (D50)
+    seed.py                       ✅  `make mcp-seed`: seed a freshly initialized target through its MCP (D50)
+  fixtures/                       ✅  versioned (D50)
+    okr-baseline.yaml             ✅  baseline dataset — DRAFT, piloted in S7/S8
+    fresh.etendo-go.yaml          ✅  freshness checklist (allowlist not captured yet)
+    fresh.holded.yaml             ✅  freshness checklist (contacts/products cannot be listed)
+  .seeds/                         ✅  gitignored: one seed manifest per target (`<target>.json`)
   ui/
     app.py                        ✅  Streamlit panel (§9)
     runs.py                       ✅  pure file-reading, no Streamlit import — the testable half
@@ -801,7 +808,7 @@ be one side of a comparison, and that attempts can run in parallel.
 `--targets a,b` (`make mcp-compare SUITE= TARGETS= REPEAT= CONCURRENCY= SUBJECT= SEED=`) writes:
 
 ```
-runs/<compareId>/                 # <UTC>-cmp-<hex4>, e.g. 20261014T1402-cmp-a3f1
+runs/<compareId>/                 # <UTC>-cmp-<hex4>, e.g. 20261014T140233-cmp-a3f1 (minutes only before 2026-10-15)
   compare.json
   summary.json  summary.md        # runner/report.py, run at the end (skip: --no-report)
   targets/<target>/               # an ordinary run dir: run.json, events.ndjson,
@@ -929,6 +936,136 @@ A v2 suite needs the target's `platform` and live catalogue even in a single `mc
 catalogue failure there exits 2 instead of writing "not measured" probes, because neither the
 platform blocks nor the `notPossible` checks can be resolved blind. `compare.json` gains
 `suite.schemaVersion` and `pins.suiteSchemaVersion` / `pins.matcherVersion`.
+
+#### 2026-10-14: baseline and freshness — `compare.json` v2 (ETP-5750 S6, D50)
+
+**Baseline dataset** (`fixtures/<name>.yaml`, `runner/fixture.py`). Read-only reference data,
+loaded once per environment, never by the runner per probe (plan §5.4):
+
+```yaml
+schemaVersion: 1
+name: okr-baseline
+records:                       # seeding order; ids permanent, append only
+  customer-paridad:
+    values: { name: "Cliente Paridad SL", taxId: "B00000017" }   # vendor-neutral
+platforms:
+  etendo-go:
+    customer-paridad:
+      create: [ <setup steps, D41> ]          # through the platform's OWN MCP only
+      id: "{{steps.bp.data.0.id}}"            # where the new id is
+      find: { tool: etendo_list, args: {…} }  # optional: the read that returns it
+      match: { name: "{{fixture.customer-paridad.name}}" }   # picks THE record out of find's rows
+      expect: { taxID: "…" }                  # values it must still hold
+      idPath: id                              # default
+  holded:
+    customer-paridad: { create: [ … ], id: "{{steps.contact.id}}" }   # no find: Holded cannot list contacts
+```
+
+A v2 suite names it with `fixture: <name>`; probes use `{{fixture.<record>.<key>}}`. `id` is the
+record's id **on the target being run** (from the read-back, or from the seed manifest when the
+platform has no `find`); any other key is a vendor-neutral `values` entry. The loader refuses an
+unknown record or key, a fixture ref without `fixture:`, a v1 suite using one, and `id` inside the
+shared prompt (ids differ per target; the prompt is byte-identical across targets). A record may name
+only records seeded before it. A whole-string ref keeps the value's type, like `{{steps.*}}`.
+
+**Seeding** (`make mcp-seed TARGET= FIXTURE= INITIALIZED_AT=`, `runner/seed.py`). Order for an
+official comparison: **initialize → seed → compare**; run B of a stability pair re-initializes and
+re-seeds **every** target again. The seed writes `.seeds/<target>.json`:
+`{target, url, platform, fixture, fixtureSha, fixtureHash, seedId, seededAt, initializedAt,
+complete, records: {record: id}}`. `INITIALIZED_AT` is operator-declared and required. Idempotency:
+a complete manifest whose baseline still reads back → no-op (exit 0, nothing created); a manifest
+that is incomplete / for another fixture or URL / no longer reads back → refused; no manifest but a
+readable baseline record already present → refused. The seed preflight runs the checklist and
+refuses only what it can **prove**: documents, master-data rows it can show are unexplained
+(`dirty`), or harness-marker rows (`leftover`) → refused (not freshly initialized). What it cannot
+judge — an entity whose list tool the live catalogue does not offer, a failed read, a partial page,
+master data while `allowlistCaptured: false` — is `unverified`: printed to stderr, one line per
+check, and the seed goes on (refusing would make a platform without list tools unseedable; the
+comparison reads the same checks as `unverified`, so it stays unofficial). The seed writes the
+manifest `complete: false` with its `seedId` **before the first create** and replaces it only at the
+end: a failed create, a Ctrl-C, a cancellation or a session that fails while closing all leave it
+incomplete (with the ids created so far), which blocks the next seed and makes the target dirty. A
+record the platform cannot read back (Holded has no `find`) is protected only by that manifest —
+never delete a seeded target's manifest.
+`CAPTURE=1` seeds nothing and prints the master data initialization created, as the `allow:` lists
+of the checklist. It reads the live tools/list first: an entity whose list tool the target does not
+offer prints `NOT CAPTURED: tool not offered: <tool>` and is never called; a failed read prints
+`NOT CAPTURED: <error>`. Exit 2 when no entity at all was captured.
+
+**Baseline verify** (preflight, every comparison and every v2 single run whose suite has a
+fixture). Per record: `ok` | `missing` | `duplicated` | `changed` (an `expect` value differs) |
+`replaced` (found under another id than seeded) | `unverified` (no `find`, or the read failed).
+`missing`, `duplicated` or `changed` **stops the run** (exit 2, nothing written); so does a
+`{{fixture.<r>.id}}` that has no id on that target (not seeded). `fixtureHash` = sha256 of the
+fixture file sha, the platform and, per record, its status and the values read back — **not the
+ids**, which change on every re-initialization, so both runs of a stability pair hash the same. It
+is pinned per target in `compare.json → pins.fixtureHashes`.
+
+**Freshness** (preflight, comparisons only; checklist `fixtures/fresh.<platform>.yaml`, through
+the MCP only). Four checks (plan §5.9), each reaching `ok`, `leftover`, `unverified` or `dirty`:
+
+1. **documents** — every listed document type holds 0 rows. Rows that all carry a harness marker
+   → `leftover`; any other row, or a count whose rows cannot all be read → `dirty`.
+2. **master data** — rows are exactly the baseline records named in `baseline` (by id) plus the
+   initialization `allow` list (by `key`). Unexplained rows that all carry a marker → `leftover`;
+   otherwise `dirty`, or `unverified` while `allowlistCaptured: false` (the checklist cannot judge)
+   or when the entity names `baseline:` records but no baseline is known (a suite without a
+   fixture: a row may be a baseline record, nobody can tell).
+3. **markers** — any row of any listed entity carrying `\d{8}T\d{4}-…-a<n>` → `leftover`.
+4. **baseline** — the seed manifest exists, is complete, matches the target URL, the suite's
+   fixture and sha, and (when the baseline read back fully) the recomputed `fixtureHash`; the
+   baseline read back without `missing/duplicated/changed/replaced`. Mismatch → `dirty`; no
+   manifest, no fixture, or an unreadable baseline → `unverified`.
+
+Anything that cannot be read — a tool absent from the live catalogue, a failed call, an unknown
+shape, a partial page (`totalRows` above the page, or a cursor page with `has_more: true`) — is
+`unverified`, **never** `ok`. Status, most severe first: **dirty > unverified > clean > fresh**
+(`FRESHNESS_STATUSES`); `unknown` = the platform has no checklist. Only `fresh` on every target is
+official; `clean` (only marker leftovers) is a diagnostic label. A checklist must declare at least
+one `documents` or `masterData` entry (one that checks nothing would read as fresh).
+
+**The live catalogue decides, never the checklist** (user decision, 2026-10-15). Vendors change
+their `tools/list`, so every entity names the list tool it **would** be read with, whether the
+platform offers it today or not (Holded: `list_contacts`, `list_products`, `list_sales_orders`,
+`list_estimates`, `list_proformas`, `list_purchase_orders`, `list_waybills`). At each preflight the
+tool is looked up in the live `tools/list`: present → the check runs for real; absent →
+`unverified` with detail `tool not offered: <tool> is not in the live catalogue`. A tool the vendor
+adds is used on the next run with no edit, and one it removes degrades its entity to `unverified`.
+The old static `unverified:` list is gone; the loader refuses it with a pointer to this form.
+
+`compare.json` **v2** (`COMPARE_SCHEMA_VERSION` 1 → 2): `targets[].freshness` =
+`{status, checkedAt, initializedAt, seedId, fixtureHash, checklist: {file, sha, allowlistCaptured},
+details: {documents[], masterData[], markers[], markerCount, baseline}}` (runs written before
+2026-10-15 may carry `declaredUnverified[]`; the report still reads it),
+`targets[].fixtureHash`, `pins.fixture` and `pins.fixtureHashes`. `summary.json` (summary v3,
+`REPORT_VERSION` 3) carries per target `status, checkedAt, initializedAt, seedId, fixtureHash` and
+`reasons` (one line per check that is not ok); `summary.md` lists them. `mcp-stability` also
+refuses a pair whose run B has the same `seedId` as run A on any target: a seed refuses a seeded
+environment, so a new `seedId` is the proof of re-initialization + re-seed.
+
+**Catalogue changes** (`summary.json` v4, `REPORT_VERSION` 4, `catalogueChanges`). Per target, the
+tools added and removed since the **previous comparison of the same target** — same name and URL,
+with a recorded tool list (`run.json → server.tools`), found under `runs/`. Picked
+deterministically so the summary stays byte-reproducible: comparisons are ordered by
+`compare.json → startedAt` (ms, UTC), with the `compareId` as tie-break, and the greatest one
+strictly before this one is `previous` (its id is recorded) — so a comparison started later, even in
+the same minute, never changes an earlier report. A legacy `compare.json` without `startedAt` is
+placed by the stamp its `compareId` starts with; since that stamp had minute precision before
+2026-10-15, two legacy comparisons of the same minute are ordered by their random suffix
+(deterministic, not chronological). New compareIds carry seconds (`%Y%m%dT%H%M%S-cmp-<hex4>`;
+`MARKER_RE` accepts both stamps). A sibling whose `compare.json` or `run.json` is unreadable or not
+a JSON object is skipped. `status`: `changed` | `unchanged` | `noPrevious`
+(said so in `summary.md`) | `unknown` (this run recorded no tool list). `watched[]` flags every
+added or removed tool that a `notPossible.missingTools` entry or a freshness checklist entity of
+that target names (`namedBy`), because each such change can invalidate a declaration or turn a
+freshness check real. A capability the subject has and the reference lacks stays a capability win
+(`notPossible` → decision rule step 0); this section is what tells the reader when that changes.
+
+**Consequence with today's Holded catalogue.** Holded's MCP (2026-10-14) offers none of the list
+tools above, so those entities read `unverified` and a Holded target is at best `unverified` —
+**never `fresh`, so no comparison against it can be official** under D50 as written. Recorded as
+an open decision (plan §9 #14). Because the check follows the live catalogue, the day Holded ships
+those tools the same checklist proves them, with no edit.
 
 ### 6.2 Run metadata header (`run.json`, written before the first probe)
 
@@ -1434,6 +1571,7 @@ in a changelog.
 | D43 | **`--repeat N` runs each probe N times, each attempt in its own MCP session, conversation and `{{marker}}`; every attempt is kept as `probes/<id>/attempt-<n>.json`, never averaged away.** A harness-errored attempt does not count and is replaced after the planned ones, at most N replacements per probe; a preflight auth failure is never replaced. | 2026-10-14 | ETP-5750 S2; plan `2026-10-14-mcp-tests-reproducible-comparison-plan.md` §5.1. Variance was unmeasured (§11 q4). Replacing harness errors keeps a transient provider fault from shrinking N, and the cap keeps a deterministically broken probe from looping. `mcp-compare` defaults to 3 (D44). **Behaviour change (S3):** the exit code is 1 whenever any attempt has a `harnessError` — a replaced transient error, or an effect check that could not run (before S3 the latter exited 0). |
 | D45 | **A suite v2 probe has one vendor-neutral prompt and a block per platform** (`setup`, `teardown`, `expectEffect` + client-side `where`, `expectAnswer`, `expectOutcome: refused`, or `notPossible`). The prompt never names a tool — enforced at load and against every target's live catalogue at preflight; every block verifies or is `notPossible`; a write refusal must prove `expect: none`; a `where` path absent from every row is not verifiable. `where` compares number-like scalars by value and refuses a partial page. v1 suites are unchanged. | 2026-10-14 | ETP-5750 S5; plan §5.3. Narrows D34 again: still one post-condition, now per platform. Neutrality enforced, not hoped for, because a prompt that names one vendor's tool hands that vendor the task. |
 | D46 | **`expectAnswer` is a deterministic, versioned matcher over `finalAnswer`** (`runner/matcher.py`, `MATCHER_VERSION`): locale-tolerant numbers (Spanish and English) that skip ids, dates, clock times, document numbers (`Nº 10`), phone numbers and percentages, `near:` anchors bound to their nearest number, `percent:`, whole-word accent-insensitive text, `all` / `none`; small literal integers need an anchor. No LLM judge. | 2026-10-14 | ETP-5750 S5; plan §5.5. A judge adds its own variance to criterion 1 and puts a second model inside the measurement. Conservative false negatives accepted, as in D34. |
+| D50 | **Official numbers come only from a fresh run** (plan §5.9): baseline seeded through each platform's own MCP (`make mcp-seed`, manifest + `fixtureHash` without ids), verified at preflight (a missing/duplicated/changed record stops the run), and four freshness checks through the MCP only; anything unreadable is `unverified`, never clean; status dirty > unverified > clean > fresh; official only if every target is `fresh`; a stability run B must carry a new `seedId` on every target. | 2026-10-14 | ETP-5750 S6; plan §5.4, §5.9 and §9 decisions 2, 5 and 13. Freshness is proven through the same MCP the agent uses, because seeding or checking through REST would measure a different surface. Unreadable means unverified because a check that cannot see a table must not certify it empty. The hash leaves ids out so that a re-initialized pair compares equal on what matters. Consequence: with Holded's current catalogue no comparison is official (§6.1, S6 note). 2026-10-15: whether an entity is checkable is decided by the LIVE `tools/list` at each preflight, never by the checklist — each entity names the tool it would use, an absent one is `unverified` ("tool not offered"); and every summary reports the catalogue changes since the target's previous comparison (§6.1). |
 | D49 | **"Not possible on this platform" is a first-class outcome**: declared per platform, checked against the live tools/list at preflight (`ok` / `invalidDeclaration` / `unchecked`), recorded as `not-possible.json`, never attempted and never worked around outside the MCP (no REST, no manual seeding). | 2026-10-14 | ETP-5750 S5; plan §5.10 and §9 decision 2. Declared rather than inferred because an agent cannot tell "does not exist" from "did not find it" (D38). |
 | D47 | **The decision rule is code (`runner/decide.py`, `RULE_VERSION`) and its thresholds are data** (the suite's `decision:` block, copied into `compare.json`, over `DEFAULT_PARAMETERS`). Every summary records the version, the parameters and their sha. | 2026-10-14 | ETP-5750 S4; plan §5.6. A KR figure without the rule that produced it is unreadable later, and a rule tweak must be re-appliable to an old run (`make mcp-report`) and visible in the diff. A declared `ruleVersion` the code does not implement is refused, never silently re-interpreted. |
 | D48 | **Metrics come only from `compare.json`, `run.json` and the probe files; `events.ndjson` is never read by the report.** | 2026-10-14 | ETP-5750 S4. Restates §6.5 rule 1 as a property of the report and guards it with a test that deletes the event files and asserts a byte-identical summary. |

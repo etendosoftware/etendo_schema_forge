@@ -741,7 +741,9 @@ def extract_rows(payload: Any) -> list[Any]:
     Only a COMPLETE answer is returned: when the payload says it holds more
     rows than it carries (`totalRows` / `totalCount` above the page size), a
     client-side `where` over this page would count a part as the whole, so it
-    raises — not verifiable — rather than answer from a partial page.
+    raises — not verifiable — rather than answer from a partial page. A
+    cursor-paginated answer that says more follows (`has_more` / `hasMore`
+    true, Holded's shape) is partial in the same way.
     """
     if isinstance(payload, list):
         return payload
@@ -749,6 +751,10 @@ def extract_rows(payload: Any) -> list[Any]:
         for key in ("data", "items", "results", "records"):
             if isinstance(payload.get(key), list):
                 rows = payload[key]
+                if _has_more(payload):
+                    raise VerificationError(
+                        f"the read returned {len(rows)} rows and says more follow (cursor page); a "
+                        f"partial answer cannot be checked — raise the page size")
                 total = next((payload[k] for k in ("totalRows", "totalCount")
                               if isinstance(payload.get(k), int)), None)
                 if total is not None and total > len(rows):
@@ -760,6 +766,10 @@ def extract_rows(payload: Any) -> list[Any]:
                 return rows
     keys = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
     raise VerificationError(f"cannot read rows out of payload {keys}")
+
+
+def _has_more(payload: dict[str, Any]) -> bool:
+    return payload.get("has_more") is True or payload.get("hasMore") is True
 
 
 def _path(row: Any, dotted: str) -> Any:
@@ -816,6 +826,11 @@ def count_matching(payload: Any, where: dict[str, Any]) -> int:
     without it does not match; a present null is a value). No rows at all is
     an honest 0: there is no shape to check, and nothing was found.
     """
+    return len(matching_rows(payload, where))
+
+
+def matching_rows(payload: Any, where: dict[str, Any]) -> list[Any]:
+    """The rows `count_matching` counts — same rules, including the missing-path one."""
     rows = extract_rows(payload)
     if rows:
         for key in where:
@@ -823,10 +838,8 @@ def count_matching(payload: Any, where: dict[str, Any]) -> int:
                 raise VerificationError(
                     f"`where` path {key!r} is in no row of the answer ({len(rows)} rows) — a typo or "
                     "a field this target does not return; it cannot be read as \"no match\"")
-    return sum(
-        1 for row in rows
-        if all(_same(_path(row, key), expected) for key, expected in where.items())
-    )
+    return [row for row in rows
+            if all(_same(_path(row, key), expected) for key, expected in where.items())]
 
 
 def count_rows(payload: Any) -> int:

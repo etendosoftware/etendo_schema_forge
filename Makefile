@@ -1073,6 +1073,19 @@ SEED        ?=
 mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, REPEAT=, CONCURRENCY=, SEED=, MODEL=)
 	cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $(SUITE) $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(SEED),--seed $(SEED)) $(if $(MODEL),--model $(MODEL))
 
+# Plan §5.4 / §5.9 (S6): load the baseline dataset into a FRESHLY INITIALIZED target through its
+# own MCP, and record a seed manifest (.seeds/<target>.json). Order for an official comparison:
+# initialize -> mcp-seed -> mcp-compare. A stability pair's run B RE-INITIALIZES and RE-SEEDS every
+# target again (mcp-stability refuses a run B that reuses run A's seed). Re-seeding a seeded target
+# is a no-op; a half-seeded or foreign one is refused, never duplicated. CAPTURE=1 seeds nothing and
+# prints the init allowlist for fixtures/fresh.<platform>.yaml.
+FIXTURE        ?= okr-baseline
+INITIALIZED_AT ?=
+.PHONY: mcp-seed
+mcp-seed: ## Seed a freshly initialized target (TARGET=, FIXTURE=okr-baseline, INITIALIZED_AT=<ISO>, CAPTURE=1)
+	@if [ -z "$(TARGET)" ]; then echo "TARGET is required, e.g. make mcp-seed TARGET=local INITIALIZED_AT=2026-10-20T09:00Z"; exit 1; fi
+	cd mcp-tests && uv run python -m runner.seed --target $(TARGET) $(if $(CAPTURE),--capture-allowlist,--fixture $(FIXTURE) $(if $(INITIALIZED_AT),--initialized-at $(INITIALIZED_AT)))
+
 .PHONY: mcp-login
 mcp-login: ## Pre-warm or refresh a target's OAuth token (TARGET=). Never a prerequisite for mcp-test.
 	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --login

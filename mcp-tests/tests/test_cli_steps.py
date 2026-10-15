@@ -6,6 +6,7 @@ with the run record around them (run schema v4: `silentWrong`, `server`,
 `harness`).
 
 @covers mcp-tests/runner/cli.py
+@covers mcp-tests/runner/report.py
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from pathlib import Path
 from unittest import mock
 
 from runner import cli
+from runner import fixture as fixtures
 from runner.agent import ProbeAborted
 from runner.mcp_client import AuthError
 
@@ -134,6 +136,8 @@ class Harness:
         self.stdout, self.stderr = io.StringIO(), io.StringIO()
         with mock.patch.dict(os.environ, {"MCP_TESTS_FAKE_KEY": "k", "MCP_TESTS_FAKE_TOKEN": "t"}), \
              mock.patch.object(cli, "RUNS_DIR", runs), \
+             mock.patch.object(fixtures, "FIXTURES_DIR", self.tmp / "fixtures"), \
+             mock.patch.object(fixtures, "SEEDS_DIR", self.tmp / ".seeds"), \
              mock.patch.object(cli, "check_model", no_model), \
              mock.patch.object(cli, "preflight", self.preflight), \
              mock.patch.object(cli, "mcp_session", self.session), \
@@ -495,6 +499,8 @@ class CompareHarness(Harness):
         self.stdout, self.stderr = io.StringIO(), io.StringIO()
         with mock.patch.dict(os.environ, {"MCP_TESTS_FAKE_KEY": "k", "MCP_TESTS_FAKE_TOKEN": "t"}), \
              mock.patch.object(cli, "RUNS_DIR", runs), \
+             mock.patch.object(fixtures, "FIXTURES_DIR", self.tmp / "fixtures"), \
+             mock.patch.object(fixtures, "SEEDS_DIR", self.tmp / ".seeds"), \
              mock.patch.object(cli, "check_model", no_model), \
              mock.patch.object(cli, "preflight", self.preflight), \
              mock.patch.object(cli, "mcp_session", self.session), \
@@ -527,7 +533,7 @@ class CompareTest(unittest.TestCase):
         compare = h.compare("--repeat", "2", "--seed", "7")
         self.assertEqual(h.exit_code, 0)
         cid = compare["compareId"]
-        self.assertRegex(cid, r"^\d{8}T\d{4}-cmp-[0-9a-f]{4}$")
+        self.assertRegex(cid, r"^\d{8}T\d{6}-cmp-[0-9a-f]{4}$")
         self.assertEqual(sorted(p.name for p in (h.compare_dir / "targets").iterdir()), ["h", "t"])
         for name in ("t", "h"):
             run = json.loads((h.compare_dir / "targets" / name / "run.json").read_text())
@@ -1129,6 +1135,26 @@ class SuiteV2CompareTest(unittest.TestCase):
         self.assertEqual(rows["w"]["status"], "decided")
         self.assertEqual(summary["kr"]["evaluated"], 2)
 
+    def test_the_summary_reports_catalogue_changes_against_the_previous_comparison(self):
+        h = V2Harness(self.tmp, holded_tools=("list_sales_orders", "get_usage"))
+        ids = iter(["20261014T0900-cmp-aaaa", "20261014T1000-cmp-bbbb"])
+        with mock.patch.object(cli, "_new_compare_id", lambda _now: next(ids)):
+            h.compare("--repeat", "1")
+            self.assertEqual(h.exit_code, 0, h.stderr.getvalue())
+            h.holded_tools = ["list_sales_orders", "create_invoice"]
+            h.compare("--repeat", "1")
+        self.assertEqual(h.exit_code, 0, h.stderr.getvalue())
+        runs = self.tmp / "runs"
+        first = json.loads((runs / "20261014T0900-cmp-aaaa" / "summary.json").read_text())
+        self.assertEqual(first["catalogueChanges"]["h"]["status"], "noPrevious")
+        changes = json.loads((runs / "20261014T1000-cmp-bbbb" / "summary.json").read_text())["catalogueChanges"]
+        self.assertEqual((changes["h"]["status"], changes["h"]["previous"]), ("changed", "20261014T0900-cmp-aaaa"))
+        self.assertEqual((changes["h"]["added"], changes["h"]["removed"]), (["create_invoice"], ["get_usage"]))
+        self.assertEqual(changes["h"]["watched"],
+                         [{"tool": "create_invoice", "change": "added", "namedBy": ["notPossible q"]}])
+        self.assertEqual(changes["t"]["status"], "unchanged")
+        self.assertIn("create_invoice added", (runs / "20261014T1000-cmp-bbbb" / "summary.md").read_text())
+
     def test_a_prompt_naming_a_live_tool_aborts(self):
         h = V2Harness(self.tmp, V2_SUITE.replace("Hacé un pedido", "Con approve_sales_order hacé un pedido"),
                       holded_tools=("list_sales_orders", "approve_sales_order"))
@@ -1310,6 +1336,158 @@ probes:
         h = Harness(self.tmp, V2_SUITE)
         self.assertIsNone(h.run())
         self.assertEqual(h.exit_code, 2)
+
+
+FRESH_FIXTURE = """
+schemaVersion: 1
+name: base
+records:
+  customer:
+    values: { name: "Cliente Paridad SL" }
+platforms:
+  etendo-go:
+    customer:
+      create: [{ tool: etendo_create, args: { spec: bp }, saveAs: bp }]
+      id: "{{steps.bp.id}}"
+      find: { tool: etendo_list, args: { spec: bp } }
+      match: { name: "{{fixture.customer.name}}" }
+  holded:
+    customer:
+      create: [{ tool: create_contact, args: { name: "{{fixture.customer.name}}" }, saveAs: c }]
+      id: "{{steps.c.id}}"
+"""
+
+FRESH_CHECKLISTS = {
+    "fresh.etendo-go.yaml": """
+schemaVersion: 1
+platform: etendo-go
+allowlistCaptured: true
+documents: [{ name: sales-invoice, tool: etendo_list, args: { spec: sales-invoice } }]
+masterData: [{ name: bp, tool: etendo_list, args: { spec: bp }, key: name, baseline: [customer], allow: [] }]
+""",
+    "fresh.holded.yaml": """
+schemaVersion: 1
+platform: holded
+allowlistCaptured: true
+documents: [{ name: invoices, tool: list_invoices }]
+masterData: [{ name: contacts, tool: list_contacts, key: name, baseline: [customer], allow: [] }]
+""",
+}
+
+
+class FreshHarness(V2Harness):
+    """A seeded pair: Etendo reads its baseline back, Holded only has a manifest."""
+
+    def __init__(self, tmp, *, seeded=("t", "h"), bp=None, holded_readable=False, **kw):
+        suite = V2_SUITE.replace("window: w\n", "window: w\nfixture: base\n").replace(
+            'args: { description: "{{marker}}" }, saveAs: inv',
+            'args: { description: "{{marker}}", bp: "{{fixture.customer.id}}" }, saveAs: inv').replace(
+            "Hacé un pedido con referencia", "Hacé un pedido para {{fixture.customer.name}} con referencia")
+        super().__init__(tmp, suite, holded_tools=("list_sales_orders", "list_invoices", "create_contact"), **kw)
+        fx = tmp / "fixtures"
+        fx.mkdir(exist_ok=True)
+        fixture_text, checklists = FRESH_FIXTURE, dict(FRESH_CHECKLISTS)
+        if holded_readable:
+            # A Holded whose MCP could list contacts: the only way it can be fresh. The
+            # checklist is NOT edited — the live catalogue now offers list_contacts.
+            fixture_text = fixture_text.replace('      id: "{{steps.c.id}}"', '      id: "{{steps.c.id}}"\n'
+                                                '      find: { tool: list_contacts }\n'
+                                                '      match: { name: "{{fixture.customer.name}}" }')
+            self.holded_tools.append("list_contacts")
+        (fx / "base.yaml").write_text(textwrap.dedent(fixture_text), encoding="utf-8")
+        for name, text in checklists.items():
+            (fx / name).write_text(textwrap.dedent(text), encoding="utf-8")
+        self.bp = [{"id": "C1", "name": "Cliente Paridad SL"}] if bp is None else bp
+        self.invoices = []
+        with mock.patch.object(fixtures, "FIXTURES_DIR", fx), mock.patch.object(fixtures, "SEEDS_DIR", tmp / ".seeds"):
+            fixture = fixtures.load_fixture("base")
+            for name, url, records in (("t", "http://x/mcp", {"customer": "C1"}), ("h", "http://h/mcp", {"customer": "H1"})):
+                if name not in seeded:
+                    continue
+                platform = "etendo-go" if name == "t" else "holded"
+                manifest = {"complete": True, "url": url, "fixture": "base", "fixtureSha": fixture.sha,
+                            "seedId": f"seed-{name}", "initializedAt": "2026-10-20T09:00:00Z", "records": records}
+                baseline = asyncio.run(fixtures.verify_baseline(fixture, platform, self._read, manifest))
+                fixtures.write_manifest(name, {**manifest, "fixtureHash": baseline["fixtureHash"]})
+
+    async def _read(self, tool, args):
+        return await self.call_tool(None, tool, args)
+
+    async def describe_server(self, target):
+        server = await super().describe_server(target)
+        if target["name"] == "t":
+            server["tools"] = ["etendo_create", "etendo_list"]
+        return server
+
+    async def call_tool(self, session, name, args):
+        if name == "etendo_list" and args.get("spec") == "bp":
+            return {"data": [dict(r) for r in self.bp]}
+        if name == "etendo_list" and args.get("spec") == "sales-invoice":
+            return {"data": list(self.invoices)}
+        if name == "list_invoices":
+            return {"data": [], "has_more": False}
+        if name == "list_contacts":
+            return {"data": [{"id": "H1", "name": "Cliente Paridad SL"}]}
+        return await super().call_tool(session, name, args)
+
+
+class FreshnessCompareTest(unittest.TestCase):
+    """S6: baseline verify + freshness at compare preflight, with fake MCPs (plan §5.4, §5.9)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def test_freshness_is_recorded_and_fixture_refs_bind_per_target(self):
+        h = FreshHarness(self.tmp)
+        compare = h.compare("--repeat", "1")
+        self.assertEqual(h.exit_code, 0, h.stderr.getvalue())
+        fresh = {t["name"]: t["freshness"] for t in compare["targets"]}
+        self.assertEqual(fresh["t"]["status"], "fresh", fresh["t"]["details"])
+        self.assertEqual(fresh["h"]["status"], "unverified")
+        self.assertEqual((fresh["t"]["seedId"], fresh["t"]["initializedAt"]), ("seed-t", "2026-10-20T09:00:00Z"))
+        self.assertEqual(compare["compareSchemaVersion"], 2)
+        self.assertEqual(set(compare["pins"]["fixtureHashes"]), {"t", "h"})
+        self.assertEqual(compare["pins"]["fixture"]["name"], "base")
+        # The id is the target's own; the shared prompt names the neutral value only.
+        create = next(a for n, a in h.calls if n == "etendo_create")
+        self.assertEqual(create["bp"], "C1")
+        self.assertIn("Cliente Paridad SL", h.attempts("t", "w")[0]["prompt"])
+        self.assertEqual(h.attempts("t", "w")[0]["prompt"], h.attempts("h", "w")[0]["prompt"])
+        summary = json.loads((h.compare_dir / "summary.json").read_text())
+        self.assertFalse(summary["official"])
+        self.assertIn("contacts: unverified — tool not offered: list_contacts is not in the live catalogue",
+                      summary["freshness"]["h"]["reasons"])
+
+    def test_official_only_when_both_targets_are_fresh(self):
+        h = FreshHarness(self.tmp, holded_readable=True)
+        compare = h.compare("--repeat", "1")
+        self.assertEqual([t["freshness"]["status"] for t in compare["targets"]], ["fresh", "fresh"])
+        self.assertTrue(json.loads((h.compare_dir / "summary.json").read_text())["official"])
+
+    def test_a_missing_baseline_record_stops_the_comparison(self):
+        h = FreshHarness(self.tmp)
+        h.bp = []
+        self.assertIsNone(h.compare("--repeat", "1"))
+        self.assertEqual(h.exit_code, 2)
+        self.assertIn("customer missing", h.stderr.getvalue())
+
+    def test_an_unseeded_target_cannot_bind_its_ids(self):
+        h = FreshHarness(self.tmp, seeded=("t",))
+        # Holded runs probe w, whose prompt names a value only: fine. Make it
+        # name the id in its own block and the unseeded side must refuse.
+        h_suite = (self.tmp / "suite.yaml").read_text().replace(
+            "where: { notes: \"{{marker}}\" }", "where: { notes: \"{{marker}}\", contact: \"{{fixture.customer.id}}\" }")
+        (self.tmp / "suite.yaml").write_text(h_suite, encoding="utf-8")
+        self.assertIsNone(h.compare("--repeat", "1"))
+        self.assertEqual(h.exit_code, 2)
+        self.assertIn("make mcp-seed", h.stderr.getvalue())
+
+    def test_a_leftover_document_is_dirty_and_the_run_still_happens(self):
+        h = FreshHarness(self.tmp)
+        h.invoices = [{"id": "I9", "description": "a real customer invoice"}]
+        compare = h.compare("--repeat", "1")
+        self.assertEqual(h.exit_code, 0)
+        self.assertEqual(compare["targets"][0]["freshness"]["status"], "dirty")
 
 
 class AttemptSuccessTest(unittest.TestCase):
