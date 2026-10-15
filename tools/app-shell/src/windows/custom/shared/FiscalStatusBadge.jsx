@@ -48,16 +48,16 @@ export function normalizeVerifactuStatus(raw) {
   return VF_CODE_MAP[raw] ?? raw;
 }
 
-export function FiscalStatusBadge({ status, loading }) {
+export function FiscalStatusBadge({ status, loading, 'data-testid': testId }) {
   const ui = useUI();
   if (loading) {
-    return <span style={{ display: 'inline-block', height: 16, width: 52, borderRadius: 8, background: 'hsl(var(--muted))', animation: 'pulse 1.5s ease-in-out infinite' }} />;
+    return <span data-testid={testId} style={{ display: 'inline-block', height: 16, width: 52, borderRadius: 8, background: 'hsl(var(--muted))', animation: 'pulse 1.5s ease-in-out infinite' }} />;
   }
-  if (!status) return <span style={{ color: 'hsl(var(--text-disabled))', fontSize: 12 }}>—</span>;
+  if (!status) return <span data-testid={testId} style={{ color: 'hsl(var(--text-disabled))', fontSize: 12 }}>—</span>;
   const cfg = CONFIG[status];
   const tone = TONE_STYLE[cfg?.tone ?? 'neutral'];
   return (
-    <span style={{
+    <span data-testid={testId} style={{
       display: 'inline-block',
       padding: '2px 8px',
       borderRadius: 99,

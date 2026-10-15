@@ -80,7 +80,7 @@ export function getSifBodyKey(specName, { sendSii, sendTbai }) {
  * it now names the system(s) the invoice is actually pending for, with the same
  * sales/purchase split as {@link getSifBodyKey}: a purchase invoice's TBAI target is
  * always Batuz (fiscalTargets.js grants it only under BIZKAIA — ETP-5087), so it
- * reads "Envío Batuz" rather than "Envío TBAI".
+ * reads "Enviar a Batuz" rather than "Enviar a TicketBAI".
  *
  * Only meaningful when at least one target is pending — every caller renders the
  * action only in that case. With nothing pending it falls back to the SII caption,

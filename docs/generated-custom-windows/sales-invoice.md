@@ -325,21 +325,48 @@ matters for the few fields that stay editable after completion (e.g. `accounting
 
 | Pending for | es_ES | en_US | Key |
 |---|---|---|---|
-| SII only | Envío SII | Send to SII | `sendToSifLabelSii` |
-| TicketBAI only | Envío TBAI | Send to TBAI | `sendToSifLabelTbai` |
-| SII and TicketBAI | Envío SII+TBAI | Send to SII+TBAI | `sendToSifLabelBoth` |
+| SII only | Enviar a SII | Send to SII | `sendToSifLabelSii` |
+| TicketBAI only | Enviar a TicketBAI | Send to TicketBAI | `sendToSifLabelTbai` |
+| SII and TicketBAI | Enviar a SII y TicketBAI | Send to SII and TicketBAI | `sendToSifLabelBoth` |
+
+**Fiscal status in the detail preview is a chip, like the grid.** The preview panel
+(`shared/InvoicePreview.jsx`) renders Estado SII, Estado TicketBAI and Estado VERI\*FACTU with the
+shared `FiscalStatusBadge`, the same component the list columns use. It previously used the
+fiscal-monitor `StatusPill`, which is styled by `.fm-pill` — a stylesheet only the fiscal-monitor
+window loads — so in this window the status rendered as plain text. A `null` status (the invoice does
+not apply to that system) still renders a dash (`FiscalStatusBadge`'s own fallback); nothing is
+defaulted to "Pendiente".
+
+**A failed TicketBAI send now shows "Error", not "Pendiente".** The "Estado TicketBAI" chip (detail
+and grid) reads the stored computed column `EM_ETGO_Tbai_Status`, i.e. the latest
+`tbai_syncinvoice.estado`, and answers "Pendiente" when there is no row. ticketbai only writes that row
+once the tax authority has answered, so a send that failed earlier — a local validation while building
+the XML (e.g. the customer's address has no postal code), signing, connection — used to leave the chip
+on "Pendiente". `TbaiXmlgeneratorHandler` (`com.etendoerp.go`) now records an `Error` attempt in
+`tbai_syncinvoice` (with the message in `tbai_valcode`) when the send fails and ticketbai wrote nothing,
+so the chip shows "Error" in both the preview and the grid. The error message shown to the user and
+stored in the attempt no longer carries the `org.openbravo...OBException: ` prefix. A later successful
+retry writes a new row, and the latest row wins, so the status moves off "Error". A rejection ticketbai
+already recorded ("Rechazado") is not duplicated. Runtime details:
+`{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` → "Real-world example —
+`TbaiXmlgeneratorHandler`".
 
 **Manual verification (Europe/Madrid browser timezone).**
 1. Configure SII for an org today (Configuración fiscal), create and confirm an invoice dated today:
-   the preview, the form topbar, the form kebab and the grid row kebab all offer "Envío SII", and the
+   the preview, the form topbar, the form kebab and the grid row kebab all offer "Enviar a SII", and the
    SII status column shows "Pendiente", not "—".
-2. Same with TicketBAI only: "Envío TBAI" everywhere.
-3. With SII + TicketBAI: "Envío SII+TBAI"; after sending only one of them (partial failure) the
+2. Same with TicketBAI only: "Enviar a TicketBAI" everywhere.
+3. With SII + TicketBAI: "Enviar a SII y TicketBAI"; after sending only one of them (partial failure) the
    caption names the remaining one.
 4. From the form kebab entry, the confirmation modal opens and stays open while you click inside it.
 5. From the grid row kebab, a successful send refreshes the row's status when the modal closes.
 6. Under the Solo Lectura tier, none of the four entry points is offered.
 7. An invoice dated before the org's adoption date still offers nothing and shows "—".
+8. Open a completed invoice in the preview: Estado SII / TicketBAI / VERI\*FACTU render as coloured
+   chips matching the grid; a system that does not apply to the invoice shows "—".
+9. With TicketBAI active, remove the postal code from the customer's invoice address and send: the
+   error message has no `OBException:` prefix, and the TicketBAI chip shows "Error" in the preview and
+   the grid. Fix the postal code and send again: the chip leaves "Error".
 
 ## Known issues / Open bugs
 
@@ -608,7 +635,7 @@ backend change is deployed.
 12c. **ETP-5692 — Descontabilizar without reactivating.** On a completed, posted invoice confirm **Descontabilizar** is offered in the detail kebab, in the row-hover kebab and — after selecting it — as a `Descontabilizar` button in the selection bar; on a not-posted invoice confirm none of the three offers it (Contabilizar is offered instead). Run it from each place and verify the invoice stays **Completada**, the posted badge flips to *Sin contabilizar*, a `Documento descontabilizado correctamente` toast appears, and Contabilizar is offered again. Confirm a posted invoice in any other status (e.g. voided) does not offer it either. Correct a rate in the **Exchange rates** tab (editable again once unposted), post again, and verify the new entries use the corrected rate. On another unposted invoice, change the header **Proyecto** / **Centro de costos**, confirm **Guardar** is enabled and saves, post again, and verify the new entries carry the dimension — without having reactivated. Confirm both fields are read-only again once the invoice is posted. Then, on an unposted Completed invoice, expand a line's **Dimensiones contables** panel (Layers icon or chevron): confirm **Proyecto** / **Centro de costos** are editable while every other line value stays read-only and no add/edit/delete line affordance appears; change one, confirm the `Registro guardado` toast and that the value survives a reload, then post again and verify the new line entries carry it. Once posted, confirm the line dimensions are read-only again. Finally, on a **voided** invoice that is not posted, confirm Descontabilizar is not offered and both the header and the line **Proyecto** / **Centro de costos** are read-only (not editable, no Save offered for them), while the accounting date behaves exactly as before. In the bulk run, mix Completed+posted, not-posted and posted-but-not-Completed invoices and confirm only the first are unposted and the others are left unchanged; the result toast only counts them ("N procesados, M omitidos (no elegibles), K con error") — it does not say why a row was skipped (ETP-5316). On an invoice whose entries fall in a closed period, confirm the translated closed-period error appears and the invoice is unchanged. Finally confirm **Reactivar** still unposts and returns the invoice to draft.
 13. Open a draft invoice and confirm the Send/"Enviar" action is **not** shown, neither in the topbar nor as a row quick action in the list. Confirm the invoice, then open the Send Email modal from the topbar and from the invoice preview and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language. Also confirm the `Asunto` and `Mensaje` fields are editable (not greyed-out/read-only), that they pre-fill with the auto-derived subject and an empty message, and that sending without touching either still succeeds normally.
 14. Open an existing draft invoice without touching any field and confirm the "Save Draft" button is **disabled**. Change any header field and confirm it becomes enabled. Save and confirm it disables again. Revert the changed field to its original value without saving and confirm the button disables once more. Add a line: once the add-row is submitted, the button should disable again if no header changes remain pending. Confirm the "Confirm" button stays enabled throughout all these states.
-15. Under an org configured for `sii+tbai`, open a completed sales invoice and confirm the send action still appears after a partial send until both targets are sent, captioned with the remaining target (`Envío SII` or `Envío TBAI`; `Envío SII+TBAI` while both are pending — see the ETP-5700 section). The confirmation copy must indicate both targets, and the result modal must attempt both `Em_aeatsii_send` and `Em_Tbai_Xmlgenerator` independently.
+15. Under an org configured for `sii+tbai`, open a completed sales invoice and confirm the send action still appears after a partial send until both targets are sent, captioned with the remaining target (`Enviar a SII` or `Enviar a TicketBAI`; `Enviar a SII y TicketBAI` while both are pending — see the ETP-5700 section). The confirmation copy must indicate both targets, and the result modal must attempt both `Em_aeatsii_send` and `Em_Tbai_Xmlgenerator` independently.
 16. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 17. On a draft invoice tied to a customer that has at least one completed (not fully invoiced) sales order, open `Import from Sales Order` and confirm: only that customer's completed-and-not-fully-invoiced orders appear; expanding an order lists its lines with already-imported lines marked and disabled; submitting creates invoice lines that reference the source order (`salesOrderLine`). If every imported order carried the same non-zero `etgoTotalDiscount`, confirm the invoice header now shows that same total discount; if the imported orders carry different discounts (or none), the header discount is left untouched.
 18. In the list, select 0, then 1, then 2+ invoices and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/sales-invoice/<id>`. Open a saved invoice and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
@@ -920,7 +947,9 @@ already renders an unrecognized/`null` estado as a dash (`—`), so this silentl
 into a false "Pendiente" the moment that system's config became active for the org —
 regardless of whether the invoice would ever actually be sent through it. The three
 call sites now pass the raw hook value straight to `StatusPill`, so a truly inapplicable
-invoice renders a dash, never a fabricated pending state.
+invoice renders a dash, never a fabricated pending state. (Those call sites have since moved
+from `StatusPill` to `FiscalStatusBadge`, keeping the same dash for `null` — see "Fiscal
+sending: same-day eligibility, system-specific caption and new entry points" above.)
 
 **Scope:** shared-hook + shared-component fix — applies identically to both
 `sales-invoice` and `purchase-invoice` (both render their preview badge through the same
@@ -2223,7 +2252,7 @@ does not trigger any of this):
   → "No tenés autorización para enviar este documento") and every attachment write
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
-- Preview also hides **Añadir cobro** and the fiscal send button (`Envío SII/TBAI`, ETP-5700) under the tier (both write).
+- Preview also hides **Añadir cobro** and the fiscal send button (`Enviar a SII` / `Enviar a TicketBAI`, ETP-5700) under the tier (both write).
 
 ## Payment ids scoped to the invoice and the tenant — ETP-5558
 

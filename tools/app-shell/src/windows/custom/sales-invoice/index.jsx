@@ -172,7 +172,7 @@ export default function SalesInvoiceWindow(props) {
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
   // Checked once here, before either branch, so both list and detail are covered.
   const windowAccessTier = useWindowAccess('167');
-  // ETP-5700 — grid row-kebab "Envío SII/TBAI". Its fiscal config (the top-nav selected
+  // ETP-5700 — grid row-kebab "Enviar a SII / TicketBAI". Its fiscal config (the top-nav selected
   // org's, same as the list's fiscal status columns) also feeds showVerifactu below, so
   // the window does not load it twice.
   const { fiscalConfig, sifMenuActions, sifModal } = useSifRowSendAction({
