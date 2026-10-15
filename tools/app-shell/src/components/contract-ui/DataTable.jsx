@@ -2456,7 +2456,7 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
           return (
             <span key={part.key} className="inline-flex items-center">
               {partIdx > 0 && (
-                <span className="mx-0.5 font-normal text-text-primary/40 select-none">{separator}</span>
+                <span className="mx-0.5 font-normal text-text-primary select-none">{separator}</span>
               )}
               {partSortable ? (
                 <button
