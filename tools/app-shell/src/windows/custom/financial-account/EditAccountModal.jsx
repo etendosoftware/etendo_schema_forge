@@ -8,13 +8,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
@@ -107,10 +100,13 @@ function accountingFieldsForType(accountType) {
 const GROUPING_OPTIONS = ['1BD', '1BW', '1BM', '1BE'];
 const FIELD_INPUT = 'bg-card shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)]';
 
-// ETP-4896 — Country field. `CreatableSearchSelect` over the live `C_Country_ID` selector, NOT
-// the Radix `Select` Currency/Type use: 239 active countries in an unfiltered `SelectContent`
-// (no search box) is unusable, whereas Currency's ~20 options are fine in a plain dropdown.
-// Deliberately not "made consistent" with Currency — see the field's own comment below.
+// ETP-4896 — Country field. `CreatableSearchSelect` over the live `C_Country_ID` selector (239
+// countries need server search). Type and Currency use the same shared selector over static
+// options (ETP-5728), exactly like the New Account wizard, so all three share the look and the
+// clear (X). Type/Currency are mandatory on an account, so clearing one blocks Save (see
+// `saveBlocked`) instead of persisting an empty value.
+const EDIT_TYPE_FIELD = { key: 'edit-account-type', id: 'edit-account-type' };
+const EDIT_CURRENCY_FIELD = { key: 'edit-account-currency', id: 'edit-account-currency' };
 const EDIT_COUNTRY_FIELD = { key: 'edit-account-country', id: 'edit-account-country' };
 const COUNTRY_SELECTOR_URL = `${getApiBase()}/sws/neo/financial-account/account/selectors/C_Country_ID`;
 
@@ -1279,6 +1275,8 @@ export function EditAccountModal({
   // `canSave` because "Sincronizar ahora" needs the same verdict without the `dirty`/`saving`
   // terms: it must refuse to sync a form it cannot persist rather than sync stale dates.
   const saveBlocked = fields.name.trim() === '' || fields.ibanInvalid
+    || (fields.typeEditable && fields.type === '')
+    || (fields.currencyEditable && fields.currencyId === '')
     || recon.amountToleranceInvalid || bankConnection.rangeInvalid;
   const canSave = dirty && !saving && !saveBlocked;
   const busy = saving || bankConnection.busy;
@@ -1539,6 +1537,15 @@ export function EditAccountModal({
 // `hasBankLink`, not `bankConnected`: a deactivated-but-reconnectable account still belongs to the
 // bank, so its IBAN stays a read-only value rather than turning back into an input (ETP-4764).
 function AccountFieldsGrid({ ui, account, isCash, hasBankLink, fields, token }) {
+  const typeOptions = useMemo(() => [
+    { id: ACCOUNT_TYPE.BANK, name: ui('financeAccountsNewTypeBank') },
+    { id: ACCOUNT_TYPE.CASH, name: ui('financeAccountsNewTypeCash') },
+    { id: ACCOUNT_TYPE.CARD, name: ui('financeAccountsNewTypeCard') },
+  ], [ui]);
+  const currencyOptions = useMemo(
+    () => fields.currencies.map((currency) => ({ id: currency.id, name: currency.iso })),
+    [fields.currencies],
+  );
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <EditField
@@ -1638,44 +1645,30 @@ function AccountFieldsGrid({ ui, account, isCash, hasBankLink, fields, token }) 
         <EditField
           label={ui('financeAccountsBankConnectionFieldType')}
           data-testid="EditField__73027d">
-          <Select value={fields.type} onValueChange={fields.setType} data-testid="Select__73027d">
-            <SelectTrigger data-testid="edit-account-type" className="bg-card">
-              <SelectValue
-                placeholder={ui('financeAccountsBankConnectionFieldType')}
-                data-testid="SelectValue__73027d" />
-            </SelectTrigger>
-            <SelectContent side="bottom" avoidCollisions={false} data-testid="SelectContent__73027d">
-              <SelectItem value={ACCOUNT_TYPE.BANK} data-testid="SelectItem__73027d">
-                {ui('financeAccountsNewTypeBank')}
-              </SelectItem>
-              <SelectItem value={ACCOUNT_TYPE.CASH} data-testid="SelectItem__73027d">
-                {ui('financeAccountsNewTypeCash')}
-              </SelectItem>
-              <SelectItem value={ACCOUNT_TYPE.CARD} data-testid="SelectItem__73027d">
-                {ui('financeAccountsNewTypeCard')}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <CreatableSearchSelect
+            field={EDIT_TYPE_FIELD}
+            value={fields.type}
+            displayValue={typeOptions.find((opt) => opt.id === fields.type)?.name || ''}
+            onChange={(id) => fields.setType(id || '')}
+            formData={{}}
+            resolvedLabel={ui('financeAccountsBankConnectionFieldType')}
+            staticOptions={typeOptions}
+            data-testid="edit-account-type" />
         </EditField>
       ) : null}
       {fields.currencyEditable ? (
         <EditField
           label={ui('financeAccountsBankConnectionFieldCurrency')}
           data-testid="EditField__73027d">
-          <Select value={fields.currencyId} onValueChange={fields.setCurrencyId} data-testid="Select__73027d">
-            <SelectTrigger data-testid="edit-account-currency" className="bg-card">
-              <SelectValue
-                placeholder={ui('financeAccountsNewFieldCurrencyPlaceholder')}
-                data-testid="SelectValue__73027d" />
-            </SelectTrigger>
-            <SelectContent side="bottom" avoidCollisions={false} data-testid="SelectContent__73027d">
-              {fields.currencies.map((currency) => (
-                <SelectItem key={currency.id} value={currency.id} data-testid="SelectItem__73027d">
-                  {currency.iso}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CreatableSearchSelect
+            field={EDIT_CURRENCY_FIELD}
+            value={fields.currencyId}
+            displayValue={currencyOptions.find((opt) => opt.id === fields.currencyId)?.name || ''}
+            onChange={(id) => fields.setCurrencyId(id || '')}
+            formData={{}}
+            resolvedLabel={ui('financeAccountsBankConnectionFieldCurrency')}
+            staticOptions={currencyOptions}
+            data-testid="edit-account-currency" />
         </EditField>
       ) : null}
     </div>
@@ -1893,7 +1886,7 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTo
               so on this gray card it blends in — the white backing makes it stand out. */}
           <div className="rounded-lg bg-card">
             <CreatableSearchSelect
-              field={{ name: 'statementGrouping' }}
+              field={{ key: 'statementGrouping', id: 'statementGrouping', name: 'statementGrouping' }}
               value={bankConnection.form.statementGrouping || ''}
               displayValue={bankConnection.form.statementGrouping
                 ? ui(`financeAccountsBankConnectionGrouping_${bankConnection.form.statementGrouping}`) : ''}

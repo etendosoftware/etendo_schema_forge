@@ -366,14 +366,14 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
         onChange={setVal('contact')}
         placeholder={ui('financeAccountStatementsManualContactPlaceholder')}
         useLookup={useBPartnerLookup}
-        testId="manual-line-contact"
+        testId={`manual-line-contact-${row.id}`}
         data-testid="ChipSelect__6b4086" />
       <ChipSelect
         value={row.glItem}
         onChange={setVal('glItem')}
         placeholder={ui('financeAccountStatementsManualGlItemPlaceholder')}
         useLookup={useGLItemLookup}
-        testId="manual-line-glitem"
+        testId={`manual-line-glitem-${row.id}`}
         data-testid="ChipSelect__6b4086" />
       {amountCell('out', 'manual-line-out')}
       {amountCell('in', 'manual-line-in')}

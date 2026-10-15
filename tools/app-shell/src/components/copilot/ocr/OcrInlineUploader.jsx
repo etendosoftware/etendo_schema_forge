@@ -8,11 +8,29 @@ import { useCopilot } from '@/components/CopilotContext';
 import { getOcrDocType } from './ocrDocTypes';
 import { uploadAndMarkMainAttachment } from './listAttachments';
 import { buildOcrSchema } from './buildOcrSchema';
-import { useOcrExtraction, OCR_NO_DATA_ERROR } from './useOcrExtraction';
+import {
+  useOcrExtraction,
+  OCR_NO_DATA_ERROR,
+  OCR_TIMEOUT_ERROR,
+  OCR_NETWORK_ERROR,
+  OCR_SESSION_CHANGED_ERROR,
+} from './useOcrExtraction';
 import { hasExtractedData } from './hasExtractedData';
 import { useOcrFlow } from './useOcrFlow';
 
 /* eslint-disable react/prop-types */
+
+// Sentinel → translated message. Every other value is shown as is.
+const ERROR_MESSAGE_KEYS = {
+  [OCR_NO_DATA_ERROR]: 'ocrNoDataExtracted',
+  [OCR_TIMEOUT_ERROR]: 'ocrExtractTimeout',
+  // Same text core puts in a NetworkError's message (request-policy.md, ETP-5424).
+  [OCR_NETWORK_ERROR]: 'networkErrorRetry',
+  [OCR_SESSION_CHANGED_ERROR]: 'ocrExtractSessionChanged',
+};
+// Manual retry only: after a gateway timeout the server may still be running the first
+// extraction, and a stale-session response must never be replayed on its own.
+const RETRYABLE_ERRORS = new Set([OCR_TIMEOUT_ERROR, OCR_NETWORK_ERROR, OCR_SESSION_CHANGED_ERROR]);
 
 export default function OcrInlineUploader({
   docTypeId,
@@ -243,7 +261,17 @@ export default function OcrInlineUploader({
       {status === 'error' && (
         <div className="flex items-start gap-2 text-xs text-destructive">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
-          <span>{error === OCR_NO_DATA_ERROR ? ui('ocrNoDataExtracted') : (error || ui('ocrFailed'))}</span>
+          <span>{ERROR_MESSAGE_KEYS[error] ? ui(ERROR_MESSAGE_KEYS[error]) : (error || ui('ocrFailed'))}</span>
+          {file && RETRYABLE_ERRORS.has(error) && (
+            <button
+              type="button"
+              onClick={handleExtract}
+              className="shrink-0 font-medium underline hover:no-underline"
+              data-testid="ocr-retry"
+            >
+              {ui('retry')}
+            </button>
+          )}
         </div>
       )}
       {pickError && (

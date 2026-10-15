@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/UpgradePage.jsx
 import { test, expect } from '@playwright/test';
 import { apiAuthHeaders, login } from '../../helpers/auth.js';
 import { loadCredentials } from '../../helpers/purchase-helpers.js';
@@ -14,10 +15,11 @@ const RUN = process.env.E2E_PROVISIONING_FAILURE === '1';
 const BASE_URL = String(process.env.BASE_URL || 'http://localhost:3100').trim();
 const LOCAL_BASE_URL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(BASE_URL);
 const FIXTURE_PATH = '/sws/go/dev/provisioning-failure-fixture';
-// The first fixture call on a backend provisions a dedicated pool tenant synchronously, which
-// takes minutes; every request otherwise inherits the 15s actionTimeout. A client-side timeout
-// does not stop the backend: it finishes the reservation and nobody holds its cleanup token, so
-// the reservation is orphaned. Setup therefore waits as long as the test budget allows.
+// With no READY fixture tenant, the fixture call provisions one synchronously before answering:
+// 35-50 s on a local backend, more on a loaded machine, well past the 15 s request default. A
+// client-side timeout does not stop the backend: it finishes the reservation and nobody holds its
+// cleanup token, so the reservation is orphaned and the next run has to build another tenant.
+// Setup therefore waits as long as the test budget allows.
 const FIXTURE_SETUP_TIMEOUT_MS = 240_000;
 const FIXTURE_CLEANUP_TIMEOUT_MS = 60_000;
 const credentials = loadCredentials();

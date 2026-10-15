@@ -3,8 +3,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:binContents
 const columns = [
-  { key: 'etgoValuation', column: 'EM_Etgo_Valuation', type: 'amount', label: 'Valuation' },
-  { key: 'etgoCost', column: 'EM_Etgo_Cost', type: 'amount', label: 'Cost' },
+  { key: 'etgoValuation', column: 'EM_Etgo_Valuation', type: 'amount', label: 'Valuation', computed: {"mode":"stored","refresh":"synchronous"} },
+  { key: 'etgoCost', column: 'EM_Etgo_Cost', type: 'amount', label: 'Cost', computed: {"mode":"stored","refresh":"synchronous"} },
 ];
 // @sf-generated-end columns:binContents
 

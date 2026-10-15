@@ -10,6 +10,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 // which resolve to their real es_ES copy so the assertion is about the sentence
 // the user reads rather than about a key name. Inlined in the factory because
 // `vi.mock` is hoisted above module-scope consts.
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => {
     const copy = { 'fm.m349.rectificative_period': 'Rectificativa {period}' };

@@ -28,10 +28,17 @@ const H = vi.hoisted(() => ({
   apiFetch: vi.fn(),
   toastError: vi.fn(),
   toastWarning: vi.fn(),
+  toastDismiss: vi.fn(),
+  findBpLocation: vi.fn(),
+  toIsoDate: vi.fn(),
 }));
 
 vi.mock('sonner', () => ({
-  toast: { error: (...a) => H.toastError(...a), warning: (...a) => H.toastWarning(...a) },
+  toast: {
+    error: (...a) => H.toastError(...a),
+    warning: (...a) => H.toastWarning(...a),
+    dismiss: (...a) => H.toastDismiss(...a),
+  },
 }));
 
 vi.mock('@/auth/useApiFetch.js', () => ({
@@ -54,6 +61,8 @@ vi.mock('../ingest/useBatch', () => ({
 
 vi.mock('../ingest/purchaseInvoiceDescriptor', () => ({
   buildPurchaseInvoiceBatch: (...args) => H.buildBatch(...args),
+  findBpLocation: (...args) => H.findBpLocation(...args),
+  toIsoDate: (...args) => H.toIsoDate(...args),
 }));
 
 vi.mock('../ocrDocTypes', () => ({
@@ -180,10 +189,13 @@ describe('useOcrFlow — full flow', () => {
     H.showResult.mockReset();
     H.toastError.mockReset();
     H.toastWarning.mockReset();
+    H.toastDismiss.mockReset();
     H.apiFetch.mockReset().mockResolvedValue({
       ok: true,
       json: async () => ({ organization: { taxId: 'B12345674' } }),
     });
+    H.findBpLocation.mockReset().mockResolvedValue('LOC1');
+    H.toIsoDate.mockReset().mockImplementation((value) => value ?? null);
     H.runBatch.mockReset().mockResolvedValue({ committed: true, operations: [] });
     H.buildBatch.mockReset().mockResolvedValue({ ops: [{ id: 'inv' }], unmatched: [] });
   });
@@ -325,11 +337,35 @@ describe('useOcrFlow — full flow', () => {
       expect(readResult().error).toContain('A99999999');
       // ETP-5654 — the organization's own tax id is no longer shown in the message.
       expect(readResult().error).not.toContain('B12345674');
-      expect(H.toastError).toHaveBeenCalledWith(readResult().error);
+      // Persistent: stays until the user closes it; the stable id makes a repeat replace it.
+      expect(H.toastError).toHaveBeenCalledWith(readResult().error, {
+        id: 'ocr-receiver-tax-id-mismatch',
+        duration: Infinity,
+        closeButton: true,
+      });
       expect(screen.queryByTestId('review-modal')).toBeNull();
       expect(H.buildBatch).not.toHaveBeenCalled();
       expect(H.showResult).not.toHaveBeenCalled();
       expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    });
+
+    it('dismisses the previous mismatch toast when a new validation run starts', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
+      await waitFor(() => expect(readResult()?.committed).toBe(false));
+      H.toastDismiss.mockClear();
+
+      await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
+      await screen.findByTestId('review-modal');
+      expect(H.toastDismiss).toHaveBeenCalledWith('ocr-receiver-tax-id-mismatch');
+      expect(H.toastError).toHaveBeenCalledTimes(1);
+    });
+
+    it('dismisses the stale mismatch toast even when the new invoice prints no receiver id', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: null } });
+      await screen.findByTestId('review-modal');
+      expect(H.toastDismiss).toHaveBeenCalledWith('ocr-receiver-tax-id-mismatch');
     });
 
     it('continues to the review when the ids match despite the country prefix', async () => {
@@ -341,13 +377,90 @@ describe('useOcrFlow — full flow', () => {
       expect(H.toastWarning).not.toHaveBeenCalled();
     });
 
-    it('continues silently, without reading the session, when no receiver id is printed', async () => {
+    // CP-7 — no receiver id printed: the flow continues, without reading the session and without a
+    // toast, and the review modal is told so it can show its non-blocking notice.
+    it.each([
+      ['null', null],
+      ['blank', '  '],
+      ['the "?" placeholder', '?'],
+    ])('flags the review modal and continues when the receiver id is %s', async (_label, raw) => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: raw } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(true);
+      expect(H.apiFetch).not.toHaveBeenCalled();
+      expect(H.toastError).not.toHaveBeenCalled();
+      expect(H.toastWarning).not.toHaveBeenCalled();
+    });
+
+    it('does not flag the review modal when the receiver id matches the organization', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
+    });
+
+    it('does not flag the review modal when the receiver id equals the issuer id', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'ESA99999999' }, issuer: { tax_id_raw: 'A99999999' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
+    });
+
+    it('does not flag the review modal when the organization has no tax id', async () => {
+      H.apiFetch.mockResolvedValue({ ok: true, json: async () => ({ organization: { taxId: '?' } }) });
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
+    });
+
+    it('does not flag the review modal for a doc type without receiver validation', async () => {
+      H.docType = docType({});
       renderFlow();
       await fireOcr({ receiver: { tax_id_raw: null } });
 
       await screen.findByTestId('review-modal');
-      expect(H.apiFetch).not.toHaveBeenCalled();
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
+    });
+
+    it('does not leak the absent flag into the next run once a receiver id matches', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+
+      await fireOcr({ receiver: { tax_id_raw: null } });
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(true);
+      await user.click(screen.getByTestId('review-cancel'));
+      await waitFor(() => expect(readResult()).toEqual({ committed: false, cancelled: true }));
+      await waitFor(() => expect(screen.queryByTestId('review-modal')).toBeNull());
+
+      H.reviewProps = null;
+      await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
       expect(H.toastError).not.toHaveBeenCalled();
+      expect(readResult()?.committed).not.toBe(false);
+    });
+
+    it('flags a later run with no receiver id after a run that had a matching one', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+
+      await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
+      await user.click(screen.getByTestId('review-cancel'));
+      await waitFor(() => expect(screen.queryByTestId('review-modal')).toBeNull());
+
+      H.reviewProps = null;
+      await fireOcr({ receiver: { tax_id_raw: null } });
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(true);
     });
 
     it('continues with a warning when the organization has no tax id', async () => {
@@ -356,6 +469,7 @@ describe('useOcrFlow — full flow', () => {
       await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
 
       await screen.findByTestId('review-modal');
+      // Warnings stay transient: no persistence options.
       expect(H.toastWarning).toHaveBeenCalledWith('ocrOrgTaxIdMissing');
       expect(H.toastError).not.toHaveBeenCalled();
     });
@@ -415,9 +529,9 @@ describe('useOcrFlow — full flow', () => {
 
     it('cancelling the lines review aborts before building the batch', async () => {
       const user = userEvent.setup();
-      H.preResolvers.findTax = vi.fn(async () => ({ id: 'T1', label: 'IVA 21%', rate: 21 }));
+      H.preResolvers.findDefaultTax = vi.fn(async () => ({ id: 'T1', label: 'IVA 21%', rate: 21 }));
       H.docType = docType({
-        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findTax' }],
+        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' }],
       });
 
       renderFlow();
@@ -457,10 +571,10 @@ describe('useOcrFlow — full flow', () => {
   describe('line resolution', () => {
     it('resolves entity line columns and mirrors the tax id/rate aliases', async () => {
       const user = userEvent.setup();
-      H.preResolvers.findTax = vi.fn(async ({ value }) => ({ id: 'T1', label: `IVA(${value})`, rate: 21 }));
+      H.preResolvers.findDefaultTax = vi.fn(async ({ value }) => ({ id: 'T1', label: `IVA(${value})`, rate: 21 }));
       H.docType = docType({
         lineColumns: [
-          { key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findTax' },
+          { key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' },
           { key: 'description', kind: 'text', extractFrom: 'description' },
         ],
       });
@@ -486,9 +600,9 @@ describe('useOcrFlow — full flow', () => {
 
     it('keeps the extracted label and nulls the id when the resolver finds nothing', async () => {
       const user = userEvent.setup();
-      H.preResolvers.findTax = vi.fn(async () => null);
+      H.preResolvers.findDefaultTax = vi.fn(async () => null);
       H.docType = docType({
-        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findTax' }],
+        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' }],
       });
 
       renderFlow();
@@ -547,9 +661,9 @@ describe('useOcrFlow — full flow', () => {
 
     it('skips the lines review when the payload carries no line_items', async () => {
       const user = userEvent.setup();
-      H.preResolvers.findTax = vi.fn(async () => ({ id: 'T1', label: 'IVA', rate: 21 }));
+      H.preResolvers.findDefaultTax = vi.fn(async () => ({ id: 'T1', label: 'IVA', rate: 21 }));
       H.docType = docType({
-        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findTax' }],
+        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' }],
       });
 
       renderFlow();
@@ -558,7 +672,139 @@ describe('useOcrFlow — full flow', () => {
 
       await waitFor(() => expect(H.buildBatch).toHaveBeenCalled());
       expect(screen.queryByTestId('lines-modal')).not.toBeInTheDocument();
-      expect(H.preResolvers.findTax).not.toHaveBeenCalled();
+      expect(H.preResolvers.findDefaultTax).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tax preselection context (ETP-5585)', () => {
+    const taxColumn = { key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' };
+
+    it('builds the tax context from the reviewed vendor and invoice date and hands it to the resolver', async () => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: { bpId: 'BP1', id: 'IGNORED' }, invoiceDate: '2026-03-04' };
+      H.preResolvers.findDefaultTax = vi.fn(async () => null);
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ invoice_date: '01/01/2020', line_items: [{ description: 'A', tax_rate: 21 }] });
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      expect(H.findBpLocation).toHaveBeenCalledWith({ token: 'tok', apiBaseUrl: '/api', bpId: 'BP1' });
+      // The reviewed date wins over the extracted one.
+      expect(H.toIsoDate).toHaveBeenCalledWith('2026-03-04');
+      const arg = H.preResolvers.findDefaultTax.mock.calls[0][0];
+      expect(arg.taxContext).toMatchObject({ partnerAddressId: 'LOC1', invoiceDate: '2026-03-04' });
+      expect(arg.taxContext.cache).toBeInstanceOf(Map);
+      expect(arg.taxContext.noMatch).toBeInstanceOf(Set);
+      expect(arg.extracted.tax_rate).toBe(21);
+    });
+
+    it('falls back to vendor.id and to the extracted invoice date', async () => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: { id: 'BP2' } };
+      H.preResolvers.findDefaultTax = vi.fn(async () => null);
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ invoice_date: '15/03/2026', line_items: [{ description: 'A', tax_rate: 21 }] });
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      expect(H.findBpLocation).toHaveBeenCalledWith(expect.objectContaining({ bpId: 'BP2' }));
+      expect(H.toIsoDate).toHaveBeenCalledWith('15/03/2026');
+    });
+
+    it('does not look up the location when the review holds no vendor id', async () => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: null };
+      H.preResolvers.findDefaultTax = vi.fn(async () => null);
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ line_items: [{ description: 'A', tax_rate: 21 }] });
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      expect(H.findBpLocation).not.toHaveBeenCalled();
+      expect(H.preResolvers.findDefaultTax.mock.calls[0][0].taxContext.partnerAddressId).toBeNull();
+    });
+
+    it('resolves the tax context after the vendor review and before the lines modal opens', async () => {
+      const user = userEvent.setup();
+      const order = [];
+      H.reviewSubmitValue = { vendor: { bpId: 'BP1' } };
+      H.findBpLocation.mockImplementation(async () => { order.push('location'); return 'LOC1'; });
+      H.preResolvers.findDefaultTax = vi.fn(async () => { order.push('tax'); return null; });
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ line_items: [{ description: 'A', tax_rate: 21 }] });
+      expect(H.findBpLocation).not.toHaveBeenCalled();
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      expect(order).toEqual(['location', 'tax']);
+    });
+
+    it('does not build a tax context when there are no lines to review', async () => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: { bpId: 'BP1' } };
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ line_items: [] });
+      await user.click(await screen.findByTestId('review-submit'));
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalled());
+
+      expect(H.findBpLocation).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['the backend answered without a tax at the rate', true, true],
+      ['the rate is not in noMatch (call failed)', false, false],
+    ])('tax_no_rate_match when %s', async (_name, rateInNoMatch, expected) => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: { bpId: 'BP1' } };
+      H.preResolvers.findDefaultTax = vi.fn(async ({ taxContext }) => {
+        if (rateInNoMatch) taxContext.noMatch.add(21);
+        return null;
+      });
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ line_items: [{ description: 'A', tax_rate: 21 }] });
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      const [line] = JSON.parse(screen.getByTestId('lines-payload').textContent);
+      expect(line.tax_no_rate_match).toBe(expected ? true : undefined);
+      expect(line.tax_id).toBeNull();
+    });
+
+    it('does not flag a line whose rate is missing or whose tax resolved', async () => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: { bpId: 'BP1' } };
+      H.preResolvers.findDefaultTax = vi.fn(async ({ taxContext, extracted }) => {
+        taxContext.noMatch.add(21);
+        return extracted.description === 'resolved' ? { id: 'T21', label: 'IVA 21', rate: 21 } : null;
+      });
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({
+        line_items: [
+          { description: 'resolved', tax_rate: 21 },
+          { description: 'no-rate' },
+        ],
+      });
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      const lines = JSON.parse(screen.getByTestId('lines-payload').textContent);
+      expect(lines[0]).toMatchObject({ tax_id: 'T21' });
+      expect(lines[0].tax_no_rate_match).toBeUndefined();
+      expect(lines[1].tax_no_rate_match).toBeUndefined();
     });
   });
 

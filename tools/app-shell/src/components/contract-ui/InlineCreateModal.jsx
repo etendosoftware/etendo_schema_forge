@@ -99,7 +99,7 @@ export function InlineCreateModal({
             data-testid="inline-create-submit"
             onClick={submit}
             disabled={!canSubmit}
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:bg-[hsl(var(--foreground))] enabled:hover:bg-[hsl(var(--accent-highlight))] enabled:hover:text-[hsl(var(--accent-highlight-foreground))]"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:hover:bg-primary/90"
           >
             {saving ? ui('processing') : ui('create')}
           </button>
