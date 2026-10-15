@@ -1989,7 +1989,7 @@ Three constraints worth knowing:
   `writeoffState` now returns the effective `limit` (`null` when there is none).
 
 The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
-**not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a
+**not** the `writeoffs: {psdId: bool}` shape used by the former `PaymentForm` flow (removed in ETP-5728): that was a
 different endpoint (`AddPaymentService`), and this modal never used it.
 
 ## Product-selector price currency — ETP-5148
