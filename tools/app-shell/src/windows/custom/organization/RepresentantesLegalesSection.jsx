@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Info, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Info, Loader2, Pencil, Trash2, TriangleAlert } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +13,9 @@ import {
   EMPTY_REPRESENTATIVE,
   MODELO_390_REPRESENTATIVE_LIMIT,
   REPRESENTATIVE_MAX_LENGTH,
+  activeRepresentatives,
   buildRepresentativePayload,
+  isActiveRepresentative,
   getRepresentativeErrors,
   representativeFullName,
   representativeToForm,
@@ -146,6 +148,11 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
   const [deletingId, setDeletingId] = useState(null);
 
   const editingRow = editing && editing !== 'new' ? rows.find(r => r.id === editing) : null;
+  // The "390" marker goes on the first 3 ACTIVE rows by line. An inactive row (deactivated in
+  // Classic; GO never deactivates one) gets no marker. Note: the classic generator does not filter
+  // inactive rows, see docs/generated-custom-windows/organization.md.
+  const activeRows = activeRepresentatives(rows);
+  const includedIds = new Set(activeRows.slice(0, MODELO_390_REPRESENTATIVE_LIMIT).map(r => r.id));
 
   async function handleSubmit(payload) {
     setSaving(true);
@@ -207,13 +214,15 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
         </tr>
       );
     }
-    return rows.map((row, index) => {
-      const included = index < MODELO_390_REPRESENTATIVE_LIMIT;
+    return rows.map((row) => {
+      const included = includedIds.has(row.id);
+      const inactive = !isActiveRepresentative(row);
       const busy = deletingId === row.id;
       return (
         <tr
           key={row.id}
           className={'border-b border-border/50 last:border-b-0' + (included ? '' : ' text-muted-foreground')}
+          data-inactive={inactive || undefined}
           data-testid={`RepresentantesLegalesSection__row-${row.id}`}>
           <td className="py-2 px-3 align-middle text-sm tabular-nums">
             <div className="flex items-center gap-1.5">
@@ -272,6 +281,17 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
         <Info size={13} className="mt-0.5 shrink-0" data-testid="Info__orgRepLimitHint" />
         <span>{ui('orgRepLimitHint', { limit: MODELO_390_REPRESENTATIVE_LIMIT })}</span>
       </p>
+      {/* Non-blocking: AEAT asks legal entities for at least one legal representative in the 390;
+          Classic generates the file anyway (blank representative positions). */}
+      {!loading && activeRows.length === 0 && (
+        <p
+          role="status"
+          className="flex items-start gap-1.5 text-xs leading-[18px] text-[var(--status-warning-fg)]"
+          data-testid="RepresentantesLegalesSection__noActiveHint">
+          <TriangleAlert size={13} className="mt-0.5 shrink-0" data-testid="TriangleAlert__orgRepNoActive" />
+          <span>{ui('orgRepLegalEntityHint')}</span>
+        </p>
+      )}
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full table-fixed">
           <thead>

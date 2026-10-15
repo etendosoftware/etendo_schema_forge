@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/organization/Modelo390IdentitySection.jsx
 // @covers tools/app-shell/src/windows/custom/organization/RepresentantesLegalesSection.jsx
+// @covers tools/app-shell/src/windows/custom/organization/representanteLegal.js
 //
 // The "Representante legal / Modelo 390" section of the Organization window. What must hold:
 // "Persona física" switches between the natural-person fields (page form) and the legal
@@ -33,6 +34,9 @@ vi.mock('@/components/ui/date-field', () => ({
 }));
 
 import Modelo390IdentitySection from '../Modelo390IdentitySection.jsx';
+import {
+  getAeat390IdentityErrors, buildAeat390InfoPayload, buildRepresentativePayload, activeRepresentatives,
+} from '../representanteLegal.js';
 
 const API_BASE_URL = '/sws/neo/organization';
 const ORG_ID = 'org-1';
@@ -137,6 +141,38 @@ describe('RepresentantesLegalesSection — grid', () => {
     expect(await screen.findByTestId('RepresentantesLegalesSection__empty')).toBeInTheDocument();
   });
 
+  it('warns (non-blocking) when a legal entity has no active representative', async () => {
+    mockFetch([{ id: 'r10', lineNo: 10, taxID: 'A', active: false }]);
+    render(<Harness />);
+    expect(await screen.findByTestId('RepresentantesLegalesSection__noActiveHint')).toHaveTextContent('orgRepLegalEntityHint');
+    // The add button stays available: the hint never blocks.
+    expect(within(screen.getByTestId('RepresentantesLegalesSection__root')).getByTestId('action-add-line')).toBeInTheDocument();
+  });
+
+  it('does not warn once there is an active representative', async () => {
+    mockFetch([{ id: 'r10', lineNo: 10, taxID: 'A' }]);
+    render(<Harness />);
+    await screen.findByTestId('RepresentantesLegalesSection__row-r10');
+    expect(screen.queryByTestId('RepresentantesLegalesSection__noActiveHint')).not.toBeInTheDocument();
+  });
+
+  it('places the 390 marker on the first 3 ACTIVE rows by line (an inactive row gets none)', async () => {
+    mockFetch([
+      { id: 'r10', lineNo: 10, taxID: 'A' },
+      { id: 'r20', lineNo: 20, taxID: 'B', active: 'N' },
+      { id: 'r30', lineNo: 30, taxID: 'C' },
+      { id: 'r40', lineNo: 40, taxID: 'D' },
+    ]);
+    render(<Harness />);
+    await screen.findByTestId('RepresentantesLegalesSection__row-r10');
+    const marked = (id) => within(screen.getByTestId(`RepresentantesLegalesSection__row-${id}`))
+      .queryByTestId('RepresentantesLegalesSection__included');
+    expect(marked('r10')).toBeInTheDocument();
+    expect(marked('r20')).not.toBeInTheDocument();
+    expect(marked('r30')).toBeInTheDocument();
+    expect(marked('r40')).toBeInTheDocument();
+  });
+
   it('blocks a new representative with missing required fields, inline, without calling the backend', async () => {
     mockFetch([]);
     render(<Harness />);
@@ -186,6 +222,26 @@ describe('RepresentantesLegalesSection — grid', () => {
     const body = JSON.parse(post[1].body);
     expect(body).not.toHaveProperty('lineNo');
     expect(body).toMatchObject({ taxID: '12345678Z', powerDate: '2026-01-15', parentId: ORG_ID, lastname2: null });
+  });
+
+  it('stores the representative NIF normalized, the same value the validator accepted', async () => {
+    mockFetch([]);
+    render(<Harness />);
+    await screen.findByTestId('RepresentantesLegalesSection__empty');
+
+    fireEvent.click(within(screen.getByTestId('RepresentantesLegalesSection__root')).getByTestId('action-add-line'));
+    const set = (field, value) => fireEvent.change(
+      screen.getByTestId(`RepresentantesLegalesSection__input-${field}`), { target: { value } });
+    set('taxID', '12.345.678-z');
+    set('firstName', 'Ana');
+    set('lastname1', 'García');
+    set('powerDate', '2026-01-15');
+    set('notaryName', 'N');
+    fireEvent.click(screen.getByTestId('RepresentantesLegalesSection__save'));
+
+    await waitFor(() => expect(globalThis.fetch.mock.calls.some(([, o]) => o?.method === 'POST')).toBe(true));
+    const post = globalThis.fetch.mock.calls.find(([, o]) => o?.method === 'POST');
+    expect(JSON.parse(post[1].body).taxID).toBe('12345678Z');
     const gets = globalThis.fetch.mock.calls.filter(([, o]) => !o?.method || o.method === 'GET');
     expect(gets.length).toBeGreaterThanOrEqual(2);
   });
@@ -235,5 +291,48 @@ describe('RepresentantesLegalesSection — grid', () => {
     await waitFor(() => expect(globalThis.fetch.mock.calls.some(([, o]) => o?.method === 'DELETE')).toBe(true));
     const [url] = globalThis.fetch.mock.calls.find(([, o]) => o?.method === 'DELETE');
     expect(url).toMatch(/\/representanteLegal\/r10$/);
+  });
+});
+
+describe('representanteLegal — Modelo 390 identity rules (classic AD_OrgInfo checks)', () => {
+  const person = (extra) => ({ aeat390Isperson: true, aeat390Firstname: 'Ana', aeat390Surname1: 'García', ...extra });
+
+  it('checks nothing while Persona física is off', () => {
+    expect(getAeat390IdentityErrors({ aeat390Isperson: false, aeat390RepNif: 'X' })).toEqual({});
+  });
+
+  it('requires Nombre and Primer apellido (blank and whitespace count as missing)', () => {
+    expect(getAeat390IdentityErrors({ aeat390Isperson: true, aeat390Firstname: '  ' }))
+      .toEqual({ aeat390Firstname: 'fieldRequired', aeat390Surname1: 'fieldRequired' });
+    expect(getAeat390IdentityErrors(person())).toEqual({});
+  });
+
+  it('requires the representative NIF and name together', () => {
+    expect(getAeat390IdentityErrors(person({ aeat390RepNif: '12345678Z' })))
+      .toEqual({ aeat390RepName: 'org390RepPairRequired' });
+    expect(getAeat390IdentityErrors(person({ aeat390RepName: 'Juan' })))
+      .toEqual({ aeat390RepNif: 'org390RepPairRequired' });
+    expect(getAeat390IdentityErrors(person({ aeat390RepNif: '12345678Z', aeat390RepName: 'Juan' }))).toEqual({});
+  });
+
+  it('reports a malformed representative NIF by its format key', () => {
+    expect(getAeat390IdentityErrors(person({ aeat390RepNif: '12345678A', aeat390RepName: 'Juan' })).aeat390RepNif)
+      .toMatch(/^taxIdInvalid/);
+  });
+
+  it('builds the information payload with blanks as null and the NIF normalized', () => {
+    expect(buildAeat390InfoPayload({
+      aeat390Isperson: true, aeat390Firstname: ' Ana ', aeat390Surname1: 'García', aeat390Surname2: '',
+      aeat390RepNif: ' 12.345.678-z ', aeat390RepName: '   ',
+    })).toEqual({
+      aeat390Isperson: true, aeat390Firstname: 'Ana', aeat390Surname1: 'García', aeat390Surname2: null,
+      aeat390RepNif: '12345678Z', aeat390RepName: null,
+    });
+  });
+
+  it('normalizes the legal representative TAXID and keeps only active rows', () => {
+    expect(buildRepresentativePayload({ taxID: 'x-1234567-l' }).taxID).toBe('X1234567L');
+    expect(activeRepresentatives([{ id: 1 }, { id: 2, active: false }, { id: 3, active: 'N' }, { id: 4, active: 'Y' }])
+      .map(r => r.id)).toEqual([1, 4]);
   });
 });

@@ -20632,6 +20632,8 @@
     "orgRepLoadError": "No se pudieron cargar los representantes legales: {error}",
     "orgRepSaveError": "No se pudo guardar el representante legal: {error}",
     "orgRepDeleteError": "No se pudo eliminar el representante legal: {error}",
+    "org390RepPairRequired": "Debe rellenar ambos, el NIF y el nombre (o razón social) del representante legal, o dejar los dos vacíos",
+    "orgRepLegalEntityHint": "Las personas jurídicas deben indicar al menos un representante legal en el Modelo 390.",
     "pricingUpdated": "Precios actualizados correctamente.",
     "priceVersionAlreadyPresent": "Esta versión de lista de precios ya está presente.",
     "priceSelectVersionFirst": "Seleccioná una versión de lista de precios primero.",

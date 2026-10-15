@@ -7,6 +7,9 @@ import { AEAT390_INFO_MAX_LENGTH } from './representanteLegal.js';
 
 // The natural-person identity fields of `AD_OrgInfo` (Classic: Organization > Information,
 // "Modelo 390" group). Laid out in pairs, like the rest of the page.
+// Required while "Persona física" is on (classic CHECK EM_AEAT390_ISPERSON_MAND_CH).
+const REQUIRED_PERSON_FIELDS = new Set(['aeat390Firstname', 'aeat390Surname1']);
+
 const PERSON_FIELD_ROWS = [
   [['aeat390Firstname', 'orgRepFirstNameLabel'], ['aeat390Surname1', 'orgRepLastname1Label']],
   [['aeat390Surname2', 'orgRepLastname2Label'], null],
@@ -20,6 +23,7 @@ function PersonField({ field, labelKey, value, error, onChange }) {
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={inputId} className="text-sm text-foreground font-medium" data-testid={`Label__${field}`}>
         {ui(labelKey)}
+        {REQUIRED_PERSON_FIELDS.has(field) && <span className="text-destructive"> *</span>}
       </Label>
       <Input
         id={inputId}

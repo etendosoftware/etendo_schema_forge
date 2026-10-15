@@ -20396,6 +20396,8 @@
     "orgRepLoadError": "Could not load the legal representatives: {error}",
     "orgRepSaveError": "Could not save the legal representative: {error}",
     "orgRepDeleteError": "Could not delete the legal representative: {error}",
+    "org390RepPairRequired": "Fill in both the legal representative NIF and name (or company name), or leave both empty",
+    "orgRepLegalEntityHint": "Legal entities must declare at least one legal representative in Form 390.",
     "pricingUpdated": "Pricing updated successfully.",
     "priceVersionAlreadyPresent": "This price list version is already present.",
     "priceSelectVersionFirst": "Select a price list version first.",

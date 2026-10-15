@@ -661,10 +661,51 @@ describe('OrganizationPage', () => {
         aeat390Isperson: true,
         aeat390Firstname: 'Ana',
         aeat390Surname1: 'García',
-        aeat390Surname2: '',
-        aeat390RepNif: '',
-        aeat390RepName: '',
+        // Blanks go as null, never '' (classic AD_OrgInfo checks would accept '' and the 390
+        // file would then carry an empty name).
+        aeat390Surname2: null,
+        aeat390RepNif: null,
+        aeat390RepName: null,
       });
+    });
+
+    it('requires Nombre and Primer apellido while Persona física is on (inline errors, no PATCH)', async () => {
+      globalThis.fetch = BASE({ aeat390Isperson: true });
+      render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+      await waitFor(() => expect(screen.getByTestId('Modelo390IdentitySection__aeat390Firstname')).toBeInTheDocument());
+
+      fireEvent.change(screen.getByTestId('Modelo390IdentitySection__aeat390Surname2'), { target: { value: 'López' } });
+      fireEvent.click(screen.getByTestId('OrganizationPage__save'));
+
+      expect(await screen.findByTestId('Modelo390IdentitySection__error-aeat390Firstname')).toHaveTextContent('fieldRequired');
+      expect(screen.getByTestId('Modelo390IdentitySection__error-aeat390Surname1')).toHaveTextContent('fieldRequired');
+      expect(toastError).toHaveBeenCalledWith('fieldRequired');
+      expect(infoPatchBody()).toBeNull();
+    });
+
+    it('requires the representative NIF and name together (one without the other blocks Save)', async () => {
+      globalThis.fetch = BASE({ aeat390Isperson: true, aeat390Firstname: 'Ana', aeat390Surname1: 'García' });
+      render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+      await waitFor(() => expect(screen.getByTestId('Modelo390IdentitySection__aeat390Firstname')).toHaveValue('Ana'));
+
+      fireEvent.change(screen.getByTestId('Modelo390IdentitySection__aeat390RepName'), { target: { value: 'Juan Pérez' } });
+      fireEvent.click(screen.getByTestId('OrganizationPage__save'));
+
+      expect(await screen.findByTestId('Modelo390IdentitySection__error-aeat390RepNif')).toHaveTextContent('org390RepPairRequired');
+      expect(infoPatchBody()).toBeNull();
+    });
+
+    it('stores the representative NIF normalized (what passes validation is what is saved)', async () => {
+      globalThis.fetch = BASE({ aeat390Isperson: true, aeat390Firstname: 'Ana', aeat390Surname1: 'García' });
+      render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+      await waitFor(() => expect(screen.getByTestId('Modelo390IdentitySection__aeat390Firstname')).toHaveValue('Ana'));
+
+      fireEvent.change(screen.getByTestId('Modelo390IdentitySection__aeat390RepNif'), { target: { value: ' 12.345.678-z ' } });
+      fireEvent.change(screen.getByTestId('Modelo390IdentitySection__aeat390RepName'), { target: { value: 'Juan Pérez' } });
+      fireEvent.click(screen.getByTestId('OrganizationPage__save'));
+
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('savedSuccessfully'));
+      expect(infoPatchBody()).toMatchObject({ aeat390RepNif: '12345678Z', aeat390RepName: 'Juan Pérez' });
     });
 
     it('blocks Save on a malformed representative NIF while Persona física is on', async () => {

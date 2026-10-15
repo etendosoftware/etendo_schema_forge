@@ -6,7 +6,7 @@
 // and the `AD_OrgInfo.EM_AEAT390_*` columns.
 
 import { parseCalendarDate } from '@/lib/dateOnly.js';
-import { getTaxIdError } from '@/lib/taxIdValidation.js';
+import { getTaxIdError, normalizeTaxId } from '@/lib/taxIdValidation.js';
 
 /** The Modelo 390 reads the first N representatives ordered by line. */
 export const MODELO_390_REPRESENTATIVE_LIMIT = 3;
@@ -96,7 +96,10 @@ export function representativeToForm(row) {
 export function buildRepresentativePayload(form) {
   const trimmed = (v) => String(v ?? '').trim();
   return {
-    taxID: trimmed(form.taxID),
+    // Stored normalized (`normalizeTaxId`, the same normalization the validator judges): the
+    // classic 390 generator uppercases, keeps only [A-Za-z0-9. ] and truncates to 9 characters, so
+    // a raw "12.345.678-Z" that passes validation would reach the file as "12.345.67".
+    taxID: normalizeTaxId(form.taxID),
     firstName: trimmed(form.firstName),
     lastname1: trimmed(form.lastname1),
     lastname2: trimmed(form.lastname2) || null,
@@ -136,4 +139,68 @@ export function representativeFullName(row) {
     .map(v => String(v ?? '').trim())
     .filter(Boolean)
     .join(' ');
+}
+
+/**
+ * A legal representative row is active unless the server says otherwise (`active` false / 'N').
+ * GO never deactivates a row (the field is system, default 'Y'), but a row deactivated in Classic
+ * still comes back in the list.
+ */
+export function isActiveRepresentative(row) {
+  return row?.active !== false && row?.active !== 'N';
+}
+
+/** The active rows, in the order given. */
+export function activeRepresentatives(rows) {
+  return (Array.isArray(rows) ? rows : []).filter(isActiveRepresentative);
+}
+
+/** `null` for a blank value (never `''`), the trimmed text otherwise. */
+export function blankToNull(value) {
+  const text = String(value ?? '').trim();
+  return text === '' ? null : text;
+}
+
+/** i18n key of the "both or neither" rule for the natural-person representative NIF / name. */
+export const AEAT390_REP_PAIR_ERROR_KEY = 'org390RepPairRequired';
+
+/**
+ * Inline errors of the Modelo 390 natural-person identity (`{ [field]: i18nKey }`, empty when
+ * valid). Only checked while "Persona física" is on — the fields are hidden otherwise, and an
+ * error on a field the user cannot see would be unfixable. Mirrors the two classic DB checks of
+ * `AD_OrgInfo` (module org.openbravo.module.aeat390.es), so the save never reaches them:
+ *   EM_AEAT390_ISPERSON_MAND_CH  a natural person needs Nombre and Primer apellido;
+ *   EM_AEAT390_REPR_FIS_CH       the representative NIF and name are both empty or both filled.
+ * Plus the NIF format (same validator as the organization NIF) on a non-empty representative NIF.
+ */
+export function getAeat390IdentityErrors(form) {
+  const errors = {};
+  if (!form?.aeat390Isperson) return errors;
+  if (blankToNull(form.aeat390Firstname) == null) errors.aeat390Firstname = 'fieldRequired';
+  if (blankToNull(form.aeat390Surname1) == null) errors.aeat390Surname1 = 'fieldRequired';
+  const hasNif = blankToNull(form.aeat390RepNif) != null;
+  const hasName = blankToNull(form.aeat390RepName) != null;
+  if (hasNif && !hasName) errors.aeat390RepName = AEAT390_REP_PAIR_ERROR_KEY;
+  if (hasName && !hasNif) errors.aeat390RepNif = AEAT390_REP_PAIR_ERROR_KEY;
+  if (hasNif) {
+    const formatKey = getTaxIdError(form.aeat390RepNif);
+    if (formatKey) errors.aeat390RepNif = formatKey;
+  }
+  return errors;
+}
+
+/**
+ * The `information` (AD_OrgInfo) Modelo 390 identity part of the Organization save. Blank values
+ * are sent as `null`, never `''` (an empty string would satisfy the classic NOT NULL checks and
+ * then write an empty name into the 390 file); the representative NIF is stored normalized.
+ */
+export function buildAeat390InfoPayload(form) {
+  return {
+    aeat390Isperson: Boolean(form?.aeat390Isperson),
+    aeat390Firstname: blankToNull(form?.aeat390Firstname),
+    aeat390Surname1: blankToNull(form?.aeat390Surname1),
+    aeat390Surname2: blankToNull(form?.aeat390Surname2),
+    aeat390RepNif: blankToNull(normalizeTaxId(form?.aeat390RepNif)),
+    aeat390RepName: blankToNull(form?.aeat390RepName),
+  };
 }

@@ -19,7 +19,7 @@ import BusinessTypeCards from './BusinessTypeCards.jsx';
 import { getCountryFlag } from './countryFlag.js';
 import ActividadesIaeSection from './ActividadesIaeSection.jsx';
 import Modelo390IdentitySection from './Modelo390IdentitySection.jsx';
-import { isEtendoTrue } from './representanteLegal.js';
+import { isEtendoTrue, getAeat390IdentityErrors, buildAeat390InfoPayload } from './representanteLegal.js';
 // ETP-5391 — reused as-is from fiscal-config (NOT forked): the backend
 // (`GET/POST/DELETE /sws/neo/certificate?orgId=...`, NeoCertificateHelper.java) is
 // already organization-scoped, not per fiscal system, so the same component that
@@ -107,14 +107,10 @@ function getTaxIdErrorKey(form) {
   return getTaxIdError(form.taxID);
 }
 
-// ETP-5716 — the natural-person representative NIF of the Modelo 390 is optional (as in
-// Classic), but a non-empty value must be a valid NIF: same validator as the NIF above. Only
-// checked while "Persona física" is on — the field is hidden otherwise, and an error on a field
-// the user cannot see would be unfixable.
-function getRepNifErrorKey(form) {
-  if (!form.aeat390Isperson) return null;
-  return getTaxIdError(form.aeat390RepNif);
-}
+// ETP-5716 — the Modelo 390 natural-person identity (Nombre / Primer apellido required, the
+// representative NIF and name both-or-neither, a non-empty representative NIF must be valid) is
+// checked by `getAeat390IdentityErrors` in representanteLegal.js — only while "Persona física"
+// is on, the fields are hidden otherwise.
 
 const EMAIL_FIELD_DESCRIPTOR = { key: 'email' };
 const WEBSITE_FIELD_DESCRIPTOR = { key: 'web', inputPrefix: 'https://' };
@@ -263,10 +259,11 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
       toast.error(ui(taxIdErrorKey));
       return;
     }
-    const repNifErrorKey = getRepNifErrorKey(form);
-    if (repNifErrorKey) {
-      setFieldErrors({ aeat390RepNif: ui(repNifErrorKey) });
-      toast.error(ui(repNifErrorKey));
+    const identityErrors = getAeat390IdentityErrors(form);
+    const identityErrorFields = Object.keys(identityErrors);
+    if (identityErrorFields.length > 0) {
+      setFieldErrors(Object.fromEntries(identityErrorFields.map(f => [f, ui(identityErrors[f])])));
+      toast.error(ui(identityErrors[identityErrorFields[0]]));
       return;
     }
     const formatErrorKey = getInvalidFormatErrorKey(form);
@@ -290,12 +287,8 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
           etgoEmail: form.email,
           etgoPhone: form.phone,
           etgoWeb: form.web,
-          aeat390Isperson: form.aeat390Isperson,
-          aeat390Firstname: form.aeat390Firstname,
-          aeat390Surname1: form.aeat390Surname1,
-          aeat390Surname2: form.aeat390Surname2,
-          aeat390RepNif: form.aeat390RepNif,
-          aeat390RepName: form.aeat390RepName,
+          // Blank → null, representative NIF normalized (buildAeat390InfoPayload).
+          ...buildAeat390InfoPayload(form),
         },
       });
       await refetch();
