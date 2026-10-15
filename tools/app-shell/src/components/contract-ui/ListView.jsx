@@ -1443,7 +1443,7 @@ export function ListView({
               data-testid="list-toolbar">
               <div
                 ref={toolbarFit.rowRef}
-                className="flex flex-wrap items-center gap-2"
+                className="flex flex-wrap items-start gap-2"
                 data-tabs-placement={toolbarTabsPlacement}
                 data-testid="list-toolbar-main-row">
                 {hasTabs && (
