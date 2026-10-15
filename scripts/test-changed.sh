@@ -24,6 +24,18 @@ COVERAGE=0
 CPUS="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
 TEST_WORKERS="${TEST_WORKERS:-$(( CPUS / 2 > 1 ? CPUS / 2 : 1 ))}"
 
+# The suites resolve packages from the repository root (global-setup imports the
+# @etendosoftware/schema-forge-cli slice-labels helper). Without them the errors read "Cannot find
+# module" or "No test files found", far from the real cause. vitest is hoisted to the root by the npm
+# workspaces, or sits in tools/app-shell when that folder was installed on its own.
+missing=""
+[ -e node_modules/@etendosoftware/schema-forge-cli ] || missing="node_modules/@etendosoftware/schema-forge-cli"
+[ -e node_modules/vitest ] || [ -e tools/app-shell/node_modules/vitest ] || missing="${missing:-vitest}"
+if [ -n "$missing" ]; then
+  echo "test-changed: $missing is missing. Run 'npm ci' at the repository root (not only in tools/app-shell)." >&2
+  exit 2
+fi
+
 WORK_DIR="tmp/test-changed"
 PLAN_FILE="$WORK_DIR/plan.tsv"
 mkdir -p "$WORK_DIR" coverage
@@ -79,15 +91,18 @@ run_vitest() {
   local -a filters=()
   # vitest filters match path substrings relative to tools/app-shell; none means the whole suite.
   [ "$files" != "*" ] && while IFS= read -r f; do filters+=("${f#tools/app-shell/}"); done <<< "$files"
-  echo "=== Vitest ($([ "$files" = "*" ] && echo all || echo "${#filters[@]}") file(s), $TEST_WORKERS workers) ==="
+  # No more workers than files: each one costs a fork and a jsdom (about 2 GB for 6 workers on 16 files).
+  local workers="$TEST_WORKERS"
+  [ "${#filters[@]}" -gt 0 ] && [ "${#filters[@]}" -lt "$workers" ] && workers="${#filters[@]}"
+  echo "=== Vitest ($([ "$files" = "*" ] && echo all || echo "${#filters[@]}") file(s), $workers workers) ==="
   if [ "$COVERAGE" = "1" ]; then
-    if ( cd tools/app-shell && npx vitest run --maxWorkers="$TEST_WORKERS" --coverage --coverage.reporter=lcov ${filters[@]+"${filters[@]}"} ); then
+    if ( cd tools/app-shell && npx vitest run --maxWorkers="$workers" --coverage --coverage.reporter=lcov ${filters[@]+"${filters[@]}"} ); then
       sed 's|^SF:src/|SF:tools/app-shell/src/|' tools/app-shell/coverage/vitest/lcov.info > coverage/vitest-lcov.info
     else
       FAILED="$FAILED vitest"
     fi
   else
-    ( cd tools/app-shell && npx vitest run --maxWorkers="$TEST_WORKERS" ${filters[@]+"${filters[@]}"} ) || FAILED="$FAILED vitest"
+    ( cd tools/app-shell && npx vitest run --maxWorkers="$workers" ${filters[@]+"${filters[@]}"} ) || FAILED="$FAILED vitest"
   fi
 }
 
