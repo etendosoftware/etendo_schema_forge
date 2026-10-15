@@ -2,6 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  changedPaths,
   globToRegExp,
   groupOf,
   parseGlobPatterns,
@@ -156,10 +157,38 @@ describe('selectTests', () => {
     assert.deepEqual(s.untested, []);
   });
 
+  it('selects the tests that still import a deleted module, directly or through another module', () => {
+    const withStaleImports = {
+      ...tree,
+      'tools/app-shell/src/hooks/useOld.js': "import { g } from '../lib/gone';",
+      'tools/app-shell/src/hooks/__tests__/useOld.test.js': "import x from '../useOld.js';",
+      'tools/app-shell/src/lib/__tests__/gone.test.js': "import { g } from '../gone.js';",
+    };
+    const s = select(withStaleImports, ['tools/app-shell/src/lib/gone.js']);
+    assert.deepEqual(tests(s), [
+      'tools/app-shell/src/hooks/__tests__/useOld.test.js',
+      'tools/app-shell/src/lib/__tests__/gone.test.js',
+    ]);
+    assert.match(s.reasons.join('\n'), /removed: tools\/app-shell\/src\/lib\/gone\.js → 2 test\(s\)/);
+  });
+
+  it('runs nothing for a deleted test file', () => {
+    const s = select(tree, ['cli/test/old.test.js']);
+    assert.deepEqual(tests(s), []);
+    assert.deepEqual(s.reasons, []);
+  });
+
   it('does not list single tests of a group that runs whole', () => {
     const s = select(tree, ['cli/test/gen.test.js', 'cli/src/templates/page.hbs']);
     assert.deepEqual(tests(s), []);
     assert.deepEqual(whole(s), ['cli']);
+  });
+});
+
+describe('changedPaths', () => {
+  it('keeps both paths of a rename and the path of every other change', () => {
+    const out = 'M\tcli/src/a.js\nD\tcli/src/b.js\nR087\tcli/src/old.js\tcli/src/new.js\nA\tdocs/x.md\n';
+    assert.deepEqual(changedPaths(out), ['cli/src/a.js', 'cli/src/b.js', 'cli/src/old.js', 'cli/src/new.js', 'docs/x.md']);
   });
 });
 

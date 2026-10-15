@@ -119,9 +119,13 @@ export function globToRegExp(glob) {
   return new RegExp(`^${re}$`);
 }
 
-/** target file -> files that import it (statically or through an import.meta.glob). */
-export function buildImporters(files, readText) {
-  const fileSet = new Set(files);
+/**
+ * target file -> files that import it (statically or through an import.meta.glob). `removed` are
+ * paths the change deleted or renamed away: specifiers still pointing at them resolve too, so a
+ * file that keeps importing a module that no longer exists is found.
+ */
+export function buildImporters(files, readText, removed = []) {
+  const fileSet = new Set([...files, ...removed]);
   const importers = new Map();
   const link = (target, importer) => {
     if (!importers.has(target)) importers.set(target, new Set());
@@ -200,6 +204,7 @@ export function selectTests({ changed, files, readText }) {
   const tests = new Set();
   const reasons = [];
   const untested = [];
+  const removed = changed.filter((file) => !fileSet.has(file));
   let importers = null;
 
   for (const file of changed) {
@@ -209,14 +214,24 @@ export function selectTests({ changed, files, readText }) {
       reasons.push(`whole group: ${file} → ${trigger.groups.length === ALL_GROUPS.length ? 'all groups' : trigger.groups.join(', ')}`);
       continue;
     }
-    if (SAFE_RE.test(file) || !fileSet.has(file)) continue; // docs and the like, or deleted
+    if (SAFE_RE.test(file)) continue; // docs and the like
+    if (!fileSet.has(file)) {
+      // Deleted or renamed away: a test that still imports or reads it now fails to load.
+      if (!CODE_RE.test(file)) continue;
+      importers ??= buildImporters(files, readText, removed);
+      const broken = [...reachTests([file, ...textReaders(file, files, readText)], importers)]
+        .filter((t) => fileSet.has(t));
+      broken.forEach((t) => tests.add(t));
+      if (broken.length) reasons.push(`removed: ${file} → ${broken.length} test(s) still depend on it`);
+      continue;
+    }
     if (groupOf(file)) {
       tests.add(file);
       continue;
     }
     if (TEST_FILE_RE.test(file)) continue; // a test outside the unit suite (gateway, mcp-tests…)
 
-    importers ??= buildImporters(files, readText);
+    importers ??= buildImporters(files, readText, removed);
     const reached = reachTests([file, ...textReaders(file, files, readText)], importers);
     if (reached.size) {
       reached.forEach((t) => tests.add(t));
@@ -270,6 +285,20 @@ export function summary(selection, files) {
   return out;
 }
 
+/**
+ * Paths a `git diff --name-status -M` output touches. A rename lists its old path too: what still
+ * imports the old one is broken (`git diff --name-only` names only the new path).
+ */
+export function changedPaths(nameStatus) {
+  const paths = [];
+  for (const line of nameStatus.split('\n').filter(Boolean)) {
+    const [code, ...files] = line.split('\t');
+    if (code.startsWith('R')) paths.push(...files);
+    else paths.push(files[files.length - 1]);
+  }
+  return [...new Set(paths)];
+}
+
 function git(args) {
   return execFileSync('git', args, { cwd: SF_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env: sanitizedGitEnv() });
 }
@@ -285,7 +314,7 @@ export function main(argv) {
     return 2;
   }
   const head = arg('--head') ?? 'HEAD';
-  const changed = git(['diff', '--name-only', `${base}...${head}`]).split('\n').filter(Boolean);
+  const changed = changedPaths(git(['diff', '--name-status', '-M', `${base}...${head}`]));
   const files = git(['ls-files']).split('\n').filter(Boolean);
   const cache = new Map();
   const readText = (rel) => {
