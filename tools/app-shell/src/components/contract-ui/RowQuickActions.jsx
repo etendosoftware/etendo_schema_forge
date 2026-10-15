@@ -302,7 +302,10 @@ export default function RowQuickActions({
       // {success:false} instead), so without this the host never heard about a failed
       // documentAction row action and the user saw nothing at all. Hand it the same
       // {success:false, message} shape the neoAction path already delivers.
-      onMenuActionExecuted?.(action, { success: false, message: err?.message });
+      // ETP-5577 — and its identity plus the row, so a period refusal can offer the calendar.
+      onMenuActionExecuted?.(action, {
+        success: false, message: err?.message, messageKeys: err?.messageKeys,
+      }, row);
     } finally {
       setInFlight(prev => {
         const next = { ...prev };
