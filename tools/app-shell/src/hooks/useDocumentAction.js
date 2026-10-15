@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { trackTransactionPosted } from '@/lib/observability/health-events.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { extractBackendMessageKeys } from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, extractBackendMessageParams } from '@/lib/backendErrors.js';
 /**
  * Invokes Etendo DocAction buttons via NEO Headless.
  * POST {apiBaseUrl}/{entity}/{recordId}/action/documentAction { docAction }
@@ -41,6 +41,7 @@ export function useDocumentAction({ apiBaseUrl, entity = 'header', token } = {})
         // envelope shape from `payload`. `undefined` when the backend did not send them (older
         // deployment), which is exactly the input `translateBackendError` treats as "text only".
         err.messageKeys = extractBackendMessageKeys(payload);
+        err.messageParams = extractBackendMessageParams(payload);
         throw err;
       }
       const data = await res.json().catch(() => null);

@@ -149,6 +149,14 @@ describe('FileLightbox — zoom', () => {
     expect(lightboxPageWidth(lightbox)).toBeCloseTo(FIT_PAGE_WIDTH, 5);
   });
 
+  it('draws the fit button with the Maximize (corners) icon, not Maximize2', async () => {
+    const { user } = setup();
+    const lightbox = await openLightbox(user);
+    const fit = within(lightbox).getByTestId('file-lightbox-fit');
+    expect(within(fit).getByTestId('Maximize__c75ca8')).toBeInTheDocument();
+    expect(within(fit).queryByTestId('Maximize2__c75ca8')).toBeNull();
+  });
+
   it('zooming in the lightbox does not change the inline preview', async () => {
     const { user } = setup();
     const inlineWidth = Number(screen.getByTestId('pdf-page').dataset.width);

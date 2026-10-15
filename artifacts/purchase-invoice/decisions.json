@@ -58,7 +58,7 @@
       "processField": "documentAction",
       "processValue": "CO",
       "label": "Confirm",
-      "keepSaveWhenCompletedFields": ["orderReference", "accountingDate", "project", "costcenter"],
+      "keepSaveWhenCompletedFields": ["orderReference", "accountingDate", "project", "costcenter", "aeatsiiErrorRegistral"],
       "editableLineFieldsWhenCompleted": ["project", "costcenter"]
     },
     "dateFilterKey": "invoiceDate",

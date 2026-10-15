@@ -146,7 +146,7 @@ both sides plus the rate that was actually booked:
 
 ```
 Importe del pago
-− 21,34 $
+21,34 $   (default colour, no sign)
   (0,680272)  14,52 €
 ```
 
@@ -469,6 +469,15 @@ acceptance line about the "New" button staying visible does not apply to this wi
 
 Manual verification: open `/payment-out` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
 runs under the toolbar, above both the sidebar and the grid, across the full width of the card.
+
+## Amount sign and colour — ETP-5728
+
+Payment Out amounts carry no sign and use the default (black) text colour (`hsl(var(--foreground))`),
+exactly like Payment In: the list Amount column (`PaymentHeaderTableBase.buildColumns`, including
+deposited/reconciled rows), the list sidebar hero ("Pagado este mes") and the detail sidebar hero
+(`PaymentDetailSidebarBase`). Neither direction is green or red; the direction is conveyed by the
+window itself (Receipts vs Payments), not by a sign or a colour. `formatCurrency` still prints its own
+`-` for genuinely negative values; nothing is prefixed on top of it. See also `payment-in.md`.
 
 ## Accounting visibility — "Show Accounting Fields" (ETP-5684)
 

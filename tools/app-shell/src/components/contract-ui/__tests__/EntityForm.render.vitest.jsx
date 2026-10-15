@@ -13,11 +13,14 @@ import userEvent from '@testing-library/user-event';
 
 // --- Mocks (must precede imports) ---
 
+// `i18nState` lets a test pick the active locale and a per-locale generic-label dictionary
+// (what the real useMenuLabel resolves from genericLabels); the default is identity / en_US.
+const i18nState = vi.hoisted(() => ({ locale: 'en_US', labels: {} }));
 vi.mock('@/i18n', () => ({
   useLabel: () => (key) => key,
-  useMenuLabel: () => (key) => key,
+  useMenuLabel: () => (key) => i18nState.labels[key] ?? key,
   useUI: () => (key) => key,
-  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
+  useLocaleSwitch: () => ({ locale: i18nState.locale, setLocale: vi.fn() }),
 }));
 
 vi.mock('../ProductSearchDrawer.jsx', () => ({
@@ -748,6 +751,37 @@ describe('EntityForm — extended render coverage', () => {
       <EntityForm fields={fields} data={{ name: 'x' }} onChange={vi.fn()} savingField="name" />,
     );
     expect(screen.getByTestId('field-name')).toBeDisabled();
+  });
+
+  // --- Select option whose label is an i18n key, no `labels` map (match-rule textCondition) ---
+
+  describe.each([
+    ['es_ES', { matchRuleConditionOptionContains: 'Contiene', matchRuleConditionOptionStartsWith: 'Empieza con', matchRuleConditionOptionRegex: 'Coincide con patrón' }, 'Contiene'],
+    ['en_US', { matchRuleConditionOptionContains: 'Contains', matchRuleConditionOptionStartsWith: 'Starts with', matchRuleConditionOptionRegex: 'Matches pattern' }, 'Contains'],
+  ])('select options labelled by an i18n key (%s)', (locale, labels, expectedC) => {
+    afterEach(() => {
+      i18nState.locale = 'en_US';
+      i18nState.labels = {};
+    });
+
+    it('translates the option label through the generic labels when `labels` is absent', () => {
+      i18nState.locale = locale;
+      i18nState.labels = labels;
+      const fields = [
+        {
+          key: 'textCondition', label: 'Text Condition', type: 'select', column: 'TextCondition',
+          options: [
+            { value: 'C', label: 'matchRuleConditionOptionContains' },
+            { value: 'S', label: 'matchRuleConditionOptionStartsWith' },
+            { value: 'R', label: 'matchRuleConditionOptionRegex' },
+          ],
+        },
+      ];
+      render(<EntityForm fields={fields} data={{ textCondition: 'C' }} onChange={vi.fn()} />);
+      expect(screen.getByTestId('csrch-display-textCondition')).toHaveTextContent(expectedC);
+      expect(screen.getByTestId('select-textCondition-S')).toHaveTextContent(labels.matchRuleConditionOptionStartsWith);
+      expect(screen.getByTestId('select-textCondition-R')).toHaveTextContent(labels.matchRuleConditionOptionRegex);
+    });
   });
 
   // --- Select with valueType boolean ---

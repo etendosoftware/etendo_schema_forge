@@ -701,6 +701,32 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
   UPGRADE_ENTER_TENANT_FAILED: defineEvent('upgrade_enter_tenant_failed', {
     channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
   }),
+  // --- "Mis empresas" page (ETP-5734, flag `my-companies-page`) --------------
+  // Rollout funnel: exposed (flag exposure) -> viewed -> entered another company.
+  // `count` is the number of companies the account can enter (owned + invited,
+  // pending invitations excluded), so the >=2-companies cohort can be isolated.
+  MY_COMPANIES_VIEWED: defineEvent('my_companies_viewed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+    ],
+  }),
+  // Emitted BEFORE the switch: a successful switch is a full navigation that
+  // starts inside the hook, so a success event fired afterwards would be lost.
+  // Successes are therefore `enter_clicked` minus `enter_failed`.
+  // `type` is the account's relationship to the company: 'owner' | 'guest'.
+  MY_COMPANIES_ENTER_CLICKED: defineEvent('my_companies_enter_clicked', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  MY_COMPANIES_ENTER_FAILED: defineEvent('my_companies_enter_failed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
 });
 
 export const OBSERVABILITY_EVENT_LIST = Object.freeze(Object.values(OBSERVABILITY_EVENTS));
