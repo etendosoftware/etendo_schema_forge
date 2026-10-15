@@ -106,8 +106,9 @@ describe('target_branch', () => {
     assert.equal(out.stdout, 'develop');
   });
 
-  it('sends main and hotfix/* to main and everything else to develop when there is no PR', () => {
+  it('sends main, hotfix/* and the daily cut to main and everything else to develop when there is no PR', () => {
     assert.equal(bash('target_branch hotfix/ETP-1', { ghOutput: '' }).stdout, 'main');
+    assert.equal(bash('target_branch mergeblock/ETP-5741', { ghOutput: '' }).stdout, 'main');
     assert.equal(bash('target_branch main', { ghOutput: '' }).stdout, 'main');
     assert.equal(bash('target_branch feature/ETP-1', { ghOutput: '' }).stdout, 'develop');
     assert.equal(bash('target_branch ""', { ghOutput: '' }).stdout, 'develop');
