@@ -21763,7 +21763,7 @@
     "firstStepsCalendarReview": "Revisar calendario contable",
     "periodNotAvailableReviewCalendar": "Revisar calendario contable",
     "periodNotAvailableOpenCalendar": "Ir al calendario",
-    "periodNotAvailableAskOwner": "Solo el propietario del entorno puede abrir los primeros períodos: pídale que revise el calendario contable.",
+    "periodNotAvailableAskOwner": "Solo el propietario del entorno puede abrir los primeros períodos: pídele que revise el calendario contable.",
     "firstStepsCalendarReviewDesc": "Todos los periodos contables empiezan cerrados, así que todavía no se puede completar ni contabilizar ningún documento. Comprueba que tu ejercicio fiscal es correcto y abre los periodos en los que vayas a trabajar.",
     "firstStepsCalendarReviewSummary": "Ejercicio {year}: del {start} al {end}, {count} periodos.",
     "firstStepsCalendarReviewConfirm": "Confirmar",

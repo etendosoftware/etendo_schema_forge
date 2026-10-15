@@ -126,7 +126,8 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   calendar, or regenerate it with another fiscal-year start while nothing depends on it — see
   `com.etendoerp.go/docs/onboarding-flow.md`, "Accounting calendar review") ends here, on
   `/calendar`. Opening any period also completes that row. Demos keep their periods open through
-  the end of the trial. A document dated in a period that is not open is refused with
+  the end of the trial. Ships unflagged by decision (2026-10-14): the initial state, the review step and the
+  refusal recovery land in one release, so a flag would guard nothing. A document dated in a period that is not open is refused with
   `PeriodNotAvailable`; the refusal toast offers **Ir al calendario** (or, while the review is
   pending, sends the owner back to the review row), and the MCP answer carries a hint naming the
   `openClose` action. **Ir al calendario** opens `/calendar/<yearId>` of the fiscal year whose

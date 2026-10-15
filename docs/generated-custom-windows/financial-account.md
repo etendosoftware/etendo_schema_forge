@@ -3723,3 +3723,6 @@ with the field label. Optional fields show an ✕ to clear. The catalog (`catalo
 `"<code> - <name>"` like every other account selector (they used an em dash, `"<code> — <name>"`,
 before ETP-5681; the `$_identifier` of each stored account changed the same way).
 
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The new movement, the movement row kebab (Contabilizar, Confirmar, Reactivar — including a reconciled movement, whose core refusal used to arrive as a raw `@ETPR_PeriodClosedForUnRemovePayment@`), the funds transfer modal and the cash close (Conciliación tab) offer **Ir al calendario**. Cash close: a close-date refusal is dated by the close; a marked movement in a closed period keeps its own sentence naming the movement and is dated by that movement (`error.periodDate`). See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

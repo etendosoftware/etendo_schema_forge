@@ -375,3 +375,7 @@ Manual check: open a draft journal, click the header Cost Center → the list ap
 typing; deactivate a cost center in its window, come back, open a line's dimensions → it is gone;
 click the Account cell of a new line → a centered popup opens; type "640" → only posting accounts
 (e.g. `64000000`), never the `640` heading.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." Saving a journal dated in a period with no open period (`PeriodNotValid`, raised by the `GL_JOURNAL` trigger) and Completar both show the refusal toast with **Ir al calendario**. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

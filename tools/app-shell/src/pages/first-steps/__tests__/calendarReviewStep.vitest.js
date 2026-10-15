@@ -4,8 +4,8 @@
  * Shown only when the backend says the tenant must review its calendar (`required`, a per-tenant
  * marker), done when it says the calendar is `reviewed`. Never a persisted checklist id.
  *
- * @covers src/pages/first-steps/calendarReviewStep.js
- * @covers src/pages/first-steps/firstStepsConfig.js
+ * @covers tools/app-shell/src/pages/first-steps/calendarReviewStep.js
+ * @covers tools/app-shell/src/pages/first-steps/firstStepsConfig.js
  */
 import {
   CALENDAR_REVIEW_STEP,

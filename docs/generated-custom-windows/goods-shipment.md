@@ -425,3 +425,7 @@ Manual verification: with the rail expanded, open `/goods-shipment` at 1280×720
 toolbar row with clear space between "Filtros" and the sort button; narrow the window (≈1000px)
 and confirm the filter buttons wrap onto a second line while the actions stay on the right with
 the same gap.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

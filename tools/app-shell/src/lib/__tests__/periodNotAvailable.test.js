@@ -49,6 +49,14 @@ describe('periodNotAvailableToastOptions', () => {
     assert.deepEqual(visited, ['/calendar']);
   });
 
+  it('offers "Ir al calendario" for PeriodNotValid too, alone or among other keys', () => {
+    setPeriodRecovery(periodRecoveryFor({ pending: false }, () => {}));
+    for (const keys of [['PeriodNotValid'], ['Other', 'PeriodNotValid']]) {
+      assert.equal(periodNotAvailableToastOptions(keys, ui).action.label,
+        't:periodNotAvailableOpenCalendar');
+    }
+  });
+
   it('adds nothing for another refusal, or with no layout registered', () => {
     setPeriodRecovery(periodRecoveryFor({ pending: false }, () => {}));
     assert.deepEqual(periodNotAvailableToastOptions(['OtherPostingProcessActive'], ui), {});
@@ -110,5 +118,15 @@ describe('the "Ir al calendario" action with a document date', () => {
     assert.equal(documentPeriodDate({ movementDate: '2027-02-01' }), '2027-02-01');
     assert.equal(documentPeriodDate({ paymentDate: '2027-03-01' }), '2027-03-01');
     assert.equal(documentPeriodDate(null), null);
+  });
+
+  it('goes to the Calendar list, without throwing, on a malformed or absent date', async () => {
+    for (const date of ['not-a-date', '2027-13-45x', '', undefined, null]) {
+      const visited = [];
+      setPeriodRecovery(periodRecoveryFor({ pending: false }, (path) => visited.push(path),
+        async () => JULY_JUNE));
+      await periodNotAvailableToastOptions(['PeriodNotValid'], ui, { date }).action.onClick();
+      assert.deepEqual(visited, ['/calendar'], String(date));
+    }
   });
 });

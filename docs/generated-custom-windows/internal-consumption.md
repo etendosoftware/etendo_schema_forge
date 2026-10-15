@@ -174,3 +174,7 @@ controls the appearance.
 - **Drawer title translated.** The product field no longer declares `lookupTitle`, which was a literal English string
   ("Product" / "Product + Warehouse") that made the drawer search read "Buscar Product..." in Spanish. The title and the
   placeholder now come from the field's translated label ("Buscar Producto...").
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." Confirmar from the form and from the grid row kebab show the refusal toast with **Ir al calendario**, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

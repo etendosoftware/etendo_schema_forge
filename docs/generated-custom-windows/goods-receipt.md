@@ -678,3 +678,7 @@ now a thin wrapper over `RelatedDocumentsSection`) and the preview's `RelatedDoc
 purchase invoices and return-to-vendor shipments (`linkedOrders` / `linkedInvoices` / `linkedReturns`).
 The backend injects these on the detail GET only, so the preview no longer reads them from the list
 row (which left the card empty): it loads the detail record itself. See `docs/ui-customization.md` §7.a.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
