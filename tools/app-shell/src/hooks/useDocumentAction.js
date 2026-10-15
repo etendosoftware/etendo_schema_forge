@@ -28,7 +28,11 @@ export function useDocumentAction({ apiBaseUrl, entity = 'header', token } = {})
       );
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
-        const message = payload?.response?.message || payload?.message || `Error ${res.status}`;
+        // ETP-5704: `error.message` is the envelope NeoResponse.error(status, message) builds — what
+        // a customization's pre-hook refusal returns (e.g. the order reactivation guard). It comes
+        // after the two process-result shapes, so their messages win exactly as before.
+        const message = payload?.response?.message || payload?.message
+          || payload?.error?.message || `Error ${res.status}`;
         const err = new Error(message);
         err.status = res.status;
         err.payload = payload;

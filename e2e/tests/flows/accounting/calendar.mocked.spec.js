@@ -130,6 +130,46 @@ test.describe('Calendar — year detail', () => {
   });
 });
 
+// ETP-5682: several periods opened from the floating selection bar, one request per period.
+test.describe('Calendar — bulk open periods', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installYearMock(page);
+    await installPeriodControlMock(page, [
+      PERIOD_OPEN,
+      PERIOD_CLOSED,
+      { ...PERIOD_CLOSED, id: 'period-003', name: 'Mar-2027', periodNo: 3 },
+    ]);
+    await installAccountingMock(page);
+    await page.goto('/calendar/year-001');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
+  test('opens the selected closed periods and skips the one already open', async ({ page }) => {
+    await page.getByTestId('tab-periods').click();
+    await expect(page.getByTestId('period-name-period-001')).toBeVisible();
+    await expect(page.getByTestId('period-bulk-open')).toHaveCount(0);
+
+    await page.getByTestId('period-select-all').click();
+    await expect(page.getByTestId('period-bulk-open')).toBeVisible();
+
+    const posted = [];
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && /\/periodControl\/[^/]+\/action\/openClose/.test(r.url())) {
+        posted.push(r.url().match(/periodControl\/([^/]+)\//)[1]);
+      }
+    });
+
+    await page.getByTestId('period-bulk-open').click();
+    await expect(page.getByTestId('periods-bulk-confirm-names')).toBeVisible();
+    await page.getByTestId('periods-bulk-confirm-ok').click();
+
+    // period-001 is already open: not posted. The others go in date order.
+    await expect.poll(() => posted).toEqual(['period-002', 'period-003']);
+    await expect(page.getByTestId('period-bulk-open')).toHaveCount(0);
+  });
+});
+
 test.describe('Calendar — Cerrar Año guard', () => {
   test('stays disabled while a period is still open', async ({ page }) => {
     await login(page);

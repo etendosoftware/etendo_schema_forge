@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailMoreActionsMenu.jsx
 // ETP-4940 — regression coverage for the kebab-menu ("more actions")
 // documentAction path (Complete/Void/Reactivate/etc. for windows that don't
 // use draftMode). Before this fix, `runDocumentAction` called
@@ -16,15 +17,21 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
 import { DetailMoreActionsMenu } from '../DetailMoreActionsMenu.jsx';
+import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
 
 vi.mock('../DetailView.jsx', () => ({
   resolveHideMoreMenu: (hideMoreMenu, data) =>
     (typeof hideMoreMenu === 'function' ? hideMoreMenu({ data }) : hideMoreMenu),
 }));
 
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('@/lib/backendErrors.js', () => ({ translateBackendError: (m) => m }));
+// backendErrors.js is used for real: the documentAction failure toast is asserted through the
+// actual translation map, and the module has no imports of its own.
 
 const REACTIVATE_ACTION = {
   key: 'reactivate',
@@ -52,7 +59,7 @@ function makeDocAction(overrides = {}) {
   };
 }
 
-function renderMenu({ hook, docAction, menuActions = [REACTIVATE_ACTION] } = {}) {
+function renderMenu({ hook, docAction, menuActions = [REACTIVATE_ACTION], ui = (key) => key } = {}) {
   return render(
     <DetailMoreActionsMenu
       apiBaseUrl="https://example.test/api"
@@ -68,7 +75,7 @@ function renderMenu({ hook, docAction, menuActions = [REACTIVATE_ACTION] } = {})
       sqBtnSize="h-9 w-9"
       statusField="documentStatus"
       token="tok"
-      ui={(key) => key}
+      ui={ui}
     />,
   );
 }
@@ -170,5 +177,64 @@ describe('DetailMoreActionsMenu — save-before-confirm guard (ETP-4940)', () =>
     // be silently lost exactly like the original ETP-4940 bug.
     expect(hook.handleSave).not.toHaveBeenCalled();
     expect(docAction.execute).toHaveBeenCalledWith('rec-1', 'RE');
+  });
+});
+
+// ETP-5684 — "Show Accounting Fields" off hides Contabilizar / Descontabilizar from the
+// form kebab, whatever the window declared. Keyed on the generic `neoAction`, so the
+// generated menuActions of every postable window are covered without a decisions change.
+describe('DetailMoreActionsMenu — accounting capability gate (ETP-5684)', () => {
+  const POST_ACTION = { key: 'post', label: 'Post', labelKey: 'post', neoAction: 'post' };
+  const UNPOST_ACTION = { key: 'unpost', label: 'Unpost', labelKey: 'unpost', neoAction: 'unpost' };
+
+  it('shows post and unpost when the role can see accounting', () => {
+    renderMenu({ hook: makeHook(), docAction: makeDocAction(), menuActions: [REACTIVATE_ACTION, POST_ACTION, UNPOST_ACTION] });
+    fireEvent.click(screen.getByTestId('action-more'));
+    expect(screen.getByTestId('menu-action-post')).toBeInTheDocument();
+    expect(screen.getByTestId('menu-action-unpost')).toBeInTheDocument();
+  });
+
+  it('drops post and unpost but keeps the other actions when the capability is off', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    renderMenu({ hook: makeHook(), docAction: makeDocAction(), menuActions: [REACTIVATE_ACTION, POST_ACTION, UNPOST_ACTION] });
+    fireEvent.click(screen.getByTestId('action-more'));
+    expect(screen.getByTestId('menu-action-reactivate')).toBeInTheDocument();
+    expect(screen.queryByTestId('menu-action-post')).toBeNull();
+    expect(screen.queryByTestId('menu-action-unpost')).toBeNull();
+  });
+
+  it('renders no kebab at all when posting was the only action', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    renderMenu({ hook: makeHook(), docAction: makeDocAction(), menuActions: [POST_ACTION] });
+    expect(screen.queryByTestId('action-more')).toBeNull();
+  });
+});
+
+describe('DetailMoreActionsMenu — documentAction failure toast', () => {
+  const LINKED_DOCS = 'This order cannot be reactivated because it has linked shipments or invoices.';
+  const DICT = {
+    cannotReactivateLinkedDocs: 'No se puede reactivar: el pedido tiene documentos vinculados',
+    actionFailed: 'La acción ha fallado',
+  };
+  const ui = (key) => DICT[key] ?? key;
+
+  it.each([
+    // Fails pre-fix: the raw English text was toasted untranslated.
+    ['a mapped backend message is translated', LINKED_DOCS, DICT.cannotReactivateLinkedDocs],
+    // Unchanged behaviour: an unmapped message still reaches the user verbatim.
+    ['an unmapped backend message is shown verbatim', 'Something unexpected', 'Something unexpected'],
+    // Fails pre-fix: an empty message toasted an empty string instead of the generic failure.
+    ['an empty message falls back to actionFailed', '', DICT.actionFailed],
+  ])('%s', async (_label, message, expected) => {
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
+    const docAction = makeDocAction({ execute: vi.fn().mockRejectedValue(new Error(message)) });
+
+    renderMenu({ hook: makeHook(), docAction, ui });
+    await openMenuAndClickAction();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.error).toHaveBeenCalledWith(expected);
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });

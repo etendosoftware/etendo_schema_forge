@@ -14368,7 +14368,7 @@
       "label": "Movimiento entre almacenes reservado"
     },
     "Simple G/L Journal": {
-      "label": "Asientos Manuales Simplificados"
+      "label": "Asientos Manuales"
     },
     "Color Palette": {
       "label": "Paleta de Color"
@@ -20013,6 +20013,7 @@
     "backendError.statementNotProcessed": "Solo los extractos procesados se pueden reactivar",
     "backendError.statementDraftNotReconcilable": "El extracto está en borrador. Procesalo antes de conciliar sus líneas.",
     "backendError.conversionRateDeleteCompleted": "No se puede eliminar el tipo de cambio de una factura completada. Modificalo en su lugar.",
+    "backendError.orderLinkedDocsCheckFailed": "No se pudieron comprobar los documentos vinculados al pedido, así que no se reactivó. Intentalo de nuevo.",
     "backendError.statementLineAlreadyReconciled": "Esta línea del extracto ya está conciliada.",
     "backendError.reconcileConversionCurrencyMismatch": "La conversión solo se puede indicar cuando todas las facturas seleccionadas comparten una misma moneda distinta de la de la cuenta.",
     "backendError.reconcileConversionNotCombinable": "La conversión no se puede combinar con movimientos existentes ni con un ajuste de la diferencia.",
@@ -22884,7 +22885,7 @@
       "label": "Cierre de año"
     },
     "Simple G/L Journal": {
-      "label": "Asientos Manuales Simplificados"
+      "label": "Asientos Manuales"
     },
     "Cluster Services": {
       "label": "Servicios Cluster"

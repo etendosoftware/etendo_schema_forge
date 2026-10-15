@@ -19,6 +19,8 @@ import { translateBackendError, extractBackendMessageKeys } from '@/lib/backendE
 import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { ACCOUNTING_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 // Post (contabilizar) / Unpost (descontabilizar) go through the financial-account spec's
 // document-posting action (Java_Qualifier `document-posting` on the transaction entity).
 const POST_URL = (id) =>
@@ -64,6 +66,8 @@ async function callTransactionAction(apiFetch, url, token) {
  */
 export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly }) {
   const ui = useUI();
+  // ETP-5684 — Contabilizar / Descontabilizar only for a role with "Show Accounting Fields".
+  const showAccounting = isCapabilityVisible(useCapabilitiesSafe(), ACCOUNTING_CAPABILITY);
   const { token } = useAuth();
   const apiFetch = useApiFetch(getApiBase());
   const { processMovement, processing } = useProcessMovement();
@@ -101,7 +105,9 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
   const deleteBlock = resolveMovementDeleteBlock(movement);
   const reactivateBlock = resolveMovementReactivateBlock(movement);
   // Contabilizar only makes sense once the movement is Processed (and not yet posted).
-  const canPost = isProcessed && !isPosted;
+  const canPost = showAccounting && isProcessed && !isPosted;
+  // Descontabilizar is offered while posted, for the same roles as Contabilizar.
+  const canUnpost = showAccounting && isPosted;
   // "Is there anything to undo?" — the movement is posted (contabilizado) and/or reconciled.
   // Two different jobs read it: Reactivar uses it to decide whether to confirm AT ALL (a
   // merely-Processed movement reactivates on the spot), while Eliminar always confirms and uses it
@@ -128,7 +134,7 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
   // Is there anything ABOVE the Delete item? Delete is the only unconditional item (ETP-5111), so
   // its separator has to be gated on this or it renders as a stray leading divider — precisely on
   // the payment-linked draft this change exists to serve, where every other flag is false.
-  const hasActionsAboveDelete = canEdit || canProcess || canPost || isPosted || canReactivate;
+  const hasActionsAboveDelete = canEdit || canProcess || canPost || canUnpost || canReactivate;
 
   // No "nothing to offer" early return any more (ETP-5111): Delete is now rendered on every row,
   // so the menu is never empty. It used to be hidden entirely for, say, a payment-linked draft —
@@ -295,7 +301,7 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
 
           {/* Unpost — descontabilizar; enabled while posted. No reconciliation-state field is
               exposed on the row, so it cannot be gated on reconciliation status here. */}
-          {isPosted && (
+          {canUnpost && (
             <DropdownMenuItem
               onClick={handleUnpost}
               disabled={busy}

@@ -1,3 +1,4 @@
+// @covers artifacts/financial-account/custom/AccountsHeaderTable.jsx
 /**
  * AccountsHeaderTable — rendering, contract-driven columns and filtering.
  *
@@ -328,13 +329,14 @@ describe('AccountsHeaderTable — layout', () => {
   // `hoverRowActions` remains the default. Account actions intentionally use the shared
   // `rowQuickActions` cell so its hover-sticky geometry matches the document lists.
   // The retired page lifted the hovered row with a drop shadow instead of tinting it
-  // (`hover:z-10 hover:shadow-lg` on AccountRow's <tr>). Moving onto the generic DataTable
-  // lost that reading, so it is now an opt-in prop — behaviour covered by
+  // (`hover:z-10 hover:shadow-lg` on AccountRow's <tr>). That lift is now DataTable's
+  // default row hover, so the slot must not pass a `rowHoverStyle` — any value it set
+  // (notably `'tint'`) would override the default. Behaviour covered by
   // tools/app-shell/src/components/contract-ui/__tests__/DataTable.rowHoverStyle.vitest.jsx
-  it('asks DataTable for the elevated (card-like) row hover', () => {
+  it('inherits DataTable\'s default lifted row hover instead of setting a style', () => {
     renderTable();
 
-    expect(tableProps.rowHoverStyle).toBe('elevated');
+    expect(tableProps.rowHoverStyle).toBeUndefined();
   });
 
   it('passes the account actions through DataTable\'s shared quick-actions cell', () => {

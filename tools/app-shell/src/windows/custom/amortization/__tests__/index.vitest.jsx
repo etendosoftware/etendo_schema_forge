@@ -18,6 +18,11 @@
 // not a hand-copied approximation of them.
 
 const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+// ETP-5684 — posting actions/status are gated on showAccountingFields (fail closed);
+// this suite asserts on them, so it grants the capability.
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: () => mockApiFetch,
 }));

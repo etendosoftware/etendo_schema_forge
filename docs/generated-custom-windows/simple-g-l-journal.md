@@ -44,7 +44,7 @@ The header form shows **6 always-visible fields** — 5 editable plus the read-o
 | `opening` | IsOpening | editable | Marks an opening-balance journal. `section: "other"` pinned (ETP-5611). |
 | `multigeneralLedger` | Multi_Gl | editable | Multi-ledger flag. `section: "other"` pinned (ETP-5611). |
 | `documentNo` | DocumentNo | system | Auto-sequenced by NEO on POST; not shown on the form. |
-| `documentType` | C_DocType_ID | system | Hidden but still defaulted under the hood (`DocBaseType='GLJ'`) — needed for posting/sequencing later. **Not discarded.** |
+| `documentType` | C_DocType_ID | system | Hidden but still defaulted under the hood (`DocBaseType='GLJ'`) — needed for posting/sequencing later. **Not discarded.** **ETP-5682:** defaulted by a client-scoped `defaultExpr` in `decisions.json` (pushed to `ETGO_SF_FIELD.defaultvalue`), not by the core AD default — see "ETP-5682 — document type from another tenant" below. |
 | `posted` | Posted | readOnly | Accounting-status pill (`statusPills`): **Sin contabilizar** / **Contabilizado**. `form: false` (not on the form), but shown as a badge, plus a grid column + searchable (grid/searchable added ETP-4917). Not a document lifecycle status — see `documentStatus` below for the second, independent chip. |
 | `documentStatus` | DocStatus | readOnly | **ETP-4917.** Second, independent header status chip — document lifecycle: **Borrador** (DR) / **Completado** (CO). `form: false` (not on the form), grid column + searchable. Promoted from `discarded`; the badge label mapping comes from `statusBadge.js`'s built-in DR→`statusDraft`/CO→`statusComplete` default fallback (no window-specific `badgeLabels` override and no new i18n keys needed). Auto-detected as the `statusField` for `draftMode` completion (falls back to `documentStatus` when the window doesn't declare `draftMode.statusField` explicitly). |
 | `rate` | CurrencyRate | system | Derived currency rate, hidden. |
@@ -343,6 +343,20 @@ the contract for agents. See `docs/decisions-reference.md`.
 `section` is pinned on `currency` (principal), `opening` and `multigeneralLedger` (other), and
 `summaryFields: []` keeps the read-only currency out of the summary strip.
 
+## ETP-5682 — document type from another tenant, and the list title
+
+**Symptom.** The second manual journal of a period failed with "ya existe un documento con este identificador". Production logs showed every retry colliding on `DocumentNo = 1000000` (`gl_journal_docno`, unique per org + period + number).
+
+**Root cause.** The core `AD_Column` default of `GL_Journal.C_DocType_ID` is `@SQL=SELECT C_DocType_ID FROM C_DocType WHERE DocBaseType='GLJ' AND AD_ISORGINCLUDED(@AD_Org_ID@, AD_Org_ID, @#AD_Client_ID@) <> '-1' ORDER BY isdefault DESC`. It has no `AD_Client_ID` filter, and every tenant keeps its GLJ document type in org `0`, so the query matches the GLJ document type of **every** client and the first row is arbitrary. Classic hides this behind the combo's client filter; NEO evaluated the SQL as-is and `documentType` is hidden, so nobody saw it. The journal took another tenant's document type, `DocumentNoHandlerLegacy` numbered it from **that tenant's** sequence (usually untouched, so `1000000`), and the sequence increment rolled back with every failed insert — so every retry computed the same number again.
+
+**Fix (two layers, shipped together).**
+- `decisions.json` → `header.fields.documentType.defaultExpr`: the same query scoped to `AD_Client_ID = @#AD_Client_ID@`, active rows only, ordered by `IsDefault DESC` then org distance. Verified live: two journals created back-to-back get `1000000` and `1000001` on the tenant's own document type.
+- `com.etendoerp.go` `NeoDefaultTenantGuard` (generic, every window): an `@SQL=` default of a foreign-key column never resolves to another tenant's row. See `neo-headless.md` (defaults section).
+
+**Existing data** (journals already stored with a foreign document type, posted ones carrying it into `Fact_Acct`) is a separate data-fix, not part of this change: ETP-5719.
+
+**List title.** The list page used the AD window name (`"Simple G/L Journal"`), translated as "Asientos Manuales Simplificados", while the menu and breadcrumb read "Asientos Manuales". The `"Simple G/L Journal"` locale label (`windows` + `menus`, en_US/es_ES/es_AR) now reads "Manual Journals" / "Asientos Manuales". The URL and spec name stay `simple-g-l-journal` (a rename to `manual-journals` is tracked separately in ETP-5720). Guarded by `tools/app-shell/src/locales/__tests__/window-list-titles.vitest.js`.
+
 ## Selectors: load on open, active records, posting accounts — ETP-5681
 
 Accounting feedback after the demo, three fixes on this window's selectors (all shared code, so
@@ -375,6 +389,15 @@ Manual check: open a draft journal, click the header Cost Center → the list ap
 typing; deactivate a cost center in its window, come back, open a line's dimensions → it is gone;
 click the Account cell of a new line → a centered popup opens; type "640" → only posting accounts
 (e.g. `64000000`), never the `640` heading.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped).
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
 
 ## Period not open (ETP-5577)
 
