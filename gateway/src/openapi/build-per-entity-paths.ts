@@ -13,9 +13,13 @@ export interface OpenApiOperation {
   summary: string;
   description?: string;
   tags: string[];
-  parameters?: Array<{ name: string; in: 'path'; required: true; schema: { type: 'string' } }>;
+  parameters?: Array<{ name: string; in: 'path' | 'header'; required: true; description?: string; schema: { type: 'string' } }>;
   requestBody?: { required: boolean; content: { 'application/json': { schema: { type: 'object'; properties: Record<string, FieldSchema> } } } };
-  responses: Record<string, { description: string; content?: { 'application/json': { schema: JsonSchema } } }>;
+  responses: Record<string, {
+    description: string;
+    headers?: Record<string, { description: string; schema: { type: 'string' } }>;
+    content?: { 'application/json': { schema: JsonSchema } };
+  }>;
   security: Array<Record<string, string[]>>;
 }
 
@@ -35,6 +39,35 @@ type PublicApiEntity = PublicApiSchema['entities'][string] & {
 
 function response(description: string, schema: JsonSchema, status = '200') {
   return { [status]: { description, content: { 'application/json': { schema } } } };
+}
+
+// Optimistic concurrency (see the controller): resources that publish
+// `updated` return an opaque ETag and require it back in If-Match on updates.
+const ETAG_HEADER = {
+  ETag: {
+    description: 'Opaque version of the record. Send it back in If-Match to update the record.',
+    schema: { type: 'string' as const },
+  },
+};
+const IF_MATCH_PARAMETER = {
+  name: 'If-Match',
+  in: 'header' as const,
+  required: true as const,
+  description: 'ETag returned when the record was read (ETag header or meta.etag).',
+  schema: { type: 'string' as const },
+};
+const PRECONDITION_RESPONSES = {
+  '412': { description: 'If-Match does not match the current version: the record changed since it was read, or the value is not a valid ETag.' },
+  '428': { description: 'If-Match is missing.' },
+};
+
+function withEtagHeader(responses: OpenApiOperation['responses']) {
+  for (const value of Object.values(responses)) value.headers = { ...ETAG_HEADER };
+  return responses;
+}
+
+function isVersioned(entity: PublicApiEntity): boolean {
+  return Boolean(entity.fields.updated);
 }
 
 function resourceSchema(entityName: string, entity: PublicApiEntity, properties: Record<string, FieldSchema>): JsonSchema {
@@ -65,6 +98,9 @@ function resourceSchema(entityName: string, entity: PublicApiEntity, properties:
       attributes: { type: 'object', properties: attributeProperties },
       ...(Object.keys(relationshipProperties).length
         ? { relationships: { type: 'object', properties: relationshipProperties } }
+        : {}),
+      ...(isVersioned(entity)
+        ? { meta: { type: 'object', properties: { etag: { type: 'string', description: 'Same value as the ETag header; send it in If-Match to update this record.' } } } }
         : {}),
     },
   };
@@ -114,6 +150,7 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
         responses: response(`${title} record filtered to curated public API fields`, { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } }),
         security: [{ bearerAuth: [] }],
       };
+      if (isVersioned(entity)) withEtagHeader(item.get.responses);
     }
     if (can('POST')) {
       collection.post = {
@@ -123,6 +160,7 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
         responses: response(`${title} record created`, { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } }, '201'),
         security: [{ bearerAuth: [] }],
       };
+      if (isVersioned(entity)) withEtagHeader(collection.post.responses);
     }
     for (const method of ['PUT', 'PATCH'] as const) {
       if (!can(method)) continue;
@@ -134,6 +172,12 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
         responses: response(`${title} record updated`, { type: 'object', properties: { data: resourceSchema(entityName, entity, properties) as any } }),
         security: [{ bearerAuth: [] }],
       };
+      if (isVersioned(entity)) {
+        const operation = item[method.toLowerCase()];
+        operation.parameters = [...(operation.parameters ?? []), IF_MATCH_PARAMETER];
+        withEtagHeader(operation.responses);
+        Object.assign(operation.responses, structuredClone(PRECONDITION_RESPONSES));
+      }
     }
     if (can('DELETE')) {
       item.delete = {

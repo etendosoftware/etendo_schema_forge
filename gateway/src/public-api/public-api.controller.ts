@@ -5,14 +5,19 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
+  HttpException,
+  HttpStatus,
   Inject,
   NotFoundException,
   Optional,
   Param,
   Patch,
   Post,
+  PreconditionFailedException,
   Put,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -24,6 +29,45 @@ import {
   filterOutboundRecord,
   type PublicApiSchema,
 } from '@etendosoftware/api-gateway-core';
+
+// Optimistic concurrency. NeoServlet refuses an update unless it carries the
+// record's `updated` value as it was read, and refuses a stale one. The public
+// contract expresses that with standard HTTP preconditions: reads return an
+// opaque `ETag` derived from `updated`, and PUT/PATCH must send it back in
+// `If-Match`. `updated` itself stays read-only in the body.
+type HeaderSink = { setHeader(name: string, value: string): unknown };
+
+const CONCURRENCY_FIELD = 'updated';
+const NEO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/;
+
+export function toEtag(version: unknown): string | undefined {
+  if (version === null || version === undefined || version === '') return undefined;
+  return `"${Buffer.from(String(version), 'utf8').toString('base64url')}"`;
+}
+
+// Returns the `updated` value an If-Match header stands for. A missing header
+// is a 428; anything that is not one of our strong ETags is a 412, because it
+// cannot match the current version (NeoServlet would answer a malformed value
+// with a 500).
+export function versionFromIfMatch(ifMatch: string | undefined): string {
+  const value = ifMatch?.trim();
+  if (!value || value === '*') {
+    throw new HttpException(
+      {
+        statusCode: HttpStatus.PRECONDITION_REQUIRED,
+        error: 'Precondition Required',
+        message: 'Updates require an If-Match header carrying the ETag returned when the record was read.',
+      },
+      HttpStatus.PRECONDITION_REQUIRED,
+    );
+  }
+  const match = /^"([A-Za-z0-9_-]+)"$/.exec(value);
+  const version = match ? Buffer.from(match[1], 'base64url').toString('utf8') : '';
+  if (!NEO_TIMESTAMP.test(version)) {
+    throw new PreconditionFailedException('If-Match does not match the current version of the record. Read it again and retry with its ETag.');
+  }
+  return version;
+}
 
 @Controller()
 @UseGuards(PublicApiKeyGuard)
@@ -64,10 +108,11 @@ export class PublicApiController {
     @Param('childName') childName: string,
     @Param('id') id: string,
     @Req() req: { neoJwt: string },
+    @Res({ passthrough: true }) res?: HeaderSink,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'GET');
-    return this.forward(child.publicName, req, 'GET', undefined, id, parentId);
+    return this.forward(child.publicName, req, 'GET', undefined, id, parentId, res);
   }
 
   @Post(':parentName/:parentId/:childName')
@@ -77,10 +122,11 @@ export class PublicApiController {
     @Param('childName') childName: string,
     @Body() body: Record<string, unknown>,
     @Req() req: { neoJwt: string },
+    @Res({ passthrough: true }) res?: HeaderSink,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'POST');
-    return this.forward(child.publicName, req, 'POST', { ...this.filterWritable(child.publicName, body), parentId }, undefined, parentId);
+    return this.forward(child.publicName, req, 'POST', { ...this.filterWritable(child.publicName, body), parentId }, undefined, parentId, res);
   }
 
   @Put(':parentName/:parentId/:childName/:id')
@@ -91,10 +137,13 @@ export class PublicApiController {
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
     @Req() req: { neoJwt: string },
+    @Headers('if-match') ifMatch?: string,
+    @Res({ passthrough: true }) res?: HeaderSink,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'PUT');
-    return this.forward(child.publicName, req, 'PUT', this.filterWritable(child.publicName, body), id, parentId);
+    const writable = this.withVersion(child.publicName, this.filterWritable(child.publicName, body), ifMatch);
+    return this.forward(child.publicName, req, 'PUT', writable, id, parentId, res);
   }
 
   @Patch(':parentName/:parentId/:childName/:id')
@@ -105,10 +154,13 @@ export class PublicApiController {
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
     @Req() req: { neoJwt: string },
+    @Headers('if-match') ifMatch?: string,
+    @Res({ passthrough: true }) res?: HeaderSink,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'PATCH');
-    return this.forward(child.publicName, req, 'PATCH', this.filterWritable(child.publicName, body), id, parentId);
+    const writable = this.withVersion(child.publicName, this.filterWritable(child.publicName, body), ifMatch);
+    return this.forward(child.publicName, req, 'PATCH', writable, id, parentId, res);
   }
 
   @Delete(':parentName/:parentId/:childName/:id')
@@ -125,31 +177,57 @@ export class PublicApiController {
   }
 
   @Get(':entityName/:id')
-  async get(@Param('entityName') entityName: string, @Param('id') id: string, @Req() req: { neoJwt: string }) {
+  async get(
+    @Param('entityName') entityName: string,
+    @Param('id') id: string,
+    @Req() req: { neoJwt: string },
+    @Res({ passthrough: true }) res?: HeaderSink,
+  ) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'GET');
-    return this.forward(entityName, req, 'GET', undefined, id);
+    return this.forward(entityName, req, 'GET', undefined, id, undefined, res);
   }
 
   @Post(':entityName')
-  async create(@Param('entityName') entityName: string, @Body() body: Record<string, unknown>, @Req() req: { neoJwt: string }) {
+  async create(
+    @Param('entityName') entityName: string,
+    @Body() body: Record<string, unknown>,
+    @Req() req: { neoJwt: string },
+    @Res({ passthrough: true }) res?: HeaderSink,
+  ) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'POST');
-    return this.forward(entityName, req, 'POST', this.filterWritable(entityName, body));
+    return this.forward(entityName, req, 'POST', this.filterWritable(entityName, body), undefined, undefined, res);
   }
 
   @Put(':entityName/:id')
-  async update(@Param('entityName') entityName: string, @Param('id') id: string, @Body() body: Record<string, unknown>, @Req() req: { neoJwt: string }) {
+  async update(
+    @Param('entityName') entityName: string,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @Req() req: { neoJwt: string },
+    @Headers('if-match') ifMatch?: string,
+    @Res({ passthrough: true }) res?: HeaderSink,
+  ) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'PUT');
-    return this.forward(entityName, req, 'PUT', this.filterWritable(entityName, body), id);
+    const writable = this.withVersion(entityName, this.filterWritable(entityName, body), ifMatch);
+    return this.forward(entityName, req, 'PUT', writable, id, undefined, res);
   }
 
   @Patch(':entityName/:id')
-  async patch(@Param('entityName') entityName: string, @Param('id') id: string, @Body() body: Record<string, unknown>, @Req() req: { neoJwt: string }) {
+  async patch(
+    @Param('entityName') entityName: string,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @Req() req: { neoJwt: string },
+    @Headers('if-match') ifMatch?: string,
+    @Res({ passthrough: true }) res?: HeaderSink,
+  ) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'PATCH');
-    return this.forward(entityName, req, 'PATCH', this.filterWritable(entityName, body), id);
+    const writable = this.withVersion(entityName, this.filterWritable(entityName, body), ifMatch);
+    return this.forward(entityName, req, 'PATCH', writable, id, undefined, res);
   }
 
   @Delete(':entityName/:id')
@@ -215,8 +293,26 @@ export class PublicApiController {
     return mapped;
   }
 
+  // Internal path of the field NeoServlet uses for optimistic concurrency, when
+  // the resource publishes it. Resources without it are not version-checked.
+  private concurrencyPath(entityName: string): string | undefined {
+    return (this.entityOrThrow(entityName).fields[CONCURRENCY_FIELD] as PublicApiField | undefined)?.internalPath;
+  }
+
+  private withVersion(entityName: string, mapped: Record<string, unknown>, ifMatch: string | undefined) {
+    const path = this.concurrencyPath(entityName);
+    if (!path) return mapped;
+    return { ...mapped, [path]: versionFromIfMatch(ifMatch) };
+  }
+
+  private etagOf(entityName: string, record: Record<string, unknown> | undefined): string | undefined {
+    const path = this.concurrencyPath(entityName);
+    return path && record ? toEtag(record[path]) : undefined;
+  }
+
   private toJsonApiResource(entityName: string, record: Record<string, unknown>, id?: string) {
     const entity = this.entityOrThrow(entityName);
+    const etag = this.etagOf(entityName, record);
     const filtered = filterOutboundRecord(entity, record);
     const resourceId = filtered.id ?? id;
     const attributes: Record<string, unknown> = { ...filtered };
@@ -244,6 +340,7 @@ export class PublicApiController {
       attributes,
       ...(Object.keys(relationships).length ? { relationships } : {}),
       ...(resourceId === undefined || resourceId === null ? {} : { links: { self: `/api/v1/${entityName}/${encodeURIComponent(String(resourceId))}` } }),
+      ...(etag ? { meta: { etag } } : {}),
     };
   }
 
@@ -259,6 +356,7 @@ export class PublicApiController {
     body?: Record<string, unknown>,
     id?: string,
     parentId?: string,
+    res?: HeaderSink,
   ) {
     const entity = this.entityOrThrow(entityName);
     const internalEntityName = entity.entityName ?? entityName;
@@ -273,8 +371,17 @@ export class PublicApiController {
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
     if (!response.ok) {
-      const errorBody = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
-      const message = errorBody?.error?.message ?? `NeoServlet request failed with status ${response.status}`;
+      const errorBody = (await response.json().catch(() => null)) as
+        { error?: string | { message?: string }; message?: string } | null;
+      // NeoServlet refuses a write whose `updated` is no longer current with
+      // 409 `stale_record`: for the public API that is a failed If-Match.
+      if (response.status === 409 && errorBody?.error === 'stale_record') {
+        throw new PreconditionFailedException(
+          errorBody.message ?? 'The record was modified after it was read. Read it again and retry with its ETag.',
+        );
+      }
+      const message = (typeof errorBody?.error === 'object' ? errorBody.error.message : undefined)
+        ?? `NeoServlet request failed with status ${response.status}`;
       if (response.status === 400 || response.status === 409) throw new BadRequestException(message);
       if (response.status === 401 || response.status === 403) throw new UnauthorizedException(message);
       throw new BadGatewayException(message);
@@ -282,6 +389,11 @@ export class PublicApiController {
     if (response.status === 204) return null;
     const json = (await response.json()) as { response?: { data?: unknown } };
     const data = json.response?.data ?? json;
+    // A single-record answer (read, create, update) carries the new version in
+    // the ETag header; NeoServlet wraps it in a one-element array.
+    const single = Array.isArray(data) ? (data.length === 1 && (id || method !== 'GET') ? data[0] : undefined) : data;
+    const etag = this.etagOf(entityName, single as Record<string, unknown> | undefined);
+    if (etag && res) res.setHeader('ETag', etag);
     return this.toJsonApi(entityName, data, id);
   }
 }

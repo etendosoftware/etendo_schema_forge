@@ -62,7 +62,7 @@ Each resource corresponds to a business window in Etendo. The resource page expl
 
 Use \`POST\` on a collection to create a record. Use \`PUT\` or \`PATCH\` on \`/resource/{id}\` to update one. Use \`DELETE\` on \`/resource/{id}\` to remove one. Request fields must be writable in this document; unknown or read-only fields are rejected before the request reaches Etendo.
 
-Updates use optimistic concurrency. Include the \`updated\` value returned by a previous read when the resource requires it; a stale value returns \`409 Conflict\`.
+Updates use optimistic concurrency with standard HTTP preconditions. Reading, creating or updating a single record returns its version in the \`ETag\` header; every resource also carries it as \`meta.etag\`, including the items of a list. Send that value back in the \`If-Match\` header of \`PUT\` or \`PATCH\`: without it the request is refused with \`428 Precondition Required\`; if the record changed since it was read, it is refused with \`412 Precondition Failed\` and nothing is saved. Read the record again, reapply the change and retry. Successful writes return the new \`ETag\`.
 
 ### 6. Create lines for a document
 
@@ -75,7 +75,8 @@ Document lines are addressed through their master resource: \`/api/v1/{master}/{
 - \`401\`: missing, malformed, or invalid credentials.
 - \`403\`: the credential does not have the required scope or organization access.
 - \`404\`: the resource or record does not exist.
-- \`409\`: the record changed since it was read.
+- \`412\`: the record changed since it was read (\`If-Match\` does not match its current version).
+- \`428\`: the update did not send \`If-Match\`.
 - \`502\`: Etendo could not complete the upstream request.
 
 ### Versioning

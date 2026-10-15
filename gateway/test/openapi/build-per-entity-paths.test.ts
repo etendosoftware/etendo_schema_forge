@@ -138,3 +138,39 @@ test('documents PATCH for writable child resources in the public contract', () =
   const item = buildPerEntityOpenApiPaths(childSchema)['/api/v1/product/{parentId}/lines/{id}'];
   assert.ok(item.patch);
 });
+
+function versionedSchema() {
+  const versioned = structuredClone(schema) as any;
+  versioned.entities.product.operations = ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'];
+  versioned.entities.product.fields.updated = {
+    publicApi: true, direction: 'out', internalPath: 'updated', type: 'passthrough', dataType: { type: 'string', format: 'date-time' }, handlerId: null,
+  };
+  versioned.entities.businessPartner.operations = ['GET', 'LIST', 'POST', 'PUT', 'PATCH', 'DELETE'];
+  return versioned;
+}
+
+test('requires If-Match and documents 412/428 on updates of a versioned resource', () => {
+  const item = buildPerEntityOpenApiPaths(versionedSchema())['/api/v1/product/{id}'];
+  for (const method of ['put', 'patch']) {
+    const ifMatch = item[method].parameters?.find((parameter) => parameter.name === 'If-Match');
+    assert.deepEqual({ in: ifMatch?.in, required: ifMatch?.required }, { in: 'header', required: true }, method);
+    assert.ok(item[method].responses['412'], `${method} documents 412`);
+    assert.ok(item[method].responses['428'], `${method} documents 428`);
+    assert.ok(item[method].responses['200'].headers?.ETag, `${method} returns the new ETag`);
+  }
+});
+
+test('returns the ETag on reads and creates of a versioned resource and exposes meta.etag', () => {
+  const paths = buildPerEntityOpenApiPaths(versionedSchema());
+  assert.ok(paths['/api/v1/product/{id}'].get.responses['200'].headers?.ETag);
+  assert.ok(paths['/api/v1/product'].post.responses['201'].headers?.ETag);
+  const data = paths['/api/v1/product/{id}'].get.responses['200'].content!['application/json'].schema.properties!.data as any;
+  assert.ok(data.properties.meta.properties.etag);
+});
+
+test('does not ask for If-Match on resources that do not publish updated', () => {
+  const item = buildPerEntityOpenApiPaths(versionedSchema())['/api/v1/businessPartner/{id}'];
+  assert.equal(item.patch.parameters?.some((parameter) => parameter.name === 'If-Match'), false);
+  assert.equal(item.patch.responses['428'], undefined);
+  assert.equal(item.get.responses['200'].headers, undefined);
+});
