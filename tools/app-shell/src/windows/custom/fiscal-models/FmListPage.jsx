@@ -253,7 +253,9 @@ function ResultText({ isComputing, error, result, t }) {
       ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
       : <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
   }
-  const label = t(`fm.result.${result.kind}`) ?? result.kind;
+  // A model may name its own badge text (`labelKey`, e.g. the 390's informative "Resultado
+  // positivo"); otherwise the shared `fm.result.<kind>` key.
+  const label = t(result.labelKey ?? `fm.result.${result.kind}`) ?? result.kind;
   // Resultado sign-coloring (ETP-5236 / M303-01): 'I' (a ingresar) green, 'V'/'C'
   // (a devolver / a compensar) blue — same rule as the Modelo 303 detail KPI, via
   // the shared fiscalModelsUtils.js helper so both call sites stay in sync.

@@ -14,7 +14,8 @@ import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
 import {
   INPUT, FLAG, TERRITORY_PERCENT_INPUTS, cellInput, cellBox, buildBoxIndex, findBox, parseAmount,
-  inputOrigin, isTerritoryMode, territoryPercentSum, isSubstitutive,
+  inputOrigin, isTerritoryMode, territoryPercentSum, isSubstitutive, isMonthlyReturn, isConcurso,
+  inputMessages390,
 } from './fm390Layouts.js';
 
 const BLOCK_ICON = {
@@ -122,7 +123,12 @@ function Cell({ cell, boxes, ctx, ariaLabel }) {
   const highlighted = box != null && box === ctx.highlightBox;
   if (spec) {
     const territory = isTerritoryMode(ctx.inputs);
-    const disabled = spec.liquidationOnly && territory;
+    const lockedByTerritory = Boolean(spec.liquidationOnly && territory);
+    const lockedByMonthlyReturn = Boolean(spec.monthlyReturnOnly && !isMonthlyReturn(ctx.inputs));
+    const disabled = lockedByTerritory || lockedByMonthlyReturn;
+    const disabledTitle = lockedByMonthlyReturn
+      ? ctx.t('fm.m390.monthly_return.devolver_disabled')
+      : ctx.t('fm.m390.territory.compensation_disabled');
     return (
       <InputCell
         spec={spec}
@@ -132,7 +138,7 @@ function Cell({ cell, boxes, ctx, ariaLabel }) {
         onRestore={ctx.onRestore}
         readOnly={ctx.readOnly}
         disabled={disabled}
-        disabledTitle={ctx.t('fm.m390.territory.compensation_disabled')}
+        disabledTitle={disabledTitle}
         highlighted={highlighted}
         ariaLabel={ariaLabel}
         t={ctx.t}
@@ -280,7 +286,7 @@ function DevengoBlock({ ctx }) {
             value={ident.formerStatement}
             testId="FmBoxes390__formerStatement" />
         )}
-        {substitutive && (
+        {substitutive && isConcurso(ctx.inputs) && (
           <ReadOnlyField
             label={ctx.t('fm.m390.substitutive.by_quotas')}
             value={ident.rectificacionCuotas ? ctx.t('fm.m390.yes') : ctx.t('fm.m390.no')}
@@ -414,6 +420,15 @@ function BoxesBlock({ block, boxes, ctx }) {
               {ctx.t('fm.m390.territory.sum_error', { sum: formatPercent(percentSum) })}
             </p>
           )}
+          {(ctx.messages ?? []).filter(m => m.blockId === block.id).map(m => (
+            <p
+              key={m.id}
+              className={m.level === 'error' ? 'fm-390-inline-error' : 'fm-390-inline-warning'}
+              role={m.level === 'error' ? 'alert' : 'status'}
+              data-testid={`FmBoxes390__check_${m.id}`}>
+              {ctx.t(m.key)}
+            </p>
+          ))}
         </>
       )}
     </>
@@ -547,8 +562,10 @@ export default function FmBoxes390({
     contentRef.current?.scrollIntoView?.({ block: 'start' });
   };
 
+  // Cross-input checks (DEVOLVER_12 with [97], [98] with [96]/[97]) — shown inline in their block.
+  const messages = readOnly ? [] : inputMessages390(inputs);
   const ctx = {
-    t, bcpLocale, inputs, preloaded, identification, orgIdentity, year, readOnly, highlightBox,
+    t, bcpLocale, inputs, preloaded, identification, orgIdentity, year, readOnly, highlightBox, messages,
     onInputChange, onRestore, onFlagChange, onClearTerritory, onEditOrganization,
   };
 

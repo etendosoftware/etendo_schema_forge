@@ -23,8 +23,11 @@
 //   RateGroup { id, type: 'rates', labelKey, rates: [{ rate, cells }], total?: Row }
 //             rate rows whose boxes are all zero are folded ("Sin operaciones").
 //   Cell      a box number (calculated, read-only), or
-//             { box?, input, percent?, nonNegative? } — a manual input (`input` = search key);
-//             `box` is the AEAT number shown in the cell (absent for per-month inputs).
+//             { box?, input, percent?, nonNegative?, liquidationOnly?, monthlyReturnOnly? } — a
+//             manual input (`input` = search key); `box` is the AEAT number shown in the cell
+//             (absent for per-month inputs). `liquidationOnly`: disabled in territory mode;
+//             `monthlyReturnOnly`: disabled unless ISMONTHLYRETURN = 'Y' (classic
+//             AEAT390_MonthlyReturn_Check).
 
 // ── Manual inputs (classic TaxReportParameter search keys) ───────────────────
 export const INPUT = Object.freeze({
@@ -55,6 +58,12 @@ export const INPUT = Object.freeze({
 export const MONTH_CODES = Object.freeze(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']);
 export const ingresarKey = (month) => `INGRESAR_${month}`;
 export const devolverKey = (month) => `DEVOLVER_${month}`;
+
+/**
+ * Highest value of one territory percentage: classic rejects 100 (AEAT390Report, each of [87]-[91]
+ * must be ≤ 99 and together they must add up to 100).
+ */
+export const TERRITORY_PERCENT_MAX = 99;
 
 /** Territory percentages ([87]-[91]); any of them > 0 switches the result to [92]-[94]. */
 export const TERRITORY_PERCENT_INPUTS = Object.freeze([
@@ -186,7 +195,7 @@ const BLOCKS = Object.freeze([
     columns: COLS_MONTHS,
     items: Object.freeze([
       ...MONTH_CODES.map(m => row(`month${m}`, `fm.m390.month.${m}`, [
-        input(ingresarKey(m)), input(devolverKey(m)),
+        input(ingresarKey(m)), input(devolverKey(m), { monthlyReturnOnly: true }),
       ])),
       row('box95_96', 'fm.m390.row.total_liquidaciones', [95, 96], { total: true }),
       row('box97', 'fm.m390.box.97', [input(INPUT.TOTAL_LASTPERIOD, { box: 97 }), null]),
@@ -462,6 +471,96 @@ export function annualResultOf(boxes, mode) {
   return v ?? 0;
 }
 
+// ── "Resultado" badge ───────────────────────────────────────────────────────
+
+/**
+ * The 390 "Resultado" kind. Unlike the 303 (shared `deriveResultKind`: "A ingresar" /
+ * "A compensar/devolver"), the 390 result [86] / [94] is INFORMATIVE: AEAT writes it "con el signo
+ * que corresponda" and classic only signs it — the payment, offset or refund was already settled
+ * by the last 303 ([97] / [98]). So only the sign is shown:
+ *   > 0 'positive', < 0 'negative', 0 'zero' (the exercise had activity) or 'N' (no activity).
+ * `null` when no finite result is available.
+ */
+export function resultKind390(result, { hasActivity = false } = {}) {
+  const amount = Number(result);
+  if (result == null || !Number.isFinite(amount)) return null;
+  if (amount > 0) return 'positive';
+  if (amount < 0) return 'negative';
+  return hasActivity ? 'zero' : 'N';
+}
+
+/** i18n key of the badge of a `resultKind390` kind. */
+export const RESULT_LABEL_KEY_390 = Object.freeze({
+  positive: 'fm.m390.result.positive',
+  negative: 'fm.m390.result.negative',
+  zero: 'fm.result.zero',
+  N: 'fm.result.N',
+});
+
+// ── Consistency of the manual inputs (classic checks at "Generar") ───────────
+
+const hasAmount = (inputs, key) => (parseAmount(inputs?.[key]) ?? 0) !== 0;
+
+/** True when the declarant is in the monthly refund register (ISMONTHLYRETURN = 'Y'). */
+export function isMonthlyReturn(inputs) {
+  return inputs?.[FLAG.MONTHLY_RETURN] === 'Y';
+}
+
+/** True when the declarant was declared in insolvency proceedings (ConcursoAcr = 'Y'). */
+export function isConcurso(inputs) {
+  return inputs?.[FLAG.CONCURSO] === 'Y';
+}
+
+/**
+ * Drops the inputs that classic would reject together with the rest, so they are never stored:
+ *   - [85] LIQANUAL_COMPENSATION in territory mode (classic BothTerritoryAndLiqAnual — the offset
+ *     goes to [93] there);
+ *   - DEVOLVER_01..12 without ISMONTHLYRETURN = 'Y' (classic AEAT390_MonthlyReturn_Check);
+ *   - ConcursoUltPer = 'Y' without ConcursoAcr = 'Y' (classic rejects it) → 'N'.
+ * Applied after every edit and on every save. Returns a new object.
+ */
+export function sanitizeAeatInputs390(inputs) {
+  const next = { ...(inputs ?? {}) };
+  if (isTerritoryMode(next)) delete next[INPUT.COMPENSATION];
+  if (!isMonthlyReturn(next)) MONTH_CODES.forEach(m => { delete next[devolverKey(m)]; });
+  if (!isConcurso(next) && next[FLAG.CONCURSO_LAST_PERIOD] === 'Y') next[FLAG.CONCURSO_LAST_PERIOD] = 'N';
+  return next;
+}
+
+/**
+ * The input that blocks typing `key` because classic rejects the two together, or `null`:
+ * [85] and [93] cannot coexist (classic BothAmtPrevious).
+ */
+export function conflictingInput390(key, inputs) {
+  if (key === INPUT.COMPENSATION && hasAmount(inputs, INPUT.COMMON_TERRITORY_COMPENSATION)) {
+    return INPUT.COMMON_TERRITORY_COMPENSATION;
+  }
+  if (key === INPUT.COMMON_TERRITORY_COMPENSATION && hasAmount(inputs, INPUT.COMPENSATION)) {
+    return INPUT.COMPENSATION;
+  }
+  return null;
+}
+
+/**
+ * Inline messages of the "Resultado de las liquidaciones" checks, `[{ id, blockId, level, key }]`:
+ *   error    DEVOLVER_12 together with [97] (classic AEAT390_TotalLastPeriod_Check);
+ *   warning  [98] together with [96] (any DEVOLVER_xx) or [97] — AEAT: "Si ha consignado alguna
+ *            cantidad en las casillas 96 ó 97 no cumplimente la 98" (non-blocking).
+ */
+export function inputMessages390(inputs) {
+  const out = [];
+  const blockId = 'resultado_liquidaciones';
+  const has97 = hasAmount(inputs, INPUT.TOTAL_LASTPERIOD);
+  if (hasAmount(inputs, devolverKey('12')) && has97) {
+    out.push({ id: 'devolver12_with_97', blockId, level: 'error', key: 'fm.m390.check.devolver12_with_97' });
+  }
+  const has96 = MONTH_CODES.some(m => hasAmount(inputs, devolverKey(m)));
+  if (hasAmount(inputs, INPUT.TOTAL_LASTPERIOD_DEVOLVER) && (has96 || has97)) {
+    out.push({ id: 'box98_with_96_97', blockId, level: 'warning', key: 'fm.m390.check.box98_with_96_97' });
+  }
+  return out;
+}
+
 // ── Origin of a manual value ─────────────────────────────────────────────────
 
 /**
@@ -484,16 +583,25 @@ export function isSubstitutive(identification) {
 }
 
 /**
+ * True when "Sustitutiva por rectificación de cuotas" applies: AEAT defines it only for a
+ * declarant in insolvency proceedings (art. 80.Tres LIVA), so it needs ConcursoAcr = 'Y' in
+ * `inputs` as well as the box marked in `identification`.
+ */
+export function isRectificationByQuotas(identification, inputs) {
+  return identification?.rectificacionCuotas === true && isConcurso(inputs);
+}
+
+/**
  * The classic flag parameters derived from the header "Tipo" control, merged into
  * `manualData.aeatInputs` on every save: ordinary → no flags; substitute → ISSUPPLEMENTARY, or
- * ISRECTIFICATION when "Sustitutiva por rectificación de cuotas" is marked (classic treats the two
- * as exclusive), plus SUPPLEMENTARYNO = the former declaration's identifier.
+ * ISRECTIFICATION when "Sustitutiva por rectificación de cuotas" applies (`isRectificationByQuotas`;
+ * classic treats the two as exclusive), plus SUPPLEMENTARYNO = the former declaration's identifier.
  */
-export function substitutiveFlags(identification) {
+export function substitutiveFlags(identification, inputs) {
   if (!isSubstitutive(identification)) {
     return { [FLAG.SUPPLEMENTARY]: 'N', [FLAG.RECTIFICATION]: 'N', [FLAG.SUPPLEMENTARY_NO]: null };
   }
-  const byQuotas = identification?.rectificacionCuotas === true;
+  const byQuotas = isRectificationByQuotas(identification, inputs);
   return {
     [FLAG.SUPPLEMENTARY]: byQuotas ? 'N' : 'Y',
     [FLAG.RECTIFICATION]: byQuotas ? 'Y' : 'N',
@@ -503,11 +611,13 @@ export function substitutiveFlags(identification) {
 
 /**
  * The `manualData` object persisted by "Guardar": the previous manualData (unknown keys kept, e.g.
- * a future `aeatPreloaded`), the identification (Tipo control) and the inputs with the
- * substitute flags applied. A `null` input value removes the key.
+ * a future `aeatPreloaded`), the identification (Tipo control) and the inputs, sanitized
+ * (`sanitizeAeatInputs390`) and with the substitute flags applied. A `null` input value removes the
+ * key.
  */
 export function buildManualData390(previous, identification, aeatInputs) {
-  const merged = { ...(aeatInputs ?? {}), ...substitutiveFlags(identification) };
+  const sanitized = sanitizeAeatInputs390(aeatInputs);
+  const merged = { ...sanitized, ...substitutiveFlags(identification, sanitized) };
   const cleaned = Object.fromEntries(Object.entries(merged).filter(([, v]) => v != null && v !== ''));
   return { ...(previous ?? {}), identification: { ...(identification ?? {}) }, aeatInputs: cleaned };
 }

@@ -34,7 +34,7 @@ import { IncidentsTab } from '../../FmTabContent.jsx';
 import { PresentModal } from '../../FmOverlays.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import {
-  formatAmount, persistManualData, fetchDeclarationIncidents, deriveResultKind, resolveResultColors,
+  formatAmount, persistManualData, fetchDeclarationIncidents, resolveResultColors,
   RECEIPT_ATTACHMENT_CONFIG,
 } from '../../fiscalModelsUtils.js';
 import { getIncidentIndicator } from '../../incidentSeverity.js';
@@ -48,7 +48,8 @@ import useOrg390Identity from './useOrg390Identity.js';
 import { fetchBoxes390, generate390File } from './fm390Api.js';
 import {
   getLayout390, deriveInputBoxes, annualResultOf, toBoxMap, normalizeInputValue,
-  isSubstitutive, buildManualData390, TERRITORY_INPUTS,
+  isSubstitutive, buildManualData390, TERRITORY_INPUTS, TERRITORY_PERCENT_MAX, FLAG,
+  resultKind390, RESULT_LABEL_KEY_390, sanitizeAeatInputs390, conflictingInput390, isConcurso,
 } from './fm390Layouts.js';
 import '../../fiscal-models.css';
 
@@ -116,8 +117,9 @@ function DeclarationTypeControl({ identification, onChange, disabled, t }) {
 }
 
 // Shown while Tipo = Sustitutiva: the former declaration's identifier (13 digits, inline error)
-// and "Sustitutiva por rectificación de cuotas". Same banner as the 349's substitute declaration.
-function SubstitutiveBanner({ identification, onChange, disabled, showError, t }) {
+// and "Sustitutiva por rectificación de cuotas" — the latter only for a declarant in insolvency
+// proceedings (`concurso`, AEAT art. 80.Tres). Same banner as the 349's substitute declaration.
+function SubstitutiveBanner({ identification, concurso, onChange, disabled, showError, t }) {
   if (!isSubstitutive(identification)) return null;
   const value = identification?.formerStatement ?? '';
   const invalid = showError && !isValidFormerStatement(value);
@@ -156,14 +158,16 @@ function SubstitutiveBanner({ identification, onChange, disabled, showError, t }
               {t('fm.m390.substitutive.id_invalid')}
             </span>
           )}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))' }}>
-            <CheckboxField
-              checked={identification?.rectificacionCuotas === true}
-              disabled={disabled}
-              onToggle={(next) => onChange('rectificacionCuotas', next)}
-              data-testid="FmModel390Page__byQuotas" />
-            <span>{t('fm.m390.substitutive.by_quotas')}</span>
-          </label>
+          {concurso && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))' }}>
+              <CheckboxField
+                checked={identification?.rectificacionCuotas === true}
+                disabled={disabled}
+                onToggle={(next) => onChange('rectificacionCuotas', next)}
+                data-testid="FmModel390Page__byQuotas" />
+              <span>{t('fm.m390.substitutive.by_quotas')}</span>
+            </label>
+          )}
         </div>
       </div>
     </div>
@@ -253,11 +257,14 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
     return deriveInputBoxes(payload.boxes, payload.inputs ?? {}, aeatInputs);
   }, [payload, aeatInputs, isSubmitted]);
   const summary = summaryOf(display.boxes, display.mode);
+  // The 390 result is informative (resultKind390): its badge shows only the sign, in neutral
+  // colours — the payment / offset / refund was settled by the last 303 ([97] / [98]).
   const resultKind = payload?.boxes
-    ? deriveResultKind({ result: summary.result }, { hasInvoices: summary.accrued !== 0 || summary.deductible !== 0 })
+    ? resultKind390(summary.result, { hasActivity: summary.accrued !== 0 || summary.deductible !== 0 })
     : null;
   const resultColors = resolveResultColors(resultKind);
-  const resultLabel = resultKind ? t(`fm.result.${resultKind}`) : t('fm.m303.summary.result_sub');
+  const resultLabel = resultKind ? t(RESULT_LABEL_KEY_390[resultKind]) : t('fm.m303.summary.result_sub');
+  const showResultHint = resultKind === 'positive' || resultKind === 'negative';
 
   // ── Edits ─────────────────────────────────────────────────────────────────
   function markDirty() { dirtyRef.current = true; }
@@ -272,28 +279,40 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
       toast.error(t('fm.m390.input.negative', { box: spec.box }));
       return;
     }
-    if (normalized != null && spec?.percent && (Number(normalized) < 0 || Number(normalized) > 100)) {
-      toast.error(t('fm.m390.input.percent_range', { box: spec.box }));
+    if (normalized != null && spec?.percent && (Number(normalized) < 0 || Number(normalized) > TERRITORY_PERCENT_MAX)) {
+      toast.error(t('fm.m390.input.percent_range', { box: spec.box, max: TERRITORY_PERCENT_MAX }));
+      return;
+    }
+    // [85] and [93] cannot coexist (classic BothAmtPrevious): the second one is refused.
+    const conflict = normalized != null && Number(normalized) !== 0 ? conflictingInput390(key, aeatInputs) : null;
+    if (conflict) {
+      toast.error(t('fm.m390.input.compensation_conflict'));
       return;
     }
     if ((aeatInputs[key] ?? null) === normalized) return;
     markDirty();
+    // sanitizeAeatInputs390: e.g. a territory percentage > 0 clears [85] (not just disables it).
     setAeatInputs(prev => {
       const next = { ...prev };
       if (normalized == null) delete next[key]; else next[key] = normalized;
-      return next;
+      return sanitizeAeatInputs390(next);
     });
   }
 
   function handleRestore(key) {
     if (!preloaded || !Object.hasOwn(preloaded, key)) return;
     markDirty();
-    setAeatInputs(prev => ({ ...prev, [key]: preloaded[key] }));
+    setAeatInputs(prev => sanitizeAeatInputs390({ ...prev, [key]: preloaded[key] }));
   }
 
+  // Turning ISMONTHLYRETURN off clears DEVOLVER_01..12; turning ConcursoAcr off clears
+  // ConcursoUltPer (sanitizeAeatInputs390) and "Sustitutiva por rectificación de cuotas".
   function handleFlagChange(flag, on) {
     markDirty();
-    setAeatInputs(prev => ({ ...prev, [flag]: on ? 'Y' : 'N' }));
+    setAeatInputs(prev => sanitizeAeatInputs390({ ...prev, [flag]: on ? 'Y' : 'N' }));
+    if (flag === FLAG.CONCURSO && !on && identification?.rectificacionCuotas) {
+      setIdentification(prev => ({ ...prev, rectificacionCuotas: false }));
+    }
   }
 
   function handleClearTerritory() {
@@ -504,6 +523,7 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
       <div className="fm-page--freeflow fm-detail-scroll">
         <SubstitutiveBanner
           identification={identification}
+          concurso={isConcurso(aeatInputs)}
           onChange={handleIdentificationChange}
           disabled={isSubmitted || busy}
           showError={showIdError || String(identification?.formerStatement ?? '').length > 0}
@@ -548,6 +568,11 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
             badgeBg={resultColors.badgeBg}
             badgeColor={resultColors.badgeColor} />
         </div>
+        {showResultHint && (
+          <p className="fm-390-hint fm-390-result-hint" data-testid="FmModel390Page__resultHint">
+            {t('fm.m390.result.informative_hint')}
+          </p>
+        )}
 
         <div className="fm-tabs-sticky">
           <Tabs tabs={tabs} active={activeTab} onSelect={setActiveTab} />

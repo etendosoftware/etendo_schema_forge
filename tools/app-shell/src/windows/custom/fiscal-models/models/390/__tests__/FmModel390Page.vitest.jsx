@@ -260,6 +260,7 @@ describe('FmModel390Page — Normal | Sustitutiva', () => {
 
   it('saves the substitute flags for the classic generator (by quota rectification → ISRECTIFICATION)', async () => {
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    fireEvent.click(screen.getByTestId('FmBoxes390__flag_ConcursoAcr'));
     fireEvent.click(screen.getByTestId('FmModel390Page__type_sustitutiva'));
     fireEvent.change(screen.getByTestId('FmModel390Page__formerStatement'), { target: { value: '3901234567890' } });
     fireEvent.click(screen.getByTestId('FmModel390Page__byQuotas'));
@@ -268,6 +269,108 @@ describe('FmModel390Page — Normal | Sustitutiva', () => {
     const md = persistManualData.mock.calls[0][1];
     expect(md.identification).toEqual({ sustitutiva: true, formerStatement: '3901234567890', rectificacionCuotas: true });
     expect(md.aeatInputs).toMatchObject({ ISSUPPLEMENTARY: 'N', ISRECTIFICATION: 'Y', SUPPLEMENTARYNO: '3901234567890' });
+  });
+});
+
+describe('FmModel390Page — classic consistency checks (ETP-5716 verification against Classic)', () => {
+  it('"Sustitutiva por rectificación de cuotas" is offered only with concurso de acreedores', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    fireEvent.click(screen.getByTestId('FmModel390Page__type_sustitutiva'));
+    expect(screen.queryByTestId('FmModel390Page__byQuotas')).toBeNull();
+    fireEvent.click(screen.getByTestId('FmBoxes390__flag_ConcursoAcr'));
+    expect(screen.getByTestId('FmModel390Page__byQuotas')).toBeTruthy();
+  });
+
+  it('unchecking concurso clears ConcursoUltPer and the rectification flag', async () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    fireEvent.click(screen.getByTestId('FmBoxes390__flag_ConcursoAcr'));
+    fireEvent.click(screen.getByTestId('FmBoxes390__flag_ConcursoUltPer'));
+    fireEvent.click(screen.getByTestId('FmModel390Page__type_sustitutiva'));
+    fireEvent.change(screen.getByTestId('FmModel390Page__formerStatement'), { target: { value: '3901234567890' } });
+    fireEvent.click(screen.getByTestId('FmModel390Page__byQuotas'));
+    fireEvent.click(screen.getByTestId('FmBoxes390__flag_ConcursoAcr'));
+    expect(screen.queryByTestId('FmModel390Page__byQuotas')).toBeNull();
+    fireEvent.click(screen.getByTestId('FmModel390Page__save'));
+    await waitFor(() => expect(persistManualData).toHaveBeenCalled());
+    const md = persistManualData.mock.calls[0][1];
+    expect(md.identification.rectificacionCuotas).toBe(false);
+    expect(md.aeatInputs).toMatchObject({ ConcursoAcr: 'N', ConcursoUltPer: 'N', ISSUPPLEMENTARY: 'Y', ISRECTIFICATION: 'N' });
+  });
+
+  it('territory percentages accept at most 99 %', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    goToBlock('territorio');
+    fireEvent.click(screen.getByTestId('FmBoxes390__territoryToggle'));
+    typeInput('COMMON_TERRITORY', '100');
+    expect(toast.error).toHaveBeenCalledWith('fm.m390.input.percent_range');
+    expect(screen.getByTestId('FmBoxes390__inputField_COMMON_TERRITORY').value).toBe('');
+    typeInput('COMMON_TERRITORY', '99');
+    expect(screen.getByTestId('FmBoxes390__inputField_COMMON_TERRITORY').value).not.toBe('');
+  });
+
+  it('turning territory mode on clears [85] from the saved inputs, not just the cell', async () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    goToBlock('resultado_liquidacion');
+    typeInput('LIQANUAL_COMPENSATION', '50');
+    goToBlock('territorio');
+    fireEvent.click(screen.getByTestId('FmBoxes390__territoryToggle'));
+    typeInput('COMMON_TERRITORY', '60');
+    typeInput('ALAVA', '40');
+    fireEvent.click(screen.getByTestId('FmModel390Page__save'));
+    await waitFor(() => expect(persistManualData).toHaveBeenCalled());
+    const inputs = persistManualData.mock.calls[0][1].aeatInputs;
+    expect(inputs).not.toHaveProperty('LIQANUAL_COMPENSATION');
+    expect(inputs).toMatchObject({ COMMON_TERRITORY: '60.00', ALAVA: '40.00' });
+  });
+
+  it('[85] and [93] cannot coexist: the second one is refused', () => {
+    render(<FmModel390Page decl={makeDecl({ manualData: { aeatInputs: { COMMON_TERRITORY_COMPENSATION: '10.00' } } })} {...props()} />);
+    goToBlock('resultado_liquidacion');
+    typeInput('LIQANUAL_COMPENSATION', '50');
+    expect(toast.error).toHaveBeenCalledWith('fm.m390.input.compensation_conflict');
+    expect(screen.getByTestId('FmBoxes390__inputField_LIQANUAL_COMPENSATION').value).toBe('');
+  });
+
+  it('DEVOLVER cells are disabled unless ISMONTHLYRETURN, and cleared when it is turned off', async () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    goToBlock('resultado_liquidaciones');
+    expect(screen.getByTestId('FmBoxes390__inputField_DEVOLVER_01').disabled).toBe(true);
+    expect(screen.getByTestId('FmBoxes390__inputField_INGRESAR_01').disabled).toBe(false);
+    goToBlock('identificacion');
+    fireEvent.click(screen.getByTestId('FmBoxes390__flag_ISMONTHLYRETURN'));
+    goToBlock('resultado_liquidaciones');
+    expect(screen.getByTestId('FmBoxes390__inputField_DEVOLVER_01').disabled).toBe(false);
+    typeInput('DEVOLVER_03', '25');
+    goToBlock('identificacion');
+    fireEvent.click(screen.getByTestId('FmBoxes390__flag_ISMONTHLYRETURN'));
+    fireEvent.click(screen.getByTestId('FmModel390Page__save'));
+    await waitFor(() => expect(persistManualData).toHaveBeenCalled());
+    const inputs = persistManualData.mock.calls[0][1].aeatInputs;
+    expect(inputs.ISMONTHLYRETURN).toBe('N');
+    expect(inputs).not.toHaveProperty('DEVOLVER_03');
+  });
+
+  it('DEVOLVER_12 with [97] is an inline error; [98] with [96]/[97] a warning', () => {
+    render(<FmModel390Page decl={makeDecl({ manualData: { aeatInputs: { ISMONTHLYRETURN: 'Y' } } })} {...props()} />);
+    goToBlock('resultado_liquidaciones');
+    typeInput('DEVOLVER_12', '30');
+    expect(screen.queryByTestId('FmBoxes390__check_devolver12_with_97')).toBeNull();
+    typeInput('TOTAL_LASTPERIOD', '10');
+    expect(screen.getByTestId('FmBoxes390__check_devolver12_with_97').getAttribute('role')).toBe('alert');
+    typeInput('TOTAL_LASTPERIOD_DEVOLVER', '5');
+    expect(screen.getByTestId('FmBoxes390__check_box98_with_96_97').getAttribute('role')).toBe('status');
+  });
+
+  it('the result badge is informative: "Resultado positivo / negativo", never "A ingresar"', () => {
+    const { unmount } = render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    const kpi = () => document.querySelector('.test-kpi390[data-label="fm.m390.kpi.result"]').textContent;
+    expect(kpi()).toContain('fm.m390.result.positive');
+    expect(kpi()).not.toContain('fm.result.I');
+    expect(screen.getByTestId('FmModel390Page__resultHint').textContent).toContain('fm.m390.result.informative_hint');
+    unmount();
+    const negative = { ...PAYLOAD, boxes: { ...PAYLOAD.boxes, 86: '-20.00', 84: '-20.00', 65: '-20.00' } };
+    render(<FmModel390Page decl={makeDecl({ _precomputed: negative })} {...props()} />);
+    expect(kpi()).toContain('fm.m390.result.negative');
   });
 });
 

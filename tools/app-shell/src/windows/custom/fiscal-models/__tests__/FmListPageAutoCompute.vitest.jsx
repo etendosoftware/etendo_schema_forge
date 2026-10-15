@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/listBehavior390.js
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
@@ -418,6 +420,30 @@ describe('FmListPage — submitted declarations with a persisted submission snap
 
     await waitFor(() => expect(cell().textContent).toContain('250'));
     expect(cell().textContent).not.toContain('7.777');
+  });
+
+  // ETP-5716 — the 390 "Resultado" is informative: the list shows its own badge text (labelKey)
+  // with the signed amount, never the 303's "A compensar/devolver".
+  it('a 390 snapshot renders "Resultado negativo" with the signed amount', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('fiscal-models-catalog')) {
+        return Promise.resolve({ ok: true, json: async () => ({ '303': true, '349': true, '390': true }) });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+    const decl = makeRow({
+      id: 'snap-390', model: '390', period: '0A',
+      submittedSnapshot: { boxes: { 47: '10.00', 64: '60.00', 86: '-50.00' }, mode: 'liquidation', summary: { annualResult: '-50.00' } },
+    });
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    const cell = container.querySelector('tbody tr').querySelectorAll('td')[5];
+    expect(cell.textContent).toContain('fm.m390.result.negative');
+    expect(cell.textContent).not.toContain('fm.result.C');
+    expect(cell.textContent).toMatch(/-\s?50/);
   });
 
   // ETP-5438 scope decision — the snapshot keeps only the invoice COUNT (`sourceCount`); the

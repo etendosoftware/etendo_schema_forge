@@ -10,6 +10,7 @@ import {
   getLayout390, buildBoxIndex, findBox, deriveInputBoxes, annualResultOf, normalizeInputValue,
   parseAmount, isTerritoryMode, territoryPercentSum, inputOrigin, substitutiveFlags,
   buildManualData390, blockRows, cellBox, INPUT,
+  resultKind390, sanitizeAeatInputs390, conflictingInput390, inputMessages390, isRectificationByQuotas,
 } from '../fm390Layouts.js';
 import { annualDeadline390 } from '../deadline390.js';
 import { missing303Periods } from '../newDeclWarning390.js';
@@ -148,8 +149,15 @@ describe('substitute flags and the saved manualData', () => {
   it('substitute → ISSUPPLEMENTARY; by quota rectification → ISRECTIFICATION (exclusive in classic)', () => {
     expect(substitutiveFlags({ sustitutiva: true, formerStatement: '3901234567890' }))
       .toEqual({ ISSUPPLEMENTARY: 'Y', ISRECTIFICATION: 'N', SUPPLEMENTARYNO: '3901234567890' });
-    expect(substitutiveFlags({ sustitutiva: true, rectificacionCuotas: true, formerStatement: '3901234567890' }))
+    expect(substitutiveFlags({ sustitutiva: true, rectificacionCuotas: true, formerStatement: '3901234567890' }, { ConcursoAcr: 'Y' }))
       .toEqual({ ISSUPPLEMENTARY: 'N', ISRECTIFICATION: 'Y', SUPPLEMENTARYNO: '3901234567890' });
+  });
+
+  it('rectification by quotas needs concurso de acreedores (AEAT art. 80.Tres) — otherwise plain substitute', () => {
+    const ident = { sustitutiva: true, rectificacionCuotas: true, formerStatement: '3901234567890' };
+    expect(isRectificationByQuotas(ident, { ConcursoAcr: 'Y' })).toBe(true);
+    expect(isRectificationByQuotas(ident, { ConcursoAcr: 'N' })).toBe(false);
+    expect(substitutiveFlags(ident, {})).toMatchObject({ ISSUPPLEMENTARY: 'Y', ISRECTIFICATION: 'N' });
   });
 
   it('buildManualData390 keeps unknown keys, writes identification + inputs, drops blanks', () => {
@@ -175,5 +183,57 @@ describe('deadline and missing 303s', () => {
     expect(missing303Periods([{ model: '303', year: 2026, period: 'T2' }], 2026)).toEqual(['T1', 'T3', 'T4']);
     expect(missing303Periods([{ model: '303', year: '2026', period: '01' }], 2026)).toHaveLength(11);
     expect(missing303Periods(null, 2026)).toEqual(['T1', 'T2', 'T3', 'T4']);
+  });
+});
+
+describe('classic consistency of the manual inputs', () => {
+  it('resultKind390: only the sign, never "a ingresar" / "a devolver"', () => {
+    expect(resultKind390(10)).toBe('positive');
+    expect(resultKind390(-0.01)).toBe('negative');
+    expect(resultKind390(0, { hasActivity: true })).toBe('zero');
+    expect(resultKind390(0)).toBe('N');
+    expect(resultKind390(null)).toBeNull();
+    expect(resultKind390('abc')).toBeNull();
+  });
+
+  it('sanitizeAeatInputs390 drops [85] in territory mode, DEVOLVER without the monthly flag, and ConcursoUltPer without concurso', () => {
+    expect(sanitizeAeatInputs390({ LIQANUAL_COMPENSATION: '5.00', COMMON_TERRITORY: '60.00' }))
+      .toEqual({ COMMON_TERRITORY: '60.00' });
+    expect(sanitizeAeatInputs390({ LIQANUAL_COMPENSATION: '5.00' })).toEqual({ LIQANUAL_COMPENSATION: '5.00' });
+    expect(sanitizeAeatInputs390({ DEVOLVER_01: '1.00', INGRESAR_01: '2.00' })).toEqual({ INGRESAR_01: '2.00' });
+    expect(sanitizeAeatInputs390({ DEVOLVER_01: '1.00', ISMONTHLYRETURN: 'Y' })).toEqual({ DEVOLVER_01: '1.00', ISMONTHLYRETURN: 'Y' });
+    expect(sanitizeAeatInputs390({ ConcursoUltPer: 'Y' })).toEqual({ ConcursoUltPer: 'N' });
+    expect(sanitizeAeatInputs390({ ConcursoUltPer: 'Y', ConcursoAcr: 'Y' })).toEqual({ ConcursoUltPer: 'Y', ConcursoAcr: 'Y' });
+    expect(sanitizeAeatInputs390(undefined)).toEqual({});
+  });
+
+  it('buildManualData390 stores the sanitized inputs', () => {
+    const md = buildManualData390({}, {}, { LIQANUAL_COMPENSATION: '5.00', NAVARRA: '100.00', DEVOLVER_12: '3.00' });
+    expect(md.aeatInputs).toEqual({ NAVARRA: '100.00', ISSUPPLEMENTARY: 'N', ISRECTIFICATION: 'N' });
+  });
+
+  it('conflictingInput390: [85] and [93] exclude each other', () => {
+    expect(conflictingInput390('LIQANUAL_COMPENSATION', { COMMON_TERRITORY_COMPENSATION: '1.00' })).toBe('COMMON_TERRITORY_COMPENSATION');
+    expect(conflictingInput390('COMMON_TERRITORY_COMPENSATION', { LIQANUAL_COMPENSATION: '1.00' })).toBe('LIQANUAL_COMPENSATION');
+    expect(conflictingInput390('LIQANUAL_COMPENSATION', { COMMON_TERRITORY_COMPENSATION: '0.00' })).toBeNull();
+    expect(conflictingInput390('LIQANUAL_VAT_IMPORT', { LIQANUAL_COMPENSATION: '1.00' })).toBeNull();
+  });
+
+  it('inputMessages390: DEVOLVER_12 + [97] error, [98] + [96]/[97] warning', () => {
+    expect(inputMessages390({})).toEqual([]);
+    expect(inputMessages390({ DEVOLVER_12: '1', TOTAL_LASTPERIOD: '2' }).map(m => [m.id, m.level]))
+      .toEqual([['devolver12_with_97', 'error']]);
+    expect(inputMessages390({ DEVOLVER_03: '1', TOTAL_LASTPERIOD_DEVOLVER: '2' }).map(m => [m.id, m.level]))
+      .toEqual([['box98_with_96_97', 'warning']]);
+    expect(inputMessages390({ TOTAL_LASTPERIOD: '1', TOTAL_LASTPERIOD_DEVOLVER: '2' }).map(m => m.id))
+      .toEqual(['box98_with_96_97']);
+    expect(inputMessages390({ TOTAL_LASTPERIOD_DEVOLVER: '2' })).toEqual([]);
+  });
+
+  it('the DEVOLVER cells are flagged monthlyReturnOnly in the layout', () => {
+    const block = getLayout390().find(b => b.id === 'resultado_liquidaciones');
+    const devolver = blockRows(block).flatMap(r => r.cells).filter(c => c?.input?.startsWith('DEVOLVER_'));
+    expect(devolver).toHaveLength(12);
+    expect(devolver.every(c => c.monthlyReturnOnly)).toBe(true);
   });
 });

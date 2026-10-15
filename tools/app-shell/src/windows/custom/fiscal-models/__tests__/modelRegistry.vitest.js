@@ -193,19 +193,28 @@ describe('modelRegistry — bindings', () => {
     expect(res349).toEqual({ kind: 'info', amount: 17.5 });
   });
 
-  // ETP-5716 — 390: the annual result ([86], or [94] in territory mode) with the shared sign rule.
+  // ETP-5716 — 390: the annual result ([86], or [94] in territory mode), informative: only its sign
+  // ("Resultado positivo / negativo"), never the 303's "A ingresar" / "A compensar/devolver".
   it('derives the 390 list result from summary.annualResult, falling back to the boxes', () => {
     const derive = getListBehavior('390').deriveListResult;
     const decl = { manualData: {} };
     expect(derive(decl, { summary: { accrued: '300.00', deductible: '100.00', annualResult: '200.00' }, boxes: {} }))
-      .toEqual({ kind: 'I', amount: 200 });
+      .toEqual({ kind: 'positive', labelKey: 'fm.m390.result.positive', amount: 200 });
     expect(derive(decl, { summary: { accrued: '100.00', deductible: '150.00', annualResult: '-50.00' }, boxes: {} }))
-      .toEqual({ kind: 'C', amount: 50 });
+      .toEqual({ kind: 'negative', labelKey: 'fm.m390.result.negative', amount: -50 });
     expect(derive(decl, { summary: {}, boxes: { 47: '10.00', 64: '10.00', 86: '0.00' }, mode: 'liquidation' }))
-      .toEqual({ kind: 'zero', amount: 0 });
+      .toEqual({ kind: 'zero', labelKey: 'fm.result.zero', amount: 0 });
     expect(derive(decl, { summary: {}, boxes: { 47: '50.00', 86: '1.00', 94: '25.00' }, mode: 'territory' }))
-      .toEqual({ kind: 'I', amount: 25 });
-    expect(derive(decl, { summary: {}, boxes: {} })).toEqual({ kind: 'N', amount: 0 });
+      .toEqual({ kind: 'positive', labelKey: 'fm.m390.result.positive', amount: 25 });
+    expect(derive(decl, { summary: {}, boxes: {} })).toEqual({ kind: 'N', labelKey: 'fm.result.N', amount: 0 });
+  });
+
+  it('leaves the 303 and 349 list results on the shared kinds (no labelKey)', () => {
+    const decl = { manualData: {} };
+    expect(getListBehavior('303').deriveListResult(decl, {
+      summary: { result: 500 }, boxes: { 27: 500 }, sources: [{ id: 'i1' }],
+    })).not.toHaveProperty('labelKey');
+    expect(getListBehavior('349').deriveListResult(decl, { summary: { totalE: '1' } })).not.toHaveProperty('labelKey');
   });
 });
 
