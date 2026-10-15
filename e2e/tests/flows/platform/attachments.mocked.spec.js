@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/components/attachments/AttachmentsTab.jsx
 // @covers tools/app-shell/src/components/contract-ui/TabStripButton.jsx
 // @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
+// @covers tools/app-shell/src/components/attachments/AttachmentsTable.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -34,6 +35,17 @@ const PRODUCT_HEADER = {
   productType: 'I',
   'productType$_identifier': 'Item',
 };
+
+// ─── Locators ──────────────────────────────────────────────────────────────────
+
+// Since ETP-5526 the attachments grid is the generic DataTable: rows are `row-{id}`
+// and the checkboxes are DataTable's (`Checkbox__eb5261`, the visible label of the
+// hidden input). Scope everything to `attachments-table` — a detail view can carry
+// other DataTables whose testids follow the same pattern.
+const attachmentsTable = (page) => page.getByTestId('attachments-table');
+const attRow = (page, id) => attachmentsTable(page).getByTestId(`row-${id}`);
+const attRowCheckbox = (page, id) => attRow(page, id).getByTestId('Checkbox__eb5261');
+const attSelectAll = (page) => attachmentsTable(page).locator('thead').getByTestId('Checkbox__eb5261');
 
 // ─── Mock installer ────────────────────────────────────────────────────────────
 
@@ -126,7 +138,7 @@ test.describe('Suite E — Product smoke (mocked)', () => {
       buffer: Buffer.from('%PDF spec'),
     });
 
-    await expect(page.getByTestId('attachment-row-prod-att-001')).toBeVisible({ timeout: 6_000 });
+    await expect(attRow(page, 'prod-att-001')).toBeVisible({ timeout: 6_000 });
   });
 });
 
@@ -284,16 +296,16 @@ test.describe('Suite G — Sales Order: upload (mocked)', () => {
       buffer: Buffer.from('%PDF-1.4 order'),
     });
 
-    await expect(page.getByTestId('attachment-row-so-att-new-1')).toBeVisible({ timeout: 6_000 });
+    await expect(attRow(page, 'so-att-new-1')).toBeVisible({ timeout: 6_000 });
   });
 
   test('G3: uploading a duplicate filename opens the replace confirmation', async ({ page }) => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1] });
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page, page.getByTestId(`attachment-row-${SO_ATT_1.id}`));
+    await openAttachmentsTab(page, attRow(page, SO_ATT_1.id));
 
-    await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).toBeVisible({ timeout: 6_000 });
+    await expect(attRow(page, SO_ATT_1.id)).toBeVisible({ timeout: 6_000 });
 
     await page.locator('[data-testid="attachments-file-input"]').setInputFiles({
       name: SO_ATT_1.name,
@@ -305,7 +317,7 @@ test.describe('Suite G — Sales Order: upload (mocked)', () => {
     // Confirm the replace — a new row should appear
     await page.getByTestId('confirm-delete-confirm').click();
     await expect(page.getByTestId('confirm-delete-dialog')).not.toBeVisible({ timeout: 3_000 });
-    await expect(page.getByTestId('attachment-row-so-att-new-1')).toBeVisible({ timeout: 6_000 });
+    await expect(attRow(page, 'so-att-new-1')).toBeVisible({ timeout: 6_000 });
   });
 });
 
@@ -316,7 +328,7 @@ test.describe('Suite H — Sales Order: delete (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1] });
     await gotoSalesOrder(page);
-    const row = page.getByTestId(`attachment-row-${SO_ATT_1.id}`);
+    const row = attRow(page, SO_ATT_1.id);
     await openAttachmentsTab(page, row);
 
     await expect(row).toBeVisible({ timeout: 6_000 });
@@ -335,7 +347,7 @@ test.describe('Suite H — Sales Order: delete (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1] });
     await gotoSalesOrder(page);
-    const row = page.getByTestId(`attachment-row-${SO_ATT_1.id}`);
+    const row = attRow(page, SO_ATT_1.id);
     await openAttachmentsTab(page, row);
 
     await expect(row).toBeVisible({ timeout: 6_000 });
@@ -356,10 +368,10 @@ test.describe('Suite H — Sales Order: delete (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1, SO_ATT_2] });
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page, page.getByTestId(`attachment-row-${SO_ATT_1.id}`));
+    await openAttachmentsTab(page, attRow(page, SO_ATT_1.id));
 
-    await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).toBeVisible({ timeout: 6_000 });
-    await expect(page.getByTestId(`attachment-row-${SO_ATT_2.id}`)).toBeVisible({ timeout: 3_000 });
+    await expect(attRow(page, SO_ATT_1.id)).toBeVisible({ timeout: 6_000 });
+    await expect(attRow(page, SO_ATT_2.id)).toBeVisible({ timeout: 3_000 });
 
     // The two header-wide controls no longer exist on this screen.
     await expect(page.getByTestId('attachments-delete-all')).toHaveCount(0);
@@ -368,15 +380,15 @@ test.describe('Suite H — Sales Order: delete (mocked)', () => {
     // Nothing selected yet → no bar.
     await expect(page.getByTestId('attachments-selection-bar')).toHaveCount(0);
 
-    await page.getByTestId('attachments-select-all').click();
+    await attSelectAll(page).click();
     await expect(page.getByTestId('attachments-selection-bar')).toBeVisible({ timeout: 3_000 });
 
     await page.getByTestId('attachments-delete-selected').click();
     await expect(page.getByTestId('confirm-delete-dialog')).toBeVisible({ timeout: 4_000 });
     await page.getByTestId('confirm-delete-confirm').click();
 
-    await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).not.toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId(`attachment-row-${SO_ATT_2.id}`)).not.toBeVisible({ timeout: 3_000 });
+    await expect(attRow(page, SO_ATT_1.id)).not.toBeVisible({ timeout: 5_000 });
+    await expect(attRow(page, SO_ATT_2.id)).not.toBeVisible({ timeout: 3_000 });
     await expect(page.getByTestId('attachments-empty-state')).toBeVisible({ timeout: 4_000 });
     // The bar goes with the selection it described.
     await expect(page.getByTestId('attachments-selection-bar')).toHaveCount(0);
@@ -412,7 +424,7 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     });
 
     await gotoSalesOrder(page);
-    const row = page.getByTestId(`attachment-row-${SO_ATT_1.id}`);
+    const row = attRow(page, SO_ATT_1.id);
     await openAttachmentsTab(page, row);
 
     await expect(row).toBeVisible({ timeout: 6_000 });
@@ -441,10 +453,10 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     });
 
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page, page.getByTestId(`attachment-row-${SO_ATT_1.id}`));
+    await openAttachmentsTab(page, attRow(page, SO_ATT_1.id));
 
-    await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).toBeVisible({ timeout: 6_000 });
-    await page.getByTestId(`attachment-select-${SO_ATT_1.id}`).click();
+    await expect(attRow(page, SO_ATT_1.id)).toBeVisible({ timeout: 6_000 });
+    await attRowCheckbox(page, SO_ATT_1.id).click();
     await expect(page.getByTestId('attachments-selection-bar')).toBeVisible({ timeout: 3_000 });
     await page.getByTestId('attachments-download-selected').click();
 

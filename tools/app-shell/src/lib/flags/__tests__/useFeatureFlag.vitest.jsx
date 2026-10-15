@@ -320,6 +320,20 @@ describe('evaluation context', () => {
     expect(buildEvaluationContext({ clientId: 'c1' })).toEqual({ account_id: 'c1' });
   });
 
+  // ETP-5751 — Datadog targeting rules compare `email` case-sensitively against lowercase values.
+  it('trims and lowercases the email attribute, leaving the targeting key untouched', () => {
+    expect(buildEvaluationContext({ accountId: 'Acc-1', accountEmail: '  Ada.Lovelace@Example.COM ' }))
+      .toEqual({ targetingKey: 'Acc-1', accountId: 'Acc-1', email: 'ada.lovelace@example.com' });
+    expect(buildEvaluationContext({ accountEmail: '   ' })).toEqual({});
+  });
+
+  it('targets the normalized email after the account identity resolves', async () => {
+    setSessionIdentity({ username: 'ada', clientId: 'c1' });
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ accountId: 'Acc-1', accountEmail: 'Ada@Example.com' }) }));
+    await refreshAccountIdentity({ fetchImpl, logger: silentLogger });
+    expect(OpenFeature.getContext()).toMatchObject({ targetingKey: 'Acc-1', email: 'ada@example.com' });
+  });
+
   it('re-targets after sign-in without throwing', async () => {
     await initFeatureFlags({ env: { VITE_FEATURE_FLAGS: FLAG_ON }, logger: silentLogger });
     await setFeatureFlagContext({ username: 'ada', clientId: 'c1' });

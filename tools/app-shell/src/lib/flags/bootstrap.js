@@ -3,14 +3,17 @@ import { FLAG_DEFAULTS } from './flag-keys.js';
 import { createFlagExposureHook, resetExposureCache } from './flag-exposure.js';
 
 import { reset, identify, group } from '../observability.js';
+import { loadDatadogFlags } from '../observability/sdk.js';
 import { authHeaders, apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 import { clearSessionIdentity, getSessionIdentity } from '../sessionIdentity.js';
 /**
  * Feature-flag bootstrap.
  *
- * Application API: OpenFeature. Remote control plane: ConfigCat. Local overrides
- * use OpenFeature's `TypedInMemoryProvider`, seeded from `VITE_FEATURE_FLAGS`.
- * `createFlagProvider` below is the only provider selection point.
+ * Application API: OpenFeature. Remote control plane: Datadog Feature Flags,
+ * with ConfigCat kept as a fallback until the cutover completes (ETP-5751).
+ * Local overrides use OpenFeature's `TypedInMemoryProvider`, seeded from
+ * `VITE_FEATURE_FLAGS`. `createFlagProvider` below is the only provider
+ * selection point.
  *
  * Three rules hold no matter which provider is registered:
  *
@@ -24,9 +27,9 @@ import { clearSessionIdentity, getSessionIdentity } from '../sessionIdentity.js'
  */
 
 /**
- * Bounds provider startup. The in-memory provider is synchronous so this never
- * trips today; it is the guard that keeps rule 2 true for a future network
- * provider, so swapping one in cannot silently make startup block.
+ * Bounds provider startup. The in-memory provider is synchronous; the remote
+ * ones fetch configuration over the network, and this guard keeps rule 2 true
+ * when that fetch hangs.
  */
 const PROVIDER_READY_TIMEOUT_MS = 5000;
 
@@ -102,7 +105,9 @@ export function readSessionContext(storage = globalThis.localStorage) {
  * `accountId` is the ETGO_ACCOUNT the backend also targets on, so it takes the
  * targeting key when present; `username` (the environment's ERP admin name)
  * only stands in until the session exposes an account. `email` is the
- * explicit account attribute remote targeting rules can read.
+ * explicit account attribute remote targeting rules can read; it is trimmed and
+ * lowercased because Datadog's ONE_OF/MATCHES rules compare case-sensitively
+ * against lowercase values (ETP-5751). The targeting key is left as-is.
  *
  * `account_id` is the AD_Client — a different identity that predates this and
  * is what the observability layer groups by. Do not conflate it with
@@ -117,8 +122,9 @@ export function buildEvaluationContext({ username, clientId, accountId, accountE
   if (accountId) {
     context.accountId = accountId;
   }
-  if (accountEmail) {
-    context.email = accountEmail;
+  const email = typeof accountEmail === 'string' ? accountEmail.trim().toLowerCase() : '';
+  if (email) {
+    context.email = email;
   }
   if (clientId) {
     context.account_id = clientId;
@@ -175,25 +181,107 @@ export function resolvePollSeconds(raw, logger = console) {
 }
 
 export const CONFIGCAT_PROVIDER_NAME = 'ConfigCatWebProvider';
+export const DATADOG_PROVIDER_NAME = 'datadog';
+
+/** Same bound as ConfigCat's `maxInitWaitTimeSeconds`, inside the readiness timeout. */
+const DATADOG_FETCH_TIMEOUT_MS = 4000;
+
+const REMOTE_PROVIDERS = ['datadog', 'configcat'];
+
+/**
+ * The flag provider reuses the RUM application, so it needs exactly the four
+ * values RUM needs. `VITE_DATADOG_ENABLED` is deliberately not one of them:
+ * flags and RUM telemetry are switched independently.
+ */
+export function hasDatadogFlagCredentials(env = {}) {
+  return Boolean(env.VITE_DATADOG_APPLICATION_ID && env.VITE_DATADOG_CLIENT_TOKEN &&
+    env.VITE_DATADOG_SITE && env.VITE_APP_ENV);
+}
+
+/**
+ * Picks the remote control plane: `'datadog'`, `'configcat'` or `undefined`
+ * (declared defaults). `VITE_FLAGS_PROVIDER` names a preference; unset, Datadog
+ * wins when its credentials are present. A preferred provider that is not
+ * configured falls through to the other one rather than to defaults, so a
+ * half-configured build still evaluates remotely.
+ */
+export function resolveRemoteFlagProvider(env = {}, logger = console) {
+  const raw = String(env.VITE_FLAGS_PROVIDER ?? '').trim().toLowerCase();
+  if (raw && !REMOTE_PROVIDERS.includes(raw)) {
+    logger.warn(`[flags] Unknown VITE_FLAGS_PROVIDER "${raw}" — expected datadog or configcat`);
+  }
+  const configured = {
+    datadog: hasDatadogFlagCredentials(env),
+    configcat: Boolean(env.VITE_CONFIGCAT_SDK_KEY),
+  };
+  const preferred = REMOTE_PROVIDERS.includes(raw) ? raw : 'datadog';
+  if (configured[preferred]) return preferred;
+  if (raw === preferred) logger.warn(`[flags] VITE_FLAGS_PROVIDER=${raw} is not configured — trying the fallback`);
+  return REMOTE_PROVIDERS.find(name => configured[name]);
+}
+
+/**
+ * Datadog's own RUM integration (`enableRumFeatureFlagTracking`) is switched
+ * off: `flag-exposure.js` is the single RUM exposure source for every provider.
+ * Leaving both on would record each flag twice in RUM — the SDK under the raw
+ * key (`import-batch-size`), the hook under the sanitized one
+ * (`import_batch_size`) — and the SDK would also merge the RUM user into the
+ * evaluation context, which must stay exactly what `buildEvaluationContext`
+ * built. Exposure logging and evaluation telemetry stay on: they feed the
+ * Feature Flags product's own intake, which nothing else reports to.
+ */
+export function buildDatadogFlagOptions(env) {
+  return {
+    applicationId: env.VITE_DATADOG_APPLICATION_ID,
+    clientToken: env.VITE_DATADOG_CLIENT_TOKEN,
+    site: env.VITE_DATADOG_SITE,
+    env: env.VITE_APP_ENV,
+    service: env.VITE_DATADOG_SERVICE || 'etendo-go-web',
+    ...(env.VITE_APP_VERSION ? { version: env.VITE_APP_VERSION } : {}),
+    enableRumFeatureFlagTracking: false,
+    enableExposureLogging: true,
+    enableFlagEvaluationTracking: true,
+  };
+}
+
+async function createDatadogFlagProvider(env, loader) {
+  const { DatadogProvider, withTimeout: withFetchTimeout } = await loader();
+  // raw-fetch-ok: the SDK's own request to Datadog's flag endpoint, not an Etendo API call.
+  const fetchImpl = typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : undefined;
+  const provider = new DatadogProvider({
+    ...buildDatadogFlagOptions(env),
+    ...(fetchImpl ? { flagConfigurationFetch: withFetchTimeout(fetchImpl, DATADOG_FETCH_TIMEOUT_MS) } : {}),
+  });
+  provider.metadata = { ...(provider.metadata || {}), name: DATADOG_PROVIDER_NAME };
+  return provider;
+}
+
+async function createConfigCatFlagProvider(env, logger, loader) {
+  const { ConfigCatWebProvider } = await loader();
+  const provider = ConfigCatWebProvider.create(env.VITE_CONFIGCAT_SDK_KEY, {
+    pollIntervalSeconds: resolvePollSeconds(env.VITE_CONFIGCAT_POLL_SECONDS, logger),
+    maxInitWaitTimeSeconds: 4,
+  });
+  // Pin metadata independently of the provider class name so minification cannot
+  // fragment exposure telemetry across builds.
+  provider.metadata = { ...(provider.metadata || {}), name: CONFIGCAT_PROVIDER_NAME };
+  return provider;
+}
 
 export async function createFlagProvider({ env = import.meta.env, logger = console,
   loader = () => import('@openfeature/config-cat-web-provider'),
+  // Injected, never imported here: the flags SDK reports exposure events to Datadog itself, so
+  // it is a provider SDK like any other and `lib/observability/sdk.js` is its one home
+  // (ETP-4578). The seam stays a default parameter, so tests still pass their own loader.
+  datadogLoader = loadDatadogFlags,
 } = {}) {
   const overrides = parseFlagConfig(env.VITE_FEATURE_FLAGS, logger);
   if (Object.keys(overrides).length > 0) {
     return new TypedInMemoryProvider(buildInMemoryConfiguration(overrides));
   }
-  if (env.VITE_CONFIGCAT_SDK_KEY) {
-    const { ConfigCatWebProvider } = await loader();
-    const provider = ConfigCatWebProvider.create(env.VITE_CONFIGCAT_SDK_KEY, {
-      pollIntervalSeconds: resolvePollSeconds(env.VITE_CONFIGCAT_POLL_SECONDS, logger),
-      maxInitWaitTimeSeconds: 4,
-    });
-    // Pin metadata independently of the provider class name so minification cannot
-    // fragment exposure telemetry across builds.
-    provider.metadata = { ...(provider.metadata || {}), name: CONFIGCAT_PROVIDER_NAME };
-    return provider;
-  }
+  const remote = resolveRemoteFlagProvider(env, logger);
+  if (remote === 'datadog') return createDatadogFlagProvider(env, datadogLoader);
+  if (remote === 'configcat') return createConfigCatFlagProvider(env, logger, loader);
   return new TypedInMemoryProvider(buildInMemoryConfiguration());
 }
 
@@ -224,7 +312,7 @@ export async function initFeatureFlags({
     // Registered before the provider so the earliest evaluations are counted.
     OpenFeature.addHooks(createFlagExposureHook());
 
-    // Awaited because the ConfigCat branch lazy-imports its SDK. This resolves
+    // Awaited because the remote branches lazy-import their SDK. This resolves
     // from a bundled chunk, and a failure lands in the catch below as a
     // fallback to declared defaults — it never blocks rendering, which already
     // happened before this fire-and-forget call resolves.
