@@ -19,6 +19,7 @@ import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
+import { getArSubtype } from '@generated/sales-invoice/custom/invoiceSubtype.js';
 
 // ETP-4841: a credit instrument is identified by the SIGN of its total, not by its
 // document type. This used to compare `arInvoiceSubtype` against the pre-ETP-4737
@@ -129,7 +130,12 @@ function InvoiceGeneralTab({ invoice, relatedDocs, partnerName, badgeProps, stat
   // Same gating as OrderPreview: show the row whenever the backend sent a value.
   // Sales invoices read "Delivered", purchase invoices "Received".
   const isPurchaseInvoice = specName === 'purchase-invoice';
-  const deliveryPercent = invoice?.eTGODeliveryStatus != null && invoice.eTGODeliveryStatus !== ''
+  // ETP-5706: a sales rectificative invoice has no delivery to track. The backend
+  // still computes a percentage for it (a return receipt counts as a "delivery"
+  // in ETGO_GET_DELIVERY_STATUS), so the row is suppressed here. Scoped to
+  // sales-invoice only: purchase-invoice keeps its "Received" row unchanged.
+  const hideDelivery = specName === 'sales-invoice' && getArSubtype(invoice) === 'RECTIFICATIVA';
+  const deliveryPercent = !hideDelivery && invoice?.eTGODeliveryStatus != null && invoice.eTGODeliveryStatus !== ''
     ? Number(invoice.eTGODeliveryStatus)
     : undefined;
 
