@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * DataTable — percent column header wrapping + list width (ETP-5545 follow-up).
  *
@@ -154,21 +155,22 @@ describe('DataTable — percent column alignment (left) vs numeric (right)', () 
 
 describe('DataTable — percent column list width', () => {
   it('uses 104px for the colgroup <col>, header th and body td', () => {
-    render(<DataTable columns={[PCT]} data={DATA} />);
+    // ETP-5510 — STR (first, non-pinned) becomes the implicit grow column; PCT keeps its basis.
+    render(<DataTable columns={[STR, PCT]} data={DATA} />);
 
     const widths = [...document.querySelectorAll('colgroup col')].map((c) => c.style.width);
     expect(widths).toContain('104px');
     expect(screen.getByTestId('column-header-pct').style.width).toBe('104px');
-    expect(screen.getByTestId('row-r1').querySelectorAll('td')[1].style.minWidth).toBe('104px');
+    expect(screen.getByTestId('row-r1').querySelectorAll('td')[2].style.minWidth).toBe('104px');
   });
 
   it('an explicit minWidth wins over the percent default', () => {
-    render(<DataTable columns={[{ ...PCT, minWidth: 200 }]} data={DATA} />);
+    render(<DataTable columns={[STR, { ...PCT, minWidth: 200 }]} data={DATA} />);
 
     const widths = [...document.querySelectorAll('colgroup col')].map((c) => c.style.width);
     expect(widths).toContain('200px');
     expect(widths).not.toContain('104px');
     expect(screen.getByTestId('column-header-pct').style.width).toBe('200px');
-    expect(screen.getByTestId('row-r1').querySelectorAll('td')[1].style.minWidth).toBe('200px');
+    expect(screen.getByTestId('row-r1').querySelectorAll('td')[2].style.minWidth).toBe('200px');
   });
 });

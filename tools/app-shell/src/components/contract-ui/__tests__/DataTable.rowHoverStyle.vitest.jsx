@@ -42,7 +42,8 @@ vi.mock('@/lib/formatAmount.js', () => ({
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({
   applyCalloutUpdates: (prev, updates) => ({ ...prev, ...updates }),
 }));
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',

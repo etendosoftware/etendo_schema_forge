@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * ETP-4603 coverage top-up for DataTable.jsx.
  *
@@ -73,7 +74,8 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
 // Deliberately NOT mocked here: flexSpec()/growColumnWidth() (native to
 // DataTable.jsx) parse this shorthand string to drive the hideHeader colgroup
 // under test below — matches the coveragePaths.vitest.jsx convention.
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   columnMinWidthPx: () => 96,
   columnFlex: (col) => (col?.flexGrow === 0 ? '0 0 80px' : '1 1 120px'),
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
