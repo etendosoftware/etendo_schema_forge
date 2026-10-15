@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/hooks/useEntity.js
+// @covers tools/app-shell/src/locales/en_US.json
 /**
  * Additional coverage tests for useEntity.js — targeting uncovered branches.
  * Focuses on: handleAddChild, handleUpdateChild, handleDeleteChild, handleProcess,
@@ -6,6 +8,9 @@
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useEntity, RECORD_SAVE_TOAST_ID } from '../useEntity';
+import enUS from '../../locales/en_US.json';
+import esES from '../../locales/es_ES.json';
+import esAR from '../../locales/es_AR.json';
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
@@ -16,8 +21,13 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ logout: mockLogout }),
 }));
 
+let customUiTranslator = null;
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => {
+    if (customUiTranslator) {
+      return customUiTranslator(key, params);
+    }
     if (params) {
       let text = key;
       Object.keys(params).forEach(p => { text = text.replace(`{${p}}`, params[p]); });
@@ -43,6 +53,7 @@ describe('useEntity — coverage paths', () => {
   });
 
   afterEach(() => {
+    customUiTranslator = null;
     vi.restoreAllMocks();
   });
 
@@ -698,6 +709,82 @@ describe('useEntity — coverage paths', () => {
 
       // ui returns key as-is → specificKey === 'aPRMProcessPaymentCompleted' → fallback to label
       expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('processConfirm'));
+    });
+
+    it('localizes fallback with process.label in Spanish without hardcoding English "completed"', async () => {
+      const parent = { id: 'p1' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'POST') return { ok: true, json: async () => ({}) };
+        return mockFetchOk([parent]);
+      });
+
+      customUiTranslator = (key) => esES.genericLabels[key] ?? key;
+
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+      act(() => { result.current.handleSelect(parent); });
+
+      await act(async () => {
+        await result.current.handleProcess({ name: 'customProcess', label: 'Crear períodos', params: [] });
+      });
+
+      expect(toast.success).toHaveBeenCalledWith('Crear períodos completado');
+      expect(toast.success).not.toHaveBeenCalledWith(expect.stringMatching(/completed/i));
+    });
+
+    it('localizes fallback without process.label in Spanish as "Proceso completado"', async () => {
+      const parent = { id: 'p1' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'POST') return { ok: true, json: async () => ({}) };
+        return mockFetchOk([parent]);
+      });
+
+      customUiTranslator = (key) => esES.genericLabels[key] ?? key;
+
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+      act(() => { result.current.handleSelect(parent); });
+
+      await act(async () => {
+        await result.current.handleProcess({ name: 'unlabeledProcess', params: [] });
+      });
+
+      expect(toast.success).toHaveBeenCalledWith('Proceso completado');
+      expect(toast.success).not.toHaveBeenCalledWith('Process completed');
+    });
+
+    it('preserves specific <name>Completed overrides when defined in dictionary', async () => {
+      const parent = { id: 'p1' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'POST') return { ok: true, json: async () => ({}) };
+        return mockFetchOk([parent]);
+      });
+
+      customUiTranslator = (key) => esES.genericLabels[key] ?? key;
+
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+      act(() => { result.current.handleSelect(parent); });
+
+      await act(async () => {
+        await result.current.handleProcess({ name: 'processNow', label: 'Crear períodos', params: [] });
+      });
+
+      expect(toast.success).toHaveBeenCalledWith('Períodos creados correctamente');
+    });
+
+    it('defines completed and processCompleted across all shipped locales', () => {
+      const locales = { en_US: enUS, es_ES: esES, es_AR: esAR };
+      for (const [name, dict] of Object.entries(locales)) {
+        expect(typeof dict.genericLabels?.completed, `${name}.genericLabels.completed`).toBe('string');
+        expect(dict.genericLabels.completed.trim(), `${name}.genericLabels.completed`).not.toBe('');
+        expect(typeof dict.genericLabels?.processCompleted, `${name}.genericLabels.processCompleted`).toBe('string');
+        expect(dict.genericLabels.processCompleted.trim(), `${name}.genericLabels.processCompleted`).not.toBe('');
+      }
+
+      expect(enUS.genericLabels.completed).toBe('completed');
+      expect(enUS.genericLabels.processCompleted).toBe('Process completed');
+      expect(esES.genericLabels.completed).toBe('completado');
+      expect(esES.genericLabels.processCompleted).toBe('Proceso completado');
+      expect(esAR.genericLabels.completed).toBe('completado');
+      expect(esAR.genericLabels.processCompleted).toBe('Proceso completado');
     });
 
     it('shows error toast on non-ok response', async () => {
