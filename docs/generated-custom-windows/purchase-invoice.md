@@ -17,7 +17,12 @@ Global semantic search opts this window in through `go.purchase-invoice`. It ind
 - Complete multiple draft invoices — or reactivate multiple completed ones — at once from the list selection bar using the bulk action, labeled "Procesar" (i18n key `process`); its dialog offers **Confirmar** / **Confirm** (`CO`) for draft selections and **Reactivar** / **Reactivate** (`RE`) for completed ones, and its confirm button reads **Aceptar** / **Accept**. Bulk **Reactivar** works on an already-posted invoice: it unposts each posted row first, exactly as the detail kebab does (ETP-5302). The list refetches in place afterwards — scroll position and active filters survive.
 - Post ("Contabilizar") a completed, not-yet-posted invoice directly from the list — via the row-hover kebab menu for a single record, or via the dedicated "Contabilizar" bulk action in the list selection bar for multiple selected records — without needing to open the record in form view first (ETP-5209).
 - Unpost ("Descontabilizar") a posted invoice **without reactivating it** — from the detail kebab menu, the row-hover kebab menu, or the dedicated "Descontabilizar" bulk action in the list selection bar. It removes the accounting entries (`posted = 'N'`) and leaves the invoice Completed (`CO`) — and, on a paid invoice, paid: the payments' own entries are not touched — so the **Exchange rates** tab (locked only while posted, ETP-5657) and the header and line accounting dimensions (project, cost center) can be corrected and saved, and the invoice posted again. Offered only on Completed **and** posted invoices; "Reactivar" still unposts and returns the invoice to draft (ETP-5692).
+- Edit **"Modificada error registral"** (`aeatsiiErrorRegistral`) on an already-completed invoice: this field is now in the `draftMode.keepSaveWhenCompletedFields` allowlist (both this window and sales-invoice), because the SII business flow for correcting a registry error on an already-sent invoice requires checking this box after completion — previously the completed-invoice write fence locked it like any other header field (ETP-5745).
 - Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved.
+
+**Reactivate refusal when fiscally accepted and rectified (ETP-5745):** "Reactivar" — from the detail kebab, the row-hover kebab, and the list bulk bar — now refuses with a 422 when the invoice is BOTH (a) accepted by a fiscal system — SII (`aeatsiiEstado` = `CO` or `AE`), or TicketBAI (`eTGOTbaiStatus` = `Recibido`; Verifactu is sales-only and never applies here) — AND (b) already has at least one COMPLETED rectificativa linked via `C_Invoice_Reverse`. The error names the fiscal system and the rectificativa document number(s) (`backendError.invoiceReactivateFiscalRectified`, keys `fiscalSystem` / `rectificativas`). Every other case — not sent, rejected or pending at the fiscal system, a draft (not-yet-completed) rectificativa, or no rectificativa at all — keeps reactivating exactly as before; this is explicitly a no-regression requirement, not a new restriction on the general case.
+
+The guard also changes what "Reactivar" does mechanically when it already knows the row will be refused: a read-only `reactivationBlocked` signal (plus `reactivationBlockedFiscalSystem` / `reactivationBlockedRectificativas`), enriched on GET by `InvoiceReactivationGuard#enrichReactivationBlock` in `com.etendoerp.go`, lets both the detail kebab (`DetailMoreActionsMenu.jsx`) and the list bulk bar (`makeInvoiceReactivateRowFilter` in `tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js`, shared with sales-invoice) short-circuit before the pre-unpost step and show the error with no side effect. Previously (ETP-5302's two-step flow: un-post, then reactivate) a doomed reactivation still left the invoice un-posted — this ETP-5745 refusal reason no longer does. **This fix is scoped to the ETP-5745 refusal reason only**: a reactivation that fails for any OTHER reason still un-posts the invoice first and then fails, leaving it un-posted — that pre-existing side effect is a separate, already-flagged, out-of-scope issue left for a future ticket.
 
 ## Interaction model
 
@@ -351,6 +356,7 @@ invoice completed with a total of 0, no payment plan and `paymentComplete = Y`.
 11. From the list, select multiple draft invoices and confirm the bulk action bar shows a `Procesar (N)` button whose dropdown offers **Confirmar** (`CO`); then select multiple completed invoices and confirm the same button offers **Reactivar** (`RE`). Confirm the dialog's confirm button reads **Aceptar** / **Accept** (not "Completado"). Verify the expected status transition and a result toast.
 11b. **ETP-5302 — bulk reactivate of a posted invoice.** Complete an invoice, post it ("Contabilizar"), then select it in the list and run `Procesar` → **Reactivar**. It must return to draft and the toast must report it as successful. Before this fix the row failed with `{"status":"error","message":"Factura contabilizada"}` while reactivating the very same invoice from its form kebab succeeded. Also confirm the page does **not** reload: scroll down a long list, apply a filter, run the bulk action, and verify the filter and scroll position survive and only the rows refetch.
 11c. **ETP-5692 — Descontabilizar without reactivating.** On a completed, posted invoice confirm **Descontabilizar** is offered in the detail kebab, in the row-hover kebab and — after selecting it — as a `Descontabilizar` button in the selection bar; on a not-posted invoice confirm none of the three offers it (Contabilizar is offered instead). Run it from the row kebab on a **paid** invoice and verify the invoice stays **Completada** and paid, its posted badge flips to *Sin contabilizar*, a `Documento descontabilizado correctamente` toast appears, and the payment's own accounting entries are unchanged. Confirm a posted invoice in any other status (e.g. voided) does not offer it either. Correct a rate in the **Exchange rates** tab, post again, and verify the new entries use it. On another unposted invoice, change the header **Proyecto** / **Centro de costos**, confirm **Guardar** is enabled and saves, post again, and verify the new entries carry the dimension — without having reactivated. Confirm both fields are read-only again once the invoice is posted. Then, on an unposted Completed invoice, expand a line's **Dimensiones contables** panel (Layers icon or chevron): confirm **Proyecto** / **Centro de costos** are editable while every other line value stays read-only and no add/edit/delete line affordance appears; change one, confirm the `Registro guardado` toast and that the value survives a reload, then post again and verify the new line entries carry it. Once posted, confirm the line dimensions are read-only again. Finally, on a **voided** invoice that is not posted, confirm Descontabilizar is not offered and both the header and the line **Proyecto** / **Centro de costos** are read-only (not editable, no Save offered for them), while the accounting date behaves exactly as before. In the bulk run, mix Completed+posted, not-posted and posted-but-not-Completed invoices and confirm only the first are unposted and the others are left unchanged; the result toast only counts them ("N procesados, M omitidos (no elegibles), K con error") — it does not say why a row was skipped (ETP-5316). On an invoice whose entries fall in a closed period, confirm the translated closed-period error appears and the invoice is unchanged. Finally confirm **Reactivar** still unposts and returns the invoice to draft.
+11d. **ETP-5745 — Reactivate refusal on a fiscally-accepted, already-rectified invoice.** Reactivate a completed, fiscally-accepted invoice (SII `CO`/`AE`, or TicketBAI `Recibido` on a Bizkaia org) that has a completed rectificativa linked via `C_Invoice_Reverse`, from the detail kebab, the row-hover kebab, and the list bulk bar — in all three, confirm the action is refused with a toast naming the fiscal system and the rectificativa document number(s), and that the invoice stays posted/unchanged (no un-post side effect). Then confirm every other case still reactivates exactly as before: an invoice not sent to any fiscal system, one rejected or pending at the fiscal system, one whose rectificativa is still a draft, and one with no rectificativa at all.
 12. Open an existing draft invoice without touching any field and confirm the "Save Draft" button is **disabled**. Change any header field and confirm it becomes enabled. Save and confirm it disables again. Revert the changed field to its original value without saving and confirm the button disables once more. Add a line: once the add-row is submitted, the button should disable again if no header changes remain pending. Confirm the "Confirm" button stays enabled throughout all these states.
 13. Open a purchase invoice detail and confirm the bottom panel shows a `SIF` section below Documents and Notes whenever the fiscal profile enables a purchase-side fiscal target. Verify the visible tabs follow the fiscal matrix: SII for `sii` / `sii-navarra`, TicketBAI for `tbai` only when the org's active TBAI config territory is Bizkaia (hidden for Álava/Gipuzkoa), SII plus TicketBAI-on-Bizkaia for `sii+tbai`, and Verifactu never for purchase invoices. Confirm the SII badge reflects `aeatsiiEstado`, the TBAI badge reflects `tbaiIssent` (only reachable on Bizkaia), the Verifactu badge reflects `etvfacInvoiceStatus`, and SII inline edits persist through `PATCH /sws/neo/purchase-invoice/header/{id}`.
 14. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
@@ -1759,7 +1765,7 @@ Three constraints worth knowing:
   server-side too (ETP-5558)*.
 
 The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
-**not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a
+**not** the `writeoffs: {psdId: bool}` shape used by the former `PaymentForm` flow (removed in ETP-5728): that was a
 different endpoint (`AddPaymentService`), and this modal never used it.
 
 ## Print button hidden in every status, list view unaffected — ETP-4714
@@ -1775,6 +1781,39 @@ final fix passes the literal `true` to `hidePrintWhen` instead, which
 `evaluateFieldCondition(true, data) → true` treats as an unconditional match, gating **only**
 the detail view; the list keeps its pre-ticket, untouched, always-visible print button. See
 `docs/decisions-reference.md` ("Print Visibility") for the generic `hidePrintWhen` mechanism.
+## OCR reader — extraction failures: gateway timeout and changed session — ETP-5585
+
+`useOcrExtraction.js` classifies the error of the upload / `executeTool` call into sentinels
+(like `OCR_NO_DATA_ERROR`); `OcrInlineUploader.jsx` maps them to translated messages instead of
+the raw English text.
+
+| Sentinel | Raised when | Message |
+|---|---|---|
+| `OCR_NETWORK_ERROR` | there was no HTTP answer at all (`isNetworkError`: offline, DNS, connection reset) | `networkErrorRetry`, the generic network message core also puts in `NetworkError.message` (see `docs/request-policy.md`, ETP-5424) |
+| `OCR_TIMEOUT_ERROR` | the answer is 502 / 503 / 504 | `ocrExtractTimeout` — "La lectura de la factura tardó demasiado. Vuelva a intentarlo." |
+| `OCR_SESSION_CHANGED_ERROR` | an `AbortError` | `ocrExtractSessionChanged` — "Su sesión cambió mientras se leía la factura. Vuelva a intentarlo." |
+
+The `AbortError` is core's stale-session abort (`staleSessionError()` in `app-shell-core`
+`auth/api.js`): the session generation changed while the request was in flight. It is by design
+and does not log the user out. The hook and `copilotRequest` never create an `AbortController` or
+pass a `signal`, so an `AbortError` reaching the hook can only be that one; if a caller-owned
+signal is ever added, check it before this branch. Any other error keeps today's behavior.
+
+The checks run in this order: `AbortError`, network, 502/503/504. Offline is a connection problem, so it must not read as a slow server.
+
+For the three sentinels the uploader shows a **Reintentar** button (`retry`) next to the message; it
+re-runs the extraction for the file that is still selected, same as "Extraer y completar". There
+is **no automatic retry**, on purpose: after a gateway timeout the server keeps running the
+first extraction, so a silent second one would duplicate the work (and its cost), and a
+response that belongs to a superseded session must never be replayed under another identity.
+No-data and generic failures show no retry button.
+
+Gateway timeouts (CloudFront / ALB idle limits) and the Copilot client timeouts are infra and
+Copilot-module concerns, outside this repo; the UI only reports them clearly.
+
+Tests: `src/components/copilot/ocr/__tests__/useOcrExtraction.vitest.jsx`,
+`OcrInlineUploader.vitest.jsx`.
+
 ## OCR reader — empty extraction is rejected (ETP-5654)
 
 A blank or corrupt PDF used to open the "Datos detectados en la factura" modal completely empty:
@@ -1915,12 +1954,45 @@ When an invoice line from the OCR reader matches no product, the resolver popup 
 "Create product" (`ProductCreateForm` in `ProductResolverPopup.jsx`). The form asks for name,
 search key, unit of measure and tax category, then POSTs to `/sws/neo/product/product`.
 
-Unit of measure and tax category are **prefilled** from `GET <productSpecUrl>/product/defaults`
-(`ProductDefaultsHandler`, ETP-4670) — the same defaults the product window uses (typically
-"Unidad" and "IVA Normal"). The form reads `uOM`/`uOM$_identifier` and
-`taxCategory`/`taxCategory$_identifier` from the response; no ids or names are hardcoded. The
-prefill never overwrites a value the user already picked (it only fills an empty selector), and if
-the defaults call fails the selectors stay empty and the existing required-field validation applies.
+Unit of measure and tax category are **prefilled**. The unit of measure comes from
+`GET <productSpecUrl>/product/defaults` (`ProductDefaultsHandler`, ETP-4670), the same default the
+product window uses (typically "Unidad"). The form reads `uOM`/`uOM$_identifier` from the
+response; no ids or names are hardcoded. If the defaults call fails the selectors stay empty and
+the existing required-field validation applies.
+
+**Tax category priority: user pick > the line tax's category > `/product/defaults`.** Each popup row
+carries `taxId`, the tax the line holds after the lines review (preselected by `defaultTax` or
+changed by the user; null when the line stayed on "Autocompletar"). `resolveProductsForLines`
+adds it to every row, suggestion rows included. Only when the create form opens **and** `taxId` is
+set, the form lazily reads the tax record (`GET /sws/neo/tax/tax/<taxId>` through the shared
+`apiFetch`, record in `response.data[0]`) and prefills the category from its
+`taxCategory` / `taxCategory$_identifier`. The defaults and the tax record load concurrently and
+may resolve in any order: the form tracks where the current value came from
+(`user` | `tax` | `defaults`), so the tax category overrides a defaults-sourced value but nothing
+ever overrides a category the user picked. A line taxed "Adquisiciones IVA 10%" therefore proposes
+"IVA Reducido" instead of "IVA Normal". With no `taxId`, a non-OK answer (for example a role without
+access to the `tax` spec), a network error or a record without `taxCategory`, the form silently
+keeps the `/product/defaults` category; no new warning is shown.
+
+### Product resolver: every line must be decided
+
+Each unmatched line is in one of three states, kept per row in `ProductResolverPopup.jsx`:
+
+| State | How a row gets there | Submitted as |
+|-------|----------------------|--------------|
+| Undecided | Default for a line **without** a suggestion | (blocks Continue) |
+| Product | Created through the "New product" modal, picked from the dropdown, or arrived with a suggestion | the product id |
+| Skipped | The user explicitly chose "Skip line" | `null` |
+
+- An undecided row shows "+ Create product" instead of "Skip line". Clicking that label opens the
+  "New product" modal; nothing opens or is created automatically. The chevron next to it opens the
+  dropdown (search an existing product, "+ Create product", "Skip line").
+- **Continue is disabled while any row is undecided**, and a short helper
+  (`ocrProductResolverIncomplete`) explains why. Rows that arrive with a suggestion count as decided.
+- Skipping is always explicit (dropdown entry, or the ghost skip button on a row that has a
+  product). A skipped row can still go back to creating or picking a product.
+- The `onSubmit` contract is unchanged: `{ [idx]: productId | null }`, where `null` means skipped.
+  Cancel still discards the whole import.
 
 Tests: `src/components/copilot/ocr/__tests__/ProductResolverPopup.vitest.jsx`.
 
@@ -1952,7 +2024,7 @@ zeros are kept.
 |---|---|---|
 | `match` | ids equal after normalization | continue |
 | `mismatch` | receiver id present and different | **blocked**: error toast with both ids, flow stops |
-| `absent` | no receiver id | continue silently |
+| `absent` | no receiver id (null, blank or the "?" placeholder) | continue, no session call, no toast; the "Datos detectados" modal shows a non-blocking amber notice (`ocrReceiverTaxIdAbsent`, prop `receiverTaxIdAbsent`) that never affects "Continuar" |
 | `same-as-issuer` | receiver id equals the issuer id (`issuer.tax_id_raw` or `tax_id`) | continue (OCR confusion) |
 | `no-org-tax-id` | organization has no tax id | continue + warning toast |
 | (session call failed) | the org tax id could not be read | continue + "could not verify" warning toast |
@@ -1964,13 +2036,58 @@ Messages use `toast` from sonner directly (`ocrReceiverTaxIdMismatch`, `ocrOrgTa
 `ocrReceiverTaxIdUnverified`), not `useBulkActionToast().showResult`, which reads `failed[0].message`
 while this flow passes `{ reason }` (pre-existing, not changed here).
 
+The mismatch error (`ocrReceiverTaxIdMismatch`) is a **persistent** toast: `duration: Infinity`,
+`closeButton: true` and the stable id `ocr-receiver-tax-id-mismatch`, so it stays until the user
+closes it and a second wrong invoice replaces it instead of stacking. Each validation run dismisses
+that id before comparing, so a correct invoice never leaves a stale error on screen. The two
+warnings (`ocrOrgTaxIdMissing`, `ocrReceiverTaxIdUnverified`) stay transient with default options.
+
 Tests: `src/components/copilot/ocr/__tests__/receiverTaxIdCheck.test.js`,
 `useOcrFlow.flow.vitest.jsx`, `buildOcrSchema.test.js`.
 
+## OCR reader — line tax preselection — ETP-5585
+
+The tax a line starts with in the lines review comes from a backend action, not from a
+similarity search. `findDefaultTax` (`ingest/purchaseInvoiceDescriptor.js`, wired as the tax
+column's `preResolve` in `ocrDocTypes.js` and `strategies.js`) calls
+
+`POST /sws/neo/purchase-invoice/lines/new/action/defaultTax`
+with `{ partnerAddressId, invoiceDate, rate }` and reads `response.data.taxId` / `identifier` /
+`rate`. The backend resolves the purchase tax from the vendor's location, the invoice date and
+the printed rate. The request goes through the shared `apiFetch`.
+
+- **One call per distinct rate.** `useOcrFlow` builds a `taxContext` per OCR run, after the vendor
+  review and before the lines are resolved: `partnerAddressId` is the vendor's location
+  (`findBpLocation`, the same lookup the batch header uses), `invoiceDate` is the reviewed
+  date (falling back to the extracted one) through `toIsoDate`, and `cache` memoizes the promise
+  per rate. Ten lines at 21 % cost one request.
+- **No call without a rate.** A line whose `tax_rate` is null / not a number, or a run with no
+  partner address, resolves to no preselection without touching the network.
+- **Never blocking.** Any non-OK answer, a null `taxId` or a network error means "no
+  preselection": the cell shows the empty `ocrLinesTaxDefault` ("Autocompletar").
+- **NO_MATCH hint.** When the backend answers but could not determine a tax to propose for the printed rate (this does not mean no purchase tax exists at that rate), the line is
+  flagged (`tax_no_rate_match`) and the lines modal shows a non-blocking amber hint,
+  `ocrLinesTaxNoRateMatch` ("No se pudo proponer un impuesto de compra al {rate} %. Elíjalo manualmente."). It is not shown for a line
+  without a rate, after a network failure, or once the user picks a tax; it never blocks
+  "Completar automáticamente".
+- **The user's pick wins.** The preselection fills `tax_id`; the user can change or clear it in
+  the cell. On submit it becomes `_tax_id`, and that is the only source of the line's `tax`.
+- **Unresolved means omitted.** With no `_tax_id`, `buildLineOps` leaves `tax` out of the line
+  body so NEO's tax callout derives it from the product, vendor and date. The old fallback that
+  searched `FinancialMgmtTaxRate` at batch time was removed: it sent an arbitrary tax even when
+  the user left "Autocompletar", so the callout never got to decide.
+- The tax kept on the line also feeds the create-product form, which prefills the product's tax
+  category from it (see "create-product step defaults").
+- `simSearch` is no longer used for taxes (`findTax`, `buildTaxSearchTerm` and
+  `resolveTaxesForLines` were deleted). It remains in use for products.
+
+Tests: `ingest/__tests__/purchaseInvoiceDescriptor.vitest.jsx`,
+`__tests__/useOcrFlow.flow.vitest.jsx`.
+
 ## OCR reader — lookups without `_neoWhere` (production WAF)
 
-Every lookup the OCR reader makes — vendor, vendor address, the vendor picker, product, tax,
-UoM and tax category — used to send its filter as an HQL `_neoWhere` fragment in the query
+Every lookup the OCR reader makes — vendor, vendor address, the vendor picker, product,
+the manual tax picker, UoM and tax category — used to send its filter as an HQL `_neoWhere` fragment in the query
 string (`taxID = '…' and active = true`, `lower(name) like '%…%'`). The production edge WAF
 blocks that shape as SQL injection and answers **403**; locally there is no WAF, so it worked.
 In production the vendor was never auto-matched, the vendor picker listed nothing, and the
@@ -1985,7 +2102,7 @@ two shapes the rest of the app already sends in production:
 | Vendor (auto-match, fuzzy, picker) | `purchase-invoice/header/selectors/C_BPartner_ID` | `q=<name>` + `isSOTrx=N&isVendor=Y` |
 | Vendor address (`partnerAddress`) | `purchase-invoice/header/selectors/C_BPartner_Location_ID` | `C_BPartner_ID=<id>` + `isSOTrx=N&isVendor=Y` |
 | Product (unmatched-lines popup) | `purchase-invoice/intrastat/selectors/M_Product_ID` | `q=<text>` |
-| Tax (lines review) | `purchase-invoice/tax/selectors/C_Tax_ID` | `q=<text>` |
+| Tax (lines review, manual picker only) | `purchase-invoice/tax/selectors/C_Tax_ID` | `q=<text>` |
 | UoM / tax category (product create) | `product/product/selectors/…` | `q=<text>` |
 
 Two selectors are deliberately **not** the line's own:
@@ -2502,8 +2619,8 @@ viewing, the lightbox and zoom stay. No document-status gate was added — uploa
 limited to drafts on either surface. While a write is in flight — an upload or a delete —
 Replace and Delete are disabled, in the menu and in the lightbox, on both surfaces:
 `useMainAttachment` reports `isBusy` for every write it runs (a pending counter, so one
-operation finishing cannot clear it under another). In the file sidebar the attach button also
-shows its spinner during a delete, and a drop is ignored until the delete returns. If a newer
+operation finishing cannot clear it under another). In the file sidebar a drop is ignored until the
+delete returns (the sidebar has no file-name header or attach button; Replace/Delete live in the "Más" menu). If a newer
 file was stored while a DELETE was in flight, the DELETE only removes the attachment it
 targeted; the newer file stays on screen.
 

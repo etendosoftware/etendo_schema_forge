@@ -1,5 +1,5 @@
 import CreateContactModalAdapter from './CreateContactModalAdapter.jsx';
-import { findBp as findBpExact, findTax, searchVendors } from './ingest/purchaseInvoiceDescriptor.js';
+import { findBp as findBpExact, findDefaultTax, searchVendors } from './ingest/purchaseInvoiceDescriptor.js';
 
 // Fuzzy fallback: the exact findBp only accepts a name that matches the extracted one
 // (and only when exactly one row matches). OCR routinely returns variants
@@ -45,7 +45,7 @@ async function findBp({ token, apiBaseUrl, value, extracted }) {
 
 export const PRE_RESOLVERS = {
   findBp,
-  findTax,
+  findDefaultTax,
 };
 
 export const CREATE_COMPONENTS = {

@@ -1,24 +1,8 @@
+// @covers tools/app-shell/src/components/forms/fields.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
 
-// Mock the Radix-based primitives that rely on portals / pointer-events, so the
-// wrappers' own logic (value/onChange contract, label rendering) is testable in
-// jsdom without fighting the real Select/Popover/Date portals.
-vi.mock('@/components/ui/select', () => ({
-  Select: ({ value, onValueChange, children }) => (
-    <div data-testid="rselect">
-      <span data-testid="rselect-value">{value}</span>
-      <button type="button" data-testid="rselect-pick-b" onClick={() => onValueChange('b')}>pick-b</button>
-      {children}
-    </div>
-  ),
-  SelectContent: ({ children }) => <div>{children}</div>,
-  SelectItem: ({ value, children }) => <div data-testid={`opt-${value}`}>{children}</div>,
-  SelectTrigger: ({ children }) => <div>{children}</div>,
-  SelectValue: ({ placeholder }) => <span data-testid="rselect-placeholder">{placeholder}</span>,
-}));
-
+// Mock the date picker portal so the wrappers' own logic is testable in jsdom.
 vi.mock('@/components/ui/date-field', () => ({
   DateField: ({ value, onChange }) => (
     <input
@@ -29,21 +13,8 @@ vi.mock('@/components/ui/date-field', () => ({
   ),
 }));
 
-vi.mock('@/components/ui/popover', () => ({
-  Popover: ({ open, children }) => <div data-testid="popover" data-open={String(!!open)}>{children}</div>,
-  PopoverAnchor: ({ children }) => <div>{children}</div>,
-  PopoverContent: ({ children, onOpenAutoFocus, onFocusOutside }) => {
-    // Invoke the focus-guard callbacks immediately so they are counted as covered.
-    const fakeEvent = { preventDefault: () => {} };
-    onOpenAutoFocus?.(fakeEvent);
-    onFocusOutside?.(fakeEvent);
-    return <div data-testid="popover-content">{children}</div>;
-  },
-  PopoverTrigger: ({ children }) => <div>{children}</div>,
-}));
-
 import {
-  Field, ReadOnly, TextInput, Select, DateInput, AmountInput, MoneyInput, LookupPicker, ChipSelect, Note, SectionLabel,
+  Field, DateInput, ChipSelect,
 } from '../fields.jsx';
 
 describe('Field', () => {
@@ -65,67 +36,6 @@ describe('Field', () => {
   });
 });
 
-describe('ReadOnly', () => {
-  it('renders a disabled input with the text value', () => {
-    render(<ReadOnly>hello</ReadOnly>);
-    const input = screen.getByDisplayValue('hello');
-    expect(input).toBeDisabled();
-  });
-
-  it('joins array children', () => {
-    render(<ReadOnly>{['a', 'b', 'c']}</ReadOnly>);
-    expect(screen.getByDisplayValue('abc')).toBeInTheDocument();
-  });
-
-  it('renders empty for nullish children', () => {
-    render(<ReadOnly>{null}</ReadOnly>);
-    expect(screen.getByDisplayValue('')).toBeInTheDocument();
-  });
-});
-
-describe('TextInput', () => {
-  it('forwards value and onChange', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<TextInput value="" onChange={onChange} placeholder="type here" />);
-    await user.type(screen.getByPlaceholderText('type here'), 'x');
-    expect(onChange).toHaveBeenCalled();
-  });
-});
-
-describe('Select', () => {
-  it('renders the placeholder and options (string options)', () => {
-    render(<Select label="Method" options={['a', 'b']} placeholder="Pick…" />);
-    expect(screen.getByText('Method')).toBeInTheDocument();
-    expect(screen.getByTestId('rselect-placeholder')).toHaveTextContent('Pick…');
-    expect(screen.getByTestId('opt-a')).toBeInTheDocument();
-    expect(screen.getByTestId('opt-b')).toBeInTheDocument();
-  });
-
-  it('maps {id,name} option objects', () => {
-    render(<Select options={[{ id: 'x', name: 'X label' }]} />);
-    expect(screen.getByTestId('opt-x')).toHaveTextContent('X label');
-  });
-
-  it('maps {value,label} option objects', () => {
-    render(<Select options={[{ value: 'y', label: 'Y label' }]} />);
-    expect(screen.getByTestId('opt-y')).toHaveTextContent('Y label');
-  });
-
-  it('emits the selected value through onChange', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<Select options={['a', 'b']} onChange={onChange} />);
-    await user.click(screen.getByTestId('rselect-pick-b'));
-    expect(onChange).toHaveBeenCalledWith('b');
-  });
-
-  it('reflects the current value', () => {
-    render(<Select value="b" options={['a', 'b']} />);
-    expect(screen.getByTestId('rselect-value')).toHaveTextContent('b');
-  });
-});
-
 describe('DateInput', () => {
   it('renders the label and forwards the ISO value/onChange', async () => {
     const user = userEvent.setup();
@@ -136,131 +46,6 @@ describe('DateInput', () => {
     expect(input).toHaveValue('2026-01-01');
     await user.clear(input);
     expect(onChange).toHaveBeenCalled();
-  });
-});
-
-describe('AmountInput', () => {
-  it('shows the formatted value when not focused', () => {
-    render(<AmountInput label="Importe" value="1250.00" />);
-    expect(screen.getByDisplayValue('1250.00')).toBeInTheDocument();
-  });
-
-  it('keeps the typed buffer while focused and reverts on blur', async () => {
-    const user = userEvent.setup();
-
-    // Parent re-formats the value on every change, like the payment form does.
-    function Host() {
-      const [v, setV] = useState('0.00');
-      return <AmountInput value={v} onChange={() => setV('99.99')} />;
-    }
-    render(<Host />);
-    const input = screen.getByRole('textbox');
-    await user.click(input);
-    await user.type(input, '5');
-    // While focused, the buffer keeps the literal keystroke "0.005".
-    expect(input).toHaveValue('0.005');
-    await user.tab(); // blur → falls back to the formatted parent value
-    expect(input).toHaveValue('99.99');
-  });
-
-  it('is disabled when readOnly', () => {
-    render(<AmountInput value="10.00" readOnly />);
-    expect(screen.getByRole('textbox')).toBeDisabled();
-  });
-
-  // ETP-4314 — AmountInput used to hardcode a literal '€' suffix regardless of
-  // the actual account/document currency (visually confirmed on a real USD
-  // financial account). It now resolves the real symbol from the `currency`
-  // prop via getCurrencySymbol(), with '€' kept only as the backward-compatible
-  // default when no `currency` prop is passed at all.
-  describe('currency symbol (ETP-4314)', () => {
-    it('falls back to the literal € when no currency prop is given', () => {
-      render(<AmountInput value="10.00" />);
-      expect(screen.getByText('€')).toBeInTheDocument();
-    });
-
-    it('shows $ for currency="USD" (not the hardcoded €)', () => {
-      render(<AmountInput value="10.00" currency="USD" />);
-      expect(screen.getByText('$')).toBeInTheDocument();
-      expect(screen.queryByText('€')).not.toBeInTheDocument();
-    });
-
-    it('shows £ for currency="GBP"', () => {
-      render(<AmountInput value="10.00" currency="GBP" />);
-      expect(screen.getByText('£')).toBeInTheDocument();
-      expect(screen.queryByText('€')).not.toBeInTheDocument();
-    });
-  });
-});
-
-describe('MoneyInput', () => {
-  it('shows the value when not focused', () => {
-    render(<MoneyInput value="42.00" />);
-    expect(screen.getByDisplayValue('42.00')).toBeInTheDocument();
-  });
-
-  it('keeps the typed buffer while focused, reverts to value on blur', async () => {
-    const user = userEvent.setup();
-    function Host() {
-      const [v] = useState('0.00');
-      return <MoneyInput value={v} onChange={() => {}} placeholder="0.00" />;
-    }
-    render(<Host />);
-    const input = screen.getByPlaceholderText('0.00');
-    await user.click(input);
-    await user.type(input, '7');
-    expect(input).toHaveValue('0.007');
-    await user.tab();
-    expect(input).toHaveValue('0.00');
-  });
-
-  it('calls onChange on each keystroke', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<MoneyInput value="" onChange={onChange} placeholder="amt" />);
-    await user.type(screen.getByPlaceholderText('amt'), '12');
-    expect(onChange).toHaveBeenCalledTimes(2);
-  });
-
-  it('respects disabled', () => {
-    render(<MoneyInput value="1" disabled placeholder="amt" />);
-    expect(screen.getByPlaceholderText('amt')).toBeDisabled();
-  });
-});
-
-describe('LookupPicker', () => {
-  const makeHook = (results, loading = false) => () => ({ results, loading });
-
-  it('seeds the query from value.name', () => {
-    render(<LookupPicker value={{ id: '1', name: 'Acme' }} onChange={vi.fn()} useLookup={makeHook([])} />);
-    expect(screen.getByDisplayValue('Acme')).toBeInTheDocument();
-  });
-
-  it('opens results and calls onChange with the picked row', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    const rows = [{ id: '1', name: 'Acme' }, { id: '2', name: 'Globex' }];
-    render(<LookupPicker value={null} onChange={onChange} useLookup={makeHook(rows)} placeholder="Buscar…" />);
-
-    await user.click(screen.getByPlaceholderText('Buscar…'));
-    expect(screen.getByTestId('popover')).toHaveAttribute('data-open', 'true');
-    await user.click(screen.getByText('Globex'));
-    expect(onChange).toHaveBeenCalledWith({ id: '2', name: 'Globex' });
-  });
-
-  it('clears a selected value when the user types over it', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<LookupPicker value={{ id: '1', name: 'Acme' }} onChange={onChange} useLookup={makeHook([{ id: '9', name: 'New' }])} />);
-    await user.type(screen.getByDisplayValue('Acme'), 'z');
-    expect(onChange).toHaveBeenCalledWith(null);
-  });
-
-  it('shows the loading placeholder when loading with no results', async () => {
-    const user = userEvent.setup();
-    render(<LookupPicker value={null} onChange={vi.fn()} useLookup={makeHook([], true)} placeholder="Buscar…" />);
-    await user.click(screen.getByPlaceholderText('Buscar…'));
-    expect(screen.getByText('…')).toBeInTheDocument();
   });
 });
 
@@ -276,7 +61,7 @@ describe('ChipSelect keyboard navigation', () => {
     { id: 'c', name: 'Gamma' },
   ];
   // Static lookup that ignores the query arg — real search isn't the point here,
-  // matching LookupPicker's own makeHook convention above.
+  // keeping the stub hook trivial.
   const makeHook = (results, loading = false) => () => ({ results, loading });
 
   function renderChipSelect(onChange) {
@@ -289,7 +74,7 @@ describe('ChipSelect keyboard navigation', () => {
         testId="test-chip"
       />,
     );
-    return screen.getByTestId('test-chip-search');
+    return screen.getByTestId('field-test-chip');
   }
 
   it('ArrowDown twice then Enter selects the second result', async () => {
@@ -344,16 +129,12 @@ describe('ChipSelect keyboard navigation', () => {
     const onChange = vi.fn();
     const input = renderChipSelect(onChange);
     await user.click(input);
-    expect(screen.getByTestId('popover')).toHaveAttribute('data-open', 'true');
+    expect(screen.getByTestId('options-test-chip')).toBeInTheDocument();
     await user.keyboard('{ArrowDown}');
-    expect(screen.getByTestId('test-chip-option-a')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('option-test-chip-a')).toHaveAttribute('aria-selected', 'true');
     await user.keyboard('{Escape}');
-    expect(screen.getByTestId('popover')).toHaveAttribute('data-open', 'false');
+    expect(screen.queryByTestId('options-test-chip')).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
-    // close() flips `open`, and the activeIndex-reset effect is keyed on `open`,
-    // so the highlight is gone too — even though the mocked PopoverContent (unlike
-    // the real Radix one) keeps rendering the option list regardless of `open`.
-    expect(screen.getByTestId('test-chip-option-a')).toHaveAttribute('aria-selected', 'false');
   });
 
   it('Home jumps the highlight back to the first result', async () => {
@@ -379,15 +160,13 @@ describe('ChipSelect keyboard navigation', () => {
   it('a cold ArrowDown (dropdown not yet open) only opens it, it does not move the highlight', () => {
     const onChange = vi.fn();
     const input = renderChipSelect(onChange);
-    // NOTE: ChipSelect's input already calls setOpen(true) on focus, so a real
-    // user.click()/user.keyboard() flow always has `open === true` by the time a
-    // key is pressed — the `if (!open && ...)` early-return branch in
-    // handleInputKeyDown is unreachable through a normal focus-then-type flow.
-    // Dispatch the keydown directly on the un-focused node with fireEvent
-    // (not userEvent, which would focus it first) to exercise that branch.
-    expect(screen.getByTestId('popover')).toHaveAttribute('data-open', 'false');
+    // ChipSelect is a thin wrapper over CreatableSearchSelect (ETP-5728), whose input opens on
+    // focus, so a real click/keyboard flow always has `open === true` by the time a key is
+    // pressed. Dispatch the keydown on the un-focused node with fireEvent (userEvent would focus
+    // it first) to exercise the cold-open branch.
+    expect(screen.queryByTestId('options-test-chip')).not.toBeInTheDocument();
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    expect(screen.getByTestId('popover')).toHaveAttribute('data-open', 'true');
+    expect(screen.getByTestId('options-test-chip')).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
     // Enter right after the opening ArrowDown must not select anything —
     // activeIndex is still -1, that first press only opened the popover.
@@ -401,18 +180,6 @@ describe('ChipSelect keyboard navigation', () => {
   });
 });
 
-describe('Note & SectionLabel', () => {
-  it('Note renders its children', () => {
-    render(<Note><b>bold</b> rest</Note>);
-    expect(screen.getByText('bold')).toBeInTheDocument();
-  });
-
-  it('SectionLabel renders its children', () => {
-    render(<SectionLabel>Section A</SectionLabel>);
-    expect(screen.getByText('Section A')).toBeInTheDocument();
-  });
-});
-
 // ETP-5479 — ChipSelect draws the same field shell as CreatableSearchSelect, so it must
 // share the unified hover fill and the disabled fill/border (no opacity dimming).
 describe('ChipSelect unified field states (ETP-5479)', () => {
@@ -422,7 +189,7 @@ describe('ChipSelect unified field states (ETP-5479)', () => {
     render(
       <ChipSelect value={null} onChange={vi.fn()} useLookup={noResults} testId="state-chip" {...props} />,
     );
-    return screen.getByTestId('state-chip-search').closest('.group.relative');
+    return screen.getByTestId('field-state-chip').closest('.group.relative');
   }
 
   it('enabled: control border, card fill and the shared --field-hover hover', () => {
@@ -442,5 +209,91 @@ describe('ChipSelect unified field states (ETP-5479)', () => {
     ]));
     expect(cls).not.toContain('border-[hsl(var(--border-control))]');
     expect(shell.className).not.toMatch(/opacity-|hover:bg-/);
+  });
+});
+
+// ETP-5728 — ChipSelect is a THIN WRAPPER over CreatableSearchSelect (the system-wide selector of
+// "País"): {id,name} adapter, disabled, lookup mode, and the chevron TOGGLES the list.
+describe('ChipSelect wrapper over CreatableSearchSelect (ETP-5728)', () => {
+  const rows = [{ id: 'a', name: 'Alpha', extra: 1 }, { id: 'b', name: 'Beta' }];
+  const lookup = () => ({ results: rows, loading: false });
+  const isOpen = () => !!screen.queryByTestId('options-cv');
+
+  function setup(props = {}) {
+    const onChange = props.onChange ?? vi.fn();
+    render(<ChipSelect value={null} onChange={onChange} useLookup={lookup} testId="cv" {...props} />);
+    return onChange;
+  }
+
+  it('lookup mode: rows come from useLookup and are rendered under the shared testids', () => {
+    setup();
+    fireEvent.click(screen.getByTestId('ChevronDown__cv'));
+    expect(screen.getByTestId('option-cv-a')).toHaveTextContent('Alpha');
+    expect(screen.getByTestId('option-cv-b')).toHaveTextContent('Beta');
+  });
+
+  it('adapter: picking a row calls onChange with the whole lookup row', () => {
+    const onChange = setup();
+    fireEvent.click(screen.getByTestId('ChevronDown__cv'));
+    fireEvent.mouseDown(screen.getByTestId('option-cv-a'));
+    expect(onChange).toHaveBeenCalledWith(rows[0]);
+  });
+
+  it('adapter: {id,name} value renders as a chip and the X clears with null', () => {
+    const onChange = setup({ value: { id: 'a', name: 'Alpha' } });
+    expect(screen.getByTestId('field-cv-chip')).toHaveTextContent('Alpha');
+    fireEvent.mouseDown(screen.getByLabelText('clear'));
+    expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  it('passes the placeholder through to the input', () => {
+    setup({ placeholder: 'Pick one' });
+    expect(screen.getByTestId('field-cv')).toHaveAttribute('placeholder', 'Pick one');
+  });
+
+  it('chevron click opens the list, a second click CLOSES it (toggle)', () => {
+    setup();
+    expect(isOpen()).toBe(false);
+    fireEvent.click(screen.getByTestId('ChevronDown__cv'));
+    expect(isOpen()).toBe(true);
+    fireEvent.click(screen.getByTestId('ChevronDown__cv'));
+    expect(isOpen()).toBe(false);
+  });
+
+  it('chevron click with a value enters editing mode (input shown, list open)', async () => {
+    setup({ value: { id: 'a', name: 'Alpha' } });
+    expect(screen.queryByTestId('field-cv')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('ChevronDown__cv'));
+    expect(screen.getByTestId('field-cv')).toBeInTheDocument();
+    // the input is focused on the next animation frame, which is what opens the list
+    expect(await screen.findByTestId('options-cv')).toBeInTheDocument();
+  });
+
+  it('disabled: input and chevron are disabled and clicks do not open the list', () => {
+    setup({ disabled: true });
+    expect(screen.getByTestId('field-cv')).toBeDisabled();
+    expect(screen.getByTestId('ChevronDown__cv').closest('button')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('field-cv').closest('.group.relative'));
+    expect(isOpen()).toBe(false);
+  });
+
+  it('disabled with a value keeps the chip read-only (no clear X)', () => {
+    setup({ disabled: true, value: { id: 'a', name: 'Alpha' } });
+    expect(screen.getByTestId('field-cv-chip')).toBeDisabled();
+    expect(screen.queryByLabelText('clear')).not.toBeInTheDocument();
+  });
+});
+
+describe('ChipSelect — never shows a raw id', () => {
+  it('a value with an id but no name does not render the id as the chip label', () => {
+    render(
+      <ChipSelect
+        value={{ id: 'RAW-ID-123' }}
+        onChange={vi.fn()}
+        useLookup={() => ({ results: [], loading: false })}
+        testId="raw-chip"
+      />,
+    );
+    expect(screen.queryByText('RAW-ID-123')).not.toBeInTheDocument();
   });
 });

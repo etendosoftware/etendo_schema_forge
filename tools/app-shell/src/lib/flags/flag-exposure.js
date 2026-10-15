@@ -1,4 +1,5 @@
 import { track, addFeatureFlagEvaluation } from '../observability.js';
+import { NO_EXPOSURE_FLAGS } from './flag-keys.js';
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/events.js';
 
 /**
@@ -10,6 +11,10 @@ import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/
  * natively and this hook becomes redundant — remove it then rather than
  * double-counting.
  *
+ * It is also the single RUM exposure source for every provider: the Datadog
+ * flag provider is created with `enableRumFeatureFlagTracking: false`
+ * (`bootstrap.js`), so RUM sees each flag once, under its sanitized key.
+ *
  * Two constraints shape the implementation:
  *
  * - **Never disturb evaluation.** `after` runs inside flag resolution, which is
@@ -17,13 +22,13 @@ import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/
  *   throws; a reporting failure must not change what a flag resolves to.
  * - **Deduplicate per flag/value/provider, not per flag/value.** `initFeatureFlags`
  *   registers this hook before the real provider is ready (`createFlagProvider`
- *   awaits a dynamic import and, for ConfigCat, a network round-trip), so the
+ *   awaits a dynamic import and, for a remote provider, a network round-trip), so the
  *   very first evaluation on every page load — for essentially every session,
  *   since React's initial render is synchronous and always wins that race —
  *   goes through OpenFeature's built-in no-op default. A dedupe key that
  *   ignores the provider lets that first, transient no-op result permanently
  *   claim the session's report for that value, silently suppressing every
- *   later evaluation once the real provider (in-memory or ConfigCat) takes
+ *   later evaluation once the real provider (in-memory, Datadog or ConfigCat) takes
  *   over — even though it may resolve the exact same boolean. Keying on the
  *   provider too reports each one exactly once instead of only the first to
  *   answer.
@@ -84,6 +89,8 @@ export function createFlagExposureHook({
       try {
         const { flagKey, value } = { flagKey: hookContext?.flagKey, value: evaluationDetails?.value };
         if (!flagKey || typeof value !== 'boolean') return;
+        // The telemetry kill switches are read by the observability layer itself.
+        if (NO_EXPOSURE_FLAGS.has(flagKey)) return;
 
         const provider = hookContext?.providerMetadata?.name;
         const dedupeKey = `${flagKey}:${value}:${provider}`;

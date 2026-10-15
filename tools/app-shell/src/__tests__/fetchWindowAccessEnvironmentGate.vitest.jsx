@@ -189,6 +189,7 @@ import {
   getEnvironmentAccessDecision,
   resetEnvironmentAccessGateForTest,
 } from '@/lib/environmentAccessGate.js';
+import { getAccessLoadError, resetAccessLoadErrorForTest } from '@/lib/accessLoadError.js';
 
 describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', () => {
   function jsonResponse(body, ok = true, status = ok ? 200 : 400) {
@@ -329,5 +330,52 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     await fetchWindowAccess({ token: 'tok' });
 
     expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
+  });
+});
+
+// ETP-5489 — a 401 on the role menu while `GET /sws/go/session` answers 200 is the core's
+// SessionAliveUnauthorizedError (no logout): the host records it so AppLayout can show the
+// access-load error screen instead of looping through /onboarding. Needs an app-shell-core that
+// classifies the 401 (the version this change re-pins to).
+describe('fetchWindowAccess — access load error (ETP-5489)', () => {
+  const windowAccessOk = {
+    ok: true,
+    status: 200,
+    json: async () => ({ windowAccess: {}, capabilities: {} }),
+  };
+
+  function stubServer({ session }) {
+    vi.stubGlobal('fetch', vi.fn((url) => {
+      const target = String(url);
+      if (target.includes('/sws/go/session')) return Promise.resolve(session);
+      if (target.includes('/listmenu')) return Promise.resolve({ ok: false, status: 401, text: async () => '{}' });
+      return Promise.resolve(windowAccessOk);
+    }));
+  }
+
+  beforeEach(() => {
+    __resetMenuAccessCacheForTest();
+    resetEnvironmentAccessGateForTest();
+    resetAccessLoadErrorForTest();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('records the failure when the menu 401s but the session is alive', async () => {
+    stubServer({ session: { ok: true, status: 200, json: async () => ({}) } });
+
+    await fetchWindowAccess({ token: 'tok' });
+
+    expect(getAccessLoadError()).toBe(true);
+  });
+
+  it('does not record it when the session endpoint also says 401 (a real expiry)', async () => {
+    stubServer({ session: { ok: false, status: 401, json: async () => ({}) } });
+
+    await fetchWindowAccess({ token: 'tok' });
+
+    expect(getAccessLoadError()).toBe(false);
   });
 });

@@ -94,6 +94,23 @@ export function DetailMoreActionsMenu({
   if (visibleActions.length === 0 && !hasCustomContent) return null;
   const currentId = data?.id || recordId;
   const runDocumentAction = async (action) => {
+    // ETP-5745 follow-up (PM decision: "if it can't reactivate, it must not do anything"):
+    // a reactivation this guard already knows will be refused must not even run its
+    // pre-unpost step — un-posting a fiscally-accepted, already-rectified invoice and THEN
+    // failing to reactivate it left a visible side effect (the invoice stayed un-posted).
+    // `reactivationBlocked*` is read-only, enriched on GET by
+    // `InvoiceReactivationGuard#enrichReactivationBlock` (com.etendoerp.go), computed from the
+    // exact same condition the backend 422 enforces — so this is a prediction of that same
+    // refusal, not a separate rule.
+    if (action.documentAction === 'RE' && data?.reactivationBlocked) {
+      toast.error(ui('backendError.invoiceReactivateFiscalRectified', {
+        fiscalSystem: data.reactivationBlockedFiscalSystem,
+        rectificativas: Array.isArray(data.reactivationBlockedRectificativas)
+          ? data.reactivationBlockedRectificativas.join(', ')
+          : data.reactivationBlockedRectificativas,
+      }));
+      return false;
+    }
     // ETP-4783 / ETP-4940: Flush any pending header edit before running the document
     // action (Complete/Void/etc., and before any preUnpost) so the server sees the
     // latest field values. Without this, fields that are intentionally editable on a
@@ -131,8 +148,10 @@ export function DetailMoreActionsMenu({
       // ETP-5704 — translated like every other action failure of this menu (preUnpost above,
       // runNeoMenuAction below): useDocumentAction carries the backend's English text and its
       // AD_MESSAGE keys, and the toast must read in the UI locale.
-      toast.error(translateBackendError(err.message, ui, { messageKeys: err.messageKeys })
-        || ui('actionFailed'));
+      toast.error(translateBackendError(err.message, ui, {
+        messageKeys: err.messageKeys,
+        messageParams: err.messageParams,
+      }) || ui('actionFailed'));
     }
     return true;
   };

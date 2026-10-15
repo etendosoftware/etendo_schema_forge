@@ -1,3 +1,6 @@
+// @covers artifacts/inventory-stock-report/helpers.js
+// @covers artifacts/inventory-stock-report/template-csv.hbs
+// @covers artifacts/inventory-stock-report/template-excel.hbs
 /**
  * ETP-5013 follow-up — the grouped ("Agrupar por") layout used to show a
  * plain group-break row (a single <td> with the group's name) inside ONE
@@ -119,5 +122,113 @@ describe('inventory-stock-report — flat (ungrouped) layout is untouched (ETP-5
     assert.match(html, /<th style="width: 18%">Producto<\/th>/);
     assert.match(html, /<th style="width: 14%">Almacen<\/th>/);
     assert.match(html, /<th style="width: 14%">Categoría<\/th>/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A product with no cost reaches the report as unitCost/totalValuation = null.
+// It must render as a genuinely blank cell (never 0, never the literal NaN
+// html-to-xlsx writes for a data-cell-type="number" cell holding no number).
+// ---------------------------------------------------------------------------
+function loadHelperFns() {
+  const code = readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8');
+  return new Function(`${code}; return { round2, numCellType };`)();
+}
+
+function renderTemplate(file, rows) {
+  const hb = Handlebars.create();
+  registerReportHelpers(hb, readFileSync(resolve(ARTIFACT_DIR, 'helpers.js'), 'utf8'));
+  // Report-specific helpers (loaded by jsreport from helpers.js) registered explicitly.
+  const { round2, numCellType } = loadHelperFns();
+  hb.registerHelper('round2', round2);
+  hb.registerHelper('numCellType', numCellType);
+  const tpl = hb.compile(readFileSync(resolve(ARTIFACT_DIR, file), 'utf8'));
+  return tpl({ meta: { labels: LABELS }, rows });
+}
+
+const COST_ROWS = [
+  row({ productSearchKey: 'P1', product: 'With cost', qtyOnHand: 10, unitCost: 9.56, totalValuation: 95.6 }),
+  row({ productSearchKey: 'P2', product: 'No cost', qtyOnHand: 5, unitCost: null, totalValuation: null }),
+  row({ productSearchKey: 'P3', product: 'Zero cost', qtyOnHand: 3, unitCost: 0, totalValuation: 0 }),
+];
+
+describe('inventory-stock-report helpers — round2 / numCellType with missing cost', () => {
+  const { round2, numCellType } = loadHelperFns();
+
+  it('round2 returns an empty string for null, undefined and empty string', () => {
+    assert.equal(round2(null), '');
+    assert.equal(round2(undefined), '');
+    assert.equal(round2(''), '');
+  });
+
+  it('round2 keeps a real zero as 0 and rounds numbers to 2 decimals', () => {
+    assert.equal(round2(0), 0);
+    assert.equal(round2(9.56), 9.56);
+    assert.equal(round2(12.345), Math.round(12.345 * 100) / 100);
+    assert.equal(round2(1.2), 1.2);
+  });
+
+  it('round2 returns 0 for a non-numeric string', () => {
+    assert.equal(round2('abc'), 0);
+  });
+
+  it('numCellType is string for null, undefined and empty string', () => {
+    assert.equal(numCellType(null), 'string');
+    assert.equal(numCellType(undefined), 'string');
+    assert.equal(numCellType(''), 'string');
+  });
+
+  it('numCellType is number for a value, including a real zero', () => {
+    assert.equal(numCellType(0), 'number');
+    assert.equal(numCellType(9.56), 'number');
+    assert.equal(numCellType('abc'), 'number');
+  });
+});
+
+describe('inventory-stock-report — template-csv.hbs with a product that has no cost', () => {
+  const lines = renderTemplate('template-csv.hbs', COST_ROWS).split('\n');
+
+  it('a row with cost keeps both amounts', () => {
+    assert.ok(lines.find((l) => l.includes('With cost')).endsWith(',10,9.56,95.6'));
+  });
+
+  it('a null-cost row ends with empty cost and valuation cells', () => {
+    const l = lines.find((x) => x.includes('No cost'));
+    assert.ok(l.endsWith(',5,,'), l);
+  });
+
+  it('a real zero cost renders 0, not blank', () => {
+    const l = lines.find((x) => x.includes('Zero cost'));
+    assert.ok(l.endsWith(',3,0,0'), l);
+  });
+});
+
+describe('inventory-stock-report — template-excel.hbs with a product that has no cost', () => {
+  const html = renderTemplate('template-excel.hbs', COST_ROWS);
+  const rowHtml = (name) => html.split('<tr>').find((r) => r.includes(name));
+
+  it('never emits NaN anywhere', () => {
+    assert.doesNotMatch(html, /NaN/);
+  });
+
+  it('null-cost cells are empty string-typed cells', () => {
+    const cells = [...rowHtml('No cost').matchAll(/<td data-cell-type="(\w+)">([^<]*)<\/td>/g)];
+    const [unit, total] = cells.slice(-2);
+    assert.deepEqual([unit[1], unit[2]], ['string', '']);
+    assert.deepEqual([total[1], total[2]], ['string', '']);
+  });
+
+  it('zero-cost cells are number-typed with 0', () => {
+    const cells = [...rowHtml('Zero cost').matchAll(/<td data-cell-type="(\w+)">([^<]*)<\/td>/g)];
+    const [unit, total] = cells.slice(-2);
+    assert.deepEqual([unit[1], unit[2]], ['number', '0']);
+    assert.deepEqual([total[1], total[2]], ['number', '0']);
+  });
+
+  it('cells with a cost are number-typed with the rounded amount', () => {
+    const cells = [...rowHtml('With cost').matchAll(/<td data-cell-type="(\w+)">([^<]*)<\/td>/g)];
+    const [unit, total] = cells.slice(-2);
+    assert.deepEqual([unit[1], unit[2]], ['number', '9.56']);
+    assert.deepEqual([total[1], total[2]], ['number', '95.6']);
   });
 });

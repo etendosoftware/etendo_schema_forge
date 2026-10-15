@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/FundsTransferModal.jsx
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
 /**
@@ -77,18 +78,17 @@ function renderModal(props = {}) {
 // Open the dropdown — focus the search input (shown until a value is chosen) or, once a value is
 // selected, click its chip to re-enter typing mode — then pick the option.
 function selectDest(id) {
-  const input = screen.queryByTestId('transfer-dest-search');
-  if (input) fireEvent.focus(input);
-  else fireEvent.click(screen.getByTestId('transfer-dest-chip'));
-  fireEvent.click(screen.getByTestId(`transfer-dest-option-${id}`));
+  if (!screen.queryByTestId('field-transfer-dest')) fireEvent.click(screen.getByTestId('field-transfer-dest-chip'));
+  fireEvent.focus(screen.getByTestId('field-transfer-dest'));
+  // CreatableSearchSelect options commit on mouse-down (so the pick lands before the input blurs).
+  fireEvent.mouseDown(screen.getByTestId(`option-transfer-dest-${id}`));
 }
 
 // GL item is required; same open-then-pick flow.
 function selectGl() {
-  const input = screen.queryByTestId('transfer-gl-search');
-  if (input) fireEvent.focus(input);
-  else fireEvent.click(screen.getByTestId('transfer-gl-chip'));
-  fireEvent.click(screen.getByTestId('transfer-gl-option-GL1'));
+  if (!screen.queryByTestId('field-transfer-gl')) fireEvent.click(screen.getByTestId('field-transfer-gl-chip'));
+  fireEvent.focus(screen.getByTestId('field-transfer-gl'));
+  fireEvent.mouseDown(screen.getByTestId('option-transfer-gl-GL1'));
 }
 
 describe('FundsTransferModal', () => {
@@ -110,29 +110,89 @@ describe('FundsTransferModal', () => {
 
   it('does not auto-open the destination dropdown on mount', () => {
     renderModal();
-    expect(screen.queryByTestId('transfer-dest-popover')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('options-transfer-dest')).not.toBeInTheDocument();
   });
 
   it('offers the other org accounts as destinations (source excluded)', () => {
     renderModal();
-    fireEvent.focus(screen.getByTestId('transfer-dest-search'));
-    expect(screen.getByTestId('transfer-dest-option-DST')).toBeInTheDocument();
-    expect(screen.getByTestId('transfer-dest-option-USD')).toBeInTheDocument();
-    expect(screen.queryByTestId('transfer-dest-option-SRC')).not.toBeInTheDocument();
+    fireEvent.focus(screen.getByTestId('field-transfer-dest'));
+    expect(screen.getByTestId('option-transfer-dest-DST')).toBeInTheDocument();
+    expect(screen.getByTestId('option-transfer-dest-USD')).toBeInTheDocument();
+    expect(screen.queryByTestId('option-transfer-dest-SRC')).not.toBeInTheDocument();
+  });
+
+  it('clicking the destination chevron with no value opens the list and focuses the input (ETP-5728)', () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId('ChevronDown__transfer-dest'));
+    expect(screen.getByTestId('options-transfer-dest')).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByTestId('field-transfer-dest'));
+  });
+
+  it('clicking the GL chevron with no value opens the list (ETP-5728)', () => {
+    renderModal();
+    expect(screen.queryByTestId('options-transfer-gl')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('ChevronDown__transfer-gl'));
+    expect(screen.getByTestId('options-transfer-gl')).toBeInTheDocument();
+  });
+
+  it('clicking the destination chevron a second time CLOSES the list (shared selector toggle, ETP-5728)', () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId('ChevronDown__transfer-dest'));
+    expect(screen.getByTestId('options-transfer-dest')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('ChevronDown__transfer-dest'));
+    expect(screen.queryByTestId('options-transfer-dest')).not.toBeInTheDocument();
+  });
+
+  it('clicking the GL chevron a second time CLOSES the list (ETP-5728)', () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId('ChevronDown__transfer-gl'));
+    expect(screen.getByTestId('options-transfer-gl')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('ChevronDown__transfer-gl'));
+    expect(screen.queryByTestId('options-transfer-gl')).not.toBeInTheDocument();
+  });
+
+  it('after Escape, mouseDown on the still-focused destination input reopens it (ETP-5728)', () => {
+    renderModal();
+    const input = screen.getByTestId('field-transfer-dest');
+    input.focus();
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByTestId('options-transfer-dest')).not.toBeInTheDocument();
+    fireEvent.mouseDown(input);
+    expect(screen.getByTestId('options-transfer-dest')).toBeInTheDocument();
+  });
+
+  it('destination rows render name, IBAN, currency badge and balance; the chip reads "name · currency"', () => {
+    renderModal();
+    fireEvent.click(screen.getByTestId('ChevronDown__transfer-dest'));
+    const row = screen.getByTestId('option-transfer-dest-USD');
+    expect(row).toHaveTextContent('Chase');
+    expect(row).toHaveTextContent('US64');
+    expect(row).toHaveTextContent('USD');
+    selectDest('USD');
+    expect(screen.getByTestId('field-transfer-dest-chip')).toHaveTextContent('Chase · USD');
+  });
+
+  it('matches the destination search against the IBAN too', () => {
+    renderModal();
+    fireEvent.focus(screen.getByTestId('field-transfer-dest'));
+    fireEvent.change(screen.getByTestId('field-transfer-dest'), { target: { value: 'es80' } });
+    expect(screen.getByTestId('option-transfer-dest-DST')).toBeInTheDocument();
+    expect(screen.queryByTestId('option-transfer-dest-USD')).not.toBeInTheDocument();
   });
 
   it('filters the destination list via its search box', () => {
     renderModal();
-    fireEvent.focus(screen.getByTestId('transfer-dest-search'));
-    fireEvent.change(screen.getByTestId('transfer-dest-search'), { target: { value: 'Chase' } });
-    expect(screen.getByTestId('transfer-dest-option-USD')).toBeInTheDocument();
-    expect(screen.queryByTestId('transfer-dest-option-DST')).not.toBeInTheDocument();
+    fireEvent.focus(screen.getByTestId('field-transfer-dest'));
+    fireEvent.change(screen.getByTestId('field-transfer-dest'), { target: { value: 'Chase' } });
+    expect(screen.getByTestId('option-transfer-dest-USD')).toBeInTheDocument();
+    expect(screen.queryByTestId('option-transfer-dest-DST')).not.toBeInTheDocument();
   });
 
   it('shows the selected destination as a clearable chip', () => {
     renderModal();
     selectDest('DST');
-    expect(screen.getByTestId('transfer-dest-chip')).toBeInTheDocument();
+    expect(screen.getByTestId('field-transfer-dest-chip')).toBeInTheDocument();
   });
 
   it('keeps confirm disabled until destination, amount and GL item are set', () => {

@@ -25,6 +25,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
+  // The real AttachmentsTable renders through DataTable (ETP-5526), which also
+  // reads these.
+  useLabel: () => (key) => key,
+  useMenuLabel: () => (key) => key,
+  useLocale: () => ({ genericLabels: {}, statuses: {} }),
 }));
 // RECEIPT_ATTACHMENT_CONFIG is the REAL constant (ETP-5584 P13): the page passes it to the
 // Justificante tab and PresentModal derives its upload label/accept/type check from it.
