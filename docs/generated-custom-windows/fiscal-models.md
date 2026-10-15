@@ -3439,7 +3439,7 @@ the substitute-from-presented flow.
 | Nueva declaración | Year only (no Frecuencia / Período), footer "Se creará como Modelo 390 · Anual <año>" (`fm.new_decl.preview_annual`); period sent is `'0A'` | `isAnnualOnlyModel` (`fiscalPeriods.js`) |
 | Nueva declaración | An ordinary 390 of the selected year already in the list → inline notice "Ya existe el Modelo 390 de <año>" + **Abrir declaración** (`onOpenExisting`) and "Crear declaración" disabled. A substitute (`type: 'com'`) does not block | `singleOrdinaryPerYear` |
 | Nueva declaración | Amber, non-blocking "Faltan Modelos 303 de <año> (T4)…" when 303s of the year are not in the list. Quarterly filer by default (T1-T4); once the year has a monthly 303, every month 01-12 is expected; any status counts | `newDeclWarning` → `newDeclWarning390.js` |
-| List | Period column "Anual" (`fm.period.annual`); sorts after December/T4; "Resultado" = `summary.annualResult` ([86], or [94] in territory mode) with the shared `deriveResultKind` (activity = [47] or [64] ≠ 0); draft polling through `/fiscal390/modified` | `listBehavior390.js` |
+| List | Period column "Anual" (`fm.period.annual`); sorts after December/T4; "Resultado" = `summary.annualResult` ([86], or [94] in territory mode) with the signed amount and the 390's own informative badge (`resultKind390`: "Resultado positivo" / "Resultado negativo" / "Resultado cero" / "Sin resultado", neutral colours — never the 303's "A ingresar" / "A compensar/devolver"; activity = [47] or [64] ≠ 0). The badge text travels as `labelKey`, which `ResultText` prefers over `fm.result.<kind>`; 303/349 send none and are unchanged. Draft polling through `/fiscal390/modified` | `listBehavior390.js` |
 | List | A `POST` answered `409 DUPLICATE_ORDINARY` (e.g. the list was stale) shows a toast "Ya existe el Modelo 390 de <año>" with **Abrir declaración**, which opens `existingId` (from the list, or re-read with `fetchDeclaration`) | `duplicateOrdinaryId` in `FmListPage.jsx` |
 | "Por vencer" | January 30 of year+1 | `annualDeadline` → `deadline390.js` |
 | Detail title | "Modelo 390 - 2026" (no period) | `formatDeclPeriod` |
@@ -3457,15 +3457,24 @@ the substitute-from-presented flow.
 - **Sustitutiva** shows the amber banner (shared `.fm-substitutive-banner`, same as 349) with
   **Identificador declaración anterior** (digits only, `sanitizeFormerStatementInput`; inline error
   `fm.m390.substitutive.id_invalid` until it has exactly 13 digits, the shared
-  `isValidFormerStatement` rule) and the checkbox **Sustitutiva por rectificación de cuotas**.
+  `isValidFormerStatement` rule) and the checkbox **Sustitutiva por rectificación de cuotas** —
+  shown only while "Declarado en concurso de acreedores" (`ConcursoAcr`) is marked: AEAT defines that
+  case only for insolvency proceedings (art. 80.Tres LIVA). Unmarking `ConcursoAcr` clears
+  `ConcursoUltPer` and `rectificacionCuotas`, and `substitutiveFlags` ignores
+  `rectificacionCuotas` without `ConcursoAcr = 'Y'` (`isRectificationByQuotas`).
   Generar and Registrar/Presentar refuse an invalid identifier with a toast. Persisted as
   `manualData.identification.{sustitutiva, formerStatement, rectificacionCuotas}` — the list "Tipo"
   column reads `sustitutiva` like 349's. `rectificacionCuotas` is deliberately not named
   `rectificativa` (that one means "Rectificativa" in the list).
 - **Cards:** Incidencias (persisted incidents of `/fiscal390/incidents`; the 390 rules arrive in the
   incidents phase), IVA devengado [47], IVA deducible [64], Resultado [86] — or [94] when filing to
-  several administrations — with the result-kind badge. The "cuadre con los 303" line under
-  Resultado belongs to the 303-preload phase. Cards go 2×2 below 1100 px (`.fm-390-kpis`).
+  several administrations — with an informative badge: **Resultado positivo / negativo** (or
+  "Resultado cero" / "Sin resultado"), neutral colours (`resultKind390` in `fm390Layouts.js`, NOT the
+  shared `deriveResultKind`). AEAT writes [86]/[94] "con el signo que corresponda" and classic only
+  signs them; the payment, offset or refund was settled by the last 303, repeated in [97]/[98]. A
+  muted line under the cards says so (`fm.m390.result.informative_hint`). The "cuadre con los 303"
+  line under Resultado belongs to the 303-preload phase. Cards go 2×2 below 1100 px
+  (`.fm-390-kpis`).
 - **Tabs:** Casillas, Incidencias (shared `IncidentsTab`), Justificante (shared `AttachmentsTab`).
   Facturas arrives with the invoices phase.
 
@@ -3482,9 +3491,9 @@ below 1200 px) and Anterior / Siguiente at the bottom:
 | 4 | Representante | Natural person: `information.aeat390RepNif/RepName`; otherwise the first 3 `representanteLegal` rows by line (NIF, name, power date, notary) | Organization, read-only + "Editar en Organización" |
 | 5 | IVA devengado | Régimen ordinario and intra-EU goods/services by rate (0, 2, 4, 5, 7.5, 10, 21 %), [27]/[28], [29]/[30], [31]/[32], totals [33]/[34] and [47] | calculated |
 | 6 | IVA deducible | Interior corrientes / bienes de inversión, importaciones, intra-EU (per rate + group totals [48]…[59], [597]/[598]), [639]/[62], [63]; manual [660]/[661]; total [64] | calculated; [660]/[661] manual |
-| 7 | Resultado liquidación anual | [65] total, [658] manual, [84] total, [659] manual, [85] manual (disabled in territory mode), [86] total | |
-| 8 | Tributación por territorio | Toggle "Tributo a varias Administraciones"; % [87]–[91], [92] total, [93] manual, [94] total; inline error when the percentages do not add up to 100 % | turning the toggle off clears the territory inputs |
-| 9 | Resultado de las liquidaciones | Per month "A ingresar" / "A devolver" (`INGRESAR_xx` / `DEVOLVER_xx`), totals [95] / [96], [97], [98], [662] manual | preloaded from the 303s in a later phase |
+| 7 | Resultado liquidación anual | [65] total, [658] manual, [84] total, [659] manual, [85] manual (disabled AND cleared in territory mode; refused while [93] has a value), [86] total | |
+| 8 | Tributación por territorio | Toggle "Tributo a varias Administraciones"; % [87]–[91] (each 0–99), [92] total, [93] manual (refused while [85] has a value), [94] total; inline error when the percentages do not add up to 100 % | turning the toggle off clears the territory inputs |
+| 9 | Resultado de las liquidaciones | Per month "A ingresar" / "A devolver" (`INGRESAR_xx` / `DEVOLVER_xx`; the "A devolver" column is disabled unless `ISMONTHLYRETURN = 'Y'`), totals [95] / [96], [97], [98], [662] manual; inline error when DEVOLVER_12 and [97] are both filled, amber warning when [98] is filled with [96] or [97] | preloaded from the 303s in a later phase |
 | 10 | Volumen de operaciones | [99] [103] [104] [105] [110] [125] [126] calculated, [127] [128] manual, [106] [107] (subtracted), total [108], [112] manual (not added) | |
 | 11 | Operaciones específicas | [230] [109] [231] [232] [113] [523] calculated, [111] manual | |
 
@@ -3496,8 +3505,27 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
   Tab walks only the editable fields; the stored value is shown formatted, the raw text while
   editing; Enter/blur commit, Esc reverts); totals in bold with the formula. Amounts with
   `formatAmount`, percentages with `formatPercent`. Inputs accept a decimal comma and are stored
-  normalised (`"40.50"`); a non-number, a negative [85]/[93] or a percentage outside 0–100 is refused
-  with a toast.
+  normalised (`"40.50"`); a non-number, a negative [85]/[93] or a percentage outside 0–99
+  (`TERRITORY_PERCENT_MAX`) is refused with a toast.
+- **Classic consistency checks (ETP-5716 verification against Classic).** The classic generator
+  rejects some input combinations at "Generar" with a raw error; the page prevents them first:
+
+  | Rule | Classic | GO |
+  |---|---|---|
+  | Each % [87]–[91] ≤ 99, sum = 100 | `AEAT390Report` | toast above 99; inline sum error |
+  | [85] with any territory % | `BothTerritoryAndLiqAnual` | a territory % > 0 removes [85] from `aeatInputs` (not just disables the cell) |
+  | [85] with [93] | `BothAmtPrevious` | typing one while the other has a value is refused (`fm.m390.input.compensation_conflict`) |
+  | DEVOLVER_xx without ISMONTHLYRETURN | `AEAT390_MonthlyReturn_Check` | "A devolver" cells disabled (`monthlyReturnOnly`); unmarking the flag clears them |
+  | DEVOLVER_12 with [97] | `AEAT390_TotalLastPeriod_Check` | inline error in block 9 (`inputMessages390`); does not disable Generar |
+  | [98] with [96] or [97] | AEAT instructions ("no cumplimente la 98") | amber, non-blocking warning in block 9 |
+  | ConcursoUltPer without ConcursoAcr | rejected | unmarking ConcursoAcr sets ConcursoUltPer to `N` |
+
+  All the "drop" rules live in one place, `sanitizeAeatInputs390`, applied after every edit and on
+  every save (`buildManualData390`), so stored data never carries the rejected combinations.
+- **Known gap — [63] (regularización de inversiones):** read-only and always 0, exactly like
+  Classic, which has no parameter for it (nor for [522]) and always writes 0. A declarant with an
+  investment-goods regularization cannot declare it in either system; adding it needs a GO-side input
+  that post-patches the classic file (page 3, position 149).
 - **Rates without operations** are folded behind "Sin operaciones (N tipos) · Mostrar".
 - **Live derivation:** the input-dependent boxes ([84]–[86], [92]–[94], [95]/[96], echoed inputs,
   [108]) are recomputed on screen by `deriveInputBoxes`, a mirror of the backend's
@@ -3521,7 +3549,9 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
 (`buildManualData390`). The classic substitute flags are written into `aeatInputs` on every save so
 the backend forwards them to the classic generator: ordinary → `ISSUPPLEMENTARY: 'N'`,
 `ISRECTIFICATION: 'N'`; substitute → `ISSUPPLEMENTARY: 'Y'` (or `ISRECTIFICATION: 'Y'` with
-"por rectificación de cuotas" — classic treats them as exclusive) and `SUPPLEMENTARYNO` = identifier.
+"por rectificación de cuotas" and `ConcursoAcr = 'Y'` — classic treats them as exclusive) and
+`SUPPLEMENTARYNO` = identifier. The inputs are passed through `sanitizeAeatInputs390` first (see
+"Classic consistency checks").
 
 | Action | Requests |
 |---|---|
@@ -3926,6 +3956,13 @@ organization is in the SII:
 - **In the SII:** the switch stays off and an amber inline notice appears under the card
   (`fm.catalog.sii_warning`) with **Cancelar** (leave it off) and **Activar** (`fm.catalog.activate`,
   turns it on). Non-blocking: the user can always activate it.
+- **Joined the SII during the year:** the active row's `fechaAcogidaSII` (`INSIISYSTEMDATE`) is read
+  too (`siiStatusOf` → `{ active, since }`). When it is after 1 January of the current year
+  (`isSiiJoinedDuringYear`), the organization was not in the SII for the whole year, so the notice
+  reads `fm.catalog.sii_warning_since` — "La organización está en el SII desde el <fecha>…", asking
+  to check the year of joining and earlier ones — instead of implying an exemption. The date is
+  date-only, formatted with `formatCalendarDate` in the UI locale. Same buttons, same non-blocking
+  behaviour. A date on 1 January or in an earlier year keeps the plain notice.
 - **Not in the SII, or the status cannot be read** (no organization, no SII module, network error):
   the model is activated right away — "unknown" never warns.
 - Deactivating, and activating 303/349, never ask.
