@@ -10,6 +10,8 @@ import { useNeoAction } from '@/hooks/useNeoAction';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
 import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { filterPostingActions } from '@/lib/capabilityVisibility.js';
 
 export const buildInOutActions = (rows) => {
   const hasDraft = rows.some((r) => (r.documentStatus || r.docStatus) === 'DR');
@@ -68,6 +70,18 @@ export const postRowFilter = (row, action, ui) => {
   return true;
 };
 
+// Built-in action list (no `buildActions` prop): Confirm for drafts, Reactivate for completed.
+function buildBulkActions(selectedRows, buildActions) {
+  if (buildActions) return buildActions(selectedRows);
+  const statusOf = (r) => r.documentStatus || r.docStatus;
+  const hasDraft = selectedRows.some((r) => statusOf(r) === 'DR');
+  const hasCompleted = selectedRows.some((r) => statusOf(r) === 'CO');
+  const out = [];
+  if (hasDraft) out.push({ value: 'CO', labelKey: 'confirm' });
+  if (hasCompleted) out.push({ value: 'RE', labelKey: 'reactivate' });
+  return out;
+}
+
 export default function BulkDocumentAction({
   selectedRows, clearSelection, token, apiBaseUrl, windowName,
   // ETP-5302 — in-place list refetch supplied by ListView's `bulkActions` slot. When
@@ -95,6 +109,7 @@ export default function BulkDocumentAction({
   windowReadOnly = false,
 }) {
   const ui = useUI();
+  const capabilities = useCapabilitiesSafe();
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
   // ETP-5075 — `actionMode: 'neoAction'` retargets the per-row call from the DocAction
@@ -128,16 +143,11 @@ export default function BulkDocumentAction({
   const [running, setRunning] = useState(false);
   const [selectedAction, setSelectedAction] = useState(null);
 
-  const actions = useMemo(() => {
-    if (buildActions) return buildActions(selectedRows);
-    const statusOf = (r) => r.documentStatus || r.docStatus;
-    const hasDraft = selectedRows.some((r) => statusOf(r) === 'DR');
-    const hasCompleted = selectedRows.some((r) => statusOf(r) === 'CO');
-    const out = [];
-    if (hasDraft) out.push({ value: 'CO', labelKey: 'confirm' });
-    if (hasCompleted) out.push({ value: 'RE', labelKey: 'reactivate' });
-    return out;
-  }, [selectedRows, buildActions]);
+  // ETP-5684 — a role without "Show Accounting Fields" gets no bulk post/unpost. Filtered
+  // here, not in each caller's builder, so a window's own builder is covered too; an empty
+  // list then renders nothing (see the early return below).
+  const actions = useMemo(() => filterPostingActions(buildBulkActions(selectedRows, buildActions), capabilities),
+    [selectedRows, buildActions, capabilities]);
 
   if (selectedRows.length === 0 || actions.length === 0 || windowReadOnly) return null;
 

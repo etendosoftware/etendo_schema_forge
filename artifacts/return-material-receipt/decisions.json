@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Return Material Receipt",
+    "agentPrompt": "#REF#agent-prompts/return-material-receipt/spec.md",
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -210,6 +211,10 @@
         },
         "freightCurrency": {
           "visibility": "discarded"
+        },
+        "etgoCurrency": {
+          "visibility": "system",
+          "defaultExpr": "@C_Currency_ID@"
         },
         "freightCostRule": {
           "visibility": "discarded"

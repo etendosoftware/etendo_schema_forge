@@ -14,6 +14,8 @@ import { declareNoSession } from '../../helpers/auth.js';
  *   accountName 60  → no storage constraint; pinned to fullName because step 2 pre-fills it
  *   fullName    60  → AD_USER.NAME  (40 for freelancers: it doubles as the client name)
  *   clientName  40  → AD_CLIENT.VALUE / AD_ORG.VALUE
+ *               (the input itself accepts 60 so an over-limit name shows an inline error
+ *               instead of being silently truncated — ETP-5638)
  *   fiscalId    20  → C_BPARTNER.TAXID
  *   address     60  → C_LOCATION.ADDRESS1
  *
@@ -27,6 +29,7 @@ const LIMITS = {
   fullName: 60,
   freelancerFullName: 40,
   clientName: 40,
+  clientNameInput: 60,
   fiscalId: 20,
   address: 60,
 };
@@ -222,17 +225,28 @@ test.describe('ETP-4665 — Step 3 length limits', () => {
     await installMocks(page);
     await reachCompanyStep(page);
 
-    await page.locator('#clientName').fill('E'.repeat(100));
+    const clientName = page.locator('#clientName');
+    const start = page.getByRole('button', { name: /empezar|start/i });
+
+    await clientName.fill('E'.repeat(100));
     await page.locator('#address').fill('D'.repeat(200));
 
-    await expect(page.locator('#clientName')).toHaveValue('E'.repeat(LIMITS.clientName));
+    // Over the AD limit but inside the input cap: kept, flagged inline, and not submittable.
+    await expect(clientName).toHaveValue('E'.repeat(LIMITS.clientNameInput));
+    await expect(clientName).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByText(new RegExp(`${LIMITS.clientName} (caracteres|characters)`))).toBeVisible();
+    await expect(start).toBeDisabled();
     await expect(page.locator('#address')).toHaveValue('D'.repeat(LIMITS.address));
+
+    await clientName.fill('E'.repeat(LIMITS.clientName));
+    await expect(clientName).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(start).toBeEnabled();
 
     const onboardingPromise = page.waitForRequest(
       req => req.url().endsWith('/sws/go/onboarding') && req.method() === 'POST',
       { timeout: 15_000 }
     );
-    await page.getByRole('button', { name: /empezar|start/i }).click();
+    await start.click();
 
     const body = (await onboardingPromise).postDataJSON();
     expect(body.clientName.length).toBeLessThanOrEqual(LIMITS.clientName);

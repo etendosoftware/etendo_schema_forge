@@ -3,9 +3,9 @@ import FiscalModelsPage from './FiscalModelsPage';
 
 /**
  * "Modelos Fiscales" access is represented by the role's grant on the Tax Report window
- * (`AD_Window_ID`, proxied per ETP-5116 — only the Finanzas template grants it). Same id
- * `NeoAttachmentAuthorizer.TAX_REPORT_WINDOW_ID` / `RoleAccessMatrix.TAX_MODELS_PROXY_WINDOW_ID`
- * check in `com.etendoerp.go`.
+ * (`AD_Window_ID`, proxied per ETP-5116 — only the Finanzas template grants it). Same id as
+ * `RoleAccessMatrix.TAX_MODELS_PROXY_WINDOW_ID`, the single backend constant in `com.etendoerp.go`
+ * (ETP-5540). Moving to a declarative feature grant is tracked in ETP-4802.
  */
 export const FISCAL_MODELS_WINDOW_ID = '3E8FEA1EA7404D979306C9EE7FD2E7E8';
 

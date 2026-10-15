@@ -267,3 +267,12 @@ contabilizados" window could post a movement, because that window calls
 - **Drawer title translated.** The product field no longer declares `lookupTitle`, which was a literal English string
   ("Product" / "Product + Warehouse") that made the drawer search read "Buscar Product..." in Spanish. The title and the
   placeholder now come from the field's translated label ("Buscar Producto...").
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped).
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

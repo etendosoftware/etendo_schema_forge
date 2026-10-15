@@ -37,16 +37,31 @@ export function ChartOfAccountsToolbarSlot() {
   // (600+ accounts on a real chart) — only once typing pauses.
   const [draft, setDraft] = useState(query);
   const searchTimerRef = useRef(null);
-  useEffect(() => { setDraft(query); }, [query]);
-  useEffect(() => () => clearTimeout(searchTimerRef.current), []);
   const pendingSearchRef = useRef(null);
+  // The last value this box wrote to the URL. A `q` equal to it is our own write landing;
+  // anything else came from outside (Back, a shared link) and wins over a pending search:
+  // the timer is cancelled so it cannot overwrite the URL the user just went back to
+  // (ETP-5733). Not cancelling on our own write keeps a key typed meanwhile.
+  const lastWrittenRef = useRef(query);
+  const writeQuery = (text) => {
+    lastWrittenRef.current = text;
+    setQuery(text);
+  };
+  useEffect(() => {
+    if (query === lastWrittenRef.current) return;
+    clearTimeout(searchTimerRef.current);
+    pendingSearchRef.current = null;
+    lastWrittenRef.current = query;
+    setDraft(query);
+  }, [query]);
+  useEffect(() => () => clearTimeout(searchTimerRef.current), []);
   const handleSearchChange = (text) => {
     setDraft(text);
     pendingSearchRef.current = text;
     clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
       pendingSearchRef.current = null;
-      setQuery(text);
+      writeQuery(text);
     }, SEARCH_DEBOUNCE_MS);
   };
   // Leaving the box (e.g. to press Compartir or open Tipo de cuenta) writes a pending
@@ -56,7 +71,7 @@ export function ChartOfAccountsToolbarSlot() {
     clearTimeout(searchTimerRef.current);
     const text = pendingSearchRef.current;
     pendingSearchRef.current = null;
-    setQuery(text);
+    writeQuery(text);
   };
 
   // "Todos los tipos de cuenta" first, then the six types by translated label (A→Z).
