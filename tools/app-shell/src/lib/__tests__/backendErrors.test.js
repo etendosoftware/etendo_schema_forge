@@ -2768,6 +2768,14 @@ describe('translateBackendError — PeriodNotAvailable (ETP-5577)', () => {
     );
   });
 
+  it('renders the same copy for PeriodNotValid, GL_JOURNAL\'s key for the same refusal', () => {
+    assert.match(
+      translateBackendError('No valid period for this accounting date.', localeTranslator('es_ES'),
+        { messageKeys: ['PeriodNotValid'] }),
+      /período contable de la fecha del documento no está abierto/,
+    );
+  });
+
   it('renders the en_US copy from the identity', () => {
     assert.match(
       translateBackendError(RAW_EN, localeTranslator('en_US'), { messageKeys: ['PeriodNotAvailable'] }),

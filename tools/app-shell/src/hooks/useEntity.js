@@ -1059,7 +1059,7 @@ export async function saveWithReadOnlyFieldRetry(apiFetch, url, method, payload,
  */
 const SAVE_CONFLICT_TOAST_ID = 'etgo-save-conflict';
 
-export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, onStaleRecord) {
+export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, onStaleRecord, record) {
     // ETP-3894: parse a structured MISSING_REQUIRED_FIELDS 400 from the backend so
     // the UI can highlight the missing fields. Falls back to the regular error
     // extraction for any other error shape.
@@ -1116,7 +1116,12 @@ export async function handleSaveErrorResponse(res, ui, setFieldErrors, setSaveEr
     }
     const msg = await extractErrorMessage(res, ui);
     setSaveError(msg);
-    toast.error(msg);
+    // ETP-5577 — a save refused for the document's period (GL_JOURNAL's trigger) offers the
+    // calendar, opened on the fiscal year of the record's date.
+    const recovery = periodNotAvailableToastOptions(await readMessageKeys(res), ui,
+        { date: documentPeriodDate(record) });
+    if (Object.keys(recovery).length > 0) toast.error(msg, recovery);
+    else toast.error(msg);
 }
 
 export function getSaveSuccessMessage(isNew, ui) {
@@ -2236,7 +2241,7 @@ export function useEntity(entity, childEntity, {
                 afterSaveNotifications(data, { silent, isNew, entity, specName, ui });
                 return saved;
             } else {
-                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, discardChangesAndReload);
+                await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError, discardChangesAndReload, editing);
                 return null;
             }
         } catch (err) {

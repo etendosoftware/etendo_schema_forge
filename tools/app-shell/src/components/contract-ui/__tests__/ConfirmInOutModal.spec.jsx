@@ -41,6 +41,7 @@ vi.mock('@/components/ui/select', () => ({
 
 import ConfirmInOutModal from '../ConfirmInOutModal.jsx';
 import * as backendErrorsModule from '@/lib/backendErrors.js';
+import { setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import { inlineFontFamiliesUpToBody } from './fontInheritance.js';
 
 const BASE_PROPS = {
@@ -177,6 +178,29 @@ describe('ConfirmInOutModal', () => {
     render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={false} />);
     fireEvent.click(screen.getByText('Confirm'));
     await waitFor(() => expect(screen.getByText('Server error')).toBeInTheDocument());
+  });
+
+  // ETP-5577 — a period refusal offers its way out inside the modal: the action closes the modal
+  // and opens the calendar on the fiscal year of the document's date.
+  it('offers the calendar on a period refusal, dated from periodDate', async () => {
+    const go = vi.fn();
+    setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
+    try {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ message: 'El Periodo no existe o no está abierto', messageKeys: ['PeriodNotAvailable'] }),
+      }));
+      const onClose = vi.fn();
+      render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={false} periodDate="2027-01-15" onClose={onClose} />);
+      fireEvent.click(screen.getByText('Confirm'));
+      const link = await screen.findByTestId('ConfirmInOutModal__periodRecovery');
+      expect(link).toHaveTextContent('periodNotAvailableOpenCalendar');
+      fireEvent.click(link);
+      expect(onClose).toHaveBeenCalled();
+      expect(go).toHaveBeenCalledWith('2027-01-15');
+    } finally {
+      setPeriodRecovery(null);
+    }
   });
 
   // ── ETP-4848: invoiceAction gating + default-checked toggle ────────────────

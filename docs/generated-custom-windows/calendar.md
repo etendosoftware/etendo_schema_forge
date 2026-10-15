@@ -132,7 +132,7 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   `openClose` action. **Ir al calendario** opens `/calendar/<yearId>` of the fiscal year whose
   period contains the document's date (accounting date, else movement or payment date), never a
   year chosen by label: on a July–June calendar a January 2027 invoice opens the year that started
-  in July 2026. The form-view kebab, the list row kebab (Post) and the draft Confirm carry the date; without one (bulk actions) or a matching period it opens the list.
+  in July 2026. The form-view kebab, the list row kebab, the draft Confirm, a refused save (a G/L journal's trigger raises `PeriodNotValid` for the same condition) and the goods receipt/shipment Confirm modal (as a link under its error) carry the date; without one (bulk actions) or a matching period it opens the list.
   Completion still requires an open period — the core `*_POST` procedures check it; there is no
   bypass.
 - **Guided tour (ETP-5577).** `walkthrough/flows/accounting-calendar.json` ("Calendario contable")

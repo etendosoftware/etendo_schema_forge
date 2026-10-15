@@ -1121,6 +1121,31 @@ describe('handleSaveErrorResponse', () => {
     assert.equal(fieldErrorsCalled, false);
     assert.deepEqual(saveErrorCalls, ['bad']);
   });
+
+  // ETP-5577 — a save refused for the document's period (GL_JOURNAL's trigger raises
+  // `PeriodNotValid`) offers the calendar, opened on the fiscal year of the record's date.
+  it('offers the calendar on a period refusal, dated from the record', async () => {
+    const { setPeriodRecovery } = await import('../../lib/periodNotAvailable.js');
+    const opened = [];
+    setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go: (date) => opened.push(date) });
+    const calls = [];
+    const original = toast.error;
+    toast.error = (...args) => calls.push(args);
+    try {
+      const res = fakeResponse({
+        error: { message: 'Periodo no válido para esta fecha de contabilidad', messageKeys: ['PeriodNotValid'] },
+      });
+      await handleSaveErrorResponse(res, ui, () => {}, () => {}, undefined,
+        { accountingDate: '2026-10-31' });
+      const [, options] = calls[0];
+      assert.equal(options.action.label, 'periodNotAvailableOpenCalendar');
+      options.action.onClick();
+      assert.deepEqual(opened, ['2026-10-31']);
+    } finally {
+      toast.error = original;
+      setPeriodRecovery(null);
+    }
+  });
 });
 
 describe('extractErrorMessage — AD-translated duplicate-identifier error (ETP-4597)', () => {

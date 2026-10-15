@@ -14,6 +14,12 @@ import { parseCalendarDate } from './dateOnly.js';
 
 export const PERIOD_NOT_AVAILABLE_KEY = 'PeriodNotAvailable';
 
+/**
+ * Every identity of the refusal: `PeriodNotValid` is what GL_JOURNAL's trigger raises for the same
+ * condition (no open period for the date), with the same way out.
+ */
+const PERIOD_REFUSAL_KEYS = [PERIOD_NOT_AVAILABLE_KEY, 'PeriodNotValid'];
+
 /** The Calendar window; `/calendar/<yearId>` opens a fiscal year on its Periods tab. */
 const CALENDAR_PATH = '/calendar';
 
@@ -83,7 +89,7 @@ export function documentPeriodDate(record) {
 
 /**
  * Extra sonner options for a refusal toast: the recovery action (or the hint) when the refusal is
- * keyed `PeriodNotAvailable`, nothing otherwise.
+ * keyed `PeriodNotAvailable` (or `PeriodNotValid`), nothing otherwise.
  *
  * @param {string[]|undefined} messageKeys the refusal's identity (`extractBackendMessageKeys`)
  * @param {(key: string) => string} ui the UI translator
@@ -91,7 +97,7 @@ export function documentPeriodDate(record) {
  *   so "Ir al calendario" opens the fiscal year it belongs to
  */
 export function periodNotAvailableToastOptions(messageKeys, ui, context = {}) {
-  if (!recovery || !messageKeys?.includes(PERIOD_NOT_AVAILABLE_KEY)) return {};
+  if (!recovery || !PERIOD_REFUSAL_KEYS.some((key) => messageKeys?.includes(key))) return {};
   if (recovery.descriptionKey) return { description: ui(recovery.descriptionKey) };
   const { go } = recovery;
   return { action: { label: ui(recovery.labelKey), onClick: () => go(context.date) } };

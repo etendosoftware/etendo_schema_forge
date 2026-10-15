@@ -4,6 +4,7 @@ import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
 
@@ -137,6 +138,7 @@ export default function ConfirmInOutModal({
   defaultPriceListId = undefined,
   rectifiableInvoicesUrl,
   token,
+  periodDate,
   onConfirmed,
   onClose,
 }) {
@@ -145,6 +147,8 @@ export default function ConfirmInOutModal({
   const [createInvoice, setCreateInvoice] = useState(skipDocumentAction ? true : defaultCreateInvoice);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // ETP-5577 — a period refusal's way out (open the calendar) or hint (ask the owner).
+  const [errorRecovery, setErrorRecovery] = useState({});
 
   const { invoiceRequested, pickerActive, priceListRequired, rectifyActive } = deriveGates({
     skipDocumentAction, createInvoice, showPriceListPicker, invoiceAction,
@@ -177,6 +181,7 @@ export default function ConfirmInOutModal({
     if (!canConfirm) return;
     setLoading(true);
     setError(null);
+    setErrorRecovery({});
     try {
       const invoice = await runConfirm({
         apiFetch,
@@ -191,6 +196,7 @@ export default function ConfirmInOutModal({
       onConfirmed({ invoice });
     } catch (err) {
       setError(translateBackendError(err.message, ui, { messageKeys: err.messageKeys }));
+      setErrorRecovery(periodNotAvailableToastOptions(err.messageKeys, ui, { date: periodDate }));
       setLoading(false);
     }
   };
@@ -340,6 +346,16 @@ export default function ConfirmInOutModal({
           {error && (
             <div style={{ fontSize: 12, color: 'hsl(var(--destructive))', background: 'var(--status-destructive-bg)', padding: '8px 12px', borderRadius: 6 }}>
               {error}
+              {errorRecovery.description && <div style={{ marginTop: 4 }}>{errorRecovery.description}</div>}
+              {errorRecovery.action && (
+                <button
+                  type="button"
+                  onClick={() => { onClose(); errorRecovery.action.onClick(); }}
+                  style={{ display: 'block', marginTop: 4, padding: 0, background: 'none', border: 'none', color: 'inherit', fontWeight: 600, textDecoration: 'underline', cursor: 'pointer' }}
+                  data-testid="ConfirmInOutModal__periodRecovery">
+                  {errorRecovery.action.label}
+                </button>
+              )}
             </div>
           )}
         </div>

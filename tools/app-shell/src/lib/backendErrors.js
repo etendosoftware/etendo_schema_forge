@@ -407,6 +407,9 @@ const BACKEND_ERROR_KEY_MAP = {
   // DocumentPostingService (STATUS_PeriodClosed) and by the payment services. A productive
   // tenant starts with every period never-opened, so this is its first refusal.
   PeriodNotAvailable: 'backendError.periodNotAvailable',
+  // ETP-5577 — core `PeriodNotValid`: the same refusal raised by GL_JOURNAL_CHK_RESTRICT_TRG when a
+  // journal is saved with a date whose period is not open.
+  PeriodNotValid: 'backendError.periodNotAvailable',
   // ETP-5692 — the invoice post/unpost refusals (com.etendoerp.go CompletedInvoiceWriteFence,
   // InvoicePostingGate, InvoiceExchangeRateHandler, DocumentPostingService). These are NOT
   // AD_MESSAGE records: the backend sends plain English plus these stable identity strings, so
