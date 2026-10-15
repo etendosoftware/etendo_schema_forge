@@ -498,8 +498,8 @@ Three matching mechanisms coexist — know all three before adding a new backend
 map to `backendError.periodNotAvailable`. A toast for a refusal carrying either key also spreads
 `periodNotAvailableToastOptions(messageKeys, ui, { date })` (`lib/periodNotAvailable.js`) into its
 sonner options: the action is "Ir al calendario" (`periodNotAvailableOpenCalendar`), "Revisar
-calendario contable" (`periodNotAvailableReviewCalendar`) for an owner whose review is pending, or
-the description `periodNotAvailableAskOwner` for a non-owner. The 4xx-only keying rule (5xx, 401,
+calendario contable" (`periodNotAvailableReviewCalendar`) for an owner whose review is pending.
+Non-owners always get "Ir al calendario". The 4xx-only keying rule (5xx, 401,
 403 and 404 are never keyed) lives in the backend; see `docs/generated-custom-windows/calendar.md`.
 
 `translateBackendError` tries the message keys first (they are a stable identity; the text is not),

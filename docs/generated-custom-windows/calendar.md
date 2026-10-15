@@ -549,7 +549,8 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
     Periods**: **Fiscal Year Range** is preselected **July - June**. Choose **January - December**
     and confirm the run is refused with the overlap message and no period is created.
 22. (ETP-5577) On a new productive tenant, complete a draft invoice before opening any period:
-    the refusal toast offers **Revisar calendario contable** (owner) and leads to First Steps; once
+    the refusal toast offers **Revisar calendario contable** (owner) and leads to First Steps, and
+    **Ir al calendario** to any other user who can open the period there; once
     a period is open, the same refusal for another month offers **Ir al calendario**, which opens
     the fiscal year holding that month (on a July–June calendar, a January date opens the year
     that started the previous July).

@@ -24,10 +24,13 @@ describe('periodNotAvailableToastOptions', () => {
     assert.deepEqual(visited, ['/first-steps']);
   });
 
-  it('tells anyone else to ask the owner while the review is pending', () => {
-    setPeriodRecovery(periodRecoveryFor({ pending: true, isOwner: false }, () => {}));
-    assert.deepEqual(periodNotAvailableToastOptions(['PeriodNotAvailable'], ui),
-      { description: 't:periodNotAvailableAskOwner' });
+  it('sends anyone else to Calendar while the review is pending, where opening a period completes it', async () => {
+    const visited = [];
+    setPeriodRecovery(periodRecoveryFor({ pending: true, isOwner: false }, (path) => visited.push(path)));
+    const { action } = periodNotAvailableToastOptions(['PeriodNotAvailable'], ui);
+    assert.equal(action.label, 't:periodNotAvailableOpenCalendar');
+    await action.onClick();
+    assert.deepEqual(visited, ['/calendar']);
   });
 
   it('sends an owner who dismissed First Steps to Calendar, the row being unreachable', async () => {

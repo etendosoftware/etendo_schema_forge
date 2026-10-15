@@ -333,7 +333,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   translated toasts. Opening any period from Calendar also completes the row; the state is read
   once per app load by the provider and re-read every time Primeros pasos is opened. When a
   document is refused with `PeriodNotAvailable` while the review is pending, the toast sends the
-  owner here (others are told to ask the owner); afterwards it offers **Ir al calendario**
+  owner here; anyone else, and everyone afterwards, gets **Ir al calendario** (opening a period
+  completes the review; the Calendar window's access decides who may open one)
   (`lib/periodNotAvailable.js`, registered by `AppLayout`).
   **Known gap — dismissed accounts.** "Finalizar configuración inicial" is per account, the review
   per environment: an owner who dismissed First Steps (e.g. on the demo, before upgrading) never
@@ -381,7 +382,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   6. (ETP-5577) On a new productive tenant, open "Revisar calendario contable": check the year
      summary, **Confirmar** and confirm it lands on Calendar and the row is done. On another new
      tenant, **Modificar** → Julio → **Aplicar** and confirm the calendar now has one July - June
-     year. Sign in as a non-owner and confirm Confirmar answers "only the owner".
+     year. Sign in as a non-owner and confirm Confirmar answers "only the owner", and that a
+     refused document offers **Ir al calendario**. Create next year's periods in Calendar as that
+     non-owner and confirm the owner can no longer regenerate (409, calendar in use).
 
 ### 4. Entity list/detail data flow
 

@@ -625,7 +625,10 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
           {error ? (
             <div className="text-sm text-[hsl(var(--destructive))]" data-testid="transfer-error">
               {error}
-              <PeriodRecoveryLink recovery={errorRecovery} onBeforeGo={onClose} />
+              <PeriodRecoveryLink
+                recovery={errorRecovery}
+                onBeforeGo={onClose}
+                data-testid="PeriodRecoveryLink__7ff08b" />
             </div>
           ) : null}
         </div>

@@ -3,8 +3,9 @@
  *
  * A productive tenant starts with every accounting period never-opened, so its first completion,
  * payment or posting is refused until someone opens the period. While the calendar review is
- * pending, the refusal toast sends the owner to "Revisar calendario contable" (First Steps) and
- * tells anyone else to ask the owner; afterwards it offers "Ir al calendario".
+ * pending, the refusal toast sends the owner to "Revisar calendario contable" (First Steps);
+ * anyone else, and everyone afterwards, gets "Ir al calendario": opening a period completes the
+ * review, and the Calendar window's own access decides who may open one.
  *
  * The toasts are raised from hooks that may run outside the router, so the app layout, which is
  * inside it, registers the action here.
@@ -26,8 +27,7 @@ const CALENDAR_PATH = '/calendar';
 let recovery = null;
 
 /**
- * @param {{ labelKey: string, go: () => void } | { descriptionKey: string } | null} next an action,
- *   a hint, or null to clear it
+ * @param {{ labelKey: string, go: () => void } | null} next an action, or null to clear it
  */
 export function setPeriodRecovery(next) {
   recovery = next;
@@ -40,8 +40,7 @@ export function setPeriodRecovery(next) {
  * checklist on a demo, then upgraded) cannot reach the review row and goes to Calendar instead.
  */
 export function periodRecoveryFor(review, navigate, loadPeriods) {
-  if (review?.pending && !review.isOwner) return { descriptionKey: 'periodNotAvailableAskOwner' };
-  if (review?.pending && !review.firstStepsDismissed) {
+  if (review?.pending && review.isOwner && !review.firstStepsDismissed) {
     return { labelKey: 'periodNotAvailableReviewCalendar', go: () => navigate('/first-steps') };
   }
   return {
@@ -88,7 +87,7 @@ export function documentPeriodDate(record) {
 }
 
 /**
- * Extra sonner options for a refusal toast: the recovery action (or the hint) when the refusal is
+ * Extra sonner options for a refusal toast: the recovery action when the refusal is
  * keyed `PeriodNotAvailable` (or `PeriodNotValid`), nothing otherwise.
  *
  * @param {string[]|undefined} messageKeys the refusal's identity (`extractBackendMessageKeys`)
@@ -98,7 +97,6 @@ export function documentPeriodDate(record) {
  */
 export function periodNotAvailableToastOptions(messageKeys, ui, context = {}) {
   if (!recovery || !PERIOD_REFUSAL_KEYS.some((key) => messageKeys?.includes(key))) return {};
-  if (recovery.descriptionKey) return { description: ui(recovery.descriptionKey) };
   const { go } = recovery;
   return { action: { label: ui(recovery.labelKey), onClick: () => go(context.date) } };
 }

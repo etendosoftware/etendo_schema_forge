@@ -347,7 +347,10 @@ export default function ConfirmInOutModal({
           {error && (
             <div style={{ fontSize: 12, color: 'hsl(var(--destructive))', background: 'var(--status-destructive-bg)', padding: '8px 12px', borderRadius: 6 }}>
               {error}
-              <PeriodRecoveryLink recovery={errorRecovery} onBeforeGo={onClose} />
+              <PeriodRecoveryLink
+                recovery={errorRecovery}
+                onBeforeGo={onClose}
+                data-testid="PeriodRecoveryLink__3b3aca" />
             </div>
           )}
         </div>
