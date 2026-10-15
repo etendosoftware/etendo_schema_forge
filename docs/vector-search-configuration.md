@@ -138,7 +138,7 @@ same key**:
 
 | Piece | Lives in | Owner |
 |---|---|---|
-| Tables `ETARC_VECTOR_EMBED_PROVIDER`, `ETARC_VECTOR_SOURCE`, `ETARC_VECTOR_SOURCE_COLUMN`, `ETARC_VECTOR_SEARCH_TARGET`, `ETARC_VECTOR_OUTBOX`, `ETARC_VECTOR_REINDEX_REQ`; windows **Embedding Provider**, **Search Source** (tabs *Source Columns*, *Search Target*, *Reindex Request*), **Outbox Monitor**; processes **Check Indexing Readiness**, **Request Reindex**, **Process Vector Outbox**, **Process Vector Reindex**, **Requeue Failed Vector Events** | `com.etendoerp.db.extended` | Platform (reusable) |
+| Tables `ETARC_VECTOR_EMBED_PROVIDER`, `ETARC_VECTOR_SOURCE`, `ETARC_VECTOR_SOURCE_COLUMN`, `ETARC_VECTOR_SEARCH_TARGET`, `ETARC_VECTOR_OUTBOX`, `ETARC_VECTOR_REINDEX_REQ`; windows **Embedding Provider**, **Search Source** (tabs *Source Columns*, *Search Target*, *Reindex Request*), **Outbox Monitor**; processes **Check Indexing Readiness**, **Request Reindex**, **Process Vector Outbox**, **Process Vector Reindex**, **Requeue Failed Vector Events**, **Requeue Failed Vector Events (scoped)** (Process Definition; menu *Search Indexes › Requeue Failed Vector Events*) | `com.etendoerp.db.extended` | Platform (reusable) |
 | The concrete provider, sources, source columns and search targets for Etendo GO windows | `{etendo_root}/modules/com.etendoerp.go/src-db/database/sourcedata/ETARC_VECTOR_*.xml` (every row has `AD_MODULE_ID = 94E1B433CF55451EABB764750AC5902A`, i.e. `com.etendoerp.go`) | Feature module |
 | `window.vectorSearch.target` (and optional `window.searchSuggestions`) | `artifacts/<spec>/decisions.json` → copied to `frontendContract.window.vectorSearch` by `resolve-curated.js` in `schema_forge_core` (`cli/src/resolve-curated.js:957, 1016`) | This repo |
 | Runtime storage `etarc_vector.etarc_vector_collection` / `etarc_vector.etarc_vector_record`, the pgvector extension, the per-source triggers | Created by `update.database` (post-update module script); excluded from DBSM exports | Never versioned |
@@ -342,7 +342,9 @@ the configuration-version bump only discards *queued* events, it does not rebuil
    chunks per run, pausing while the source has more than 10 000 pending events) and enqueues one
    outbox event per row (`ProcessVectorReindex.java`).
 3. The scheduled **Process Vector Outbox** embeds up to 100 pending events per run, grouped by
-   source, one provider call per batch of 25.
+   source, one provider call per batch of 25. A pending event whose `NEXT_ATTEMPT_AT` is still in
+   the future is skipped until then: it is waiting out the backoff of a transient provider failure
+   (see *Troubleshooting*).
 
 Both processes must be scheduled **once, at System level** (*Process Request*), not per client.
 Request the reindex **after** the column change: a reindex requested before it carries the old
@@ -579,8 +581,9 @@ SELECT s.namespace, sc.seqno, c.columnname, sc.iscontent, sc.isreindexonchange, 
   JOIN ad_column c ON c.ad_column_id = sc.ad_column_id
  ORDER BY s.namespace, sc.seqno;
 
--- outbox state per source
-SELECT s.namespace, o.status, count(*)
+-- outbox state per source; "waiting" = PENDING events still in a retry backoff
+SELECT s.namespace, o.status, count(*),
+       count(*) FILTER (WHERE o.next_attempt_at > now() AT TIME ZONE 'UTC') AS waiting
   FROM etarc_vector_outbox o JOIN etarc_vector_source s USING (etarc_vector_source_id)
  GROUP BY 1, 2 ORDER BY 1, 2;
 
@@ -614,7 +617,8 @@ grep -h -A0 "<SEARCH_KEY>" {etendo_root}/modules/com.etendoerp.go/src-db/databas
 | Symptom | Cause | Fix |
 |---|---|---|
 | The palette never shows records; the endpoint returns `200` with empty `matches` | **The index is empty.** Typical local state: `etarc_vector_record` has 0 rows while `etarc_vector_outbox` holds `PENDING` events, because **Process Vector Outbox** is not scheduled | Schedule **Process Vector Outbox** and **Process Vector Reindex** once at System level; check the provider key `ETENDO_PGVECTOR_OPENAI_API_KEY` (a LiteLLM key) is set |
-| Outbox events end in `FAILED` | Provider error (key, endpoint, timeout) or a source with no content column | Fix the cause (the **Outbox Monitor** window shows the error), then run **Requeue Failed Vector Events** |
+| Outbox events end in `FAILED` | One of: a **permanent** provider error — HTTP 401/403 (rejected API key), any other 4xx (bad payload, unknown model) or a malformed endpoint URL — which fails at once; a source with no content column; or a **transient** error (HTTP 408/429/5xx, timeout, network) that spent the provider's retry limit (3 attempts by default; `Last Error` starts with `Retry limit of N attempts exhausted`) | Fix the cause (the **Outbox Monitor** window shows `Last Error`), then run **Requeue Failed Vector Events** (Process Request, every failed event), or the Process Definition **Requeue Failed Vector Events (scoped)** — menu *Search Indexes › Requeue Failed Vector Events*, System only — with an optional **Client** and/or **Source**, e.g. only the source whose provider key you fixed. Both requeue up to 1000 events per run and reset the attempt counter |
+| Outbox events stay `PENDING` with a future `next_attempt_at` | **Retry backoff in progress.** A transient provider failure (HTTP 408/429/5xx, timeout, network) puts the event back in the queue after a wait of 60 s doubling per attempt (cap 1 h), or the provider's longer `Retry-After` (cap 24 h). `Last Error` says which attempt failed (`Attempt 1 of 3 failed, retrying in 60s. …`) | None — the next **Process Vector Outbox** run after that moment retries it. If it keeps failing it ends in `FAILED` (row above) |
 | Outbox events end in `SUPERSEDED` | The source configuration changed after they were queued | Expected. Request Reindex after the change |
 | A window shows no results, or **all** record results vanished after a change | **Mismatched target key.** The SPA sends a key with no active `SEARCH_KEY` → `422 unknown_vector_target`. `useVectorSearch` turns any non-`ok` response into an empty list, and in a fan-out one failing request empties the results of every window (`useVectorSearch.js:29, 39, 49`). A `403` on one target (role lacks window access, spec not active / not *Show in MCP*) has the same effect | Make `decisions.json → vectorSearch.target`, `SEARCH_KEY` and the spec name identical; check the Network tab for the failing `vectorsearch` request |
 | Old records are never found, new ones are | **Records predate the triggers.** Triggers capture changes only from the `update.database` that installed them | **Request Reindex** on the source |
