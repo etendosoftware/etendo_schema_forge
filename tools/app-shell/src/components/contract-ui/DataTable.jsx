@@ -2069,6 +2069,16 @@ function isLiftHover(rowHoverStyle) {
   return rowHoverStyle !== 'tint';
 }
 
+/**
+ * Whether a row raises on hover. Under `lift` only a clickable row does; `lift-always`
+ * (ETP-5526) lifts every row, for a grid whose rows have no click target of their own but
+ * expose hover actions (the attachments table), so it still reads like every other list.
+ */
+function rowLifts(rowHoverStyle, clickable) {
+  if (rowHoverStyle === 'lift-always') return true;
+  return Boolean(clickable) && isLiftHover(rowHoverStyle);
+}
+
 function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine }) {
   // Inline-lines focus keeps its own look: a muted fill plus the focus ring.
   if (isSelectedLine) return 'bg-muted ring-1 ring-focus-ring hover:bg-muted [--row-hover-bg:hsl(var(--muted))]';
@@ -2089,6 +2099,8 @@ function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelect
  *     `elevated` is the former name of this style and stays an alias.
  *   - `tint`: the pre-ETP-5600 translucent `bg-muted/50` wash, kept as an explicit
  *     opt-out for a grid where a raised white row would read wrong.
+ *   - `lift-always` (ETP-5526): the `lift` look on EVERY row, clickable or not — for a
+ *     grid with hover actions but no row click (attachments). The cursor stays default.
  * Selection always wins over hover: a checked / active row keeps its selection colour
  * when hovered. Under `lift` it still gets the shadow, so the pointer feedback stays
  * the same on every clickable row. Every row also sets `--row-hover-bg` to its own
@@ -2099,8 +2111,9 @@ function getRowClassName({
   rowHoverStyle = 'lift',
 }) {
   const clickable = onRowClick || onNavigate;
-  // Only a clickable row lifts; a non-clickable row renders as it did before ETP-5600.
-  const liftRow = clickable && isLiftHover(rowHoverStyle);
+  // Only a clickable row lifts (non-clickable rows render as before ETP-5600), unless
+  // the caller opted into `lift-always`.
+  const liftRow = rowLifts(rowHoverStyle, clickable);
   const selectionClass = rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine });
   let hoverClass = '';
   if (liftRow && !isSelectedLine) {
@@ -3548,8 +3561,8 @@ export function DataTable({
         table.jsx: `<div className="relative w-full overflow-auto">`, this div's direct
         child — the same one `[&>div]` reaches below for the scrollbar): it sizes itself
         to exactly the `<table>`'s content height with zero slack. `[&>div]:pb-6` pads
-        that inner box so the shadow has room. Only when rows can be clicked (no lift
-        otherwise), and not for `inlineEditable`, whose wrapper is `overflow-visible`.
+        that inner box so the shadow has room. Only when rows lift (clickable rows, or
+        `lift-always`), and not for `inlineEditable`, whose wrapper is `overflow-visible`.
 
         ETP-5600 — that room must not read as a 24px gap under the last row (Figma ends a
         list at its last row / totals row, and a tab grid runs straight into its add-line
@@ -3595,7 +3608,7 @@ export function DataTable({
             // above this thumb once scrolled into view ("al final se ven
             // 2") — the `[&>div]` combinator reaches into that child instead.
             : 'overflow-x-auto overflow-y-visible [&>div]:[scrollbar-width:none] [&>div::-webkit-scrollbar]:hidden',
-          linesLayout !== 'inlineEditable' && isLiftHover(rowHoverStyle) && (onRowClick || onNavigate)
+          linesLayout !== 'inlineEditable' && rowLifts(rowHoverStyle, onRowClick || onNavigate)
             ? '!-mb-6 [&>div]:pb-6 [&>div]:pointer-events-none [&>div>table]:pointer-events-auto'
             : '',
         ].filter(Boolean).join(' ')}
