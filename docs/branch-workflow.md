@@ -46,7 +46,7 @@ main     (protected — production; PRs must be up to date)
 develop  (protected — staging and integration point; PRs need NOT be up to date)
   ▲ feature/ETP-AAAA  →  PR, mini pipeline
   ▲ feature/ETP-BBBB  →  PR, mini pipeline
-  ▲ main → develop    →  PR, brings back hotfixes and fixes made on the cut
+  ▲ main → develop    →  PR before every cut: hotfixes, cut fixes, cut born up to date
 ```
 
 ### Hierarchy and merge rules
@@ -54,7 +54,7 @@ develop  (protected — staging and integration point; PRs need NOT be up to dat
 | Merge | Gate | Who merges |
 |-------|------|------------|
 | `feature → develop` | PR checks: mini pipeline (unit, mocked, Java unit), `Tests`, `Sonar Build`, review, code-owner gate | **Human**, in GitHub, merge commit |
-| `main → develop` | PR checks | **Human**, before each cut when main carries anything develop lacks |
+| `main → develop` | PR checks | **Human**, before every cut |
 | `mergeblock → main` (the cut) | Full Jenkins pipeline, integration included; branch up to date with main | **Human only** |
 | `hotfix → main` | Full pipeline | **Human only**; comes back through `main → develop` |
 
@@ -78,18 +78,25 @@ carries no task of its own.
 ### Order of operations
 
 ```
-1. main → develop        only when main has commits develop lacks
+1. main → develop        before every cut, always
 2. cut                   mergeblock/ETP-XXXX from develop + origin/main, in all three repos
 3. mergeblock → main     PR, full pipeline; green → human merges → production
 ```
 
-1. **Bring main into develop.** `git log --no-merges --oneline origin/develop..origin/main` lists what
-   main has that develop lacks: hotfixes, and the test fixes and reverts made on yesterday's cut.
-   Empty → skip. Otherwise a `main → develop` PR, merged before cutting; a cut that misses them
-   would undo them in production.
+1. **Bring main into develop, every time.** A `main → develop` PR, merged before cutting. There is
+   always something to bring: after each cut main holds at least that cut's merge commit, plus any
+   hotfix, test fix or revert made on the cut. Before step 2, `git log --oneline origin/develop..origin/main`
+   (merge commits included) must print nothing. Doing it every time gives two things:
+   - **Hotfixes come back.** Until they do, develop (staging) and every branch cut from it run without
+     the fix, and the cut is tested without it.
+   - **The cut is born up to date.** main requires its PRs to be up to date. When develop already
+     contains main, so does the cut branch; otherwise GitHub asks for *Update branch*, which adds an
+     untested merge commit to the cut and re-runs the full pipeline, another half hour.
 2. **Cut.** Blockie (`merge-block-helper`) lists the tasks merged into develop since main and their
    checks, proposes the cut point (develop's head, or the last commit before a task that went in red)
    and, on an explicit OK, creates `mergeblock/ETP-XXXX` at that commit with `origin/main` merged in.
+   After step 1 that merge does nothing; it only matters when the cut point is older than the
+   `main → develop` merge (cutting one task earlier) or main moved in between.
    The human pushes the branches; Clerk opens the PRs to `main` on request.
 3. **Full pipeline.** Jenkins runs everything there, integration included. Green → the human merges
    in all three repos, and production updates. Red → the failure ladder below.

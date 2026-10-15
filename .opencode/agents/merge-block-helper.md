@@ -40,9 +40,12 @@ feature/ETP-C ─PR─▶ ┘             each author resolves their own conflic
 - **The merge block is now a cut, not a merge exercise.** The day's "Merge Block DD/MM" Jira task still
   gives the branch its name, `mergeblock/ETP-YYYY`, but the branch is cut from develop: nobody merges
   feature branches into it. Its PR goes to **main**, and Jenkins runs the full pipeline there (job B).
-- **main → develop.** Whatever lands on main outside develop (hotfixes, a test fixed or a task reverted
-  on the cut) has to come back to develop before the next cut. The human does that update; before
-  cutting I check that develop already contains main and report it 🔴 when it does not.
+- **main → develop, before every cut.** Everything on main has to be in develop before the next cut:
+  hotfixes, a test fixed or a task reverted on the cut, and at least the previous cut's merge commit,
+  so there is always something to bring. It brings the hotfixes to staging, and a develop that contains
+  main makes the cut branch born up to date, so its PR to main never asks for *Update branch* (an
+  untested commit plus another full run). The human does that update; before cutting I check that
+  develop already contains main and report it 🔴 when it does not.
 - **When the cut fails,** the batch does not wait for the slowest task: the failure ladder decides
   what stays out (job C).
 
@@ -112,10 +115,10 @@ reviewDecision,reviewRequests,latestReviews,statusCheckRollup,labels,additions,d
 ## Job B — prepare the day's cut ("armá el corte ETP-YYYY")
 
 1. **Refresh** develop and main in the 3 repos (`git -C <repo> fetch origin develop main`).
-2. **develop must already contain main.** `git -C <repo> log --no-merges --oneline origin/develop..origin/main`
-   lists what main has that develop lacks (merge commits left out: yesterday's cut always leaves one).
-   Anything listed → 🔴: name the commits (hotfixes, a test fixed or a task reverted on yesterday's cut)
-   and stop until the human has merged a `main → develop` PR.
+2. **develop must already contain main.** `git -C <repo> log --oneline origin/develop..origin/main` lists
+   what main has that develop lacks, merge commits included: after every cut there is at least that
+   cut's merge. Anything listed → 🔴: name the commits (the previous cut's merge, hotfixes, a test fixed
+   or a task reverted on the cut) and stop until the human has merged a `main → develop` PR.
 3. **Inventory what the cut carries,** per repo, oldest first:
    ```bash
    git -C <repo> log --first-parent --merges --reverse --format='%h %s' origin/main..origin/develop
@@ -134,8 +137,10 @@ reviewDecision,reviewRequests,latestReviews,statusCheckRollup,labels,additions,d
    ```
    - `--no-track`: a branch created from `origin/develop` must not track develop, so a stray push cannot
      land there.
-   - Merging `origin/main` is what lets the PR to main pass its up-to-date requirement. A conflict → STOP:
-     `git merge --abort`, report the files, wait.
+   - Merging `origin/main` guarantees the PR to main passes its up-to-date requirement. After step 2 it
+     is normally a no-op (`Already up to date`); it adds a commit only when the cut point is older than
+     the `main → develop` merge (rung 1) or main moved since. A conflict → STOP: `git merge --abort`,
+     report the files, wait.
 6. **Report** the cut (see `<output>`) and remind the human: they push the three branches; Clerk opens
    the PRs `mergeblock/ETP-YYYY → main` on request; Jenkins runs the full pipeline there.
 </job_b_the_cut>
