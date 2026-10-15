@@ -174,3 +174,21 @@ describe('DataTable — percent column list width', () => {
     expect(screen.getByTestId('row-r1').querySelectorAll('td')[2].style.minWidth).toBe('200px');
   });
 });
+
+// ETP-5510 — the real (unmocked) width helpers, end to end through a plain list.
+describe('DataTable — plain list implicit grow column and min-width', () => {
+  const AMOUNT = { key: 'total', label: 'Total', type: 'amount' };
+
+  it('leaves the first non-pinned column width-less, keeps the checkbox <col> at 40px and sets the table min-width', () => {
+    render(<DataTable columns={[STR, AMOUNT]} data={[{ id: 'r1', name: 'BBVA', total: 5 }]} selectable />);
+
+    const widths = [...document.querySelectorAll('colgroup col')].slice(0, 3).map((c) => c.style.width);
+    // checkbox | grow (no width) | amount (172px basis)
+    expect(widths).toEqual(['40px', '', '172px']);
+
+    // grow floor 320 + amount 172 + 40px selection slot
+    const tables = [...document.querySelectorAll('table')];
+    expect(tables.length).toBeGreaterThan(0);
+    for (const t of tables) expect(t.style.minWidth).toBe('532px');
+  });
+});
