@@ -182,7 +182,7 @@ export default function PurchaseInvoiceWindow(props) {
     apiBaseUrl,
     enabled: windowAccessTier !== 'read-only',
     onRefresh: () => setRefreshKey(k => k + 1),
-    // The form view (recordId) mounts no grid; it has its own SendToSifButton.
+    // The form view (recordId) mounts no grid; it sends from the kebab (SifSendMenuItem).
     loadConfig: !recordId,
   });
   const { headers, createContactCtxValue, contactPortal } =
@@ -266,8 +266,8 @@ export default function PurchaseInvoiceWindow(props) {
         {contactPortal}
         {taxSifModal}
         {/* ETP-5700 — hosts the send modal for the form kebab entry (SifSendMenuItem). Mounted
-            unconditionally: the kebab unmounts its own content on close, and the topbar
-            button is not always rendered. */}
+            unconditionally: the kebab unmounts its own content on close. Since ETP-5700 the
+            kebab is the form view's only send entry point (no topbar button). */}
         <SifSendModalHost
           apiBaseUrl={apiBaseUrl}
           recordId={recordId}

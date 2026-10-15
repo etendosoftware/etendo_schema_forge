@@ -250,6 +250,9 @@ export function DetailMoreActionsMenu({
               apiBaseUrl={apiBaseUrl}
               onClose={() => setShowMoreMenu(false)}
               onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
+              // ETP-5700 — the header's unsaved-edit signal (the same one runDocumentAction
+              // flushes), so an entry that cannot save first can refuse to run on a dirty form.
+              isDirty={!!hook?.isDirtyHeader}
               data-testid="CustomMenuContent__fa3275" />
           );
         })()}

@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
-import SendToSifButton from './SendToSifButton';
 import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -44,8 +43,11 @@ const BADGE_STYLES = {
  * - Draft -> nothing
  *
  * The badge is the ONLY entry point. Clicking it opens the payments modal.
+ *
+ * ETP-5700 — the fiscal send action no longer renders here: in the form view it lives
+ * only in the kebab (`SifSendMenuItem`, `window.customComponents.moreMenuContent`).
  */
-export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api, onSave, isDirty, windowReadOnly }) {
+export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
@@ -334,19 +336,6 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         {badgeInfo.label}
         <span style={{ opacity: 0.6, marginLeft: 4 }}>{ui('view')} &rarr;</span>
       </button>
-
-      <SendToSifButton
-        data={data}
-        recordId={recordId}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        status={data?.documentStatus}
-        onSave={onSave}
-        isDirty={isDirty}
-        // ETP-5700: the Solo Lectura tier, NOT isDocumentReadOnly (true on every
-        // completed invoice through the processed lock) — see SendToSifButton.jsx.
-        windowReadOnly={windowReadOnly}
-        data-testid="SendToSifButton__329004" />
 
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (

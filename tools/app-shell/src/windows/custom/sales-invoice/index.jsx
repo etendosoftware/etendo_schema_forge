@@ -260,8 +260,8 @@ export default function SalesInvoiceWindow(props) {
         {contactPortal}
         {taxSifModal}
         {/* ETP-5700 — hosts the send modal for the form kebab entry (SifSendMenuItem). Mounted
-            unconditionally: the kebab unmounts its own content on close, and the topbar
-            button is not always rendered. */}
+            unconditionally: the kebab unmounts its own content on close. Since ETP-5700 the
+            kebab is the form view's only send entry point (no topbar button). */}
         <SifSendModalHost
           apiBaseUrl={apiBaseUrl}
           recordId={recordId}
