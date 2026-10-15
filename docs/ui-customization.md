@@ -1974,6 +1974,34 @@ enforced client-side by `resolveCanAddSecondaryLines(st, childrenCount)` in `Det
 gating `secondaryAddLineBar`, the inline `addRow`, and the empty-state add trigger once the tab's
 own child count reaches the declared `maxDetailLines`.
 
+#### The "More" overflow menu of the Form View tab strip (ETP-5515)
+
+The Form View's bottom tab strip (`DetailTabStrip.jsx`, rendered by `DetailView`) shows at most
+**4 tabs plus a "Más" / "More" menu** in every window, with or without a sidebar; labels never
+wrap (`whitespace-nowrap`). With 4 tabs or fewer there is no menu. No `decisions.json` option:
+the rule is generic, so it applies to every window, declarative or custom.
+
+- **Dynamic slot.** The last visible tab (4th) is a slot. Picking a hidden tab from the menu puts
+  it in the slot and the tab that was there drops into the menu; selecting any fixed tab (the
+  first three) restores the original arrangement. The arrangement is derived purely from the
+  active tab key (`resolveTabStripLayout` in `detailTabStripLayout.js`), so it also follows
+  deep links (`location.state.openSecondaryTab`).
+- **Width-aware.** The limit of 4 is a ceiling: the visible count is `min(4, tabs that fit)` in the
+  strip's own width (`useFittingTabCount.js` + `computeFittingTabCount`), so a 4-tab window gets a
+  "Más" at narrow widths or high zoom and tabs never overlap the side panel. The rest of the rules
+  (slot, reset, active tab always visible) hold for any count. Floor: 1 fixed tab + the slot; if
+  even that does not fit, the strip clips (`min-w-0 overflow-hidden`) instead of overlapping.
+  Natural widths come from an invisible probe row rendered inside the strip (same box classes as `TabStripButton`, shared via `tabStripButtonBaseCls`; labels and counters are drawn with CSS `::after{content:attr(data-text)}`, so the probe adds no text nodes, test ids or focusable elements to the DOM); a `ResizeObserver`
+  on the strip and the probe re-measures on resize, sidebar open/close, zoom and font changes.
+  Without layout (jsdom, no `ResizeObserver`, zero width) it falls back to the count-only rule.
+- **Counters** (e.g. "Dirección 1") and the save-first disabled hint travel with the tab into and
+  out of the menu.
+- **Test ids.** Visible tabs keep `tab-<key>`; the trigger is `detail-tab-more` and menu entries
+  are `detail-tab-more-item-<key>`. A test that clicks `tab-<key>` for a tab beyond the 4th must
+  open `detail-tab-more` first.
+- Hand-built windows that render their own tab strip (e.g. financial-account `DetailTabs`) are not
+  affected.
+
 ---
 
 ### 18. `multiField` — composite list column (stacked identity cell)
