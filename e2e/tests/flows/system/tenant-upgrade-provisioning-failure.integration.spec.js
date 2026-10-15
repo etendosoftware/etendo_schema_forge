@@ -31,9 +31,10 @@ async function authenticatedJson(page, path, options = {}) {
 }
 
 test.describe('Paid pooled tenant provisioning failure — real backend', () => {
-  // First run may build the dedicated pool client before the browser starts provisioning:
-  // up to FIXTURE_SETUP_TIMEOUT_MS of setup, then about a minute of browser flow.
-  test.describe.configure({ timeout: 360_000 });
+  // First run may build the dedicated pool client before the browser starts provisioning: the
+  // budget covers the worst setup and cleanup plus three minutes for login, the browser flow (up
+  // to a minute) and the status requests, so the cleanup in `finally` is never cut short.
+  test.describe.configure({ timeout: FIXTURE_SETUP_TIMEOUT_MS + FIXTURE_CLEANUP_TIMEOUT_MS + 180_000 });
   test.skip(!RUN, 'The local backend fixture is not configured (E2E_PROVISIONING_FAILURE=1).');
 
   test('keeps the paid purchase and shows the failed provisioning in the browser', async ({ page }) => {
