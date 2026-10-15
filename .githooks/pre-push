@@ -143,6 +143,10 @@ CPUS="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null |
 PRE_PUSH_WORKERS="${PRE_PUSH_WORKERS:-$(( CPUS / 2 > 1 ? CPUS / 2 : 1 ))}"
 export TEST_WORKERS="${TEST_WORKERS:-$PRE_PUSH_WORKERS}"
 MOCKED_E2E_WORKERS="${E2E_WORKERS:-$(( PRE_PUSH_WORKERS < 4 ? PRE_PUSH_WORKERS : 4 ))}"
+# Even half the CPUs left a 12-thread ThinkBook at 97% (ETP-5695): the hook and everything it starts
+# run at nice 10, so the editor and the browser stay responsive and an idle machine loses no time.
+# PRE_PUSH_NICE=0 turns it off.
+renice -n "${PRE_PUSH_NICE:-10}" -p $$ >/dev/null 2>&1 || true
 
 # Path where run-sonar.sh writes a copy-pasteable handoff prompt when the
 # Quality Gate fails. Cleared up-front so a stale file is never shown.
@@ -574,7 +578,23 @@ run_playwright() {
   fi
 
   if [ "$RUN_PW_MOCKED" = "1" ]; then
-    run_e2e_suite mocked "mocked specs" "$password" "$backend_url"
+    # Only mocked specs changed: run those, not all of them (the PR's mini pipeline runs the whole
+    # suite). UI source, e2e infrastructure or dependencies still run it whole.
+    local changed_specs spec
+    changed_specs="$(printf '%s\n' "${CHANGED_FILES:-}" | relevance_mocked_specs)"
+    MOCKED_SPECS=""
+    for spec in $changed_specs; do
+      [ -f "$REPO_DIR/$spec" ] && MOCKED_SPECS="$MOCKED_SPECS ${spec#e2e/}"
+    done
+    MOCKED_SPECS="${MOCKED_SPECS# }"
+    if [ -n "$changed_specs" ] && [ -z "$MOCKED_SPECS" ]; then
+      echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (the change only deletes mocked specs)"
+      record_summary_row "Playwright — mocked" "-" "SKIPPED" "only deleted specs"
+    elif [ -n "$MOCKED_SPECS" ]; then
+      run_e2e_suite mocked "mocked specs, only the $(printf '%s\n' $MOCKED_SPECS | wc -l | tr -d ' ') changed" "$password" "$backend_url"
+    else
+      run_e2e_suite mocked "mocked specs" "$password" "$backend_url"
+    fi
   else
     echo "==> Playwright E2E — mocked specs... SKIPPED ⏭️  (no mocked-spec / UI changes)"
     record_summary_row "Playwright — mocked" "-" "SKIPPED" ""
@@ -652,10 +672,10 @@ run_e2e_suite() {
   set +e
   # Only the mocked suite gets the local worker cap: integration specs share one admin and one
   # tenant, so more workers there mean data races (see playwright.config.js).
-  local workers_env=""
-  [ "$suite" = "mocked" ] && workers_env="E2E_WORKERS=$MOCKED_E2E_WORKERS"
+  local workers_env="" specs=""
+  [ "$suite" = "mocked" ] && { workers_env="E2E_WORKERS=$MOCKED_E2E_WORKERS"; specs="${MOCKED_SPECS:-}"; }
   # shellcheck disable=SC2086 # workers_env is empty or a single NAME=value word
-  ( cd "$REPO_DIR" && env $workers_env E2E_SUITE="$suite" E2E_PASSWORD="$password" \
+  ( cd "$REPO_DIR" && env $workers_env E2E_MOCKED_SPECS="$specs" E2E_SUITE="$suite" E2E_PASSWORD="$password" \
       E2E_BACKEND_URL="$backend_url" ETENDO_URL="$backend_url" \
       E2E_RETRIES="${retries:-0}" \
       ./scripts/run-e2e-full.sh ) 2>&1 | tee "$log"
