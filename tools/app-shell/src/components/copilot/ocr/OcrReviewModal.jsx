@@ -349,7 +349,7 @@ export default function OcrReviewModal({
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {ui('ocrReviewContinue')}
           </button>
