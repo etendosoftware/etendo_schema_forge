@@ -118,7 +118,7 @@ Some fields are never published, whether curated or derived. The manifest lists 
 
 | Field | Reason |
 |-------|--------|
-| `client` | The tenant is derived from the API key, never chosen by the caller. |
+| `client`, `organization` | Tenant and organization ownership come from the API key, never from the caller. |
 | `grantPortalAccess` | Grants a contact access to the customer portal; it stays a decision taken in the application. |
 | `accountNo`, `bankName`, `displayedAccount`, `iBAN`, `swiftCode` | Bank account identifiers of a business partner. |
 | `etblkpAccountingstatus`, `etblkpBulkposting` | Accounting bulk-posting fields; accounting is outside the public API scope. |
@@ -171,13 +171,14 @@ artifacts/<window>/contract.json
 ### Manifest: `generate-base-public-api-manifest.mjs` to `base.v1.json`
 
 - The gateway loads `process.env.PUBLIC_API_SCHEMA_PATH`, defaulting to `../public-api/base.v1.json`; the Docker image sets it to `/app/public-api/base.v1.json` (`gateway/src/schema/schema.provider.ts`, `gateway/Dockerfile`).
-- The generator scans every `artifacts/*/contract.json`, skipping the windows in `excludedWindows` and the categories `accounting`, `configuration`, `crm`, `finance`, `hr`, `settings`, `setup`.
-- Every published window must have `artifacts/<window>/schema-raw.json`, except the legacy artifacts `document`, `project` and `uom`. The file is gitignored, so a clean checkout lacks it; when it is missing the generator fails and names the file, instead of producing a manifest without child resources and `updated`. Windows that are not published do not need it.
-- Resources are the primary entity of each window plus child tabs whose parent foreign key is found in `schema-raw.json`. When `decisions.window.secondaryTabs` is non-empty, only the listed tabs are published. Child tabs whose name matches `accounting` are skipped.
+- The generator scans every `artifacts/*/contract.json`, skipping the windows in `excludedWindows` and the categories `accounting`, `configuration`, `crm`, `finance`, `hr`, `settings`, `setup`. `excludedWindows` includes `document`, `project` and `uom`, which have no NeoServlet spec.
+- Every published window must have `artifacts/<window>/schema-raw.json`. The file is gitignored, so a clean checkout lacks it; when it is missing the generator fails and names the file, instead of producing a manifest without child resources and `updated`. Windows that are not published do not need it.
+- Resources are the primary entity of each window plus child tabs whose parent foreign key is found in `schema-raw.json`. When `decisions.window.secondaryTabs` is non-empty, only the listed tabs are published. Child tabs whose name matches `accounting`, or is exactly `Bank Account`, are skipped. The manifest lists these patterns in `policy.excludedChildTabs`.
 - The public resource name is `specName` for the primary entity and `specName-entityName` for the others.
-- Operations come from `backendContract.endpoints` plus a forced `GET` and `LIST`; `PATCH` is added whenever `PUT` exists. The windows `monitor-verifactu`, `sii-monitor` and `tbai-facturas-enviadas` are fixed to `GET`, `LIST`; field directions are not affected by this override (see [Field rules](#field-rules-applied-by-the-manifest-generator)).
+- Operations come from `backendContract.endpoints` plus a forced `GET` and `LIST`; `PATCH` is added whenever `PUT` exists. The windows `monitor-verifactu`, `sii-monitor` and `tbai-facturas-enviadas` are fixed to `GET`, `LIST`; field directions are not affected by this override (see [Field rules](#field-rules-applied-by-the-manifest-generator)). A resource with no field of direction `in` or `inout` is read-only: its operations are reduced to `GET`, `LIST`.
+- The functional texts (`functional.functionalSummary`, `functional.functionalCapabilities`) come from `docs/generated-custom-windows/<window>.md`. Capability lines and summary sentences that cite a ticket (`ETP-<number>`) or Jira are not published; when no summary sentence remains, the summary is `Public API resource for the <window> window.`
 - A relationship is added to a field whose `reference` resolves to another public resource.
-- `scripts/validate-base-public-api-manifest.mjs` checks: `publicApi` is `true`; `fields.id.internalPath` is `id`; no resource named or titled `accounting`; every child has a parent, a foreign key, a path segment and all of `GET`, `LIST`, `POST`, `PUT`, `PATCH`, `DELETE`; every relationship target exists and has a valid cardinality and foreign key.
+- `scripts/validate-base-public-api-manifest.mjs` checks: `publicApi` is `true`; `fields.id.internalPath` is `id`; no resource named or titled `accounting`; every child has a parent, a foreign key, a path segment, `GET` and `LIST`, and either none or all of `POST`, `PUT`, `PATCH`, `DELETE`; every relationship target exists and has a valid cardinality and foreign key.
 
 ### Allowlist: `generate-public-api-schema.js` to `allowlist.v1.json`
 
@@ -282,7 +283,8 @@ does not require `If-Match` and returns no `ETag`.
 | `PUT` or `PATCH` with the current ETag | The update is applied and the response carries the new `ETag`. |
 | `DELETE` | Does not use `If-Match`. |
 
-- The ETag is a strong, opaque, quoted value derived from the record's `updated`. Clients must treat it as opaque and send it back unchanged.
+- The ETag is a strong, opaque, quoted value derived from the record's `updated`; it is issued only when `updated` is an ISO-8601 timestamp with a time zone. Clients must treat it as opaque and send it back unchanged.
+- No other response carries an `ETag` header.
 - `updated` stays read-only: sending it in the body returns `400 Field "updated" is not writable by the public API`. The version travels only in `If-Match`; the gateway forwards it to Etendo, which compares it with the stored record and refuses a stale write.
 - After a `412`, the client reads the record again, reapplies its change and retries with the new ETag.
 
@@ -526,7 +528,10 @@ Testable statements derived from this document, each linked to its section.
 - [ ] Field `direction` is `inout` only for editable fields of an entity with a write endpoint, including for fiscal-monitor windows whose operations are `GET`, `LIST` ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] The public name derivation matches the table, including the override table, the `pO` to `purchase` rule and the generic snake_case rule ([2](#name-derivation))
 - [ ] `make generate-base-public-api-manifest` produces a manifest that passes the validator ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
-- [ ] Generation fails, naming the file, when a published window other than `document`, `project` or `uom` has no `schema-raw.json` ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
+- [ ] `document`, `project`, `uom` and the `Bank Account` child tab are not published ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
+- [ ] A resource without any writable field exposes only `GET` and `LIST`, and every resource that accepts writes publishes `updated` ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
+- [ ] No published functional text cites `ETP-<number>` or Jira ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
+- [ ] Generation fails, naming the file, when a published window has no `schema-raw.json` ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
 - [ ] The gateway reads `PUBLIC_API_SCHEMA_PATH`, defaulting to `../public-api/base.v1.json` ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
 - [ ] `make regen-public-api` writes `artifacts/_public-api/allowlist.v1.json`, and the gateway does not read it at runtime ([3](#allowlist-generate-public-api-schemajs-to-allowlistv1json))
 - [ ] `make regen-public-api` output contains only `product` and `businessPartner`, with operations `GET` and `LIST` ([3](#allowlist-generate-public-api-schemajs-to-allowlistv1json))
