@@ -194,9 +194,9 @@ export function withImplicitGrowColumn(columns) {
  * their floor: the scroll container scrolls instead.
  */
 export function listTableMinWidthPx(columns, fixedSlotsPx = 0) {
-  return columns.reduce((sum, col, idx) => {
+  return columns.reduce((sum, col) => {
     if (col.headClass) return sum;
-    const basis = columnMinWidthPx(col, idx);
+    const basis = columnMinWidthPx(col);
     return sum + (col.grow ? Math.max(basis, GROW_COLUMN_MIN_PX) : basis);
   }, fixedSlotsPx);
 }
