@@ -1663,7 +1663,11 @@ that already has values stored with the scheme included.
 ### Public API curation (`publicApi`)
 
 Per-field opt-in that declares a field as part of the **public** REST API served by the gateway
-under `/api/v1/*`. It is unrelated to the field's UI visibility and to the grid/form flags above.
+under `/api/v1/*`. Curating a single field switches the whole entity to curated mode: the entity
+then publishes **only** its curated fields. An entity with no curated field publishes, by default,
+the fields its window form shows (`form` not `false`, visibility `editable` or `readOnly`), so the
+`form` flag above does affect the public API of non-curated entities. Curate an entity to narrow or
+rename what it publishes.
 
 ```json
 "searchKey": {
@@ -1673,14 +1677,15 @@ under `/api/v1/*`. It is unrelated to the field's UI visibility and to the grid/
 
 | Property | Type | Purpose |
 |----------|------|---------|
-| `exposed` | boolean | Only the exact value `true` opts the field in. Absent or `false` = not public. |
+| `exposed` | boolean | Only the exact value `true` opts the field in. In a curated entity, absent or `false` = not public. |
 | `name` | string | Requested public field name. **Not necessarily the final name**: the manifest generator (`scripts/generate-base-public-api-manifest.mjs`) rewrites it to snake_case (`searchKey` → `search_key`). |
 | `type` | `"passthrough"` \| `"custom"` | Mapping kind. The manifest generator always emits `passthrough`. |
 | `handlerId` | string \| null | Identifier of a custom handler. The manifest generator always writes `null`. |
 
 Mechanics: `resolve-curated.js` copies `publicApi` verbatim and `generate-contract.js` stamps it
 onto the field in `contract.json` (both in `schema_forge_core`). Fields with `visibility`
-`system` or `discarded` are skipped by the manifest generator (`scripts/generate-base-public-api-manifest.mjs`) even when `exposed: true`; the allowlist generator (`sf-generate-public-api-schema`) does not apply that filter. Real examples:
+`system` or `discarded`, and the fields listed in the manifest's `policy.excludedFields` (tenant,
+portal access, bank account and bulk-posting fields), are skipped by the manifest generator (`scripts/generate-base-public-api-manifest.mjs`) even when `exposed: true`; the allowlist generator (`sf-generate-public-api-schema`) does not apply that filter. Real examples:
 `artifacts/contacts/decisions.json` and `artifacts/product/decisions.json` (6 fields each).
 
 Adding `publicApi` to a window is not enough to publish it: the public manifest

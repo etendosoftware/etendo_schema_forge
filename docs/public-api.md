@@ -1,7 +1,8 @@
 # Etendo Go Public API
 
-Reference for the public REST API of Etendo Go: how fields are curated, how the contract is
-generated, what the gateway exposes under `/api/v1/*`, how API keys are managed under
+Reference for the public REST API of Etendo Go: how fields are selected (curated, or derived
+from the window form), how the contract is generated, what the gateway exposes under
+`/api/v1/*`, how updates are protected against concurrent changes, how API keys are managed under
 `/oauth2/api-keys`, and how the UI and the OpenAPI documents relate to them.
 
 Source locations are given as file paths. Paths without a prefix belong to this repository;
@@ -11,7 +12,7 @@ Source locations are given as file paths. Paths without a prefix belong to this 
 ## Contents
 
 1. [Overview](#1-overview)
-2. [`publicApi` curation in `decisions.json`](#2-publicapi-curation-in-decisionsjson)
+2. [Field selection: `publicApi` curation and window-form default](#2-field-selection-publicapi-curation-and-window-form-default)
 3. [Generation chain](#3-generation-chain)
 4. [Public resource contract (`/api/v1/*`)](#4-public-resource-contract-apiv1)
 5. [API key management contract (`/oauth2/api-keys`)](#5-api-key-management-contract-oauth2api-keys)
@@ -64,7 +65,20 @@ credential API or the resource API.
 
 ---
 
-## 2. `publicApi` curation in `decisions.json`
+## 2. Field selection: `publicApi` curation and window-form default
+
+Each public resource publishes its fields in one of two ways, decided per entity:
+
+| Entity | Fields published |
+|--------|------------------|
+| Curated: at least one field declares `publicApi.exposed: true` | Exactly the curated fields. The rest of the window form is ignored. |
+| Not curated | The fields its window form shows (see [Default exposure: window form](#default-exposure-window-form)). |
+| Fiscal monitors `monitor-verifactu`, `sii-monitor`, `tbai-facturas-enviadas` | Their curation only. They never derive fields from the form; without curation they publish `id` and, when present, `updated`. |
+
+In both cases `id` and `updated` are added as described in [Field rules](#field-rules-applied-by-the-manifest-generator).
+The manifest records the rule as `policy.fieldSelection: "curated-publicApi-else-window-form"`.
+
+### `publicApi` curation in `decisions.json`
 
 Per-field key at `entities.<entity>.fields.<field>.publicApi`:
 
@@ -88,6 +102,27 @@ Pipeline handling: `resolve-curated.js` copies `publicApi` as a whitelisted deci
 (`core: cli/src/resolve-curated.js`) and `generate-contract.js` stamps it onto each contract
 field (`core: cli/src/generate-contract.js`).
 
+### Default exposure: window form
+
+For an entity that is not curated, the generator publishes every field of the entity in
+`artifacts/<window>/contract.json` (`frontendContract.entities.<entity>.fields`) that:
+
+- is shown in the window form: `form` is not `false` (a field without `form` counts as shown); and
+- has `visibility` `editable` or `readOnly`.
+
+Fields shown only in the grid (`form: false`) are not published. Each published field keeps the
+form's internal name as its internal path, and its public name follows [Name derivation](#name-derivation).
+
+Some fields are never published, whether curated or derived. The manifest lists them in
+`policy.excludedFields`:
+
+| Field | Reason |
+|-------|--------|
+| `client` | The tenant is derived from the API key, never chosen by the caller. |
+| `grantPortalAccess` | Grants a contact access to the customer portal; it stays a decision taken in the application. |
+| `accountNo`, `bankName`, `displayedAccount`, `iBAN`, `swiftCode` | Bank account identifiers of a business partner. |
+| `etblkpAccountingstatus`, `etblkpBulkposting` | Accounting bulk-posting fields; accounting is outside the public API scope. |
+
 ### Name derivation
 
 `scripts/generate-base-public-api-manifest.mjs` passes `publicApi.name` (or the field name when
@@ -105,10 +140,11 @@ absent) through `publicFieldName()`:
 ### Field rules applied by the manifest generator
 
 - Fields with `visibility` `system` or `discarded` are skipped even when `exposed` is `true`.
+- Fields in `policy.excludedFields` are skipped even when `exposed` is `true` or the form shows them.
 - Two fields resolving to the same public name make the generator throw (`Public field name collision`).
-- `direction` is `inout` only when the entity has at least one `POST`, `PUT` or `PATCH` endpoint in `backendContract.endpoints` and the field's visibility is `editable`; otherwise `out`. It is computed from those endpoints, independently of the fiscal-monitor override that fixes a resource's operations to `GET`, `LIST`.
+- `direction` is `inout` only when the entity has at least one `POST`, `PUT` or `PATCH` endpoint in `backendContract.endpoints` and the field's visibility is `editable`; otherwise `out`. The rule is the same for curated and derived fields, so a `readOnly` form field is always `out`. It is computed from those endpoints, independently of the fiscal-monitor override that fixes a resource's operations to `GET`, `LIST`.
 - `id` is always present and its internal path is always `id` (the NEO response key). When `id` is not curated it is added as a read-only (`out`) field; when it is curated, its curated direction is kept and only the internal path is forced to `id`.
-- `updated` is added as a read-only (`out`) field only when the entity's raw schema (`schema-raw.json`) has a field named `updated`. A resource whose entity has none carries no `updated` field. A resource with no curated fields therefore exposes `id` and, when the raw schema has it, `updated`.
+- `updated` is added as a read-only (`out`) field only when the entity's raw schema (`schema-raw.json`) has a field named `updated`. A resource whose entity has none carries no `updated` field. A resource that publishes `updated` is a versioned resource: its updates use [optimistic concurrency](#45-optimistic-concurrency-etag-and-if-match).
 
 ---
 
@@ -136,6 +172,7 @@ artifacts/<window>/contract.json
 
 - The gateway loads `process.env.PUBLIC_API_SCHEMA_PATH`, defaulting to `../public-api/base.v1.json`; the Docker image sets it to `/app/public-api/base.v1.json` (`gateway/src/schema/schema.provider.ts`, `gateway/Dockerfile`).
 - The generator scans every `artifacts/*/contract.json`, skipping the windows in `excludedWindows` and the categories `accounting`, `configuration`, `crm`, `finance`, `hr`, `settings`, `setup`.
+- Every published window must have `artifacts/<window>/schema-raw.json`, except the legacy artifacts `document`, `project` and `uom`. The file is gitignored, so a clean checkout lacks it; when it is missing the generator fails and names the file, instead of producing a manifest without child resources and `updated`. Windows that are not published do not need it.
 - Resources are the primary entity of each window plus child tabs whose parent foreign key is found in `schema-raw.json`. When `decisions.window.secondaryTabs` is non-empty, only the listed tabs are published. Child tabs whose name matches `accounting` are skipped.
 - The public resource name is `specName` for the primary entity and `specName-entityName` for the others.
 - Operations come from `backendContract.endpoints` plus a forced `GET` and `LIST`; `PATCH` is added whenever `PUT` exists. The windows `monitor-verifactu`, `sii-monitor` and `tbai-facturas-enviadas` are fixed to `GET`, `LIST`; field directions are not affected by this override (see [Field rules](#field-rules-applied-by-the-manifest-generator)).
@@ -183,10 +220,10 @@ The route table is fixed controller code; resource and child lookup use the mani
 | GET | `/api/v1/{resource}` | List. Top-level resources only. |
 | GET | `/api/v1/{resource}/{id}` | Read one. |
 | POST | `/api/v1/{resource}` | Create. |
-| PUT, PATCH | `/api/v1/{resource}/{id}` | Update. |
+| PUT, PATCH | `/api/v1/{resource}/{id}` | Update. Requires `If-Match` on versioned resources ([4.5](#45-optimistic-concurrency-etag-and-if-match)). |
 | DELETE | `/api/v1/{resource}/{id}` | Delete. |
 | GET, POST | `/api/v1/{parent}/{parentId}/{child}` | Child collection. `parentId` is sent upstream as the query parameter `parentId`; on POST it is also set in the body as `parentId`. |
-| GET, PUT, PATCH, DELETE | `/api/v1/{parent}/{parentId}/{child}/{id}` | Child item. |
+| GET, PUT, PATCH, DELETE | `/api/v1/{parent}/{parentId}/{child}/{id}` | Child item. PUT and PATCH require `If-Match` on versioned resources. |
 
 - A resource that has a `parent` in the manifest is not reachable at top level: `404 Child resource must be addressed through its master: <name>`.
 - An unknown resource returns `404 Unknown public entity: <name>`; an unknown child path returns `404 Unknown child resource: <parent>/<child>`.
@@ -207,6 +244,7 @@ guard. Example: `GET /api/v1/contacts/ABC` calls `GET /sws/neo/contacts/business
   - When the value is an object, the related id is its `id`, else its `identifier`, else its `_id`; otherwise the scalar value itself is the id. When the value is null, or an object carrying none of those three keys, the result is `{ "data": null }` without `links`.
   - The ids inside `links.related` and `links.self` are URL-encoded.
   - `links.self` (`/api/v1/<resource>/<id>`) is present only when an id exists.
+  - `meta.etag` is present on resources of versioned entities whose record carries `updated` ([4.5](#45-optimistic-concurrency-etag-and-if-match)), including the items of a list.
 - On a write, a `relationships.<field>.data.id` value is mapped to the field's internal path; a missing `data` maps to `null`.
 
 Example response (values illustrative):
@@ -217,14 +255,45 @@ Authorization: Bearer etgo-0123456789abcdef:<64-hex-secret>
 ```
 ```json
 { "data": { "type": "product", "id": "8F2A...",
-            "attributes": { "search_key": "P-001", "name": "Widget", "sale_price": 12.5 },
-            "links": { "self": "/api/v1/product/8F2A..." } } }
+            "attributes": { "search_key": "P-001", "name": "Widget", "sale_price": 12.5,
+                            "updated": "2026-10-15T10:42:07Z" },
+            "links": { "self": "/api/v1/product/8F2A..." },
+            "meta": { "etag": "\"MjAyNi0xMC0xNVQxMDo0MjowN1o\"" } } }
 ```
 
 ### 4.4 Capability enforcement
 
 The gateway itself does not evaluate capabilities. They are enforced by Etendo when the token is
 used on `/sws/neo/*` (see [section 8](#8-authentication-and-token-flow)).
+
+### 4.5 Optimistic concurrency: `ETag` and `If-Match`
+
+Applies to versioned resources: those whose manifest entity publishes `updated`
+([Field rules](#field-rules-applied-by-the-manifest-generator)). Resources without `updated` are
+not version-checked and do not use these headers.
+
+| Case | Behavior |
+|------|----------|
+| `GET` of one record, `POST`, `PUT`, `PATCH` (top-level and child) | The response carries an `ETag` header with the record's current version. |
+| Every resource in a response, including list items | Carries the same value as `meta.etag`. |
+| `PUT` or `PATCH` without `If-Match`, or with `If-Match: *` | `428 Precondition Required`; nothing is sent to Etendo. |
+| `PUT` or `PATCH` with an `If-Match` that is not an ETag issued by the gateway (weak, unquoted or malformed) | `412 Precondition Failed`; nothing is sent to Etendo. |
+| `PUT` or `PATCH` with an ETag of a version that is no longer current | `412 Precondition Failed`; the record is not changed. |
+| `PUT` or `PATCH` with the current ETag | The update is applied and the response carries the new `ETag`. |
+| `DELETE` | Does not use `If-Match`. |
+
+- The ETag is a strong, opaque, quoted value derived from the record's `updated`. Clients must treat it as opaque and send it back unchanged.
+- `updated` stays read-only: sending it in the body returns `400 Field "updated" is not writable by the public API`. The version travels only in `If-Match`; the gateway forwards it to Etendo, which compares it with the stored record and refuses a stale write.
+- After a `412`, the client reads the record again, reapplies its change and retries with the new ETag.
+
+```http
+PATCH /api/v1/sales-order/C918... HTTP/1.1
+Authorization: Bearer etgo-0123456789abcdef:<64-hex-secret>
+If-Match: "MjAyNi0xMC0xNVQxMDo0MjowN1o"
+Content-Type: application/json
+
+{"data":{"attributes":{"order_date":"2026-10-14"}}}
+```
 
 ---
 
@@ -394,6 +463,13 @@ Two independent OpenAPI documents exist; neither contains the other's routes.
 The gateway document's introduction shows `POST /oauth2/api-keys` in a `curl` example for
 obtaining a key; that endpoint is not listed among the document's `paths`.
 
+For versioned resources ([4.5](#45-optimistic-concurrency-etag-and-if-match)) the gateway document
+also declares:
+
+- the response header `ETag` on item `GET`, collection `POST`, and item `PUT` and `PATCH`;
+- a required `If-Match` header parameter and the responses `412` and `428` on item `PUT` and `PATCH`;
+- a `meta.etag` property in the resource schema.
+
 ---
 
 ## 8. Authentication and token flow
@@ -437,8 +513,12 @@ integrator                gateway (Nest)                     Etendo (com.etendoe
 
 Testable statements derived from this document, each linked to its section.
 
-### Curation and generation ([2](#2-publicapi-curation-in-decisionsjson), [3](#3-generation-chain))
-- [ ] Only fields with `publicApi.exposed === true` reach the manifest ([2](#2-publicapi-curation-in-decisionsjson))
+### Field selection and generation ([2](#2-field-selection-publicapi-curation-and-window-form-default), [3](#3-generation-chain))
+- [ ] A curated entity publishes only its fields with `publicApi.exposed === true` ([2](#2-field-selection-publicapi-curation-and-window-form-default))
+- [ ] A non-curated entity publishes its window form fields (`form` not `false`, visibility `editable` or `readOnly`) and no grid-only field ([2](#default-exposure-window-form))
+- [ ] The fiscal monitors publish no form-derived field ([2](#2-field-selection-publicapi-curation-and-window-form-default))
+- [ ] No field in `policy.excludedFields` appears in the manifest, curated or derived ([2](#default-exposure-window-form))
+- [ ] The manifest declares `policy.fieldSelection` `curated-publicApi-else-window-form` and lists `policy.excludedFields` ([2](#2-field-selection-publicapi-curation-and-window-form-default))
 - [ ] Fields with `visibility` `system` or `discarded` are excluded even when exposed ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] A public name collision makes the generator throw ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] Every manifest resource has an `id` field with internal path `id`; `updated` (read-only) is present only when the entity's raw schema has an `updated` field ([2](#field-rules-applied-by-the-manifest-generator))
@@ -446,6 +526,7 @@ Testable statements derived from this document, each linked to its section.
 - [ ] Field `direction` is `inout` only for editable fields of an entity with a write endpoint, including for fiscal-monitor windows whose operations are `GET`, `LIST` ([2](#field-rules-applied-by-the-manifest-generator))
 - [ ] The public name derivation matches the table, including the override table, the `pO` to `purchase` rule and the generic snake_case rule ([2](#name-derivation))
 - [ ] `make generate-base-public-api-manifest` produces a manifest that passes the validator ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
+- [ ] Generation fails, naming the file, when a published window other than `document`, `project` or `uom` has no `schema-raw.json` ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
 - [ ] The gateway reads `PUBLIC_API_SCHEMA_PATH`, defaulting to `../public-api/base.v1.json` ([3](#manifest-generate-base-public-api-manifestmjs-to-basev1json))
 - [ ] `make regen-public-api` writes `artifacts/_public-api/allowlist.v1.json`, and the gateway does not read it at runtime ([3](#allowlist-generate-public-api-schemajs-to-allowlistv1json))
 - [ ] `make regen-public-api` output contains only `product` and `businessPartner`, with operations `GET` and `LIST` ([3](#allowlist-generate-public-api-schemajs-to-allowlistv1json))
@@ -463,6 +544,12 @@ Testable statements derived from this document, each linked to its section.
 - [ ] Relationship id resolution: object value uses `id`, else `identifier`, else `_id`; scalar value is the id; null or an object with none of them gives `data: null` without `links`; ids in links are URL-encoded ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] `links.self` is present only when an id exists ([4.3](#43-fields-and-fail-closed-filtering))
 - [ ] A write with `relationships.<field>.data.id` sets the field's internal path; a missing `data` sets `null` ([4.3](#43-fields-and-fail-closed-filtering))
+- [ ] On a versioned resource, a single-record `GET`, `POST`, `PUT` and `PATCH` return an `ETag` header equal to `meta.etag`, and list items carry `meta.etag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] `PUT` or `PATCH` without `If-Match`, or with `*`, returns `428` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] `PUT` or `PATCH` with a stale ETag returns `412` and leaves the record unchanged; with a malformed one returns `412`, never `500` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] `PUT` or `PATCH` with the current ETag succeeds and returns a different `ETag` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] Sending `updated` in a write body returns `400` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
+- [ ] `DELETE` succeeds without `If-Match` ([4.5](#45-optimistic-concurrency-etag-and-if-match))
 
 ### Key management ([5](#5-api-key-management-contract-oauth2api-keys))
 - [ ] Update and rotate responses contain the `key` object fields (`id`, `name`, `clientId`, `capabilities`, `isActive`); rotate adds `clientSecret` and `tokensRevoked` ([5.2](#52-endpoints))
@@ -514,3 +601,4 @@ Testable statements derived from this document, each linked to its section.
 - [ ] `/api/openapi.json` and `/api/v1/openapi.json` return the same document; only the latter is `no-store` ([7](#7-openapi-sources-and-endpoint-matrix))
 - [ ] `/api`, `/docs`, `/healthz` and the two OpenAPI routes need no key ([7](#7-openapi-sources-and-endpoint-matrix))
 - [ ] Every manifest resource and operation appears as a gateway path ([7](#7-openapi-sources-and-endpoint-matrix))
+- [ ] For versioned resources the gateway document declares the `ETag` response header, the required `If-Match` parameter with `412` and `428` on `PUT` and `PATCH`, and `meta.etag` ([7](#7-openapi-sources-and-endpoint-matrix))
