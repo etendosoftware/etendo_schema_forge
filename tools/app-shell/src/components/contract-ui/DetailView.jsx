@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
 import { X, Check, Save, Printer, Mail, Trash2, Loader2, Lock, Undo2 } from 'lucide-react';
 import TabStripButton from './TabStripButton.jsx';
+import DetailTabStrip from './DetailTabStrip.jsx';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
@@ -21,6 +22,7 @@ import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { useLabel, useMenuLabel, useUI } from '@/i18n';
 import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver } from './saveActions.jsx';
+import { DetailDeleteButton } from './DetailDeleteButton.jsx';
 import { translateBackendError, translateBackendErrorResponse } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -2813,14 +2815,10 @@ export function DetailView({
                 // processed-document delete behavior changes.
                 hideDeleteButton: hideDeleteButton || windowReadOnly,
               }) && (
-                <button
+                <DetailDeleteButton
                   onClick={() => setShowDeleteConfirm(true)}
-                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors`}
                   title={ui('delete')}
-                  data-testid="action-delete"
-                >
-                  <Trash2 className="h-5 w-5" data-testid="Trash2__fa3275" />
-                </button>
+                  data-testid="DetailDeleteButton__fa3275" />
               )}
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
@@ -3211,29 +3209,16 @@ export function DetailView({
                       onMouseDown={autoSaveOnBlur && linesLayout === 'inlineEditable' ? () => handleFieldBlurRef.current?.() : undefined}
                     >
                       <div className={`flex items-center justify-between border-b border-border/50 ${getTabStripBleedClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, formScrollPaddingX })} ${(getInlineEditableShrinkClassName(linesLayout))}`}>
-                        <div className="flex items-center gap-0">
-                          {tabs.map((tab, idx) => {
-                            const tabIndicatorCls = linesLayout === 'inlineEditable'
-                              ? 'absolute bottom-0 left-0 right-0 h-[2px] bg-foreground'
-                              : 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full';
-                            return (
-                              <TabStripButton
-                                key={tab.key}
-                                iconKey={tab.key}
-                                label={tab.label}
-                                count={tab.count}
-                                isActive={activeTab === idx}
-                                onClick={() => { setActiveTab(idx); setSelectedLine(null); setSelectedSecondaryLine(null); }}
-                                paddingY={secondaryTabsPaddingY}
-                                showHoverLine={secondaryTabsShowHoverLine}
-                                indicatorCls={tabIndicatorCls}
-                                tMenu={tMenu}
-                                testId={`tab-${tab.key}`}
-                                disabledHint={tab.saveFirstHint}
-                                data-testid="TabStripButton__fa3275" />
-                            );
-                          })}
-                        </div>
+                        <DetailTabStrip
+                          tabs={tabs}
+                          activeIndex={activeTab}
+                          onSelect={(idx) => { setActiveTab(idx); setSelectedLine(null); setSelectedSecondaryLine(null); }}
+                          tMenu={tMenu}
+                          getIndicatorCls={() => (linesLayout === 'inlineEditable'
+                            ? 'absolute bottom-0 left-0 right-0 h-[2px] bg-foreground'
+                            : 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full')}
+                          buttonProps={{ paddingY: secondaryTabsPaddingY, showHoverLine: secondaryTabsShowHoverLine }}
+                          data-testid="DetailTabStrip__fa3275" />
                       </div>
 
                       {/* Tab content: Lines.

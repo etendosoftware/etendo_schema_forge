@@ -8,9 +8,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { getSubscription, createPortalSession } from '@/lib/upgrade/api.js';
 import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
-
-/** Statuses whose subscription is genuinely healthy enough to promise a future renewal. */
-const RENEWING_STATUSES = new Set(['active', 'trialing']);
+import { RENEWING_STATUSES } from '@/lib/upgrade/subscriptionStatus.js';
 
 /**
  * Maps Stripe's live subscription `status` (lowercase, provider-defined — see

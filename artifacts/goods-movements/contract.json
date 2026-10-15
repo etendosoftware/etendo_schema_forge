@@ -1,8 +1,8 @@
 {
   "version": "0.23.0",
   "generatedAt": "2026-07-29T14:51:09.206Z",
-  "updatedAt": "2026-10-09T16:43:30.475Z",
-  "checksum": "a60311221a333a87",
+  "updatedAt": "2026-10-13T17:27:53.449Z",
+  "checksum": "c3ef9bcfcde37655",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -86,7 +86,7 @@
           "hintKeys": {
             "D": "goodsMovementsPostedDisabledHint"
           },
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
         }
       ]
     },
@@ -187,6 +187,7 @@
             },
             "explicitType": true,
             "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
             "badgeLabels": {
               "true": {
                 "en_US": "Posted",
@@ -685,7 +686,7 @@
           "hintKeys": {
             "D": "goodsMovementsPostedDisabledHint"
           },
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
         }
       ]
     },

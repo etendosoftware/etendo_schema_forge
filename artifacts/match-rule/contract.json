@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.5.0",
   "generatedAt": "2026-06-11T18:36:13.442Z",
-  "updatedAt": "2026-09-25T17:52:14.319Z",
-  "checksum": "740ceda1db53cadf",
+  "updatedAt": "2026-10-13T18:01:22.710Z",
+  "checksum": "44b9b585ebe70a12",
   "frontendContract": {
     "window": {
       "id": "24963D64E83B4543A7F6BD248CF944EE",
@@ -340,24 +340,15 @@
             "enumValues": [
               {
                 "value": "C",
-                "name": "Contains",
-                "labels": {
-                  "es_ES": "Contains"
-                }
-              },
-              {
-                "value": "R",
-                "name": "Regex",
-                "labels": {
-                  "es_ES": "Regex"
-                }
+                "name": "matchRuleConditionOptionContains"
               },
               {
                 "value": "S",
-                "name": "Starts with",
-                "labels": {
-                  "es_ES": "Starts with"
-                }
+                "name": "matchRuleConditionOptionStartsWith"
+              },
+              {
+                "value": "R",
+                "name": "matchRuleConditionOptionRegex"
               }
             ],
             "searchSelect": true,

@@ -93,6 +93,29 @@ function renderModal(props = {}) {
 }
 
 describe('OcrReviewModal', () => {
+  // CP-7 — informational notice when the invoice prints no recipient tax id; never gates Continue.
+  it('shows the receiver-absent notice only when the flag is set, without gating Continue', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderModal({ receiverTaxIdAbsent: true });
+
+    expect(screen.getByTestId('ocr-review-receiver-absent')).toHaveTextContent('ocrReceiverTaxIdAbsent');
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    await user.click(continueButton());
+    expect(onSubmit).toHaveBeenCalled();
+  });
+
+  it('shows no receiver-absent notice by default, and Continue is unaffected', async () => {
+    renderModal();
+    expect(screen.queryByTestId('ocr-review-receiver-absent')).toBeNull();
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+  });
+
+  it('keeps Continue disabled for a blocking reason even with the notice shown', () => {
+    renderModal({ receiverTaxIdAbsent: true, preResolved: {}, resolving: true });
+    expect(screen.getByTestId('ocr-review-receiver-absent')).toBeInTheDocument();
+    expect(continueButton()).toBeDisabled();
+  });
+
   it('renders extracted and pre-resolved field values, then submits enabled values', async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderModal();

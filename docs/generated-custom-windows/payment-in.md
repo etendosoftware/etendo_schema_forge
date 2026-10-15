@@ -214,7 +214,7 @@ both sides plus the rate that was actually booked:
 
 ```
 Importe del cobro
-+ 21,34 $
+21,34 $
   (0,680272)  14,52 €
 ```
 
@@ -394,3 +394,20 @@ the same `FieldItem`) and is **not** changed here.
 payment whose customer or deposit account has a long name. The date shows in full, for example
 `23/09/2026`, and the long values end in "…". Hovering a cut value shows the full text, and hovering
 a value that fits shows no tooltip.
+
+## Amount sign and colour — ETP-5728
+
+Payment In amounts carry no `+` prefix and use the default (black) text colour (`hsl(var(--foreground))`),
+whether or not the receipt is deposited: the list Amount column (`PaymentHeaderTableBase.buildColumns`),
+the list sidebar hero ("Cobrado este mes") and the detail sidebar hero (`PaymentDetailSidebarBase`).
+Payment Out is identical (no sign, default colour). Neither direction is green or red; the direction is
+conveyed by the window itself (Receipts vs Payments). `formatCurrency` still prints its own `-` for
+genuinely negative values; nothing is prefixed on top of it.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

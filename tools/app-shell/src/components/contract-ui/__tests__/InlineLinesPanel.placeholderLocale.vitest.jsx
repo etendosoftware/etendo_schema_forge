@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 /**
  * InlineLinesPanel — inline selector/search cell placeholder must translate
  * by locale, mirroring the column HEADER's own label resolution (ETP-5023).
@@ -23,6 +24,13 @@ import { render, screen, within, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import React, { createRef } from 'react';
+
+// The line delete button renders the Iconic trash from the core custom-icons barrel;
+// the published core may predate it, so stub it while keeping every other icon real.
+vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+  ...(await importOriginal()),
+  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+}));
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },

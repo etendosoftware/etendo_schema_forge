@@ -1,6 +1,7 @@
 // @covers tools/app-shell/src/lib/backendErrors.js
 // @covers tools/app-shell/src/locales/en_US.json
 // @covers tools/app-shell/src/locales/es_ES.json
+// @covers tools/app-shell/src/locales/es_AR.json
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -274,6 +275,37 @@ describe('translateBackendError', () => {
           if (locale !== 'en_US') assert.notEqual(translated, raw, `${locale}.${key} is untranslated`);
         }
       });
+    }
+  });
+
+  // Sales order Reactivate refusals (com.etendoerp.go OrderReactivationGuard). The backend
+  // sends them in English only, so the SPA must map each one to a locale key.
+  describe('sales order reactivation refusals', () => {
+    const KNOWN = [
+      {
+        raw: 'This order cannot be reactivated because it has linked shipments or invoices.',
+        key: 'cannotReactivateLinkedDocs',
+      },
+      {
+        raw: 'The documents linked to this order could not be checked, so it has not been reactivated. Try again.',
+        key: 'backendError.orderLinkedDocsCheckFailed',
+      },
+    ];
+
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const json = JSON.parse(
+        readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+      for (const { raw, key } of KNOWN) {
+        it(`resolves "${raw.slice(0, 40)}..." through ${key} to the ${locale} text`, () => {
+          const asked = [];
+          const t = (k) => { asked.push(k); return json.genericLabels[k] ?? k; };
+          const translated = translateBackendError(raw, t);
+          assert.ok(asked.includes(key), `${raw} is not mapped to ${key}`);
+          assert.equal(translated, json.genericLabels[key], `${locale}.${key}`);
+          assert.ok(translated.trim(), `${locale}.${key} is blank`);
+          if (locale !== 'en_US') assert.notEqual(translated, raw, `${locale}.${key} is untranslated`);
+        });
+      }
     }
   });
 
@@ -3013,6 +3045,93 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
     });
     assert.equal(text, es('backendError.invoiceUnpostNotCompleted'));
     assert.doesNotMatch(text, /VO|\{docStatus\}/);
+  });
+});
+
+// ── ETP-5745 follow-up: reactivation refused for a fiscally-accepted, already-rectified
+// invoice — rendered from its identity plus interpolated messageParams (fiscalSystem,
+// rectificativas). The first BACKEND_ERROR_KEY_MAP entry whose locale text actually consumes
+// messageParams end to end (every sibling key in the ETP-5692 block above is param-less).
+describe('translateBackendError — invoice reactivate fiscal-rectified refusal (ETP-5745 follow-up)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const KEY = 'ETGO_InvoiceReactivateFiscalRectified';
+  const I18N_KEY = 'backendError.invoiceReactivateFiscalRectified';
+
+  it('renders the key in es_ES and en_US, never the raw key or the backend prose', () => {
+    const prose = 'ignored backend prose';
+    const esText = translateBackendError(prose, es, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
+    });
+    const enText = translateBackendError(prose, en, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
+    });
+    assert.notEqual(esText, I18N_KEY);
+    assert.notEqual(enText, I18N_KEY);
+    assert.notEqual(esText, prose);
+    assert.notEqual(esText, enText);
+  });
+
+  it('interpolates fiscalSystem and a single-element rectificativas array with no brackets', () => {
+    const text = translateBackendError('ignored', es, {
+      messageKeys: [KEY],
+      messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
+    });
+    assert.match(text, /Verifactu/);
+    assert.match(text, /FR-0001/);
+    assert.doesNotMatch(text, /[[\]]/);
+  });
+
+  it('joins a multi-element rectificativas array with ", ", not Array.toString\'s bare comma', () => {
+    const text = translateBackendError('ignored', es, {
+      messageKeys: [KEY],
+      messageParams: { fiscalSystem: 'TicketBAI', rectificativas: ['FR-0001', 'FR-0002', 'FR-0003'] },
+    });
+    assert.match(text, /FR-0001, FR-0002, FR-0003/);
+    assert.doesNotMatch(text, /FR-0001,FR-0002/);
+  });
+
+  it('passes a non-array (bare) rectificativas value through unchanged', () => {
+    const text = translateBackendError('ignored', es, {
+      messageKeys: [KEY],
+      messageParams: { fiscalSystem: 'Verifactu', rectificativas: 'FR-0001' },
+    });
+    assert.match(text, /FR-0001/);
+  });
+
+  it('keeps the backend prose when the locale has no entry for the key', () => {
+    const prose = 'raw backend prose';
+    assert.equal(translateBackendError(prose, (k) => k, {
+      messageKeys: [KEY], messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
+    }), prose);
+  });
+});
+
+// ── translateByMessageKey messageParams forwarding — no regression on param-less keys ──
+//
+// translateByMessageKey now forwards messageParams to t(key, params) for EVERY keyed message,
+// via toInterpolationParams (array values joined with ', '). Every pre-existing
+// BACKEND_ERROR_KEY_MAP entry has a locale string with no `{var}` token, so passing params
+// through must render identically to passing none — t() simply ignores params the string does
+// not reference (the standard, documented interpolation behavior).
+describe('translateByMessageKey — messageParams forwarding does not regress param-less keys (ETP-5745 follow-up)', () => {
+  const es = localeTranslator('es_ES');
+
+  it('renders ETGO_InvoiceUnpostNotPosted identically whether or not messageParams are sent', () => {
+    const withoutParams = translateBackendError('ignored', es, { messageKeys: ['ETGO_InvoiceUnpostNotPosted'] });
+    const withParams = translateBackendError('ignored', es, {
+      messageKeys: ['ETGO_InvoiceUnpostNotPosted'], messageParams: { someExtra: ['a', 'b'] },
+    });
+    assert.equal(withParams, withoutParams);
+    assert.ok(withParams.trim());
+  });
+
+  it('renders ProductNotNullAndMovementQtyZero identically whether or not messageParams are sent', () => {
+    const withoutParams = translateBackendError('ignored', es, { messageKeys: ['ProductNotNullAndMovementQtyZero'] });
+    const withParams = translateBackendError('ignored', es, {
+      messageKeys: ['ProductNotNullAndMovementQtyZero'], messageParams: { fields: ['a', 'b'] },
+    });
+    assert.equal(withParams, withoutParams);
   });
 });
 

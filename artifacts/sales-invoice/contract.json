@@ -1,8 +1,8 @@
 {
   "version": "0.91.0",
   "generatedAt": "2026-09-17T15:12:05.781Z",
-  "updatedAt": "2026-10-13T13:49:29.304Z",
-  "checksum": "c28a95219dca050e",
+  "updatedAt": "2026-10-14T21:15:10.360Z",
+  "checksum": "3c1b24be71e4184e",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -140,7 +140,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -1844,7 +1844,8 @@
           "keepSaveWhenCompletedFields": [
             "accountingDate",
             "project",
-            "costcenter"
+            "costcenter",
+            "aeatsiiErrorRegistral"
           ],
           "editableLineFieldsWhenCompleted": [
             "project",
@@ -2973,7 +2974,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },

@@ -19,6 +19,8 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
@@ -504,5 +506,83 @@ describe('FmModel349Page — in-flight save locks the form (ETP-5597)', () => {
     expect(persistManualData).toHaveBeenLastCalledWith(
       'decl-349', { identification: { sustitutiva: true, formerStatement: '3490000000003' } }, expect.any(Object),
     );
+  });
+});
+
+// ETP-5725 — `decl._duplicatePeriodPresented` (set by FmListPage.jsx: true only when a sibling
+// declaration for this (model, year, period) is already in the submitted family) drives two
+// things, mirroring 303's `rectificativa` auto-default + lock (FmModel303Page.jsx):
+//   1. The `identChecks` lazy initializer defaults `sustitutiva` to true for a brand-new,
+//      never-persisted draft.
+//   2. `DeclarationTypeControl`'s `lockNormalOption` disables the "Normal" option — but ONLY
+//      while Sustitutiva is CURRENTLY checked (review B1 fix), so a legacy declaration saved
+//      with `sustitutiva: false` while a sibling is presented never gets permanently stuck
+//      unable to select Normal again.
+describe('FmModel349Page — ETP-5725 auto-default sustitutiva + lockNormalOption', () => {
+  it('auto-defaults to Sustitutiva (no persisted value) when _duplicatePeriodPresented is true', () => {
+    render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} />);
+    expect(sustitutivaBtn().getAttribute('aria-checked')).toBe('true');
+    expect(normalBtn().getAttribute('aria-checked')).toBe('false');
+    expect(banner()).not.toBeNull();
+  });
+
+  it('locks "Normal" (disabled) once auto-defaulted to Sustitutiva, Sustitutiva itself stays clickable', () => {
+    render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} />);
+    expect(normalBtn().disabled).toBe(true);
+    expect(sustitutivaBtn().disabled).toBe(false);
+  });
+
+  it('does NOT auto-default when _duplicatePeriodPresented is false (duplicate exists but sibling not submitted)', () => {
+    render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: false })} {...defaultProps} />);
+    expect(normalBtn().getAttribute('aria-checked')).toBe('true');
+    expect(normalBtn().disabled).toBe(false);
+    expect(banner()).toBeNull();
+  });
+
+  it('does NOT auto-default when _duplicatePeriodPresented is absent — regression guard for a period with no prior declaration', () => {
+    render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    expect(normalBtn().getAttribute('aria-checked')).toBe('true');
+    expect(normalBtn().disabled).toBe(false);
+    expect(banner()).toBeNull();
+  });
+
+  it('an explicit persisted sustitutiva=false wins over the auto-default (never-saved check only applies when truly unset)', () => {
+    render(<FmModel349Page decl={makeDecl({
+      _duplicatePeriodPresented: true,
+      manualData: { identification: { sustitutiva: false } },
+    })} {...defaultProps} />);
+    expect(normalBtn().getAttribute('aria-checked')).toBe('true');
+  });
+
+  // ── B1 strand regression (the review blocker) ───────────────────────────
+  it('B1: a legacy sustitutiva=false declaration with _duplicatePeriodPresented true keeps "Normal" clickable', () => {
+    render(<FmModel349Page decl={makeDecl({
+      _duplicatePeriodPresented: true,
+      manualData: { identification: { sustitutiva: false } },
+    })} {...defaultProps} />);
+    // Sustitutiva is NOT checked, so lockNormalOption must be false — Normal stays enabled,
+    // unlike the unconditional `Boolean(decl._duplicatePeriodPresented) && !isSubmitted` that
+    // review caught (it would have disabled Normal here even though Sustitutiva was never set).
+    expect(normalBtn().disabled).toBe(false);
+    expect(sustitutivaBtn().getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('B1: once the user clicks Sustitutiva (even by accident) while duplicatePeriodPresented, Normal locks — but clicking Sustitutiva is still always possible to reach it', () => {
+    render(<FmModel349Page decl={makeDecl({
+      _duplicatePeriodPresented: true,
+      manualData: { identification: { sustitutiva: false } },
+    })} {...defaultProps} />);
+    expect(normalBtn().disabled).toBe(false);
+    fireEvent.click(sustitutivaBtn());
+    expect(sustitutivaBtn().getAttribute('aria-checked')).toBe('true');
+    expect(normalBtn().disabled).toBe(true);
+  });
+
+  it('lockNormalOption never applies once the declaration is submitted, regardless of the current value', () => {
+    render(<FmModel349Page decl={SUSTITUTIVA_DECL({}, { status: 'submitted', _duplicatePeriodPresented: true })} {...defaultProps} />);
+    // Already disabled by `isSubmitted` (pre-existing behavior) — both options locked, same
+    // outcome as before ETP-5725, unaffected by the new guard.
+    expect(normalBtn().disabled).toBe(true);
+    expect(sustitutivaBtn().disabled).toBe(true);
   });
 });

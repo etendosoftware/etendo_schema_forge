@@ -497,6 +497,35 @@ async function expectAnyEnvironmentOrDashboard(page) {
 }
 
 /**
+ * Re-stub the window-access map as a NON-admin role WITHOUT "Show Accounting Fields"
+ * (`capabilities.showAccountingFields: false`), still with full access to every window.
+ *
+ * `login()` grants every capability; call this AFTER it and then navigate (`page.goto`), so
+ * this init script runs after login's and its `window.fetch` wrapper answers first.
+ * Shared by the specs that assert what such a role does NOT see (ETP-5684 posting surfaces,
+ * the accounting monitor menu, the roles overview).
+ */
+export async function installNonAdminCapabilities(page) {
+  await page.addInitScript(() => {
+    const adminFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input?.url;
+      if (url && url.includes('/sws/neo/windowaccessmap')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            windowAccess: new Proxy({}, { get: () => 'full' }),
+            capabilities: { showAccountingFields: false, isAdminOrClientAdmin: false },
+          }),
+        });
+      }
+      return adminFetch(input, init);
+    };
+  });
+}
+
+/**
  * Navigate to a specific window by slug.
  * Uses path-based routing (not hash-based).
  */

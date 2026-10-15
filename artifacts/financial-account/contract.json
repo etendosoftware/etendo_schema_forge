@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-09-29T12:00:08.872Z",
-  "updatedAt": "2026-10-07T14:26:32.451Z",
-  "checksum": "117a1093353a7507",
+  "updatedAt": "2026-10-13T15:55:30.617Z",
+  "checksum": "9b06061c0855efe2",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -1290,6 +1290,7 @@
             "defaultValue": "N",
             "explicitType": true,
             "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
             "badgeLabels": {
               "true": {
                 "en_US": "Posted",
@@ -2996,6 +2997,7 @@
             },
             "defaultValue": "N",
             "explicitType": true,
+            "visibleWhenCapability": "showAccountingFields",
             "gridOrder": 6,
             "validation": {
               "required": true,
