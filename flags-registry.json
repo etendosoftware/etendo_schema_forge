@@ -844,6 +844,54 @@
           }
         ]
       }
+    },
+    {
+      "id": "public-api-keys",
+      "description": "Admin-only page (/api-keys) to create, rename, rotate, revoke and delete the user's own public API keys, backed by the /oauth2/api-keys credential-management API. Visual gating only: the backend API is not controlled by this flag. The flag value and its targeting are managed in ConfigCat.",
+      "owner": "platform-team",
+      "jira": "ETP-5345",
+      "created": "2026-09-16",
+      "flag": {
+        "key": "public-api-keys",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "PLACEHOLDER date: no removal date defined yet; platform team to decide. The 2026-12-31 value is not a commitment and has no justification.",
+        "symbols": [
+          "public-api-keys",
+          "PUBLIC_API_KEYS",
+          "ApiKeysPage",
+          "apiKeysApi",
+          "api-keys",
+          "apiKeys"
+        ],
+        "$symbolsComment": "ApiKeysPage and apiKeysApi are how runtime-routes.jsx and the page reference the feature without naming the flag; `api-keys` is the menu.json item name, the route path and the navigationExpectations.js catalog entry; `apiKeys` is the i18n key prefix this feature adds to the locale files. The flag is frontend-only: no backend feature-flag entry exists for it, and /oauth2/api-keys stays available when the flag is off."
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/pages/ApiKeysPage.jsx",
+          "tools/app-shell/src/lib/apiKeysApi.js"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Owned code only. menu.json, runtime-routes.jsx, SideMenu.jsx, CommandPalette.jsx, flag-keys.js, lib/flags/index.js, the locale files and navigationExpectations.js are shared toggle points. The backend (OAuth2Servlet /api-keys routes, SFWindowAccessMap publicApiKeyManagement capability) is shared and not owned by this flag, so no backend path is listed. See docs/public-api.md section 6.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/__tests__/apiKeysApi.test.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/layout/SideMenu/__tests__/SideMenu.vitest.jsx",
+            "note": "Shared spec; flag constant is stubbed here. Whether it carries an on/off case for the public-api-keys item was not verified."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/__tests__/CommandPalette.vitest.jsx",
+            "note": "Shared spec; declares an api-keys menu item with featureFlag public-api-keys."
+          }
+        ]
+      }
     }
   ]
 }
