@@ -108,7 +108,7 @@ Two CI jobs run it today, and a third consumes its output:
 
 | Job | Trigger | What happens to the outputs |
 |---|---|---|
-| Jenkins `Node Tests` stage (`etendo-go/schemaforge/Jenkinsfile` in the separate `com.etendoerp.jenkins.pipelines` repo) | Its `GenericTrigger` fires on push to `develop` / `main`, PRs `mergeblock/*` → `develop`, and PRs `hotfix/*` → `main` or `develop`. `feature/*` PRs do **not** trigger it. Heavy stages are skipped when a non-hotfix PR carries the `local-validated` label | Feeds the `SonarQube Analysis` (branch analysis) and `Compare Coverage Results` stages |
+| Jenkins `Node Tests` stage (`etendo-go/schemaforge/Jenkinsfile` in the separate `com.etendoerp.jenkins.pipelines` repo) | Its `GenericTrigger` fires on push to `main`, on the daily cut (PRs `mergeblock/*` → `main`) and on PRs `hotfix/*` → `main` or `develop`. `feature/*` PRs and pushes to `develop` do **not** trigger it. The `local-validated` label no longer skips anything there: the cut is the only full run (ETP-5695) | Feeds the `SonarQube Analysis` (branch analysis) and `Compare Coverage Results` stages |
 | GitHub Action `Tests` (`.github/workflows/test.yml`), job `test` | `pull_request` (opened / synchronize / reopened) and push to `main` / `develop` | JUnit published as the "Test Results" check; both files uploaded as the `unit-coverage` workflow artifact (7-day retention) |
 | GitHub Action `Tests`, job `sonar` (check name `Sonar Build`) | Same triggers, runs after `test` | Downloads `unit-coverage` (only when `test` succeeded) and runs the SonarQube scan, which reads `coverage/merged-lcov.info` via `sonar-project.properties` |
 
