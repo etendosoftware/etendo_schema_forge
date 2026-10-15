@@ -48,6 +48,15 @@ export const UNIFIED_CALENDAR_POC = 'unified-calendar-poc';
  */
 export const IMPORT_BATCH_SIZE = 'import-batch-size';
 
+/**
+ * Reveals the "Mis empresas" entry in the user menu (ETP-5734): the page that lists the account's
+ * companies, split into owned and invited, with pending invitations. Visual gating only: the
+ * `/companies` route is registered unconditionally and every backend call it makes is
+ * authorized by the account session, never by this flag. Frontend-only on purpose — see the
+ * `targeting-key-divergence` item in flags-registry.json.
+ */
+export const MY_COMPANIES_PAGE = 'my-companies-page';
+
 export const FLAG_DEFAULTS = Object.freeze({
   [PROOF_OF_CONCEPT_MENU]: false,
   [WEBMCP_AGENT_CHAT]: false,
@@ -56,6 +65,7 @@ export const FLAG_DEFAULTS = Object.freeze({
   [PUBLIC_API_KEYS]: false,
   [UNIFIED_CALENDAR_POC]: false,
   [IMPORT_BATCH_SIZE]: 0,
+  [MY_COMPANIES_PAGE]: false,
 });
 
 /**

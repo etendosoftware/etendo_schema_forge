@@ -204,7 +204,10 @@ const BLOCKED_ACCESS_CONTENT = {
 // reachable while `environmentAccessDecision` is set, so AppLayoutAccessGate falls through
 // to the normal Outlet render (full chrome + routed page) instead of this screen on either
 // path — see the check around BlockedAccessScreen's render below.
-const ENVIRONMENT_GATE_EXEMPT_PATHS = ['/account', '/upgrade'];
+// ETP-5734 — `/companies` ("Mis empresas") joins them for the same reason: it reads only
+// account-level endpoints, and a blocked tenant is exactly when the account needs to see its
+// other companies and enter one of them.
+const ENVIRONMENT_GATE_EXEMPT_PATHS = ['/account', '/upgrade', '/companies'];
 function isEnvironmentGateExemptPath(pathname) {
   return ENVIRONMENT_GATE_EXEMPT_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)

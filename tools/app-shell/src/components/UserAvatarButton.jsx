@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, LogOut, User, Languages, Rocket } from 'lucide-react';
+import { Building2, ChevronRight, LogOut, User, Languages, Rocket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n/index.js';
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
 import { useLogout } from '@/auth/useLogout.js';
+import { useFeatureFlag, MY_COMPANIES_PAGE } from '@/lib/flags';
 import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 
 const LOCALES = [
@@ -29,6 +30,8 @@ export function UserAvatarButton({ expanded = false }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale, setLocale } = useLocaleSwitch();
+  // ETP-5734 — gates the entry only; `/companies` is registered unconditionally.
+  const myCompaniesEnabled = useFeatureFlag(MY_COMPANIES_PAGE);
   // ETP-5115: the menu used to decide whether to offer "change password" by reading a value
   // stashed in localStorage at login, which is why an SSO account saw no such option at all — not
   // disabled with a reason, simply absent. The account screen asks the server what the account
@@ -161,6 +164,15 @@ export function UserAvatarButton({ expanded = false }) {
               <Rocket className="h-3.5 w-3.5 mr-2" data-testid="Rocket__9f3744" />
               {ui('upgradeMenuAction')}
             </DropdownMenuItem>
+            {myCompaniesEnabled && (
+              <DropdownMenuItem
+                onSelect={() => navigate('/companies')}
+                data-testid="menu-my-companies"
+              >
+                <Building2 className="h-3.5 w-3.5 mr-2" data-testid="Building2__menu-my-companies" />
+                {ui('myCompaniesMenuAction')}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onSelect={() => navigate('/account')}
               data-testid="menu-account"
