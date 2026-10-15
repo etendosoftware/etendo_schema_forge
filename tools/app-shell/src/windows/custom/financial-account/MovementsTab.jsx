@@ -23,6 +23,7 @@ import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialo
 import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 import { resolveMovementDeleteBlock, movementHasUndoableState } from './movementActionEligibility.js';
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 
 // ---------------------------------------------------------------------------
 // KPI window suffix (shown in parentheses next to Inflows / Outflows labels)
@@ -250,7 +251,9 @@ export const MovementsTab = forwardRef(function MovementsTab(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  const sortColumns = useMemo(() => buildMovementSortColumns(ui), [ui]);
+  // ETP-5684 — the "Contabilizado" entry only for a role with "Show Accounting Fields".
+  const capabilities = useCapabilitiesSafe();
+  const sortColumns = useMemo(() => buildMovementSortColumns(ui, capabilities), [ui, capabilities]);
   const {
     sorted: sortedMovements, sortKey, sortDirection, toggleSort, selectSort, clearSort,
     isDefaultSort,

@@ -3191,8 +3191,8 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 - **Column widths stay in code** (`COLUMN_CHROME` in `AccountsHeaderTable.jsx`) on purpose: `decisions.json` is a semantic contract, not a stylesheet; Tailwind arbitrary values must be static in source, so a runtime `w-[${n}px]` would never compile; and `pl-[40px]` is not a width but a mirror of `NameCell`'s 32px avatar + 8px padding, so it is coupled to that cell body. The former 44px decorative drag-grip slot is gone.
 - **List chrome uses shared `ListView`/`DataTable` props, not decisions**, because these behaviours are generic and every window may reuse them:
   - `tablePaddingX=""` (passed by the wrapper in `windows/custom/financial-account/index.jsx`) cancels `ListView`'s default `px-2` on the table region. That padding would inset the slot's full-bleed rules — the one under the toolbar and the vertical one between the KPI panel and the rows — from both edges. The slot owns its inner spacing instead.
-  - `rowHoverStyle="elevated"` (passed to `DataTable` by `AccountsHeaderTable`) restores the retired `AccountRow`'s hover: an opaque background plus `shadow-lg` and `z-10`, so the row reads as a raised card and its shadow spills over the neighbouring separators. The default `"tint"` is `DataTable`'s pre-existing `hover:bg-muted/50` — no other grid changes. Selection backgrounds always win over the elevated background.
-  - **Last-row shadow clipping needs padding on TWO nested `overflow` boxes, not one (ETP-5388).** `DataTable`'s own table wrapper is `overflow-x-auto overflow-y-visible`, which the CSS spec computes as `auto` on **both** axes — but that wrapper "never itself overflows" (its height is intrinsic to its content), so padding it alone is a no-op. The box that actually clips is `<Table>`'s own hardcoded child div (schema_forge_core's table.jsx: `<div className="relative w-full overflow-auto">`), sized tight to the `<table>` with zero slack. `DataTable` therefore applies `pb-6 [&>div]:pb-6` together: the `[&>div]` half pads the real clipping box so the shadow (`0 10px 15px -3px` ≈ 22px of reach) has room, and the outer `pb-6` keeps the wrapper's own reported height consistent for whatever sits above it. `AccountsHeaderTable` adds a THIRD `overflow: auto` ancestor on top of `DataTable` (its own custom scroll region — unique to this hand-assembled headerTable, no other `rowHoverStyle="elevated"` consumer has one) and carries the same 24px of trailing padding for the same reason.
+  - The hovered row lifts (opaque white + Shadows/lg + `z-10`), the reading the retired `AccountRow` had. Since ETP-5600 that is `DataTable`'s default row hover for every list (`rowHoverStyle="lift"`, see `docs/ui-customization.md` §13 → *List row visuals*), so `AccountsHeaderTable` no longer passes `rowHoverStyle="elevated"` (still accepted as an alias). Selection backgrounds always win over the hover background.
+  - **Last-row shadow clipping (ETP-5388).** The box that clips the last row's shadow is `<Table>`'s own hardcoded child div (schema_forge_core's table.jsx: `<div className="relative w-full overflow-auto">`), sized tight to the `<table>`. `DataTable` pads it with `[&>div]:pb-6` whenever the lift hover is active on clickable rows. Since ETP-5600 the outer wrapper's own `pb-6` is gone: the inner padding already sits inside it, and with the lift now the default it only added 24px under every list. The same change also stops that inner room from showing as a 24px gap under the last row: the outer wrapper takes it back with `!-mb-6`, keeping the 24px as its own border box (so the shadow still paints unclipped) while its margin box ends at the table. `AccountsHeaderTable` adds a THIRD `overflow: auto` ancestor on top of `DataTable` (its own custom scroll region, unique to this hand-assembled headerTable). It used to carry its own `paddingBottom: 24` for the shadow; ETP-5600 removed it as redundant, because a scroll container still counts the wrapper's full border box as scrollable overflow, so scrolled to the bottom the last row's shadow has its 24px without a second gap.
 - **Account row actions use the same sticky cell as Sales Invoice.** `AccountsHeaderTable` passes a
   custom `rowQuickActions.render(account)` to `DataTable`; the renderer keeps the financial-account
   `AccountRowActions` contents (Edit, conditional Sync, and the account kebab), while `DataTable`
@@ -3712,3 +3712,24 @@ finished**, as relative time. Cash, offline/reconnectable and unconnected accoun
   `financeAccountsSyncUpdatedAgo`, `financeAccountsUpdatedAgo` and `financeAccountsUnsyncedNotice` were removed.
 - The sidebar "Saldo" header carries no sync pill (removed by product decision); only the per-account labels exist.
 - Out of scope: a "next sync in..." estimate (the sync is a per-client scheduled process).
+
+## Account selectors — ETP-5681
+
+The account fields of the edit modal's **Contabilidad** tab (`AccountingConfigurationSection` in
+`EditAccountModal.jsx`) use `AccountSelect`: the field is a button that opens the shared centered
+account search popup (`SearchPopup`, the one the report filters use for "Desde la cuenta"), titled
+with the field label. Optional fields show an ✕ to clear. The catalog (`catalogs.accounts` of
+`FinancialAccountAccountingHandler`) lists **posting accounts only**, and its labels now read
+`"<code> - <name>"` like every other account selector (they used an em dash, `"<code> — <name>"`,
+before ETP-5681; the `$_identifier` of each stored account changed the same way).
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Movements (`MovementsTable.jsx`): the posting dot under the type and the "Contabilizado" half of the "Tipo & Contabilizado" header are hidden, and the "Ordenar por" popover loses the entry (`buildMovementSortColumns(ui, capabilities)`). The movement kebab (`MovementRowKebab.jsx`) hides Contabilizar / Descontabilizar, and no stray separator is left above Eliminar.
+- Reconciliations: `decisions.json → entities.reconciliations.fields.posted` carries the gate; `getContractGridColumns` forwards it, so `ReconciliationListTable.jsx` drops the column, its cells and its sort entry, and the advanced filter (`buildReconciliationFilterColumns(ui, capabilities)`) drops the field. `entities.transaction.fields.posted` carries it too.
+- The reconciled-transactions modal (`ReconciledTxnsModal.jsx`) hides the posting dot.
+- Kept on purpose: the Reactivar / Eliminar confirmation dialogs still say the accounting entry will be removed (a consequence of an action the user may take).
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

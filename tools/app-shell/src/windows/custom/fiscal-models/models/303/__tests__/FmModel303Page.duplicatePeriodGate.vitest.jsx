@@ -106,7 +106,7 @@ describe('FmModel303Page — duplicate-period banner', () => {
   it('clears the banner once rectificativa is checked, even though _hasDuplicatePeriod is still true', () => {
     const decl = makeDecl({
       _hasDuplicatePeriod: true,
-      identification: { tipo_declaracion: 'I', rectificativa: true, bank_iban: 'ES1234567890123456789012' },
+      identification: { tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', bank_iban: 'ES1234567890123456789012' },
     });
     render(<FmModel303Page decl={decl} {...defaultProps} />);
     expect(screen.queryByText('fm.duplicate_period.warning')).not.toBeInTheDocument();
@@ -144,7 +144,7 @@ describe('FmModel303Page — duplicate-period gate blocks "Marcar como Presentad
   it('allows presenting once rectificativa is checked', () => {
     const decl = makeDecl({
       _hasDuplicatePeriod: true,
-      identification: { tipo_declaracion: 'I', rectificativa: true, bank_iban: 'ES1234567890123456789012' },
+      identification: { tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', bank_iban: 'ES1234567890123456789012' },
     });
     render(<FmModel303Page decl={decl} {...defaultProps} />);
     fireEvent.click(submitBtn());
@@ -156,5 +156,58 @@ describe('FmModel303Page — duplicate-period gate blocks "Marcar como Presentad
     render(<FmModel303Page decl={decl} {...defaultProps} />);
     fireEvent.click(submitBtn());
     expect(screen.getByTestId('PresentModal-mock')).toBeInTheDocument();
+  });
+});
+
+// ETP-5725 — `decl._duplicatePeriodPresented` (narrower than `_hasDuplicatePeriod`: set by
+// FmListPage.jsx only when a sibling for this period is already in the submitted family) makes
+// the `identChecks` lazy initializer auto-default `rectificativa` to true for a brand-new,
+// never-persisted draft — so the gate above never even fires, and presenting is allowed
+// immediately without the user having to find/check the box themselves.
+describe('FmModel303Page — ETP-5725 auto-default rectificativa on duplicatePeriodPresented', () => {
+  it('auto-checks rectificativa (no warning banner, no toast, present allowed) for a fresh draft', async () => {
+    const { toast } = await import('sonner');
+    // motivo_rectificacion/bank_iban are only REQUIRED once rectificativa is checked (same
+    // fields the pre-existing "allows presenting once rectificativa is checked" test above
+    // supplies) — provided here so the generic required-field gate doesn't mask what this test
+    // is actually about: the duplicate-period-specific gate/warning disappearing once the
+    // auto-default kicks in. rectificativa itself is deliberately left unset so it comes from
+    // the auto-default, not from this fixture.
+    const decl = makeDecl({
+      _hasDuplicatePeriod: true, _duplicatePeriodPresented: true,
+      identification: { tipo_declaracion: 'I', motivo_rectificacion: 'R', bank_iban: 'ES1234567890123456789012' },
+    });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    expect(screen.queryByText('fm.duplicate_period.warning')).not.toBeInTheDocument();
+    fireEvent.click(submitBtn());
+    expect(toast.error).not.toHaveBeenCalledWith('fm.duplicate_period.warning');
+    expect(screen.getByTestId('PresentModal-mock')).toBeInTheDocument();
+  });
+
+  it('does NOT auto-check rectificativa when _duplicatePeriodPresented is false (duplicate exists but sibling not submitted)', () => {
+    const decl = makeDecl({ _hasDuplicatePeriod: true, _duplicatePeriodPresented: false });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    // Same behavior as the pre-ETP-5725 gate tests above: still gated, warning still shows.
+    expect(screen.getByText('fm.duplicate_period.warning')).toBeInTheDocument();
+  });
+
+  it('does NOT auto-check rectificativa when _duplicatePeriodPresented is absent (undefined)', () => {
+    // Regression guard: a period with no prior declaration at all (no _hasDuplicatePeriod,
+    // no _duplicatePeriodPresented) must keep the untouched default.
+    const decl = makeDecl();
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    expect(screen.queryByText('fm.duplicate_period.warning')).not.toBeInTheDocument();
+  });
+
+  it('an explicit persisted rectificativa=false wins over the auto-default', () => {
+    // A declaration that was already saved once with rectificativa explicitly unchecked keeps
+    // that choice — the auto-default only applies to a NEVER-persisted value (undefined).
+    const decl = makeDecl({
+      _hasDuplicatePeriod: true,
+      _duplicatePeriodPresented: true,
+      identification: { tipo_declaracion: 'I', rectificativa: false },
+    });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    expect(screen.getByText('fm.duplicate_period.warning')).toBeInTheDocument();
   });
 });

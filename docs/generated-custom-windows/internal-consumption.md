@@ -118,7 +118,7 @@ Use this window to register stock consumed inside the organization rather than s
 
 ### Cross-window
 17. Open "Documentos no contabilizados" (`/not-posted-documents`) and confirm Internal Consumption appears as a document-type filter option and that an unposted Internal Consumption row can be posted from there.
-18. Open a saved record and confirm the **Attachments** tab works (upload, download, delete; 'Download all (ZIP)' and 'Delete all' with confirmation when multiple files exist).
+18. Open a saved record and confirm the **Attachments** tab works (upload, download, delete; with two rows ticked, the selection bar offers a ZIP download of just those and a delete with confirmation — the header has no bulk controls since ETP-5526).
 
 ## Automated evidence
 
@@ -161,3 +161,25 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Design changes — ETP-5681
+
+- **The line form opens the same product drawer as the grid.** `EntityForm.LookupFormField` used to hardcode
+  `ProductSearchDrawer` and ignore the field's `lookupDrawer`. It now resolves the drawer through
+  `lookupDrawers.js`, so the line form opens the declared `product-stock` drawer as the add row and the inline
+  edit already did.
+- `onSelectMappings` (the storage-bin fill from `_aux._LOC`) is still applied caller-side by the grid only
+  (`DataTable.applyOnSelectMappings`), so the form behaves as before for that mapping.
+- `decisions.json`: only the `lookupTitle` removal below.
+- **Drawer title translated.** The product field no longer declares `lookupTitle`, which was a literal English string
+  ("Product" / "Product + Warehouse") that made the drawer search read "Buscar Product..." in Spanish. The title and the
+  placeholder now come from the field's translated label ("Buscar Producto...").
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped).
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

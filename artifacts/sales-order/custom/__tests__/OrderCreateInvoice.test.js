@@ -1,3 +1,4 @@
+// @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -674,16 +675,22 @@ describe('OrderCreateInvoice', () => {
     });
   });
 
-  // ETP-4312: the modal must DERIVE the view label from each doc's type. Passing
-  // a hardcoded primary={ui('soViewInvoice')} would force "Ver factura" on a
-  // shipment-only result. The arrow now comes from the modal's SVG, not the label.
-  describe('ConfirmResultModal primary label (ETP-4312 regression)', () => {
-    it('does not force a hardcoded soViewInvoice primary label', () => {
-      assert.doesNotMatch(src, /primary=\{ui\('soViewInvoice'\)\}/);
+  // ETP-4312 / ETP-5674: ConfirmResultModal derives its title, banner and "Ver …" label
+  // from each doc's type. The caller hands it only `docs`; a title/primary/currency prop
+  // would be silently ignored (and was how "Ver factura" ended up on a shipment-only result).
+  describe('ConfirmResultModal receives only docs, never presentational props (ETP-4312)', () => {
+    it('passes no title, primary or currency prop to the modal', () => {
+      const element = src.match(/<ConfirmResultModal[\s\S]*?\/>/);
+      assert.ok(element, 'ConfirmResultModal element not found');
+      assert.doesNotMatch(element[0], /\b(title|primary|currency)=/);
     });
 
-    it('does not pass any hardcoded primary view label to the modal', () => {
-      assert.doesNotMatch(src, /primary=\{ui\('(soViewInvoice|poViewInvoice|soViewShipment|poViewReceipt|sqViewOrder)'\)\}/);
+    // The shipment's badge follows its real status: both places that build the shipment
+    // result carry `documentStatus`, and the modal's shipment doc forwards it.
+    it('forwards the real shipment documentStatus to the modal', () => {
+      assert.match(src, /currentShipment = \{[^}]*documentStatus: doc\?\.documentStatus \?\? null \}/);
+      assert.match(src, /result\.shipment = \{[^}]*documentStatus: doc\?\.documentStatus \?\? null \}/);
+      assert.match(src, /type: 'salida', num: confirmedDocs\.shipment\.documentNo, documentStatus: confirmedDocs\.shipment\.documentStatus/);
     });
   });
 

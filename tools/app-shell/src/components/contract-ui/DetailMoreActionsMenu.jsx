@@ -4,7 +4,9 @@ import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
-import { runPreUnpost } from '@/lib/preUnpost.js';
+import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { filterPostingActions } from '@/lib/capabilityVisibility.js';
 
 /**
  * Kebab ("more actions") menu of the detail toolbar.
@@ -31,6 +33,7 @@ export function DetailMoreActionsMenu({
   windowReadOnly,
 }) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const capabilities = useCapabilitiesSafe();
   const moreMenuRef = useRef(null);
   // Probe to detect whether customMenuContent actually renders anything for the
   // current record. A custom kebab component may return null based on status
@@ -38,7 +41,17 @@ export function DetailMoreActionsMenu({
   // popover would open as an empty box. Mirrors Sales Order's menuActions
   // behavior where the kebab opens nothing when no action applies.
   const moreMenuProbeRef = useRef(null);
-  const [customMenuHasContent, setCustomMenuHasContent] = useState(customMenuContent ? null : false);
+  // ETP-5562 — the probe verdict is only valid for the record it was measured on. A `false`
+  // measured on `/new` (custom content renders null for an unsaved header) used to stick after
+  // the first save: the early `return null` below unmounts the probe, so nothing could ever flip
+  // it back and the kebab stayed hidden until a full reload. Keying the verdict by record id makes
+  // it read as "unknown" (null → probe mounts again) as soon as the record identity changes.
+  const probeKey = data?.id || recordId;
+  const [probeVerdict, setProbeVerdict] = useState({ key: probeKey, has: customMenuContent ? null : false });
+  // A verdict measured on another record is stale: unknown (null) when there is custom content to
+  // probe, nothing to show (false) when there is none.
+  const staleVerdict = customMenuContent ? null : false;
+  const customMenuHasContent = probeVerdict.key === probeKey ? probeVerdict.has : staleVerdict;
 
   useEffect(() => {
     if (!showMoreMenu) return;
@@ -56,7 +69,7 @@ export function DetailMoreActionsMenu({
   useEffect(() => {
     if (!customMenuContent) return;
     const has = !!(moreMenuProbeRef.current && moreMenuProbeRef.current.childElementCount > 0);
-    setCustomMenuHasContent(prev => (prev === has ? prev : has));
+    setProbeVerdict(prev => (prev.key === probeKey && prev.has === has ? prev : { key: probeKey, has }));
   });
 
   // More actions — only render the button when there is something to show
@@ -69,9 +82,10 @@ export function DetailMoreActionsMenu({
   // same "!windowReadOnly && ..." pattern DetailView.jsx already applies to
   // renderSaveActions/processes/detailProcesses (see ETP-5116 sibling commit).
   const normalizedActions = Array.isArray(resolvedActions) ? resolvedActions : [];
+  // ETP-5684: a role without "Show Accounting Fields" sees no post/unpost action.
   const visibleActions = windowReadOnly
     ? []
-    : normalizedActions.filter(a => a.visible !== false);
+    : filterPostingActions(normalizedActions, capabilities).filter(a => a.visible !== false);
   // Every existing customMenuContent implementation (GoodsShipmentMoreMenu,
   // InventoryMenuContent, InternalConsumptionActions) fires a write action
   // (post/void/update quantities) on click, so it must be gated the same way
@@ -97,7 +111,7 @@ export function DetailMoreActionsMenu({
       recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
     });
     if (!preUnpost.success) {
-      toast.error(translateBackendError(preUnpost.message, ui) || ui('actionFailed'));
+      toast.error(translateBackendError(preUnpost.message, ui, preUnpostErrorIdentity(preUnpost)) || ui('actionFailed'));
       return false;
     }
     try {
@@ -114,7 +128,11 @@ export function DetailMoreActionsMenu({
       hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } catch (err) {
-      toast.error(err.message);
+      // ETP-5704 — translated like every other action failure of this menu (preUnpost above,
+      // runNeoMenuAction below): useDocumentAction carries the backend's English text and its
+      // AD_MESSAGE keys, and the toast must read in the UI locale.
+      toast.error(translateBackendError(err.message, ui, { messageKeys: err.messageKeys })
+        || ui('actionFailed'));
     }
     return true;
   };
@@ -195,7 +213,7 @@ export function DetailMoreActionsMenu({
                   recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
                 });
                 if (!preUnpost.success) {
-                  toast.error(translateBackendError(preUnpost.message, ui) || ui('actionFailed'));
+                  toast.error(translateBackendError(preUnpost.message, ui, preUnpostErrorIdentity(preUnpost)) || ui('actionFailed'));
                   return;
                 }
                 if (action.columnName) {

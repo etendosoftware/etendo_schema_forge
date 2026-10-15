@@ -43,7 +43,7 @@
         "field": "posted",
         "trueKey": "postedStatus",
         "falseKey": "notPostedStatus",
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
       }
     ],
     "labelOverrides": {
@@ -96,6 +96,7 @@
           "reason": "Action endpoint must be active (system); button rendered via moreMenuContent with flat { action: 'CO' } body"
         },
         "posted": {
+          "visibleWhenCapability": "showAccountingFields",
           "visibility": "readOnly",
           "type": "boolean",
           "form": false,
@@ -150,7 +151,6 @@
           "searchable": true,
           "lookup": true,
           "lookupDrawer": "product-stock",
-          "lookupTitle": "Product + Warehouse",
           "onSelectMappings": [
             {
               "from": "_aux._LOC",

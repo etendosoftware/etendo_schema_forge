@@ -55,6 +55,17 @@ Territory groups and their regimes:
 
 The manual screen still enforces territory-driven compatibility, but it no longer requires a prior selection on the first screen. Users can open manual mode directly, pick a territory there, and then choose one of the compatible systems. If they had already chosen a territory on the first screen, that territory appears preselected in the manual screen.
 
+**Order of the SIF options (ETP-5597).** Wherever the wizard offers the SIF systems as choices, they appear in the order **SII → TicketBAI → VERI\*FACTU** (only the presentation order; values, territory gating and defaults are unchanged):
+
+| Place | Options (order shown) |
+|---|---|
+| Sub-question, billing ≤ 6.010.121 € (`siiver` territories, `lowChoice`) | SII, VERI\*FACTU (was VERI\*FACTU, SII — reordered in ETP-5597) |
+| Manual screen, "Sistema fiscal" (`getAllowedSystemsForTerritory`) | Navarra: SII · Álava/Bizkaia/Gipuzkoa: TicketBAI, SII + TicketBAI · Baleares/Canarias: SII, VERI\*FACTU · Ceuta/Melilla: VERI\*FACTU |
+| Territory screen groups (by regime) | SII (Navarra), TicketBAI (País Vasco), SII / VERI\*FACTU (rest) |
+| Detail/config tabs for SII + TicketBAI | SII, TicketBAI |
+
+Only the low-volume sub-question changed in code; the other rows already followed that order. In particular the Basque territories (Álava, Bizkaia, Gipuzkoa) keep **TicketBAI, SII + TicketBAI** unchanged — SII is not offered there on its own, so there is nothing to move ahead of TicketBAI. The two low-volume cards now render the test ids `BulletOptionCard__sii` / `BulletOptionCard__verifactu` on their `<button>` (`BulletOptionCard` → `SelectableCard` forward `data-testid`; before, the id was passed but never reached the DOM).
+
 Changing the territory in either the main wizard screen or the manual screen resets the auto-flow answers (`alsoNational`, billing volume, and low-volume choice) so stale answers from a previous territory cannot leak into the confirmation summary. When the user reaches confirmation from manual mode, the back button returns to the manual screen rather than to the automatic sub-question flow.
 
 ## Profile detection

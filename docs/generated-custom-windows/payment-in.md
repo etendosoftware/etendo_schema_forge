@@ -52,7 +52,7 @@ The current repo evidence shows a generated finance window with payment-in-speci
 6b. Confirm the detail-view "more" (⋮) button is no longer rendered at all on the payment-in detail page, in any status — the kebab-menu **Remove Payment** entry was removed in ETP-4479 as redundant with the trash-icon delete button.
 7. Open the `Lines` child dataset for a payment with allocations and confirm the line surface exposes at least due date, received amount, and invoice payment schedule, all scoped to the current payment via `parentId`.
 8. Create or edit allocation lines tied to invoice schedules and confirm the bottom panel reflects linked invoices and any remaining unallocated credit after refresh.
-9. Scroll below the `PaymentBottomPanel` and confirm the **Attachments** tab strip and content area are visible. Upload a file, verify it appears in the table with file name, size, upload date, and uploader. Download it, then delete it and confirm the row disappears. When multiple files exist, confirm the "Download all (ZIP)" and "Delete all" actions appear in the table header, and that "Delete all" shows a confirmation dialog before removing all files.
+9. Scroll below the `PaymentBottomPanel` and confirm the **Attachments** tab strip and content area are visible. Upload a file, verify it appears in the table with file name, size, upload date, and uploader. Download it, then delete it and confirm the row disappears. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 10. **ETP-4940 follow-up:** on a draft (`RPAP`) payment, edit the amount WITHOUT clicking Save, then go to the "Apply to Invoices" tab and click through to apply + process. Confirm the payment processes with the edited amount, not the original one.
 
 ## Automated evidence
@@ -394,3 +394,11 @@ the same `FieldItem`) and is **not** changed here.
 payment whose customer or deposit account has a long name. The date shows in full, for example
 `23/09/2026`, and the long values end in "…". Hovering a cut value shows the full text, and hovering
 a value that fits shows no tooltip.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

@@ -88,7 +88,7 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
 7. Process the shipment and confirm the document moves out of draft and the draft-only actions disappear or become unavailable.
 8. If related documents exist, open the Related Documents tab and verify it links the shipment back to the surrounding return flow.
 9. If stock-movement behavior is important for the rollout, verify separately in the ERP/backend that processing this shipment produces the expected outbound inventory effect, because that consequence is not directly proven by current SPA evidence.
-10. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+10. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 11. In the list, select 0, then 1, then 2+ shipments and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/return-to-vendor-shipment/<id>`. Open a saved shipment and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
 12. **ETP-4737:** open a draft return-to-vendor shipment and confirm the confirm-flow card reads **"Create Rectificative Invoice"** (not "Nota de Crédito" or any "factura de devolución" wording) in all 3 locales. Confirm and generate the invoice, then confirm it lands under the purchase-invoice "Facturas rectificativas" tab with negative line quantities/totals — and, since ETP-5381, in **Confirmado** rather than Borrador. On a completed shipment with no invoice yet, confirm the secondary pill button still reads the generic "Crear Factura de Devolución" label (known residual gap, not fixed here).
 13. **ETP-5124 (Send):** on a Confirmado shipment, confirm the row-hover Email icon in the list AND the "Enviar" button in the row-preview panel both open the send modal (they used to be either absent — ETP-4717 — or present-but-broken — ETP-4718). Send a test email; confirm it succeeds (no "Unknown email contract" error) and that the "Emails" card in the preview's General tab shows the new send after the modal closes, without needing to reopen the panel. On a Borrador shipment, confirm neither trigger is offered.
@@ -297,6 +297,22 @@ into `ConfirmWithCreditButtonBase.jsx`, and replacing both `window.location.relo
 sites (closing the result modal without navigating away, and confirming a draft without creating
 an invoice) with `onRefresh?.()`, mirroring `GoodsReceiptActions.jsx`'s exact pattern.
 
+## Document type default scoped to the tenant — ETP-5682
+
+`header.fields.documentType` (a hidden `system` field) carries a client-scoped `defaultExpr`:
+`DocBaseType='MMR'`, purchase (`IsSOTrx='N'`), return (`IsReturn='Y'`), active, organization
+included, own `AD_Client_ID`, `ORDER BY IsDefault DESC` then organization distance. It mirrors
+`NeoHandlerUtils.findReturnDocType`, which the create handler uses, so the `/defaults` preview
+(document type and DocumentNo `<…>` from the tenant's own sequence) matches what is saved.
+
+The previous `ETGO_SF_FIELD` default (written by hand in ETP-4034) had no client filter and ended in
+`LIMIT 1`, so the preview showed another tenant's document type and numbering; once the generic
+NEO tenant guard landed it resolved to nothing instead. Never add a `LIMIT` to an `@SQL=` default:
+it defeats the guard (`com.etendoerp.go` `docs/neo-headless.md` §4.3.6).
+
+Manual check: `GET /sws/neo/return-to-vendor-shipment/returnToVendorShipment/defaults` as a tenant
+user returns that tenant's "RTV Shipment" document type and a `<…>` DocumentNo from its sequence.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.
@@ -454,6 +470,24 @@ Backend: the email send contract and every attachment write answer 403 for this 
 (`com.etendoerp.go` — `DefaultDocumentSendEmailContract.authorize`, `NeoAttachmentAuthorizer`).
 Print and Download PDF are deliberately NOT restricted (they only expose readable data).
 
+## Generated-documents popup — ETP-5674
+
+The purchase rectificative invoice this window creates — detail **Confirmar** on a Borrador
+shipment, post-completion «Crear Factura Rectificativa» (`ConfirmWithCreditButtonBase.jsx` via
+`useConfirmWithCredit`, `invoiceType="facturaRectificativaCompra"`) and the grid row **Confirmar**
+(`ReturnWindowShell` → `useRowConfirmAction`, `invoiceDocType: 'facturaRectificativaCompra'`) — is
+announced by the shared `ConfirmResultModal` as a `facturaRectificativaCompra` doc (it used to be
+typed `facturaCompra`, titled by `returnToVendor.invoiceCreatedTitle`, now removed). The popup reads
+«Factura rectificativa de compra creada», one card «Factura rectificativa de compra · Completada ·
+Nº …» (no amount), «Cerrar» + «Ver factura» → `/purchase-invoice/{id}`. Contract, type table and `data-testid`s: `docs/ui-customization.md` §21.
+
+**Manual verification.** On a completed shipment with no invoice, run «Crear Factura Rectificativa»
+and verify the title, the «Completada» badge and that «Ver factura» opens the new purchase invoice.
+
+**Automated evidence.** `tools/app-shell/src/windows/custom/return-to-vendor-shipment/__tests__/ConfirmWithCreditButton.spec.jsx`,
+`tools/app-shell/src/windows/custom/return-to-vendor-shipment/__tests__/index.test.js`,
+`e2e/tests/flows/purchases/return-to-vendor-shipment.mocked.spec.js`.
+
 ## Related documents — form and list preview share one definition — ETP-5539
 
 The form's Related Documents tab (`artifacts/return-to-vendor-shipment/custom/RelatedDocuments.jsx`,
@@ -462,3 +496,12 @@ now a thin wrapper over `RelatedDocumentsSection`) and the preview card
 source goods receipts (`sourceReceipts`) and return invoices (`returnInvoices`). The preview passes
 `relatedLoadsDetail` so the card loads the detail record instead of reading the list row. See
 `docs/ui-customization.md` §7.a.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field was already gated (ETP-4520); `ListView` now also drops it from the filter, sort and export.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

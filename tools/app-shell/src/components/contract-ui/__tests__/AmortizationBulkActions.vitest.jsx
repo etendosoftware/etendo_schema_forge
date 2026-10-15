@@ -27,6 +27,11 @@ const { UI_MESSAGES } = vi.hoisted(() => ({
   },
 }));
 
+// ETP-5684 — posting actions/status are gated on showAccountingFields (fail closed);
+// this suite asserts on them, so it grants the capability.
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => UI_MESSAGES[key] ?? key,
 }));

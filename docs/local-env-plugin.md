@@ -17,7 +17,7 @@ the project skill [`.claude/skills/local-env/SKILL.md`](../.claude/skills/local-
 |---|---|
 | `manifest` | prints `seed GOClient v1`, which becomes part of the DB fingerprint, so a DB with the GO sample client never shares a cached snapshot with one without it |
 | `db-seed` | prints the gradle invocations that load it, one per line: `import.sample.data -Pclient=GOClient`, then `prepareOnboardingSampledata --info`. local-env runs them right after `install`, against its own guarded DB, before the DB is snapshotted; every later DB comes from a snapshot that already carries the seed. A failed seed aborts `local-env up` |
-| `worktree-create` | reserves a free `SPA_PORT` (from 3101) and `BFF_PORT` (from 3401) for the new environment, skipping the ports other environments reserved and anything listening, and appends them to the environment's `build/local-env/env`, together with `ETGO_ALLOWED_ORIGINS` for that SPA port (see *Allowed origins* below). The main checkout keeps 3100 / 3400 |
+| `worktree-create` | reserves a free `SPA_PORT` (from 3101) and `BFF_PORT` (from 3401) for the new environment, skipping the ports other environments reserved and anything listening, and appends them to the environment's `build/local-env/env`, together with `ETGO_ALLOWED_ORIGINS` for that SPA port (see *Allowed origins* below), and points `etgo.mcp.public.url` / `etgo.oauth2.public.url` at that port (see *MCP and OAuth public URLs* below). The main checkout keeps 3100 / 3400 |
 | `up` | in the background: `npm install` in this environment's `schema_forge_core` and `make install` in its `schema_forge`, each only when its `node_modules` is missing or its `package-lock.json` is newer than the last install (local-env clones `node_modules` into new worktrees from the source checkout, so they can lag the branch); then, in `schema_forge`, `make dev-local-core ETENDO_URL=<this environment's Tomcat URL> SPA_PORT=… BFF_PORT=… SCHEMA_FORGE_CORE=… ETENDO_MCP_URL=<Tomcat URL>/sws/mcp ETENDO_USAGE_URL=<Tomcat URL>/sws/neo/usage`. The AI BFF reads `ETENDO_MCP_URL`, not `ETENDO_URL`, and would otherwise call the main checkout's :8080. A branch whose Makefile predates `SPA_PORT` runs on :3100/:3400 and frees them first, so in a worktree it is started only while both are free (otherwise a warning, no SPA). Prints the SPA URL; log and pid in `build/local-env/plugins/etendo-go/` |
 | `status` | `SPA  http://localhost:<port> (running\|starting\|stopped)`. `<port>` is the one the SPA really listens on (`lsof` on its process group, vite's listener), so a branch whose Makefile ignores `SPA_PORT` shows its own port, flagged `not the reserved :<SPA_PORT>`; until it listens, the reserved port with `(starting)`. local-env puts the URL into `progress.json` (`urls.SPA`) |
 | `stop`, `off`, `worktree-rm` | stops this environment's SPA + BFF (one process group), nobody else's |
@@ -98,6 +98,39 @@ from the shell) is kept and only the missing origins are appended. Tomcat inheri
 variable: local-env sources that file, and `tomcat-fast` sources it again right before
 starting the JVM, so the Tomcat started by the same `up` already has it. Only a Tomcat
 that was running when the line was added lacks it; `up` then warns to restart it once.
+
+## MCP and OAuth public URLs
+
+An MCP client (Claude Code) that logs in through a SPA's OAuth edge reads the vite
+well-known metadata, which advertises resource `http://localhost:<SPA port>/mcp` and
+issuer `http://localhost:<SPA port>`. The backend validates the token audience against
+`etgo.mcp.public.url`, and the client requires the issuer to equal
+`authorization_servers[0]`, which comes from `etgo.oauth2.public.url` (see
+[agentic-validation/mcp-client-setup.md](agentic-validation/mcp-client-setup.md),
+*The two properties*). A worktree copies both from the main checkout, so they say :3100
+and the login against a SPA on any other port fails.
+
+So when an environment's `SPA_PORT` is not 3100 the plugin rewrites them to
+`http://localhost:<port>/mcp` and `http://localhost:<port>` (no `/oauth2`), at
+`worktree-create` and at every `up` (which covers environments created before this
+existed). Files, all inside the environment, never the main checkout:
+
+- `<env>/gradle.properties` (plain: `http://localhost:<port>`);
+- `<env>/config/Openbravo.properties` and `<env>/WebContent/WEB-INF/Openbravo.properties`;
+- the deployed `<env>/build/local-env/catalina/webapps/*/WEB-INF/Openbravo.properties`, when it exists.
+
+Each rewritten line keeps its own escaping (`http\://localhost\:<port>` in the
+`Openbravo.properties` files). Only a value of the form `http://localhost:<other port>…`
+is rewritten. A custom public URL (any other host) is kept, and so is a `127.0.0.1` one.
+An absent property is **not** added: unlike `ETGO_ALLOWED_ORIGINS`, which is additive to
+the backend's defaults and harmless when unused, an absent public URL makes
+`PublicUrlResolver` derive it from the request (Tomcat's own URL), and adding one would
+change that for an environment that never uses the SPA's OAuth edge. A value that
+already points at the SPA port is left alone, so `up` is a no-op on an aligned
+environment.
+
+Properties load at context init. A Tomcat started by the same `up` reads the new values;
+one already running does not, and `up` warns to restart it once.
 
 ## Ports outside local-env
 

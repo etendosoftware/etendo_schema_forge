@@ -2,6 +2,9 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // The translator echoes the key, so assertions read on key strings.
+// ETP-5684 — the posting column is gated on showAccountingFields (fail closed).
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
@@ -24,8 +27,10 @@ import { useClientSort } from '@/hooks/useClientSort';
 import {
   ReconciliationListTable,
   buildReconciliationSortAccessors,
+  buildReconciliationSortColumns,
   reconciliationPostedLabel,
 } from '../ReconciliationListTable.jsx';
+import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
 
 /**
  * ReconciliationListTable — column sorting (ETP-4921).
@@ -187,5 +192,25 @@ describe('reconciliationPostedLabel', () => {
   it('shows a dash for an empty value', () => {
     expect(reconciliationPostedLabel('', ui)).toBe('—');
     expect(reconciliationPostedLabel(undefined, ui)).toBe('—');
+  });
+});
+
+// ETP-5684 — the column list comes from the contract (decisions.json →
+// `reconciliations.posted.visibleWhenCapability`), so a role without "Show Accounting
+// Fields" loses the "Contabilizado" header, its cells and its sort entry.
+describe('ReconciliationListTable — accounting capability gate (ETP-5684)', () => {
+  it('shows the posting column when the role can see accounting', () => {
+    renderTable();
+    expect(screen.getByTestId('column-header-sort-posted')).toBeInTheDocument();
+    expect(buildReconciliationSortColumns((k) => k, { showAccountingFields: true }).map((c) => c.key)).toContain('posted');
+  });
+
+  it('drops the posting header, its cells and its sort entry when the capability is off', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    renderTable();
+    expect(screen.queryByTestId('column-header-sort-posted')).not.toBeInTheDocument();
+    expect(screen.getByTestId('column-header-sort-documentNo')).toBeInTheDocument();
+    expect(screen.queryByText('financeAccountReconciliationsPosted_Y')).not.toBeInTheDocument();
+    expect(buildReconciliationSortColumns((k) => k, ACCOUNTING_HIDDEN).map((c) => c.key)).not.toContain('posted');
   });
 });

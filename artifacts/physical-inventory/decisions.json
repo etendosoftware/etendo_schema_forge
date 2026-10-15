@@ -73,7 +73,7 @@
         "field": "posted",
         "trueKey": "postedStatus",
         "falseKey": "notPostedStatus",
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
       }
     ]
   },
@@ -145,6 +145,7 @@
           "reason": "ETP-4529 — accounting dimension, config-gated (@ACCT_DIMENSION_DISPLAY@). Moved from \"other\" to \"principal\", same rationale as header.project above."
         },
         "posted": {
+          "visibleWhenCapability": "showAccountingFields",
           "visibility": "readOnly",
           "type": "boolean",
           "form": false,
@@ -184,6 +185,7 @@
           "grid": true,
           "gridOrder": 3,
           "grow": true,
+          "gridReadOnly": true,
           "columnWidth": 192,
           "readOnlyLogic": null
         },
@@ -203,6 +205,7 @@
           "grid": true,
           "gridOrder": 5,
           "grow": true,
+          "gridReadOnly": true,
           "columnWidth": 192,
           "readOnlyLogic": null
         },

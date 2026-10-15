@@ -35,6 +35,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
 | K2 | Accounting dimension display | Product decision: Contacto (BP) and Producto (PR) accounting-dimension elements must always be `active` and are never editable/visible through "Dimensiones contables" — DB-confirmed `isactive` was already `'Y'` fleet-wide (no-op, kept as a correctness guard) but `ismandatory` was `'N'` for every BP/PR row (196/196), never forced before | Both fronts closed: code-side lock (`GeneralLedgerConfigurationHandler.LOCKED_DIMENSION_TYPES`, already shipped) + preventive dataset-only fix (`C_ACCTSCHEMA_ELEMENT.xml` `ISMANDATORY` N→Y for BP/PR, no new service, no CUT bump — new tenant already born correct) + corrective data-fix (`R37-acctdim-bp-pr-locked-active`) forces both flags fleet-wide | ETP-4879 |
 | L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
+| L3 | Tenant ownership | The owner `AD_User.Name` is its username — `email+<company>` for an account's additional environment — instead of the person's name, because onboarding only renamed the owner when the request carried a full name, and an additional environment never does. Shows as the person's name in Users, attachments ("uploaded by") and audit "created by" | Both fronts closed: preventive `EtendoGoJwtSupport#resolveOwnerDisplayName` (request full name → `ETGO_ACCOUNT.NAME` → email), applied once in `EtendoGoJwtServlet#prepareOnboarding` so the classic and the pooled path both get it; corrective data-fix (`R48-owner-display-name-from-account`). CUT NOT bumped — a newborn tenant is born correct, so `R48`'s `@check` returns 0 rows for it | ETP-5689 |
 | N1 | Tenant plan / fiscal test mode | A Demo/free tenant has no way to submit SII/TicketBAI/VeriFactu in test/sandbox mode without a manual `ETSG_ForceTestMode` edit in Classic — every self-registered free tenant defaults to real (production) fiscal submissions | Both fronts closed: `OnboardingForceTestModeService` (preventive, new step in `ensureOnboardingDataset`) + `R31-force-test-mode-demo-tenants` (corrective, also backfills already-existing SII/TicketBAI/VeriFactu config rows) | ETP-5117 |
 | N5 | Initial dataset configuration | No price list is flagged as default — the curated `M_PRICELIST.xml` shipped both tariffs with `ISDEFAULT='N'`, so the four consumers that disambiguate tariffs with `isdefault DESC` (the `ETGO_PRODUCT_SALE_PRICE`/`ETGO_PRODUCT_PURCHASE_PRICE` computed columns, `PriceListPicker.jsx`, `R33`'s standard-cost anchor, and ETP-5245's new default-tariff resolver) silently fall through to an arbitrary list | Both fronts closed: preventive is dataset-only (`ISDEFAULT` `N`→`Y` on both curated tariffs in `GOClient/M_PRICELIST.xml`, already in `INCLUDED_TABLES`); corrective data-fix (`R35`) marks one active list per trade direction on already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it | ETP-5245 |
 | N6 | Initial dataset configuration | The curated `AD_SEQUENCE.xml` ships the tenant's document series with NO prefix at all (`Purchase Order`, `Standard Order`, `AR Invoice`) or with ETP-4737's interim `REC-` (both rectificativas), and `AR Invoice` starts at 10000000 instead of 1000000 — so a tenant's invoices and orders are numbered `1000000`, indistinguishable from each other, instead of the product's `PC`/`PV`/`FV`/`FVR`/`FCR` series | Both fronts closed: preventive is dataset-only (`GOClient/AD_SEQUENCE.xml` sets the five prefixes and drops `AR Invoice` to 1000000); corrective data-fix (`R38-document-sequence-series-prefixes`) applies the same to already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R38`'s `@check` returns 0 rows for it. The sixth series the ticket names, `FC` (Factura de compra), is NOT covered: `AP Invoice` is `IsDocNoControlled='N'` with no sequence in 76/76 doctypes, so giving it a series is a product decision, tracked separately | ETP-5285 |
@@ -1868,6 +1869,48 @@ preventive fix above) — merely redundant, never incorrect.
 live-validated in a rolled-back transaction, then **run for real against the shared dev DB**
 (2026-08-27T14:18:28Z) — 69 owners backfilled, 26 already had an email, 0 failures; a re-run
 confirmed 0 rows remaining (idempotent).
+
+### L3 — Owner `AD_User.Name` left as the (often `+company`-suffixed) username (ETP-5689)
+
+**Symptom:** the owner of an environment shows as `jane@acme.com+acmeltd` (or the bare email)
+wherever the app prints a user's name: the Users window, attachments ("uploaded by", via
+`NeoAttachmentsHelper.userToJson` → `user.getName()`) and the audit "created by" fields. Live
+DB, 2026-10-09: 58 owners with `Name = Username`, 33 of them with the `+company` suffix.
+Distinct from L2 (the owner's `Email`): a different column on the same row.
+
+**Root cause:** `InitialSetupUtility#insertUser` names the new admin after its username, and
+onboarding overrode it only when the request carried a `fullName`
+(`EtendoGoJwtSupport#applyClientAdminDisplayName` is a no-op on a blank name). The SPA sends no
+full name when an existing account creates an additional environment — exactly the case whose
+username gets the `+<company>` suffix (`EtendoGoJwtSupport#buildClientUsername`, see L2). The
+pooled path (`PooledTenantClaimService#personalize`) fell back to the username explicitly. The
+person's name was always available in `ETGO_ACCOUNT.NAME`, and was never used. The username
+itself must NOT change: login resolves an account's environments by `username = email OR
+username LIKE 'email+%'`.
+
+**Preventive front:** `EtendoGoJwtSupport#resolveOwnerDisplayName(fullName, accountName, email)`
+returns the first non-blank of the three, trimmed and capped at 60 (`AD_User.Name`).
+`EtendoGoJwtServlet#prepareOnboarding` applies it to the request once, right after parsing and
+before the pool/classic split, so both paths see a non-blank full name; the pool's own fallback
+became the account email for defence in depth. `Description` still carries the username on both
+paths — deliberately left, as nothing displays it.
+
+**Corrective fix:** `20261009T151500Z__R48-owner-display-name-from-account.sql` — renames each
+owner whose `Name` still equals its `Username` (so a name a user edited is never touched) to
+`ETGO_ACCOUNT.NAME`, else the account email. The account is found by the owner's `Email` (set
+since L2), else by the username with the last `+suffix` after the `@` removed — the
+`GoAccountResolver#findAccountByUsername` split, so a plus-addressed email survives — and only
+among active accounts (`isactive = 'Y'`, as the runtime resolver). An owner with no account is
+skipped: those are unclaimed pool tenants (`pool-<hex>`) and seed users. Regression guard:
+`cli/test/data-fixes-r48-owner-display-name-from-account.test.js`.
+
+**`ONBOARDING_PROVISIONED_THROUGH` NOT bumped.** The preventive front makes a newborn tenant
+correct, so R48's `@check` is a cheap no-op for it; bumping would add nothing.
+
+**Status:** both fronts written (2026-10-09). Reproduced by hand on the classic path (bare email
+and `+company` names), then verified after the fix on the classic AND the pooled path (pool flag
+enabled for the run); R48 applied to the three reproduction tenants only — `APPLIED (1 row)`
+each, re-run `SKIPPED_NOT_NEEDED`. Not yet run against the full dev tenant universe.
 
 ---
 

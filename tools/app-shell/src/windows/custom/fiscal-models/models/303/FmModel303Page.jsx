@@ -14,7 +14,7 @@ import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303 } from '../../FmOverlays.jsx';
 import AeatSubmitFlow, { isMissingDefaultIaeActivity, checkMissingIaeGuard } from './AeatSubmitFlow.jsx';
-import { isLastPeriodOfYear, getMissingRequiredFields, getInvalidSelectedOptions, resolveFieldLabelKey } from './fm303Layouts.js';
+import { isLastPeriodOfYear, getMissingRequiredFields, getInvalidSelectedOptions, resolveFieldLabelKey, resolveOptionDisabledReasonKey, getAutoValueChanges } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import {
@@ -33,6 +33,7 @@ import { AttachmentsTab, useAttachments } from '@/components/attachments';
 // that mock the barrel with only AttachmentsTab/useAttachments keep working.
 import { notifyAttachmentsChanged } from '@/components/attachments/attachmentsBus';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 
 // AD table name backing the AEAT justificante attachments store — both the
 // server-side auto-attach on a successful telematic submission and the
@@ -81,8 +82,10 @@ function boxesClearedByIdentChange(id, value, nextIdentChecks) {
   return [];
 }
 
+// ETP-5597 (CP-18) — the canonical typed-number parser (lib/parseLocaleNumber.js): the cell
+// editor reports a clean value, and parseLocaleNumber also accepts the instance decimal separator.
 function parseBoxInput(rawValue) {
-  const numVal = parseFloat(String(rawValue ?? '').replace(',', '.'));
+  const numVal = parseLocaleNumber(rawValue).value ?? Number.NaN;
   // Every manually-typed box value is capped to 2 decimal places (ETP-5409) — automatic/derived
   // box values already carry <=2 decimals by construction (recomputeDerivedBoxes' own r2/roundEur
   // rounding), so this is the single choke point that needs it for manual entry. Reuses the same
@@ -188,7 +191,7 @@ const CASILLAS_SECTIONS = [
   { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final', 'sin_actividad', 'rectificativa'] },
 ];
 
-function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, onBoxChange, t, isSubmitted }) {
+function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, onBoxChange, t, isSubmitted, lockRectificativaChecked }) {
   const [activeSection, setActiveSection] = useState('identificacion');
   const section = CASILLAS_SECTIONS.find(s => s.id === activeSection) ?? CASILLAS_SECTIONS[0];
 
@@ -257,6 +260,7 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
             onIdentChange={onIdentChange}
             onBoxChange={onBoxChange}
             readOnly={isSubmitted}
+            lockRectificativaChecked={lockRectificativaChecked}
             data-testid="FmBoxes303__4f6c0d" />
         </div>
       </div>
@@ -381,7 +385,19 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   const [orgIdent, setOrgIdent] = useState({ nif: '', nombre: '' });
   // Hydrate from persisted decl.manualData when present, falling back to the old
   // non-persisted decl.identification only for fixtures/demo declarations that predate it.
-  const [identChecks, setIdentChecks] = useState(decl.manualData?.identification ?? decl.identification ?? {});
+  // ETP-5725 — when this is a brand-new declaration (no persisted `rectificativa` either way)
+  // opened for a period whose latest sibling is already presented (`decl._duplicatePeriodPresented`,
+  // set by FmListPage.jsx), default "Autoliquidación rectificativa" to checked instead of letting
+  // the user land on "Normal". A period with no prior declaration keeps the untouched default
+  // (unchecked) — `_duplicatePeriodPresented` is false there. An explicit persisted value (user
+  // already saved this declaration at least once) always wins over the auto-default.
+  const [identChecks, setIdentChecks] = useState(() => {
+    const persisted = decl.manualData?.identification ?? decl.identification ?? {};
+    if (persisted.rectificativa === undefined && Boolean(decl._duplicatePeriodPresented)) {
+      return { ...persisted, rectificativa: true };
+    }
+    return persisted;
+  });
   /**
    * ETP-5338 (architecture change) — `identChecks`/`manualOverrides` are now purely LOCAL,
    * in-memory state until the user explicitly clicks "Guardar". There is no more debounced
@@ -1275,15 +1291,34 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     .map(f => `'${t(resolveFieldLabelKey(f, identWithBoxFlags))}'`).join(', ');
 
   // ETP-5597 pt.1 — a select whose CURRENT value is an option that is no longer allowed (tipo
-  // Compensación/Devolución while casilla 69 is positive). Same gate shape as
+  // Compensación/Devolución while casilla 71 is positive, or anything but Resultado cero while
+  // 69 > 0 and 71 < 0 — see `resolveTipoDeclaracionRestriction`). Same gate shape as
   // `missingRequiredFields`: blocks "Generar fichero 303" and "Registrar/Presentar" (button
   // pre-checks + handleGenerate/handlePresent). The value is never cleared automatically — see
   // `getInvalidSelectedOptions`' doc comment — and FmBoxes303 shows the reason under the select.
   const invalidSelectedOptions = getInvalidSelectedOptions(decl?.year, decl?.period, identWithBoxFlags);
 
+  // ETP-5597 (QA round 3) — a field whose value is FIXED by a layout rule (`autoValueWhen`: tipo
+  // "Resultado cero" while casilla 69 > 0 and 71 < 0, the only option left) is set here, as an
+  // ordinary, silent edit through handleIdentChange — so Guardar and the auto-save before Generar/
+  // Presentar persist it like any other change. Only on an editable (draft) declaration: any other
+  // status keeps its stored value. Idempotent (`getAutoValueChanges` is empty once the
+  // value matches) and keyed on the serialized change set, so it fires once per change of the
+  // derived restriction (load, Calcular, box edit). When the rule stops applying the value stays
+  // as set; the user can change it.
+  // Same condition as the identification's read-only flag (`readOnly={status !== 'draft'}` below):
+  // a ready/rejected/error declaration must not get an invisible edit an auto-save would persist.
+  const autoValueChanges = status !== 'draft' ? [] : getAutoValueChanges(decl?.year, decl?.period, identWithBoxFlags);
+  const autoValueKey = autoValueChanges.map(c => `${c.field}=${c.value}`).join('|');
+  useEffect(() => {
+    if (!autoValueKey) return;
+    for (const { field, value } of autoValueChanges) handleIdentChange(field, value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when the change set changes
+  }, [autoValueKey]);
+
   function invalidSelectedOptionsToast() {
     const { option } = invalidSelectedOptions[0];
-    toast.error(t(option.disabledReasonKey ?? 'fm.ident.decl.option_not_allowed'));
+    toast.error(t(resolveOptionDisabledReasonKey(option, identWithBoxFlags)));
   }
 
   function missingRequiredFieldsToast(actionKey, fallback) {
@@ -1424,7 +1459,14 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   useFmDetailPageMeta({
     model: '303',
     title: declTitle,
-    breadcrumb: `${ui('finance')} / ${ui('fm.breadcrumb.section')} / ${declTitle}`,
+    // ETP-5597 — the "Modelos Fiscales" level is a link back to the declarations list, like the
+    // parent crumb of a generated window's detail (TopBar breadcrumb item `{ label, onClick }`);
+    // it takes the same path as "Cancelar".
+    breadcrumb: [
+      ui('finance'),
+      { label: ui('fm.breadcrumb.section'), onClick: handleCancel },
+      declTitle,
+    ],
     favLabel: ui('fm.breadcrumb.section'),
   });
 
@@ -1671,6 +1713,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
             onBoxChange={handleBoxChange}
             t={t}
             isSubmitted={isSubmitted}
+            // ETP-5725 — only lock the checkbox while it is CURRENTLY checked: this prevents
+            // undoing the auto-default without ever being able to strand a declaration whose
+            // rectificativa happens to be false (e.g. a legacy save from before this lock
+            // existed) in an unchecked-but-disabled state with no way to fix it. The required-
+            // field/duplicate-period warning gate above still blocks "Presentar" for that case
+            // exactly as it always has.
+            lockRectificativaChecked={Boolean(decl._duplicatePeriodPresented) && !isSubmitted && Boolean(identChecks.rectificativa)}
             data-testid="CasillasTab__4f6c0d" />
         )}
         {activeTab !== 'boxes' && (

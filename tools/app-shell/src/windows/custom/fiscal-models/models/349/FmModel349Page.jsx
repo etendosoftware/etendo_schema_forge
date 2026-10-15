@@ -149,6 +149,17 @@ function KeyBadge({ k, 'data-testid': testId }) {
   return <span className={`fm-key fm-key--${k}`} data-testid={testId}>{k}</span>;
 }
 
+// The Clave cell of the Operadores table — the key badge plus its description. Shared with the
+// "Facturas origen" Clave column (ETP-5597) so both tables render the key identically.
+function KeyCell({ k, t, badgeTestId }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} data-testid="KeyCell">
+      <KeyBadge k={k} data-testid={badgeTestId} />
+      <span style={{ fontSize: 14, color: 'var(--fm-fg-1)' }}>{t(`fm.m349.key.${k}`)}</span>
+    </span>
+  );
+}
+
 // Follows the same inline-pill shape as ViesBadge above (see .fm-vies in
 // fiscal-models.css) — no new component system, just a sibling class.
 // ETP-5027 (QA F4) — the badge names the declared period it rectifies whenever the
@@ -536,6 +547,19 @@ function InvoicesTabContent({ decl, liveInvoices, t, originFilter, onClearOrigin
           decl={{ ...decl, sources }}
           t={t}
           showTaxColumns={false}
+          // ETP-5597 — the AEAT349 key of each origin row, rendered exactly like the Operadores
+          // Clave cell (KeyCell), so the two rows of a mixed goods + services invoice (E + S, A + I)
+          // can be told apart. The key already says whether a row is a purchase or a sale, so the
+          // generic "Tipo" column is hidden here.
+          keyColumn={{
+            label: t('fm.m349.col.key') ?? 'Clave',
+            render: r => (r.key ? <KeyCell
+              k={r.key}
+              t={t}
+              badgeTestId="KeyBadge__sourceRow"
+              data-testid="KeyCell__346dd5" /> : '—'),
+          }}
+          hiddenColumns={['type']}
           data-testid="SourcesTab__346dd5" />
       )}
     </>
@@ -690,7 +714,11 @@ function isSustitutivaChecked(identChecks) {
 
 // ETP-5597 (W4) — `isBusy` also locks it while a manual-data save / generate / present is in
 // flight, so no Tipo edit can land mid-save.
-function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = false, t }) {
+// ETP-5725 — `lockNormalOption`: true while the period's latest sibling declaration is already
+// presented (`decl._duplicatePeriodPresented`). "Normal" becomes unselectable (the AEAT rule
+// this period now requires is Sustitutiva) — only that option is disabled, "Sustitutiva" stays
+// clickable, mirroring how 303 only locks its single "rectificativa" checkbox.
+function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = false, lockNormalOption = false, t }) {
   const sustitutiva = isSustitutivaChecked(identChecks);
   const options = [
     { value: false, labelKey: 'fm.m349.type.normal', fallback: 'Normal', testId: 'normal' },
@@ -709,15 +737,16 @@ function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = f
       >
         {options.map(o => {
           const active = sustitutiva === o.value;
+          const optionDisabled = isSubmitted || isBusy || (lockNormalOption && o.value === false);
           return (
             <button
               key={o.testId}
               type="button"
               role="radio"
               aria-checked={active}
-              disabled={isSubmitted || isBusy}
+              disabled={optionDisabled}
               className={`fm-newdecl-segmented__btn${active ? ' fm-newdecl-segmented__btn--active' : ''}`}
-              onClick={() => { if (!active) onChange('sustitutiva', o.value); }}
+              onClick={() => { if (!active && !optionDisabled) onChange('sustitutiva', o.value); }}
               data-testid={`FmModel349Page__type_${o.testId}`}
             >
               {t(o.labelKey) ?? o.fallback}
@@ -873,7 +902,18 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // `manualData.identification`, hydrated once from `decl.manualData` and flushed explicitly by
   // "Guardar" — no debounce/autosave, see `handleSave` below). 349 has no box-override state to
   // race against, so this skips 303's `useRecordWriteQueue` machinery entirely.
-  const [identChecks, setIdentChecks] = useState(decl.manualData?.identification ?? {});
+  // ETP-5725 — same auto-default rule as 303's `rectificativa`: a brand-new declaration (no
+  // persisted `sustitutiva` either way) opened for a period whose latest sibling is already
+  // presented (`decl._duplicatePeriodPresented`, set by FmListPage.jsx) defaults to "Sustitutiva"
+  // instead of "Normal". A period with no prior declaration keeps the untouched default (Normal)
+  // — `_duplicatePeriodPresented` is false there. An explicit persisted value always wins.
+  const [identChecks, setIdentChecks] = useState(() => {
+    const persisted = decl.manualData?.identification ?? {};
+    if (persisted.sustitutiva === undefined && Boolean(decl._duplicatePeriodPresented)) {
+      return { ...persisted, sustitutiva: true };
+    }
+    return persisted;
+  });
   const hasPendingEditRef = useRef(false);
   // ETP-5597 (W4) — bumped on every edit. A save only clears `hasPendingEditRef` when no edit
   // happened after it started (same version on success), so an edit racing an in-flight save
@@ -1377,7 +1417,14 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   useFmDetailPageMeta({
     model: '349',
     title: declTitle,
-    breadcrumb: `${ui('finance')} / ${ui('fm.breadcrumb.section')} / ${declTitle}`,
+    // ETP-5597 — the "Modelos Fiscales" level is a link back to the declarations list, like the
+    // parent crumb of a generated window's detail (TopBar breadcrumb item `{ label, onClick }`);
+    // it takes the same path as "Cancelar".
+    breadcrumb: [
+      ui('finance'),
+      { label: ui('fm.breadcrumb.section'), onClick: onBack },
+      declTitle,
+    ],
     favLabel: ui('fm.breadcrumb.section'),
   });
 
@@ -1412,6 +1459,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                 onChange={handleIdentChange}
                 isSubmitted={isSubmitted}
                 isBusy={actionBusy}
+                // ETP-5725 (review B1) — only lock "Normal" while Sustitutiva is CURRENTLY
+                // checked, mirroring 303's `lockRectificativaChecked` guard
+                // (FmModel303Page.jsx). Without `isSustitutivaChecked(identChecks)` here, a
+                // legacy declaration saved with `sustitutiva: false` while a sibling is
+                // presented would have "Normal" disabled from the start; if the user then
+                // clicked Sustitutiva (even by accident) they could never click back to Normal,
+                // since the lock doesn't depend on the current value. This way the lock only
+                // ever reinforces an already-true value — it never traps a false one.
+                lockNormalOption={Boolean(decl._duplicatePeriodPresented) && !isSubmitted && isSustitutivaChecked(identChecks)}
                 t={t}
                 data-testid="DeclarationTypeControl__346dd5" />
             </>
@@ -1660,10 +1716,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                               </span>
                             </td>
                             <td>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                <KeyBadge k={op.key} data-testid="KeyBadge__346dd5" />
-                                <span style={{ fontSize: 14, color: 'var(--fm-fg-1)' }}>{t(`fm.m349.key.${op.key}`)}</span>
-                              </span>
+                              <KeyCell
+                                k={op.key}
+                                t={t}
+                                badgeTestId="KeyBadge__346dd5"
+                                data-testid="KeyCell__346dd5" />
                             </td>
                             <td
                               style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}

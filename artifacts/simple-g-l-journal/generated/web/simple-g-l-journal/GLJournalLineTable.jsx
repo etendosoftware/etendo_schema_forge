@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:gLJournalLine
 const columns = [
-  { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', lookup: true, minWidth: 220 },
+  { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', lookup: true, lookupDrawer: 'account', minWidth: 220 },
   { key: 'foreignCurrencyDebit', column: 'AmtSourceDr', type: 'amount', labels: {"en_US":"Debit","es_ES":"Débito"}, label: 'Debit', required: true },
   { key: 'foreignCurrencyCredit', column: 'AmtSourceCr', type: 'amount', labels: {"en_US":"Credit","es_ES":"Crédito"}, label: 'Credit', required: true, noTrailing: true },
   { key: 'dimensions', type: 'dimensionsPanel', label: 'Accounting dimensions', labels: { en_US: 'Accounting dimensions', es_ES: 'Dimensiones contables' }, dimensionFields: [

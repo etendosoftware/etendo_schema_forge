@@ -4,8 +4,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:assetAcct
 const columns = [
   { key: 'accountingSchema', column: 'C_AcctSchema_ID', type: 'selector', label: 'General Ledger', required: true },
-  { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', label: 'Accumulated Depreciation', required: true },
-  { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', label: 'Depreciation', required: true },
+  { key: 'accumulatedDepreciation', column: 'A_Accumdepreciation_Acct', type: 'selector', label: 'Accumulated Depreciation', required: true, lookup: true, lookupDrawer: 'account' },
+  { key: 'depreciation', column: 'A_Depreciation_Acct', type: 'selector', label: 'Depreciation', required: true, lookup: true, lookupDrawer: 'account' },
 ];
 // @sf-generated-end columns:assetAcct
 

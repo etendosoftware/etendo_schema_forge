@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { resolveBackendSort, buildBackendFilter } from '@/lib/gridQuery.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, extractBackendMessageKeys, extractBackendMessageParams } from '@/lib/backendErrors.js';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
@@ -248,7 +248,12 @@ export async function extractErrorMessage(res, ui) {
             }
 
             const raw = decoded.replace(/\s+/g, ' ').trim();
-            return translateBackendError(raw, ui) || raw;
+            // ETP-5692 — the body's identity rides along: the invoice write fence answers in
+            // English plus `messageKeys`, and only the key can be translated.
+            return translateBackendError(raw, ui, {
+                messageKeys: extractBackendMessageKeys(data),
+                messageParams: extractBackendMessageParams(data),
+            }) || raw;
         };
 
 

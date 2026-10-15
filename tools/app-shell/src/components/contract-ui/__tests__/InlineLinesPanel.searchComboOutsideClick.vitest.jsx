@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 /**
  * InlineLinesPanel — outside-pointerdown row-exit handling for a REAL
  * InlineSearchCombo cell (ETP-4600 ARIA follow-up).
@@ -19,6 +20,13 @@ import { render, screen, within, act, fireEvent, waitFor } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import React, { createRef } from 'react';
+
+// The line delete button renders the Iconic trash from the core custom-icons barrel;
+// the published core may predate it, so stub it while keeping every other icon real.
+vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+  ...(await importOriginal()),
+  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+}));
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },

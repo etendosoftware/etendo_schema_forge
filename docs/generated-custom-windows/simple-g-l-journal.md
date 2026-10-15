@@ -44,7 +44,7 @@ The header form shows **6 always-visible fields** — 5 editable plus the read-o
 | `opening` | IsOpening | editable | Marks an opening-balance journal. `section: "other"` pinned (ETP-5611). |
 | `multigeneralLedger` | Multi_Gl | editable | Multi-ledger flag. `section: "other"` pinned (ETP-5611). |
 | `documentNo` | DocumentNo | system | Auto-sequenced by NEO on POST; not shown on the form. |
-| `documentType` | C_DocType_ID | system | Hidden but still defaulted under the hood (`DocBaseType='GLJ'`) — needed for posting/sequencing later. **Not discarded.** |
+| `documentType` | C_DocType_ID | system | Hidden but still defaulted under the hood (`DocBaseType='GLJ'`) — needed for posting/sequencing later. **Not discarded.** **ETP-5682:** defaulted by a client-scoped `defaultExpr` in `decisions.json` (pushed to `ETGO_SF_FIELD.defaultvalue`), not by the core AD default — see "ETP-5682 — document type from another tenant" below. |
 | `posted` | Posted | readOnly | Accounting-status pill (`statusPills`): **Sin contabilizar** / **Contabilizado**. `form: false` (not on the form), but shown as a badge, plus a grid column + searchable (grid/searchable added ETP-4917). Not a document lifecycle status — see `documentStatus` below for the second, independent chip. |
 | `documentStatus` | DocStatus | readOnly | **ETP-4917.** Second, independent header status chip — document lifecycle: **Borrador** (DR) / **Completado** (CO). `form: false` (not on the form), grid column + searchable. Promoted from `discarded`; the badge label mapping comes from `statusBadge.js`'s built-in DR→`statusDraft`/CO→`statusComplete` default fallback (no window-specific `badgeLabels` override and no new i18n keys needed). Auto-detected as the `statusField` for `draftMode` completion (falls back to `documentStatus` when the window doesn't declare `draftMode.statusField` explicitly). |
 | `rate` | CurrencyRate | system | Derived currency rate, hidden. |
@@ -61,7 +61,7 @@ The add-row form exposes the **Open Items** checkbox, which gates the `asset` fi
 | Field (curated) | Column | Grid? | Visibility | Notes |
 |---|---|---|---|---|
 | `lineNo` | Line | — | system | **ETP-5611:** no longer a grid column. Still assigned server-side by the AD default (`MAX(Line)+10`) and used as the list order (see "ETP-5611" below). |
-| `accountingCombination` | C_ValidCombination_ID | grid | editable | Accounting-combination selector (label **Account**, lookup, `columnWidth: 220` — narrowed from 280 in ETP-5611). Now the first grid column. |
+| `accountingCombination` | C_ValidCombination_ID | grid | editable | Accounting-combination selector (label **Account**, `columnWidth: 220` — narrowed from 280 in ETP-5611). Now the first grid column. Opens the shared account search popup since ETP-5681 (`lookup: true`, `lookupDrawer: "account"`); lists posting accounts only. |
 | `foreignCurrencyDebit` | AmtSourceDr | grid | editable, amount, required | **Debit** — feeds the balance footer Σ debit. |
 | `foreignCurrencyCredit` | AmtSourceCr | grid | editable, amount, required | **Credit** — feeds the balance footer Σ credit. `noTrailing: true` (ETP-5611) so the hover actions take their own slot instead of covering it. |
 | `openItems` | Open_Items | form-only | editable | **Open Items** checkbox in the add-row form; toggling it reveals the `asset` field below. `businessPartner`/`product`/`project`/`costCenter` are reached via the grid's hover action instead — see below. |
@@ -343,3 +343,58 @@ the contract for agents. See `docs/decisions-reference.md`.
 `section` is pinned on `currency` (principal), `opening` and `multigeneralLedger` (other), and
 `summaryFields: []` keeps the read-only currency out of the summary strip.
 
+## ETP-5682 — document type from another tenant, and the list title
+
+**Symptom.** The second manual journal of a period failed with "ya existe un documento con este identificador". Production logs showed every retry colliding on `DocumentNo = 1000000` (`gl_journal_docno`, unique per org + period + number).
+
+**Root cause.** The core `AD_Column` default of `GL_Journal.C_DocType_ID` is `@SQL=SELECT C_DocType_ID FROM C_DocType WHERE DocBaseType='GLJ' AND AD_ISORGINCLUDED(@AD_Org_ID@, AD_Org_ID, @#AD_Client_ID@) <> '-1' ORDER BY isdefault DESC`. It has no `AD_Client_ID` filter, and every tenant keeps its GLJ document type in org `0`, so the query matches the GLJ document type of **every** client and the first row is arbitrary. Classic hides this behind the combo's client filter; NEO evaluated the SQL as-is and `documentType` is hidden, so nobody saw it. The journal took another tenant's document type, `DocumentNoHandlerLegacy` numbered it from **that tenant's** sequence (usually untouched, so `1000000`), and the sequence increment rolled back with every failed insert — so every retry computed the same number again.
+
+**Fix (two layers, shipped together).**
+- `decisions.json` → `header.fields.documentType.defaultExpr`: the same query scoped to `AD_Client_ID = @#AD_Client_ID@`, active rows only, ordered by `IsDefault DESC` then org distance. Verified live: two journals created back-to-back get `1000000` and `1000001` on the tenant's own document type.
+- `com.etendoerp.go` `NeoDefaultTenantGuard` (generic, every window): an `@SQL=` default of a foreign-key column never resolves to another tenant's row. See `neo-headless.md` (defaults section).
+
+**Existing data** (journals already stored with a foreign document type, posted ones carrying it into `Fact_Acct`) is a separate data-fix, not part of this change: ETP-5719.
+
+**List title.** The list page used the AD window name (`"Simple G/L Journal"`), translated as "Asientos Manuales Simplificados", while the menu and breadcrumb read "Asientos Manuales". The `"Simple G/L Journal"` locale label (`windows` + `menus`, en_US/es_ES/es_AR) now reads "Manual Journals" / "Asientos Manuales". The URL and spec name stay `simple-g-l-journal` (a rename to `manual-journals` is tracked separately in ETP-5720). Guarded by `tools/app-shell/src/locales/__tests__/window-list-titles.vitest.js`.
+
+## Selectors: load on open, active records, posting accounts — ETP-5681
+
+Accounting feedback after the demo, three fixes on this window's selectors (all shared code, so
+they also apply to every other window with the same selectors):
+
+- **Header Cost Center / Project load on open.** They showed nothing until the user typed. The
+  header selectors are `CreatableSearchSelect` (server-search mode); an EMPTY first page hides its
+  dropdown entirely, and that first page went through the shared selector cache (5 min) — a
+  failed request was even cached as an empty page — so one bad first load was replayed on every
+  open. Now a failed page is never cached, an empty cached page is never trusted, a cached page
+  older than 30 s (`SELECTOR_REVALIDATE_AFTER_MS`, `tools/app-shell/src/lib/selectorRevalidation.js`)
+  is shown at once and refreshed in the background, and clicking an already-focused selector (after
+  Esc) opens it.
+- **Line dimensions show only active records.** The server always filtered `active = 'Y'`
+  (verified live); the stale list came from the client. The "Dimensiones contables" selectors
+  (`SelectorInput`) stay mounted for the whole document and used to load once; they now revalidate
+  their first page on reopen with the same 30 s rule, and a write in Cost Center / Project
+  (`cost-center`, `project`, `service-project` in `crossSpecCacheInvalidation.js`) marks every
+  cached selector page stale at once.
+- **Account column.** `accountingCombination` declares `lookup: true` + `lookupDrawer: "account"`:
+  clicking the cell opens `AccountLookupPopup`, the shared centered search popup (`SearchPopup`,
+  the same one the report filters use for "Desde la cuenta") over the column's own
+  `C_ValidCombination_ID` selector. It shows each `"<code> - <name>"` in full; the product lookup
+  drawer it used before cut long account names off. Applies to the add-line row, inline edit and
+  the line form. Like every account selector, it lists **posting accounts only** — summary
+  (heading) accounts are hidden by `PostingAccountCombinationSelectorPolicy` in
+  `com.etendoerp.go`. Saving a summary account through the API/MCP is not rejected yet (ETP-5693).
+
+Manual check: open a draft journal, click the header Cost Center → the list appears without
+typing; deactivate a cost center in its window, come back, open a line's dimensions → it is gone;
+click the Account cell of a new line → a centered popup opens; type "640" → only posting accounts
+(e.g. `64000000`), never the `640` heading.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped).
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.

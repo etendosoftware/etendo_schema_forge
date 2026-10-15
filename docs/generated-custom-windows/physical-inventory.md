@@ -55,7 +55,7 @@ Physical Inventory should let a warehouse user create an inventory count session
 6. Run `Update List System Count` and confirm the action disables while pending, then the page reloads and the line-level system counts refresh.
 7. Confirm the **Confirm** button (draftMode) is absent until at least one line exists. Click it — confirm the processed status badge turns green and the locked alert banner appears. Confirm Save and Confirm buttons are no longer visible.
 8. Confirm the ⋮ button is absent on a new (unsaved) header. After saving, confirm it appears. After processing, confirm it disappears again.
-9. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+9. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
 10. On a header with no lines yet, confirm the empty state shows both "+ Add line" and "Generate lines automatically". Click the latter, confirm the modal shows Product Category (default "All categories"), Inventory Quantity (default `not 0`), and "Set Book Quantity to zero" (unchecked). Submit and confirm lines are generated for the header's warehouse only, a success toast appears, and the modal closes without a full page reload.
 11. On a header with existing lines, open the "+ Add line" dropdown and confirm "Generate lines automatically" is listed; confirm it opens the same modal.
 12. In the modal, pick a specific Product Category and confirm only products in that category are generated. Leave it on "All categories" and confirm products across categories are generated (i.e. the request omits `M_Product_Category_ID` rather than sending a placeholder).
@@ -272,3 +272,23 @@ no-id/no-data cases.
   `confirmKey` menuAction option through the generator in schema_forge_core), so it is out of
   scope for this reject cycle.
 
+
+## Design changes — ETP-5562
+
+- **"Create Inventory Count List" removed from the detail kebab** (`InventoryMenuContent.jsx`): it was
+  redundant with "Generate lines automatically" (`GenerateLinesModal` → `InventoryHandler`). The kebab keeps
+  "Update List System Count". `InventoryCreateListModal.jsx` is no longer used by the kebab (only by the
+  unused `InventoryTopbarActions.jsx`); the i18n key `createInventoryCountList` is kept for that file.
+- **System Count / Difference are strictly read-only in the lines grid**: `gridReadOnly: true` in
+  `decisions.json` → `readOnly: true` in `InventoryLineTable.jsx`, so `InlineLinesPanel` never renders an input.
+- **Kebab on a freshly created record** (`DetailMoreActionsMenu.jsx`): the hidden probe's verdict is now keyed
+  by record id, so the `false` measured on `/new` no longer sticks after the first save.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped). The custom list columns in `windows/custom/physical-inventory/index.jsx` (`COLUMNS`) carry the same gate.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
