@@ -2463,8 +2463,8 @@ viewing, the lightbox and zoom stay. No document-status gate was added — uploa
 limited to drafts on either surface. While a write is in flight — an upload or a delete —
 Replace and Delete are disabled, in the menu and in the lightbox, on both surfaces:
 `useMainAttachment` reports `isBusy` for every write it runs (a pending counter, so one
-operation finishing cannot clear it under another). In the file sidebar the attach button also
-shows its spinner during a delete, and a drop is ignored until the delete returns. If a newer
+operation finishing cannot clear it under another). In the file sidebar a drop is ignored until the
+delete returns (the sidebar has no file-name header or attach button; Replace/Delete live in the "Más" menu). If a newer
 file was stored while a DELETE was in flight, the DELETE only removes the attachment it
 targeted; the newer file stays on screen.
 

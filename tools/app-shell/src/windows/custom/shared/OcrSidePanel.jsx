@@ -1,5 +1,5 @@
 import { useRef, useState, lazy, Suspense } from 'react';
-import { FileText, Loader2, Paperclip, AlertCircle } from 'lucide-react';
+import { FileText, Loader2, AlertCircle } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { matchOcrDocType, getOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { useMainAttachment } from './useMainAttachment.js';
@@ -135,30 +135,6 @@ function EmptyDocumentDropzone({ canAttach, isDragOver, dropHandlers, onPick }) 
   );
 }
 
-/** File name row above the viewer, with the attach button when attaching is allowed. */
-function StoredFileHeader({ fileName, canAttach, isBusy, onAttach }) {
-  const ui = useUI();
-  return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <FileText className="h-3.5 w-3.5 shrink-0" data-testid="FileText__c851a1" />
-      <span className="truncate">{fileName}</span>
-      {canAttach && (
-        <button
-          type="button"
-          disabled={isBusy}
-          onClick={onAttach}
-          className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-border-subtle bg-card px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isBusy
-            ? <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__c851a1" />
-            : <Paperclip className="h-3 w-3" data-testid="Paperclip__c851a1" />}
-          {isBusy ? ui('ocrSidePanelAttaching') : ui('ocrSidePanelAttach')}
-        </button>
-      )}
-    </div>
-  );
-}
-
 /**
  * Edit-mode view: renders the record's marked "main" Attachment and lets the
  * user fill it (ETP-4855).
@@ -212,7 +188,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
 
   if (isBusy && !storedFile) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
+      <div className="flex h-full min-h-[360px] flex-1 items-center justify-center rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
       </div>
     );
@@ -245,12 +221,6 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
   const { openPicker, removeFile } = buildStoredFileActions({ canAttach, inputRef, deleteFile });
   return (
     <div className="flex h-full min-h-0 flex-col gap-2" {...dropHandlers}>
-      <StoredFileHeader
-        fileName={storedFile.fileName}
-        canAttach={canAttach}
-        isBusy={isBusy}
-        onAttach={openPicker}
-        data-testid="StoredFileHeader__c851a1" />
       {errorRow}
       <div className={`min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-dashed bg-card ${
         isDragOver ? 'border-primary' : 'border-border-control'
@@ -289,8 +259,10 @@ export default function OcrSidePanel(props) {
   // ETP-5289 — reserve the scrollbar's gutter. The PDF preview fits its page to this box's
   // width, so a scrollbar that came and went resized the page, the resized page toggled the
   // scrollbar again, and react-pdf redrew the canvas every ~250 ms: the "flicker" on Extract.
+  // pt-3 mirrors the 12px (pl-3/pr-3) the side-panel wrapper leaves at the sides, so the
+  // attachment area no longer sits flush against the action bar.
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col pt-3">
       <div className="flex-1 overflow-auto [scrollbar-gutter:stable]">
         <FileTab {...props} docTypeId={ocrDocType?.id} data-testid="FileTab__c851a1" />
       </div>

@@ -102,7 +102,7 @@ async function renderWithStoredImage() {
   const user = userEvent.setup();
   render(<OcrSidePanel {...PROPS} />);
   await sidebarImage();
-  await waitFor(() => expect(screen.getByText('ocrSidePanelAttach').closest('button')).toBeEnabled());
+  await waitFor(() => expect(screen.getByTestId('file-viewer-more')).toBeInTheDocument());
   return user;
 }
 
@@ -220,6 +220,8 @@ describe('OcrSidePanel with the real useMainAttachment — drops on the lightbox
     expect(uploadAndMarkMainAttachment).toHaveBeenCalledWith(expect.objectContaining({
       recordId: 'inv-1', tableName: 'C_Invoice', fileName: 'replacement.pdf',
     }));
-    expect(await screen.findByText('replacement.pdf')).toBeInTheDocument();
+    // The file-name header is gone (ETP-5518): the replaced PDF shows up in the viewer, the image is gone.
+    expect(await screen.findByTestId('pdf-document')).toBeInTheDocument();
+    expect(screen.queryByAltText('scan.png')).not.toBeInTheDocument();
   });
 });
