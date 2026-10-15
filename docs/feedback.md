@@ -3134,3 +3134,37 @@ passes and the failure only surfaces at file generation.
 
 **Reference:** `docs/generated-custom-windows/fiscal-models.md` → "Tipo de declaración vs. casilla
 69, bank block requiredness and boxes 70/109 (ETP-5597)", part 2.
+
+---
+
+## [2026-10-13] ETP-5573 — Stock Report warehouse selector omits warehouses created from the Warehouse window
+
+**Component:** `ReportSelectorsServlet.buildWarehouseQuery()` (`com.etendoerp.go`) and its dev-server twin,
+the `warehouse` branch of `tools/app-shell/vite-plugins/report-api.js`.
+
+**Symptom:** a warehouse created in the Etendo GO Warehouse window shows up in the window, in the Stock
+Report output and in every document selector (sales/purchase order, goods receipt/shipment, physical
+inventory, returns), but is missing from the Stock Report "Warehouse" scope selector.
+
+**Root cause:** the selector required an `ad_org_warehouse` row (the Classic organization↔warehouse
+assignment, Organization window → Warehouse tab) for one of the role's readable organizations. Etendo GO
+never creates that row when a warehouse is added (no core trigger, no NEO handler), and no other GO
+selector asks for it — they scope by the warehouse's own organization (`m_warehouse.ad_org_id`), as does
+`WarehouseLookupHelper`. The restriction came in with the Stock Report (ETP-3585, copied to the servlet in
+ETP-3637) and has no documented rationale.
+
+**Why it hid locally:** `localhost:3100` answers `/sws/report-selectors/*` from the Vite plugin, not from the
+servlet, and the popup sends no org parameters, so the plugin never applied the filter. Only the real
+servlet reproduces it. Call Tomcat directly (`<etendo>/sws/report-selectors/warehouse?q=` with a bearer
+token) to test selector changes.
+
+**Fix:** both implementations now scope by `m_warehouse.ad_org_id` (selectedOrgId also accepts the root org
+`'0'`; roleOrgIds is the role's readable orgs) and never touch `ad_org_warehouse`. No handler and no data
+fix: existing warehouses become visible as soon as the new build is deployed.
+
+**Lesson:** a selector that ignores the rule every sibling selector follows is a bug magnet, and the
+dev-server plugin duplicates the servlet's SQL (see also ETP-5483) — change both in the same commit. The
+other two ticket items (accent in "Almacén", "Unidad de Medida" capitalization) were already fixed by
+ETP-5492.
+
+**Reference:** `docs/plans/2026-10-13-etp-5573-stock-report-warehouse-selector.md`.

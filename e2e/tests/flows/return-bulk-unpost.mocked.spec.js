@@ -1,5 +1,8 @@
+// @covers tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx
+// @covers tools/app-shell/src/components/contract-ui/RowQuickActions.jsx
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth.js';
+import { login, installNonAdminCapabilities } from '../helpers/auth.js';
 
 /**
  * Return windows — the selection bar must offer Descontabilizar for a posted row (mocked).
@@ -39,6 +42,12 @@ import { login } from '../helpers/auth.js';
  *     `exact: true` strings so the spec survives an en_US run (mock mode defaults to es_ES).
  *   - The row checkbox input is `sr-only` with a styled div over it, so `check()` needs
  *     `{ force: true }` — without it Playwright waits forever for a "visible" element.
+ *
+ * <b>ETP-5684 — roles without "Show Accounting Fields".</b> The second describe block replays
+ * the same rows for a non-admin role whose `capabilities.showAccountingFields` is false: the
+ * "Contabilizado" column, the bulk Contabilizar/Descontabilizar and the row-kebab entries must
+ * all be gone. The admin describe pins the positive half (bar + kebab offer them), so the
+ * negative assertions cannot pass vacuously.
  *
  * Mock mode only — no backend required.
  */
@@ -217,6 +226,19 @@ const BULK_LABELS = {
 const barButton = (page, key) => selectionBar(page).getByRole('button', { name: BULK_LABELS[key] });
 
 /**
+ * Hover a row and open its kebab when it has one. A role without posting rights may have no
+ * kebab at all on a row whose only entry was Descontabilizar — that is a valid outcome too.
+ */
+async function openRowKebab(page, docNo) {
+  const row = page.locator('tbody tr').filter({ hasText: docNo }).first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.hover();
+  await expect(row.getByTestId('row-quick-actions')).toBeVisible({ timeout: 5_000 });
+  const more = row.getByTestId('row-quick-action-more');
+  if (await more.count()) await more.click();
+}
+
+/**
  * Tick a row. The input is `sr-only` behind a styled div, so it is never "visible" to
  * Playwright's actionability check — `force: true` is required, not a workaround.
  */
@@ -288,6 +310,13 @@ for (const spec of Object.keys(WINDOWS)) {
       await expect(barButton(page, 'unpost')).toHaveCount(0);
     });
 
+    // ── Row kebab (ETP-5684 positive control) ────────────────────────────────
+    test('the row kebab of a posted row offers Descontabilizar', async ({ page }) => {
+      await openRowKebab(page, cfg.postedDocNo);
+      await expect(page.getByTestId('menu-action-unpost')).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByTestId('column-header-posted').first()).toBeVisible();
+    });
+
     // ── The action actually runs ─────────────────────────────────────────────
     test('running Descontabilizar POSTs to /action/unpost for the selected record', async ({ page }) => {
       const row = page.locator('tbody tr').filter({ hasText: cfg.postedDocNo }).first();
@@ -324,6 +353,45 @@ for (const spec of Object.keys(WINDOWS)) {
       // The bulk run ends with `clearSelection()`, so the pill goes away on success. Pins
       // that the action was treated as a success rather than swallowed as a failed row.
       await expect(selectionBar(page)).toBeHidden({ timeout: 15_000 });
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// ETP-5684 — a role without "Show Accounting Fields"
+// ---------------------------------------------------------------------------
+
+for (const spec of Object.keys(WINDOWS)) {
+  const cfg = WINDOWS[spec];
+
+  test.describe(`${spec} — no posting surface without Show Accounting Fields (ETP-5684)`, () => {
+    test.beforeEach(async ({ page }) => {
+      const rows = buildRows(cfg);
+      await login(page);
+      await installNonAdminCapabilities(page);
+      await installReturnWindowMocks(page, spec, { rows, state: { actions: [] } });
+      await page.goto(`/${spec}`);
+      await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    });
+
+    test('the list has no Contabilizado column', async ({ page }) => {
+      await expect(page.locator('tbody tr').filter({ hasText: cfg.postedDocNo }).first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByTestId('column-header-documentNo').first()).toBeVisible();
+      await expect(page.getByTestId('column-header-posted')).toHaveCount(0);
+    });
+
+    test('the selection bar offers neither Descontabilizar nor Contabilizar', async ({ page }) => {
+      await expect(page.locator('tbody tr').filter({ hasText: cfg.postedDocNo }).first()).toBeVisible({ timeout: 10_000 });
+      await selectRow(page, cfg.postedId);
+      await selectRow(page, cfg.unpostedId);
+      await expect(selectionBar(page)).toBeVisible({ timeout: 10_000 });
+      await expect(barButton(page, 'unpost')).toHaveCount(0);
+      await expect(barButton(page, 'post')).toHaveCount(0);
+    });
+
+    test('the row kebab of a posted row has no Descontabilizar', async ({ page }) => {
+      await openRowKebab(page, cfg.postedDocNo);
+      await expect(page.getByTestId('menu-action-unpost')).toHaveCount(0);
     });
   });
 }

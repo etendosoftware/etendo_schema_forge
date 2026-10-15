@@ -211,6 +211,14 @@ const BACKEND_ERROR_MAP = {
   'There is already an asset with this identifier in this organization.': 'backendError.assetSearchKeyDuplicate',
   // Goods Movements line (GoodsMovementLineHandler) validation messages
   'This product is of type Service and cannot be used in inventory movements.': 'backendError.productNotStockable',
+  // ETP-5704 — OrderReactivationGuard (com.etendoerp.go): Reactivate (docAction RE) on a sales order
+  // that has a linked shipment or invoice. AD_Message ETGO_OrderReactivateLinkedDocs /
+  // ETGO_OrderLinkedDocsCheckFailed, both English-only in the module like every ETGO_* message.
+  // The first reuses the bulk bar's own rowFilter sentence, so the refusal reads the same whether
+  // the SPA hid the action or the backend caught a stale screen.
+  'This order cannot be reactivated because it has linked shipments or invoices.': 'cannotReactivateLinkedDocs',
+  'The documents linked to this order could not be checked, so it has not been reactivated. Try again.':
+    'backendError.orderLinkedDocsCheckFailed',
   // Product category (ProductCategoryDefaultHandler) validation messages
   'Only one product category can be marked as default.': 'backendError.productCategoryCannotSetMultipleDefault',
   // Costing engine (core `NotCalculatedCostWithTransaction` AD_MESSAGE) — the backend

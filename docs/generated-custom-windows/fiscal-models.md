@@ -853,6 +853,70 @@ edited).
 `fm.type.rectificative` is a new key (all 3 locale files); `fm.type.complementary` is kept as-is
 for the reason above, not removed or repurposed.
 
+### Auto-select Sustitutiva/rectificativa on a duplicate-presented period (ETP-5725)
+
+The ETP-5187 gate above only warns and blocks presenting — it never checks the box for the user,
+so a NEW declaration opened for a period whose latest sibling is already presented still landed on
+"Normal"/unchecked by default, requiring the user to find and check it themselves before AEAT's
+own rule (a 2nd+ declaration for an already-filed period must be a correction) is satisfied.
+ETP-5725 makes that the default instead of merely warning about its absence.
+
+**New, narrower flag: `_duplicatePeriodPresented`.** `FmListPage.jsx` computes it alongside the
+existing `_hasDuplicatePeriod` (same `decls.some(...)` shape, same select-time attachment) but
+additionally requires the sibling's `status` to be in `SUBMITTED_STATUSES` (`submitted`,
+`submitted_ack`, `submitted_ext`) — `_hasDuplicatePeriod` fires for ANY sibling regardless of
+status (still used for the ETP-5187 warning/gate, untouched), `_duplicatePeriodPresented` only for
+one that is actually in the submitted family. There is no exposed `DECL_SEQ` ordinal on the list
+payload (see `FiscalDeclCrudHandler#findLatestDeclaration` on the Go side), so this is "any
+submitted sibling exists" rather than strictly "the latest sibling is submitted" — the two
+coincide in practice because the ETP-5272 one-draft-per-period guard means at most one sibling can
+be in a non-terminal state at a time.
+
+**Auto-default, both models.** `FmModel303Page.jsx`'s and `FmModel349Page.jsx`'s `identChecks`
+`useState` initializers became lazy initializers: when the persisted value (`manualData` or the
+legacy `decl.identification` fallback) has never set `rectificativa`/`sustitutiva` either way
+(`undefined`) AND `_duplicatePeriodPresented` is true, the initial state defaults it to `true`. A
+period with no prior declaration at all keeps the untouched default (`_duplicatePeriodPresented` is
+false there) — this is the regression every test in this area guards. An explicit persisted value
+(the declaration was saved at least once, even with the flag off) always wins over the
+auto-default; it only fills the gap for a never-saved declaration.
+
+**Locking "Normal" out — asymmetric by control shape.**
+
+- **303** (`FmBoxes303.jsx`'s single `rectificativa` checkbox, a toggle that can go either way):
+  `lockRectificativaChecked` (new prop, `CasillasTab` → `FmBoxes303`) disables ONLY the
+  `rectificativa` field, computed in `FmModel303Page.jsx` as `Boolean(decl._duplicatePeriodPresented)
+  && !isSubmitted && Boolean(identChecks.rectificativa)` — deliberately requiring the CURRENT value
+  to already be true. A lock that fired on `_duplicatePeriodPresented` alone would strand a legacy
+  declaration explicitly saved with `rectificativa: false` in an unchecked-but-disabled state with
+  no way to ever fix it; requiring the current value means the lock only ever reinforces an
+  already-true value (prevents un-checking) and never traps a false one (the field stays editable,
+  and the pre-existing ETP-5187 required-field/warning gate still blocks presenting until the user
+  checks it themselves).
+- **349** (`DeclarationTypeControl`'s two-button segmented control, where only ONE option is ever
+  disabled): `lockNormalOption` — `Boolean(decl._duplicatePeriodPresented) && !isSubmitted &&
+  isSustitutivaChecked(identChecks)` — disables only the "Normal" button; "Sustitutiva" is never
+  disabled by this flag, so even a legacy `sustitutiva: false` declaration can always reach
+  Sustitutiva (and, once checked, Normal locks out from then on). The 303 strand bug does not apply
+  here by construction — a 2-button exclusive control where only one option is ever disabled always
+  leaves a path to the other value — but the guard is kept symmetric with 303's for the same reason:
+  an unconditional `Boolean(decl._duplicatePeriodPresented) && !isSubmitted` (no current-value check)
+  would still disable "Normal" from the very first render of a legacy `sustitutiva: false`
+  declaration, before the user ever touched the control.
+
+**List "Tipo" column fallback for an unsaved draft.** The auto-default above only ever touches
+in-memory `identChecks` state inside the open detail page — it reaches `manualData` (and therefore
+`FmListPage.jsx`'s `resolveDeclTypeLabel`, see "Tipo column derivation" above) only after the user
+clicks "Guardar". Without a corresponding list-side change, a freshly created/opened duplicate
+declaration would show "Ordinaria" in the grid despite correctly displaying the checked/locked
+state inside its own detail page. `resolveDeclTypeLabel` now takes `duplicatePeriodPresented` as a
+3rd argument (the same flag the row already computes for `_duplicatePeriodPresented`) and falls
+back to the rectificativa/sustitutiva label — chosen by `decl.model` — ONLY when the declaration has
+genuinely never been saved (`rectificativa` and `sustitutiva` both `undefined` on
+`manualData.identification`). The moment either flag is persisted (including an explicit save back
+to `false`), the persisted value wins exactly as it did before this fix; the fallback only
+covers the window between opening a new duplicate-period declaration and the first "Guardar".
+
 ### Required-field pre-flight gate (ETP-5187)
 
 `fm303Layouts.js` marks exactly 2 fields `required: true`: `tipo_declaracion` (always visible, in
@@ -3455,6 +3519,46 @@ the count they were taken with.
 previous backend would be restored as-is and keep showing "—" in Origen for the services row. The
 ETP-5456 deployment trap above applies: verify in a fresh tab after deploying.
 
+### Single-key "Facturas origen" rows now use the live per-key base, not the cached column (ETP-5725)
+
+**Bug.** A rectificativa (credit-note-style, e.g. `FVR…`) invoice could show its base with the
+WRONG SIGN in "Facturas origen", while the "Rectificaciones" tab (a separate code path,
+untouched by this fix) and the Operadores totals showed it correctly.
+
+**Root cause.** `appendInvoiceRows` (`Fiscal349BoxesHandler`) builds one row per (invoice, key)
+from `invoiceKeyBases` — the live, correctly-signed per-key base `resolveInvoiceKeyBases` computes
+straight from `InvoiceTax` (same HQL `getTaxBaseAmountPerBusinessPartner`/the Operadores totals
+and the multi-key/mixed-invoice branch above already trust). For the single-key case (the common
+case — most invoices only resolve to one AEAT349 key), it used to discard that live base
+(`mixed ? e.getValue() : null`) and pass `null` into `buildInvoiceRow`, which then fell back to
+`inv.getSummedLineAmount()` — a cached header column on `Invoice` that can disagree in SIGN with
+the live tax-line sum for a rectificativa invoice. The mixed (multi-key) branch was never affected;
+only the single-key path trusted the stale column.
+
+**Fix.** `appendInvoiceRows` now always passes the live per-key base (`e.getValue()`), mixed or
+not — `inv.getSummedLineAmount()` is reachable only when `invoiceKeyBases` has no entry at all for
+an invoice (no resolvable key), the one case with no live source to use instead. Nothing else
+changed: `collectRectifications`/`correctiveDeltaRows` (the "Rectificaciones" tab's signed-delta
+path) and `appendOperators`/`getTaxBaseAmountPerBusinessPartner` (the Operadores totals and the
+generated `.349` file) are untouched, so the totals per clave, the "Subtotal rectificativas" and
+the file itself are unaffected — only the "Facturas origen" tab's displayed sign for a single-key
+rectificativa invoice changes.
+
+**Dependency worth knowing about when debugging a misclassified invoice: the "corrective" flag is
+manual, by design.** Whether an invoice lands in "Facturas origen" vs. "Rectificaciones" at all is
+decided entirely by `AEAT3492010ReportDao#getCorrectiveInvoices`, which queries `C_Invoice_Reverse`
+(`ReversedInvoice` entity) for a row with `em_aeat349_iscorrective = 'Y'`. This flag is **not**
+derived from anything structural about the invoice (its DocType, a credit-note flag, etc.) — it is
+set by the user in the invoice's "Facturas revertidas" panel to explicitly flag that invoice as a
+349 correction, and defaults to `'N'` until they do. This is intentional, not a gap: not every
+reversed/linked invoice is a 349 correction, so the user's own judgment is the correct source of
+truth here, same as 303's `motivo_rectificacion` is deliberately left manual elsewhere in this doc.
+The practical consequence for this ticket's fix: a 349-corrective invoice only reaches
+"Rectificaciones" (and the signed-delta path, untouched by this fix) if the user remembered to
+check that flag — otherwise it is, correctly, treated as a regular invoice and goes through
+"Facturas origen", which is exactly the path the base-sign fix above covers. Worth checking first
+when an invoice shows up in the "wrong" tab.
+
 ### Generate error banner (`genError`)
 
 `FmModel349Page` mirrors the pre-existing `genError` pattern from `FmModel303Page.jsx`: a local `genError` state, rendered as a destructive banner (`OctagonAlert` icon, `var(--status-destructive-bg)`) directly above the KPI-to-tabs boundary whenever `generate349File` resolves with `{ ok: false, ... }`.
@@ -3604,6 +3708,17 @@ from a `Date`. There was no locale leak to fix on 303.
 **Sort** is a real field-selector popover, not a bare toggle. Clicking "Ordenar" opens a list of sortable fields (`SORT_FIELDS` in `FmListPage.jsx`: Modelo, Año, Período, Estado), explicitly modeled on `components/contract-ui/ListView.jsx`'s existing `sortColumn`/`sortDirection`/`handleSortSelect`/`handleClearSort` pattern — clicking a field sorts ascending, clicking the same field again flips to descending. A **"Limpiar orden"** entry, shown only once a field is active, resets `sortColumn` to `null`, restoring the default order (year + period, most recent first).
 
 **Search** was removed entirely — the search input/icon button is gone from the toolbar. Narrowing the list is handled by the existing year/model/status `FilterDropdown` filters instead.
+
+### Row hover look (ETP-5600)
+
+`.fm-table` is a hand-built table, not `DataTable`, but its hovered row matches the shared list row
+(`docs/ui-customization.md` §13 → *List row visuals*): white cells, Shadows/lg
+(`0 4px 6px -2px rgba(18,18,23,.05), 0 10px 15px -3px rgba(18,18,23,.08)`), no transition. The
+raised row (`position: relative; z-index: 2`) used to paint over the line above it (the previous
+row's `border-bottom` in the collapsed-border grid); `.fm-table tbody tr:hover td` now redraws it as
+`box-shadow: inset 0 1px 0 var(--fm-border-1)`. `.fm-table__row--selected` keeps its own inset
+borders: both rules have the same specificity (0,2,3), so it wins by source order (it is declared
+after the hover rule in `fiscal-models.css`).
 
 ### Row hover actions — Edit/Delete/Reactivar (`FmRowActions`, ETP-5187, ETP-5338)
 
@@ -4137,7 +4252,8 @@ hid the "Modelos Fiscales" menu entry for a role without the grant, but:
   `'none'` tier renders the access-denied screen instead of `FiscalModelsPage`; `'read-only'` and
   `'full'` both render the page (this window is window-gated, not write-gated, on the frontend).
 - **Backend** (`com.etendoerp.go`) — two separate gates, both calling
-  `NeoAccessHelper.hasWindowAccess(NeoAttachmentAuthorizer.TAX_REPORT_WINDOW_ID, method)`:
+  `NeoAccessHelper.hasWindowAccess(RoleAccessMatrix.TAX_MODELS_PROXY_WINDOW_ID, method)` (the
+  single backend constant for this id since ETP-5540; the attachment authorizer reads it too):
   - `AbstractFiscalHandler.handle(entityName, method, request, response)` — the single entry point
     every `/fiscal303/*` and `/fiscal349/*` sub-route funnels through (declarations, incidents,
     boxes, submit, modified, validate-vies) — checks access first, before any entity routing,

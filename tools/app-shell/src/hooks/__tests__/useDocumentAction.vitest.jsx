@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useDocumentAction.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useDocumentAction } from '../useDocumentAction';
 
@@ -152,6 +153,31 @@ describe('useDocumentAction', () => {
 
     expect(caughtError.message).toBe('Error 500');
     expect(result.current.error).toBe('Error 500');
+  });
+
+  // The NeoResponse.error envelope ({ error: { message } }) is what a customization's pre-hook
+  // refusal returns; it must reach the user instead of "Error <status>". The two process-result
+  // shapes keep winning over it, so the rows with both guard the unchanged precedence.
+  it.each([
+    ['error.message alone', { error: { message: 'X' } }, 'X'],
+    ['response.message over error.message', { response: { message: 'A' }, error: { message: 'X' } }, 'A'],
+    ['top-level message over error.message', { message: 'B', error: { message: 'X' } }, 'B'],
+  ])('rejects with the backend message: %s', async (_label, body, expected) => {
+    globalThis.fetch.mockResolvedValue({ ok: false, status: 400, json: async () => body });
+
+    const { result } = renderHook(() => useDocumentAction(baseOpts));
+
+    let caughtError;
+    await act(async () => {
+      try {
+        await result.current.execute('rec-1', 'RE');
+      } catch (e) {
+        caughtError = e;
+      }
+    });
+
+    expect(caughtError.message).toBe(expected);
+    expect(result.current.error).toBe(expected);
   });
 
   it('calls onSuccess callback on success', async () => {
