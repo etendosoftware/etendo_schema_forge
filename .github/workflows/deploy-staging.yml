@@ -155,7 +155,12 @@ jobs:
           # Public API documentation endpoint used by the API keys screen. Only
           # production runs the public API gateway, so every target links there.
           VITE_PUBLIC_API_DOCS_URL: ${{ vars.PUBLIC_ORIGIN_PRODUCTION }}/api
-          # ConfigCat control plane (ETP-4691) — key as variable, not secret: Vite
+          # Flag control plane (ETP-5751): Datadog Feature Flags, reusing the RUM
+          # application ID/client token above and VITE_APP_ENV as the Datadog
+          # flag environment. Setting the VITE_FLAGS_PROVIDER Actions variable to
+          # `configcat` and redeploying is the rollback lever until the cutover.
+          VITE_FLAGS_PROVIDER: ${{ vars.VITE_FLAGS_PROVIDER || 'datadog' }}
+          # ConfigCat fallback control plane (ETP-4691) — key as variable, not secret: Vite
           # bakes it into the JS bundle, so it is public by construction and
           # masking it would only hide it from the build log. Production and
           # experimental use separate per-environment Actions variables; staging

@@ -370,10 +370,13 @@ release builds. The session sample rate is a percentage bounded to 0..100 (defau
 100), and `VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE` defaults to 20. Set
 `VITE_DATADOG_REMOTE_CONFIGURATION_ID` to enable Datadog-managed RUM settings.
 RUM feature flag context is attached to views, errors, vitals, actions, long
-tasks and resources when the ConfigCat OpenFeature provider is enabled. The
+tasks and resources whenever a remote OpenFeature provider (Datadog Feature
+Flags or the ConfigCat fallback) is registered. The
 OpenFeature exposure hook forwards real evaluations to RUM independently of
 the shared `feature_flag_evaluated` business event, which remains the single
-manual exposure event. RUM keys are sanitized for Datadog's identifier rules;
+manual exposure event. The Datadog flag provider is created with
+`enableRumFeatureFlagTracking: false` so this hook stays the only RUM source
+(see `docs/feature-flags.md`). RUM keys are sanitized for Datadog's identifier rules;
 the business event retains the original flag key.
 There is no browser API key. Incomplete configuration stays disabled and warns.
 
@@ -386,8 +389,10 @@ An old session response arriving after logout cannot restore identity.
 CI resolves application ID/client token separately for PRODUCTION, EXPERIMENTAL
 and STAGING from `VITE_DATADOG_APPLICATION_ID_<TARGET>` and
 `VITE_DATADOG_CLIENT_TOKEN_<TARGET>` Actions variables. `DD_SITE` sets the site;
-`VITE_DATADOG_ENABLED` enables RUM and `VITE_CONFIGCAT_SDK_KEY` enables remote
-feature flags independently. Mixpanel is independently opt-in through
+`VITE_DATADOG_ENABLED` enables RUM. Feature flags are independent of it: the
+same RUM application ID/client token plus `VITE_APP_ENV` enable Datadog Feature
+Flags (`VITE_FLAGS_PROVIDER`, default `datadog`), and `VITE_CONFIGCAT_SDK_KEY`
+keeps ConfigCat available as the fallback. Mixpanel is independently opt-in through
 `VITE_MIXPANEL_ENABLED`.
 
 When Datadog telemetry is enabled, CI uploads hidden source maps using the
