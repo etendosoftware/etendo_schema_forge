@@ -268,6 +268,19 @@ def read_manifest(target_name: str) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def archive_manifest(target_name: str, manifest: dict[str, Any]) -> Path:
+    """Move `.seeds/<target>.json` to `.seeds/archive/<target>-<seedId>.json`; never overwrites one."""
+    archive = SEEDS_DIR / "archive"
+    archive.mkdir(parents=True, exist_ok=True)
+    stem = f"{target_name}-{manifest.get('seedId') or 'no-seed-id'}"
+    dest, n = archive / f"{stem}.json", 1
+    while dest.exists():
+        n += 1
+        dest = archive / f"{stem}-{n}.json"
+    manifest_path(target_name).rename(dest)
+    return dest
+
+
 def write_manifest(target_name: str, manifest: dict[str, Any]) -> Path:
     path = manifest_path(target_name)
     path.parent.mkdir(parents=True, exist_ok=True)

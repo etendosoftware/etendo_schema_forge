@@ -1,6 +1,11 @@
 # MCP tests — reproducible Etendo Go vs Holded comparison (ETP-5750) — Plan
 
-**Status:** proposal, not started; user decisions of 2026-10-14 folded in (§9). **Epic:** ETP-5339. **Date:** 2026-10-14.
+**Status:** S1–S6 implemented (ETP-5750, PR #1850, 2026-10-15); **S7 and S8 are out of scope of that
+PR** and not started (§7). User decisions of 2026-10-14 folded in (§9); **open question 14 (Holded
+freshness) is still undecided** and blocks any official number (§9). **Epic:** ETP-5339.
+**Date:** 2026-10-14, last updated 2026-10-15.
+**Operator guide:** `mcp-tests/README.md` (prerequisites, commands, the official-run workflow, how
+to read `summary.md`).
 **Builds on:** `docs/plans/2026-09-11-mcp-test-harness-design.md` (the harness design; D-numbers
 below refer to its §10). **Code location:** everything lives in `mcp-tests/` in this repo (D1, D9);
 nothing here touches `schema_forge_core` or `com.etendoerp.go`.
@@ -13,6 +18,10 @@ One command
 make mcp-compare SUITE=okr TARGETS=local,holded REPEAT=3
 ```
 
+*(The command exists since S3; the `okr` suite it names does not exist yet — it is S7, out of scope
+of the first ETP-5750 PR. Until then `SUITE=` takes any existing suite, and only a v2 suite with
+`platforms:` blocks verifies on both sides.)*
+
 runs the same isolated business tasks against Etendo Go and Holded, N times each, and writes
 `runs/<compareId>/summary.md` + `summary.json` with:
 
@@ -24,7 +33,11 @@ runs the same isolated business tasks against Etendo Go and Holded, N times each
 Acceptance target: two back-to-back runs on the same builds give the same winner in >= 90 % of
 tasks.
 
-## 2. Where the harness stands today (verified against the code)
+## 2. Where the harness stood before this plan (verified against the code on 2026-10-14)
+
+*Historical: this is the state S1 started from, kept because the line references explain each
+slice. What exists now is in the design doc (§4 layout, §6.1 run schemas v4–v7, §6.6, D43–D50) and in
+`mcp-tests/README.md`.*
 
 | Need | State | Evidence |
 |---|---|---|
@@ -498,6 +511,17 @@ Python `unittest` under `mcp-tests/tests/`, written by **tester-functional** (th
 only the failing repro test of a bug fix). Each slice extends the existing test file for the unit
 it touches before creating a new one (`docs/testing/test-reuse-policy.md`).
 
+**Status (2026-10-15).** S1–S6 are implemented and tested in ETP-5750 (PR #1850). **Out of scope of
+that PR, not started:**
+
+- **S7 — populating the `okr` suite.** No `suites/okr.yaml` and no `suites/okr.ids` exist; the six
+  seed probes of §5.8 are still proposals. `suites/examples/collect-invoice.v2.yaml` only
+  illustrates the v2 shape. The baseline (`fixtures/okr-baseline.yaml`) and both freshness
+  checklists exist but are **drafts**: never seeded on a fresh tenant, and `allowlistCaptured:
+  false` on both platforms.
+- **S8 — the live official baseline and the acceptance pair.** No official comparison has been run.
+  It also depends on open question 14 (§9): with Holded's current catalogue no run can be official.
+
 | # | Slice | Size | Depends on | Tests (tester-functional) |
 |---|---|---|---|---|
 | S1 | **Run record v4 groundwork:** `finalAnswer`, `usage.loop` / `usage.report`, served model + fingerprint, `serverInfo` + catalogue sha at preflight, harness commit, persisted `silentWrong`. `RUN_SCHEMA_VERSION` 3 → 4. | S | — | final answer is the last loop message, not the report; usage summed over loop only; missing usage → null, not 0; v3 files still load in `ui/runs.py` |
@@ -510,7 +534,8 @@ it touches before creating a new one (`docs/testing/test-reuse-policy.md`).
 | S8 | **Official baseline + acceptance:** freshly initialize local Etendo and the Holded account, seed, run the comparison (official); re-initialize **both** environments and seed again, run again; `mcp-stability`. If < 90 %, apply §6 levers with a rule version bump. Summary pasted into `docs/mcp-evaluation/` by hand (D6). | S–M | S7 | — (an acceptance run, not a test) |
 
 Docs per slice: the design doc's §6.2, §6.6, §7, §10 and §12 rows updated in the same change as the
-code (self-documentation policy); `mcp-tests/README` / `make help` lines for the new targets.
+code (self-documentation policy); `mcp-tests/README.md` (written 2026-10-15) / `make help` lines for
+the new targets.
 
 ## 8. Risks
 
@@ -553,8 +578,11 @@ code (self-documentation policy); `mcp-tests/README` / `make help` lines for the
 | 12 | Frozen task 5 is split into `e-unknown-document` and `e-invalid-write`, so the seed suite has six probes. | §5.8, S7 |
 | 13 | Stability run B requires re-initializing both environments (local Etendo and Holded). `clean` is not accepted. | §5.9, S8 |
 
-### Still open
+### Still open — needs a user decision
+
+Until question 14 is decided the code behaves as option (a): D50 stays strict, and every comparison
+against Holded is reported **UNOFFICIAL**. That is the absence of a decision, not a choice of (a).
 
 | # | Question | Why it matters | Raised |
 |---|---|---|---|
-| 14 | **Holded can never be `fresh` with its current MCP.** Contacts and products, the whole baseline, cannot be listed, so check 2 and the baseline read-back are `unverified` on Holded by construction, and D50 makes no comparison official. Options: (a) keep D50 strict and report every run as unofficial until Holded's MCP can list them; (b) accept a declared, versioned set of `unverified` entity types per platform as compatible with `fresh` (weaker: a dirty Holded account would pass); (c) prove freshness of Holded through the account's creation date plus an empty document check only. **Still open.** Since 2026-10-15 the checks follow the live catalogue, so under (a) Holded becomes provable the day its MCP offers those list tools, with no change here; and a capability Etendo's MCP has and Holded's lacks keeps counting as a capability win (`notPossible`, decision rule step 0). | S8 cannot produce an official number under (a) with today's catalogue. | S6, 2026-10-14 |
+| 14 | **OPEN.** **Holded can never be `fresh` with its current MCP.** Contacts and products, the whole baseline, cannot be listed, so check 2 and the baseline read-back are `unverified` on Holded by construction, and D50 makes no comparison official. Options: (a) keep D50 strict and report every run as unofficial until Holded's MCP can list them; (b) accept a declared, versioned set of `unverified` entity types per platform as compatible with `fresh` (weaker: a dirty Holded account would pass); (c) prove freshness of Holded through the account's creation date plus an empty document check only. **Still open.** Since 2026-10-15 the checks follow the live catalogue, so under (a) Holded becomes provable the day its MCP offers those list tools, with no change here; and a capability Etendo's MCP has and Holded's lacks keeps counting as a capability win (`notPossible`, decision rule step 0). | S8 cannot produce an official number under (a) with today's catalogue. | S6, 2026-10-14 |

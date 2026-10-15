@@ -80,6 +80,9 @@ backlog it produces. Refresh with the `/mcp-comparison` skill.
 | [mcp-comparison-holded-vs-etendo-go.md](mcp-evaluation/mcp-comparison-holded-vs-etendo-go.md) | Baseline benchmark: architecture contrast, tool/spec inventories, coverage matrix, and each item's `BEFORE`/`AFTER`/`Done when:` specification |
 | [mcp-comparison-post-audit-2026-08-05.md](mcp-evaluation/mcp-comparison-post-audit-2026-08-05.md) | Run report (2026-08-05, `etendo-go-local`): live read + authorized write evidence, defects, IMP-11…IMP-15, M1–M4, and the MARI baseline (28) |
 | [mcp-comparison-post-audit-2026-08-06.md](mcp-evaluation/mcp-comparison-post-audit-2026-08-06.md) | Run report (2026-08-06, `etendo-go-local` + Holded demo): full-coverage run — all 6 probe surfaces closed, M1/M2 re-measured on the frozen 5-task suite, IMP-16…IMP-21, quota re-based 73 → 97, **MARI 28 → 49** |
+| [../mcp-tests/README.md](../mcp-tests/README.md) | **Operator guide of the agentic MCP test harness** (`mcp-tests/`): prerequisites, `make mcp-test` / `mcp-seed` / `mcp-compare` / `mcp-report` / `mcp-stability`, the official-run workflow (re-initialize → seed → compare, twice) and how to read `summary.md` |
+| [plans/2026-09-11-mcp-test-harness-design.md](plans/2026-09-11-mcp-test-harness-design.md) | Harness design and record of what is built: run/compare/summary file formats, metrics, decisions D1–D50, plus Track B (production telemetry, `neo_feedback`) |
+| [plans/2026-10-14-mcp-tests-reproducible-comparison-plan.md](plans/2026-10-14-mcp-tests-reproducible-comparison-plan.md) | ETP-5750 — Reproducible Etendo Go vs Holded comparison: decision rule, fresh environments, "not possible" outcome, slices (S1–S6 built; S7 `okr` suite and S8 official baseline pending), open question 14 (Holded freshness) |
 
 ## Etendo AD Reference
 

@@ -1,9 +1,11 @@
 # MCP Test Harness + Telemetry — Design (v1.0)
 
 **Status:** design **and**, since 2026-09-14, a partial record of what exists ·
-**Date:** 2026-09-11, last updated 2026-09-14 · **Owner:** Valentin
+**Date:** 2026-09-11, last updated 2026-10-15 · **Owner:** Valentin
 **Related:** `docs/mcp-evaluation/` (manual benchmark), `/mcp-comparison` skill, IMP-* registry,
-`mcp-tests/findings/` (D35)
+`mcp-tests/findings/` (D35), `mcp-tests/README.md` (operator guide: commands and the official-run
+workflow), `docs/plans/2026-10-14-mcp-tests-reproducible-comparison-plan.md` (the Etendo Go vs
+Holded comparison, ETP-5750)
 
 > ### How to read this document
 >
@@ -17,6 +19,8 @@
 > fix and for `neo_feedback` v3 ship without one. Wherever this document says something "is
 > implemented", that means *the code exists and was exercised by hand against a live server* —
 > never *it is covered*. Tests are outstanding on both tracks and are not scheduled here.
+> *(Superseded for Track A: `mcp-tests/tests/` has had a `unittest` suite since 2026-10-01, and
+> every ETP-5750 slice — §6.1 run schemas v4–v7, §6.6, D43–D50 — landed with tests. See §12.)*
 >
 > **Improvement status is not here.** `docs/mcp-evaluation/mcp-improvements-registry.md` remains
 > the single source of truth for whether an IMP-* is open, partial or resolved. This document
@@ -62,7 +66,9 @@ suite file (prompts)  ──▶  runner  ──▶  LLM agent  ◀──MCP─�
               Streamlit UI        run report (JSON + MD)
 ```
 
-*(As built: the Streamlit UI and the JSON run files exist; the MD report does not — see §6.6.)*
+*(As built: the Streamlit UI and the JSON run files exist. The MD report exists for comparisons
+only — `summary.md` / `summary.json` of `make mcp-compare` / `make mcp-report`, §6.6; a single
+`make mcp-test` run is still not summarised.)*
 
 One **probe** = one natural-language task given to a fresh agent with the MCP tools attached, e.g.
 *"Create a sales order for the default customer, with no lines."*
@@ -85,10 +91,11 @@ diff-able.
 `mcp-tests/` is a **self-contained Python tool**. It shares no code with `cli/` (Node) and does not
 belong to the app build.
 
-Annotated with what exists as of 2026-09-14. **✅ built · ❌ not built.**
+Annotated with what exists as of 2026-10-15. **✅ built · ❌ not built.**
 
 ```
 mcp-tests/
+  README.md                       ✅  operator guide: prerequisites, commands, official-run workflow
   pyproject.toml                  ✅  (the UI is an optional `ui` extra)
   config.example.toml             ✅  see the Configuration note in §5 — the env-var scheme
                                       sketched below was NOT what got built
@@ -97,6 +104,9 @@ mcp-tests/
     sales-order.yaml              ✅
     discoverability.yaml          ✅  (read-only probes: can a naive agent find its way?)
     full-flows.yaml               ✅  (one long chained write flow, Spanish, D21)
+    treasury.yaml                 ✅  collections / refusals with setup + teardown (D41)
+    examples/collect-invoice.v2.yaml  ✅  suite v2 worked example (§4 *Suite v2*) — not a measurement suite
+    okr.yaml                      ❌  the comparison suite: plan S7, not in ETP-5750's first PR
     business-partner.yaml         ❌  never written; discoverability.yaml covers that ground
   findings/                       ✅  D35. One dated file per product defect, plus a README
   runner/
@@ -113,6 +123,9 @@ mcp-tests/
     decide.py                     ✅  the versioned decision rule, `RULE_VERSION` (§6.6, D47)
     fixture.py                    ✅  baseline dataset, `{{fixture.*}}`, baseline verify, freshness checks (D50)
     seed.py                       ✅  `make mcp-seed`: seed a freshly initialized target through its MCP (D50)
+    matcher.py                    ✅  `expectAnswer` matcher, `MATCHER_VERSION` 4 (D46)
+    steps.py                      ✅  setup / teardown steps, `{{steps.*}}` refs (D41)
+    config.py                     ✅  config.toml loading, per-target settings and `platform`
   fixtures/                       ✅  versioned (D50)
     okr-baseline.yaml             ✅  baseline dataset — DRAFT, piloted in S7/S8
     fresh.etendo-go.yaml          ✅  freshness checklist (allowlist not captured yet)
@@ -122,21 +135,26 @@ mcp-tests/
     app.py                        ✅  Streamlit panel (§9)
     runs.py                       ✅  pure file-reading, no Streamlit import — the testable half
     launch.py                     ✅  shells out to the CLI (D11)
+  tests/                          ✅  `unittest`, one file per unit (§12)
   .auth/                          ✅  gitignored token cache, 0600, never copied into runs/
   runs/                           ✅  gitignored (D6)
     .ui/                          ✅  the UI's own subprocess logs — not runs; skipped when listing
-    20260911T1402-local-a3f1/
+    20260911T1402-local-a3f1/     ✅  a single `make mcp-test` run
       run.json                    ✅  metadata header, written first
       events.ndjson               ✅  append-only, live
       probes/
-        create-empty-default-customer.json   ✅
-      summary.md                  ❌  not produced
-      summary.json                ❌  not produced
+        create-empty-default-customer/attempt-1.json   ✅  (v1–v4: probes/<id>.json)
+      summary.md / summary.json   ❌  a single run is not summarised
+    20261015T090212-cmp-a3f1/     ✅  a `make mcp-compare` run (§6.1 run schema v6)
+      compare.json                ✅  pins, targets, freshness
+      summary.json  summary.md    ✅  `runner/report.py` (§6.6)
+      targets/<target>/           ✅  one ordinary run dir per target
 ```
 
-Two absences are load-bearing rather than cosmetic and are called out where they belong: **§6.7**
-(credentials are not scrubbed on the way to disk) and **§6.6** (no metric is derived by the tool —
-a run is read by a human or by the UI).
+One absence is load-bearing rather than cosmetic and is called out where it belongs: **§6.7**
+(credentials are not scrubbed on the way to disk). The other one this section used to name — no
+metric derived by the tool — is closed for comparisons by §6.6; a single run is still read by a
+human or by the UI.
 
 ### Suite file shape
 
@@ -819,8 +837,8 @@ runs/<compareId>/                 # <UTC>-cmp-<hex4>, e.g. 20261014T140233-cmp-a
 
 ```jsonc
 {
-  "compareSchemaVersion": 1,
-  "compareId": "20261014T1402-cmp-a3f1",
+  "compareSchemaVersion": 1,          // 2 since S6 — see *baseline and freshness* below
+  "compareId": "20261014T140233-cmp-a3f1",
   "startedAt": "2026-10-14T14:02:11.123Z", "finishedAt": "…",   // finishedAt null while running
   "subject": "local",                  // --subject, default the first of --targets
   "repeat": 3,                         // default 3 with --targets (D43), 1 for mcp-test
@@ -844,7 +862,8 @@ runs/<compareId>/                 # <UTC>-cmp-<hex4>, e.g. 20261014T140233-cmp-a
 
 Per-target pins (server identity, catalogue sha/bytes, served model) stay in each target's
 `run.json`; the report reads them there. **`freshness.status` is always `unknown` until S6 (D50)
-implements the checks**, so every comparison is reported *unofficial* until then.
+implements the checks**, so every comparison is reported *unofficial* until then. *(S6 implemented
+them: `compare.json` v2, *baseline and freshness* below.)*
 
 Rules:
 
@@ -970,9 +989,11 @@ only records seeded before it. A whole-string ref keeps the value's type, like `
 
 **Seeding** (`make mcp-seed TARGET= FIXTURE= INITIALIZED_AT=`, `runner/seed.py`). Order for an
 official comparison: **initialize → seed → compare**; run B of a stability pair re-initializes and
-re-seeds **every** target again. The seed writes `.seeds/<target>.json`:
-`{target, url, platform, fixture, fixtureSha, fixtureHash, seedId, seededAt, initializedAt,
-complete, records: {record: id}}`. `INITIALIZED_AT` is operator-declared and required. Idempotency:
+re-seeds **every** target again. The seed writes `.seeds/<target>.json` (`MANIFEST_VERSION` 1):
+`{manifestVersion, target, url, platform, fixture, fixtureSha, fixtureHash, seedId, seededAt,
+initializedAt, complete, records: {record: id}, steps}`, plus `error` when a create failed and
+`verify: {record: status}` when the baseline was read back after seeding. `INITIALIZED_AT` is
+operator-declared and required (ISO-8601 with a timezone; `seed.py` refuses to seed without it). Idempotency:
 a complete manifest whose baseline still reads back → no-op (exit 0, nothing created); a manifest
 that is incomplete / for another fixture or URL / no longer reads back → refused; no manifest but a
 readable baseline record already present → refused. The seed preflight runs the checklist and
@@ -986,7 +1007,17 @@ manifest `complete: false` with its `seedId` **before the first create** and rep
 end: a failed create, a Ctrl-C, a cancellation or a session that fails while closing all leave it
 incomplete (with the ids created so far), which blocks the next seed and makes the target dirty. A
 record the platform cannot read back (Holded has no `find`) is protected only by that manifest —
-never delete a seeded target's manifest.
+never delete a seeded target's manifest. The converse holds after a **re-initialization**: the manifest then
+describes an environment that no longer exists. `INITIALIZED_AT` is the explicit re-initialization
+claim: when it differs from the manifest's `initializedAt`, the seed treats the target as a new
+environment — the old manifest is ignored, every preflight refusal above still applies (so on
+Etendo a target still holding readable baseline records is refused and keeps its manifest), and
+only when the seed is about to create is the old manifest moved to
+`.seeds/archive/<target>-<seedId>.json` (printed) and a new `seedId` issued. With the same
+`INITIALIZED_AT` the rules above are unchanged. Without this, on Holded, whose baseline is
+`unverified`, a stale *complete* manifest made the seed a silent no-op, so run B carried run A's
+`seedId` and `mcp-stability` refused the pair; on Holded the claim is all the seed can check, so it
+must only be made after a real re-initialization (`mcp-tests/README.md` §3).
 `CAPTURE=1` seeds nothing and prints the master data initialization created, as the `allow:` lists
 of the checklist. It reads the live tools/list first: an entity whose list tool the target does not
 offer prints `NOT CAPTURED: tool not offered: <tool>` and is never called; a failed read prints
@@ -1011,7 +1042,9 @@ the MCP only). Four checks (plan §5.9), each reaching `ok`, `leftover`, `unveri
    otherwise `dirty`, or `unverified` while `allowlistCaptured: false` (the checklist cannot judge)
    or when the entity names `baseline:` records but no baseline is known (a suite without a
    fixture: a row may be a baseline record, nobody can tell).
-3. **markers** — any row of any listed entity carrying `\d{8}T\d{4}-…-a<n>` → `leftover`.
+3. **markers** — any row of any listed entity carrying a harness marker → `leftover`. The pattern
+   is `MARKER_RE` (`runner/fixture.py`): `\d{8}T\d{4}(\d{2})?-…-a<n>`, i.e. both the run-id stamp
+   (`%Y%m%dT%H%M`) and the compareId stamp (`%Y%m%dT%H%M%S` since 2026-10-15, minutes before).
 4. **baseline** — the seed manifest exists, is complete, matches the target URL, the suite's
    fixture and sha, and (when the baseline read back fully) the recomputed `fixtureHash`; the
    baseline read back without `missing/duplicated/changed/replaced`. Mismatch → `dirty`; no
@@ -1075,7 +1108,7 @@ As implemented:
 
 ```jsonc
 {
-  "schemaVersion": 6,               // 1 -> 2 on 2026-09-14, 3 -> 4 -> 5 -> 6 on 2026-10-14, see §6.1
+  "schemaVersion": 7,               // 1 -> 2 on 2026-09-14, 3 -> 4 -> 5 -> 6 -> 7 on 2026-10-14, see §6.1
   "runId": "20260911T1402-local-a3f1",   // in a comparison: <compareId>-<target>
   "compareId": null,                // v6: the comparison it belongs to
   "startedAt": "2026-09-11T14:02:11Z",
@@ -1089,6 +1122,8 @@ As implemented:
     "protocolVersion": "2025-06-18",
     "catalogue": { "sha": "<sha256>", "toolCount": 28, "bytes": 58000 },   // tools/list, every page;
                                     // bytes = UTF-8 size of the canonical (compact, sorted) form
+    "tools": ["etendo_list", "..."], // v7: sorted live tool names — notPossible checks (D49),
+                                    // freshness "tool not offered" (D50), catalogue changes (§6.6)
     "error": null                   // a failed read: { "kind": "auth" | "server", "detail": "..." },
                                     // the shape of a probe's harnessError (§6.4); never fatal
   },                                // null when preflight auth already failed
@@ -1373,20 +1408,28 @@ not implement is refused (`RuleMismatch`). Every summary records `rule.version`,
 `rule.parametersSha` and `rule.versionAtRun` (what `compare.json` declared), and the same block sits
 in `pins`.
 
-**`summary.json`** (`summarySchemaVersion` 1, `reportVersion` 1): `kr` (subject vs reference, tasks,
+**`summary.json`** (`summarySchemaVersion` 4, `reportVersion` 4 — both started at 1 in S4; v2 added
+`selfReportedSuccess` (S5 review), v3 the freshness `seedId` / `fixtureHash` / `reasons` (S6), v4
+`catalogueChanges` (§6.1, 2026-10-15)): `kr` (subject vs reference, tasks,
 evaluated, wins split `byCapability` / `byMeasurement` for both sides, ties, `winRate` and its two
 halves, fragile count), `official` + `freshness` per target (official only when every target is
-`fresh`; a missing status is `unknown`), `stumbleIndicators` per target (stumbles per counted
+`fresh`; a missing status is `unknown`; each target carries `status, checkedAt, initializedAt,
+seedId, fixtureHash, reasons`), `stumbleIndicators` per target (stumbles per counted
 attempt, tasks with any stumble), `tasks[]` (decision + both sides' items and per-attempt rows),
-`capabilityGaps`, `excluded`, `notEvaluable`, `backlog` (frictions by phase, suggestions by kind,
+`selfReportedSuccess`, `catalogueChanges` per target, `capabilityGaps`, `excluded`, `notEvaluable`,
+`backlog` (frictions by phase, suggestions by kind,
 verbatim; a legacy prose suggestion is `unclassified`), `cost` (per target: attempts incl.
 replacements, harness errors, loop and report tokens, attempts without usage, wall time), `pins`.
 
-**`summary.md`** is the projection: headline with OFFICIAL / UNOFFICIAL and the KR split, freshness
-table, one row per task × target (or `not possible (<kind>): <reason>` in place of the items),
-stumble indicators, capability gaps, uncounted tasks, backlog, run cost, pins. It holds counts and
+**`summary.md`** is the projection, in this order: headline with OFFICIAL / UNOFFICIAL and the KR
+split, the rule line (version, parameters sha, REPEAT, report version), *Freshness* (status table +
+one line per check that is not ok), *Tasks* (one row per task × target, or `not possible (<kind>):
+<reason>` / `invalid declaration (…)` / `not evaluable: …` in place of the items; `(fragile)` next to
+the winner), *Stumble indicators*, *Capability gaps*, *Catalogue changes since the previous
+comparison*, *Success on the agent's word* (only when there is any), *Not counted* (excluded and
+not-evaluable tasks), *Stumble backlog*, *Run cost*, *Pins*. It holds counts and
 verdict text only — **no tool result and no `finalAnswer`** — because it is the copy-paste path and
-§6.7 is still not built.
+§6.7 is still not built. How to read it as an operator: `mcp-tests/README.md`.
 
 **Stability.** `stability(A, B)`: agreement = same `winner` (a tie equals a tie) over tasks decided
 in both runs, plus the same over tasks fragile in neither. Pins are compared flattened, minus the
@@ -1567,10 +1610,10 @@ in a changelog.
 | D2 | **`REPEAT` defaults to `1`.** | 2026-09-11 | Non-determinism is real but not paid for on every run. §7. Raisable since D43 (`--repeat N`); the default is unchanged. Exit code 1 now also covers a probe whose only harness error was an effect check that could not run (D43). Even at `REPEAT=1` a harness-errored probe is now retried once (D43's replacement rule), so a write probe that crashed mid-loop can leave a **second agent-created record** on the tenant: teardown only removes what setup created, never what the agent wrote. |
 | D3 | **No enforced data-hygiene policy.** Writes are a per-probe decision by the suite author; the runner offers `{{marker}}` instead of a rule. | 2026-09-11 | §8 — the token is `{{marker}}` (`<runId>-<probeId>`) rather than the `{{runId}}` this row originally named; D34 needed per-probe uniqueness. Accepted consequence: the tenant accumulates records and nothing prevents it — the marker makes the sweep cheap, it does not perform it. |
 | D4 | **Probes are hand-written, grown incrementally.** The first one is deliberately simple in *what it asks for* (a sales order for the default customer, no lines) so that the first failure is unambiguous while the harness itself is still unproven. | 2026-09-11 | Simple in scope — **not** simple in phrasing; see D21. |
-| D44 | **A comparison groups one standard run per target under one `compareId`.** Targets run concurrently; attempts within a target run in a pool of K (`--concurrency` / `run.concurrency`, default 4; a target's own `concurrency` only caps it), in a seeded shuffled order whose seed is recorded and pinned; `exclusive` probes run alone; every attempt records its real start, finish and worker slot. Preflight covers every target and any failure aborts the whole comparison. | 2026-10-14 | ETP-5750 S3; plan §5.2. Parallel from v1 was a user decision (plan §9.3). All-or-nothing preflight because one side alone produces no winner. The seed is a pin so that a stability pair runs the same order; parallelism is a variance source, so the schedule is recorded rather than inferred. |
+| D44 | **A comparison groups one standard run per target under one `compareId`** (`%Y%m%dT%H%M%S-cmp-<hex4>`, UTC; minute precision before 2026-10-15). Targets run concurrently; attempts within a target run in a pool of K (`--concurrency` / `run.concurrency`, default 4; a target's own `concurrency` only caps it), in a seeded shuffled order whose seed is recorded and pinned; `exclusive` probes run alone; every attempt records its real start, finish and worker slot. Preflight covers every target and any failure aborts the whole comparison. | 2026-10-14 | ETP-5750 S3; plan §5.2. Parallel from v1 was a user decision (plan §9.3). All-or-nothing preflight because one side alone produces no winner. The seed is a pin so that a stability pair runs the same order; parallelism is a variance source, so the schedule is recorded rather than inferred. |
 | D43 | **`--repeat N` runs each probe N times, each attempt in its own MCP session, conversation and `{{marker}}`; every attempt is kept as `probes/<id>/attempt-<n>.json`, never averaged away.** A harness-errored attempt does not count and is replaced after the planned ones, at most N replacements per probe; a preflight auth failure is never replaced. | 2026-10-14 | ETP-5750 S2; plan `2026-10-14-mcp-tests-reproducible-comparison-plan.md` §5.1. Variance was unmeasured (§11 q4). Replacing harness errors keeps a transient provider fault from shrinking N, and the cap keeps a deterministically broken probe from looping. `mcp-compare` defaults to 3 (D44). **Behaviour change (S3):** the exit code is 1 whenever any attempt has a `harnessError` — a replaced transient error, or an effect check that could not run (before S3 the latter exited 0). |
 | D45 | **A suite v2 probe has one vendor-neutral prompt and a block per platform** (`setup`, `teardown`, `expectEffect` + client-side `where`, `expectAnswer`, `expectOutcome: refused`, or `notPossible`). The prompt never names a tool — enforced at load and against every target's live catalogue at preflight; every block verifies or is `notPossible`; a write refusal must prove `expect: none`; a `where` path absent from every row is not verifiable. `where` compares number-like scalars by value and refuses a partial page. v1 suites are unchanged. | 2026-10-14 | ETP-5750 S5; plan §5.3. Narrows D34 again: still one post-condition, now per platform. Neutrality enforced, not hoped for, because a prompt that names one vendor's tool hands that vendor the task. |
-| D46 | **`expectAnswer` is a deterministic, versioned matcher over `finalAnswer`** (`runner/matcher.py`, `MATCHER_VERSION`): locale-tolerant numbers (Spanish and English) that skip ids, dates, clock times, document numbers (`Nº 10`), phone numbers and percentages, `near:` anchors bound to their nearest number, `percent:`, whole-word accent-insensitive text, `all` / `none`; small literal integers need an anchor. No LLM judge. | 2026-10-14 | ETP-5750 S5; plan §5.5. A judge adds its own variance to criterion 1 and puts a second model inside the measurement. Conservative false negatives accepted, as in D34. |
+| D46 | **`expectAnswer` is a deterministic, versioned matcher over `finalAnswer`** (`runner/matcher.py`, `MATCHER_VERSION`, 4 as of 2026-10-15 — history in §4 *Suite v2*; a pin in `compare.json`): locale-tolerant numbers (Spanish and English) that skip ids, dates, clock times, document numbers (`Nº 10`), phone numbers and percentages, `near:` anchors bound to their nearest number, `percent:`, whole-word accent-insensitive text, `all` / `none`; small literal integers need an anchor. No LLM judge. | 2026-10-14 | ETP-5750 S5; plan §5.5. A judge adds its own variance to criterion 1 and puts a second model inside the measurement. Conservative false negatives accepted, as in D34. |
 | D50 | **Official numbers come only from a fresh run** (plan §5.9): baseline seeded through each platform's own MCP (`make mcp-seed`, manifest + `fixtureHash` without ids), verified at preflight (a missing/duplicated/changed record stops the run), and four freshness checks through the MCP only; anything unreadable is `unverified`, never clean; status dirty > unverified > clean > fresh; official only if every target is `fresh`; a stability run B must carry a new `seedId` on every target. | 2026-10-14 | ETP-5750 S6; plan §5.4, §5.9 and §9 decisions 2, 5 and 13. Freshness is proven through the same MCP the agent uses, because seeding or checking through REST would measure a different surface. Unreadable means unverified because a check that cannot see a table must not certify it empty. The hash leaves ids out so that a re-initialized pair compares equal on what matters. Consequence: with Holded's current catalogue no comparison is official (§6.1, S6 note). 2026-10-15: whether an entity is checkable is decided by the LIVE `tools/list` at each preflight, never by the checklist — each entity names the tool it would use, an absent one is `unverified` ("tool not offered"); and every summary reports the catalogue changes since the target's previous comparison (§6.1). |
 | D49 | **"Not possible on this platform" is a first-class outcome**: declared per platform, checked against the live tools/list at preflight (`ok` / `invalidDeclaration` / `unchecked`), recorded as `not-possible.json`, never attempted and never worked around outside the MCP (no REST, no manual seeding). | 2026-10-14 | ETP-5750 S5; plan §5.10 and §9 decision 2. Declared rather than inferred because an agent cannot tell "does not exist" from "did not find it" (D38). |
 | D47 | **The decision rule is code (`runner/decide.py`, `RULE_VERSION`) and its thresholds are data** (the suite's `decision:` block, copied into `compare.json`, over `DEFAULT_PARAMETERS`). Every summary records the version, the parameters and their sha. | 2026-10-14 | ETP-5750 S4; plan §5.6. A KR figure without the rule that produced it is unreadable later, and a rule tweak must be re-appliable to an old run (`make mcp-report`) and visible in the diff. A declared `ruleVersion` the code does not implement is refused, never silently re-interpreted. |
@@ -1648,11 +1691,11 @@ classified). What the first three days of real runs opened instead:
 | 6b | Credential redaction | ❌ **not built** (§6.7) |
 | 6c | Naive versioned system prompt (D20) | ✅ at promptVersion 4 |
 | 7 | `bearer` + `oauth` (auth code + PKCE), token cache, silent refresh | ✅ · `oauth_client_credentials` ❌ by choice |
-| 8 | `make mcp-test` / `mcp-login` / `mcp-ui` | ✅ · `REPEAT=` (`--repeat`, D43) · `make mcp-compare` (D44) · `MODE` ❌ (§5, §7) |
+| 8 | `make mcp-test` / `mcp-login` / `mcp-ui` | ✅ · `REPEAT=` (`--repeat`, D43) · `make mcp-compare` (D44) · `make mcp-report` / `mcp-stability` (D47, D48) · `make mcp-seed` (D50) · `MODE` ❌ (§5, §7). Operator guide: `mcp-tests/README.md` |
 | — | The Streamlit UI (§9) | ✅ all four v1 views |
 | — | `expectEffect` post-condition (D34) | ✅ — added after the design, not in the original scope |
 | — | `findings/` (D35) | ✅ eight findings written |
-| — | **Tests** | ⚠️ `unittest` under `mcp-tests/tests/` since 2026-10-01 (setup/teardown, empty completions); run schema v4 added agent-record, run-header, `mcp_client` and `ui/runs.py` cases. Run with `.venv/bin/python -m unittest discover -s tests -t .` from `mcp-tests/`. |
+| — | **Tests** | ✅ `unittest` under `mcp-tests/tests/` since 2026-10-01 (setup/teardown, empty completions); ETP-5750 added one file per new unit — `test_decide`, `test_report`, `test_matcher`, `test_fixture`, `test_seed`, `test_mcp_client`, `test_ui_runs` — next to `test_steps`, `test_cli_steps` and `test_agent_empty_completion`. Run with `.venv/bin/python -m unittest discover -s tests -t .` from `mcp-tests/`. ⚠️ Track B's Java classes are still untested (header note). |
 
 Still deferred as designed: chained scenarios (though `full-flows.yaml` is one long chained write
 task inside a single probe, which is not the same thing), `expect` assertions beyond D34, run

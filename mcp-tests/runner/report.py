@@ -895,16 +895,25 @@ def main(argv: list[str] | None = None) -> int:
     stab.add_argument("--json", action="store_true", help="print the full result as JSON")
     args = parser.parse_args(argv)
 
-    if args.command == "report":
-        compare_dir = resolve_compare_dir(args.run, RUNS_DIR)
-        summary = write_summary(compare_dir)
-        kr = summary["kr"]
-        print(f"{'official' if summary['official'] else 'UNOFFICIAL'} · KR {_pct(kr['winRate'])} "
-              f"({kr['subjectWins']['total']}/{kr['evaluated']}) -> {compare_dir / 'summary.md'}")
-        return 0
+    def comparison(value: str) -> Path:
+        # A RUN / A / B that names no comparison is a usage error (exit 2 on stderr), not a traceback.
+        compare_dir = resolve_compare_dir(value, RUNS_DIR)
+        if not compare_dir.is_dir():
+            parser.error(f"no comparison {value!r}: neither a directory nor a compareId under {RUNS_DIR}")
+        return compare_dir
 
-    result = stability(build_summary(resolve_compare_dir(args.a, RUNS_DIR)),
-                       build_summary(resolve_compare_dir(args.b, RUNS_DIR)))
+    try:
+        if args.command == "report":
+            compare_dir = comparison(args.run)
+            summary = write_summary(compare_dir)
+            kr = summary["kr"]
+            print(f"{'official' if summary['official'] else 'UNOFFICIAL'} · KR {_pct(kr['winRate'])} "
+                  f"({kr['subjectWins']['total']}/{kr['evaluated']}) -> {compare_dir / 'summary.md'}")
+            return 0
+        result = stability(build_summary(comparison(args.a)), build_summary(comparison(args.b)))
+    except ValueError as exc:
+        # build_summary's own refusals (not two targets, an unknown rule version).
+        parser.error(str(exc))
     print(json.dumps(result, indent=2, sort_keys=True) if args.json else render_stability(result))
     return 0 if result["valid"] else 2
 

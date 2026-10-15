@@ -1079,11 +1079,13 @@ mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, REPEAT=,
 # target again (mcp-stability refuses a run B that reuses run A's seed). Re-seeding a seeded target
 # is a no-op; a half-seeded or foreign one is refused, never duplicated. CAPTURE=1 seeds nothing and
 # prints the init allowlist for fixtures/fresh.<platform>.yaml.
+# TARGET must be passed explicitly: seeding writes, so the `TARGET ?= local` default above never
+# picks the target for it (checked when the recipe expands, so `make -n mcp-seed` fails too).
 FIXTURE        ?= okr-baseline
 INITIALIZED_AT ?=
 .PHONY: mcp-seed
 mcp-seed: ## Seed a freshly initialized target (TARGET=, FIXTURE=okr-baseline, INITIALIZED_AT=<ISO>, CAPTURE=1)
-	@if [ -z "$(TARGET)" ]; then echo "TARGET is required, e.g. make mcp-seed TARGET=local INITIALIZED_AT=2026-10-20T09:00Z"; exit 1; fi
+	$(if $(or $(filter file default undefined,$(origin TARGET)),$(if $(strip $(TARGET)),,empty)),$(error TARGET is required (the TARGET ?= local default does not apply to seeding), e.g. make mcp-seed TARGET=local INITIALIZED_AT=2026-10-20T09:00Z))
 	cd mcp-tests && uv run python -m runner.seed --target $(TARGET) $(if $(CAPTURE),--capture-allowlist,--fixture $(FIXTURE) $(if $(INITIALIZED_AT),--initialized-at $(INITIALIZED_AT)))
 
 .PHONY: mcp-login

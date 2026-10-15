@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 from runner import report
@@ -289,6 +289,26 @@ class SummaryTest(unittest.TestCase):
         self.assertTrue((cmp_dir / "summary.json").exists())
         self.assertIn("UNOFFICIAL", out.getvalue())
 
+    def _cli_usage_error(self, argv):
+        with redirect_stdout(io.StringIO()) as out, redirect_stderr(io.StringIO()) as err:
+            with self.assertRaises(SystemExit) as raised:
+                report.main(argv)
+        self.assertEqual(raised.exception.code, 2)
+        self.assertEqual(out.getvalue(), "")
+        self.assertNotIn("Traceback", err.getvalue())
+        return err.getvalue()
+
+    def test_cli_report_of_a_missing_run_is_a_usage_error(self):
+        err = self._cli_usage_error(["report", "no-such-compare-id"])
+        self.assertIn("usage:", err)
+        self.assertIn("no comparison 'no-such-compare-id'", err)
+
+    def test_cli_report_of_a_malformed_comparison_is_a_usage_error(self):
+        cmp_dir = _copy_fixture()
+        _edit_compare(cmp_dir, lambda c: c["targets"].append({"name": "third"}))
+        self.assertIn("exactly two targets, found 3", self._cli_usage_error(["report", str(cmp_dir)]))
+        self.assertFalse((cmp_dir / "summary.json").exists())
+
 
 class CatalogueChangesTest(unittest.TestCase):
     """Per target, the tools added / removed since its previous comparison in runs/ (vendor drift)."""
@@ -527,6 +547,19 @@ class StabilityTest(unittest.TestCase):
         b["freshness"]["holded"]["seedId"] = "sb2"
         self.assertTrue(report.stability(a, b)["valid"])
 
+    def test_a_run_compared_with_itself_is_refused(self):
+        # A == B: official, pins equal, agreement 100% — but the same seedId on
+        # every target, so nothing proves run B was re-seeded. Refused.
+        a = copy.deepcopy(self.base)
+        for name in a["freshness"]:
+            a["freshness"][name]["seedId"] = f"seed-{name}"
+        result = report.stability(a, a)
+        self.assertFalse(result["valid"])
+        self.assertEqual(result["pinDifferences"], [])
+        self.assertEqual(result["agreement"]["ratio"], 1.0)
+        self.assertEqual(len(result["refusals"]), 1)
+        self.assertIn("reuses run A's seeded environment on ['holded', 'local']", result["refusals"][0])
+
     def test_self_reported_tasks_are_flagged_but_decided_and_compared_as_any_other(self):
         # Documents the S5 contract: `successBasis: selfReport` is VISIBLE
         # (summary.json + summary.md) but neither the rule (decide.py never
@@ -576,6 +609,17 @@ class StabilityTest(unittest.TestCase):
         self.assertEqual(code, 2, "the fixture is unofficial on holded")
         self.assertIn("NOT VALID", out.getvalue())
 
+    def test_cli_stability_with_a_missing_run_is_a_usage_error(self):
+        for argv in (["stability", "no-such-a", str(FIXTURE)], ["stability", str(FIXTURE), "no-such-b"]):
+            with self.subTest(argv=argv):
+                with redirect_stdout(io.StringIO()) as out, redirect_stderr(io.StringIO()) as err:
+                    with self.assertRaises(SystemExit) as raised:
+                        report.main(argv)
+                self.assertEqual(raised.exception.code, 2)
+                self.assertEqual(out.getvalue(), "")
+                self.assertIn("no comparison 'no-such-", err.getvalue())
+                self.assertNotIn("Traceback", err.getvalue())
+
 
 class MakeTargetsTest(unittest.TestCase):
     """The Make wrappers refuse to run without their arguments (no uv call)."""
@@ -600,6 +644,18 @@ class MakeTargetsTest(unittest.TestCase):
                 done = self._make(*argv)
                 self.assertNotEqual(done.returncode, 0)
                 self.assertIn("A and B are required", done.stdout)
+
+    def test_mcp_seed_needs_an_explicit_target(self):
+        # `TARGET ?= local` serves mcp-test/mcp-login; seeding writes, so it must be named.
+        for argv in (("-n", "mcp-seed"), ("-n", "mcp-seed", "TARGET=")):
+            with self.subTest(argv=argv):
+                done = self._make(*argv)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("TARGET is required", done.stdout + done.stderr)
+                self.assertNotIn("runner.seed", done.stdout)
+        done = self._make("-n", "mcp-seed", "TARGET=local")
+        self.assertEqual(done.returncode, 0)
+        self.assertIn("runner.seed --target local", done.stdout)
 
 
 if __name__ == "__main__":

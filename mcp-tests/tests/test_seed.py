@@ -72,14 +72,14 @@ class SeedTest(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
 
-    def seed(self):
+    def seed(self, initialized_at="2026-10-20T09:00:00Z"):
         self.out, self.err = io.StringIO(), io.StringIO()
         with mock.patch.object(seed, "mcp_session", self.tenant.session), \
              mock.patch.object(seed, "call_tool", self.tenant.call_tool), \
              mock.patch.object(seed, "describe_server", self.tenant.describe_server), \
              redirect_stdout(self.out), redirect_stderr(self.err):
             return asyncio.run(seed.seed(TARGET, "etendo-go", fixtures.load_fixture("base"),
-                                         initialized_at="2026-10-20T09:00:00Z"))
+                                         initialized_at=initialized_at))
 
     def manifest(self):
         return fixtures.read_manifest("t")
@@ -104,6 +104,38 @@ class SeedTest(unittest.TestCase):
         self.assertEqual(self.tenant.creates(), [])
         self.assertEqual(self.manifest(), before)
         self.assertIn("Nothing done", self.out.getvalue())
+        self.assertFalse((fixtures.SEEDS_DIR / "archive").exists(), "the same INITIALIZED_AT archives nothing")
+
+    def _reinitialize(self):
+        self.tenant.rows = Tenant().rows
+        self.tenant.calls.clear()
+
+    def test_a_new_initialization_instant_archives_the_manifest_and_reseeds(self):
+        # Run B of a stability pair: the environment was re-initialized, and the
+        # new INITIALIZED_AT says so. A stale manifest must not turn into a no-op.
+        self.seed()
+        old = self.manifest()
+        self._reinitialize()
+        self.assertEqual(self.seed("2026-10-21T09:00:00Z"), 0, self.err.getvalue())
+        self.assertEqual([c["spec"] for c in self.tenant.creates()], ["bp", "product"])
+        new = self.manifest()
+        self.assertTrue(new["complete"])
+        self.assertNotEqual(new["seedId"], old["seedId"])
+        self.assertEqual(new["initializedAt"], "2026-10-21T09:00:00Z")
+        archived = fixtures.SEEDS_DIR / "archive" / f"t-{old['seedId']}.json"
+        self.assertEqual(json.loads(archived.read_text()), old)
+        self.assertIn(f"Seed {old['seedId']} archived", self.out.getvalue())
+
+    def test_a_new_initialization_instant_with_the_baseline_still_present_is_refused(self):
+        # The claim is checked wherever the baseline is readable (Etendo): not re-initialized.
+        self.seed()
+        old = self.manifest()
+        self.tenant.calls.clear()
+        self.assertEqual(self.seed("2026-10-21T09:00:00Z"), 2)
+        self.assertEqual(self.tenant.creates(), [])
+        self.assertIn("declares it re-initialized", self.err.getvalue())
+        self.assertEqual(self.manifest(), old, "a refused seed keeps the manifest in place")
+        self.assertFalse((fixtures.SEEDS_DIR / "archive").exists())
 
     def test_a_target_holding_baseline_records_without_a_manifest_is_refused(self):
         self.seed()

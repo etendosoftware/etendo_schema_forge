@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import http.server
+import inspect
 import json
 import os
 import secrets
@@ -666,6 +667,27 @@ def catalogue_digest(tools: list[Any]) -> dict[str, Any]:
     }
 
 
+async def _list_tools_page(session: Any, cursor: str | None) -> Any:
+    """One `tools/list` page, on any `mcp` SDK the lock allows (`>=1.9`).
+
+    Newer SDKs take `params=PaginatedRequestParams(cursor=...)` and deprecate the
+    bare `cursor=` argument; older ones only know `cursor=`. Prefer `params` when
+    the session's signature declares it, so the code never trips the deprecation
+    and never fails on an SDK that predates it. The first page sends neither.
+    """
+    if not cursor:
+        return await session.list_tools()
+    try:
+        accepts_params = "params" in inspect.signature(session.list_tools).parameters
+    except (TypeError, ValueError):
+        accepts_params = False
+    if accepts_params:
+        from mcp.types import PaginatedRequestParams
+
+        return await session.list_tools(params=PaginatedRequestParams(cursor=cursor))
+    return await session.list_tools(cursor=cursor)
+
+
 async def describe_server(target: dict[str, Any]) -> dict[str, Any]:
     """What the target says it is, read once at preflight (plan §6 pins).
 
@@ -680,12 +702,7 @@ async def describe_server(target: dict[str, Any]) -> dict[str, Any]:
         tools: list[Any] = []
         cursor: str | None = None
         while True:
-            if cursor:
-                from mcp.types import PaginatedRequestParams
-
-                page = await session.list_tools(params=PaginatedRequestParams(cursor=cursor))
-            else:
-                page = await session.list_tools()
+            page = await _list_tools_page(session, cursor)
             tools.extend(page.tools)
             cursor = getattr(page, "nextCursor", None)
             if not cursor:

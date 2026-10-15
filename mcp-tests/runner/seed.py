@@ -13,6 +13,15 @@ Idempotency — a seed never duplicates:
   record reads back ok -> nothing is done (exit 0, the manifest is kept);
 * a manifest exists but is incomplete, for another fixture or URL, or the
   records no longer read back -> refused (exit 2): re-initialize;
+* `--initialized-at` differs from the manifest's `initializedAt` -> the operator
+  declares a RE-INITIALIZED environment: the old manifest describes one that no
+  longer exists, so the seed runs as if there were none (every refusal below
+  still applies) and, only once it is about to create, moves the old manifest
+  to `.seeds/archive/<target>-<seedId>.json`. This is what keeps run B of a
+  stability pair from silently reusing run A's `seedId` on a platform that
+  cannot read its baseline back (Holded); a claim that is false is still caught
+  wherever a baseline record IS readable (Etendo), and a refused seed leaves
+  the old manifest in place;
 * no manifest, but a record the platform CAN read back is already there ->
   refused (exit 2): the environment is not freshly initialized;
 * the freshness checklist finds documents, or master-data rows it can PROVE
@@ -101,6 +110,11 @@ async def seed(target: dict[str, Any], platform: str, fixture: fixtures.Fixture,
         return 2
     checklist = fixtures.load_checklist(platform)
     manifest = fixtures.read_manifest(target["name"])
+    # A new INITIALIZED_AT is the operator's re-initialization claim (module docstring): the old
+    # manifest is set aside, not trusted, and archived only once the preflight lets the seed go on.
+    stale = manifest if manifest is not None and manifest.get("initializedAt") != initialized_at else None
+    if stale is not None:
+        manifest = None
     base = {"target": target["name"], "url": target["url"], "platform": platform, "fixture": fixture.name,
             "fixtureSha": fixture.sha, "seedId": fixtures.new_seed_id(), "initializedAt": initialized_at}
     ids: dict[str, Any] = {}
@@ -132,8 +146,11 @@ async def seed(target: dict[str, Any], platform: str, fixture: fixtures.Fixture,
                     file=sys.stderr)
                 return 2
             if present:
+                why = (f"although INITIALIZED_AT {initialized_at} declares it re-initialized since seed "
+                       f"{stale.get('seedId')} ({stale.get('initializedAt')})" if stale is not None
+                       else "but has no seed manifest")
                 out(f"Seed refused: {target['name']!r} already holds baseline records "
-                    f"{sorted(present)} but has no seed manifest. It is not a freshly initialized "
+                    f"{sorted(present)} {why}. It is not a freshly initialized "
                     f"environment; re-initialize it first. Nothing was created.", file=sys.stderr)
                 return 2
 
@@ -155,6 +172,11 @@ async def seed(target: dict[str, Any], platform: str, fixture: fixtures.Fixture,
                         out(f"Seed preflight: cannot verify {c['name']} ({c['tool']}): {c.get('detail')}. "
                             f"Not refused; the comparison will read it as unverified.", file=sys.stderr)
 
+            if stale is not None:
+                moved = fixtures.archive_manifest(target["name"], stale)
+                out(f"{target['name']}: INITIALIZED_AT {initialized_at} differs from the manifest's "
+                    f"{stale.get('initializedAt')}: treated as a re-initialized environment. Seed "
+                    f"{stale.get('seedId')} archived -> {moved}")
             # From here on something may be created: the manifest exists, INCOMPLETE,
             # until the very end (see the module docstring).
             fixtures.write_manifest(target["name"], _manifest(

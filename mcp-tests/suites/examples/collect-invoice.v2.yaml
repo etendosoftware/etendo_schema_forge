@@ -2,7 +2,7 @@
 #
 # NOT a measurement suite: the `okr` suite (S7) is. This file shows the v2 shape on one real probe,
 # `collect-full-sales-invoice` from treasury.yaml, converted as-is, plus one read probe that shows
-# `expectAnswer`. It is loaded by the tests (tests/test_suite_v2.py), so it cannot rot silently.
+# `expectAnswer`. It is loaded by the tests (tests/test_steps.py, SuiteV2Test), so it cannot rot silently.
 #
 # Probes: `collect-full-sales-invoice` (converted, write + expectEffect), `example-invoice-outstanding`
 # (read + expectAnswer) and `overpay-purchase-invoice` (converted from treasury.yaml, a WRITE REFUSAL:

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import unittest
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -125,6 +126,45 @@ class DescribeServerTest(unittest.TestCase):
         self.assertEqual(pages, [])
         self.assertEqual(out["catalogue"],
                          mcp_client.catalogue_digest([_tool("a"), _tool("b"), _tool("c")]))
+
+    def _paginate_with(self, list_tools):
+        pages = [ListToolsResult(tools=[_tool("b")], nextCursor="next"),
+                 ListToolsResult(tools=[_tool("a")])]
+
+        async def wrapped(*args, **kwargs):
+            await list_tools(*args, **kwargs)
+            return pages.pop(0)
+
+        wrapped.__signature__ = inspect.signature(list_tools)
+        initialized = SimpleNamespace(serverInfo=None, protocolVersion="2025-06-18")
+
+        @asynccontextmanager
+        async def fake_open(_target):
+            yield SimpleNamespace(list_tools=wrapped), initialized
+
+        with mock.patch.object(mcp_client, "_open_session", fake_open):
+            return asyncio.run(mcp_client.describe_server({"name": "t"}))
+
+    def test_an_old_sdk_that_only_takes_cursor_still_paginates(self):
+        # mcp < 1.30: `list_tools(cursor=None)`, no `params` keyword at all.
+        seen = []
+
+        async def list_tools(cursor=None):
+            seen.append(cursor)
+
+        out = self._paginate_with(list_tools)
+        self.assertEqual(seen, [None, "next"])
+        self.assertEqual(out["catalogue"]["toolCount"], 2)
+
+    def test_a_new_sdk_gets_params_not_the_deprecated_cursor(self):
+        seen = []
+
+        async def list_tools(cursor=None, *, params=None):
+            seen.append((cursor, None if params is None else params.cursor))
+
+        out = self._paginate_with(list_tools)
+        self.assertEqual(seen, [(None, None), (None, "next")])
+        self.assertEqual(out["catalogue"]["toolCount"], 2)
 
 
 
