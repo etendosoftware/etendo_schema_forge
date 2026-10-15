@@ -57,9 +57,14 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }) => <div>{children}</div>,
 }));
 
+// ETP-5684 — Post/Unpost are gated on capabilities.showAccountingFields (fail closed).
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MovementRowKebab } from '../MovementRowKebab.jsx';
+import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
 
 // Post (contabilizar) only shows for a Processed, not-yet-posted movement.
 const NOT_POSTED = { id: 'mov-1', posted: 'N', processed: true };
@@ -396,5 +401,34 @@ describe('MovementRowKebab — Unpost action', () => {
   it('does not render the Unpost item when movement.posted is undefined', () => {
     renderKebab({ id: 'mov-3' });
     expect(screen.queryByText('financeAccountMovementsRowUnpost')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-5684 — a role without "Show Accounting Fields" gets neither Contabilizar nor
+// Descontabilizar, and no stray separator is left above Delete when they were the only items.
+describe('MovementRowKebab — accounting capability gate (ETP-5684)', () => {
+  it('hides Post on a processed, not-posted movement', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    renderKebab(NOT_POSTED);
+    expect(screen.queryByTestId('movement-row-post')).not.toBeInTheDocument();
+  });
+
+  it('hides Unpost on a posted movement', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    renderKebab(POSTED);
+    expect(screen.queryByTestId('movement-row-unpost')).not.toBeInTheDocument();
+  });
+
+  it('leaves no separator above Delete when Unpost was the only item above it', () => {
+    const POSTED_DRAFT_PAYMENT = { id: 'mov-3', posted: 'Y', processed: false, paymentId: 'pay-1' };
+    renderKebab(POSTED_DRAFT_PAYMENT);
+    expect(screen.getByTestId('movement-row-unpost')).toBeInTheDocument();
+    expect(document.querySelector('hr')).not.toBeNull();
+  });
+
+  it('drops that separator too when the capability is off', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    renderKebab({ id: 'mov-3', posted: 'Y', processed: false, paymentId: 'pay-1' });
+    expect(document.querySelector('hr')).toBeNull();
   });
 });

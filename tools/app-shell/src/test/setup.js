@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { configure } from '@testing-library/react';
 import { beforeEach } from 'vitest';
 import { installMemoryLocalStorage } from './localStorage.js';
+import { resetMockCapabilities } from './capabilitiesSafeMock.js';
 
 installMemoryLocalStorage();
 
@@ -17,6 +18,12 @@ beforeEach(() => {
   } catch {
     /* no sessionStorage in this environment — nothing to reset */
   }
+});
+
+// ETP-5684 — a test that flips the mocked capability map (capabilitiesSafeMock.js)
+// must not leak it into the next test. Only resets that helper's state; it mocks nothing.
+beforeEach(() => {
+  resetMockCapabilities();
 });
 
 // jsdom doesn't implement scroll APIs — stub them so components that

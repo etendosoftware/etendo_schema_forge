@@ -98,13 +98,19 @@ vi.mock('@/components/financial-accounts/contractColumns', () => ({
   ],
 }));
 
+// ETP-5684 — the posting part of the "Tipo" cell is gated on showAccountingFields.
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 import * as React from 'react';
 import { useClientSort } from '@/hooks/useClientSort';
 import {
   MovementsTable,
   buildMovementSortCtx,
   buildMovementSortAccessors,
+  buildMovementSortColumns,
 } from '../MovementsTable.jsx';
+import { ACCOUNTING_HIDDEN, setMockCapabilities } from '@/test/capabilitiesSafeMock.js';
 import { backgroundUtilities, hoverBackgroundUtilities, countBackgroundUtilities } from '@/test/rowShading.js';
 import { formatCurrency } from '@/lib/formatCurrency';
 
@@ -1216,5 +1222,31 @@ describe('MovementsTable — editable dimensions (ETP-5101)', () => {
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountTxRowDimensionUpdateError'));
     expect(onReload).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-5684 — "Contabilizado" lives inside the "Tipo" cell (a dot under the type) and as the
+// second segment of its header ("Tipo & Contabilizado"). A role without "Show Accounting
+// Fields" loses both, and the "Ordenar por" popover loses the entry.
+describe('MovementsTable — accounting capability gate (ETP-5684)', () => {
+  it('shows the posting dot and its sort segment when the role can see accounting', () => {
+    renderTable({ movements: [baseMovement({ posted: 'Y' })] });
+    expect(screen.getByTestId('posting-dot')).toBeInTheDocument();
+    expect(screen.getByTestId('column-header-sort-posted')).toBeInTheDocument();
+  });
+
+  it('drops the posting dot and its sort segment when the capability is off', () => {
+    setMockCapabilities(ACCOUNTING_HIDDEN);
+    renderTable({ movements: [baseMovement({ posted: 'Y' })] });
+    expect(screen.queryByTestId('posting-dot')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('column-header-sort-posted')).not.toBeInTheDocument();
+    expect(screen.getByTestId('column-header-sort-transactionType')).toBeInTheDocument();
+  });
+
+  it('leaves "posted" out of the sort popover entries when the capability is off', () => {
+    const ui = (k) => k;
+    expect(buildMovementSortColumns(ui, { showAccountingFields: true }).map((c) => c.key)).toContain('posted');
+    expect(buildMovementSortColumns(ui, ACCOUNTING_HIDDEN).map((c) => c.key)).not.toContain('posted');
+    expect(buildMovementSortColumns(ui, ACCOUNTING_HIDDEN).map((c) => c.key)).toContain('transactionType');
   });
 });
