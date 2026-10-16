@@ -401,6 +401,45 @@ a whole document, e.g. the GL journal line dimensions) applies it each time its 
 Not covered: the Contacts CSV/XLSX import (`contactsImportDescriptor.js`) writes through the
 plain-module `apiFetch`, so selector pages still wait out `catalogStaleTime` after an import.
 
+## One read per resource per page load (ETP-4952)
+
+Opening a document used to issue the same three reads several times over: `GET .../sws/neo/session`
+2–5 times, the record's `GET .../<spec>/header/<id>` twice and its marked attachment
+`GET .../attachments/<table>/<id>/main` twice. Every caller wanted the same bytes for the same
+request and nobody shared them, so the burst queued against itself at the backend.
+
+`tools/app-shell/src/lib/neoRequestDedupe.js` (installed by `main.jsx` before the first render)
+decorates `globalThis.fetch` with a three-entry allowlist; every other request is forwarded
+untouched, as the same call with the same `init`:
+
+- `GET .../sws/neo/session` — **memoized for the page load** (the payload is constant per session:
+  currency, standard precision, `brandingUpdated`, account identity, org tax id). Only an `ok`
+  response is memoized, and the memo is dropped when the session changes — any non-GET under
+  `.../sws/go/session` or `.../sws/neo/session` (login, logout, entering an environment, switching
+  role/org), on dispatch **and** on settle, so a read resolving mid-mutation cannot leave the
+  pre-mutation payload behind.
+- `GET .../<spec>/header/<id>` and `GET .../attachments/<table>/<id>[/main|/count]` — **in-flight
+  coalescing only**. Once the read settles the next one goes to the network: these records change
+  (a save, an upload marking a new main attachment), and serving a stored copy is exactly what
+  `useEntity`'s forced refetches exist to avoid.
+
+It lives at the transport layer, not in the shared record cache, for two reasons. Three of the
+readers are plain modules (`pdfUtils.js`, `listAttachments.js`, `related-documents/helpers.js`) with
+no access to a `DataProvider`; and two readers of the same URL disagree on the shape they expect —
+`useEntity` caches a normalized row while `useTaxSifLineRowActions` reads the raw
+`response.data[0]` envelope — so a shared cache entry would have to pick one and break the other.
+Sharing the response bytes lets every caller parse exactly as before. Requests are keyed by method +
+full URL + `Authorization`, so two sessions never share a response.
+
+A caller's `AbortSignal` is never handed to the shared request: one component unmounting (the
+aborted attachment read the issue reported) must not cancel the read the others are waiting for.
+Each caller's signal rejects only that caller, and the shared request carries its own timeout so a
+hung socket cannot pin an in-flight entry.
+
+Adding an entry is a policy decision, not a refactor: list a URL pattern in that module (and its
+test) only for a read measured to be duplicated, and only when concurrent callers really want the
+same answer. A write, a list query and an `<id>/action/...` sub-resource must never be listed.
+
 ## Working without an AuthProvider
 
 `useApiFetch` and `useLogout` read the session with `useAuthOptional`, so they do NOT throw in
