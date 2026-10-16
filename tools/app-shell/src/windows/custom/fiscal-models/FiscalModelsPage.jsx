@@ -22,6 +22,9 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
   // so this is the single place that needs to keep FmListPage's cache in sync — see
   // `FmModel303Page.jsx`'s `persistEditableFields` for where this fires.
   const [declManualDataPatch, setDeclManualDataPatch] = useState(null);
+  // ETP-5716 — a declaration created from a detail page ("Crear declaración sustitutiva" of a
+  // presented 390): a fresh `{ decl }` each time, so FmListPage inserts it and opens it.
+  const [declAdded, setDeclAdded] = useState(null);
 
   const handleSelect = useCallback((decl) => {
     setView({ type: decl.model, decl });
@@ -85,10 +88,12 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           onComputeUpdate={handleComputeUpdate}
           declStatusPatch={declStatusPatch}
           declManualDataPatch={declManualDataPatch}
+          declAdded={declAdded}
           data-testid="FmListPage__ca1112" />
       </div>
       {DetailPage && (
         <DetailPage
+          key={view.decl?.id}
           decl={view.decl}
           onBack={handleBack}
           token={token}
@@ -108,6 +113,7 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           onManualDataSaved={(id, manualData) => {
             setDeclManualDataPatch({ id, patch: { manualData } });
           }}
+          onDeclarationCreated={(created) => setDeclAdded({ decl: created })}
           data-testid={`FmModel${detailType}Page__ca1112`} />
       )}
       {debugMode && <FmDebugPanel view={view} setView={setView} data-testid="FmDebugPanel__ca1112" />}

@@ -73,8 +73,8 @@ const MODELS = Object.freeze([
     singleOrdinaryPerYear: false,
     newDeclWarning: null,
   }),
-  // Annual VAT summary. Not active by default (an opt-in model: SII entities are exempt). The
-  // telematic filing is a later phase — until then the detail page only registers a filing.
+  // Annual VAT summary. Not active by default (an opt-in model: SII entities are exempt). Filed
+  // telematically (`POST /fiscal390/submit`) or registered as presented elsewhere.
   Object.freeze({
     id: '390',
     periodicities: Object.freeze(['annual']),
@@ -85,7 +85,7 @@ const MODELS = Object.freeze([
     annualDeadline: annualDeadline390,
     iaeReminderOnActivate: false,
     iaeReminderOnYearEndPeriod: false,
-    telematicFiling: false,
+    telematicFiling: true,
     syncDraftComputeToDetail: false,
     siiWarningOnActivate: true,
     singleOrdinaryPerYear: true,

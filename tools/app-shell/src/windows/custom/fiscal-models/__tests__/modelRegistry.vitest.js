@@ -82,11 +82,11 @@ describe('modelRegistry — entries', () => {
   });
 
   // ETP-5716 — Modelo 390, the annual VAT summary.
-  it('registers 390 as an annual, single-ordinary model with the SII activation warning', () => {
+  it('registers 390 as an annual, single-ordinary, telematically filed model with the SII activation warning', () => {
     expect(getModel('390')).toMatchObject({
       periodicities: ['annual'], defaultActive: false, locked: false, badgeVariant: '390',
       monthlyDeadline: null, iaeReminderOnActivate: false, iaeReminderOnYearEndPeriod: false,
-      telematicFiling: false, syncDraftComputeToDetail: false,
+      telematicFiling: true, syncDraftComputeToDetail: false,
       siiWarningOnActivate: true, singleOrdinaryPerYear: true,
     });
     // Filed from January 1 to January 30 of the following year.

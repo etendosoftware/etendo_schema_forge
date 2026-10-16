@@ -676,7 +676,7 @@ function ListPageMeta({ title, breadcrumb, recordCount }) {
   return null;
 }
 
-export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl, active = true }) {
+export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, declAdded, token, apiBaseUrl, active = true }) {
   const ui = useUI();
   const t  = ui;
   const { locale: appLocale } = useLocaleSwitch();
@@ -734,6 +734,16 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     if (!declManualDataPatch) return;
     setDecls(ds => ds.map(d => (d.id === declManualDataPatch.id ? { ...d, ...declManualDataPatch.patch } : d)));
   }, [declManualDataPatch]);
+
+  // ETP-5716 — a declaration created from a detail page ("Crear declaración sustitutiva"): a
+  // one-shot `{ decl }` (raw backend shape). It is added to the list and opened, normalized
+  // exactly like a declaration created from "Nueva declaración".
+  useEffect(() => {
+    if (!declAdded?.decl?.id) return;
+    const created = normDecl(declAdded.decl, bcpLocale);
+    setDecls(ds => (ds.some(d => d.id === created.id) ? ds : [created, ...ds]));
+    onSelect?.(created);
+  }, [declAdded]);
 
   // Real per-declaration incidents (ETP-4755 fix): GET /fiscal303/declarations above never
   // carries real blocking/warning counts — `FiscalDeclCrudHandler#declToJson` doesn't serialize

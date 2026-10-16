@@ -13,10 +13,16 @@
 //                       freezes the submission snapshot from the stored inputs BEFORE applying a
 //                       same-request manualData — aeat-390-endpoints.md, "User inputs").
 //
-// Later phases plug in here: the invoices tab (a `sources` array in the payload), incident rules
-// (backend `replaceIncidents`, already listed by the Incidencias tab), the 303 preload
-// (`manualData.aeatPreloaded`, already read for the origin legend / restore) and the telematic
-// filing (registry `telematicFiling` + a submit flow next to PresentModal).
+// Presentar (ETP-5716): PresentModal offers the AEAT telematic filing (AeatSubmitFlow with the
+// 390 adapter, `POST /fiscal390/submit` — the backend sets submitted_ack + the filing data) and
+// "Registrar como presentada" (RegisterSubmitted390Modal: justificante, date, PDF → PUT
+// manualData.submission, then PUT status submitted_ext). Both save pending changes first and both
+// ask "Declaro que los datos … son conformes". A submitted 390 shows the "Presentación en la
+// AEAT" card and "Crear declaración sustitutiva" (submission390.js).
+//
+// Later phases plug in here: incident rules (backend `replaceIncidents`, already listed by the
+// Incidencias tab) and the 303 preload (`manualData.aeatPreloaded`, already read for the origin
+// legend / restore).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -32,6 +38,13 @@ import {
 } from '../../FmDetailChrome.jsx';
 import { IncidentsTab } from '../../FmTabContent.jsx';
 import { PresentModal } from '../../FmOverlays.jsx';
+import AeatSubmitFlow from '../303/AeatSubmitFlow.jsx';
+import RegisterSubmitted390Modal from './RegisterSubmitted390Modal.jsx';
+import SubmissionCard390 from './SubmissionCard390.jsx';
+import {
+  AEAT_SUBMIT_390, STATUS_SUBMITTED_EXT, SUBMISSION_KEY, SUBMISSION_METHOD_MANUAL_EXT,
+  buildManualSubmission, createSubstitute390, submissionFromResponse, submissionOf,
+} from './submission390.js';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import {
   formatAmount, persistManualData, fetchDeclarationIncidents, resolveResultColors,
@@ -59,6 +72,10 @@ const MODEL_ID = '390';
 const FISCAL_DECL_TABLE = 'ETGO_Fiscal_Decl';
 const SUBMITTED_STATUSES = new Set(['submitted', 'submitted_ext', 'submitted_ack']);
 const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
+/** PresentModal's left column for the 390: one "Registrar como presentada" path (step 2 follows). */
+const REGISTER_PATHS_390 = [
+  { id: STATUS_SUBMITTED_EXT, titleKey: 'fm.m390.present.path.register', descKey: 'fm.m390.present.path.register_desc', continues: true },
+];
 
 // ── Pure helpers (exported for their unit tests) ─────────────────────────────
 
@@ -184,7 +201,9 @@ function buildIncidentVariants(blocking, warning, t) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-export default function FmModel390Page({ decl, onBack, onStatusChange, onManualDataSaved, token, apiBaseUrl }) {
+export default function FmModel390Page({
+  decl, onBack, onStatusChange, onSubmittedRemotely, onDeclarationCreated, onManualDataSaved, token, apiBaseUrl,
+}) {
   const t = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
@@ -206,6 +225,11 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
   const [presenting, setPresenting] = useState(false);
   const [showFilegen, setShowFilegen] = useState(false);
   const [showPresent, setShowPresent] = useState(false);
+  const [showAeatFlow, setShowAeatFlow] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const [creatingSubstitute, setCreatingSubstitute] = useState(false);
+  // The filing data (`manualData.submission`) — local so the card shows at once after filing.
+  const [submission, setSubmission] = useState(() => submissionOf(decl.manualData));
   const [showIdError, setShowIdError] = useState(false);
   const [activeTab, setActiveTab] = useState('boxes');
   // Facturas tab filter, owned here so "Ver facturas" can open the tab filtered by a box.
@@ -218,10 +242,10 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
   // Edits since the last successful save — a ref so a handler can read it synchronously.
   const dirtyRef = useRef(false);
   const lastSavedManualData = useRef(decl.manualData ?? {});
-  const busy = computing || saving || generating || presenting;
+  const busy = computing || saving || generating || presenting || creatingSubstitute;
   const layout = useMemo(() => getLayout390(payload?.taxReport?.layoutYear), [payload?.taxReport?.layoutYear]);
 
-  const { count: receiptCount = null, upload: uploadReceipt } = useAttachments({
+  const { count: receiptCount = null, upload: uploadReceipt, list: listReceipts } = useAttachments({
     tableName: FISCAL_DECL_TABLE, recordId: decl.id, token, apiBaseUrl, isActive: false, prefetchCount: true,
   });
 
@@ -425,9 +449,11 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
     setShowPresent(true);
   }
 
-  // Registering the filing: inputs are saved in their OWN PUT first, then the status changes in a
-  // second one (the backend freezes the snapshot from the stored inputs).
-  async function handlePresent({ status: newStatus, acuseFile }) {
+  // PresentModal's choice. Pending changes are saved FIRST (the backend files / freezes from the
+  // stored inputs); a failed save stops here. Then the next step opens: the AEAT flow, or the
+  // registration form.
+  async function handlePresentPath({ status: path }) {
+    if (path !== 'aeat_telematic' && path !== STATUS_SUBMITTED_EXT) return;
     setPresenting(true);
     try {
       const saved = await persistIfDirty();
@@ -435,21 +461,78 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
         toast.error(t('fm.action.save_error'));
         return;
       }
-      if (newStatus === 'submitted_ack' && acuseFile) uploadReceipt?.(acuseFile);
-      const method = newStatus === 'submitted_ack' ? 'manual_ack' : 'manual_no_receipt';
+      if (path === 'aeat_telematic') setShowAeatFlow(true);
+      else setShowRegister(true);
+    } finally {
+      setPresenting(false);
+    }
+  }
+
+  // AEAT accepted the filing: the backend already stored submitted_ack, aeat_telematic, the
+  // snapshot and manualData.submission — mirror them locally and let the parent re-read the
+  // declaration (a status PUT here would be a 409 submitted → submitted).
+  function handleTelematicResult(data) {
+    if (data?.status !== 'SUCCESS') return;
+    const filed = submissionFromResponse(data, { user: auth?.username });
+    const manualData = { ...lastSavedManualData.current, [SUBMISSION_KEY]: filed };
+    lastSavedManualData.current = manualData;
+    setSubmission(filed);
+    setStatus('submitted_ack');
+    setSubmissionMethod('aeat_telematic');
+    onManualDataSaved?.(decl.id, manualData);
+    onSubmittedRemotely?.(decl.id, 'submitted_ack');
+  }
+
+  // "Registrar como presentada": the filing data is saved in its OWN PUT (with the inputs), the
+  // PDF uploaded, then the status changes in a second PUT (the backend freezes the snapshot).
+  async function handleRegister({ justificante, date, file }) {
+    setPresenting(true);
+    try {
+      const filed = buildManualSubmission({ justificante, date, user: auth?.username });
+      const manualData = { ...currentManualData(), [SUBMISSION_KEY]: filed };
+      const saved = await persistManualData(decl.id, manualData, { token, apiBaseUrl });
+      if (!saved.ok) {
+        toast.error(t('fm.action.save_error'));
+        return;
+      }
+      dirtyRef.current = false;
+      lastSavedManualData.current = manualData;
+      invalidateFiscalComputeCache(decl.id);
+      onManualDataSaved?.(decl.id, manualData);
+      if (file) uploadReceipt?.(file);
       const previous = { status, submissionMethod };
-      setStatus(newStatus);
-      setSubmissionMethod(method);
-      const result = await onStatusChange?.(decl.id, newStatus, method);
+      setStatus(STATUS_SUBMITTED_EXT);
+      setSubmissionMethod(SUBMISSION_METHOD_MANUAL_EXT);
+      const result = await onStatusChange?.(decl.id, STATUS_SUBMITTED_EXT, SUBMISSION_METHOD_MANUAL_EXT);
       if (result?.ok === false) {
         setStatus(previous.status);
         setSubmissionMethod(previous.submissionMethod);
         toast.error(t('fm.action.present_error'));
         return;
       }
+      setSubmission(filed);
+      setShowRegister(false);
       if (result?.submittedSnapshot?.boxes != null) setPayload(result.submittedSnapshot);
     } finally {
       setPresenting(false);
+    }
+  }
+
+  // "Crear declaración sustitutiva": a new draft (type substitute) with the same inputs and the
+  // former declaration's identifier — the 13-digit justificante — prefilled. Opened at once.
+  async function handleCreateSubstitute() {
+    setCreatingSubstitute(true);
+    try {
+      const result = await createSubstitute390({ ...decl, manualData: { ...lastSavedManualData.current, [SUBMISSION_KEY]: submission } }, { token, apiBaseUrl });
+      if (result.ok) {
+        toast.success(t('fm.m390.substitute.created'));
+        onDeclarationCreated?.(result.decl);
+        return;
+      }
+      if (result.decl) onDeclarationCreated?.(result.decl);
+      toast.error(t(result.error === 'draft_exists' ? 'fm.m390.substitute.draft_exists' : 'fm.m390.substitute.error'));
+    } finally {
+      setCreatingSubstitute(false);
     }
   }
 
@@ -490,7 +573,14 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
                 t={t} />
             </>
           )}
-          right={!isSubmitted && (
+          right={isSubmitted ? (
+            <FmDetailButton onClick={handleCreateSubstitute} disabled={busy} data-testid="FmModel390Page__createSubstitute">
+              {creatingSubstitute
+                ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__substitute390" />
+                : <RefreshCw size={16} strokeWidth={1.75} data-testid="RefreshCw__substitute390" />}
+              {t('fm.m390.substitute.action')}
+            </FmDetailButton>
+          ) : (
             <>
               <FmDetailButton onClick={handleCompute} disabled={busy} data-testid="FmModel390Page__compute">
                 {computing
@@ -530,6 +620,7 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
       </FmDetailHeader>
 
       <div className="fm-page--freeflow fm-detail-scroll">
+        {isSubmitted && <SubmissionCard390 submission={submission} t={t} bcpLocale={bcpLocale} />}
         <SubstitutiveBanner
           identification={identification}
           concurso={isConcurso(aeatInputs)}
@@ -678,7 +769,31 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
           t={t} />
       )}
       {showPresent && (
-        <PresentModal decl={decl} onConfirm={handlePresent} onClose={() => setShowPresent(false)} showAeatPath={false} />
+        <PresentModal
+          decl={decl}
+          onConfirm={handlePresentPath}
+          onClose={() => setShowPresent(false)}
+          showAeatPath
+          registerPaths={REGISTER_PATHS_390} />
+      )}
+      {showAeatFlow && (
+        <AeatSubmitFlow
+          decl={decl}
+          adapter={AEAT_SUBMIT_390}
+          orgIdent={{ nif: orgIdentity.nif, nombre: orgIdentity.name }}
+          identChecks={identification}
+          summary={summary}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          onResult={handleTelematicResult}
+          onAttached={() => listReceipts?.()}
+          onClose={() => setShowAeatFlow(false)} />
+      )}
+      {showRegister && (
+        <RegisterSubmitted390Modal
+          busy={presenting}
+          onConfirm={handleRegister}
+          onClose={() => setShowRegister(false)} />
       )}
     </div>
   );

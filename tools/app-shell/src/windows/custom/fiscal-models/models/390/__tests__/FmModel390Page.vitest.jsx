@@ -436,17 +436,6 @@ describe('FmModel390Page — Generar fichero / Presentar save first', () => {
     expect(persistManualData).not.toHaveBeenCalled();
   });
 
-  it('Presentar persists the inputs in their own PUT before the status change', async () => {
-    const p = props();
-    render(<FmModel390Page decl={makeDecl()} {...p} />);
-    goToBlock('resultado_liquidacion');
-    typeInput('LIQANUAL_VAT_IMPORT', '12');
-    fireEvent.click(screen.getByTestId('FmModel390Page__present'));
-    fireEvent.click(screen.getByTestId('PresentModal-confirm'));
-    await waitFor(() => expect(p.onStatusChange).toHaveBeenCalledWith('decl-390', 'submitted', 'manual_no_receipt'));
-    expect(persistManualData.mock.invocationCallOrder[0]).toBeLessThan(p.onStatusChange.mock.invocationCallOrder[0]);
-  });
-
   it('blocking incidents disable Generar and Presentar', async () => {
     fetchDeclarationIncidents.mockResolvedValue({ blocking: 1, warning: 0, items: [{ severity: 'block' }] });
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
