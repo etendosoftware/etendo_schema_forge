@@ -3016,6 +3016,31 @@ describe('translateBackendError — invoice post/unpost refusals by identity (ET
   });
 });
 
+// ── ETP-5729: duplicate return from a goods shipment, translated by identity + params ──
+//
+// NeoReturnReceiptService (com.etendoerp.go) refuses a second return from the same shipment with a
+// 409 that used to carry the internal shipment ID in English. It now sends `messageKeys`
+// ['ETGO_ReturnAlreadyExists'] and `messageParams.documentNo`; the key route must interpolate the
+// params so the user reads the shipment's document number in their own locale.
+describe('translateBackendError — duplicate return by identity with params (ETP-5729)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const prose = 'A return (1000006) already exists for shipment 1000035.';
+  const options = {
+    messageKeys: ['ETGO_ReturnAlreadyExists'],
+    messageParams: { documentNo: '1000035', returnDocumentNo: '1000006' },
+  };
+
+  it('names the shipment document number in es_ES and en_US, never the backend prose', () => {
+    assert.equal(translateBackendError(prose, es, options), 'Ya existe una devolución para el albarán 1000035.');
+    assert.equal(translateBackendError(prose, en, options), 'A return already exists for shipment 1000035.');
+  });
+
+  it('keeps the backend prose when the locale has no entry (never the raw key)', () => {
+    assert.equal(translateBackendError(prose, (k) => k, options), prose);
+  });
+});
+
 describe('parseBackendError / translateBackendErrorResponse (ETP-5692)', () => {
   const es = localeTranslator('es_ES');
   const jsonResponse = (body, status = 422) => ({ status, json: async () => body });

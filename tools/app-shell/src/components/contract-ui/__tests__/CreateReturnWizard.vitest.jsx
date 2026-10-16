@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx
 // --- Mocks (before imports) ---
 
 vi.mock('@/i18n', () => ({
@@ -36,7 +37,6 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from 'sonner';
 import CreateReturnWizard from '../CreateReturnWizard.jsx';
-import { formatCurrency } from '@/lib/formatCurrency.js';
 
 // --- Fixtures ---
 
@@ -58,8 +58,6 @@ const defaultProps = {
   onError: vi.fn(),
   titleKey: 'createReturnTitle',
   refLabelKey: 'refLabel',
-  docTypeLabelKey: 'docTypeLabel',
-  docTypeDescriptionKey: 'docTypeDescription',
   createActionUrl: (base, id) => `${base}/some-spec/entity/${id}/action/createReturn`,
 };
 
@@ -82,22 +80,8 @@ function checkboxFor(productLabel) {
   return within(row).getByRole('checkbox');
 }
 
-async function goToStep2() {
-  fireEvent.click(screen.getByText('next').closest('button'));
-  await waitFor(() => expect(screen.getByText('docTypeLabel')).toBeInTheDocument());
-}
-
-// formatCurrency() joins the amount and the symbol with a literal NBSP (U+00A0, matching what
-// Intl's currencyDisplay:'narrowSymbol' inserts) — see its own doc comment. RTL's default text
-// normalizer collapses \s (which DOES include NBSP) in the DOM's textContent when matching, but
-// does NOT apply that same normalization to a plain-string matcher argument, so comparing a
-// `formatCurrency(...)`-built expected string against `screen.getByText` byte-for-byte fails on
-// that exact NBSP-vs-normalized-space mismatch. Normalizing both sides here — instead of
-// hardcoding a decimal-separator-and-symbol-side-specific literal — keeps the assertion honest
-// about what formatCurrency actually returned without re-deriving its formatting rules by hand.
-function findByNormalizedText(expected) {
-  const norm = (s) => s.replace(/\s+/g, ' ').trim();
-  return screen.getByText((_, el) => el?.textContent != null && norm(el.textContent) === norm(expected));
+function confirmButton() {
+  return screen.getByText('createReturn').closest('button');
 }
 
 describe('CreateReturnWizard', () => {
@@ -228,88 +212,55 @@ describe('CreateReturnWizard', () => {
     });
   });
 
-  describe('step navigation and canProceed gating', () => {
-    it('advances to step 2 on Next and returns to step 1 on Back', async () => {
+  describe('single step (ETP-5729 CP-15) and confirm gating', () => {
+    // The read-only second step (document card + per-line amounts priced per PRODUCT, wrong when
+    // the same product sat on two order lines at different prices) was removed: the first screen
+    // creates the return directly.
+    it('has no Next/Back step and no amount summary: the first screen confirms directly', () => {
       renderWizard();
-      await goToStep2();
-      expect(screen.getByText('Product A')).toBeInTheDocument(); // still shown in the step-2 summary
-
-      fireEvent.click(screen.getByText('back').closest('button'));
-      expect(qtyInputFor('Product A')).toBeInTheDocument(); // step-1-only element (the editable input)
+      expect(screen.queryByText('next')).not.toBeInTheDocument();
+      expect(screen.queryByText('back')).not.toBeInTheDocument();
+      expect(screen.queryByText('amount')).not.toBeInTheDocument();
+      expect(confirmButton()).not.toBeDisabled();
     });
 
-    it('disables Next when a selected line has a zero committed quantity', () => {
+    it('disables Create return when a selected line has a zero committed quantity', () => {
       const ZERO_LINE = { id: 'line-zero', product: 'p6', 'product$_identifier': 'Product Zero', movementQuantity: 0 };
       const OK_LINE = LINES[0];
       renderWizard({ lines: [ZERO_LINE, OK_LINE] });
 
-      expect(screen.getByText('next').closest('button')).toBeDisabled();
+      expect(confirmButton()).toBeDisabled();
     });
 
-    it('re-enables Next once the zero-quantity line is deselected', () => {
+    it('re-enables Create return once the zero-quantity line is deselected', () => {
       const ZERO_LINE = { id: 'line-zero', product: 'p6', 'product$_identifier': 'Product Zero', movementQuantity: 0 };
       const OK_LINE = LINES[0];
       renderWizard({ lines: [ZERO_LINE, OK_LINE] });
 
       fireEvent.click(checkboxFor('Product Zero'));
 
-      expect(screen.getByText('next').closest('button')).not.toBeDisabled();
+      expect(confirmButton()).not.toBeDisabled();
     });
 
-    it('disables Next when no line is selected', () => {
+    it('disables Create return when no line is selected', () => {
       renderWizard();
       // Deselect both lines individually.
       fireEvent.click(checkboxFor('Product A'));
       fireEvent.click(checkboxFor('Product B'));
 
-      expect(screen.getByText('next').closest('button')).toBeDisabled();
-    });
-  });
-
-  describe('showAmountColumn (step 2 summary)', () => {
-    it('shows no Amount column/total when showAmountColumn is false (default)', async () => {
-      renderWizard();
-      await goToStep2();
-
-      expect(screen.queryByText('amount')).not.toBeInTheDocument();
-    });
-
-    it('shows the Amount column and computes qty * unitPrice per line + total when showAmountColumn is true', async () => {
-      const fetchPrices = vi.fn().mockResolvedValue({
-        priceMap: { p1: 10, p2: 20 },
-        currency: 'EUR',
-      });
-      renderWizard({ showAmountColumn: true, fetchPrices });
-
-      await waitFor(() => expect(fetchPrices).toHaveBeenCalledWith({ base: defaultProps.base, sourceData: SOURCE }));
-      await goToStep2();
-
-      expect(screen.getByText('amount')).toBeInTheDocument();
-      // line-1: qty 5 * price 10 = 50; line-2: qty 3 * price 20 = 60; total = 110
-      await waitFor(() => {
-        expect(findByNormalizedText(formatCurrency('EUR', 50))).toBeInTheDocument();
-        expect(findByNormalizedText(formatCurrency('EUR', 60))).toBeInTheDocument();
-        expect(findByNormalizedText(formatCurrency('EUR', 110))).toBeInTheDocument();
-      });
-    });
-
-    it('does not call fetchPrices at all when showAmountColumn is false, even if fetchPrices is provided', () => {
-      const fetchPrices = vi.fn().mockResolvedValue({ priceMap: {}, currency: 'EUR' });
-      renderWizard({ fetchPrices });
-      expect(fetchPrices).not.toHaveBeenCalled();
+      expect(confirmButton()).toBeDisabled();
     });
   });
 
   describe('handleConfirm', () => {
-    async function confirmFromStep2(overrides = {}) {
+    async function confirmReturn(overrides = {}) {
       const utils = renderWizard(overrides);
-      await goToStep2();
-      fireEvent.click(screen.getByText('createReturn').closest('button'));
+      fireEvent.click(confirmButton());
       return utils;
     }
 
     it('POSTs to createActionUrl(base, sourceData.id) with the selected lines and reason, then calls onClose + onSuccess with the response data', async () => {
-      const { props } = await confirmFromStep2();
+      const { props } = await confirmReturn();
 
       await waitFor(() => expect(props.onSuccess).toHaveBeenCalled());
 
@@ -341,13 +292,54 @@ describe('CreateReturnWizard', () => {
         json: () => Promise.resolve({ error: { message: 'A return already exists for shipment: DOC-001', status: 409 } }),
       }));
 
-      const { props } = await confirmFromStep2();
+      const { props } = await confirmReturn();
 
       await waitFor(() => expect(props.onError).toHaveBeenCalled());
       expect(props.onError).toHaveBeenCalledWith('A return already exists for shipment: DOC-001');
       expect(props.onError).not.toHaveBeenCalledWith(expect.stringContaining('Request failed'));
       expect(props.onSuccess).not.toHaveBeenCalled();
+    });
+
+    // ETP-5729 CP-12: the second return from the same shipment came back as an English sentence
+    // carrying the internal shipment ID, and the dialog stayed open in front of a button that
+    // could only fail again. The backend now sends a stable key plus the document numbers.
+    it('translates the duplicate-return 409 from messageKeys/messageParams and closes the dialog', async () => {
+      globalThis.fetch = vi.fn(() => Promise.resolve({
+        ok: false,
+        status: 409,
+        json: () => Promise.resolve({
+          error: {
+            status: 409,
+            code: 'RETURN_ALREADY_EXISTS',
+            message: 'A return (1000006) already exists for shipment 1000035.',
+            messageKeys: ['ETGO_ReturnAlreadyExists'],
+            messageParams: { documentNo: '1000035', returnDocumentNo: '1000006' },
+          },
+        }),
+      }));
+
+      const { props } = await confirmReturn();
+
+      await waitFor(() => expect(props.onError).toHaveBeenCalled());
+      expect(props.onError).toHaveBeenCalledWith(
+        'backendError.returnAlreadyExistsForShipment:{"documentNo":"1000035","returnDocumentNo":"1000006"}',
+      );
+      expect(props.onClose).toHaveBeenCalledTimes(1);
+      expect(props.onSuccess).not.toHaveBeenCalled();
+    });
+
+    it('keeps the dialog open on a non-conflict error so the user can adjust and retry', async () => {
+      globalThis.fetch = vi.fn(() => Promise.resolve({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: { message: 'No valid lines to return', status: 400 } }),
+      }));
+
+      const { props } = await confirmReturn();
+
+      await waitFor(() => expect(props.onError).toHaveBeenCalled());
       expect(props.onClose).not.toHaveBeenCalled();
+      await waitFor(() => expect(confirmButton()).not.toBeDisabled());
     });
 
     it('falls back to the generic "Request failed (status)" message when the body carries no recognised error shape', async () => {
@@ -357,7 +349,7 @@ describe('CreateReturnWizard', () => {
         json: () => Promise.resolve({}),
       }));
 
-      const { props } = await confirmFromStep2();
+      const { props } = await confirmReturn();
 
       await waitFor(() => expect(props.onError).toHaveBeenCalled());
       expect(props.onError).toHaveBeenCalledWith('Request failed (500)');
@@ -370,7 +362,7 @@ describe('CreateReturnWizard', () => {
         json: () => Promise.reject(new Error('not valid json')),
       }));
 
-      const { props } = await confirmFromStep2();
+      const { props } = await confirmReturn();
 
       await waitFor(() => expect(props.onError).toHaveBeenCalled());
       expect(props.onError).toHaveBeenCalledWith('Request failed (500)');
@@ -384,7 +376,7 @@ describe('CreateReturnWizard', () => {
         json: () => Promise.resolve({ response: { error: { message: 'Nested response error message' } } }),
       }));
 
-      const { props } = await confirmFromStep2();
+      const { props } = await confirmReturn();
 
       await waitFor(() => expect(props.onError).toHaveBeenCalled());
       expect(props.onError).toHaveBeenCalledWith('Nested response error message');

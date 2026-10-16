@@ -424,6 +424,12 @@ const BACKEND_ERROR_KEY_MAP = {
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
   // here only aligns it with the UI locale, like OtherPostingProcessActive above.
   PostedDocument: 'backendError.documentAlreadyPosted',
+  // ETP-5729 — com.etendoerp.go NeoReturnReceiptService refuses a second return from the same
+  // goods shipment with a 409 carrying this identity plus `messageParams.documentNo` (the
+  // shipment's document number). Not an AD_MESSAGE: the backend sends plain English, so this is
+  // the only place the refusal becomes Spanish. The params reach the key through
+  // translateByMessageKey below.
+  ETGO_ReturnAlreadyExists: 'backendError.returnAlreadyExistsForShipment',
 };
 
 // ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
@@ -543,12 +549,14 @@ function translateInvalidAccount(messageKeys, messageParams, t) {
 // failure (`@Inline@` + `@lockedProduct@`) lands on the failure. Returns null when no key is
 // known, or when the mapped locale entry is missing — an untranslated result is indistinguishable
 // from no result for the caller, same convention as translateSingleMessage.
-function translateByMessageKey(messageKeys, t) {
+function translateByMessageKey(messageKeys, t, messageParams) {
   if (!Array.isArray(messageKeys)) return null;
   for (const raw of messageKeys) {
     const key = BACKEND_ERROR_KEY_MAP[raw];
     if (!key) continue;
-    const translated = t(key);
+    // ETP-5729 — the backend's `messageParams` interpolate the key's `{placeholders}`; a key with
+    // none ignores them, so passing them always is harmless.
+    const translated = messageParams ? t(key, messageParams) : t(key);
     if (translated && translated !== key) return translated;
   }
   return null;
@@ -1254,7 +1262,9 @@ export function translateBackendError(msg, t, options = {}) {
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.
-  const byKey = translateByMessageKey(options.messageKeys ?? extractRawMessageKeys(msg), t);
+  const byKey = translateByMessageKey(
+    options.messageKeys ?? extractRawMessageKeys(msg), t, options.messageParams,
+  );
   if (byKey !== null) return byKey;
 
   if (!msg) return msg;
