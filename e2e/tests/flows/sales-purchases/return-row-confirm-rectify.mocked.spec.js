@@ -1,8 +1,8 @@
 // @covers tools/app-shell/src/windows/custom/shared/useRowConfirmAction.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth.js';
-import { buildRectifiableInvoicesPayload } from '../helpers/rectifiable-invoices-mock.js';
+import { login } from '../../helpers/auth.js';
+import { buildRectifiableInvoicesPayload } from '../../helpers/rectifiable-invoices-mock.js';
 
 /**
  * Return windows — row-hover Confirmar must offer the rectify picker (mocked).

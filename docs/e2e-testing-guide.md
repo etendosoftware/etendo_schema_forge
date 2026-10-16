@@ -46,6 +46,36 @@ E2E_CAPTURE_SCREENSHOTS=1 npx playwright test --project=mocked
 explicit evidence screenshots and Playwright's automatic failure screenshots are
 available. The default is disabled; `0` and any other value also leave capture off.
 
+### Running the specs of one cell
+
+Every spec lives in a folder under `e2e/tests/flows/`, and every folder belongs to a
+product cell. The cell names match the `com.etendoerp.go` Java cells (`src-test/cells/`):
+
+| Cell | Folders |
+|------|---------|
+| `ventas` | `sales`, `contacts`, `sales-purchases` |
+| `compras` | `purchases`, `sales-purchases` |
+| `almacenes` | `inventory`, `products` |
+| `contabilidad` | `accounting` |
+| `financiero` | `finance` |
+| `localizacion` | `fiscal` |
+| `plataforma` | `platform`, `system`, `dashboard`, `onboarding` |
+
+`sales-purchases` holds the specs that exercise both sales and purchase documents, so it
+runs with either cell. From `e2e/`:
+
+```bash
+npm run test:cell -- ventas                  # mocked + integration
+npm run test:cell -- compras mock            # projects mocked + mocked-serial
+npm run test:cell -- almacenes integration   # project integration
+npm run test:cell -- ventas mock --list      # anything after the kind goes to Playwright
+npm run test:cell -- --check                 # fails on a loose spec or a folder with no cell
+```
+
+A new spec goes in the folder of its cell, never loose in `tests/flows/`. A new folder must be
+added to `CELLS` in `e2e/support/test-cell.mjs`; `scripts/__tests__/e2e-test-cell.test.js`
+fails otherwise.
+
 ---
 
 ## Copilot Agent Navigation (`webmcp-agent-chat`)
