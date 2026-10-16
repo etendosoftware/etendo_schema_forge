@@ -59,7 +59,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:account
 
 // @sf-generated-start requiredHeaderFields:account
-const requiredHeaderFields = ['name', 'currency', 'type', 'default', 'currentBalance', 'country'];
+const requiredHeaderFields = ['name', 'currency', 'type', 'country'];
 // @sf-generated-end requiredHeaderFields:account
 
 

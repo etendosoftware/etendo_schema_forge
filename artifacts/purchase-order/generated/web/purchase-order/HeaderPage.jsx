@@ -50,7 +50,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['businessPartner', 'documentNo', 'orderDate', 'partnerAddress', 'scheduledDeliveryDate', 'warehouse', 'paymentTerms', 'priceList', 'grandTotalAmount', 'summedLineAmount', 'currency'];
+const requiredHeaderFields = ['businessPartner', 'orderDate', 'partnerAddress', 'scheduledDeliveryDate', 'warehouse', 'paymentTerms', 'priceList', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines

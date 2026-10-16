@@ -1365,7 +1365,7 @@ The generic `LinesEmptyState` component lives at `tools/app-shell/src/components
 />
 ```
 
-`addLineGuard` receives current form data and must return `true` to enable adding lines. It gates both the button inside the empty state (`canAddLine` prop) and the `+ Add Line` button in the lines table header. Without a guard, adding is always allowed.
+`addLineGuard` receives current form data and must return `true` to enable adding lines. It gates both the button inside the empty state (`canAddLine` prop) and the `+ Add Line` button in the lines table header. Without a guard, the default gate is the generated `requiredHeaderFields` list (`resolveCanAddLines` in `detailViewHelpers.jsx`): adding is allowed once every listed header field holds a value, and always when the list is empty. `generate-frontend.js` builds that list from the header's `required` + `form` fields the user can fill — it excludes `visibility` `discarded`, `system` **and `readOnly`** (ETP-5676), because a readOnly field such as `grandTotalAmount`/`summedLineAmount`, `documentNo` or `docStatus` is filled by the backend after the save and would otherwise hide the button until then. A field that is only locked by `readOnlyLogic` (e.g. after completion) is still editable in draft and stays in the list.
 
 **`window.maxDetailLines` — cap the line count (decisions-driven; `0` = import-only lines):**
 
