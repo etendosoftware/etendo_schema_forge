@@ -243,14 +243,19 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
-  // ETP-5381: the only remaining server-side duplicate guard. The order, shipment, receipt and
-  // quotation paths need none — now that the invoice is confirmed on creation, the core's own
-  // pending-quantity logic sees the invoiced amounts and rejects the second attempt by itself.
-  // A return document has no such native cap: its rectificative takes the lines whole.
+  // ETP-5381: this duplicate guard was REMOVED on purpose (a return can legitimately have more
+  // than one rectificative invoice) and the backend no longer sends this sentence; ETP-5712 reports
+  // the existing ones in `previousReturnInvoices` instead. The entry stays only so a response from
+  // an older backend still reads in the user's language.
   'A rectificative invoice already exists for this return document.':
     'backendError.returnInvoiceAlreadyExists',
   // ETP-5381 — a rectificative invoice cannot be confirmed without declaring which invoice it
   // rectifies (ETSG_CHECK_RECTIF_INV_DOC), so the request is rejected before anything is written.
+  // ETP-5712 reworded the sentence so an agent reads why (the returned document was never invoiced)
+  // and what to do; ReturnShipmentUtils.ERR_RECTIFIED_INVOICE_REQUIRED is the source, keep both in step.
+  'This return has no invoice to rectify: the document it returns has not been invoiced, so the factura rectificativa has nothing to link to. Invoice the original document first, or pass originInvoices with the id of an invoice from rectifiableInvoices.':
+    'backendError.rectifiedInvoiceRequired',
+  // Before ETP-5712 the same refusal read as a UI hint; an older backend may still send it.
   'Select at least one invoice to rectify: a rectificative invoice cannot be confirmed without it.':
     'backendError.rectifiedInvoiceRequired',
   // ReturnFromDocumentSupport (com.etendoerp.go — ETP-5711): the create-from-document return
@@ -832,6 +837,23 @@ function matchReturnReasonTooLong(msg) {
   return max && length ? { max, length } : null;
 }
 
+// ReturnShipmentUtils.refuseIfUnpriced (com.etendoerp.go — ETP-5712), `error.code = returnInvoiceWithoutAmount`:
+// "The corrective invoice (factura rectificativa) cannot be created: no price could be found for
+// {products}, so it would be confirmed with a zero amount. Set a price for ... and try again."
+// The products are free text joined with ", " — one opaque {products} param (same shape as
+// matchInvoiceLinesWithoutAmount), located by the fixed prefix and suffix, never by a regex.
+const RETURN_INVOICE_NO_AMOUNT_PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for ';
+const RETURN_INVOICE_NO_AMOUNT_SUFFIX = ', so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+
+function matchReturnInvoiceWithoutAmount(msg) {
+  if (!msg.startsWith(RETURN_INVOICE_NO_AMOUNT_PREFIX) || !msg.endsWith(RETURN_INVOICE_NO_AMOUNT_SUFFIX)) {
+    return null;
+  }
+  const products = msg.slice(RETURN_INVOICE_NO_AMOUNT_PREFIX.length, -RETURN_INVOICE_NO_AMOUNT_SUFFIX.length);
+  if (!products) return null;
+  return { products };
+}
+
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
 // orderId. Fixed English prefix + dynamic order id appended, no closing delimiter
 // (ETP-4831 case 4, family B). Same plain-string-slicing rationale as
@@ -1227,6 +1249,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchReturnNothingLeftOnLine, 'backendError.returnNothingLeftOnLine'],
   [matchReturnLineNotInDocument, 'backendError.returnLineNotInDocument'],
   [matchReturnReasonTooLong, 'backendError.returnReasonTooLong'],
+  [matchReturnInvoiceWithoutAmount, 'backendError.returnInvoiceWithoutAmount'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
