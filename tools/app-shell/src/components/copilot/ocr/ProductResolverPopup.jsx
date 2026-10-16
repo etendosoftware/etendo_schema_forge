@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useId } from 'react';
 import { X, Ban, AlertTriangle, Loader2, Search, ChevronDown, Check, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 
@@ -6,12 +6,18 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { Button } from '@/components/ui/button';
 import RequiredMark from '@/components/ui/required-mark.jsx';
 import { InfoBanner } from '@/components/InfoBanner';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { buildSearchUrl, readSearchRows } from './ocrQuery.js';
+import { Popover, PopoverTrigger, PopoverContent, PopoverAnchor } from '@/components/ui/popover';
+import { buildSearchUrl, deriveSpecBase, readSearchRows } from './ocrQuery.js';
 /* eslint-disable react/prop-types */
 
 const SELECTOR_PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 250;
+
+// Per-row resolution state (ETP-5585): `undefined` = undecided, `{ id, label }` = a product
+// (picked or created), SKIPPED = the user explicitly dropped the line. Only `submit` maps
+// SKIPPED to `null`, which is what the onSubmit contract carries.
+const SKIPPED = Symbol('ocr-product-skipped');
+const isProduct = (selection) => Boolean(selection) && selection !== SKIPPED;
 
 function normalizeText(value) {
   return String(value ?? '')
@@ -24,19 +30,24 @@ function normalizeText(value) {
  * Resolves OCR-extracted product names that simSearch couldn't auto-match.
  * For each unmatched line the popup shows the original description on the
  * left and a search-and-pick selector on the right. From the picker the user
- * can also create a new Product on the fly. Lines left unselected when the
- * user clicks Continue are dropped from the invoice — the user can add them
- * manually after the import.
+ * can also create a new Product on the fly. A line without a suggestion starts
+ * undecided (showing "+ Create product") and blocks Continue until the user
+ * creates a product, picks an existing one or explicitly skips it. Skipped
+ * lines are dropped from the invoice — the user can add them manually after
+ * the import.
  *
  * Props:
- *   unmatched      — [{ idx, description, quantity?, unitPrice? }]
+ *   unmatched      — [{ idx, description, quantity?, unitPrice?, suggestion?, taxId? }]
+ *                    `taxId` is the tax chosen for the line in the lines review (null when
+ *                    the line stayed on "Autocompletar"); the create form prefills the tax
+ *                    category from that tax's record.
  *   selectorUrl    — full URL to the line product selector
  *                    (e.g. /sws/neo/purchase-invoice/lines/selectors/M_Product_ID)
  *   productSpecUrl — base URL of the product spec
  *                    (e.g. /sws/neo/product). Used to look up UOM / TaxCategory
  *                    selectors and to POST the product create.
  *   token          — bearer token
- *   onSubmit       — receives a map { [idx]: productId | null }
+ *   onSubmit       — receives a map { [idx]: productId | null } (null = explicitly skipped)
  *   onCancel       — discards the import entirely
  */
 function SelectorOption({ option, selected, onPick, sizing = 'compact' }) {
@@ -64,13 +75,14 @@ export default function ProductResolverPopup({
   onCancel,
 }) {
   const ui = useUI();
+  const incompleteHintId = useId();
   // Every URL these components receive (selectorUrl, productSpecUrl) is already
   // complete, so the hook is bound with no base of its own; the caller's token
   // is passed explicitly per call below (it comes from a prop, not AuthContext).
   const apiFetch = useApiFetch('');
 
-  // selections: { [idx]: { id, label } | null }
-  // Rows carrying a suggestion start preselected; the user can still change, search, create or skip.
+  // selections: { [idx]: { id, label } | SKIPPED } — a missing key means undecided.
+  // Rows carrying a suggestion start preselected (decided); the user can still change, search, create or skip.
   const [selections, setSelections] = useState(() => {
     const seeded = {};
     for (const row of unmatched) {
@@ -80,12 +92,16 @@ export default function ProductResolverPopup({
   });
   const hasPreselected = unmatched.some((row) => row.suggestion?.id);
   const hasUnsuggested = unmatched.length === 0 || unmatched.some((row) => !row.suggestion?.id);
+  const undecidedCount = unmatched.filter((row) => !selections[row.idx]).length;
+  const canContinue = undecidedCount === 0;
 
   const cancel = () => onCancel?.();
   const submit = () => {
+    if (!canContinue) return;
     const out = {};
     for (const row of unmatched) {
-      out[row.idx] = selections[row.idx]?.id ?? null;
+      const selection = selections[row.idx];
+      out[row.idx] = isProduct(selection) ? selection.id : null;
     }
     onSubmit?.(out);
   };
@@ -93,7 +109,7 @@ export default function ProductResolverPopup({
   return (
     <div className="fixed inset-0 z-50 bg-foreground/30 flex items-center justify-center p-4">
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border-subtle">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border-subtle">
           <h2 className="text-base font-semibold text-foreground">
             {ui('ocrProductResolverTitle')}
           </h2>
@@ -103,7 +119,7 @@ export default function ProductResolverPopup({
         </div>
 
         {hasPreselected && (
-          <div className="px-6 pt-4">
+          <div className="px-5 pt-3">
             <InfoBanner
               tone="warning"
               icon={AlertTriangle}
@@ -116,17 +132,17 @@ export default function ProductResolverPopup({
         )}
 
         {hasUnsuggested && (
-          <div className="px-6 py-3 text-xs text-muted-foreground border-b border-border-subtle">
+          <div className="px-5 py-3 text-xs text-muted-foreground border-b border-border-subtle">
             {ui('ocrProductResolverHint')}
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3">
           {unmatched.map((row) => (
             <ProductRow
               key={row.idx}
               row={row}
-              selection={selections[row.idx] || null}
+              selection={selections[row.idx]}
               onSelect={(value) => setSelections(prev => ({ ...prev, [row.idx]: value }))}
               selectorUrl={selectorUrl}
               productSpecUrl={productSpecUrl}
@@ -137,11 +153,20 @@ export default function ProductResolverPopup({
           ))}
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-subtle">
+        <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-border-subtle">
+          {!canContinue && (
+            <span id={incompleteHintId} className="mr-auto text-xs text-muted-foreground" data-testid="ocr-product-incomplete-hint">
+              {ui('ocrProductResolverIncomplete')}
+            </span>
+          )}
           <Button variant="outline" onClick={cancel} data-testid="Button__b3ae11_cancel">
             {ui('cancel')}
           </Button>
-          <Button onClick={submit} data-testid="Button__b3ae11_continue">
+          <Button
+            onClick={submit}
+            disabled={!canContinue}
+            aria-describedby={canContinue ? undefined : incompleteHintId}
+            data-testid="Button__b3ae11_continue">
             {ui('continue')}
           </Button>
         </div>
@@ -177,19 +202,22 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, api
           apiFetch={apiFetch}
           token={token}
           initialQuery={row.description}
-          value={selection}
+          value={isProduct(selection) ? selection : null}
+          skipped={selection === SKIPPED}
+          testIdSuffix={row.idx}
           onPick={onSelect}
+          onSkip={() => onSelect(SKIPPED)}
           onCreateNew={productSpecUrl ? () => setCreating(true) : null}
           ui={ui}
           data-testid="InlineSelector__b3ae11" />
         {/* Fixed-height slot: the button appearing/disappearing never shifts the row layout. */}
         <div className="mt-1 flex h-8 justify-end">
-          {selection?.id && (
+          {isProduct(selection) && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => onSelect(null)}
+              onClick={() => onSelect(SKIPPED)}
               className="text-muted-foreground hover:text-foreground"
               data-testid={`ocr-product-skip-${row.idx}`}
             >
@@ -203,6 +231,7 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, api
         <ProductCreateForm
           initialName={row.description}
           productSpecUrl={productSpecUrl}
+          taxId={row.taxId ?? null}
           apiFetch={apiFetch}
           token={token}
           onCreated={(value) => { onSelect(value); setCreating(false); }}
@@ -214,7 +243,7 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, api
   );
 }
 
-function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, onPick, onCreateNew, ui }) {
+function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, skipped = false, testIdSuffix, onPick, onSkip, onCreateNew, ui }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [items, setItems] = useState([]);
@@ -272,27 +301,53 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, onP
     setOpen(false);
   };
 
+  const undecided = !value && !skipped;
+  let mainLabel = value?.label;
+  let mainTone = 'text-foreground';
+  if (skipped) {
+    mainLabel = ui('ocrProductSkip');
+    mainTone = 'text-muted-foreground';
+  } else if (undecided) {
+    // Without a product spec there is nothing to create: fall back to a neutral prompt.
+    mainLabel = onCreateNew ? ui('createProduct') : ui('ocrProductCreateSelect');
+    mainTone = onCreateNew ? 'text-status-info-foreground' : 'text-muted-foreground';
+  }
+
   // ETP-5289 — the list renders in a portal (Popover). As an `absolute` child it was clipped by
   // the popup's scrolling body instead of overlapping it.
   return (
     <Popover open={open} onOpenChange={setOpen} data-testid="Popover__b3ae11">
-      <PopoverTrigger asChild data-testid="PopoverTrigger__b3ae11">
-        <button
-          type="button"
-          className="w-full border border-border-control rounded-lg px-3 py-2 text-sm bg-card hover:border-border-control focus:outline-none focus:ring-2 focus:ring-focus-ring flex items-center justify-between gap-2"
-        >
-          <span className={`truncate ${value ? 'text-foreground' : 'text-muted-foreground'}`}>
-            {value?.label || ui('ocrProductSkip')}
-          </span>
-          <ChevronDown
-            size={16}
-            className="text-muted-foreground shrink-0"
-            data-testid="ChevronDown__b3ae11" />
-        </button>
-      </PopoverTrigger>
+      <PopoverAnchor asChild data-testid="PopoverAnchor__b3ae11">
+        <div className="flex w-full items-stretch rounded-lg border border-border-control bg-card hover:border-border-control focus-within:ring-2 focus-within:ring-focus-ring">
+          {/* Undecided + creatable: the label itself opens the "new product" modal (never auto-opened). */}
+          <button
+            type="button"
+            onClick={undecided && onCreateNew ? onCreateNew : () => setOpen(true)}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-l-lg px-3 py-2 text-left text-sm focus:outline-none"
+            data-testid={`ocr-product-main-${testIdSuffix}`}
+          >
+            {undecided && <Plus size={14} className="shrink-0 text-status-info-foreground" data-testid="Plus__b3ae11" />}
+            {skipped && <Ban size={14} className="shrink-0 text-muted-foreground" data-testid="Ban__b3ae11" />}
+            <span className={`truncate ${mainTone}`}>{mainLabel}</span>
+          </button>
+          <PopoverTrigger asChild data-testid="PopoverTrigger__b3ae11">
+            <button
+              type="button"
+              aria-label={ui('ocrProductPick')}
+              className="flex shrink-0 items-center rounded-r-lg px-2 focus:outline-none"
+              data-testid={`ocr-product-open-${testIdSuffix}`}
+            >
+              <ChevronDown
+                size={16}
+                className="text-muted-foreground shrink-0"
+                data-testid="ChevronDown__b3ae11" />
+            </button>
+          </PopoverTrigger>
+        </div>
+      </PopoverAnchor>
       <PopoverContent
         align="start"
-        className="z-[60] w-[var(--radix-popover-trigger-width)] min-w-72 p-0"
+        className="z-[60] w-72 p-0"
         onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }}
         data-testid="PopoverContent__b3ae11">
         <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
@@ -321,6 +376,15 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, onP
               <span className="truncate">{ui('createProduct')}</span>
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onSkip?.(); }}
+            className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/50"
+            data-testid={`ocr-product-skip-option-${testIdSuffix}`}
+          >
+            <Ban size={14} className="shrink-0" data-testid="Ban__b3ae11" />
+            <span className="truncate">{ui('ocrProductSkip')}</span>
+          </button>
           {!loading && failed && (
             <div className="px-3 py-2 text-xs text-muted-foreground">{ui('ocrProductLoadError')}</div>
           )}
@@ -504,12 +568,24 @@ function deriveSearchKey(value) {
   return String(value || '').trim().replace(/\s+/g, '');
 }
 
-function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCreated, onCancel, ui }) {
+function ProductCreateForm({ initialName, productSpecUrl, taxId = null, apiFetch, token, onCreated, onCancel, ui }) {
   const [name, setName] = useState(initialName || '');
   const [searchKey, setSearchKey] = useState(deriveSearchKey(initialName));
   const [skTouched, setSkTouched] = useState(false);
   const [uom, setUom] = useState(null);
-  const [taxCategory, setTaxCategory] = useState(null);
+  const [taxCategory, setTaxCategoryState] = useState(null);
+  // Where the current tax category came from: 'user' | 'tax' | 'defaults' | null. Priority is
+  // user pick > the line tax's category > /product/defaults; the two loads resolve in any order.
+  const categorySource = useRef(null);
+  const applyCategory = (source, value) => {
+    const current = categorySource.current;
+    const allowed = source === 'user'
+      || current === null
+      || (source === 'tax' && current === 'defaults');
+    if (!allowed) return;
+    categorySource.current = source;
+    setTaxCategoryState(value);
+  };
   const [picker, setPicker] = useState(null); // 'uom' | 'taxCategory' | null
   const [defaults, setDefaults] = useState(null);
   const [defaultsFailed, setDefaultsFailed] = useState(false);
@@ -549,7 +625,7 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
             setUom((prev) => prev ?? { id: d.uOM, label: d['uOM$_identifier'] ?? '' });
           }
           if (d.taxCategory) {
-            setTaxCategory((prev) => prev ?? { id: d.taxCategory, label: d['taxCategory$_identifier'] ?? '' });
+            applyCategory('defaults', { id: d.taxCategory, label: d['taxCategory$_identifier'] ?? '' });
           }
         }
       } catch {
@@ -559,6 +635,28 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productSpecUrl, apiFetch, token]);
+
+  // The category of the line's own tax (ETP-5585). Lazy: only when the form is open and the
+  // line has a tax. Any failure keeps the /product/defaults category, silently.
+  useEffect(() => {
+    if (!taxId || !productSpecUrl) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = `${deriveSpecBase(productSpecUrl, 'tax')}/tax/${encodeURIComponent(taxId)}`;
+        const res = await apiFetch(url, { token });
+        if (!res.ok) return;
+        const json = await res.json();
+        const record = json?.response?.data?.[0] ?? json?.response?.data ?? null;
+        const id = record?.taxCategory;
+        if (!cancelled && id) {
+          applyCategory('tax', { id, label: record['taxCategory$_identifier'] ?? '' });
+        }
+      } catch { /* keep the defaults category */ }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taxId, productSpecUrl, apiFetch, token]);
 
   const validate = () => {
     if (!name.trim()) return ui('ocrProductCreateNameRequired');
@@ -717,7 +815,7 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
           apiFetch={apiFetch}
           token={token}
           currentId={taxCategory?.id || null}
-          onPick={(value) => { setTaxCategory(value); setPicker(null); }}
+          onPick={(value) => { applyCategory('user', value); setPicker(null); }}
           onClose={() => setPicker(null)}
           ui={ui}
           data-testid="SelectorDialog__b3ae11" />

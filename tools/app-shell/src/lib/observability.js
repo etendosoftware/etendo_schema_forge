@@ -15,6 +15,8 @@ export const captureException = observability.captureException;
 export const flush = observability.flush;
 export const reset = observability.reset;
 export const setContext = observability.setContext;
-// Feature flag exposure is routed through the shared facade so disabled
-// providers never load their SDK just because a flag was evaluated.
+export const disable = observability.disable;
+export const enable = observability.enable;
+// Feature flag exposure goes through the gateway too: a killed or disabled provider never
+// loads its SDK just because a flag was evaluated.
 export const addFeatureFlagEvaluation = observability.addFeatureFlagEvaluation;

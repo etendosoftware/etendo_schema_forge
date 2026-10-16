@@ -9,6 +9,11 @@ import { resolveTabIcon } from './tabIcons.js';
  * the record is still new (see getCustomTabSaveFirstHint). `aria-disabled` rather than
  * the native attribute so the tooltip still shows on hover.
  */
+/** Box classes that decide a tab's width; shared with DetailTabStrip's width probe so they cannot drift. */
+export const tabStripButtonBaseCls = (paddingY = 'py-2.5', showHoverLine = false) =>
+  `${showHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${paddingY} text-sm font-medium whitespace-nowrap shrink-0 transition-colors relative`;
+export const TAB_COUNT_CHIP_CLS = 'inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground';
+
 export default function TabStripButton({
   iconKey, label, count, isActive, onClick,
   paddingY = 'py-2.5', showHoverLine = false, indicatorCls, tMenu, testId, disabledHint = null,
@@ -22,7 +27,7 @@ export default function TabStripButton({
       title={disabled ? disabledHint : undefined}
       data-testid={testId}
       className={[
-        `${showHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${paddingY} text-sm font-medium transition-colors relative`,
+        tabStripButtonBaseCls(paddingY, showHoverLine),
         isActive ? 'text-foreground' : 'text-muted-foreground',
         !isActive && !disabled && 'hover:text-foreground',
         disabled && 'opacity-50 cursor-not-allowed',
@@ -31,7 +36,7 @@ export default function TabStripButton({
       {React.createElement(resolveTabIcon(iconKey), { className: 'h-4 w-4' })}
       {tMenu(label)}
       {count != null && (
-        <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground">
+        <span className={TAB_COUNT_CHIP_CLS}>
           {count}
         </span>
       )}

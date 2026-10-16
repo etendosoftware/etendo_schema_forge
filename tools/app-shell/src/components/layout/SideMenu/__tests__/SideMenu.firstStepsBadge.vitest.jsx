@@ -100,7 +100,7 @@ vi.mock('@phosphor-icons/react', () => {
     Star: iconStub,
     IdentificationCard: iconStub,
     ShareNetwork: iconStub,
-    TrendUp: iconStub,
+    ChartLineUp: iconStub,
     Receipt: iconStub,
     Bank: iconStub,
     Package: iconStub,

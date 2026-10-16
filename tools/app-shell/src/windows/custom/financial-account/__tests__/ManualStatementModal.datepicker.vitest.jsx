@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/ManualStatementModal.jsx
 // ETP-4924 — regression coverage for the bank-statement line date picker bug.
 //
 // Root cause (diagnosed, not re-diagnosed here): the editable-row wrapper in
@@ -10,7 +11,7 @@
 // portalled calendar (or Escape/Enter handling swallowed by the row's own
 // `onKeyDown`) is wrongly treated as "focus left the row", unmounting
 // `LineEditHint` mid-interaction and breaking keyboard day selection.
-// `ChipSelect`'s dropdown is ALSO a Radix Popover portalled to `document.body`,
+// `ChipSelect`'s dropdown (CreatableSearchSelect's panel) is ALSO portalled to `document.body`,
 // so the same mechanism applies to it too.
 //
 // UNLIKE the existing `ManualStatementModal.vitest.jsx` spec, this file does
@@ -246,8 +247,8 @@ describe('ManualStatementModal — line date picker (real Popover/Dialog, ETP-49
     const row = firstEditRow();
 
     // The row starts on a blank/new line (contact: null), so ChipSelect
-    // renders its plain search input (`${testId}-search`), not the chip.
-    await user.click(within(row).getByTestId('manual-line-contact-search'));
+    // renders its plain search input (`field-${testId}`), not the chip.
+    await user.click(within(row).getByTestId(/^field-manual-line-contact-/));
     // The BPartner mock always returns one result, so the dropdown mounts.
     await screen.findByText('Acme');
 

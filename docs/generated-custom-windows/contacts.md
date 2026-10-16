@@ -1499,3 +1499,21 @@ within its 30 s stale time.
 behavior itself is covered generically in `hooks/__tests__/useBulkRowDelete.vitest.jsx`. The
 E2E bulk-delete step in `e2e/tests/flows/contacts/contacts-integration.spec.js` now drives the
 generic `bulk-delete-selected` / `bulk-delete-confirm` testids.
+## ETP-5515 — Bottom tabs: "Más" menu with a dynamic slot
+
+At 1280x720 the six bottom tabs (Persona, Cuenta bancaria, Dirección, Contabilidad cliente,
+Contabilidad proveedor, Adjuntos) no longer wrap. The strip shows **4 tabs + "Más 2"**:
+Persona, Cuenta bancaria and Dirección are fixed, **Contabilidad cliente** is the dynamic slot and
+**Contabilidad proveedor** and **Adjuntos** sit inside "Más". Picking "Adjuntos" puts it in the
+slot, shows its content and moves "Contabilidad cliente" into "Más"; clicking Persona, Cuenta
+bancaria or Dirección restores the original arrangement. Record counters (e.g. "Dirección 1") stay
+visible wherever the tab is. Shared behavior, documented in `docs/ui-customization.md` (§17).
+
+Manual verification: open a contact at 1280x720, confirm labels are on one line and "Más 2" shows;
+open "Más", pick "Adjuntos", confirm it is active in the slot and the menu now lists "Contabilidad
+cliente" and "Contabilidad proveedor"; click "Persona" and confirm the original tabs return; check
+with and without the sidebar variants.
+
+At narrower widths (browser zoom, side panel open) fewer than 4 tabs may fit; the strip then moves
+the extra tabs into "Más" and never overlaps the side panel. Manual check: zoom the browser in
+until a tab would not fit and confirm "Más" count grows and nothing overlaps.

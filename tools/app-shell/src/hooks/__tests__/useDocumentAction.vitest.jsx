@@ -369,4 +369,118 @@ describe('useDocumentAction', () => {
       expect(onError.mock.calls[0][0].messageKeys).toEqual(['InActiveProducts']);
     });
   });
+
+  // ETP-5745 follow-up — the `messageParams` sibling of `messageKeys` above, needed to
+  // interpolate a parameterized keyed message (e.g. invoiceReactivateFiscalRectified's
+  // fiscalSystem/rectificativas) in the UI locale.
+  describe('messageParams on the rejected error (ETP-5745 follow-up)', () => {
+    it('exposes err.messageParams from a top-level messageParams body', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({
+          message: 'This invoice cannot be reactivated.',
+          messageKeys: ['ETGO_InvoiceReactivateFiscalRectified'],
+          messageParams: { fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] },
+        }),
+      });
+
+      const { result } = renderHook(() => useDocumentAction(baseOpts));
+
+      let caughtError;
+      await act(async () => {
+        try {
+          await result.current.execute('rec-1', 'RE');
+        } catch (e) {
+          caughtError = e;
+        }
+      });
+
+      expect(caughtError.messageParams).toEqual({ fiscalSystem: 'Verifactu', rectificativas: ['FR-0001'] });
+      // `message` and `messageKeys` are untouched by this addition.
+      expect(caughtError.messageKeys).toEqual(['ETGO_InvoiceReactivateFiscalRectified']);
+      expect(caughtError.message).toBe('This invoice cannot be reactivated.');
+    });
+
+    it('exposes err.messageParams from the response.* envelope', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({ response: { message: 'boom', messageParams: { a: 1 } } }),
+      });
+
+      const { result } = renderHook(() => useDocumentAction(baseOpts));
+
+      let caughtError;
+      await act(async () => {
+        try {
+          await result.current.execute('rec-1', 'RE');
+        } catch (e) {
+          caughtError = e;
+        }
+      });
+
+      expect(caughtError.messageParams).toEqual({ a: 1 });
+    });
+
+    // Same "frontend ahead of backend" steady state as messageKeys above.
+    it('leaves err.messageParams undefined when the body carries none', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ response: { message: 'Document already completed' } }),
+      });
+
+      const { result } = renderHook(() => useDocumentAction(baseOpts));
+
+      let caughtError;
+      await act(async () => {
+        try {
+          await result.current.execute('rec-1', 'CO');
+        } catch (e) {
+          caughtError = e;
+        }
+      });
+
+      expect(caughtError.messageParams).toBeUndefined();
+    });
+
+    it('leaves err.messageParams undefined when the error body is not JSON at all', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => { throw new Error('invalid json'); },
+      });
+
+      const { result } = renderHook(() => useDocumentAction(baseOpts));
+
+      let caughtError;
+      await act(async () => {
+        try {
+          await result.current.execute('rec-1', 'CO');
+        } catch (e) {
+          caughtError = e;
+        }
+      });
+
+      expect(caughtError.messageParams).toBeUndefined();
+    });
+
+    it('hands the params to the onError callback too (same Error instance)', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        status: 422,
+        json: async () => ({ message: 'boom', messageParams: { fiscalSystem: 'TicketBAI' } }),
+      });
+
+      const onError = vi.fn();
+      const { result } = renderHook(() => useDocumentAction(baseOpts));
+
+      await act(async () => {
+        await result.current.execute('rec-1', 'RE', { onError }).catch(() => {});
+      });
+
+      expect(onError.mock.calls[0][0].messageParams).toEqual({ fiscalSystem: 'TicketBAI' });
+    });
+  });
 });
