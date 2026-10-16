@@ -8,6 +8,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   TrendingUp, TrendingDown, Pencil, RotateCcw, Search, ChevronLeft, ChevronRight, Info, TriangleAlert,
+  ReceiptText,
 } from 'lucide-react';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
@@ -40,7 +41,26 @@ function BoxNumber({ box }) {
   return <span className="fm-aeat-cell__num">{box != null ? String(box).padStart(2, '0') : ''}</span>;
 }
 
-function CalcCell({ box, value, highlighted }) {
+// "Ver facturas": shown on a box filled from invoices (`invoiceBoxes` of the boxes payload) when
+// the page can open the Facturas tab filtered by it.
+function ViewInvoicesLink({ box, ctx }) {
+  if (!ctx?.onViewInvoices || !ctx.invoiceBoxes?.has(box)) return null;
+  const label = ctx.t('fm.m390.sources.view_invoices_box', { box: String(box).padStart(2, '0') });
+  return (
+    <button
+      type="button"
+      className="fm-390-cell__invoices"
+      title={label}
+      aria-label={label}
+      onClick={() => ctx.onViewInvoices(box)}
+      data-testid={`FmBoxes390__viewInvoices_${box}`}
+    >
+      <ReceiptText size={13} strokeWidth={1.75} data-testid="ReceiptText__fm390" />
+    </button>
+  );
+}
+
+function CalcCell({ box, value, highlighted, ctx }) {
   return (
     <div
       id={boxDomId(box)}
@@ -50,6 +70,7 @@ function CalcCell({ box, value, highlighted }) {
     >
       <BoxNumber box={box} />
       <span className="fm-aeat-cell__value">{value != null ? formatAmount(value) : ''}</span>
+      <ViewInvoicesLink box={box} ctx={ctx} />
     </div>
   );
 }
@@ -145,7 +166,7 @@ function Cell({ cell, boxes, ctx, ariaLabel }) {
       />
     );
   }
-  return <CalcCell box={box} value={boxes[box] ?? null} highlighted={highlighted} />;
+  return <CalcCell box={box} value={boxes[box] ?? null} highlighted={highlighted} ctx={ctx} />;
 }
 
 function BoxRow({ row, boxes, ctx, label, displayLabel, columns }) {
@@ -556,15 +577,19 @@ function BlockIndex({ blocks, active, onSelect, t }) {
  * @param {Function} [props.onFlagChange]  (flagKey, boolean) => void
  * @param {Function} [props.onClearTerritory]
  * @param {Function} [props.onEditOrganization]
+ * @param {Array}    [props.invoiceBoxes]    `invoiceBoxes` of the boxes payload (boxes with invoices)
+ * @param {Function} [props.onViewInvoices]  (box) => void — "Ver facturas" on those boxes
  */
 export default function FmBoxes390({
   layout, boxes, inputs, preloaded, identification, orgIdentity, taxReport, warnings, year, readOnly,
   onInputChange, onRestore, onFlagChange, onClearTerritory, onEditOrganization, t, bcpLocale = 'es-ES',
+  invoiceBoxes, onViewInvoices,
 }) {
   const [activeId, setActiveId] = useState(layout[0]?.id);
   const [highlightBox, setHighlightBox] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const index = useMemo(() => buildBoxIndex(layout), [layout]);
+  const invoiceBoxSet = useMemo(() => new Set((invoiceBoxes ?? []).map(Number)), [invoiceBoxes]);
   const contentRef = useRef(null);
   const activeIdx = Math.max(0, layout.findIndex(b => b.id === activeId));
   const block = layout[activeIdx];
@@ -596,6 +621,7 @@ export default function FmBoxes390({
   const ctx = {
     t, bcpLocale, inputs, preloaded, identification, orgIdentity, year, readOnly, highlightBox, messages,
     onInputChange, onRestore, onFlagChange, onClearTerritory, onEditOrganization,
+    invoiceBoxes: invoiceBoxSet, onViewInvoices,
   };
 
   return (

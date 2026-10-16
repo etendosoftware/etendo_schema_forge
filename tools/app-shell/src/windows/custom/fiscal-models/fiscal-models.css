@@ -1635,3 +1635,30 @@
 .fm-390-filegen__summary { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 16px 0 0; font-size: 14px; }
 .fm-390-filegen__summary dt { color: hsl(var(--muted-foreground)); }
 .fm-390-filegen__summary dd { margin: 0; color: hsl(var(--foreground)); font-variant-numeric: tabular-nums; }
+
+/* ── Modelo 390 · Facturas tab (FmSources390.jsx) and "Ver facturas" on a box ── */
+.fm-390-cell__invoices {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px;
+  border: none; border-left: 1px solid hsl(var(--border-subtle)); background: transparent; cursor: pointer;
+  color: hsl(var(--muted-foreground));
+}
+.fm-390-cell__invoices:hover { color: hsl(var(--foreground)); background: hsl(var(--card)); }
+.fm-390-cell__invoices:focus-visible { outline: 2px solid hsl(var(--ring, var(--primary))); outline-offset: -2px; }
+.fm-390-sources { display: flex; flex-direction: column; flex: 1; min-height: 0; background: hsl(var(--card)); }
+.fm-390-sources__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 20px 8px; }
+.fm-390-sources__toolbar .fm-btn { display: inline-flex; align-items: center; gap: 6px; }
+.fm-390-sources__select {
+  height: 36px; padding: 0 8px; max-width: 220px; font-size: 14px; color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border-control)); border-radius: 8px; background: hsl(var(--card));
+}
+.fm-390-sources__chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 20px 10px; max-height: 76px; overflow-y: auto; }
+.fm-390-sources__chips .fm-toolbar__pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.fm-390-sources__chip-box { font-weight: 600; }
+.fm-390-sources__table { flex: 1; min-height: 0; }
+.fm-390-sources__table tfoot td { position: sticky; bottom: 0; background: hsl(var(--muted)); font-weight: 700; border-top: 1px solid hsl(var(--border-control)); }
+.fm-390-sources__placeholder { text-align: center; padding: 24px 0 !important; color: hsl(var(--muted-foreground)); }
+.fm-390-sources__footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 20px 12px; font-size: 13px; }
+.fm-390-sources__match { display: inline-flex; align-items: center; gap: 6px; color: var(--status-success-fg, hsl(var(--foreground))); }
+.fm-390-sources__mismatch { display: inline-flex; align-items: center; gap: 6px; color: var(--status-warning-fg); }
+.fm-390-sources__pager { display: inline-flex; align-items: center; gap: 12px; }
+.fm-390-sources__pager .fm-btn { display: inline-flex; align-items: center; gap: 4px; }

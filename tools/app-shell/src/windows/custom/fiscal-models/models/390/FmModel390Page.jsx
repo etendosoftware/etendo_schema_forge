@@ -23,7 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import {
   Calculator, CircleCheck, ClipboardCheck, Download, FileCheck, Loader2, OctagonAlert, RefreshCw, Save,
-  TrendingDown, TrendingUp, TriangleAlert,
+  TrendingDown, TrendingUp, TriangleAlert, ReceiptText,
 } from 'lucide-react';
 import { KpiWidget, Tabs } from '../../FmCommon.jsx';
 import {
@@ -43,6 +43,8 @@ import { invalidateFiscalComputeCache } from '../../useFiscalAutoCompute.js';
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import FmBoxes390 from './FmBoxes390.jsx';
+import FmSources390 from './FmSources390.jsx';
+import { emptySourcesFilter, sourcesFilterForBox } from './sources390.js';
 import FileGenModal390 from './FileGenModal390.jsx';
 import useOrg390Identity from './useOrg390Identity.js';
 import { fetchBoxes390, generate390File } from './fm390Api.js';
@@ -206,6 +208,12 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
   const [showPresent, setShowPresent] = useState(false);
   const [showIdError, setShowIdError] = useState(false);
   const [activeTab, setActiveTab] = useState('boxes');
+  // Facturas tab filter, owned here so "Ver facturas" can open the tab filtered by a box.
+  const [sourcesFilter, setSourcesFilter] = useState(emptySourcesFilter);
+  const viewInvoicesForBox = (box) => {
+    setSourcesFilter(sourcesFilterForBox(box));
+    setActiveTab('sources');
+  };
   const [incidents, setIncidents] = useState(decl.incidents?.items ? decl.incidents : EMPTY_INCIDENTS);
   // Edits since the last successful save — a ref so a handler can read it synchronously.
   const dirtyRef = useRef(false);
@@ -460,6 +468,7 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
 
   const tabs = [
     { id: 'boxes', label: t('fm.tab.boxes'), icon: <ClipboardCheck size={16} strokeWidth={1.75} data-testid="ClipboardCheck__fm390" /> },
+    { id: 'sources', label: t('fm.tab.sources'), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__fm390tab" /> },
     { id: 'incidents', label: t('fm.tab.incidents'), ...incidentsTabBadge(blocking, warning), icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__fm390tab" /> },
     { id: 'receipt', label: t('fm.tab.receipt'), badge: tabCount(receiptCount), icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__fm390" /> },
   ];
@@ -617,9 +626,25 @@ export default function FmModel390Page({ decl, onBack, onStatusChange, onManualD
                 onFlagChange={handleFlagChange}
                 onClearTerritory={handleClearTerritory}
                 onEditOrganization={() => navigate('/organization')}
+                invoiceBoxes={payload.invoiceBoxes}
+                onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}
                 t={t}
                 bcpLocale={bcpLocale} />
             )}
+          </div>
+        )}
+        {activeTab === 'sources' && (
+          <div className="fm-page__body" style={{ padding: 0 }}>
+            <FmSources390
+              decl={decl}
+              token={token}
+              apiBaseUrl={apiBaseUrl}
+              filter={sourcesFilter}
+              onFilterChange={setSourcesFilter}
+              isSubmitted={isSubmitted}
+              refreshKey={payload}
+              t={t}
+              bcpLocale={bcpLocale} />
           </div>
         )}
         {activeTab === 'incidents' && (

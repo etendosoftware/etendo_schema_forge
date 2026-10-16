@@ -102,3 +102,26 @@ export async function generate390File(decl, { token, apiBaseUrl, fileName } = {}
     return { ok: false, error: 'network' };
   }
 }
+
+/**
+ * `GET /fiscal390/sources` — the Facturas tab: `{ rows, count, page, pageSize, totals, boxes,
+ * taxes, submitted }`. `params` are the filter/page query parameters (`sourcesQueryParams` of
+ * sources390.js). No timeout: the backend runs the whole box computation to list the lines.
+ * Throws on a failed request (message in `error.message`).
+ */
+export async function fetchSources390(decl, { token, apiBaseUrl, params } = {}) {
+  if (!apiBaseUrl) throw new Error('missing credentials');
+  const query = periodParams(decl);
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v != null && v !== '') query.set(k, String(v));
+  }
+  const res = await apiFetch(`${neoRoot(apiBaseUrl)}/fiscal390/sources?${query}`, { baseUrl: '', token, timeout: 0 });
+  if (!res.ok) {
+    const message = await readServerMessage(res);
+    const err = new Error(message || `sources fetch failed: ${res.status}`);
+    err.status = res.status;
+    err.serverMessage = message;
+    throw err;
+  }
+  return res.json();
+}
