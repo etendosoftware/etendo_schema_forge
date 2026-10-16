@@ -12,6 +12,86 @@ function sanitizeCalloutMessage(raw) {
 }
 
 /**
+ * ETP-5024: a "credit limit exceeded" / "Business Partner on hold" message must render as a
+ * PERSISTENT inline banner, not an auto-dismissing toast, so it is pulled out of the toasts and
+ * returned here instead. Only the last match wins if a response somehow carried more than one
+ * (in practice the backend only ever sends one of these per callout).
+ *
+ * @param {Array} messages raw callout messages
+ * @returns {object|null} the blocking condition, or null
+ */
+function resolveBlockingCondition(messages) {
+  let blockingCondition = null;
+  for (const msg of messages) {
+    const text = sanitizeCalloutMessage(msg.text || msg.message || '');
+    if (!text) continue;
+    const condition = detectBlockingBpCondition(text);
+    if (condition) blockingCondition = condition;
+  }
+  return blockingCondition;
+}
+
+/** Toast every callout message that is NOT a blocking condition (those render as a banner). */
+function toastCalloutMessages(messages) {
+  for (const msg of messages) {
+    const text = sanitizeCalloutMessage(msg.text || msg.message || '');
+    if (!text || detectBlockingBpCondition(text)) continue;
+    const type = (msg.type || '').toUpperCase();
+    if (type === 'ERROR') toast.error(text);
+    else if (type === 'WARNING') toast.warning(text);
+    else toast.info(text);
+  }
+}
+
+/**
+ * Perform one callout request and hand the result to the consumer.
+ *
+ * Extracted from the debounce callback in `useCallout` so that callback stays a thin
+ * dispatch/timing shell (Sonar javascript:S3776) and the request itself is readable.
+ *
+ * @returns {Promise<boolean>} true when a `calloutResult` was handed over (the consumer must
+ *   apply it), false when there is nothing to apply (non-OK response, network error or abort)
+ */
+async function performCallout({ field, value, formState, meta, entity, apiFetch, controller, setCalloutLoading, setCalloutResult }) {
+  setCalloutLoading(true);
+  try {
+    // Extract auxiliary values from formState (keys like "businessPartner_LOC")
+    const state = formState ?? {};
+    const auxiliaryValues = extractAuxiliaryValues(state);
+    const payload = {
+      field,
+      value,
+      formState: state,
+      ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
+    };
+    const res = await apiFetch(`/${entity}/callout`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) return false;
+
+    const data = await res.json();
+    const messages = data.messages ?? [];
+    toastCalloutMessages(messages);
+    setCalloutResult({
+      updates: data.updates ?? {},
+      combos: data.combos ?? {},
+      triggerField: field,
+      meta,
+      blockingCondition: resolveBlockingCondition(messages),
+    });
+    return true;
+  } catch {
+    // Callout is best-effort — do not block the user on failure (abort included)
+    return false;
+  } finally {
+    setCalloutLoading(false);
+  }
+}
+
+/**
  * Hook that calls the NEO Headless callout endpoint when FK fields change.
  *
  * The backend checks if the column has a registered callout. If not, it
@@ -81,67 +161,13 @@ export function useCallout(entity, { token, apiBaseUrl }) {
         if (abortMapRef.current[field]) abortMapRef.current[field].abort();
         const controller = new AbortController();
         abortMapRef.current[field] = controller;
-
-        let hasResult = false;
-        setCalloutLoading(true);
-        try {
-          // Extract auxiliary values from formState (keys like "businessPartner_LOC")
-          const state = formState ?? {};
-          const auxiliaryValues = extractAuxiliaryValues(state);
-          const payload = {
-            field,
-            value,
-            formState: state,
-            ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
-          };
-          const res = await apiFetch(`/${entity}/callout`, {
-            method: 'POST',
-            body: JSON.stringify(payload),
-            signal: controller.signal,
-          });
-
-          if (!res.ok) {
-            return;
-          }
-
-          const data = await res.json();
-          const updates = data.updates ?? {};
-          const combos = data.combos ?? {};
-          const messages = data.messages ?? [];
-
-          // ETP-5024: a "credit limit exceeded" / "Business Partner on hold" message
-          // must render as a PERSISTENT inline banner, not an auto-dismissing toast —
-          // so it is pulled out of the loop below instead of being toasted. Every
-          // other callout message keeps the existing toast behavior unchanged. Only
-          // the last match wins if a response somehow carried more than one (in
-          // practice the backend only ever sends one of these per callout).
-          let blockingCondition = null;
-          for (const msg of messages) {
-            const text = sanitizeCalloutMessage(msg.text || msg.message || '');
-            if (!text) continue;
-            const condition = detectBlockingBpCondition(text);
-            if (condition) {
-              blockingCondition = condition;
-              continue;
-            }
-            const type = (msg.type || '').toUpperCase();
-            if (type === 'ERROR') toast.error(text);
-            else if (type === 'WARNING') toast.warning(text);
-            else toast.info(text);
-          }
-
-          setCalloutResult({ updates, combos, triggerField: field, meta, blockingCondition });
-          hasResult = true;
-        } catch (err) {
-          if (err.name !== 'AbortError') {
-            // Callout is best-effort — do not block the user on failure
-          }
-        } finally {
-          setCalloutLoading(false);
-          // ETP-4742: settle the caller (after setCalloutResult above, so the
-          // consumer's apply effect runs on a later commit than this resolution).
-          resolve(hasResult);
-        }
+        // ETP-4742: settle the caller AFTER the request handled setCalloutResult, so the
+        // consumer's apply effect runs on a later commit than this resolution.
+        const hasResult = await performCallout({
+          field, value, formState, meta, entity, apiFetch, controller,
+          setCalloutLoading, setCalloutResult,
+        });
+        resolve(hasResult);
       }, 300);
       debounceMapRef.current[field] = entry;
     });
