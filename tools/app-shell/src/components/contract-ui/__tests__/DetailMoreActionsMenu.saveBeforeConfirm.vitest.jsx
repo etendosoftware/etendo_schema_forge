@@ -180,6 +180,46 @@ describe('DetailMoreActionsMenu — save-before-confirm guard (ETP-4940)', () =>
   });
 });
 
+// ETP-5700 — custom kebab content cannot save first (it gets no save handle), so the
+// menu hands it the header's dirty signal and lets it refuse to run on a dirty form.
+describe('DetailMoreActionsMenu — customMenuContent receives isDirty (ETP-5700)', () => {
+  function DirtyProbe({ isDirty }) {
+    return <span data-testid="dirty-probe">{String(isDirty)}</span>;
+  }
+
+  function renderWithCustom(hook) {
+    render(
+      <DetailMoreActionsMenu
+        apiBaseUrl="https://example.test/api"
+        customMenuContent={DirtyProbe}
+        data={{ id: 'rec-1' }}
+        docAction={makeDocAction()}
+        hideMoreMenu={false}
+        hook={hook}
+        menuActions={[]}
+        neoAction={{ execute: vi.fn(), loading: false }}
+        recordId="rec-1"
+        setDocsRefreshSignal={vi.fn()}
+        sqBtnSize="h-9 w-9"
+        statusField="documentStatus"
+        token="tok"
+        ui={(key) => key}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('action-more'));
+  }
+
+  it.each([
+    [true, 'true'],
+    [false, 'false'],
+  ])('isDirtyHeader=%s → the open menu content gets isDirty=%s', (isDirtyHeader, expected) => {
+    renderWithCustom(makeHook({ isDirtyHeader }));
+    // The hidden probe renders the same component too; the visible one is the last.
+    const rendered = screen.getAllByTestId('dirty-probe');
+    expect(rendered[rendered.length - 1]).toHaveTextContent(expected);
+  });
+});
+
 // ETP-5684 — "Show Accounting Fields" off hides Contabilizar / Descontabilizar from the
 // form kebab, whatever the window declared. Keyed on the generic `neoAction`, so the
 // generated menuActions of every postable window are covered without a decisions change.
@@ -207,6 +247,138 @@ describe('DetailMoreActionsMenu — accounting capability gate (ETP-5684)', () =
     setMockCapabilities(ACCOUNTING_HIDDEN);
     renderMenu({ hook: makeHook(), docAction: makeDocAction(), menuActions: [POST_ACTION] });
     expect(screen.queryByTestId('action-more')).toBeNull();
+  });
+});
+
+// ETP-5745 follow-up — "if it can't reactivate, it must not do anything": a reactivation this
+// guard already knows will be refused (fiscally accepted + a completed rectificativa) must not
+// run maybeSaveBeforeConfirm, runPreUnpost, or docAction.execute — not even when the header is
+// dirty and the row is posted (which would otherwise both fire first).
+describe('DetailMoreActionsMenu — reactivation blocked by a fiscal-accepted rectificativa (ETP-5745 follow-up)', () => {
+  const REACTIVATE_WITH_PREUNPOST = {
+    key: 'reactivate',
+    label: 'Reactivate',
+    labelKey: 'reactivate',
+    documentAction: 'RE',
+    successKey: 'reactivated',
+    preUnpost: true,
+  };
+  const CONFIRM_ACTION = {
+    key: 'confirm',
+    label: 'Confirm',
+    labelKey: 'confirm',
+    documentAction: 'CO',
+    successKey: 'documentConfirmed',
+  };
+
+  // `ui` mimics useUI()'s interpolation ({param} substitution) closely enough to assert the
+  // exact params the component passed, without re-implementing backendErrors.js here.
+  function paramUi(key, params) {
+    return params ? `${key}:${JSON.stringify(params)}` : key;
+  }
+
+  function renderBlockedMenu({ data, menuActions = [REACTIVATE_WITH_PREUNPOST], hookOverrides = {} } = {}) {
+    const hook = makeHook({ isDirtyHeader: true, ...hookOverrides });
+    const docAction = makeDocAction();
+    const neoExecute = vi.fn().mockResolvedValue({ success: true });
+    render(
+      <DetailMoreActionsMenu
+        apiBaseUrl="https://example.test/api"
+        customMenuContent={null}
+        data={data}
+        docAction={docAction}
+        hideMoreMenu={false}
+        hook={hook}
+        menuActions={menuActions}
+        neoAction={{ execute: neoExecute, loading: false }}
+        recordId={data?.id}
+        setDocsRefreshSignal={vi.fn()}
+        sqBtnSize="h-9 w-9"
+        statusField="documentStatus"
+        token="tok"
+        ui={paramUi}
+      />,
+    );
+    return { hook, docAction, neoExecute };
+  }
+
+  it('toasts the fiscal-rectified message and runs nothing else: no save, no preUnpost, no execute', async () => {
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
+    const { hook, docAction, neoExecute } = renderBlockedMenu({
+      data: {
+        id: 'rec-1',
+        posted: 'Y', // posted on purpose — proves runPreUnpost (which WOULD fire for a posted row) never runs
+        reactivationBlocked: true,
+        reactivationBlockedFiscalSystem: 'Verifactu',
+        reactivationBlockedRectificativas: ['FR-0001', 'FR-0002'],
+      },
+    });
+
+    await openMenuAndClickAction();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.error).toHaveBeenCalledWith(
+      'backendError.invoiceReactivateFiscalRectified:'
+      + JSON.stringify({ fiscalSystem: 'Verifactu', rectificativas: 'FR-0001, FR-0002' }),
+    );
+    expect(hook.handleSave).not.toHaveBeenCalled();
+    expect(neoExecute).not.toHaveBeenCalled();
+    expect(docAction.execute).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('passes a bare (non-array) rectificativas value through unchanged', async () => {
+    vi.mocked(toast.error).mockClear();
+    await renderBlockedMenu({
+      data: {
+        id: 'rec-1',
+        reactivationBlocked: true,
+        reactivationBlockedFiscalSystem: 'TicketBAI',
+        reactivationBlockedRectificativas: 'FR-0003',
+      },
+    });
+
+    await openMenuAndClickAction();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.error).toHaveBeenCalledWith(
+      'backendError.invoiceReactivateFiscalRectified:'
+      + JSON.stringify({ fiscalSystem: 'TicketBAI', rectificativas: 'FR-0003' }),
+    );
+  });
+
+  it('does not block a non-RE action even when reactivationBlocked is true', async () => {
+    const { hook, docAction } = renderBlockedMenu({
+      data: { id: 'rec-1', reactivationBlocked: true },
+      menuActions: [CONFIRM_ACTION],
+    });
+
+    await openMenuAndClickAction('confirm');
+
+    await waitFor(() => expect(docAction.execute).toHaveBeenCalled());
+    // The normal flow DID run: the dirty header was saved first, same as any other documentAction.
+    expect(hook.handleSave).toHaveBeenCalledWith({ silent: true });
+    expect(docAction.execute).toHaveBeenCalledWith('rec-1', 'CO');
+  });
+
+  it('runs the normal flow (save, then execute) when reactivationBlocked is false', async () => {
+    const { hook, docAction } = renderBlockedMenu({ data: { id: 'rec-1', reactivationBlocked: false } });
+
+    await openMenuAndClickAction();
+
+    await waitFor(() => expect(docAction.execute).toHaveBeenCalled());
+    expect(hook.handleSave).toHaveBeenCalledWith({ silent: true });
+    expect(docAction.execute).toHaveBeenCalledWith('rec-1', 'RE');
+  });
+
+  it('runs the normal flow when reactivationBlocked is absent entirely', async () => {
+    const { docAction } = renderBlockedMenu({ data: { id: 'rec-1' } });
+
+    await openMenuAndClickAction();
+
+    await waitFor(() => expect(docAction.execute).toHaveBeenCalled());
+    expect(docAction.execute).toHaveBeenCalledWith('rec-1', 'RE');
   });
 });
 

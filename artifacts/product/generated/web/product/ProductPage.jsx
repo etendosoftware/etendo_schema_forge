@@ -603,7 +603,6 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       galleryRenderer={(gProps) => <ProductGallery {...gProps} />}
-      listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
       hideMoreMenu

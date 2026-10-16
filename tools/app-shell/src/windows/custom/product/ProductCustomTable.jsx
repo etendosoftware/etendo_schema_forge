@@ -24,6 +24,8 @@ const columns = [
     // "grow": true flag — kept manually here since this file predates and
     // supersedes the generated columns array (see the doc comment above).
     grow: true,
+    // ETP-5510 — header reads "Identificador / Nombre" (slash, not the default ' & ').
+    partSeparator: ' / ',
     parts: [
       { key: 'searchKey', column: 'Value', type: 'string', required: true, labels: { en_US: 'Identifier', es_ES: 'Identificador' } },
       { key: 'name', column: 'Name', type: 'string', required: true, labels: { en_US: 'Name', es_ES: 'Nombre' } },

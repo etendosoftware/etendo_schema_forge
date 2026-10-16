@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.15.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-10-15T17:51:18.840Z",
-  "checksum": "69ca3ffc959f9949",
+  "updatedAt": "2026-10-16T15:28:49.201Z",
+  "checksum": "4c5050b1da02c549",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -76,7 +76,6 @@
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "attachments": true,
       "customPanelTabs": [
@@ -2581,7 +2580,6 @@
       "formCardPadding": "px-2",
       "tabsBarPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "attachments": true,
       "customPanelTabs": [

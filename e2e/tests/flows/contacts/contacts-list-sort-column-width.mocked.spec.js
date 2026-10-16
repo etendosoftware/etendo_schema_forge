@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
+
 /**
  * ETP-5182 — Bug 1: sorting the Contacts list resized every column
  * (regression spec).
@@ -105,6 +108,14 @@ test.describe('ETP-5182 — Contacts list column widths stay stable across sort 
     // that still resolves to SHORT_ROWS under the direction-based mock above.
     await expect(page.getByText('Ana', { exact: true })).toBeVisible({ timeout: 10_000 });
 
+    // Measure the whole header row, not just the Name column: `table-layout: fixed` fixes each
+    // column's SHARE of the table width, so the share is the quantity the fix actually
+    // guarantees, and it is immune to the container snapping between fractional and integer
+    // widths (see the tolerance note below).
+    const measure = () => page
+      .locator('thead th')
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
+    const headersBefore = await measure();
     const widthBefore = await nameHeader.evaluate((el) => el.getBoundingClientRect().width);
 
     // The name column is already the active sort (asc), so this click toggles
@@ -119,13 +130,35 @@ test.describe('ETP-5182 — Contacts list column widths stay stable across sort 
     // Wait for the long-content sorted rows to actually render before re-measuring.
     await expect(page.getByText(LONG_NAME, { exact: false }).first()).toBeVisible({ timeout: 10_000 });
 
+    const headersAfter = await measure();
     const widthAfter = await nameHeader.evaluate((el) => el.getBoundingClientRect().width);
 
-    // Sub-pixel tolerance, not exact equality: getBoundingClientRect() returns fractional
-    // widths and the same unchanged column can measure 139.24835205078125 before and 139.25
-    // after, purely from layout rounding. Half a pixel still catches what ETP-5182 is about —
-    // a column that re-fits itself to the long sorted content grows by tens of pixels here
-    // (LONG_NAME is ~4x the short names), so any real resize is orders of magnitude above this.
-    expect(Math.abs(widthAfter - widthBefore)).toBeLessThan(0.5);
+    // Tolerance, not exact equality: getBoundingClientRect() returns fractional widths, and the
+    // table as a whole settles from fractional to integer widths between the first paint and the
+    // post-sort render. Measured here, unsorted-column-by-unsorted-column:
+    //
+    //   before: name 223.3168 | firstname 223.3168 | ... | phone 223.3168   (row total 1916.14)
+    //   after:  name 224      | firstname 224      | ... | phone 224        (row total 1922)
+    //
+    // EVERY column moved by the same +0.68px and the row total grew by 5.86px — the container
+    // snapping, not the Name column re-fitting. Name's SHARE of the row is unchanged to five
+    // decimals (0.116563 -> 0.116545). The old 0.5px bound sat inside that noise band and failed
+    // non-deterministically (observed 1.448, 1.19, 0.69, 0.683 and 0.0 across runs).
+    //
+    // Two assertions, both with a wide margin over the noise and far below the real signal:
+    //
+    //  1. SHARE within 0.005 (half a percentage point). Observed noise is 1.8e-5, so this is
+    //     ~275x the noise; a content-driven re-fit of a column holding LONG_NAME (~4x the short
+    //     names) moves the share by several whole percentage points, so it is ~10x below the
+    //     smallest real regression. This is the precise guard.
+    //  2. ABSOLUTE width within 4px, as a readable backstop. The rounding noise is bounded by
+    //     roughly one device pixel per column plus the container snap (worst observed 1.45px);
+    //     a genuine re-fit is tens of pixels, so 4px cannot let one through.
+    const totalBefore = headersBefore.reduce((a, b) => a + b, 0);
+    const totalAfter = headersAfter.reduce((a, b) => a + b, 0);
+    const shareBefore = widthBefore / totalBefore;
+    const shareAfter = widthAfter / totalAfter;
+    expect(Math.abs(shareAfter - shareBefore)).toBeLessThan(0.005);
+    expect(Math.abs(widthAfter - widthBefore)).toBeLessThan(4);
   });
 });

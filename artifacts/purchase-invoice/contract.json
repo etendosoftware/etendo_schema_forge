@@ -1,8 +1,8 @@
 {
   "version": "0.5.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "updatedAt": "2026-10-15T19:36:08.920Z",
-  "checksum": "ce2fef2147c9a97d",
+  "updatedAt": "2026-10-16T15:28:49.374Z",
+  "checksum": "e9d0d3bedbf8f819",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -1886,7 +1886,8 @@
             "orderReference",
             "accountingDate",
             "project",
-            "costcenter"
+            "costcenter",
+            "aeatsiiErrorRegistral"
           ],
           "editableLineFieldsWhenCompleted": [
             "project",

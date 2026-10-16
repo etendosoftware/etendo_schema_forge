@@ -13,7 +13,6 @@
     "hideMoreMenu": true,
     "hideLink": true,
     "contentBg": "bg-card",
-    "listbarPaddingX": "px-2",
     "tablePaddingX": "px-2",
     "formCardPadding": "px-2",
     "compactSidebarPadding": true,

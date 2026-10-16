@@ -82,8 +82,6 @@ export default function WarehouseWindow(props) {
       Table={WarehouseCustomTable}
       hidePrint
       hideLink
-      listbarPaddingX="px-2"
-      listbarPaddingY="py-2"
       tablePaddingX="px-2"
       tablePaddingBottom="pb-2"
       toolbarPaddingX="px-2"

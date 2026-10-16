@@ -55,7 +55,6 @@
       "navigateTo": "/physical-inventory/new"
     },
     "whiteFormBackground": true,
-    "listbarPaddingX": "px-2",
     "tablePaddingX": "px-2",
     "hideLink": true,
     "hidePrint": true,

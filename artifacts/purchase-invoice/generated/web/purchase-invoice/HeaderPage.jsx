@@ -53,7 +53,8 @@ const draftMode = {
     "orderReference",
     "accountingDate",
     "project",
-    "costcenter"
+    "costcenter",
+    "aeatsiiErrorRegistral"
   ],
   "editableLineFieldsWhenCompleted": [
     "project",

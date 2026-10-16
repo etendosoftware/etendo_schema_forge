@@ -21,7 +21,7 @@ import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import { useInvoicePdf } from '../shared/useInvoicePdf.js';
-import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord, buildInvoiceUnpostActions, invoiceUnpostRowFilter } from '../shared/useInvoiceWindow.js';
+import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord, buildInvoiceUnpostActions, invoiceUnpostRowFilter, makeInvoiceReactivateRowFilter } from '../shared/useInvoiceWindow.js';
 import { SALES_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
 import { createFollowUpAfterProcess } from '@/components/follow-up-documents/followUpDocuments.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
@@ -105,6 +105,12 @@ const OVERDUE_INITIAL_COLUMNS = [
 ];
 
 function SalesInvoiceBulkAction(props) {
+  // ETP-5745 follow-up — one row-fetch per SELECTED row when reactivating, not per list row;
+  // see makeInvoiceReactivateRowFilter's doc for why this is a plain (hook-free) factory, not a
+  // hook — this component is invoked as a bare function call (ETP-5209), never rendered as JSX.
+  const reactivateRowFilter = makeInvoiceReactivateRowFilter({
+    apiBaseUrl: props.apiBaseUrl, token: props.token,
+  });
   return (
     <>
       <BulkDocumentAction
@@ -114,6 +120,7 @@ function SalesInvoiceBulkAction(props) {
         // already unposts first (`preUnpost: true` in decisions.json); this makes the bulk
         // bar run the same two steps instead of failing with "Factura contabilizada".
         preUnpostActions={['RE']}
+        rowFilter={reactivateRowFilter}
         data-testid="BulkDocumentAction__c01c21" />
       {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
       <BulkDocumentAction
@@ -172,7 +179,7 @@ export default function SalesInvoiceWindow(props) {
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
   // Checked once here, before either branch, so both list and detail are covered.
   const windowAccessTier = useWindowAccess('167');
-  // ETP-5700 — grid row-kebab "Envío SII/TBAI". Its fiscal config (the top-nav selected
+  // ETP-5700 — grid row-kebab "Enviar a SII / TicketBAI". Its fiscal config (the top-nav selected
   // org's, same as the list's fiscal status columns) also feeds showVerifactu below, so
   // the window does not load it twice.
   const { fiscalConfig, sifMenuActions, sifModal } = useSifRowSendAction({
@@ -203,8 +210,10 @@ export default function SalesInvoiceWindow(props) {
       onRefresh: () => setRefreshKey(k => k + 1),
       ui,
       extraMenuActions: sifMenuActions,
+      apiBaseUrl,
+      token,
     }),
-    [navigate, windowName, requestDelete, ui, sifMenuActions],
+    [navigate, windowName, requestDelete, ui, sifMenuActions, apiBaseUrl, token],
   );
 
   // Pick up the saved record from navigation state when arriving at the list view
@@ -221,7 +230,7 @@ export default function SalesInvoiceWindow(props) {
   // can save corrected header dimensions; their decisions.json readOnlyLogic override
   // (@Posted@='Y' | (@Processed@='Y' & @DocStatus@!'CO')) keeps them locked while the invoice
   // is posted (matching core C_INVOICE_TRG) or in any processed status other than CO.
-  const draftModeOverride = getInvoiceDraftMode(ui, { showVerifactuProcessingModal: showVerifactu, keepSaveWhenCompletedFields: ['accountingDate', 'project', 'costcenter'], editableLineFieldsWhenCompleted: ['project', 'costcenter'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
+  const draftModeOverride = getInvoiceDraftMode(ui, { showVerifactuProcessingModal: showVerifactu, keepSaveWhenCompletedFields: ['accountingDate', 'project', 'costcenter', 'aeatsiiErrorRegistral'], editableLineFieldsWhenCompleted: ['project', 'costcenter'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
 
   // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
   // ListView below never picked up the read-only tier either, unlike GeneratedApp
@@ -260,8 +269,8 @@ export default function SalesInvoiceWindow(props) {
         {contactPortal}
         {taxSifModal}
         {/* ETP-5700 — hosts the send modal for the form kebab entry (SifSendMenuItem). Mounted
-            unconditionally: the kebab unmounts its own content on close, and the topbar
-            button is not always rendered. */}
+            unconditionally: the kebab unmounts its own content on close. Since ETP-5700 the
+            kebab is the form view's only send entry point (no topbar button). */}
         <SifSendModalHost
           apiBaseUrl={apiBaseUrl}
           recordId={recordId}

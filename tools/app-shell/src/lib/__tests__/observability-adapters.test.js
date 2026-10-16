@@ -8,13 +8,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { buildBrowserObservabilityConfig } from '../observability/browser.js';
+import { createObservability } from '../observability/core.js';
 import {
   createRumProvider,
   DEFAULT_RUM_SESSION_SAMPLE_RATE,
   resolveRumConfig,
   resolveRumSessionSampleRate,
 } from '../rum.js';
-import { createDatadogProvider, DATADOG_RUM_FEATURE_FLAG_EVENTS, redactDatadogEvent, redactErrorText, resolveTracingUrls } from '../observability/providers/datadog.js';
+import { createDatadogProvider } from '../observability/providers/datadog.js';
+import { resolveTracingUrls } from '@etendosoftware/app-shell-core/observability/adapters/datadog';
 
 const datadogEnv = {
   VITE_DATADOG_ENABLED: 'true', VITE_DATADOG_APPLICATION_ID: 'test-app',
@@ -22,155 +24,181 @@ const datadogEnv = {
   VITE_APP_ENV: 'test', VITE_APP_VERSION: 'test-release',
   VITE_DATADOG_REMOTE_CONFIGURATION_ID: 'remote-config',
 };
+const silent = { warn() {} };
+
 function sdkRecorder() {
   const calls = [];
   const sdk = Object.fromEntries(['init', 'startView', 'addAction', 'addError', 'setUser',
-    'setAccount', 'stopSession', 'clearUser', 'clearAccount', 'setGlobalContext'].map(method =>
+    'setAccount', 'stopSession', 'clearUser', 'clearAccount', 'setGlobalContext',
+    'setTrackingConsent', 'addFeatureFlagEvaluation'].map(method =>
     [method, (...args) => calls.push([method, ...args])]));
   return { calls, sdk };
 }
 
-describe('Datadog observability adapter', () => {
+/**
+ * The host's Datadog provider behind the real facade and gateway (ETP-4578): what these tests
+ * check is what actually reaches the SDK, after the host's payload policy and the gateway.
+ */
+async function observedDatadog(env = datadogEnv, extra = {}) {
+  const { calls, sdk } = sdkRecorder();
+  let loads = 0;
+  const provider = createDatadogProvider({
+    env,
+    logger: silent,
+    loader: async () => { loads++; return { datadogRum: sdk, ...extra }; },
+  });
+  const observability = createObservability({ logger: silent });
+  await observability.initObservability({ providers: [provider], logger: silent });
+  const options = () => calls.find(([method]) => method === 'init')?.[1];
+  return { calls, observability, options, loads: () => loads };
+}
+
+/** Runs the SDK's beforeSend on an event, as the SDK would before sending it. */
+function beforeSend(options, event) {
+  const copy = structuredClone(event);
+  const keep = options.beforeSend(copy);
+  return { keep, event: copy };
+}
+
+describe('Datadog observability provider (behind the gateway)', () => {
   it('loads no SDK for disabled or incomplete configuration', async () => {
     for (const env of [{}, { ...datadogEnv, VITE_DATADOG_ENABLED: 'false' },
       { ...datadogEnv, VITE_DATADOG_CLIENT_TOKEN: '' }]) {
       let loads = 0;
-      const provider = createDatadogProvider({ env, logger: { warn() {} }, loader: async () => {
+      const provider = createDatadogProvider({ env, logger: silent, loader: async () => {
         loads++; throw new Error('must not load');
       } });
-      await Promise.all([
-        provider.init(),
-        provider.track('record_saved', {}),
-        provider.addFeatureFlagEvaluation('sample_flag', true),
-        provider.page('/sales-order'),
-      ]);
+      await provider.init();
+      provider.track('record_saved', {});
+      provider.addFeatureFlagEvaluation('sample_flag', true);
+      provider.page('/sales-order');
       assert.equal(provider.enabled, false);
       assert.equal(loads, 0);
     }
   });
 
-  it('initializes once across concurrent callers with manual privacy-safe tracking', async () => {
-    const { calls, sdk } = sdkRecorder();
-    let loads = 0;
-    const provider = createDatadogProvider({ env: datadogEnv, loader: async () => {
-      loads++; return { datadogRum: sdk, reactPlugin: options => ({ name: 'react', options }) };
-    } });
-    await Promise.all([provider.init(), provider.track('record_saved', { entity: 'header' }),
-      provider.identify('account-1', { email: 'private@example.com' })]);
-    assert.equal(loads, 1);
-    const options = calls.find(([method]) => method === 'init')[1];
+  it('initializes once with manual, privacy-safe tracking from the deploy settings', async () => {
+    const { observability, calls, options, loads } = await observedDatadog(datadogEnv, {
+      reactPlugin: (pluginOptions) => ({ name: 'react', options: pluginOptions }),
+    });
+    await observability.track('record_saved', { entity: 'header' });
+    await observability.identify('account-1', { email: 'private@example.com' });
+    assert.equal(loads(), 1);
     assert.equal(calls.filter(([method]) => method === 'init').length, 1);
-    assert.equal(options.trackUserInteractions, true);
-    assert.equal(options.trackViewsManually, true);
-    assert.equal(options.sessionReplaySampleRate, 20);
-    assert.deepEqual(options.remoteConfiguration, { id: 'remote-config' });
-    assert.deepEqual(options.trackFeatureFlagsForEvents, DATADOG_RUM_FEATURE_FLAG_EVENTS);
-    assert.deepEqual(options.plugins, [{ name: 'react', options: { router: false } }]);
-    assert.equal(options.version, 'test-release');
-    assert.equal(options.defaultPrivacyLevel, 'mask');
-    assert.deepEqual(options.allowedTracingUrls, []);
-    assert.equal(options.traceSampleRate, 20);
-    assert.deepEqual(calls.find(([method]) => method === 'addAction'),
-      ['addAction', 'record_saved', { entity: 'header' }]);
+    const init = options();
+    assert.equal(init.trackUserInteractions, true);
+    assert.equal(init.trackViewsManually, true);
+    assert.equal(init.sessionReplaySampleRate, 20);
+    assert.equal(init.remoteConfigurationId, 'remote-config');
+    assert.deepEqual(init.trackFeatureFlagsForEvents, ['vital', 'action', 'long_task', 'resource']);
+    assert.deepEqual(init.plugins, [{ name: 'react', options: { router: false } }]);
+    assert.equal(init.version, 'test-release');
+    assert.equal(init.service, 'etendo-go-web');
+    assert.equal(init.defaultPrivacyLevel, 'mask');
+    assert.deepEqual(init.allowedTracingUrls, []);
+    assert.equal(init.traceSampleRate, 20);
+    const [, actionName, actionProperties] = calls.find(([method]) => method === 'addAction');
+    assert.equal(actionName, 'record_saved');
+    assert.equal(actionProperties.entity, 'header');
     assert.deepEqual(calls.find(([method]) => method === 'setUser'), ['setUser', { id: 'account-1' }]);
   });
 
   it('normalizes manual views and does not duplicate the same route', async () => {
-    const { calls, sdk } = sdkRecorder();
-    const provider = createDatadogProvider({ env: datadogEnv, loader: async () => ({ datadogRum: sdk }) });
-    await provider.init();
+    const { observability, calls } = await observedDatadog();
     const initialViews = calls.filter(([method]) => method === 'startView').length;
-    await provider.page('/sales-order/123?token=private');
-    await provider.page('/sales-order/456?email=private');
+    await observability.page('/sales-order/123?token=private');
+    await observability.page('/sales-order/456?email=private');
     const views = calls.filter(([method]) => method === 'startView');
     assert.equal(views.length, initialViews + 1);
     assert.deepEqual(views.at(-1), ['startView', { name: '/sales-order/:recordId' }]);
   });
 
-  it('preserves the Error stack while redacting error metadata', async () => {
-    const { calls, sdk } = sdkRecorder();
-    const provider = createDatadogProvider({ env: datadogEnv, loader: async () => ({ datadogRum: sdk }) });
+  it('sends errors with their stack and only approved details', async () => {
+    const { observability, calls } = await observedDatadog();
     const error = new TypeError('failed');
-    await provider.captureException(error, { component: 'header', password: 'secret', email: 'private@example.com' });
+    await observability.captureException(error, { component: 'header', password: 'secret', email: 'private@example.com' });
     const [, sentError, details] = calls.find(([method]) => method === 'addError');
-    assert.equal(sentError, error);
+    assert.equal(sentError.name, 'TypeError');
+    assert.equal(sentError.message, 'failed');
     assert.equal(sentError.stack, error.stack);
-    assert.deepEqual(details, { component: 'header' });
+    assert.deepEqual(Object.keys(details), ['component']);
   });
 
   it('clears user, tenant and global context on logout', async () => {
-    const { calls, sdk } = sdkRecorder();
-    const provider = createDatadogProvider({ env: datadogEnv, loader: async () => ({ datadogRum: sdk }) });
-    await provider.identify('account-1');
-    await provider.group('account_id', 'tenant-1');
+    const { observability, calls } = await observedDatadog();
+    await observability.identify('account-1');
+    await observability.group('account_id', 'tenant-1');
     assert.deepEqual(calls.find(([method]) => method === 'setAccount'), ['setAccount', { id: 'tenant-1' }]);
-    await provider.reset();
+    await observability.reset();
     assert.deepEqual(calls.slice(-4), [['stopSession'], ['clearUser'], ['clearAccount'], ['setGlobalContext', {}]]);
   });
 
-  it('redacts nested error causes recursively', () => {
-    const event = { error: { message: 'outer person@example.com', stack: 'https://go.example/app.js?token=secret', causes: [
-      { message: 'inner user@example.com', stack: 'password=secret https://go.example/error.js?email=private' },
-      { message: 'deep', causes: [{ message: 'deep@example.com', stack: 'token=private' }] },
-    ] } };
-    assert.equal(redactDatadogEvent(event), true);
-    assert.ok(!event.error.message.includes('@example.com'));
-    assert.ok(!event.error.stack.includes('token=secret'));
-    assert.ok(!event.error.causes[0].message.includes('@example.com'));
-    assert.ok(!event.error.causes[0].stack.includes('password=secret'));
-    assert.ok(!event.error.causes[1].causes[0].message.includes('@example.com'));
-    assert.ok(!event.error.causes[1].causes[0].stack.includes('token=private'));
-  });
-
-  it('redacts automatic resource/view URLs and user/account PII', () => {
-    const event = { view: { url: '/sales-order/123?token=private', referrer: '/purchase-order/456?email=private' },
-      resource: { url: '/sales-order/123?token=private' }, context: { component: 'header', password: 'secret' },
-      usr: { id: 'account-1', email: 'private@example.com' }, account: { id: 'tenant-1', name: 'private' } };
-    assert.equal(redactDatadogEvent(event), true);
-    assert.equal(event.view.url, '/sales-order/:recordId');
-    assert.equal(event.resource.url, '/sales-order/:recordId');
-    assert.deepEqual(event.context, { component: 'header' });
-    assert.deepEqual(event.usr, { id: 'account-1' });
-    assert.deepEqual(event.account, { id: 'tenant-1' });
-  });
-
-  it('redacts bearer credentials in error text', () => {
-    const result = redactErrorText('request failed Authorization: Bearer super-secret-token');
-    assert.match(result, /Authorization=\[redacted\]/i);
-    assert.ok(!result.includes('super-secret-token'));
-  });
-
-  it('redacts standalone bearer credentials in error text', () => {
-    const result = redactErrorText('request failed with Bearer super-secret-token');
-    assert.match(result, /Bearer \[redacted\]/i);
-    assert.ok(!result.includes('super-secret-token'));
-  });
-
-  it('redacts quoted JSON-like credential pairs in error text', () => {
-    const result = redactErrorText('{"authorization":"Bearer super-secret-token","token":"private"}');
-    assert.match(result, /"authorization": "\[redacted\]"/i);
-    assert.match(result, /"token": "\[redacted\]"/i);
-    assert.ok(!result.includes('super-secret-token'));
-    assert.ok(!result.includes('private'));
-  });
-
   it('starts a fresh RUM view when the tenant changes, without doing so on logout', async () => {
-    const { calls, sdk } = sdkRecorder();
-    const provider = createDatadogProvider({ env: datadogEnv, loader: async () => ({ datadogRum: sdk }) });
-    await provider.init();
+    const { observability, calls } = await observedDatadog();
     const initialViews = calls.filter(([method]) => method === 'startView').length;
 
-    await provider.group('account_id', 'tenant-1');
+    await observability.group('account_id', 'tenant-1');
     assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews);
-    await provider.reset();
+    await observability.reset();
     assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews);
-    await provider.group('account_id', 'tenant-2');
+    await observability.group('account_id', 'tenant-2');
     assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews + 1);
     const accountIndex = calls.findLastIndex(([method, args]) => method === 'setAccount' && args.id === 'tenant-2');
     const viewIndex = calls.findLastIndex(([method]) => method === 'startView');
     assert.ok(accountIndex < viewIndex);
-    await provider.reset();
+    await observability.reset();
     assert.equal(calls.filter(([method]) => method === 'startView').length, initialViews + 1);
+  });
+
+  it('reports flag evaluations made before telemetry started, once it does', async () => {
+    const { calls, sdk } = sdkRecorder();
+    const provider = createDatadogProvider({ env: datadogEnv, logger: silent, loader: async () => ({ datadogRum: sdk }) });
+    const observability = createObservability({ logger: silent });
+    await observability.addFeatureFlagEvaluation('page-help-suggestions', true);
+    await observability.initObservability({ providers: [provider], logger: silent });
+    assert.deepEqual(calls.filter(([method]) => method === 'addFeatureFlagEvaluation'),
+      [['addFeatureFlagEvaluation', 'page_help_suggestions', true]]);
+  });
+
+  // The SDK collects views, resources and unhandled errors on its own: beforeSend is the only
+  // place that traffic is sanitized. (The SDK reverts a change to `usr`, `account` or
+  // `error.causes`, so those are kept clean at the source instead; see the core's
+  // docs/security/telemetry-egress.md.)
+  it('redacts automatic resource and view URLs and unapproved context', async () => {
+    const { options } = await observedDatadog();
+    const { keep, event } = beforeSend(options(), {
+      type: 'resource',
+      view: { url: '/sales-order/123?token=private', referrer: '/purchase-order/456?email=private' },
+      resource: { url: '/sales-order/123?token=private' },
+      context: { component: 'header', password: 'secret' },
+    });
+    assert.equal(keep, true);
+    assert.equal(event.view.url, '/sales-order/:recordId');
+    assert.equal(event.view.referrer, '/purchase-order/:recordId');
+    assert.equal(event.resource.url, '/sales-order/:recordId');
+    assert.deepEqual(event.context, { component: 'header' });
+  });
+
+  it('redacts credentials and emails in automatic error text', async () => {
+    const { options } = await observedDatadog();
+    for (const message of [
+      'request failed Authorization: Bearer super-secret-token-value-1234567890',
+      '{"authorization":"Bearer super-secret-token-value-1234567890"}',
+      'failed for person@example.com',
+    ]) {
+      const { event } = beforeSend(options(), { type: 'error', error: { message, stack: message } });
+      for (const secret of ['super-secret-token', 'person@example.com']) {
+        assert.ok(!event.error.message.includes(secret), message);
+        assert.ok(!event.error.stack.includes(secret), message);
+      }
+    }
+  });
+
+  it('keeps source frame URLs and positions, which the uploaded source maps resolve', async () => {
+    const { options } = await observedDatadog();
+    const stack = 'TypeError: x\n    at save (https://go.example/assets/index-B3x9kQ2a.js:12:4567)';
+    const { event } = beforeSend(options(), { type: 'error', error: { message: 'x', stack } });
+    assert.ok(event.error.stack.includes('https://go.example/assets/index-B3x9kQ2a.js:12:4567'));
   });
 });
 
@@ -191,7 +219,7 @@ describe('AWS RUM observability adapter', () => {
 
   it('stays disabled when the build did not inject RUM IDs', () => {
     const provider = createRumProvider({
-      env: {},
+      env: { VITE_RUM_ENABLED: 'true' },
       AwsRumCtor: class {
         constructor() {
           throw new Error('must not be constructed');
@@ -204,7 +232,18 @@ describe('AWS RUM observability adapter', () => {
     assert.equal(provider.enabled, false);
   });
 
-  it('initializes AWS RUM with the existing region, endpoint, telemetries, and bounded sample rate', () => {
+  it('is optional: the injected IDs alone no longer switch it on, it needs an explicit VITE_RUM_ENABLED (ETP-4578, D3)', () => {
+    const ids = { VITE_RUM_APP_MONITOR_ID: 'monitor-id', VITE_RUM_IDENTITY_POOL_ID: 'pool-id' };
+    const off = createRumProvider({ env: ids, AwsRumCtor: class {}, logger: { warn() {} } });
+    assert.equal(off.enabled, false);
+
+    for (const flag of ['false', '1', 'yes', '']) {
+      assert.equal(createRumProvider({ env: { ...ids, VITE_RUM_ENABLED: flag }, AwsRumCtor: class {}, logger: { warn() {} } }).enabled, false, flag);
+    }
+    assert.equal(createRumProvider({ env: { ...ids, VITE_RUM_ENABLED: 'true' }, AwsRumCtor: class {}, logger: { warn() {} } }).enabled, true);
+  });
+
+  it('initializes AWS RUM with the existing region, endpoint, telemetries, and bounded sample rate', async () => {
     const calls = [];
     class FakeAwsRum {
       constructor(...args) {
@@ -214,6 +253,7 @@ describe('AWS RUM observability adapter', () => {
 
     const provider = createRumProvider({
       env: {
+        VITE_RUM_ENABLED: 'true',
         VITE_RUM_APP_MONITOR_ID: 'monitor-id',
         VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
         VITE_RUM_SESSION_SAMPLE_RATE: '0.25',
@@ -221,26 +261,41 @@ describe('AWS RUM observability adapter', () => {
       AwsRumCtor: FakeAwsRum,
       logger: { warn() {} },
     });
-    provider.init();
+    await provider.init();
 
     assert.equal(provider.name, 'aws-rum');
     assert.equal(provider.enabled, true);
-    assert.deepEqual(calls[0], [
-      'monitor-id',
-      '1.0.0',
-      'eu-west-3',
-      {
-        sessionSampleRate: 0.25,
-        identityPoolId: 'pool-id',
-        endpoint: 'https://dataplane.rum.eu-west-3.amazonaws.com',
-        telemetries: ['performance', 'errors', 'http'],
-        allowCookies: true,
-        enableXRay: false,
-      },
-    ]);
+    const [appMonitorId, version, region, config] = calls[0];
+    assert.equal(appMonitorId, 'monitor-id');
+    assert.equal(version, '1.0.0');
+    assert.equal(region, 'eu-west-3');
+    assert.equal(config.sessionSampleRate, 0.25);
+    assert.equal(config.identityPoolId, 'pool-id');
+    assert.equal(config.endpoint, 'https://dataplane.rum.eu-west-3.amazonaws.com');
+    assert.deepEqual(config.telemetries, ['performance', 'errors', 'http']);
+    assert.equal(config.enableXRay, false);
+    // ETP-4578: batches are sanitized through the client builder, before they are signed.
+    assert.equal(typeof config.clientBuilder, 'function');
   });
 
-  it('logs and contains AWS RUM init failures', () => {
+  it('keeps cookies off unless VITE_RUM_ALLOW_COOKIES=true (open question for Privacy)', async () => {
+    const seen = [];
+    class FakeAwsRum {
+      constructor(...args) {
+        seen.push(args[3].allowCookies);
+      }
+    }
+    const base = {
+      VITE_RUM_ENABLED: 'true',
+      VITE_RUM_APP_MONITOR_ID: 'monitor-id',
+      VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
+    };
+    await createRumProvider({ env: base, AwsRumCtor: FakeAwsRum, logger: { warn() {} } }).init();
+    await createRumProvider({ env: { ...base, VITE_RUM_ALLOW_COOKIES: 'true' }, AwsRumCtor: FakeAwsRum, logger: { warn() {} } }).init();
+    assert.deepEqual(seen, [false, true]);
+  });
+
+  it('logs and contains AWS RUM init failures', async () => {
     const warnings = [];
     class BrokenAwsRum {
       constructor() {
@@ -250,6 +305,7 @@ describe('AWS RUM observability adapter', () => {
 
     const provider = createRumProvider({
       env: {
+        VITE_RUM_ENABLED: 'true',
         VITE_RUM_APP_MONITOR_ID: 'monitor-id',
         VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
       },
@@ -261,8 +317,8 @@ describe('AWS RUM observability adapter', () => {
       },
     });
 
-    assert.doesNotThrow(() => provider.init());
-    assert.deepEqual(warnings, [['CloudWatch RUM init failed', 'rum unavailable']]);
+    await assert.doesNotReject(() => provider.init());
+    assert.deepEqual(warnings, [['[observability] aws-rum init failed', 'rum unavailable']]);
   });
 
   it('keeps legacy no-op behavior when no hostname config matches', () => {
@@ -280,8 +336,9 @@ describe('AWS RUM observability adapter', () => {
       logger: { warn() {} },
     });
 
+    // A disabled adapter is never started: the gateway (and the facade's isProviderEnabled)
+    // skip it, so the SDK constructor is not reached.
     assert.equal(provider.enabled, false);
-    assert.doesNotThrow(() => provider.init());
     assert.deepEqual(calls, []);
 
     const nullEnvProvider = createRumProvider({
@@ -292,7 +349,6 @@ describe('AWS RUM observability adapter', () => {
     });
 
     assert.equal(nullEnvProvider.enabled, false);
-    assert.doesNotThrow(() => nullEnvProvider.init());
     assert.deepEqual(calls, []);
   });
 
@@ -324,6 +380,7 @@ describe('browser observability config', () => {
     const config = buildBrowserObservabilityConfig({
       env: {
         ...datadogEnv,
+        VITE_RUM_ENABLED: 'true',
         VITE_RUM_APP_MONITOR_ID: 'monitor-id',
         VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
       },
@@ -340,15 +397,48 @@ describe('browser observability config', () => {
     assert.deepEqual(config.providers.map(provider => provider.name), ['datadog', 'aws-rum', 'mixpanel']);
     assert.deepEqual(config.providers.map(provider => provider.enabled), [true, true, false]);
   });
-});
 
-describe('error text privacy', () => {
-  it('preserves source frame filenames and positions while stripping URL query, email and credentials', () => {
-    const result = redactErrorText('Error token=private person@example.com\n at save (https://go.example/assets/app-abc.js?token=private:12:4)');
-    assert.ok(result.includes('https://go.example/assets/app-abc.js:12:4'));
-    assert.ok(!result.includes('person@example.com'));
-    assert.ok(!result.includes('private'));
-    assert.ok(result.includes('token=[redacted]'));
+  // ETP-4578 H6 (D3): every provider is opt-in and needs its own explicit switch plus its
+  // configuration. (Sentry was the one exception, mandatory with a DSN; ETP-5605 removed it.)
+  describe('optional providers are off by default', () => {
+    const enabledOf = (env) => Object.fromEntries(
+      buildBrowserObservabilityConfig({ env, location: { hostname: 'h' }, logger: silent })
+        .providers.map((provider) => [provider.name, provider.enabled]),
+    );
+    const RUM_IDS = { VITE_RUM_APP_MONITOR_ID: 'monitor-id', VITE_RUM_IDENTITY_POOL_ID: 'pool-id' };
+    const MIXPANEL_TOKEN = { VITE_MIXPANEL_TOKEN: 'fake-project-token' };
+    const DATADOG_CONFIG = Object.fromEntries(Object.entries(datadogEnv).filter(([key]) => key !== 'VITE_DATADOG_ENABLED'));
+    const NONE = { datadog: false, 'aws-rum': false, mixpanel: false };
+
+    it('starts nothing from an empty environment', () => {
+      assert.deepEqual(enabledOf({}), NONE);
+    });
+
+    it('does not start any provider from its IDs and tokens alone', () => {
+      assert.deepEqual(enabledOf({ ...DATADOG_CONFIG, ...RUM_IDS, ...MIXPANEL_TOKEN }), NONE);
+    });
+
+    it('needs the explicit switch AND the configuration, for each provider', () => {
+      assert.deepEqual(enabledOf({ VITE_DATADOG_ENABLED: 'true' }), NONE, 'Datadog switch without its configuration');
+      assert.deepEqual(enabledOf({ VITE_RUM_ENABLED: 'true' }), NONE, 'RUM switch without IDs');
+      assert.deepEqual(enabledOf({ VITE_MIXPANEL_ENABLED: 'true' }), NONE, 'Mixpanel switch without a token');
+      assert.deepEqual(enabledOf(datadogEnv), { ...NONE, datadog: true });
+      assert.deepEqual(enabledOf({ VITE_RUM_ENABLED: 'true', ...RUM_IDS }), { ...NONE, 'aws-rum': true });
+      assert.deepEqual(enabledOf({ VITE_MIXPANEL_ENABLED: 'true', ...MIXPANEL_TOKEN }), { ...NONE, mixpanel: true });
+    });
+
+    it('takes only the literal "true" as opt-in', () => {
+      for (const value of ['1', 'yes', 'TRUE', 'on', ' true']) {
+        assert.deepEqual(
+          enabledOf({
+            ...DATADOG_CONFIG, VITE_DATADOG_ENABLED: value,
+            VITE_RUM_ENABLED: value, ...RUM_IDS, VITE_MIXPANEL_ENABLED: value, ...MIXPANEL_TOKEN,
+          }),
+          NONE,
+          value,
+        );
+      }
+    });
   });
 });
 
@@ -373,6 +463,9 @@ describe('private source-map release policy', () => {
       assert.match(workflow, new RegExp(`datadog_application_id=\\$\\{\\{ vars\\.VITE_DATADOG_APPLICATION_ID_${target} \\}\\}`));
       assert.match(workflow, new RegExp(`datadog_client_token=\\$\\{\\{ vars\\.VITE_DATADOG_CLIENT_TOKEN_${target} \\}\\}`));
       assert.match(workflow, new RegExp(`datadog_trace_api_bases=\\$\\{\\{ vars\\.VITE_DATADOG_TRACE_API_BASES_${target} \\}\\}`));
+      // The value is a JSON array: inside double quotes its own quotes close the shell string and
+      // the build gets `[https://…]`, which resolveTracingUrls rejects (no trace propagation).
+      assert.match(workflow, new RegExp(`echo 'datadog_trace_api_bases=\\$\\{\\{ vars\\.VITE_DATADOG_TRACE_API_BASES_${target} \\}\\}'`));
     }
     assert.match(workflow, /VITE_DATADOG_APPLICATION_ID: \$\{\{ steps\.target\.outputs\.datadog_application_id \}\}/);
     assert.match(workflow, /VITE_DATADOG_CLIENT_TOKEN: \$\{\{ steps\.target\.outputs\.datadog_client_token \}\}/);

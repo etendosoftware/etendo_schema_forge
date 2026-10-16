@@ -24,7 +24,11 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('@/lib/backendErrors.js', () => ({
-  translateBackendError: (raw) => raw,
+  // Identity, except one text-mapped refusal (the blocked-movement sentence, ETP-5577).
+  translateBackendError: (raw, _t, opts) => {
+    if (raw === 'The movement "M1" has an accounting date in a closed period.') return 'movimiento M1 bloqueado';
+    return opts?.messageKeys ? `byKey:${raw}` : raw;
+  },
 }));
 
 // Driven per-test via this mutable holder, mirroring how the other financial-account tab specs
@@ -80,6 +84,8 @@ vi.mock('../CashCloseConfirmDialog.jsx', () => ({
   ),
 }));
 
+import { toast } from 'sonner';
+import { setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import { CashCloseTab } from '../index.jsx';
 
 const MOVEMENTS = [
@@ -228,5 +234,42 @@ describe('CashCloseTab — window read-only access tier (ETP-5457)', () => {
     fireEvent.click(screen.getByTestId('stub-confirm-run'));
     await waitFor(() => expect(writes.confirmClose).toHaveBeenCalledTimes(1));
     expect(writes.confirmClose.mock.calls[0][0]).toMatchObject({ declaredBalance: 50 });
+  });
+
+  it('ETP-5577: a close refused for a closed period offers the calendar', async () => {
+    const go = vi.fn();
+    setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
+    writes.confirmClose = vi.fn().mockRejectedValue(
+      Object.assign(new Error('El Periodo no existe'), { messageKeys: ['PeriodNotAvailable'] }));
+    try {
+      renderTab();
+      fireEvent.click(screen.getByTestId('stub-side-confirm'));
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      const options = toast.error.mock.calls.at(-1)[1];
+      expect(options.action.label).toBe('periodNotAvailableOpenCalendar');
+      options.action.onClick();
+      expect(go).toHaveBeenCalledTimes(1);
+    } finally {
+      setPeriodRecovery(null);
+    }
+  });
+
+  it('ETP-5577: a blocked movement keeps its own sentence and opens the year of ITS date', async () => {
+    const go = vi.fn();
+    setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
+    writes.confirmClose = vi.fn().mockRejectedValue(Object.assign(
+      new Error('The movement "M1" has an accounting date in a closed period.'),
+      { messageKeys: ['PeriodNotAvailable'], periodDate: '2026-03-15' }));
+    try {
+      renderTab();
+      fireEvent.click(screen.getByTestId('stub-side-confirm'));
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      const [text, options] = toast.error.mock.calls.at(-1);
+      expect(text).toBe('movimiento M1 bloqueado');
+      options.action.onClick();
+      expect(go).toHaveBeenCalledWith('2026-03-15');
+    } finally {
+      setPeriodRecovery(null);
+    }
   });
 });

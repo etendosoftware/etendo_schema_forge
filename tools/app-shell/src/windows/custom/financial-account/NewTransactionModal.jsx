@@ -18,10 +18,11 @@ import { useCreateMovement, useUpdateMovement } from '@/hooks/useCreateMovement'
 import { FINANCIAL_ACCOUNT_FIELD_LIMITS, getMaxLengthError } from './fieldLengthValidation.js';
 import { FieldLengthCounter, FieldLengthError } from './FieldLengthHint.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { useGLItemLookup, useBPartnerLookup, useDimensionLookup } from '@/hooks/useMovementLookups';
 import { Field, DateInput, MaskedAmountInput, ChipSelect } from '@/components/forms/fields';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
-import { todayISO } from './NewMovementWizard/movementWizardData';
+import { todayCalendarISO as todayISO } from '@/lib/dateOnly.js';
 
 const BTN_PRIMARY =
   'inline-flex h-9 items-center gap-2 rounded-lg bg-[hsl(var(--text-primary))] px-[18px] text-sm font-semibold text-primary-foreground transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground disabled:opacity-45 disabled:pointer-events-none';
@@ -213,7 +214,12 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
     } catch (e) {
       // The hook throws the backend's own business message (ETP-5085) — translate it before
       // showing it, or the user reads it in English.
-      toast.error(translateBackendError(e?.message, ui) || ui('financeAccountTxNewError'));
+      const text = translateBackendError(e?.message, ui, { messageKeys: e?.messageKeys })
+        || ui('financeAccountTxNewError');
+      // ETP-5577 — a period refusal offers the calendar, on the fiscal year of the movement's date.
+      const recovery = periodNotAvailableToastOptions(e?.messageKeys, ui, { date: form.date });
+      if (Object.keys(recovery).length > 0) toast.error(text, recovery);
+      else toast.error(text);
     }
   };
 
