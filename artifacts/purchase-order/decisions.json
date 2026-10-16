@@ -199,13 +199,13 @@
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
+          "form": false,
           "grid": true,
-          "gridOrder": 5,
-          "section": "summary"
+          "gridOrder": 5
         },
         "summedLineAmount": {
           "visibility": "readOnly",
-          "section": "summary"
+          "form": false
         },
         "priceIncludesTax": {
           "visibility": "readOnly",

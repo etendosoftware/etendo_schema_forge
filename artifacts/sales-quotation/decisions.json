@@ -178,13 +178,13 @@
         },
         "summedLineAmount": {
           "visibility": "readOnly",
-          "section": "summary"
+          "form": false
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
+          "form": false,
           "grid": true,
-          "gridOrder": 6,
-          "section": "summary"
+          "gridOrder": 6
         },
         "documentStatus": {
           "visibility": "readOnly",
