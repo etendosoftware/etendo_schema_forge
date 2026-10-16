@@ -347,7 +347,7 @@ moment the same request had to confirm it.
 The link can only be created **while the invoice is still a draft**: the
 `C_INVOICE_REVERSE_TRG` trigger refuses any insert into `C_Invoice_Reverse` once
 the invoice is `Processed='Y'`. Hence the mandatory backend ordering in
-`ReturnShipmentUtils.finalizeReturnInvoice` (`ReturnShipmentUtils.java:613-634`,
+`ReturnInvoiceSupport.finalizeReturnInvoice` (`ReturnInvoiceSupport.java`,
 javadoc `:599-612`): **create lines → create the `C_Invoice_Reverse` link →
 complete**. Complete first and the document can be neither confirmed nor linked —
 a permanently stuck draft.
@@ -391,6 +391,8 @@ it."* — before anything is written.
 
 ### Guard P5 — 409 on a return shipment that is already invoiced
 
+> **Superseded (ETP-5712 section below):** this guard was removed; a second factura rectificativa is allowed and reported in `previousReturnInvoices`. Kept for history.
+
 `ReturnToVendorShipmentHeaderHandler.java:327-330` throws
 `AlreadyInvoicedException` with **"A rectificative invoice already exists for this
 return document."** — **HTTP 409** (`:364-366`) — when
@@ -406,13 +408,13 @@ stayed visible, and a second one could be created.
 
 ### HTTP status convention
 
-**409** = "already invoiced" (a duplicate). **400** = "nothing to invoice" or a
-missing datum, including the missing-rectified-invoice case and the pre-existing
-*"Return shipment must be completed before creating a return invoice"*. Messages
-are English literals in Java on purpose (no `AD_MESSAGE` rows), localized by
-`tools/app-shell/src/lib/backendErrors.js` →
-`backendError.returnInvoiceAlreadyExists` and
-`backendError.rectifiedInvoiceRequired`.
+**400** = "nothing to invoice" or a missing datum, including the missing-rectified-invoice
+case and the pre-existing *"Return shipment must be completed before creating a return
+invoice"*. **422** = the zero-amount refusal (`returnInvoiceWithoutAmount`, ETP-5712). There is
+no 409 any more: a second rectificativa on the same return is allowed (see ETP-5712 below).
+Messages are English literals in Java on purpose (no `AD_MESSAGE` rows), localized by
+`tools/app-shell/src/lib/backendErrors.js` → `backendError.rectifiedInvoiceRequired` and
+`backendError.returnInvoiceWithoutAmount`.
 
 ### Modifying the invoice afterwards
 
@@ -446,9 +448,11 @@ the user that Reactivar is now the way to edit the invoice.
    button is disabled. From the draft entry point, verify switching the invoice
    toggle off still lets the shipment be confirmed alone.
 5. On a shipment that already has a rectificative invoice, verify the create
-   button is not rendered; POST `createReturnInvoice` directly and verify the
-   translated 409 and that nothing is written. Void that invoice and verify the
-   button reappears — the predicate is "non-voided", not "any".
+   button is not rendered (the SPA hides it through `hasReturnInvoice`); POST
+   `createReturnInvoice` directly and verify it is accepted: a second rectificativa
+   is created and the answer lists the earlier one in `previousReturnInvoices`.
+   Void that invoice and verify the button reappears — the predicate is
+   "non-voided", not "any".
 6. Force the completion to fail and verify no draft rectificative invoice and no
    `C_Invoice_Reverse` rows are left behind, and the document number is not
    burned.
@@ -505,6 +509,76 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 - The `posted` field was already gated (ETP-4520); `ListView` now also drops it from the filter, sort and export.
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Over-return cap, MCP actions and currency — ETP-5711
+
+The server never lets a return take more than what is still returnable of a source line: *returnable = quantity of
+the source line − what every non-voided return line linked to it already holds, drafts included* (the same figure
+the picker lists show as `movementQuantity`). It is enforced when the return is created from the document, when
+lines are imported, and when the quantity of an existing return line is edited (the line's own quantity does not
+count against itself). A violation is a 422 `returnQuantityExceedsAvailable` ("Cannot return 5 of Agua: only 4 can
+still be returned from this line (10 on the source document)."), translated in the SPA
+(`backendError.returnQuantityExceeds`), and nothing is created. A second partial return with exactly what is left
+works; one document may now have several returns (the old 409 "A return already exists for shipment" is gone).
+
+- **Lines arrive only by import.** Two ways: create the return from ONE receipt (`createPurchaseReturn` on the goods
+  receipt, see `goods-receipt.md`) or "Añadir desde Albarán" on a draft return (`importReceiptLines`: lines from one or
+  more receipts of the same vendor, each line linked to its source line). There is no manual line entry with a
+  product, and the line fields' visibility is unchanged. **The server enforces it:** a direct `POST` of a line on the
+  CRUD endpoint (REST, `etendo_batch` or MCP `etendo_create`) answers 422 `returnLineRequiresImport` ("Return lines
+  cannot be created directly. Add them to the return with importReceiptLines, or create the whole return from the
+  source document with createPurchaseReturn."), translated in the SPA. Quantity edits (PATCH/PUT) of existing lines
+  stay allowed and capped; a legacy line with no source link is not capped.
+- **No double return under concurrency:** the source receipt lines are row-locked (`FOR UPDATE`, sorted ids) before
+  the returned total is read, so two simultaneous creates/imports cannot both pass the cap. A reversed return still
+  counts as returned (only a voided one frees the quantity). `reason` over the description length answers 422
+  `returnReasonTooLong`. See `neo-headless.md` §4.12.32.
+- **Published to MCP.** `availableReceipts`, `availableReceiptLines` (`receiptId` + `businessPartner`),
+  `importReceiptLines`, `rectifiableInvoices`, `createReturnInvoice` and `documentAction` (CO) are declared by
+  `ReturnToVendorShipmentHeaderHandler.actionContracts()`; the spec `agentPrompt`
+  (`agent-prompts/return-to-vendor-shipment/spec.md`) describes the flow. The classic "Pick/Edit Lines" button
+  (`RM_Shipment_Pickedit`, no process) redirects to `importReceiptLines` through `MCP_CONFIG`.
+- **Currency.** `etgoCurrency` is `system` with `defaultExpr: "@C_Currency_ID@"` (organisation currency, as the goods
+  receipt and `return-material-receipt`). Before, a header created through MCP/REST failed with `Missing required
+  fields: etgoCurrency`. No visible UI change; the regen only adds `agentPrompt` to `contract.json` /
+  `contract.mcp.json`. `push-to-neo` writes the default to `ETGO_SF_FIELD.DefaultValue`; run
+  `./gradlew export.database` to persist it in the module.
+
+## Factura rectificativa of a return: separate action, discoverable, warned, never at zero — ETP-5712
+
+*Factura rectificativa de compra* = the Corrective Purchase Invoice (API rectificative) that refunds a return to a
+vendor. Nothing changes in the window for a person (Confirmar and "Crear Factura Rectificativa" behave as in ETP-5381);
+what changes is what the **server and the MCP agents** see:
+
+- **Confirming does not create it.** For an agent, `documentAction` (CO) only books the stock movement; the
+  factura rectificativa is a separate `createReturnInvoice` call afterwards (what the SPA does with its two calls).
+  The return headers' `documentAction` description (`ReturnCompletionContract`), the text of every return action
+  and the spec prompt (`agent-prompts/return-to-vendor-shipment/spec.md`) now say so. The goods receipt / shipment
+  `documentAction` text is unchanged.
+- **A second one is allowed, and reported.** The 409 guard described under *Guard P5* above no longer exists (ETP-5381
+  removed it on purpose). `createReturnInvoice` tells the agent to check `hasReturnInvoice` /
+  `returnInvoices` first, and its answer lists the rectificativas the return already had before the call in
+  `previousReturnInvoices`.
+- **Richer answer.** `{id, documentNo, documentStatus}` plus `documentType`, `isSalesTransaction` (`false` here),
+  `grandTotalAmount`, `totalLines` (negative amounts, read after the completion), `linkedReturnId`,
+  `returnDocumentNo`, `rectifiedInvoices` and `previousReturnInvoices`. The invoice stays COMPLETED.
+- **Never at zero.** If any product line with a quantity would end at a price of 0 (no price on the receipt/order
+  line, none on the source invoice line, none in the price list) the call answers **422**
+  `returnInvoiceWithoutAmount` naming the products and creates nothing. The SPA shows it translated
+  (`backendError.returnInvoiceWithoutAmount`, "No se puede crear la factura rectificativa: no se ha encontrado precio
+  para …").
+- **No invoice to rectify** (the receipt was never invoiced): still **400**, now worded *"This return has no invoice to
+  rectify: the document it returns has not been invoiced, so the factura rectificativa has nothing to link to. …"*
+  (`backendError.rectifiedInvoiceRequired`, the SPA's translation follows).
+- **Classic buttons.** `GenerateTo` and `Invoicefromshipment` of the shipment table are redirected to
+  `createReturnInvoice` in `MCP_CONFIG` (next to the `RM_Shipment_Pickedit` redirect).
+
+The amount of the created invoice reaches the SPA as `invoice.amount` (`ConfirmInOutModal.runConfirm`) but no
+component renders it. Full reference: `neo-headless.md` §4.12.33.
+
+**Manual verification (MCP).** Confirm a return, then create its factura rectificativa; call `createReturnInvoice` a
+second time and check `previousReturnInvoices`; try a return whose product has no price (422, nothing created);
+try a return of a never-invoiced receipt (400 with the new wording).
 
 ## Period not open (ETP-5577)
 
