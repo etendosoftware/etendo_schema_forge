@@ -1,0 +1,13 @@
+{
+  "outcome": "notPossible",
+  "probeId": "w-invoice-one-product-issued",
+  "declaration": {
+    "kind": "goal",
+    "reason": "Holded's MCP has no tool to create an invoice.",
+    "missingTools": [
+      "create_invoice"
+    ]
+  },
+  "catalogueSha": "sha-holded",
+  "check": "ok"
+}

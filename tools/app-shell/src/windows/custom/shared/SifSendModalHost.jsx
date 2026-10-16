@@ -10,9 +10,8 @@ import SifSendingModal from './SifSendingModal.jsx';
  * ETP-5700 — the kebab cannot keep the modal: `DetailMoreActionsMenu` unmounts its
  * content as soon as the menu closes. The invoice window mounts this host next to its
  * form (`sales-invoice/index.jsx`, `purchase-invoice/index.jsx`) unconditionally, so the
- * request is never lost, whatever the topbar renders. The kebab entry already computed
- * the pending targets with `useInvoiceSifSending` (the gate shared with the topbar
- * button), so the host only opens the modal for them.
+ * request is never lost. The kebab entry already computed the pending targets with
+ * `useInvoiceSifSending`, so the host only opens the modal for them.
  *
  * After a successful send it fires `${specName}:invoice-updated`, the event the window's
  * topbar already listens to in order to refresh the record.

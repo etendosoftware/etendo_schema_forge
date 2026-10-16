@@ -398,6 +398,64 @@ test.describe('First Steps transfer and plan gates', () => {
   });
 });
 
+/**
+ * ETP-5577 — the accounting calendar review row. The backend shows it only to a tenant onboarded
+ * with every period never-opened (`required`), and owns its completion (`reviewed`). The mock
+ * answers confirm/regenerate with the new state, as the real endpoint does.
+ */
+async function installCalendarReviewMock(page, overrides = {}) {
+  const review = {
+    required: true, reviewed: false, canRegenerate: true, year: '2026',
+    startDate: '2026-01-01', endDate: '2026-12-31', periodCount: 12, fiscalYearStart: 'JANUARY',
+    ...overrides,
+  };
+  const posts = [];
+  await page.route('**/sws/go/onboarding/calendar-review**', async (route) => {
+    const req = route.request();
+    if (req.method() === 'POST') {
+      posts.push({ url: req.url(), body: JSON.parse(req.postData() || '{}') });
+      review.reviewed = true;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(review) });
+  });
+  return { review, posts };
+}
+
+test.describe('First Steps — accounting calendar review (ETP-5577)', () => {
+  test('a tenant that must review its calendar sees the row, server-owned, after the fiscal step', async ({ page }) => {
+    await setupFirstSteps(page);
+    await installCalendarReviewMock(page);
+    await page.goto('/first-steps');
+    await expect(progress(page)).toContainText('1/8');
+    const row = page.getByTestId('first-steps-step-calendar-review');
+    await expect(row).toBeVisible();
+    await row.getByTestId('first-steps-title-calendar-review').click();
+    await expect(row.getByTestId('first-steps-calendar-review-summary')).toBeVisible();
+    await expect(row.getByTestId('first-steps-toggle-calendar-review')).toHaveCount(0);
+  });
+
+  test('Confirmar marks it reviewed and sends the owner to Calendar', async ({ page }) => {
+    const mock = await setupFirstSteps(page);
+    const calendar = await installCalendarReviewMock(page);
+    await page.goto('/first-steps');
+    await page.getByTestId('first-steps-title-calendar-review').click();
+    await page.getByTestId('first-steps-calendar-review-confirm').click();
+    await expect(page).toHaveURL(/\/calendar/);
+    expect(calendar.posts).toHaveLength(1);
+    expect(calendar.posts[0].url).toContain('/calendar-review/confirm');
+    // Server-owned: nothing goes to the per-account checklist store.
+    expect(mock.writes).toHaveLength(0);
+  });
+
+  test('a tenant without the review marker never sees the row', async ({ page }) => {
+    await setupFirstSteps(page);
+    await installCalendarReviewMock(page, { required: false });
+    await page.goto('/first-steps');
+    await expect(progress(page)).toContainText('1/7');
+    await expect(page.getByTestId('first-steps-step-calendar-review')).toHaveCount(0);
+  });
+});
+
 test.describe('First Steps page — degraded backend', () => {
   test('still renders the list when the state cannot be read', async ({ page }) => {
     await login(page);

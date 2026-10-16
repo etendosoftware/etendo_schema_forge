@@ -15,7 +15,6 @@
     "autoSaveOnBlur": true,
     "hidePrint": true,
     "hideLink": true,
-    "listbarPaddingX": "px-2",
     "tablePaddingX": "px-2",
     "maxDetailLines": 1
   },

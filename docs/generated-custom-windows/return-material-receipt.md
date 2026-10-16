@@ -637,3 +637,7 @@ to `ETGO_SF_SPEC.AGENT_PROMPT`): create the header → `availableShipments` →
 `availableShipmentLines` → `importShipmentLines` → DocAction `CO` → `rectifiableInvoices` →
 `createReturnInvoice`. The regen only added `agentPrompt` to `contract.json` / `contract.mcp.json`;
 the generated JSX is unchanged.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the document's accounting date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

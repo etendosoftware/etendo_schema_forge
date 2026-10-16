@@ -12,7 +12,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
 import { usePaymentBalance, formatPlain, parseMaskedAmount, round2 } from './usePaymentBalance.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
@@ -444,7 +444,9 @@ function extractSaveError(json, ui) {
     || json?.response?.message?.text
     || json?.response?.message;
   if (!raw || typeof raw !== 'string') return ui('cpSaveFailed');
-  return translateBackendError(raw, ui) || raw;
+  // ETP-5577 — the identity too: a payment dated in a period that is not open is keyed
+  // `PeriodNotAvailable` and must read like every other "period not open" refusal.
+  return translateBackendError(raw, ui, { messageKeys: extractBackendMessageKeys(json) }) || raw;
 }
 
 /**

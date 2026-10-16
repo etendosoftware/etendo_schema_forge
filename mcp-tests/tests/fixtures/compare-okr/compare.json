@@ -1,0 +1,54 @@
+{
+  "compareSchemaVersion": 1,
+  "compareId": "20261014T1000-cmp-fixture",
+  "startedAt": "2026-10-14T10:00:00Z",
+  "finishedAt": "2026-10-14T10:30:00Z",
+  "subject": "local",
+  "repeat": 3,
+  "decision": {
+    "ruleVersion": 1,
+    "callsMargin": 0.2,
+    "tokensMargin": 0.1
+  },
+  "suite": {
+    "file": "okr.yaml",
+    "sha": "deadbeef",
+    "schemaVersion": 2
+  },
+  "probes": [
+    "w-invoice-one-product-issued",
+    "q-product-prices-stock",
+    "f-process-sales-order",
+    "e-unknown-document",
+    "q-both-not-possible",
+    "q-short-of-attempts",
+    "q-tokens-missing"
+  ],
+  "targets": [
+    {
+      "name": "local",
+      "platform": "etendo-go",
+      "concurrency": 4,
+      "freshness": {
+        "status": "fresh",
+        "checkedAt": "2026-10-14T09:59:00Z",
+        "initializedAt": "2026-10-14T09:00:00Z"
+      }
+    },
+    {
+      "name": "holded",
+      "platform": "holded",
+      "concurrency": 2,
+      "freshness": {
+        "status": "clean",
+        "checkedAt": "2026-10-14T09:59:30Z",
+        "initializedAt": "2026-10-13T09:00:00Z"
+      }
+    }
+  ],
+  "pins": {
+    "scheduleSeed": 42,
+    "matcherVersion": 1,
+    "verdictSchemaVersion": 3
+  }
+}

@@ -8,6 +8,8 @@ import {
 import { useFirstSteps } from './useFirstSteps.js';
 import { useDemoDataTransfer } from './useDemoDataTransfer.js';
 import { NO_DEMO_DATA_TRANSFER, demoDataTransferStepState } from './demoDataTransferStep.js';
+import { useCalendarReview } from './useCalendarReview.js';
+import { NO_CALENDAR_REVIEW, calendarReviewStepState } from './calendarReviewStep.js';
 import { useTenantPlan } from '@/hooks/useTenantPlan.js';
 
 /**
@@ -35,6 +37,8 @@ const INERT_STATE = Object.freeze({
   total: firstStepsTotal(null),
   dataTransfer: { status: 'LOADING', products: {}, contacts: {}, loading: true, available: false },
   demoDataTransfer: NO_DEMO_DATA_TRANSFER,
+  calendarReview: { required: false, reviewed: false, loading: true },
+  calendarReviewStep: NO_CALENDAR_REVIEW,
 });
 const FirstStepsContext = createContext(null);
 
@@ -49,6 +53,9 @@ export function FirstStepsProvider({ children }) {
   // answer, and `demoDataTransfer` is the one value every catalogue helper below is handed.
   const dataTransfer = useDemoDataTransfer();
   const demoDataTransfer = demoDataTransferStepState(dataTransfer);
+  // ETP-5577: per-tenant, server-derived; `calendarReviewStep` is handed to every helper below.
+  const calendarReview = useCalendarReview();
+  const calendarReviewStep = calendarReviewStepState(calendarReview);
   const { completed, seen, dismissed, loading, error, toggleStep, markSeen, setDismissed } =
     firstSteps;
   const value = useMemo(() => ({
@@ -65,19 +72,21 @@ export function FirstStepsProvider({ children }) {
     // This also holds back the dashboard's one-time redirect (`useFirstStepsRedirect` gates on
     // `!loading`) until the plan is in — deliberately, since the page it redirects to would
     // otherwise render the productive list and drop three rows a moment later.
-    loading: loading || planLoading || dataTransfer.loading,
+    loading: loading || planLoading || dataTransfer.loading || calendarReview.loading,
     error,
     toggleStep,
     markSeen,
     setDismissed,
     plan,
-    steps: visibleFirstSteps(plan, demoDataTransfer),
+    steps: visibleFirstSteps(plan, demoDataTransfer, calendarReviewStep),
     dataTransfer,
     demoDataTransfer,
-    completedCount: countCompletedSteps(completed, plan, demoDataTransfer),
-    total: firstStepsTotal(plan, demoDataTransfer),
+    calendarReview,
+    calendarReviewStep,
+    completedCount: countCompletedSteps(completed, plan, demoDataTransfer, calendarReviewStep),
+    total: firstStepsTotal(plan, demoDataTransfer, calendarReviewStep),
   }), [completed, seen, dismissed, loading, planLoading, error, toggleStep, markSeen,
-    setDismissed, plan, dataTransfer, demoDataTransfer]);
+    setDismissed, plan, dataTransfer, demoDataTransfer, calendarReview, calendarReviewStep]);
   return <FirstStepsContext.Provider value={value}>{children}</FirstStepsContext.Provider>;
 }
 

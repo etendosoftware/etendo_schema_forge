@@ -494,6 +494,14 @@ Three matching mechanisms coexist — know all three before adding a new backend
      Every code the backend can send needs an entry in all three top-level locales
      (`backendErrors.test.js` checks this for the invalid-account codes).
 
+**Period refusals (ETP-5577).** `PeriodNotAvailable` and `PeriodNotValid` (a G/L journal save) both
+map to `backendError.periodNotAvailable`. A toast for a refusal carrying either key also spreads
+`periodNotAvailableToastOptions(messageKeys, ui, { date })` (`lib/periodNotAvailable.js`) into its
+sonner options: the action is "Ir al calendario" (`periodNotAvailableOpenCalendar`), "Revisar
+calendario contable" (`periodNotAvailableReviewCalendar`) for an owner whose review is pending.
+Non-owners always get "Ir al calendario". The 4xx-only keying rule (5xx, 401,
+403 and 404 are never keyed) lives in the backend; see `docs/generated-custom-windows/calendar.md`.
+
 `translateBackendError` tries the message keys first (they are a stable identity; the text is not),
 then the exact-match map, then the parameterized matchers, and returns the original (untranslated)
 message if none matches — never throws and never silently swallows an unrecognized backend error.

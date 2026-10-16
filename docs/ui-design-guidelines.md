@@ -382,6 +382,23 @@ with `layout="horizontal"`) is built to work there next to a side panel:
   layout from a measured width (`useElementWidth`), as `ProductPriceBar.jsx` does by moving its
   Venta/Compra switch above the section.
 
+## Master Detail List Tables at 1280x720 (ETP-5510)
+
+The shared list table (`DataTable.jsx`, plain list mode) follows these rules at the 1280x720 minimum resolution. They are generic: no window declares anything to get them.
+
+| Rule | Mechanism |
+|------|-----------|
+| No collapsed column | The table gets `min-width` = fixed slots + every column's `columnMinWidthPx` (`listTableMinWidthPx`, `lib/linesColumnWidth.js`); the width-less `grow` column is floored at `GROW_COLUMN_MIN_PX` (320). The header table (`StickyHeaderRow`) gets the same value. The list scrolls horizontally instead of compressing columns. |
+| Homogeneous 40 px checkbox column | Plain lists always have exactly one width-less column (`withImplicitGrowColumn`: the first column that does not pin its width, when no column declares `grow`), so `table-layout: fixed` never stretches the other `<col>`s proportionally (that is what made Warehouse's checkbox 65 px). |
+| Max 2 lines per text cell | `renderDefaultCell` renders strings over 30 characters with `<TruncatedText lines={2}>` (CSS line clamp). |
+| Custom `render` cells | A column with its own `render` bypasses `CELL_RENDERERS`, so it does not get the 2-line clamp for free: render `<TruncatedText lines={2}>` itself (as Contacts' `TextCell` does) for non-first text columns. |
+| Tooltip only when truncated | `TruncatedText` opens its tooltip only when the text is actually clipped (width for 1 line, height for `lines > 1`). |
+| `multiField` identity cell | Title stays on 1 line with ellipsis + tooltip; the identifier chip sits below. Plain-list basis 240 px (`LIST_BASIS_PX`). |
+| `status` column | Plain-list basis 184 px so a StatusTag pill such as "Cobro depositado" is fully readable. |
+| Sticky hover-actions zone | Keeps the gradient fade and adds a subtle inset left edge (no extra width) while the zone floats over content. |
+
+Kept as before: horizontal scroll, the bottom scroll thumb, hover-only row actions, the safe space at the end of the scroll, no extra space when nothing scrolls. Lines grids / add-row mode (`hideHeader`, `inlineEditable`) are untouched.
+
 ## References
 
 - Component implementations: `tools/app-shell/src/components/contract-ui/`

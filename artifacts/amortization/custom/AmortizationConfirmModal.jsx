@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useUI, getStoredLocale } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
+import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
+import { PeriodRecoveryLink } from '@/components/contract-ui/PeriodRecoveryLink.jsx';
 
 export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, onClose }) {
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
@@ -13,6 +16,7 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
   const ui = useUI();
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState(null);
+  const [errorRecovery, setErrorRecovery] = useState({});
   const [freshData,  setFreshData]  = useState(null);
   const [lineCount,  setLineCount]  = useState(null);
   const [linesTotal, setLinesTotal] = useState(null);
@@ -69,6 +73,7 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
     }
     setLoading(true);
     setError(null);
+    setErrorRecovery({});
     try {
       const res = await apiFetch(
         `${apiBaseUrl}/header/${recordId}/action/Processed`,
@@ -76,7 +81,11 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.response?.message || err?.message || `Error (${res.status})`);
+        const raw = err?.response?.message || err?.message;
+        const messageKeys = extractBackendMessageKeys(err);
+        // ETP-5577 — a period refusal is translated by key and offers the calendar of its date.
+        setErrorRecovery(periodNotAvailableToastOptions(messageKeys, ui, { date: documentPeriodDate(d) }));
+        throw new Error(translateBackendError(raw, ui, { messageKeys }) || raw || `Error (${res.status})`);
       }
       onClose(true);
     } catch (e) {
@@ -127,6 +136,7 @@ export default function AmortizationConfirmModal({ recordId, token, apiBaseUrl, 
         {error && (
           <div style={{ padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))' }}>
             {error}
+            <PeriodRecoveryLink recovery={errorRecovery} onBeforeGo={() => onClose(false)} />
           </div>
         )}
 

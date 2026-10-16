@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 5,
+  "runId": "run-holded",
+  "probeId": "f-process-sales-order",
+  "attempt": 1,
+  "replaces": null,
+  "mode": "write",
+  "prompt": "p",
+  "startedAt": "2026-10-14T10:00:00Z",
+  "finishedAt": "2026-10-14T10:01:00Z",
+  "effectVerified": true,
+  "effectCheck": null,
+  "silentWrong": false,
+  "finalAnswer": "listo",
+  "usage": {
+    "loop": {
+      "turns": 8,
+      "turnsWithUsage": 8,
+      "inputTokens": 23900,
+      "outputTokens": 100,
+      "totalTokens": 24000,
+      "cachedInputTokens": 0
+    },
+    "report": {
+      "turns": 1,
+      "turnsWithUsage": 1,
+      "inputTokens": 400,
+      "outputTokens": 100,
+      "totalTokens": 500,
+      "cachedInputTokens": 0
+    }
+  },
+  "servedModel": {
+    "models": [
+      "gpt-5.2"
+    ],
+    "systemFingerprints": [
+      "fp_1"
+    ]
+  },
+  "toolCallCount": 8,
+  "toolCalls": [
+    {
+      "id": "c-approve_sales_order",
+      "tool": "approve_sales_order",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    },
+    {
+      "id": "c-approve_sales_order",
+      "tool": "approve_sales_order",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    },
+    {
+      "id": "c-approve_sales_order",
+      "tool": "approve_sales_order",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    },
+    {
+      "id": "c-approve_sales_order",
+      "tool": "approve_sales_order",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    },
+    {
+      "id": "c-approve_sales_order",
+      "tool": "approve_sales_order",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    },
+    {
+      "id": "c-approve_sales_order",
+      "tool": "approve_sales_order",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    },
+    {
+      "id": "c-approve_sales_order",
+      "tool": "approve_sales_order",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    },
+    {
+      "id": "c-approve_sales_order",
+      "tool": "approve_sales_order",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    }
+  ],
+  "exhausted": false,
+  "setup": [],
+  "teardown": [],
+  "teardownClean": null,
+  "harnessError": null,
+  "verdict": {
+    "schemaVersion": 3,
+    "outcome": "OKAY",
+    "summary": "s",
+    "achieved": "a",
+    "frictions": [],
+    "failures": [],
+    "wastedCalls": [],
+    "suggestions": []
+  }
+}

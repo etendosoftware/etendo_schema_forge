@@ -505,3 +505,7 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 - The `posted` field was already gated (ETP-4520); `ListView` now also drops it from the filter, sort and export.
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the document's accounting date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
