@@ -1,8 +1,8 @@
 {
   "version": "0.22.0",
   "generatedAt": "2026-04-29T18:11:26.703Z",
-  "updatedAt": "2026-10-09T15:04:44.996Z",
-  "checksum": "6ebc6e14c3f533e3",
+  "updatedAt": "2026-10-15T12:37:56.931Z",
+  "checksum": "54dbd2c2901cfb98",
   "frontendContract": {
     "window": {
       "id": "144",
@@ -19,7 +19,6 @@
       "formScrollPaddingX": "px-2",
       "tabsBarPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "layoutType": "default",
       "linesLayout": "inlineEditable",
@@ -307,7 +306,6 @@
       "formScrollPaddingX": "px-2",
       "tabsBarPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "linesLayout": "inlineEditable",
       "autoSaveOnBlur": true,

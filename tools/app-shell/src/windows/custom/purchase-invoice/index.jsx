@@ -183,13 +183,13 @@ export default function PurchaseInvoiceWindow(props) {
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
   // Checked once here, before either branch, so both list and detail are covered.
   const windowAccessTier = useWindowAccess('183');
-  // ETP-5700 — grid row-kebab "Envío SII" (or "Envío Batuz" under Bizkaia).
+  // ETP-5700 — grid row-kebab "Enviar a SII" (or "Enviar a Batuz" under Bizkaia).
   const { sifMenuActions, sifModal } = useSifRowSendAction({
     specName: 'purchase-invoice',
     apiBaseUrl,
     enabled: windowAccessTier !== 'read-only',
     onRefresh: () => setRefreshKey(k => k + 1),
-    // The form view (recordId) mounts no grid; it has its own SendToSifButton.
+    // The form view (recordId) mounts no grid; it sends from the kebab (SifSendMenuItem).
     loadConfig: !recordId,
   });
   const { headers, createContactCtxValue, contactPortal } =
@@ -275,8 +275,8 @@ export default function PurchaseInvoiceWindow(props) {
         {contactPortal}
         {taxSifModal}
         {/* ETP-5700 — hosts the send modal for the form kebab entry (SifSendMenuItem). Mounted
-            unconditionally: the kebab unmounts its own content on close, and the topbar
-            button is not always rendered. */}
+            unconditionally: the kebab unmounts its own content on close. Since ETP-5700 the
+            kebab is the form view's only send entry point (no topbar button). */}
         <SifSendModalHost
           apiBaseUrl={apiBaseUrl}
           recordId={recordId}

@@ -8,9 +8,9 @@ import { resolveInvoiceOrgId } from './resolveInvoiceOrgId.js';
  * The fiscal-sending state of ONE open invoice (form view): which systems it is still
  * pending for, and the copy that goes with them.
  *
- * ETP-5700 — extracted from `SendToSifButton` so the form topbar button and the form
- * kebab entry (`SifSendMenuItem`) gate on exactly the same rules and can never drift
- * apart. The fiscal config is keyed by the INVOICE's own org (ETP-5087, see
+ * ETP-5700 — extracted from the former form-topbar `SendToSifButton`; the form kebab
+ * entry (`SifSendMenuItem`) is now its only consumer and the form view's only send
+ * entry point. The fiscal config is keyed by the INVOICE's own org (ETP-5087, see
  * resolveInvoiceOrgId.js), never the top-nav org selector.
  *
  * @param {object} params

@@ -45,10 +45,15 @@ function TypeBadge({ row, t }) {
 // generic `renderDefaultCell` gives every column, but these columns opt out of
 // it by defining their own `render` (needed for inline editing), which bypasses
 // CELL_RENDERERS entirely (see DataTable.jsx's `renderCellValue`).
-function TextCell({ value, className = '' }) {
+//
+// ETP-5510 — non-first text columns clamp to 2 lines (same as `renderDefaultCell`) so a long
+// address wraps instead of ellipsising on one line; the first column (`lines={1}`) stays on one.
+// The `max-w-[200px]` cap is kept, matching `renderDefaultCell`'s cap for non-grow columns.
+function TextCell({ value, className = '', lines = 2 }) {
   return (
     <TruncatedText
       text={value ?? '—'}
+      lines={lines}
       className={`max-w-[200px] ${className}`.trim()}
       data-testid="TruncatedText__5c74a8" />
   );
@@ -167,7 +172,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('name', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : <TextCell value={row.name} className="font-semibold" data-testid="TextCell__5c74a8" />,
+          : <TextCell value={row.name} lines={1} className="font-semibold" data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoFirstname', column: 'EM_Etgo_Firstname', type: 'string', label: t('firstNameColumn'),

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * DataTable — opt-in per-column chrome (`col.headClass` / `col.cellClass`), ETP-4658 Fase 0.
  *
@@ -39,7 +40,8 @@ vi.mock('@/lib/formatAmount.js', () => ({
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({
   applyCalloutUpdates: (prev, updates) => ({ ...prev, ...updates }),
 }));
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   columnFlex: () => '1 0 100px',
   columnMinWidthPx: () => 100,
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
@@ -194,10 +196,12 @@ describe('DataTable — per-column isolation', () => {
  */
 describe('DataTable — generic minWidth floor', () => {
   it('applies the width floor to the header cell and the minWidth floor to the body cell when no headClass/cellClass is set', () => {
-    render(<DataTable columns={[STRING_COL]} data={DATA} />);
+    // ETP-5510 — a lone column would become the implicit width-less `grow` column, so the
+    // floor is asserted on the second one (the first absorbs the leftover space).
+    render(<DataTable columns={[AMOUNT_COL, STRING_COL]} data={DATA} />);
 
     const th = screen.getByTestId('column-header-name');
-    const td = screen.getByTestId('row-r1').querySelectorAll('td')[1];
+    const td = screen.getByTestId('row-r1').querySelectorAll('td')[2];
 
     expect(th.style.width).toBe('100px');
     expect(td.style.minWidth).toBe('100px');
