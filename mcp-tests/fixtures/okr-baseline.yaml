@@ -1,0 +1,126 @@
+# Baseline dataset of the `okr` comparison suite (plan §5.4, S6). Read-only reference data: probes
+# name these records and never change them; per-probe documents come from each probe's own setup.
+#
+# DRAFT, NOT PILOTED. The tool arguments below follow the catalogues as read on 2026-10-14
+# (Etendo `etendo_create` / `etendo_list` shapes from suites/treasury.yaml; Holded `create_contact`
+# / `create_product` from its tools/list schema). Required Etendo fields (category, UOM, tax
+# category, price list) are confirmed only by the first seed of a freshly initialized tenant
+# (S7/S8). A wrong argument fails the seed loudly and writes an INCOMPLETE manifest; it never
+# produces a quiet half-baseline.
+#
+# Format (runner/fixture.py):
+#   records.<id>.values    vendor-neutral values, identical on every platform. Probes read them as
+#                          {{fixture.<id>.<key>}}; {{fixture.<id>.id}} is the record's id on the
+#                          target being run (never in a shared prompt).
+#   platforms.<p>.<id>     create: steps (as setup steps, D41) · id: where the new id is ·
+#                          find + match: the read that picks the record back out. Name the tool it
+#                          WOULD use even when the platform does not offer it today: the live
+#                          tools/list decides at every run, and an absent tool makes the record
+#                          `unverified` ("tool not offered", id from the seed manifest), which does not
+#                          block an official run (plan §9 q14). Omit `find` only when no read could
+#                          ever exist: that `unverified` blocks. · expect: values it must still hold ·
+#                          idPath (default id).
+# Records are seeded in the order written; a record may name only records above it.
+# Ids are permanent: rename nothing, append new records at the end.
+schemaVersion: 1
+name: okr-baseline
+
+records:
+  customer-paridad:
+    kind: customer
+    values: { name: "Cliente Paridad SL", taxId: "B00000017" }
+  supplier-paridad:
+    kind: supplier
+    values: { name: "Proveedor Paridad SL", taxId: "B00000025" }
+  product-servicio:
+    kind: product
+    values: { name: "Servicio Paridad", sku: "SRV-PARIDAD", price: 100, tax: 21 }
+
+platforms:
+  etendo-go:
+    customer-paridad:
+      create:
+        - tool: etendo_create
+          args:
+            spec: business-partner
+            entity: header
+            fields:
+              name: "{{fixture.customer-paridad.name}}"
+              searchKey: "{{fixture.customer-paridad.taxId}}"
+              taxID: "{{fixture.customer-paridad.taxId}}"
+              customer: true
+          saveAs: bp
+      id: "{{steps.bp.data.0.id}}"
+      find: { tool: etendo_list, args: { spec: business-partner, entity: header,
+                                         filters: { name: "{{fixture.customer-paridad.name}}" } } }
+      match: { name: "{{fixture.customer-paridad.name}}" }
+      expect: { taxID: "{{fixture.customer-paridad.taxId}}" }
+    supplier-paridad:
+      create:
+        - tool: etendo_create
+          args:
+            spec: business-partner
+            entity: header
+            fields:
+              name: "{{fixture.supplier-paridad.name}}"
+              searchKey: "{{fixture.supplier-paridad.taxId}}"
+              taxID: "{{fixture.supplier-paridad.taxId}}"
+              vendor: true
+          saveAs: bp
+      id: "{{steps.bp.data.0.id}}"
+      find: { tool: etendo_list, args: { spec: business-partner, entity: header,
+                                         filters: { name: "{{fixture.supplier-paridad.name}}" } } }
+      match: { name: "{{fixture.supplier-paridad.name}}" }
+      expect: { taxID: "{{fixture.supplier-paridad.taxId}}" }
+    product-servicio:
+      create:
+        - tool: etendo_create
+          args:
+            spec: product
+            entity: header
+            fields:
+              name: "{{fixture.product-servicio.name}}"
+              searchKey: "{{fixture.product-servicio.sku}}"
+              productType: S
+          saveAs: product
+      id: "{{steps.product.data.0.id}}"
+      find: { tool: etendo_list, args: { spec: product, entity: header,
+                                         filters: { searchKey: "{{fixture.product-servicio.sku}}" } } }
+      match: { searchKey: "{{fixture.product-servicio.sku}}" }
+      expect: { name: "{{fixture.product-servicio.name}}" }
+
+  holded:
+    # Holded's MCP has no list/get for contacts or products (tools/list, 2026-10-14). Each `find`
+    # names the tool it WOULD use (as fresh.holded.yaml does): while the live catalogue lacks it the
+    # record is `unverified` ("tool not offered", plan §9 q14) and its id comes from the seed
+    # manifest; the run Holded adds the tool, the record is read back for real. The `args` mirror the
+    # sibling list tools and are a guess until the tool exists: a wrong guess fails the read, which
+    # is `unverified` and blocks `fresh`.
+    customer-paridad:
+      create:
+        - tool: create_contact
+          args: { name: "{{fixture.customer-paridad.name}}", code: "{{fixture.customer-paridad.taxId}}",
+                  type: client, is_person: false }
+          saveAs: contact
+      id: "{{steps.contact.id}}"
+      find: { tool: list_contacts, args: { limit: 200 } }
+      match: { name: "{{fixture.customer-paridad.name}}" }
+    supplier-paridad:
+      create:
+        - tool: create_contact
+          args: { name: "{{fixture.supplier-paridad.name}}", code: "{{fixture.supplier-paridad.taxId}}",
+                  type: supplier, is_person: false }
+          saveAs: contact
+      id: "{{steps.contact.id}}"
+      find: { tool: list_contacts, args: { limit: 200 } }
+      match: { name: "{{fixture.supplier-paridad.name}}" }
+    product-servicio:
+      create:
+        - tool: create_product
+          args: { name: "{{fixture.product-servicio.name}}", sku: "{{fixture.product-servicio.sku}}",
+                  price: "100.00", taxes: ["s_iva_21"], kind: simple, has_stock: false,
+                  for_sale: true, for_purchase: true }
+          saveAs: product
+      id: "{{steps.product.id}}"
+      find: { tool: list_products, args: { limit: 200 } }
+      match: { sku: "{{fixture.product-servicio.sku}}" }

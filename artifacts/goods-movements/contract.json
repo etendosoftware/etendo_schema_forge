@@ -1,8 +1,8 @@
 {
   "version": "0.23.0",
   "generatedAt": "2026-07-29T14:51:09.206Z",
-  "updatedAt": "2026-10-13T17:27:53.449Z",
-  "checksum": "c3ef9bcfcde37655",
+  "updatedAt": "2026-10-15T12:37:56.577Z",
+  "checksum": "51edb20eb2d94614",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -71,7 +71,6 @@
       },
       "noHeaderBorder": true,
       "whiteFormBackground": true,
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "sendDocument": {
         "enabled": false
@@ -672,7 +671,6 @@
       },
       "noHeaderBorder": true,
       "whiteFormBackground": true,
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "sendDocument": {
         "enabled": false

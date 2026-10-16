@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { isChromelessEmbed } from '@/lib/embeddedWindow.js';
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Building2, ChevronDown, Loader2, LogOut, RefreshCw } from 'lucide-react';
@@ -41,8 +41,11 @@ import { useUI } from '@/i18n';
 import { fetchCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 import { WalkthroughProvider } from '@etendosoftware/app-shell-core/walkthrough';
-import { WALKTHROUGH_FLOWS } from '@/walkthrough/flows';
+import { WALKTHROUGH_FLOWS, walkthroughFlowsForPlan } from '@/walkthrough/flows';
 import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js';
+import { periodRecoveryFor, setPeriodRecovery } from '@/lib/periodNotAvailable.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { NEO_BASE } from '@/lib/neoWebhookClient.js';
 
 /**
  * ETP-5144 — the engine's `onFinish`, bound to the flow list so the handler can
@@ -612,7 +615,31 @@ function AppLayoutAccessGate({ menuGroups }) {
   // a tree with no provider must not throw. `undefined` (no provider, or the state not answered
   // yet) fails closed in `filterMenuGroupsByAccess`, which is what stops the entry painting
   // before its state is known.
-  const firstStepsDismissed = useFirstStepsProgressOptional()?.dismissed;
+  const firstStepsProgress = useFirstStepsProgressOptional();
+  const firstStepsDismissed = firstStepsProgress?.dismissed;
+  // ETP-5577 — productive-only tours are hidden on a demo. The plan comes from the First Steps
+  // provider above, which already resolves it for the checklist.
+  const tenantPlan = firstStepsProgress?.plan;
+  const walkthroughFlows = useMemo(() => walkthroughFlowsForPlan(tenantPlan), [tenantPlan]);
+  // ETP-5577 — the action a "period not open" refusal toast offers (see lib/periodNotAvailable.js).
+  const navigate = useNavigate();
+  const calendarReviewPending = Boolean(firstStepsProgress?.calendarReview?.pending);
+  const calendarReviewOwner = Boolean(firstStepsProgress?.calendarReview?.isOwner);
+  // The calendar's periods, read only when "Ir al calendario" is clicked, to open the right year.
+  const periodApiFetch = useApiFetch(`${NEO_BASE}/open-close-period-control`);
+  const loadPeriods = useCallback(async () => {
+    // shortcut: one page of 1000 periods (~76 years); paginate if a calendar ever outgrows it.
+    const res = await periodApiFetch('/periodControl?_startRow=0&_endRow=1000');
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body?.response?.data ?? [];
+  }, [periodApiFetch]);
+  useEffect(() => {
+    setPeriodRecovery(periodRecoveryFor(
+      { pending: calendarReviewPending, isOwner: calendarReviewOwner,
+        firstStepsDismissed: firstStepsDismissed === true }, navigate, loadPeriods));
+    return () => setPeriodRecovery(null);
+  }, [calendarReviewPending, calendarReviewOwner, firstStepsDismissed, navigate, loadPeriods]);
 
   // ETP-5402 QA follow-up — the caller's own Informes-subsection report access
   // (`fetchMyReportAccess()`), used only as a FALLBACK inside `filterMenuGroupsByAccess`'s
@@ -718,7 +745,7 @@ function AppLayoutAccessGate({ menuGroups }) {
                     flows are pure data (src/walkthrough/flows); the engine
                     itself lives in app-shell-core and is window-agnostic. */}
                 <WalkthroughProvider
-                  flows={WALKTHROUGH_FLOWS}
+                  flows={walkthroughFlows}
                   onFinish={reportWalkthroughFinish}
                   data-testid="WalkthroughProvider__488148">
                   <AppLayoutInner
