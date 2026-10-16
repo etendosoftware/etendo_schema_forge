@@ -3430,3 +3430,63 @@ restart — but it argues for running this fix close to a restart.
   **Apply:** R44 dry-run on the local DB (2026-10-01): 14 `WOULD_APPLY` / 105 `SKIPPED_NOT_NEEDED`;
   applied to Calendar1 (`A5C303F8CF314BBF85CDC90757C8DBD7`) → `APPLIED (430 rows)`, Jan–Oct all `'O'`,
   Nov/Dec `'N'` → re-run `SKIPPED_NOT_NEEDED — kept prior success state`.
+
+## ETP-5729 — R50: rectificatives from a return document with duplicated tax and an order link (2026-10-16)
+
+Corrective-only (code bug, not an onboarding gap; preventive = com.etendoerp.go commit `e4a1a1a26`;
+CUT not bumped). Fix: `20261016T185257Z__R50-rectificative-dup-tax-and-order-link.sql`.
+
+- **2026-10-16 — `C_InvoiceTax.Recalculate` tells a trigger-made row from a hand-made one.** The
+  core chain (`C_INVOICELINE_TRG2` → `C_INVOICELINETAX_TRG`) only ever creates/increments rows with
+  `Recalculate='Y'`, one per (invoice, `C_Tax_ID`). A row with `Recalculate='N'` is "manual":
+  `C_INVOICETAX_TRG2` adds its `TaxAmt` straight to `C_Invoice.GrandTotal` on INSERT and takes it
+  off on DELETE. A `Y` + `N` pair for the same tax on one invoice is never produced by the core — it
+  is the exact signature of the removed `CreateDraftInvoiceHandler#recalculateTotals`. On the local
+  DB every affected document had `N` and `Y` rows with identical base/tax and `Line=10`.
+  **Apply:** detect duplicated tax by that pair, never by amounts or document numbers.
+- **2026-10-16 — Processed invoices refuse every tax-row and line-link edit**:
+  `C_INVTAX_CHK_RESTRICTIONS_TRG` raises `@20501@` on any INSERT/DELETE of `C_InvoiceTax` when
+  `Processed='Y'`, `C_INVOICETAX_TRG` also when `Posted='Y'`, and `C_INVLINE_CHK_RESTRICTIONS_TRG`
+  on a `C_OrderLine_ID` change. All are gated by `AD_isTriggerEnabled()`, so a repair runs inside
+  `ad_disable_triggers()`/`ad_enable_triggers()` (transaction-local `set_config`). With triggers
+  off, `C_INVOICETAX_TRG2` does not adjust `GrandTotal` either — adjust it explicitly.
+  `C_ORDLINE_CHK_RESTRICTIONS_TRG` allows a `QtyInvoiced`-only change on a processed order, raising
+  only when |QtyInvoiced| > |QtyOrdered| on a sales order.
+- **2026-10-16 — Not gated by `AD_isTriggerEnabled()`: the `ad_scd_*` stored-computed-column
+  triggers and the module triggers on `C_Invoice`** (`etvfac_*`, `etblkp_*`, `etarc_vsrc_*`,
+  `aeatsii_deletion_*`, `tbai_deletion_*`). The `C_OrderLine` scd trigger behind
+  `C_Order.EM_ETGO_Invoice_Status` (the "% invoiced" chip = `ROUND(SUM|QtyInvoiced| /
+  SUM|QtyOrdered| * 100)`, `ETGO_GET_ORDER_INVOICE_STATUS`) watches `QtyInvoiced` and queues a
+  deferred refresh run at COMMIT. **Apply:** fixing `C_OrderLine.QtyInvoiced` in SQL refreshes the
+  chip by itself, even with AD triggers disabled — no explicit recompute needed.
+- **2026-10-16 — Where `C_INVOICE_POST` touches the order for an invoice line with
+  `C_OrderLine_ID`:** sales — the SO branch adds `QtyInvoiced` to `C_OrderLine.QtyInvoiced`, sets
+  `DateInvoiced`, and inserts `M_MatchSO`; purchase — the early `IsSOTrx='N'` loop adds it to
+  `C_OrderLine.QtyInvoiced` (and `DateInvoiced`), the MatchInv-PO loop inserts `M_MatchPO`. Both
+  match rows carry `M_InOutLine_ID = NULL`, so `M_MATCHSO_TRG`/`M_MATCHPO_TRG` (pending-storage
+  updates) are no-ops for them and they are safe to delete. Undoing a wrong link =
+  `QtyInvoiced -= line qty`, delete those match rows, null the line's `C_OrderLine_ID`.
+- **2026-10-16 — Return documents and rectificatives, as stored by GO.** The return
+  `M_InOut` uses a `C_DocType` with `IsReturn='Y'` (`MMS` sales / `MMR` purchase), but its
+  `MovementType` is not a reliable discriminator (`C-` / `V+` observed on returns). Each return
+  line points at the original shipment line via `M_InOutLine.Canceled_InOutLine_ID` and has NO
+  `C_OrderLine_ID` itself; the rectificative is tied to the invoice it rectifies by
+  `C_Invoice_Reverse` (`C_Invoice_ID` = the rectificative) and has no header `C_Order_ID`.
+- **2026-10-16 — Reading a module's `EM_` column without a hard dependency:**
+  `COALESCE(to_jsonb(r) ->> 'em_etvfac_senttoverifac', 'N')` on a row/CTE alias evaluates to the
+  default when the module (and column) is not installed, instead of failing the whole fix. Used by
+  R50 for the Verifactu (`com.etendoerp.verifactu`), SII (`org.openbravo.module.sii`) and
+  TicketBAI flags, which `com.etendoerp.go` does not all declare as dependencies.
+- **2026-10-16 — Posted documents are reported, not re-accounted.** On the local DB nearly every
+  affected rectificative was `Posted='Y'` with `Fact_Acct` carrying the doubled VAT and
+  receivable/payable (e.g. 12.00 + 5.04 VAT = 17.04 instead of 2.52 / 14.52). R50 repairs the
+  subledger only for unposted documents; posted ones go to `@report` with the procedure: GO
+  `unpost` action (`DocumentPostingService#unpost` → `ResetAccounting`, refuses a closed period)
+  → `--fix R50-rectificative-dup-tax-and-order-link --client <id>` → post again. The order unlink
+  is applied even to posted invoices: `C_OrderLine_ID` plays no part in the invoice's `Fact_Acct`.
+- **2026-10-16 — Local DB read-only simulation:** tenant `802509E12436405C86BA1FD5B1DF508C` →
+  tax repair for `REC-1000005` (posted `E`, -2.14 → -1.82), 5 order lines back to 100%
+  (e.g. 3 → 4 of 4), `REC-1000000…04` reported as POSTED, order `1000008` reported as
+  over-invoiced (returned quantity already invoiced again). Tenant
+  `DC22B59C30884D9BAFDD7BC5D05027C1` → both invoices POSTED (reported), PV1000002 0 → 1 of 1,
+  PC1000006 -1 → 0 of 1. Not executed against any DB.
