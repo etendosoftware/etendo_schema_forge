@@ -68,3 +68,4 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 - LinesTable template updated in ETP-3908 to include the inline-editable add-row alignment fix. This window uses `linesLayout: "classic"` so the new template branch is dead code here — no behavioral change.
 
 - **ETP-4103 — Generator fix (labelOverrides deduplication)**: `const labelOverrides` in the generated page now references `api.labelOverrides` instead of re-embedding the full object. No functional change — field labels and selectors behave identically.
+- **ETP-5771 — Lines grid footer totals**: `decisions.json` declares `window.showDetailFooterTotals: false`, but until the schema_forge_core fix in ETP-5771 the resolver silently dropped that key, so the generated page never received it. With the core version pinned in this branch, `PriceListPage.jsx` now passes `showDetailFooterTotals={false}` and the lines grid shows no generic footer totals row.
