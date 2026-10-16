@@ -180,9 +180,9 @@ export default function CreateReturnWizard({
       if (!res.ok) {
         // `body?.error?.message` covers the standard `NeoResponse.error(int, String)` envelope
         // (`{"error":{"message","status"}}`) used by most NEO action handlers — same fallback
-        // chain as useNeoAction.js (ETP-4706); without it the real backend message (e.g. "A
-        // return already exists for shipment: ...") is silently dropped for the generic HTTP
-        // reason phrase.
+        // chain as useNeoAction.js (ETP-4706); without it the real backend message (e.g. "Cannot
+        // return 5 of Agua: only 4 can still be returned ...", a 422 returnQuantityExceedsAvailable)
+        // is silently dropped for the generic HTTP reason phrase.
         const rawMessage = body?.error?.message ?? body?.response?.error?.message
           ?? body?.response?.message ?? body?.message ?? `Request failed (${res.status})`;
         throw new Error(translateBackendError(rawMessage, ui, { messageKeys: extractBackendMessageKeys(body) }));

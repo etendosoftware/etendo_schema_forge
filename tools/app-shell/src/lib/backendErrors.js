@@ -253,6 +253,19 @@ const BACKEND_ERROR_MAP = {
   // rectifies (ETSG_CHECK_RECTIF_INV_DOC), so the request is rejected before anything is written.
   'Select at least one invoice to rectify: a rectificative invoice cannot be confirmed without it.':
     'backendError.rectifiedInvoiceRequired',
+  // ReturnFromDocumentSupport (com.etendoerp.go — ETP-5711): the create-from-document return
+  // actions refuse a document with nothing left to return, and one that is not completed.
+  'Nothing is left to return from this document: every line has already been returned.':
+    'backendError.returnNothingLeft',
+  'The document must be completed before goods can be returned from it.':
+    'backendError.returnSourceNotCompleted',
+  // ReturnableQuantity.refuseDirectCreate (com.etendoerp.go — ETP-5711): a return line is never
+  // created by a plain POST of the line, only by the import / create-from-document actions. Two
+  // exact strings (one per direction, they differ only in the action names), one translation.
+  'Return lines cannot be created directly. Add them to the return with importReceiptLines, or create the whole return from the source document with createPurchaseReturn.':
+    'backendError.returnLineRequiresImport',
+  'Return lines cannot be created directly. Add them to the return with importShipmentLines, or create the whole return from the source document with createReturn.':
+    'backendError.returnLineRequiresImport',
   // CreateDraftInvoiceHandler (com.etendoerp.go) — same hardcoded-Spanish-literal bug
   // as above, but from the shipment-invoicing flow. Two throw sites emit this exact
   // string: capShipmentLineOverrides (~L952) and the line-selection loop inside
@@ -727,6 +740,90 @@ function matchInvoiceLinesWithoutAmount(msg) {
   return { products };
 }
 
+// ReturnableQuantity.java (com.etendoerp.go — ETP-5711), `error.code = returnQuantityExceedsAvailable`:
+// "Cannot return {requested} of {product}: only {available} can still be returned from this line
+// ({total} on the source document)." or, with nothing left, "...: nothing is left to return from
+// this line ({total} on the source document)." The numbers are plain, locale-neutral digits and
+// the product name is free text, so it is located by the fixed delimiters, never by a regex.
+const RETURN_EXCEEDS_PREFIX = 'Cannot return ';
+const RETURN_EXCEEDS_OF = ' of ';
+const RETURN_EXCEEDS_ONLY = ': only ';
+const RETURN_EXCEEDS_ONLY_TAIL = ' can still be returned from this line (';
+const RETURN_EXCEEDS_NONE = ': nothing is left to return from this line (';
+const RETURN_EXCEEDS_SUFFIX = ' on the source document).';
+
+function splitReturnExceeds(msg) {
+  if (!msg.startsWith(RETURN_EXCEEDS_PREFIX) || !msg.endsWith(RETURN_EXCEEDS_SUFFIX)) return null;
+  const rest = msg.slice(RETURN_EXCEEDS_PREFIX.length, -RETURN_EXCEEDS_SUFFIX.length);
+  const ofAt = rest.indexOf(RETURN_EXCEEDS_OF);
+  if (ofAt <= 0) return null;
+  return { requested: rest.slice(0, ofAt), afterOf: rest.slice(ofAt + RETURN_EXCEEDS_OF.length) };
+}
+
+function matchReturnQuantityExceeds(msg) {
+  const parts = splitReturnExceeds(msg);
+  if (!parts) return null;
+  const { requested, afterOf } = parts;
+  const onlyAt = afterOf.lastIndexOf(RETURN_EXCEEDS_ONLY);
+  const tailAt = afterOf.lastIndexOf(RETURN_EXCEEDS_ONLY_TAIL);
+  if (onlyAt <= 0 || tailAt < onlyAt) return null;
+  return {
+    requested,
+    product: afterOf.slice(0, onlyAt),
+    available: afterOf.slice(onlyAt + RETURN_EXCEEDS_ONLY.length, tailAt),
+    total: afterOf.slice(tailAt + RETURN_EXCEEDS_ONLY_TAIL.length),
+  };
+}
+
+function matchReturnNothingLeftOnLine(msg) {
+  const parts = splitReturnExceeds(msg);
+  if (!parts) return null;
+  const noneAt = parts.afterOf.lastIndexOf(RETURN_EXCEEDS_NONE);
+  if (noneAt <= 0) return null;
+  return {
+    requested: parts.requested,
+    product: parts.afterOf.slice(0, noneAt),
+    total: parts.afterOf.slice(noneAt + RETURN_EXCEEDS_NONE.length),
+  };
+}
+
+// ReturnFromDocumentSupport.java (com.etendoerp.go — ETP-5711), `error.code = returnLineNotInDocument`:
+// "Line {lineId} is not a line of this document." The id is an opaque token, located by the fixed
+// prefix and suffix, no regex.
+const RETURN_LINE_NOT_IN_DOCUMENT_PREFIX = 'Line ';
+const RETURN_LINE_NOT_IN_DOCUMENT_SUFFIX = ' is not a line of this document.';
+
+function matchReturnLineNotInDocument(msg) {
+  if (!msg.startsWith(RETURN_LINE_NOT_IN_DOCUMENT_PREFIX)
+    || !msg.endsWith(RETURN_LINE_NOT_IN_DOCUMENT_SUFFIX)) {
+    return null;
+  }
+  const lineId = msg.slice(
+    RETURN_LINE_NOT_IN_DOCUMENT_PREFIX.length,
+    -RETURN_LINE_NOT_IN_DOCUMENT_SUFFIX.length,
+  );
+  if (!lineId) return null;
+  return { lineId };
+}
+
+// ReturnFromDocumentSupport.java (com.etendoerp.go — ETP-5711), `error.code = returnReasonTooLong`:
+// "The reason is too long: it can have at most {max} characters (it has {length})."
+const RETURN_REASON_TOO_LONG_PREFIX = 'The reason is too long: it can have at most ';
+const RETURN_REASON_TOO_LONG_MID = ' characters (it has ';
+const RETURN_REASON_TOO_LONG_SUFFIX = ').';
+
+function matchReturnReasonTooLong(msg) {
+  if (!msg.startsWith(RETURN_REASON_TOO_LONG_PREFIX) || !msg.endsWith(RETURN_REASON_TOO_LONG_SUFFIX)) {
+    return null;
+  }
+  const rest = msg.slice(RETURN_REASON_TOO_LONG_PREFIX.length, -RETURN_REASON_TOO_LONG_SUFFIX.length);
+  const midAt = rest.indexOf(RETURN_REASON_TOO_LONG_MID);
+  if (midAt <= 0) return null;
+  const max = rest.slice(0, midAt);
+  const length = rest.slice(midAt + RETURN_REASON_TOO_LONG_MID.length);
+  return max && length ? { max, length } : null;
+}
+
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
 // orderId. Fixed English prefix + dynamic order id appended, no closing delimiter
 // (ETP-4831 case 4, family B). Same plain-string-slicing rationale as
@@ -1118,6 +1215,10 @@ const PARAMETERIZED_MATCHERS = [
   [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
   [matchZeroOrNegativeQtyProcess, 'backendError.zeroOrNegativeQtyProcess'],
   [matchInvoiceLinesWithoutAmount, 'backendError.invoiceLinesWithoutAmount'],
+  [matchReturnQuantityExceeds, 'backendError.returnQuantityExceeds'],
+  [matchReturnNothingLeftOnLine, 'backendError.returnNothingLeftOnLine'],
+  [matchReturnLineNotInDocument, 'backendError.returnLineNotInDocument'],
+  [matchReturnReasonTooLong, 'backendError.returnReasonTooLong'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],

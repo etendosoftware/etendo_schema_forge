@@ -440,3 +440,13 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 - The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped). The custom list columns in `windows/custom/goods-shipment/index.jsx` (`COLUMNS`) carry the same gate.
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Return from the shipment (`createReturn`) — ETP-5711
+
+`createReturn` is now declared to MCP by `GoodsShipmentHeaderHandler.actionContracts()` (after `createDraftInvoice`).
+Same contract as `createPurchaseReturn` on the goods receipt: optional `lines: [{lineId, returnQuantity}]` and
+`reason`; omit `lines` to return everything still returnable; the return (`return-material-receipt`) is always left in
+draft and the 201 lists its lines with their `sourceLineId`. The old 409 "A return already exists for shipment" is gone
+(it blocked a second partial return); the cap is *returnable = shipped − what non-voided returns, drafts included,
+already hold*, refused with 422 `returnQuantityExceedsAvailable` / `nothingLeftToReturn`. See
+`return-material-receipt.md` and neo-headless.md §4.12.32.

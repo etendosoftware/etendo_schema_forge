@@ -637,3 +637,31 @@ to `ETGO_SF_SPEC.AGENT_PROMPT`): create the header → `availableShipments` →
 `availableShipmentLines` → `importShipmentLines` → DocAction `CO` → `rectifiableInvoices` →
 `createReturnInvoice`. The regen only added `agentPrompt` to `contract.json` / `contract.mcp.json`;
 the generated JSX is unchanged.
+
+## Over-return cap and MCP actions — ETP-5711
+
+The server never lets a return take more than what is still returnable of a source line: *returnable = quantity of
+the source line − what every non-voided return line linked to it already holds, drafts included* (the same figure
+the picker lists show as `movementQuantity`). It is enforced when the return is created from the document, when
+lines are imported, and when the quantity of an existing return line is edited (the line's own quantity does not
+count against itself). A violation is a 422 `returnQuantityExceedsAvailable` ("Cannot return 5 of Agua: only 4 can
+still be returned from this line (10 on the source document)."), translated in the SPA
+(`backendError.returnQuantityExceeds`), and nothing is created. A second partial return with exactly what is left
+works; one document may now have several returns (the old 409 "A return already exists for shipment" is gone).
+
+- **Lines arrive only by import:** create the return from ONE shipment (`createReturn` on the goods shipment, see
+  `goods-shipment.md`) or "Añadir desde Albarán" (`importShipmentLines`, lines from one or more shipments of the same
+  customer). No manual line entry with a product. **The server enforces it:** a direct `POST` of a line on the
+  CRUD endpoint (REST, `etendo_batch` or MCP `etendo_create`) answers 422 `returnLineRequiresImport` ("Return lines
+  cannot be created directly. Add them to the return with importShipmentLines, or create the whole return from the
+  source document with createReturn."), translated in the SPA. Quantity edits (PATCH/PUT) of existing lines stay
+  allowed and capped; a legacy line with no source link is not capped.
+- **No double return under concurrency:** the source shipment lines are row-locked (`FOR UPDATE`, sorted ids) before
+  the returned total is read, so two simultaneous creates/imports cannot both pass the cap. A reversed return still
+  counts as returned (only a voided one frees the quantity). `reason` over the description length answers 422
+  `returnReasonTooLong`. See `neo-headless.md` §4.12.32.
+- **Published to MCP.** `documentAction` (CO) joins the five actions of ETP-5704 in
+  `ReturnMaterialReceiptHeaderHandler.actionContracts()`; the spec prompt
+  (`agent-prompts/return-material-receipt/spec.md`) now also describes the `createReturn` fast path and the cap. The
+  classic "Pick/Edit Lines" button (`RM_Receipt_PickEdit`, no process) redirects to `importShipmentLines` through
+  `MCP_CONFIG`. Currency is unchanged (ETP-5704).
