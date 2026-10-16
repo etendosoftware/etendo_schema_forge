@@ -224,6 +224,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_PriceList", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
+        showDetailFooterTotals={false}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />

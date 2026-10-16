@@ -324,14 +324,14 @@
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
+          "form": false,
           "grid": true,
           "gridOrder": 6,
-          "section": "summary",
           "businessCritical": true
         },
         "summedLineAmount": {
           "visibility": "readOnly",
-          "section": "summary"
+          "form": false
         },
         "outstandingAmount": {
           "visibility": "readOnly",
