@@ -1221,8 +1221,8 @@ describe('InvoicePreview — delivery row (ETP-5549)', () => {
 
   const lastSummaryProps = () => SummaryCard.mock.calls.at(-1)[0];
 
-  function renderWithDelivery(specName, eTGODeliveryStatus) {
-    const inv = { ...defaultInvoice, eTGODeliveryStatus };
+  function renderWithDelivery(specName, eTGODeliveryStatus, extra = {}) {
+    const inv = { ...defaultInvoice, eTGODeliveryStatus, ...extra };
     useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
       displayInvoice: inv,
       isSalesInvoice: specName === 'sales-invoice',
@@ -1260,6 +1260,17 @@ describe('InvoicePreview — delivery row (ETP-5549)', () => {
   ])('passes no deliveryPercent when eTGODeliveryStatus is %s', (_label, value) => {
     renderWithDelivery('sales-invoice', value);
     expect(lastSummaryProps().deliveryPercent).toBeUndefined();
+  });
+
+  // A rectificative has no delivery to track: hidden on sales only; the purchase
+  // "Received" row is deliberately unchanged.
+  it.each([
+    ['sales-invoice', 'RECTIFICATIVA', undefined],
+    ['sales-invoice', 'FAC', 60],
+    ['purchase-invoice', 'RECTIFICATIVA', 60],
+  ])('%s with arInvoiceSubtype %s passes deliveryPercent %s', (specName, arInvoiceSubtype, expected) => {
+    renderWithDelivery(specName, 60, { arInvoiceSubtype });
+    expect(lastSummaryProps().deliveryPercent).toBe(expected);
   });
 
   it('still forwards status and fiscal rows alongside the delivery props', () => {
