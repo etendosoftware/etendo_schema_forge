@@ -17020,6 +17020,7 @@
     "noLines": "No lines",
     "backendError.amortizationCurrencyRequired": "Currency field cannot be empty",
     "backendError.staleRecord": "Someone else changed this record while you were editing it, so your changes were not saved. Reload the record to see the current values.",
+    "backendError.invoiceLinesWithoutAmount": "The invoice cannot be completed: the lines of {products} have a quantity and a price but a net amount of 0, so the totals would be wrong. Save those lines again so the amount is recalculated, then complete.",
     "backendError.costingNoProduct": "A cost line must belong to a product.",
     "backendError.costingCostRequired": "The cost is required.",
     "backendError.costingCostNegative": "The cost cannot be negative.",
