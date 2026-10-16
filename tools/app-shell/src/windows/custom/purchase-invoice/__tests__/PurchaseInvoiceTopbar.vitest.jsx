@@ -104,13 +104,14 @@ describe('PurchaseInvoiceTopbar', () => {
   // topbarRight siblings. Clone now lives in PurchaseInvoiceSecondaryActions
   // (topbarSecondary, left of Save/Confirm — see
   // artifacts/purchase-invoice/custom/__tests__/PurchaseInvoiceSecondaryActions.test.js),
-  // and SendToSifButton is rendered as that same component's `children`, after
-  // Clone. PurchaseInvoiceTopbar itself must never regrow either — that would
-  // duplicate the action alongside the topbarSecondary copy.
-  it('never renders a clone button or a send-to-sif button — both moved to PurchaseInvoiceSecondaryActions (ETP-5260)', () => {
+  // and ETP-5700 removed the form-topbar send button altogether: the form view
+  // sends from the kebab only (SifSendMenuItem). PurchaseInvoiceTopbar must never
+  // regrow either — that would duplicate the action.
+  it('never renders a clone button or a fiscal send button (ETP-5260, ETP-5700)', () => {
     render(<PurchaseInvoiceTopbar {...defaultProps} />);
     expect(screen.queryByTestId('clone-btn')).toBeNull();
     expect(screen.queryByTestId('send-to-sif-btn')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^sendToSifLabel/ })).toBeNull();
   });
 
   // "Gestionar recepción": the generic follow-up button, fed with this window's config
@@ -626,7 +627,5 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
 });
 
 // ETP-5272 follow-up ("Enviar a SIF" must flush pending header edits before sending) does NOT
-// apply to this component any more: ETP-5260 moved SendToSifButton (and Clone/Copy-link) out of
-// PurchaseInvoiceTopbar into PurchaseInvoiceSecondaryActions (topbarSecondary slot). The
-// onSave/isDirty forwarding coverage for purchase-invoice now lives in
-// artifacts/purchase-invoice/custom/__tests__/PurchaseInvoiceSecondaryActions.test.js instead.
+// apply to this component: the form-topbar send button it guarded was removed in ETP-5700 (the
+// form view sends from the kebab, SifSendMenuItem).

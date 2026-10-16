@@ -180,6 +180,46 @@ describe('DetailMoreActionsMenu — save-before-confirm guard (ETP-4940)', () =>
   });
 });
 
+// ETP-5700 — custom kebab content cannot save first (it gets no save handle), so the
+// menu hands it the header's dirty signal and lets it refuse to run on a dirty form.
+describe('DetailMoreActionsMenu — customMenuContent receives isDirty (ETP-5700)', () => {
+  function DirtyProbe({ isDirty }) {
+    return <span data-testid="dirty-probe">{String(isDirty)}</span>;
+  }
+
+  function renderWithCustom(hook) {
+    render(
+      <DetailMoreActionsMenu
+        apiBaseUrl="https://example.test/api"
+        customMenuContent={DirtyProbe}
+        data={{ id: 'rec-1' }}
+        docAction={makeDocAction()}
+        hideMoreMenu={false}
+        hook={hook}
+        menuActions={[]}
+        neoAction={{ execute: vi.fn(), loading: false }}
+        recordId="rec-1"
+        setDocsRefreshSignal={vi.fn()}
+        sqBtnSize="h-9 w-9"
+        statusField="documentStatus"
+        token="tok"
+        ui={(key) => key}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('action-more'));
+  }
+
+  it.each([
+    [true, 'true'],
+    [false, 'false'],
+  ])('isDirtyHeader=%s → the open menu content gets isDirty=%s', (isDirtyHeader, expected) => {
+    renderWithCustom(makeHook({ isDirtyHeader }));
+    // The hidden probe renders the same component too; the visible one is the last.
+    const rendered = screen.getAllByTestId('dirty-probe');
+    expect(rendered[rendered.length - 1]).toHaveTextContent(expected);
+  });
+});
+
 // ETP-5684 — "Show Accounting Fields" off hides Contabilizar / Descontabilizar from the
 // form kebab, whatever the window declared. Keyed on the generic `neoAction`, so the
 // generated menuActions of every postable window are covered without a decisions change.
