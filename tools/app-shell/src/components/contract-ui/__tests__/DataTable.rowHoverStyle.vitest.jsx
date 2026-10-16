@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 // @covers tools/app-shell/src/components/contract-ui/rowVisuals.js
 /**
  * DataTable — row hover style and the row selection colours (getRowClassName) plus the
@@ -185,6 +186,29 @@ describe('DataTable — non-clickable rows never lift', () => {
 // The lifted shadow's room: 24px of padding on the inner box, taken back from the layout
 // by a negative margin on this wrapper (no visible gap under the last row), with the
 // padding made click-through so it never swallows clicks on whatever follows the grid.
+// `lift-always` (ETP-5526) — the lift on rows that have no click target of their
+// own but expose hover actions (the attachments grid). Plain `lift` must keep NOT
+// lifting them (covered above), so the two values are pinned side by side.
+describe('DataTable — rowHoverStyle="lift-always"', () => {
+  it.each([
+    ['a non-clickable row', { clickable: false }, 'cursor-default'],
+    ['a clickable row', {}, 'cursor-pointer'],
+  ])('lifts %s with an opaque white background', async (_label, props, cursor) => {
+    const { row, tokens } = await renderRow({ rowHoverStyle: 'lift-always', ...props });
+
+    expect(tokens).toEqual(expect.arrayContaining([cursor, ...LIFT, ...LIFT_REST]));
+    expect(tokens).not.toContain(TINT_VAR);
+    expect(hoverBackgroundUtilities(row)).toEqual(['hover:bg-card']);
+  });
+
+  it('keeps the checked colour on hover of a non-clickable row and still lifts', async () => {
+    const { row, tokens } = await renderRow({ rowHoverStyle: 'lift-always', clickable: false, check: true });
+
+    expect(tokens).toEqual(expect.arrayContaining([...CHECKED, ...LIFT]));
+    expect(hoverBackgroundUtilities(row)).toHaveLength(1);
+  });
+});
+
 const ROOM = [
   '!-mb-6', '[&>div]:pb-6',
   '[&>div]:pointer-events-none', '[&>div>table]:pointer-events-auto',
@@ -196,6 +220,7 @@ describe('DataTable — scroll wrapper room for the lifted shadow', () => {
     ['a clickable "elevated" grid', { rowHoverStyle: 'elevated' }, true],
     ['a clickable "tint" grid', { rowHoverStyle: 'tint' }, false],
     ['a non-clickable grid', { clickable: false }, false],
+    ['a non-clickable "lift-always" grid', { clickable: false, rowHoverStyle: 'lift-always' }, true],
     ['an inlineEditable grid', { linesLayout: 'inlineEditable' }, false],
   ])('reserves the room only for %s', async (_label, props, padded) => {
     const { wrapper } = await renderRow(props);

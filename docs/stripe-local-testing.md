@@ -270,8 +270,13 @@ account's subscription is read or which portal session is opened.
 - **`GET /sws/go/billing/subscription`** — resolves the account's `CheckoutRequest` with a
   `stripeSubscription`, fetches the live detail from Stripe (`plan`, `amountMinor`, `currency`,
   `status`, `renewalAt`, `cancelAtPeriodEnd`), and merges in the stored `graceEndsAt` /
-  `graceDaysRemaining`. An account with none returns `200 {"hasSubscription": false}`, never a
+  `graceDaysRemaining` plus `clientId`, the environment the subscription pays for (`null` while
+  the purchase has no environment yet; "Mis empresas" uses it to put `renewalAt` on the right row,
+  ETP-5734). An account with none returns `200 {"hasSubscription": false}`, never a
   `404` — free and grandfathered accounts must still render the page.
+  **`renewalAt` is the renewal date; the environment's stored `renewalDueAt` is not.** The latter
+  is the payment-grace anchor: empty while the subscription is current, the end of the last paid
+  period once it is past due.
   **Note:** `status` in this response is Stripe's own live subscription status string (e.g.
   `"active"`, `"past_due"`, `"canceled"`) — not the internal `CURRENT` / `PAST_DUE` / `EXPIRED`
   enum this guide uses above. Use `graceDaysRemaining` / `graceEndsAt` to detect the grace state,

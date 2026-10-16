@@ -134,25 +134,6 @@ export function buildDimensionUpdatePayload(movement, accountCurrencyId, overrid
 }
 
 /**
- * Hook for registering a payment (replicating Classic "Add Payment").
- *
- * POST /sws/neo/financial-account-transactions?action=create-payment
- * body: {
- *   FIN_Financial_Account_ID, isReceipt, bpartnerId, paymentMethodId, amount,
- *   paymentDate, referenceNo?, description?, organizationId?,
- *   selectedInvoices: { <psdId>: amount }, writeoffs: { <psdId>: bool },
- *   glItems: [{ glItemId, receivedIn, paidOut }], overpaymentAction
- * }
- *
- * Returns `{ createPayment, creating, error }`. On success resolves with the
- * `{ id, documentNo, status, refundPaymentId? }` shape returned by the backend.
- */
-export function useCreatePayment() {
-  const { run, busy, error } = usePostAction('create-payment');
-  return { createPayment: run, creating: busy, error };
-}
-
-/**
  * Hook for transferring funds between two financial accounts (ETP-4272).
  *
  * POST /sws/neo/financial-account-transactions?action=transfer

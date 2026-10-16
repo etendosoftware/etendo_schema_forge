@@ -23,7 +23,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         type="button"
         data-testid="statements-import-button"
         onClick={onImportClick}
-        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-[#121217] px-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
+        className="inline-flex h-10 items-center gap-2 rounded-l-lg bg-primary px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-primary/90"
       >
         <Upload className="h-5 w-5" data-testid="Upload__8a428c" />
         {ui('financeAccountStatementsImport')}
@@ -35,7 +35,7 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
         aria-expanded={open}
         data-testid="statements-import-split"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-r-lg border-l border-inverse-border/20 bg-[#121217] text-white transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-r-lg border-l border-inverse-border/20 bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
       >
         <ChevronDown
           className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -76,7 +76,7 @@ function SyncStatementsButton({ ui, onClick, syncing }) {
       data-testid="statements-bank-sync-button"
       onClick={onClick}
       disabled={syncing}
-      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#121217] px-3 text-sm font-medium leading-6 text-white transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium leading-6 text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
     >
       <RefreshCw
         className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`}

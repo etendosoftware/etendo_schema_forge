@@ -117,7 +117,12 @@
             "C": "matchRuleConditionContains",
             "S": "matchRuleConditionStartsWith",
             "R": "matchRuleConditionRegex"
-          }
+          },
+          "enumValues": [
+            { "value": "C", "name": "matchRuleConditionOptionContains" },
+            { "value": "S", "name": "matchRuleConditionOptionStartsWith" },
+            { "value": "R", "name": "matchRuleConditionOptionRegex" }
+          ]
         },
         "textPattern": {
           "grid": false,

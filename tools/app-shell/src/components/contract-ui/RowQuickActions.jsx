@@ -239,6 +239,21 @@ export default function RowQuickActions({
     setInFlight(prev => ({ ...prev, [key]: true }));
     try {
       if (action.documentAction) {
+        // ETP-5745 QA follow-up — an OPTIONAL per-action guard, checked BEFORE preUnpost:
+        // a row whose document action is already known to be refused (e.g. invoice
+        // reactivation blocked by InvoiceReactivationGuard, com.etendoerp.go) must not
+        // run preUnpost either, or this row-hover kebab un-posts the row and THEN fails —
+        // the exact side effect ETP-5745 exists to prevent on the other two surfaces
+        // (detail kebab, bulk bar). Generic here on purpose: this component stays
+        // domain-agnostic, the actual check is supplied by the window
+        // (`buildInvoiceRowQuickActions`'s `reactivateRowFilter`, useInvoiceWindow.js).
+        if (typeof action.preUnpostGuard === 'function') {
+          const guardResult = await action.preUnpostGuard(row, action.documentAction, ui);
+          if (guardResult !== true) {
+            onMenuActionExecuted?.(action, { success: false, message: guardResult });
+            return;
+          }
+        }
         // ETP-5378 — same rule the detail kebab applies (DetailMoreActionsMenu's
         // runDocumentAction): reactivating an already-posted document must reverse its
         // accounting first, or the backend rejects the bare docAction with "Factura
