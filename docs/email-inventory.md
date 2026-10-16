@@ -46,6 +46,7 @@ graph LR
     K1(["Print &amp; Send from the backoffice"])
     K2(["Grants or cancels portal access"])
     K3(["An alert rule matches, or a<br/>TicketBAI / currency sync fails"])
+    K4(["Daily job: a demo trial<br/>ends soon or has ended"])
   end
 
   M1["✅ ✉️ new-account<br/><i>verified</i>"]
@@ -57,6 +58,7 @@ graph LR
   M7["✅ ✉️ organization-joined<br/><i>verified</i>"]
   M8["◐ ✉️ verify-email<br/><i>24-hour link</i>"]
   M9["◐ ✉️ new-account-invitee<br/><i>welcome, no verification</i>"]
+  M10["◐ ✉️ demo-trial-notice<br/><i>3 days, 1 day, ended</i>"]
   D1["✅ ✉️ sales-invoice-send<br/><i>verified</i>"]
   D2["◐ ✉️ sales-order-send"]
   D3["◐ ✉️ sales-quotation-send"]
@@ -94,8 +96,9 @@ graph LR
   ADMIN --> K1 --> C1
   ADMIN --> K2 --> C2
   K3 --> C3
+  K4 --> M10 --> ADMIN
 
-  M1 & M2 & M3 & M4 & M5 & M6 & M7 & M8 & M9 --> LAYOUT --> PROVIDER
+  M1 & M2 & M3 & M4 & M5 & M6 & M7 & M8 & M9 & M10 --> LAYOUT --> PROVIDER
   D1 & D2 & D3 & D4 & D5 & D6 & D7 & D8 --> LAYOUT
   C1 & C2 & C3 --> SMTP
   SMTP -. "no SMTP configured" .-> PROVIDER
@@ -107,9 +110,9 @@ graph LR
   classDef who fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
   classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
   class M1,M2,M3,M4,M7,D1 verified
-  class M5,M6,M8,M9,D2,D3,D4,D5,D6,D7,D8 migrated
+  class M5,M6,M8,M9,M10,D2,D3,D4,D5,D6,D7,D8 migrated
   class C1,C2,C3 todo
-  class A1,A2,A3,A4,O1,O2,O3,O4,O5,K1,K2,K3 act
+  class A1,A2,A3,A4,O1,O2,O3,O4,O5,K1,K2,K3,K4 act
   class ADMIN,OPER,PARTY who
   class LAYOUT,PROVIDER,SMTP hub
 ```
@@ -237,6 +240,7 @@ what they used *before* that work, which is what the branded-template migration 
 | 14 | Welcome for an invited user | `new-account-invitee` | invitation accepted when the account is created there — `CompanyInvitationService` | shared layout | `contracts/CoreEmailContractProvider.java`, `rest/TransactionalAuthEmailSender.java` |
 | 15 | Organization joined | `organization-joined` | invitation accepted — `CompanyInvitationService` (both the existing-account and register-and-accept paths) | shared layout | `contracts/OrganizationJoinedEmailContract.java`, `rest/TransactionalAuthEmailSender.java` |
 | 16 | Login alert (new IP/device) | `login-alert` | **deliberately not sent** (2026-08-26) — registered and reachable over the endpoint, no in-repo caller by decision | shared layout | `contracts/LoginAlertEmailContract.java` |
+| 16a | Demo trial ending / ended (ETP-5453) | `demo-trial-notice` | daily background process *Demo Trial Notices* — 3 and 1 days before the end, and once ended; System callers only | shared layout, links to `/upgrade` | `contracts/DemoTrialNoticeEmailContract.java`, `payment/DemoTrialNoticePlanner.java`, `payment/DemoTrialNoticeService.java`, `payment/DemoTrialNoticeProcess.java` (scheduled by hand in Process Request) |
 
 ### 3.C — Etendo Core (classic SMTP)
 
