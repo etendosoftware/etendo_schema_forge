@@ -28,6 +28,12 @@ function sanitizeCalloutMessage(raw) {
  * one of those two conditions, or `null` otherwise — consumers (DetailView) use it
  * to show/clear the persistent inline banner; see `lib/blockingBpConditions.js`.
  * executeCallout(field, value, formState, meta): triggers the callout (debounced 300ms).
+ * ETP-4742: it returns a promise that settles once the callout has been fully
+ * accounted for — `true` when a response was handed to the consumer through
+ * `calloutResult` (the consumer must apply it; a form gating itself on the chain
+ * releases on its own apply effect, not on this resolution), `false` when there
+ * is nothing to apply (non-OK response, network error or abort). Callers that
+ * ignore the return value (the user-change path) are unaffected.
  */
 export function useCallout(entity, { token, apiBaseUrl }) {
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -38,74 +44,80 @@ export function useCallout(entity, { token, apiBaseUrl }) {
   const abortMapRef = useRef({});
 
   const executeCallout = useCallback((field, value, formState, meta) => {
-    if (!field || !apiBaseUrl || !entity) return;
+    if (!field || !apiBaseUrl || !entity) return Promise.resolve(false);
 
     // Cancel any pending debounced call for THIS field only
     if (debounceMapRef.current[field]) clearTimeout(debounceMapRef.current[field]);
 
-    debounceMapRef.current[field] = setTimeout(async () => {
-      // Abort previous in-flight request for THIS field only
-      if (abortMapRef.current[field]) abortMapRef.current[field].abort();
-      const controller = new AbortController();
-      abortMapRef.current[field] = controller;
+    return new Promise((resolve) => {
+      debounceMapRef.current[field] = setTimeout(async () => {
+        // Abort previous in-flight request for THIS field only
+        if (abortMapRef.current[field]) abortMapRef.current[field].abort();
+        const controller = new AbortController();
+        abortMapRef.current[field] = controller;
 
-      setCalloutLoading(true);
-      try {
-        // Extract auxiliary values from formState (keys like "businessPartner_LOC")
-        const state = formState ?? {};
-        const auxiliaryValues = extractAuxiliaryValues(state);
-        const payload = {
-          field,
-          value,
-          formState: state,
-          ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
-        };
-        const res = await apiFetch(`/${entity}/callout`, {
-          method: 'POST',
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
+        let hasResult = false;
+        setCalloutLoading(true);
+        try {
+          // Extract auxiliary values from formState (keys like "businessPartner_LOC")
+          const state = formState ?? {};
+          const auxiliaryValues = extractAuxiliaryValues(state);
+          const payload = {
+            field,
+            value,
+            formState: state,
+            ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
+          };
+          const res = await apiFetch(`/${entity}/callout`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
 
-        if (!res.ok) {
-          setCalloutLoading(false);
-          return;
-        }
-
-        const data = await res.json();
-        const updates = data.updates ?? {};
-        const combos = data.combos ?? {};
-        const messages = data.messages ?? [];
-
-        // ETP-5024: a "credit limit exceeded" / "Business Partner on hold" message
-        // must render as a PERSISTENT inline banner, not an auto-dismissing toast —
-        // so it is pulled out of the loop below instead of being toasted. Every
-        // other callout message keeps the existing toast behavior unchanged. Only
-        // the last match wins if a response somehow carried more than one (in
-        // practice the backend only ever sends one of these per callout).
-        let blockingCondition = null;
-        for (const msg of messages) {
-          const text = sanitizeCalloutMessage(msg.text || msg.message || '');
-          if (!text) continue;
-          const condition = detectBlockingBpCondition(text);
-          if (condition) {
-            blockingCondition = condition;
-            continue;
+          if (!res.ok) {
+            return;
           }
-          const type = (msg.type || '').toUpperCase();
-          if (type === 'ERROR') toast.error(text);
-          else if (type === 'WARNING') toast.warning(text);
-          else toast.info(text);
-        }
 
-        setCalloutResult({ updates, combos, triggerField: field, meta, blockingCondition });
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          // Callout is best-effort — do not block the user on failure
+          const data = await res.json();
+          const updates = data.updates ?? {};
+          const combos = data.combos ?? {};
+          const messages = data.messages ?? [];
+
+          // ETP-5024: a "credit limit exceeded" / "Business Partner on hold" message
+          // must render as a PERSISTENT inline banner, not an auto-dismissing toast —
+          // so it is pulled out of the loop below instead of being toasted. Every
+          // other callout message keeps the existing toast behavior unchanged. Only
+          // the last match wins if a response somehow carried more than one (in
+          // practice the backend only ever sends one of these per callout).
+          let blockingCondition = null;
+          for (const msg of messages) {
+            const text = sanitizeCalloutMessage(msg.text || msg.message || '');
+            if (!text) continue;
+            const condition = detectBlockingBpCondition(text);
+            if (condition) {
+              blockingCondition = condition;
+              continue;
+            }
+            const type = (msg.type || '').toUpperCase();
+            if (type === 'ERROR') toast.error(text);
+            else if (type === 'WARNING') toast.warning(text);
+            else toast.info(text);
+          }
+
+          setCalloutResult({ updates, combos, triggerField: field, meta, blockingCondition });
+          hasResult = true;
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            // Callout is best-effort — do not block the user on failure
+          }
+        } finally {
+          setCalloutLoading(false);
+          // ETP-4742: settle the caller (after setCalloutResult above, so the
+          // consumer's apply effect runs on a later commit than this resolution).
+          resolve(hasResult);
         }
-      } finally {
-        setCalloutLoading(false);
-      }
-    }, 300);
+      }, 300);
+    });
   }, [entity, token, apiBaseUrl, apiFetch]);
 
   return { calloutResult, calloutLoading, executeCallout };

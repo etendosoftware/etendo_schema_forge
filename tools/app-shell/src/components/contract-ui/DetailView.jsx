@@ -81,7 +81,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import { buildLineRowUpdateHandler, resolveCompletedLineFieldGate } from './inlineLineUpdateHandlers.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, normalizePatchFieldValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, refreshHeaderCurrencyRate, withExchangeRateHeaderSync, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, normalizePatchFieldValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useDefaultCallouts, useNewRouteEditingReset, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, refreshHeaderCurrencyRate, withExchangeRateHeaderSync, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -1806,8 +1806,6 @@ export function DetailView({
     })();
     return () => { cancelled = true; };
   }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.[documentDateField], apiBaseUrl, token, documentDateField, apiFetch]);
-  // Guard: fire default callouts only once per new-record session
-  const defaultCalloutsTriggeredRef = useRef(false);
   // Cache for tax rates fetched from the selector (keyed by tax ID).
   // Avoids repeated API calls when the same tax appears on multiple lines.
   const taxRateCacheRef = useRef({});
@@ -1967,42 +1965,18 @@ export function DetailView({
   }, [isNew, hook.editing, catalogsLoaded, catalogs, api]);
 
   // After defaults load for a new record, fire callouts for non-dependent selector fields
-  // so the callout chain runs (e.g. businessPartner → priceList, paymentTerms).
-  // This mirrors what classic Etendo does when opening a blank document.
-  useEffect(() => {
-    if (!isNew) { defaultCalloutsTriggeredRef.current = false; return; }
-    if (defaultCalloutsTriggeredRef.current) return;
-    if (!hook.editing || !api?.selectors) return;
-    // Wait until defaults have actually arrived (editing is non-empty)
-    const hasDefaults = Object.values(hook.editing).some(v => v != null && v !== '');
-    if (!hasDefaults) return;
-
-    defaultCalloutsTriggeredRef.current = true;
-
-    // Trigger callouts for primary (non-dependent) selector fields that have default values.
-    // 'dependent' selectors (e.g. partnerAddress) are derived by other callouts — skip them.
-    const triggers = (api.selectors || [])
-      .filter(s => s.entity === entity && s.inputMode !== 'dependent' && hook.editing[s.field]);
-
-    // Stagger calls by (i * executeCallout.debounceMs + buffer) so each result settles
-    // before the next callout fires. The backend is idempotent: returns {} for fields
-    // with no registered callout, so it is safe to call for every selector field.
-    const STAGGER_MS = 400; // > useCallout debounce (300ms)
-    const editingSnapshot = { ...hook.editing };
-    triggers.forEach(({ field }, i) => {
-      setTimeout(() => {
-        const value = editingSnapshot[field];
-        if (value) {
-          // ETP-4772: bump + snapshot BEFORE dispatch, so a manual edit that
-          // happens while this default callout is in flight (see fireCallout
-          // below) is detected as "newer" once this response comes back.
-          fieldGenerationRef.current[field] = (fieldGenerationRef.current[field] || 0) + 1;
-          executeCallout(field, value, editingSnapshot, { ...fieldGenerationRef.current });
-        }
-      }, i * STAGGER_MS);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNew, hook.editing, api, entity]);
+  // so the callout chain runs (e.g. businessPartner → priceList, paymentTerms), mirroring
+  // classic Etendo opening a blank document. ETP-4742: the chain (and its `pending` gate
+  // signal) lives in useDefaultCallouts, moved out of this growth-guarded file.
+  const { pending: defaultCalloutsPending, markApplied: markDefaultCalloutsApplied } = useDefaultCallouts({
+    isNew,
+    defaultsLoading: hook.defaultsLoading,
+    editing: hook.editing,
+    selectors: api?.selectors,
+    entity,
+    executeCallout,
+    fieldGenerationRef,
+  });
 
   useEffect(() => {
     setDirectFetched(false);
@@ -2103,11 +2077,17 @@ export function DetailView({
     // Mark these fields so the next onChange doesn't re-trigger callout
     calloutAppliedRef.current = appliedFields;
 
+    // ETP-4742: the result is now in hook.editing — release the initial callout
+    // chain's accounting so the creation form can drop its loading gate. Called
+    // for every callout; it is a no-op unless the initial chain has an outstanding
+    // token that settled with a result.
+    markDefaultCalloutsApplied();
+
     // Currency change validation is handled inside handleChangeWithCallout (synchronous
     // dropdown-change path). The callout response handler intentionally no longer applies
     // any conversion to pending lines — under the simplified ETP-4027 model, conversion
     // only applies to lines added AFTER the saved currency change.
-  }, [calloutResult]);
+  }, [calloutResult, markDefaultCalloutsApplied]);
 
   // Fire the callout (and related validation) for a user-initiated field change.
   // Extracted from handleChangeWithCallout so the same logic can be triggered either
@@ -2694,9 +2674,9 @@ export function DetailView({
   // A list refresh (hook.loading for the side list) or any unrelated background
   // fetch must not wipe out a form the user was interacting with.
 
-  if (isLoadingRecordForRoute(hook, isNew, recordId)) {
+  if (isLoadingRecordForRoute(hook, isNew, recordId, { initialCalloutsPending: defaultCalloutsPending })) {
     return (
-      <div className="flex items-center justify-center h-64 text-muted-foreground">
+      <div className="flex items-center justify-center h-64 text-muted-foreground" data-testid="detail-loading-gate">
         {ui('loading')}
       </div>
     );

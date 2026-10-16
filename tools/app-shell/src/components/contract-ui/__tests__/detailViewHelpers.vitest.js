@@ -9,12 +9,15 @@
 // which is exactly the coupling ETP-4730 set out to remove.
 
 import { describe, it, expect, vi } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
 
 vi.mock('@/lib/resolveIdentifier.js', () => ({
   resolveIdentifier: (data, field) => (field ? data?.[field] : undefined),
 }));
 
 import {
+  useDefaultCallouts,
+  isLoadingRecordForRoute,
   evalDisplayLogicRaw,
   deriveTaxRateFromGross,
   normalizePatchFieldValues,
@@ -1228,5 +1231,155 @@ describe('buildCustomAddModalSeed / buildCustomAddModalOnParentRefresh (ETP-5654
     buildCustomAddModalOnParentRefresh({ hook, parentRecordId: 'p1' })();
     expect(hook.invalidateEntityCache).toHaveBeenCalled();
     expect(hook.fetchById).toHaveBeenCalledWith('p1', { force: true });
+  });
+});
+
+// ETP-4742 — the staggered initial-callout chain of a creation form. The suite drives the
+// hook directly: it is where `pending` (the gate signal) and the outstanding-token
+// accounting live, and driving it here avoids DetailView.jsx's dependency closure.
+describe('useDefaultCallouts (ETP-4742)', () => {
+  const selectors = [{ field: 'businessPartner', entity: 'header' }];
+  const twoSelectors = [
+    { field: 'businessPartner', entity: 'header' },
+    { field: 'warehouse', entity: 'header' },
+  ];
+  const fieldGenerationRef = { current: {} };
+
+  function useCallouts({ isNew = true, defaultsLoading = false, editing, executeCallout, selectors: sel = selectors }) {
+    return useDefaultCallouts({
+      isNew,
+      defaultsLoading,
+      editing,
+      selectors: sel,
+      entity: 'header',
+      executeCallout,
+      fieldGenerationRef,
+    });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('is not pending before the defaults carry a dispatchable selector value', () => {
+    const { result } = renderHook(() => useCallouts({
+      editing: { documentNo: '' },
+      executeCallout: vi.fn().mockResolvedValue(false),
+    }));
+    expect(result.current.pending).toBe(false);
+  });
+
+  it('keeps pending while a dispatched callout is in flight and clears when it settles without a result', async () => {
+    let resolveCallout;
+    const executeCallout = vi.fn(() => new Promise((resolve) => { resolveCallout = resolve; }));
+    const { result } = renderHook(() => useCallouts({ editing: { businessPartner: 'BP1' }, executeCallout }));
+
+    await waitFor(() => expect(result.current.pending).toBe(true));
+    expect(executeCallout).toHaveBeenCalledWith('businessPartner', 'BP1', expect.any(Object), expect.any(Object));
+
+    await act(async () => { resolveCallout(false); });
+    await waitFor(() => expect(result.current.pending).toBe(false));
+  });
+
+  it('stays pending after a result-producing callout settles, until markApplied drains it', async () => {
+    const executeCallout = vi.fn().mockResolvedValue(true);
+    const { result } = renderHook(() => useCallouts({ editing: { businessPartner: 'BP1' }, executeCallout }));
+
+    await waitFor(() => expect(result.current.pending).toBe(true));
+    await act(async () => { await Promise.resolve(); });
+    expect(
+      result.current.pending,
+      'a handed-over result must not release the gate until the consumer applied it',
+    ).toBe(true);
+
+    await act(async () => { result.current.markApplied(); });
+    expect(result.current.pending).toBe(false);
+  });
+
+  it('drains every settled-with-result callout in one markApplied (batched results)', async () => {
+    const executeCallout = vi.fn().mockResolvedValue(true);
+    const { result } = renderHook(() => useCallouts({
+      editing: { businessPartner: 'BP1', warehouse: 'WH1' },
+      executeCallout,
+      selectors: twoSelectors,
+    }));
+
+    await waitFor(() => expect(executeCallout).toHaveBeenCalledTimes(2));
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current.pending).toBe(true);
+
+    await act(async () => { result.current.markApplied(); });
+    expect(
+      result.current.pending,
+      'two results batched into a single apply-effect run must both be drained',
+    ).toBe(false);
+  });
+
+  it('arms only when the defaults actually carry a selector value (ETP-4741 latch gap)', async () => {
+    const executeCallout = vi.fn().mockResolvedValue(false);
+    const { result, rerender } = renderHook(
+      ({ editing }) => useCallouts({ editing, executeCallout }),
+      { initialProps: { editing: { documentNo: 'typed-by-user' } } },
+    );
+
+    await act(async () => { await Promise.resolve(); });
+    expect(
+      executeCallout,
+      'a non-selector edit must not consume the latch',
+    ).not.toHaveBeenCalled();
+    expect(result.current.pending).toBe(false);
+
+    rerender({ editing: { documentNo: 'typed-by-user', businessPartner: 'BP1' } });
+    await waitFor(() => expect(executeCallout).toHaveBeenCalledTimes(1));
+  });
+
+  it('drops a stale pending state when a new defaults request starts', async () => {
+    const never = new Promise(() => {});
+    const executeCallout = vi.fn(() => never);
+    const { result, rerender } = renderHook(
+      ({ isNew, defaultsLoading, editing }) => useCallouts({ isNew, defaultsLoading, editing, executeCallout }),
+      { initialProps: { isNew: true, defaultsLoading: false, editing: { businessPartner: 'BP1' } } },
+    );
+
+    await waitFor(() => expect(result.current.pending).toBe(true));
+
+    rerender({ isNew: true, defaultsLoading: true, editing: { businessPartner: 'BP1' } });
+    await waitFor(() => expect(result.current.pending).toBe(false));
+  });
+
+  it('never fires or gates off the creation route', async () => {
+    const executeCallout = vi.fn().mockResolvedValue(false);
+    const { result } = renderHook(() => useCallouts({ isNew: false, editing: { businessPartner: 'BP1' }, executeCallout }));
+
+    await act(async () => { await Promise.resolve(); });
+    expect(executeCallout).not.toHaveBeenCalled();
+    expect(result.current.pending).toBe(false);
+  });
+
+  it('releases the gate at the safety budget when a callout never settles', async () => {
+    vi.useFakeTimers();
+    const executeCallout = vi.fn(() => new Promise(() => {}));
+    const { result } = renderHook(() => useCallouts({ editing: { businessPartner: 'BP1' }, executeCallout }));
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(executeCallout).toHaveBeenCalled();
+    expect(result.current.pending).toBe(true);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    expect(
+      result.current.pending,
+      'a callout that never settles must not latch the form shut forever',
+    ).toBe(false);
+  });
+
+  it('is exposed through isLoadingRecordForRoute as the new-record gate', () => {
+    expect(
+      isLoadingRecordForRoute(
+        { defaultsLoading: false, loading: false, selected: null },
+        true,
+        'new',
+        { initialCalloutsPending: true },
+      ),
+    ).toBe(true);
   });
 });

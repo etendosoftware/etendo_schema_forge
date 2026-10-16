@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
+//
 // ETP-5034 — the route-level guard that decides when the detail pane must show
 // "record unavailable" instead of a form.
 //
@@ -59,6 +61,30 @@ describe('isLoadingRecordForRoute', () => {
   it('is false when nothing is loading', () => {
     expect(
       isLoadingRecordForRoute({ loading: false, selected: null }, false, 'rec-1')
+    ).toBe(false);
+  });
+
+  // ETP-4742 — the gate must also cover the staggered initial callout chain, so the
+  // creation form does not render and then get mutated by the derived fields.
+  it('is true on the creation route while the initial callout chain is pending', () => {
+    expect(
+      isLoadingRecordForRoute(
+        { defaultsLoading: false, loading: false, selected: null },
+        true,
+        'new',
+        { initialCalloutsPending: true },
+      )
+    ).toBe(true);
+  });
+
+  it('ignores initialCalloutsPending off the creation route', () => {
+    expect(
+      isLoadingRecordForRoute(
+        { loading: false, selected: { id: 'rec-1' } },
+        false,
+        'rec-1',
+        { initialCalloutsPending: true },
+      )
     ).toBe(false);
   });
 });

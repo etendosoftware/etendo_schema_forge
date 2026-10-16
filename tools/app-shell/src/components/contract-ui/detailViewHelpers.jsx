@@ -1,7 +1,7 @@
 /**
  * Extracted from DetailView.jsx via ast-refactor.
  */
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {Button} from '@/components/ui/button.jsx';
 import {Trash2} from 'lucide-react';
 import {toast} from 'sonner';
@@ -1958,6 +1958,166 @@ export function shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnoth
   return Boolean(arrivedFromAnotherRecord && editing.id);
 }
 
+/** Stagger between two initial callouts; must exceed useCallout's 300ms debounce. */
+const CALL_OUT_STAGGER_MS = 400;
+/** Safety budget: a callout that never settles must not latch the creation form shut. */
+const CALL_OUT_CHAIN_BUDGET_MS = 10000;
+
+/**
+ * ETP-4742 — the staggered initial-callout chain of a creation form, and whether it is
+ * still in flight.
+ *
+ * Lives here rather than in DetailView.jsx for the same reason as
+ * {@link useNewRouteEditingReset}: that file is guarded against growth
+ * (`.claude/hooks/check-detailview-growth.mjs`).
+ *
+ * The chain fires one callout per non-dependent selector field that a `/defaults` response
+ * populated (`businessPartner → priceList / paymentTerms / address…`). Its results are applied
+ * by DetailView's `[calloutResult]` effect, i.e. AFTER the form has painted — which is why the
+ * creation form must stay gated until the chain is done. `pending` is that gate signal.
+ *
+ * Accounting: every dispatched callout owns a token. It leaves the outstanding set either when
+ * it settles without a result (non-OK / network error / abort — `executeCallout` resolves
+ * `false`) or when {@link markApplied} drains it, which the consumer calls from its apply effect.
+ * Draining ALL settled-with-result tokens in one call is deliberate: two responses batched into a
+ * single `calloutResult` commit produce one apply-effect run for two results.
+ *
+ * A fresh `/defaults` request (`defaultsLoading` back to true) starts a new creation session:
+ * the chain re-arms and any stale pending state is dropped.
+ *
+ * @param {object} args
+ * @param {boolean} args.isNew creation route
+ * @param {boolean} args.defaultsLoading hook.defaultsLoading — a new request re-arms the chain
+ * @param {object|null} args.editing hook.editing
+ * @param {Array} args.selectors api.selectors
+ * @param {string} args.entity header entity name
+ * @param {Function} args.executeCallout useCallout().executeCallout (promise resolving `true`
+ *   when a result is handed to the consumer)
+ * @param {object} args.fieldGenerationRef DetailView's per-field generation ref
+ * @returns {{pending: boolean, markApplied: () => void}}
+ */
+export function useDefaultCallouts({ isNew, defaultsLoading, editing, selectors, entity, executeCallout, fieldGenerationRef }) {
+  const armedRef = useRef(false);
+  const cycleRef = useRef(0);
+  const budgetRef = useRef(null);
+  const staggerTimersRef = useRef([]);
+  // token -> { settledWithResult } for the callouts this cycle dispatched.
+  const outstandingRef = useRef(new Map());
+  const [pending, setPending] = useState(false);
+
+  const reset = useCallback(() => {
+    cycleRef.current += 1;
+    staggerTimersRef.current.forEach(clearTimeout);
+    staggerTimersRef.current = [];
+    if (budgetRef.current) clearTimeout(budgetRef.current);
+    budgetRef.current = null;
+    outstandingRef.current = new Map();
+    setPending(false);
+  }, []);
+
+  // A fresh /defaults request opens a new creation session: re-arm so its own defaults fire
+  // their own chain, and drop any pending state left by the superseded session.
+  useEffect(() => {
+    if (!defaultsLoading) return;
+    armedRef.current = false;
+    reset();
+  }, [defaultsLoading, reset]);
+
+  // Layout effect: arming must flip `pending` BEFORE the browser paints the render in which
+  // the defaults just landed, otherwise the form would flash for one frame (the callout
+  // results it is gated against are applied by a later passive effect anyway).
+  useLayoutEffect(() => {
+    if (!isNew) {
+      armedRef.current = false;
+      reset();
+      return;
+    }
+    // A request in flight means the values are about to be replaced: do not arm
+    // against whatever `editing` still holds (the new defaults drive the chain).
+    if (armedRef.current || defaultsLoading || !editing || !selectors) return;
+    const hasDefaults = Object.values(editing).some(v => v != null && v !== '');
+    if (!hasDefaults) return;
+    const triggers = selectors.filter(
+      s => s.entity === entity && s.inputMode !== 'dependent' && editing[s.field],
+    );
+    // ETP-4741 latch gap: arm only when the chain will actually fire. Latching on
+    // "editing became non-empty" consumed the latch before the defaults landed (the user
+    // typing into a plain field was enough), so the chain never ran.
+    if (triggers.length === 0) return;
+    armedRef.current = true;
+
+    const cycle = cycleRef.current + 1;
+    cycleRef.current = cycle;
+    const outstanding = new Map();
+    outstandingRef.current = outstanding;
+    setPending(true);
+
+    const settle = () => {
+      if (cycleRef.current !== cycle || outstanding.size > 0) return;
+      if (budgetRef.current) clearTimeout(budgetRef.current);
+      budgetRef.current = null;
+      setPending(false);
+    };
+
+    const snapshot = { ...editing };
+    triggers.forEach(({ field }, i) => {
+      staggerTimersRef.current.push(setTimeout(() => {
+        if (cycleRef.current !== cycle) return;
+        const value = snapshot[field];
+        if (!value) return;
+        const token = `${field}#${i}`;
+        outstanding.set(token, { settledWithResult: false });
+        // ETP-4772: bump + snapshot BEFORE dispatch so a manual edit racing this
+        // in-flight callout is detected as newer once the response comes back.
+        fieldGenerationRef.current[field] = (fieldGenerationRef.current[field] || 0) + 1;
+        Promise.resolve(executeCallout(field, value, snapshot, { ...fieldGenerationRef.current }))
+          .then(hasResult => {
+            if (cycleRef.current !== cycle) return;
+            const entry = outstanding.get(token);
+            if (!entry) return;
+            if (hasResult) entry.settledWithResult = true;
+            else {
+              outstanding.delete(token);
+              settle();
+            }
+          })
+          .catch(() => {
+            if (cycleRef.current !== cycle) return;
+            outstanding.delete(token);
+            settle();
+          });
+      }, i * CALL_OUT_STAGGER_MS));
+    });
+
+    budgetRef.current = setTimeout(() => {
+      if (cycleRef.current !== cycle) return;
+      outstanding.clear();
+      budgetRef.current = null;
+      setPending(false);
+    }, CALL_OUT_CHAIN_BUDGET_MS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew, defaultsLoading, editing, selectors, entity]);
+
+  const markApplied = useCallback(() => {
+    const outstanding = outstandingRef.current;
+    if (outstanding.size === 0) return;
+    let drained = false;
+    for (const [token, entry] of outstanding) {
+      if (entry.settledWithResult) {
+        outstanding.delete(token);
+        drained = true;
+      }
+    }
+    if (drained && outstanding.size === 0) {
+      if (budgetRef.current) clearTimeout(budgetRef.current);
+      budgetRef.current = null;
+      setPending(false);
+    }
+  }, []);
+
+  return { pending, markApplied };
+}
+
 /** Reactive wrapper: calls `handleNew()` exactly when {@link shouldResetEditingForNewRoute} says to. */
 export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew }) {
   const prevRecordIdRef = useRef(recordId);
@@ -1986,10 +2146,14 @@ export function hasRecordForRoute(isNew, hook, recordId) {
  * @param {object} hook useEntity hook instance
  * @param {boolean} isNew whether the route is the creation route
  * @param {string} recordId the id in the URL
+ * @param {object} [options]
+ * @param {boolean} [options.initialCalloutsPending] ETP-4742 — the creation form's initial callout
+ *   chain is still in flight (see {@link useDefaultCallouts}), so its derived fields are about to be
+ *   applied and the form must stay gated
  * @returns {boolean} true while the record for this route is still being fetched
  */
-export function isLoadingRecordForRoute(hook, isNew, recordId) {
-  if (isNew && hook.defaultsLoading) return true;
+export function isLoadingRecordForRoute(hook, isNew, recordId, { initialCalloutsPending = false } = {}) {
+  if (isNew && (hook.defaultsLoading || initialCalloutsPending)) return true;
   return hook.loading && !hasRecordForRoute(isNew, hook, recordId);
 }
 
