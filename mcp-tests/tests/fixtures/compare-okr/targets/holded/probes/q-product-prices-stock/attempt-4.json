@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 5,
+  "runId": "run-holded",
+  "probeId": "q-product-prices-stock",
+  "attempt": 4,
+  "replaces": 2,
+  "mode": "read",
+  "prompt": "p",
+  "startedAt": "2026-10-14T10:00:00Z",
+  "finishedAt": "2026-10-14T10:01:00Z",
+  "effectVerified": false,
+  "effectCheck": null,
+  "silentWrong": true,
+  "finalAnswer": "listo",
+  "usage": {
+    "loop": {
+      "turns": 1,
+      "turnsWithUsage": 1,
+      "inputTokens": 2900,
+      "outputTokens": 100,
+      "totalTokens": 3000,
+      "cachedInputTokens": 0
+    },
+    "report": {
+      "turns": 1,
+      "turnsWithUsage": 1,
+      "inputTokens": 400,
+      "outputTokens": 100,
+      "totalTokens": 500,
+      "cachedInputTokens": 0
+    }
+  },
+  "servedModel": {
+    "models": [
+      "gpt-5.2"
+    ],
+    "systemFingerprints": [
+      "fp_1"
+    ]
+  },
+  "toolCallCount": 1,
+  "toolCalls": [
+    {
+      "id": "c-list_products",
+      "tool": "list_products",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    }
+  ],
+  "exhausted": false,
+  "setup": [],
+  "teardown": [],
+  "teardownClean": null,
+  "harnessError": null,
+  "verdict": {
+    "schemaVersion": 3,
+    "outcome": "OKAY",
+    "summary": "s",
+    "achieved": "a",
+    "frictions": [],
+    "failures": [],
+    "wastedCalls": [],
+    "suggestions": [
+      "legacy prose suggestion"
+    ]
+  }
+}
