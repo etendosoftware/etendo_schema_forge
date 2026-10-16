@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { loadQuarantine, quarantinePattern } from '../scripts/lib/playwright-quarantine.js';
 
 // The onboarding project creates this file for the downstream integration tests.
 // Reuse it when available so running integration tests does not register another
@@ -47,6 +48,12 @@ const MOCKED_SERIAL_SPECS = [
   '**/sales-invoice-discount-display.mocked.spec.js',
   '**/inline-lines-quotation.mocked.spec.js',
 ];
+// ETP-5695: quarantined flaky mocked tests (quarantine.json, docs/testing/flaky-tests.md) stay out
+// of every gating run. E2E_QUARANTINE=only runs just them, which run-e2e-full.sh does after the
+// mocked suite, without blocking.
+const QUARANTINE = quarantinePattern(loadQuarantine(resolve(import.meta.dirname, 'quarantine.json')));
+const QUARANTINE_FILTER = !QUARANTINE ? {}
+  : process.env.E2E_QUARANTINE === 'only' ? { grep: QUARANTINE } : { grepInvert: QUARANTINE };
 const CAPTURE_SCREENSHOTS = new Set(['1', 'true', 'yes']).has(
   String(process.env.E2E_CAPTURE_SCREENSHOTS || '').toLowerCase(),
 );
@@ -96,6 +103,7 @@ export default defineConfig({
       name: 'mocked',
       testMatch: '**/*.mocked.spec.js',
       testIgnore: MOCKED_SERIAL_SPECS,
+      ...QUARANTINE_FILTER,
       use: { ...devices['Desktop Chrome'] },
       workers: MOCKED_WORKERS,
     },
@@ -104,6 +112,7 @@ export default defineConfig({
       // MOCKED_SERIAL_SPECS above for why these specific files and not others.
       name: 'mocked-serial',
       testMatch: MOCKED_SERIAL_SPECS,
+      ...QUARANTINE_FILTER,
       use: { ...devices['Desktop Chrome'] },
       workers: 1,
     },

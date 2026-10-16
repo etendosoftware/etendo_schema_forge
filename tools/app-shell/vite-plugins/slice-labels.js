@@ -50,6 +50,16 @@ function slicerSpecifier() {
   return '@etendosoftware/schema-forge-cli/slice-labels';
 }
 
+/**
+ * Regenerates every per-window slice and the core locale files, as `buildStart` does. Vitest's
+ * global setup calls it too: the tests import the slices, and nothing else writes them before a
+ * test run (in CI they used to exist only because pwa.test.js ran `vite build` first).
+ */
+export async function sliceAllLabels() {
+  const { sliceAll } = await import(slicerSpecifier());
+  return sliceAll(SLICER_PATHS);
+}
+
 /** Matches loadLocales()'s own discovery pattern (e.g. en_US.json, es_ES.json). */
 const LOCALE_FILE_RE = /^[a-z]{2}_[A-Z]{2}\.json$/;
 
@@ -57,8 +67,7 @@ export default function sliceLabelsPlugin() {
   return {
     name: 'etp-4300-slice-labels',
     async buildStart() {
-      const { sliceAll } = await import(slicerSpecifier());
-      const { windows, locales } = await sliceAll(SLICER_PATHS);
+      const { windows, locales } = await sliceAllLabels();
       // eslint-disable-next-line no-console
       console.log(`[slice-labels] generated slices for ${windows} windows + core (${locales.join(', ')})`);
     },
