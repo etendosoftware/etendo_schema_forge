@@ -4,13 +4,24 @@
  * `parseAuxReference` splits that into `{ id, name }`; anything else (a plain number, a blank, an
  * unexpected shape) returns `null` so callers never invent a value.
  */
-const AUX_REFERENCE = /^[A-Za-z][\w.]*\(([^()\s]+)\)\s*\(name:\s*(.*)\)\s*$/;
+const REFERENCE_KIND = /^[A-Za-z][\w.]*$/;
+const NAME_OPEN = '(name:';
 
 export function parseAuxReference(value) {
   if (typeof value !== 'string') return null;
-  const match = AUX_REFERENCE.exec(value.trim());
-  if (!match || !match[2]) return null;
-  return { id: match[1], name: match[2] };
+  const text = value.trim();
+  // `<Kind>(<id>) (name: <name>)` — parsed with index lookups, not a regex over the whole
+  // string: a pattern with several open-ended quantifiers can backtrack super-linearly.
+  const open = text.indexOf('(');
+  const close = text.indexOf(')', open + 1);
+  if (open < 1 || close < 0) return null;
+  if (!REFERENCE_KIND.test(text.slice(0, open))) return null;
+  const id = text.slice(open + 1, close);
+  if (!id || /[\s()]/.test(id)) return null;
+  const rest = text.slice(close + 1).trim();
+  if (!rest.startsWith(NAME_OPEN) || !rest.endsWith(')')) return null;
+  const name = rest.slice(NAME_OPEN.length, -1).trim();
+  return name ? { id, name } : null;
 }
 
 /**
