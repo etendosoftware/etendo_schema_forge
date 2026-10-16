@@ -341,6 +341,7 @@ describe('RowQuickActions', () => {
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'custom2' }),
         { handled: true },
+        expect.objectContaining({ id: expect.anything() }), // the row (ETP-5577)
       );
     });
   });
@@ -461,11 +462,15 @@ describe('RowQuickActions', () => {
     // useDocumentAction THROWS on failure (useNeoAction resolves instead), so without
     // forwarding the caught error the host never heard about it and the user saw nothing.
     it('reports a thrown document action to the host instead of only the console', async () => {
-      docActionExecuteMock.mockRejectedValue(new Error('Factura contabilizada'));
+      // ETP-5577 — with the error's identity and the row, so a period refusal can offer the calendar.
+      docActionExecuteMock.mockRejectedValue(
+        Object.assign(new Error('Factura contabilizada'), { messageKeys: ['PeriodNotAvailable'] }),
+      );
       const { onMenuActionExecuted } = await clickReactivate({ row: UNPOSTED_ROW });
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'reactivate' }),
-        { success: false, message: 'Factura contabilizada' },
+        { success: false, message: 'Factura contabilizada', messageKeys: ['PeriodNotAvailable'] },
+        UNPOSTED_ROW,
       );
     });
   });
@@ -640,6 +645,7 @@ describe('RowQuickActions', () => {
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'x' }),
         { success: true },
+        expect.objectContaining({ id: expect.anything() }), // the row (ETP-5577)
       );
     });
 
@@ -656,6 +662,7 @@ describe('RowQuickActions', () => {
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'reactivate' }),
         { success: true },
+        expect.objectContaining({ id: expect.anything() }), // the row (ETP-5577)
       );
       expect(toast.error).not.toHaveBeenCalled();
     });

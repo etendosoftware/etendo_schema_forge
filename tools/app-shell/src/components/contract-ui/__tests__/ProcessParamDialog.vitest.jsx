@@ -180,6 +180,31 @@ describe('ProcessParamDialog', () => {
     expect(onConfirm).toHaveBeenCalledWith({ period: 'Y' });
   });
 
+  it('pre-populates a select with its defaultValue when it is one of the options', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    const options = REQUIRED_SELECT_PARAM.options;
+    renderDialog({
+      open: true,
+      process: buildProcess([{ ...REQUIRED_SELECT_PARAM, defaultValue: options[options.length - 1].value }]),
+      onConfirm,
+    });
+    await user.click(screen.getByTestId('process-param-confirm'));
+    expect(onConfirm).toHaveBeenCalledWith({ period: options[options.length - 1].value });
+  });
+
+  it('falls back to the first option when defaultValue is not an option', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    renderDialog({
+      open: true,
+      process: buildProcess([{ ...REQUIRED_SELECT_PARAM, defaultValue: 'NOT_AN_OPTION' }]),
+      onConfirm,
+    });
+    await user.click(screen.getByTestId('process-param-confirm'));
+    expect(onConfirm).toHaveBeenCalledWith({ period: 'Y' });
+  });
+
   it('calls onOpenChange(false) when Cancel is clicked', async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();

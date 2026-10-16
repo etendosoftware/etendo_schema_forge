@@ -615,3 +615,7 @@ wrapper over `RelatedDocumentsSection`) and the list preview's `RelatedDocuments
 The `purchase-order:document-created` event is the definition's `refreshEvent`. The dead copy
 `tools/app-shell/src/windows/custom/purchase-order/RelatedDocuments.jsx` (and its test) was removed;
 the pipeline imports the artifact's `custom/RelatedDocuments.jsx`. See `docs/ui-customization.md` §7.a.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The invoice step of **Gestionar factura** (create invoice and confirm-with-invoice modals) shows the refusal with an **Ir al calendario** link, dated today (the invoice is dated today). See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
