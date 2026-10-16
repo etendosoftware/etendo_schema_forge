@@ -19,6 +19,7 @@ import {
 import {
   PUBLIC_API_SCHEMA,
   PublicApiKeyGuard,
+  type PublicApiKeyRequest,
   type PublicApiEntity,
   type PublicApiField,
   filterOutboundRecord,
@@ -39,7 +40,7 @@ export class PublicApiController {
   ) {}
 
   @Get(':entityName')
-  async list(@Param('entityName') entityName: string, @Req() req: { neoJwt: string }) {
+  async list(@Param('entityName') entityName: string, @Req() req: PublicApiKeyRequest) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'GET');
     return this.forward(entityName, req, 'GET');
@@ -50,7 +51,7 @@ export class PublicApiController {
     @Param('parentName') parentName: string,
     @Param('parentId') parentId: string,
     @Param('childName') childName: string,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'GET');
@@ -63,7 +64,7 @@ export class PublicApiController {
     @Param('parentId') parentId: string,
     @Param('childName') childName: string,
     @Param('id') id: string,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'GET');
@@ -76,7 +77,7 @@ export class PublicApiController {
     @Param('parentId') parentId: string,
     @Param('childName') childName: string,
     @Body() body: Record<string, unknown>,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'POST');
@@ -90,7 +91,7 @@ export class PublicApiController {
     @Param('childName') childName: string,
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'PUT');
@@ -104,7 +105,7 @@ export class PublicApiController {
     @Param('childName') childName: string,
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'PATCH');
@@ -117,7 +118,7 @@ export class PublicApiController {
     @Param('parentId') parentId: string,
     @Param('childName') childName: string,
     @Param('id') id: string,
-    @Req() req: { neoJwt: string },
+    @Req() req: PublicApiKeyRequest,
   ) {
     const child = this.childOrThrow(parentName, childName);
     this.assertOperation(child.publicName, 'DELETE');
@@ -125,35 +126,35 @@ export class PublicApiController {
   }
 
   @Get(':entityName/:id')
-  async get(@Param('entityName') entityName: string, @Param('id') id: string, @Req() req: { neoJwt: string }) {
+  async get(@Param('entityName') entityName: string, @Param('id') id: string, @Req() req: PublicApiKeyRequest) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'GET');
     return this.forward(entityName, req, 'GET', undefined, id);
   }
 
   @Post(':entityName')
-  async create(@Param('entityName') entityName: string, @Body() body: Record<string, unknown>, @Req() req: { neoJwt: string }) {
+  async create(@Param('entityName') entityName: string, @Body() body: Record<string, unknown>, @Req() req: PublicApiKeyRequest) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'POST');
     return this.forward(entityName, req, 'POST', this.filterWritable(entityName, body));
   }
 
   @Put(':entityName/:id')
-  async update(@Param('entityName') entityName: string, @Param('id') id: string, @Body() body: Record<string, unknown>, @Req() req: { neoJwt: string }) {
+  async update(@Param('entityName') entityName: string, @Param('id') id: string, @Body() body: Record<string, unknown>, @Req() req: PublicApiKeyRequest) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'PUT');
     return this.forward(entityName, req, 'PUT', this.filterWritable(entityName, body), id);
   }
 
   @Patch(':entityName/:id')
-  async patch(@Param('entityName') entityName: string, @Param('id') id: string, @Body() body: Record<string, unknown>, @Req() req: { neoJwt: string }) {
+  async patch(@Param('entityName') entityName: string, @Param('id') id: string, @Body() body: Record<string, unknown>, @Req() req: PublicApiKeyRequest) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'PATCH');
     return this.forward(entityName, req, 'PATCH', this.filterWritable(entityName, body), id);
   }
 
   @Delete(':entityName/:id')
-  async remove(@Param('entityName') entityName: string, @Param('id') id: string, @Req() req: { neoJwt: string }) {
+  async remove(@Param('entityName') entityName: string, @Param('id') id: string, @Req() req: PublicApiKeyRequest) {
     this.assertTopLevel(entityName);
     this.assertOperation(entityName, 'DELETE');
     return this.forward(entityName, req, 'DELETE', undefined, id);
@@ -254,7 +255,7 @@ export class PublicApiController {
 
   private async forward(
     entityName: string,
-    req: { neoJwt: string },
+    req: PublicApiKeyRequest,
     method: string,
     body?: Record<string, unknown>,
     id?: string,
@@ -276,6 +277,9 @@ export class PublicApiController {
       const errorBody = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
       const message = errorBody?.error?.message ?? `NeoServlet request failed with status ${response.status}`;
       if (response.status === 400 || response.status === 409) throw new BadRequestException(message);
+      // Etendo refused the token (key rotated, revoked, deactivated or deleted): drop it from
+      // the cache so the next request re-exchanges the key instead of replaying it.
+      if (response.status === 401) req.evictNeoJwt?.();
       if (response.status === 401 || response.status === 403) throw new UnauthorizedException(message);
       throw new BadGatewayException(message);
     }
