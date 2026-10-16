@@ -933,12 +933,12 @@ ordinaria declaration for the same period").
 
 **2 — Mirror rule: only one presented ordinaria per period.** The auto-select checkbox can be
 manually unchecked back to "Normal" even when a sibling is already presented; presenting (or
-saving/generating) as ordinaria in that state is now rejected too ("Cannot present as ordinaria:
-another ordinaria declaration is already presented for this period").
+saving/generating) as ordinaria in that state is now rejected too ("Cannot save/present as
+ordinaria: another ordinaria declaration is already presented for this period").
 
 **Shared backend implementation.** `FiscalDeclCrudHandler#checkCorrectiveConsistency(clientId,
 orgId, model, year, period, excludeId, effectivelyCorrective)` is the single method behind both
-directions — returns a violation message or `null`. Two callers:
+directions — returns a violation message or `null`. Three callers:
 
 - `rejectCorrectiveConsistencyViolation` — the `PUT /fiscal{model}/declarations` guard. Fires
   whenever `previousStatus` is NOT already in `SUBMITTED_STATUSES`, regardless of whether the PUT
@@ -954,17 +954,33 @@ directions — returns a violation message or `null`. Two callers:
   the sibling-search exclusion, mirroring `guardNotAlreadySubmitted`'s own pattern. Throws the
   existing `AlreadySubmittedException` (reused, not a new type) — `runDispatch` already turns it
   into a clean 409 for both models.
+- `Fiscal303SubmissionSupport#handleSubmit` (303 only — ETP-5725 REVIEW FIX, Blocker B1) — the
+  SAME `guardCorrectiveConsistency` call, added directly inside `handleSubmit`, right after the
+  resubmission/missing-presenter guard and before any certificate check or AEAT call. This is
+  `POST /fiscal303/submit`, the REAL AEAT telematic filing (production and test-mode validation
+  alike) — distinct from both guards above. **This endpoint was missed in the first pass of this
+  fix**, caught in review: neither `checkCorrectiveConsistency` nor `guardCorrectiveConsistency`
+  ran on it at all, so a direct call with a valid `declId` (or any future frontend path reaching
+  `AeatSubmitFlow.jsx` other than `FmModel303Page#handlePresent`'s own pre-flight click-time
+  check) could file a corrective declaration with AEAT with no presented ordinaria, or file a
+  duplicate ordinaria, with the server accepting it. 349 has no equivalent gap — there is no AEAT
+  telematic submit entity for it, only PUT-present and generate, both already gated.
 
-**`effectivelyCorrective` at generate time — no persisted row to trust.** The 303 frontend's
-`handleGenerate` never flushes a save first (unlike 349's, which does), so the backend must read
-the request's OWN parameters, not a persisted `manualData`. 349 already always sends an
-unambiguous `substitutive` param (`"Y"`/`"N"`, every call — see `generate349File`/
-`AEAT3492010Report.generateLine1`). **303 did not** — its existing `IsComplementary=Y` param is
-ambiguous: `applyComplementariaParams` in `fiscalModelsUtils.js` sets that SAME param for the
-unrelated legacy "complementaria" AEAT checkbox, so reading it server-side would have falsely
-flagged a plain complementaria declaration as corrective. Fixed by adding a new, dedicated
-`Rectificativa=Y` query param to `generate303File` (set only when `identChecks.rectificativa` is
-true), purely additive — no existing AEAT-facing param changed.
+**`effectivelyCorrective` with no persisted row to trust.** Neither `generate` nor `submit` have a
+declaration id guaranteed to carry a flushed save (303's `handleGenerate`/`AeatSubmitFlow.jsx`
+never flush first — unlike 349's `generateNow`, which does), so both read the request's OWN
+params, not a persisted `manualData`. 349 already always sends an unambiguous `substitutive` param
+(`"Y"`/`"N"`, every call — see `generate349File`/`AEAT3492010Report.generateLine1`). **303 did
+not** — its existing `IsComplementary=Y` param is ambiguous: `applyComplementariaParams` in
+`fiscalModelsUtils.js` sets that SAME param for the unrelated legacy "complementaria" AEAT
+checkbox, so reading it server-side would have falsely flagged a plain complementaria declaration
+as corrective. Fixed by adding a new, dedicated `Rectificativa=Y` query param — set directly
+inside the SHARED `applyIdentParams` helper (`fiscalModelsUtils.js`), not duplicated per caller,
+precisely because the first version of this fix set it only inside `generate303File` and missed
+`AeatSubmitFlow.jsx`'s own submit request entirely (the same B1 gap above) — every 303 request
+that can file or preview-generate goes through `applyIdentParams` with the same `identChecks`, so
+centralizing it there is what actually guarantees both callers carry it. Purely additive — no
+existing AEAT-facing param changed.
 
 **Frontend UX gates (sugar only; backend is authoritative).** `FmModel303Page.jsx` computes
 `correctiveWithoutPresentedOrdinaria` / `ordinariaAlreadyPresented` (both derived from
