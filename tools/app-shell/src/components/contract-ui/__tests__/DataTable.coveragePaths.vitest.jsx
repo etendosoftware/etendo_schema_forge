@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
@@ -50,7 +51,8 @@ vi.mock('@/lib/applyCalloutUpdates.js', () => ({
   applyCalloutUpdates: (prev, updates) => ({ ...prev, ...updates }),
 }));
 
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   columnMinWidthPx: () => 96,
   columnFlex: () => '1 1 120px',
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',

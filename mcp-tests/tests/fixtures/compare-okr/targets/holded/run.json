@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 5,
+  "runId": "run-holded",
+  "startedAt": "2026-10-14T10:00:00Z",
+  "target": {
+    "name": "holded",
+    "url": "https://holded.example/mcp"
+  },
+  "serverBuild": null,
+  "server": {
+    "serverInfo": {
+      "name": "holded",
+      "version": "1.0.0"
+    },
+    "protocolVersion": "2025-06-18",
+    "catalogue": {
+      "sha": "sha-holded",
+      "toolCount": 180,
+      "bytes": 8000
+    },
+    "error": null
+  },
+  "harness": {
+    "commit": "abc123",
+    "dirty": false
+  },
+  "provider": "openai",
+  "model": "openai/gpt-5.2",
+  "temperature": 0,
+  "promptVersion": 4,
+  "maxSteps": 25,
+  "maxResultChars": 20000,
+  "repeat": 3,
+  "suites": [
+    {
+      "file": "okr.yaml",
+      "sha": "deadbeef"
+    }
+  ]
+}

@@ -1056,14 +1056,54 @@ TARGET ?= local
 SUITE  ?= sales-order
 PROBE  ?=
 MODEL  ?=
+REPEAT ?=
 
 .PHONY: mcp-test
-mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=)
-	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL))
+mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=, REPEAT=, CONCURRENCY=)
+	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY))
+
+TARGETS     ?= local,holded
+SUBJECT     ?=
+CONCURRENCY ?=
+SEED        ?=
+
+# D44: one compareId, one run per target under runs/<compareId>/targets/, run
+# concurrently, then summary.json + summary.md. REPEAT defaults to 3 here, 1 in
+# mcp-test. Every target needs `platform` in config.toml. Pass SEED=<run A's
+# seed> to start the second run of a stability pair.
+.PHONY: mcp-compare
+mcp-compare: ## Compare two MCP targets (SUITE=, TARGETS=a,b, SUBJECT=, REPEAT=, CONCURRENCY=, SEED=, MODEL=)
+	cd mcp-tests && uv run python -m runner.cli --targets $(TARGETS) --suite $(SUITE) $(if $(SUBJECT),--subject $(SUBJECT)) $(if $(REPEAT),--repeat $(REPEAT)) $(if $(CONCURRENCY),--concurrency $(CONCURRENCY)) $(if $(SEED),--seed $(SEED)) $(if $(MODEL),--model $(MODEL))
+
+# Plan §5.4 / §5.9 (S6): load the baseline dataset into a FRESHLY INITIALIZED target through its
+# own MCP, and record a seed manifest (.seeds/<target>.json). Order for an official comparison:
+# initialize -> mcp-seed -> mcp-compare. A stability pair's run B RE-INITIALIZES and RE-SEEDS every
+# target again (mcp-stability refuses a run B that reuses run A's seed). Re-seeding a seeded target
+# is a no-op; a half-seeded or foreign one is refused, never duplicated. CAPTURE=1 seeds nothing and
+# prints the init allowlist for fixtures/fresh.<platform>.yaml.
+# TARGET must be passed explicitly: seeding writes, so the `TARGET ?= local` default above never
+# picks the target for it (checked when the recipe expands, so `make -n mcp-seed` fails too).
+FIXTURE        ?= okr-baseline
+INITIALIZED_AT ?=
+.PHONY: mcp-seed
+mcp-seed: ## Seed a freshly initialized target (TARGET=, FIXTURE=okr-baseline, INITIALIZED_AT=<ISO>, CAPTURE=1)
+	$(if $(or $(filter file default undefined,$(origin TARGET)),$(if $(strip $(TARGET)),,empty)),$(error TARGET is required (the TARGET ?= local default does not apply to seeding), e.g. make mcp-seed TARGET=local INITIALIZED_AT=2026-10-20T09:00Z))
+	cd mcp-tests && uv run python -m runner.seed --target $(TARGET) $(if $(CAPTURE),--capture-allowlist,--fixture $(FIXTURE) $(if $(INITIALIZED_AT),--initialized-at $(INITIALIZED_AT)))
 
 .PHONY: mcp-login
 mcp-login: ## Pre-warm or refresh a target's OAuth token (TARGET=). Never a prerequisite for mcp-test.
 	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --login
+
+# Pure, from files: never contacts an MCP or an LLM, never reads events.ndjson (D48).
+.PHONY: mcp-report
+mcp-report: ## Derive summary.json + summary.md of a comparison (RUN=<compareId>|<path>)
+	@if [ -z "$(RUN)" ]; then echo "RUN is required, e.g. make mcp-report RUN=20261014T1000-cmp-a1b2"; exit 1; fi
+	cd mcp-tests && uv run python -m runner.report report $(RUN)
+
+.PHONY: mcp-stability
+mcp-stability: ## Winner agreement between two comparisons; exit 2 if pins differ or a run is unofficial (A=, B=)
+	@if [ -z "$(A)" ] || [ -z "$(B)" ]; then echo "A and B are required, e.g. make mcp-stability A=<compareId> B=<compareId>"; exit 1; fi
+	cd mcp-tests && uv run python -m runner.report stability $(A) $(B)
 
 # Deliberately NOT folded into mcp-test: that target must stay a command that
 # starts, runs and returns an exit code, so it keeps working from a script and

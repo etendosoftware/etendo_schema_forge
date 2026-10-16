@@ -169,6 +169,10 @@ const FIXES_WITH_REPORT = new Set([
   // The @report lists the period-control rows it left untouched (closed by a user, permanently
   // closed, or blocked by a future permanently closed year) and flags a calendar with no Oct-26.
   '20261001T120000Z__R44-demo-periods-open-through-oct-2026',
+  // R49 (ETP-5768) gives every business partner without currency its org / legal entity / client
+  // currency. The @report lists a partner the chain could not resolve (a client with no base
+  // currency) and is empty on every clean run.
+  '20261015T184242Z__R49-bpartner-currency-from-org',
 ]);
 
 async function loadCatalogFiles() {

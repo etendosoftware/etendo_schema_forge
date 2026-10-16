@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 // unavailable there), and backendErrors.js is a dependency-free leaf module, so the
 // relative path costs nothing. Mirrors the same choice in useInvoiceWindow.js.
 import { translateBackendError } from '../../../lib/backendErrors.js';
+import { documentPeriodDate, periodNotAvailableToastOptions } from '../../../lib/periodNotAvailable.js';
 
 // ETP-5209 rejection-cycle fix — extracted from goods-receipt/index.jsx and
 // goods-shipment/index.jsx, which each hand-rolled an identical ~25-line block:
@@ -51,17 +52,23 @@ export function buildPostMenuActions({ row, includeUnpost = false } = {}) {
 // action, mirroring DetailMoreActionsMenu's runNeoMenuAction for the exact same
 // neoAction shape.
 export function buildMenuActionExecutedHandler(ui, onRefresh) {
-  return (action, result) => {
+  return (action, result, row) => {
     // ETP-5378 — widened from `neoAction` only, so a documentAction row entry (e.g.
     // reactivate) also gets its toast and list refresh.
     if (!action.neoAction && !action.documentAction) return;
     if (result?.success === false) {
       // ETP-5360 — forward the AD_MESSAGE keys so translateBackendError can map by identity;
       // ETP-5175 — and their params, so the Invalid-Account failure renders in the UI locale.
-      toast.error(translateBackendError(result?.message, ui, {
+      const text = translateBackendError(result?.message, ui, {
         messageKeys: result?.messageKeys,
         messageParams: result?.messageParams,
-      }) || ui?.('actionFailed'));
+      }) || ui?.('actionFailed');
+      // ETP-5577 — a Post refused for a period that is not open offers the way out, opening
+      // the fiscal year of the row's date (same as the form-view kebab).
+      const recovery = periodNotAvailableToastOptions(result?.messageKeys, ui,
+        { date: documentPeriodDate(row) });
+      if (Object.keys(recovery).length > 0) toast.error(text, recovery);
+      else toast.error(text);
     } else {
       toast.success((action.successKey ? ui?.(action.successKey) : action.successMessage) || ui?.('actionCompleted'));
     }
