@@ -107,6 +107,7 @@ import {
   getDetailContentContainerClassName,
   getLinesTabsSectionClassName,
   getSecondaryTabEntityKey,
+  gateDetailTab,
   renderNotesField,
   computeIsDirty,
   hasRecordForRoute,
@@ -590,6 +591,36 @@ describe('getSecondaryTabEntityKey', () => {
   it('returns null for an out-of-range index (undefined tab)', () => {
     expect(getSecondaryTabEntityKey([], 0)).toBeNull();
     expect(getSecondaryTabEntityKey([{ key: 'lines' }], 5)).toBeNull();
+  });
+
+  // ETP-5648: a capability-hidden tab must not be fetched in the background.
+  it('returns null for a capability-gated tab when the capability is missing', () => {
+    const tabs = [{ key: 'accounting', visibleWhenCapability: 'showAccountingFields' }];
+    expect(getSecondaryTabEntityKey(tabs, 0, { showAccountingFields: false })).toBeNull();
+    expect(getSecondaryTabEntityKey(tabs, 0, {})).toBeNull();
+    expect(getSecondaryTabEntityKey(tabs, 0)).toBeNull();
+  });
+
+  it('returns the key of a capability-gated tab when the capability is granted', () => {
+    const tabs = [{ key: 'accounting', visibleWhenCapability: 'showAccountingFields' }];
+    expect(getSecondaryTabEntityKey(tabs, 0, { showAccountingFields: true })).toBe('accounting');
+  });
+});
+
+describe('gateDetailTab (ETP-5648)', () => {
+  const Table = () => null;
+
+  it('keeps the detail entity and table when no capability is declared', () => {
+    expect(gateDetailTab('lines', Table, null, {})).toEqual(['lines', Table]);
+  });
+
+  it('keeps them when the declared capability is granted', () => {
+    expect(gateDetailTab('accounting', Table, 'showAccountingFields', { showAccountingFields: true }))
+      .toEqual(['accounting', Table]);
+  });
+
+  it('drops both (no tab, no fetch) when the capability is missing', () => {
+    expect(gateDetailTab('accounting', Table, 'showAccountingFields', {})).toEqual([null, null]);
   });
 });
 
