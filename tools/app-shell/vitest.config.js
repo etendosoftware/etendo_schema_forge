@@ -99,6 +99,8 @@ export default defineConfig({
     // negative; if a test ever needs more than this, that test is the problem.
     testTimeout: 15000,
     hookTimeout: 15000,
+    // Writes the gitignored label slices the components import (see the file).
+    globalSetup: ['./src/test/global-setup.js'],
     setupFiles: ['./src/test/setup.js'],
     include: ['src/**/*.vitest.{js,jsx}', 'src/**/*.spec.{js,jsx}'],
     css: false,
