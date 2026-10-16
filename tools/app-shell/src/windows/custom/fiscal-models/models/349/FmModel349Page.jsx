@@ -1545,7 +1545,26 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
               </FmDetailButton>
               {/* ETP-5597 (W4) — Generar / Guardar / Registrar are locked while any of them is in
                   flight (`actionBusy`), so no Tipo edit can land mid-save. */}
-              <FmDetailButton onClick={() => setShowFilegen(true)} disabled={actionBusy} data-testid="FmModel349Page__generate">
+              <FmDetailButton
+                onClick={() => {
+                  // ETP-5725 (reopened QA fix, UX follow-up) — mirrors FmModel303Page.jsx's own
+                  // "Generar fichero" onClick exactly: block BEFORE opening FileGenModal, not
+                  // only inside generateNow (the modal's own onConfirm). Same fix shape as the
+                  // "Registrar/Presentar" button above.
+                  if (isSustitutivaChecked(identChecks) && !Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+                    toast.error(t('fm.duplicate_period.requires_ordinaria')
+                      ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+                    return;
+                  }
+                  if (!isSustitutivaChecked(identChecks) && Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+                    toast.error(t('fm.duplicate_period.ordinaria_exists')
+                      ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+                    return;
+                  }
+                  setShowFilegen(true);
+                }}
+                disabled={actionBusy}
+                data-testid="FmModel349Page__generate">
                 <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
                 {t('fm.action.gen349') ?? 'Generar fichero 349'}
               </FmDetailButton>
@@ -1566,7 +1585,26 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
               </FmDetailButton>
               <FmDetailButton
                 primary
-                onClick={() => setShowPresent(true)}
+                onClick={() => {
+                  // ETP-5725 (reopened QA fix, UX follow-up) — mirrors FmModel303Page.jsx's own
+                  // "Registrar/Presentar" onClick exactly: block BEFORE opening PresentModal, not
+                  // only inside presentNow (which only runs after the user picks a submission
+                  // mode and confirms). Previously 349 was the only one of the two models whose
+                  // button opened the modal unconditionally — the modal would open, the user
+                  // would pick con/sin acuse and confirm, and ONLY THEN get rejected by
+                  // presentNow's own check (still kept below, belt-and-braces, same as 303).
+                  if (isSustitutivaChecked(identChecks) && !Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+                    toast.error(t('fm.duplicate_period.requires_ordinaria')
+                      ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+                    return;
+                  }
+                  if (!isSustitutivaChecked(identChecks) && Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+                    toast.error(t('fm.duplicate_period.ordinaria_exists')
+                      ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+                    return;
+                  }
+                  setShowPresent(true);
+                }}
                 // ETP-5597 — a substitute declaration needs a valid former-declaration identifier.
                 disabled={formerStatementInvalid || actionBusy}
                 title={formerStatementInvalid

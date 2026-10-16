@@ -1613,6 +1613,21 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                     );
                     return;
                   }
+                  // ETP-5725 (reopened QA fix, UX follow-up) — same gate `handleGenerate` itself
+                  // enforces (see its own comment); checked here too so the "Generar fichero 303"
+                  // modal never even opens on an invalid corrective/ordinaria state. This button
+                  // was found to be the one place this check was missing at the pre-flight level
+                  // — "Registrar/Presentar" already had it (see that button's own onClick).
+                  if (correctiveWithoutPresentedOrdinaria) {
+                    toast.error(t('fm.duplicate_period.requires_ordinaria')
+                      ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+                    return;
+                  }
+                  if (ordinariaAlreadyPresented) {
+                    toast.error(t('fm.duplicate_period.ordinaria_exists')
+                      ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+                    return;
+                  }
                   setShowFilegen(true);
                 }}
                 disabled={generating}

@@ -188,7 +188,10 @@ describe('FmModel349Page — Tipo segmented control (ETP-5597)', () => {
   });
 
   it('threads the selected Tipo and the identifier into FileGenModal', () => {
-    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    // ETP-5725 (reopened QA fix) — `_duplicatePeriodPresented: true` needed so the new
+    // corrective-consistency pre-check on the Generar button's onClick doesn't block this
+    // (unrelated) test: it's about what gets threaded into the modal, not about that guard.
+    const { container } = render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} />);
     fireEvent.click(sustitutivaBtn());
     fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(genBtn(container));
@@ -648,28 +651,29 @@ describe('FmModel349Page — ETP-5725 Guardar/Generar/Presentar gated by correct
     expect(persistManualData).not.toHaveBeenCalled();
   });
 
-  it('blocks "Generar fichero 349" for the same corrective-without-ordinaria case', () => {
-    // genBtn's own onClick only opens FileGenModal — the guard lives in `generateNow`, the
-    // modal's own `onConfirm` (mocked as a click on `FileGenModal-mock` itself, same pattern as
-    // the other Generar tests in this file).
+  it('blocks "Generar fichero 349" for the same corrective-without-ordinaria case BEFORE the modal opens', () => {
+    // ETP-5725 (reopened QA fix, UX follow-up) — genBtn's own onClick now mirrors 303's: it
+    // blocks BEFORE opening FileGenModal, not only inside generateNow (the modal's onConfirm).
+    // The modal must never even mount here.
     const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
     fireEvent.click(sustitutivaBtn());
     fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(genBtn(container));
-    fireEvent.click(screen.getByTestId('FileGenModal-mock'));
     expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+    expect(screen.queryByTestId('FileGenModal-mock')).not.toBeInTheDocument();
     expect(generate349File).not.toHaveBeenCalled();
   });
 
-  it('blocks "Registrar/Presentar" for the same corrective-without-ordinaria case', () => {
-    // `presentBtn`'s own onClick only opens PresentModal (no pre-check in this model, unlike
-    // 303) — the guard lives in `presentNow`, which is the modal's own `onConfirm`.
+  it('blocks "Registrar/Presentar" for the same corrective-without-ordinaria case BEFORE the modal opens', () => {
+    // ETP-5725 (reopened QA fix, UX follow-up) — `presentBtn`'s own onClick now mirrors 303's:
+    // it blocks BEFORE opening PresentModal, not only inside `presentNow` (the modal's
+    // `onConfirm`). The modal must never even mount here.
     render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
     fireEvent.click(sustitutivaBtn());
     fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(presentBtn());
-    fireEvent.click(screen.getByTestId('PresentModal-confirm'));
     expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+    expect(screen.queryByTestId('PresentModal-confirm')).not.toBeInTheDocument();
     expect(persistManualData).not.toHaveBeenCalled();
   });
 

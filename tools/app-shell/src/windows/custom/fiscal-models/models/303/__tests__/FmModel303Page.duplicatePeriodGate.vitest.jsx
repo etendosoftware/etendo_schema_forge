@@ -313,7 +313,7 @@ describe('FmModel303Page — ETP-5725 Guardar/Generar gated by corrective consis
     expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
   });
 
-  it('blocks "Generar fichero" for the same corrective-without-ordinaria case', async () => {
+  it('blocks "Generar fichero" for the same corrective-without-ordinaria case BEFORE the modal opens', async () => {
     const { toast } = await import('sonner');
     const decl = makeDecl({
       _hasDuplicatePeriod: false,
@@ -321,11 +321,13 @@ describe('FmModel303Page — ETP-5725 Guardar/Generar gated by corrective consis
       identification: { tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', bank_iban: 'ES1234567890123456789012' },
     });
     render(<FmModel303Page decl={decl} {...defaultProps} />);
-    // The "Generar fichero" button's own onClick only opens FileGenModal303 — the real
-    // handleGenerate (where this guard lives) is that modal's onConfirm.
+    // ETP-5725 (reopened QA fix, UX follow-up) — the "Generar fichero" button's own onClick now
+    // blocks BEFORE opening FileGenModal303, not only inside handleGenerate (the modal's
+    // onConfirm) — mirrors "Registrar/Presentar"'s own onClick pre-check. The modal must never
+    // even mount here.
     fireEvent.click(screen.getByTestId('FmModel303Page__generate'));
-    fireEvent.click(screen.getByTestId('filegen-modal-confirm'));
     expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+    expect(screen.queryByTestId('filegen-modal-confirm')).not.toBeInTheDocument();
   });
 
   it('blocks "Guardar" as ordinaria when another ordinaria is already presented (mirror rule)', async () => {
