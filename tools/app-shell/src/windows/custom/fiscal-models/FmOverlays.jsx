@@ -173,14 +173,26 @@ function PresentModalColumn({ icon, titleKey, descKey, paths, path, setPath, t, 
 // The underlying `path` selection state and `canConfirm`/`handleConfirm`
 // logic are unchanged from the single-column version — only the visual
 // grouping changed.
-export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
+// `registerPaths` (optional, ETP-5716): replaces the left column's 2 manual paths — the 390
+// registers a filing made elsewhere as one path (`submitted_ext`, "Registrar como presentada")
+// whose details are asked in a step of its own. A path with `continues: true` confirms with
+// "Continuar" (its caller opens that next step). Omitted, the column is exactly as before.
+const DEFAULT_REGISTER_PATHS = [
+  { id: 'submitted_ack', titleKey: 'fm.present.path.acuse',     descKey: 'fm.present.path.acuse_desc' },
+  { id: 'submitted',     titleKey: 'fm.present.path.sin_acuse', descKey: 'fm.present.path.sin_acuse_desc' },
+];
+
+export function PresentModal({ decl, onConfirm, onClose, showAeatPath, registerPaths = DEFAULT_REGISTER_PATHS }) {
   const ui = useUI();
   const t = ui;
   const [path, setPath] = useState(null);
   const [acuseFile, setAcuseFile] = useState(null);
   const fileRef = useRef(null);
 
-  const canConfirm = path === 'submitted' || path === 'aeat_telematic' || (path === 'submitted_ack' && acuseFile);
+  const REGISTER_PATHS = registerPaths;
+  const isRegisterPath = REGISTER_PATHS.some(p => p.id === path);
+  const continues = path === 'aeat_telematic' || REGISTER_PATHS.some(p => p.id === path && p.continues);
+  const canConfirm = path === 'aeat_telematic' || (isRegisterPath && (path !== 'submitted_ack' || !!acuseFile));
 
   function handleConfirm() {
     onConfirm({ status: path, acuseFile: path === 'submitted_ack' ? acuseFile : null });
@@ -202,10 +214,6 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
     setAcuseFile(file);
   };
 
-  const REGISTER_PATHS = [
-    { id: 'submitted_ack', titleKey: 'fm.present.path.acuse',     descKey: 'fm.present.path.acuse_desc' },
-    { id: 'submitted',     titleKey: 'fm.present.path.sin_acuse', descKey: 'fm.present.path.sin_acuse_desc' },
-  ];
   const AEAT_PATHS = showAeatPath
     ? [{ id: 'aeat_telematic', titleKey: 'fm.present.path.aeat', descKey: 'fm.present.path.aeat_desc' }]
     : [];
@@ -293,7 +301,7 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
             disabled={!canConfirm}
             onClick={handleConfirm}
           >
-            {path === 'aeat_telematic' ? (t('fm.action.continue') ?? 'Continue') : t('fm.action.confirm_presentation')}
+            {continues ? (t('fm.action.continue') ?? 'Continue') : t('fm.action.confirm_presentation')}
           </button>
         </div>
 

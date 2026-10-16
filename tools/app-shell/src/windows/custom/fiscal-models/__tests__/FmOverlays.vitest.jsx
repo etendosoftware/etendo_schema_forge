@@ -82,6 +82,24 @@ describe('PresentModal', () => {
     expect(confirmBtn.disabled).toBe(false);
   });
 
+  // ETP-5716 — the 390 replaces the left column with one "Registrar como presentada" path whose
+  // details come in a next step: it confirms with "Continuar" and reports its own status.
+  it('registerPaths replaces the manual paths; a `continues` path confirms with Continuar', () => {
+    const onConfirm = vi.fn();
+    const paths = [{ id: 'submitted_ext', titleKey: 'fm.m390.present.path.register', descKey: 'x', continues: true }];
+    const { container } = render(
+      <PresentModal decl={{ ...decl, model: '390', period: '0A' }} onConfirm={onConfirm} onClose={vi.fn()} showAeatPath registerPaths={paths} />,
+    );
+    expect(document.body.textContent).toContain('fm.m390.present.path.register');
+    expect(document.body.textContent).not.toContain('fm.present.path.acuse');
+    const pathCards = container.querySelectorAll('[style*="cursor: pointer"]');
+    fireEvent.click(pathCards[0]);
+    const confirmBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('fm.action.continue'));
+    expect(confirmBtn.disabled).toBe(false);
+    fireEvent.click(confirmBtn);
+    expect(onConfirm).toHaveBeenCalledWith({ status: 'submitted_ext', acuseFile: null });
+  });
+
   it('calls onClose when overlay is clicked', () => {
     const onClose = vi.fn();
     const { container } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={onClose} />);
