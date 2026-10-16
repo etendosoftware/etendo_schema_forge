@@ -333,6 +333,10 @@ describe('FmModel303Page — box70/109 clamp applies even when handleBoxChange n
         identification: { tipo_declaracion: 'N', rectificativa: true, motivo_rectificacion: 'R' },
         manualOverrides: { 70: -300 },
       },
+      // ETP-5725 (reopened QA fix) — "Guardar" below is gated by the corrective-consistency
+      // guard too: a persisted rectificativa: true needs a presented ordinaria sibling. Not
+      // what this test is about (the box70/111 clamp), so a sibling is simply assumed.
+      _duplicatePeriodPresented: true,
     };
     installImmediateServer();
     render(<FmModel303Page decl={decl} token={TOKEN} apiBaseUrl={API_BASE_URL} {...defaultProps} />);

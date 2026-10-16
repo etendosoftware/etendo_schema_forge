@@ -117,6 +117,11 @@ const BASE_DECL = {
   status: 'draft', result: null, incidents: { blocking: 0, warning: 0 },
   _precomputed: null, boxes: null, sources: [], history: [],
   manualData: { identification: { tipo_declaracion: 'N', rectificativa: true } },
+  // ETP-5725 (reopened QA fix) — a persisted `rectificativa: true` now also needs a presented
+  // ordinaria sibling to pass the corrective-consistency guard ("Guardar" is gated by it too,
+  // not just "Registrar/Presentar") — this file's own scenarios are about box111's
+  // MIN/ABS formula, not about that guard, so a sibling is simply assumed to exist.
+  _duplicatePeriodPresented: true,
 };
 
 // `boxes: []`/`summary: {}` — not `_precomputed: null` — so the mount effect's own

@@ -53,12 +53,34 @@ vi.mock('../../../FmTabContent.jsx', () => ({
   SourcesTab: () => null,
   IncidentsTab: () => null,
 }));
+// ETP-5725 (reopened QA fix, critical regression) — exposes `identification` + `onIdentChange`
+// (same minimal pattern as FmModel303Page.identChangeSyncsBox111.vitest.jsx's own mock) so the
+// regression tests below can assert on the ACTUAL rendered `rectificativa` checkbox state, not
+// just on the duplicate-period banner/toast — the regression was specifically that the detail
+// page's `identChecks` initializer auto-checked the box on an ALREADY-SUBMITTED declaration.
 vi.mock('../FmBoxes303.jsx', () => ({
-  default: () => React.createElement('div', { 'data-testid': 'fm-boxes-303' }, 'boxes'),
+  default: ({ identification, onIdentChange }) => React.createElement(
+    'div',
+    { 'data-testid': 'fm-boxes-303' },
+    React.createElement('input', {
+      type: 'checkbox',
+      checked: !!identification?.rectificativa,
+      'data-testid': 'rectificativa-cb',
+      onChange: (e) => onIdentChange?.('rectificativa', e.target.checked),
+    }),
+  ),
 }));
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: () => React.createElement('div', { 'data-testid': 'PresentModal-mock' }, 'present-modal'),
-  FileGenModal303: () => React.createElement('div', { 'data-testid': 'FileGenModal303-mock' }, 'filegen-modal'),
+  // `onConfirm` exposed as a clickable button (mirrors PresentModal's own mock above) so tests
+  // can drive the REAL `handleGenerate` — the Bug-1 corrective-consistency guard lives INSIDE
+  // that function, not in the "Generar fichero" button's own onClick (which only opens this
+  // modal), so a test must reach this confirm to exercise it.
+  FileGenModal303: ({ onConfirm }) => React.createElement(
+    'button',
+    { 'data-testid': 'filegen-modal-confirm', onClick: () => onConfirm({}) },
+    'confirm-filegen',
+  ),
 }));
 vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null,
@@ -142,8 +164,15 @@ describe('FmModel303Page — duplicate-period gate blocks "Marcar como Presentad
   });
 
   it('allows presenting once rectificativa is checked', () => {
+    // ETP-5725 (reopened QA fix, Bug 1) — `_duplicatePeriodPresented: true` added to this
+    // fixture: checking rectificativa is no longer enough on its own to present — AEAT requires
+    // an ORDINARIA to already be PRESENTED for the period (see `correctiveWithoutPresentedOrdinaria`
+    // in FmModel303Page.jsx), which this flag represents. The old fixture (no presented sibling
+    // at all) is exactly Bug 1's own repro and is now covered separately, as a BLOCKED case, by
+    // the "Guardar/Generar gated by corrective consistency" describe block below.
     const decl = makeDecl({
       _hasDuplicatePeriod: true,
+      _duplicatePeriodPresented: true,
       identification: { tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', bank_iban: 'ES1234567890123456789012' },
     });
     render(<FmModel303Page decl={decl} {...defaultProps} />);
@@ -209,5 +238,114 @@ describe('FmModel303Page — ETP-5725 auto-default rectificativa on duplicatePer
     });
     render(<FmModel303Page decl={decl} {...defaultProps} />);
     expect(screen.getByText('fm.duplicate_period.warning')).toBeInTheDocument();
+  });
+});
+
+// ETP-5725 (reopened QA fix) — CRITICAL REGRESSION: the `identChecks` lazy initializer applied
+// the SAME auto-default as the banner/present gate above, but with NO `decl.status === 'draft'`
+// precondition. Repro: present an ordinaria (rectificativa never touched/saved, so it reads
+// `undefined`), then present a sibling as rectificativa for the same period — OPENING the
+// original, already-presented ordinaria re-triggered the auto-default and showed "Autoliquidación
+// rectificativa" CHECKED on an already-submitted, correctly-ordinaria record. Confirmed
+// display-only (no PUT is reachable from the locked/`isSubmitted` view — see
+// `docs/generated-custom-windows/fiscal-models.md`), but still alarming and wrong. Fixed by
+// gating the auto-default on `decl.status === 'draft'`, mirroring the identical fix already
+// applied to `FmListPage.jsx`'s `resolveDeclTypeLabel` (Bug 3).
+describe('FmModel303Page — ETP-5725 critical regression: identChecks never auto-defaults on a non-draft declaration', () => {
+  it('renders rectificativa UNCHECKED for an already-submitted declaration, even with _duplicatePeriodPresented true and rectificativa never persisted', () => {
+    const decl = makeDecl({
+      status: 'submitted',
+      _duplicatePeriodPresented: true,
+      identification: { tipo_declaracion: 'I' }, // rectificativa deliberately absent/undefined
+    });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    expect(screen.getByTestId('rectificativa-cb').checked).toBe(false);
+  });
+
+  it('still renders rectificativa UNCHECKED for a "ready" (not yet submitted, but no longer draft) declaration under the same conditions', () => {
+    const decl = makeDecl({
+      status: 'ready',
+      _duplicatePeriodPresented: true,
+      identification: { tipo_declaracion: 'I' },
+    });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    expect(screen.getByTestId('rectificativa-cb').checked).toBe(false);
+  });
+
+  it('control: a genuine DRAFT still gets the auto-default checked under the same conditions', () => {
+    const decl = makeDecl({
+      status: 'draft',
+      _duplicatePeriodPresented: true,
+      identification: { tipo_declaracion: 'I' },
+    });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    expect(screen.getByTestId('rectificativa-cb').checked).toBe(true);
+  });
+});
+
+// ETP-5725 (reopened QA fix) — Bug 1 / mirror rule: "Guardar" and "Generar fichero" must be
+// gated by the same corrective/ordinaria consistency rule as "Registrar/Presentar"
+// (`correctiveWithoutPresentedOrdinaria` / `ordinariaAlreadyPresented`). Backend is the
+// authoritative gate; these are the UX-sugar frontend checks.
+describe('FmModel303Page — ETP-5725 Guardar/Generar gated by corrective consistency', () => {
+  it('blocks "Registrar/Presentar" (Bug 1\'s own repro) when rectificativa is checked with no presented ordinaria sibling at all', async () => {
+    const { toast } = await import('sonner');
+    const decl = makeDecl({
+      _hasDuplicatePeriod: false,
+      _duplicatePeriodPresented: false,
+      identification: { tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', bank_iban: 'ES1234567890123456789012' },
+    });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    fireEvent.click(submitBtn());
+    expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+    expect(screen.queryByTestId('PresentModal-mock')).not.toBeInTheDocument();
+  });
+
+  it('blocks "Guardar" and toasts when rectificativa is checked with no presented ordinaria sibling', async () => {
+    const { toast } = await import('sonner');
+    const decl = makeDecl({
+      _hasDuplicatePeriod: false,
+      _duplicatePeriodPresented: false,
+      identification: { tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', bank_iban: 'ES1234567890123456789012' },
+    });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('FmModel303Page__save'));
+    expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+  });
+
+  it('blocks "Generar fichero" for the same corrective-without-ordinaria case', async () => {
+    const { toast } = await import('sonner');
+    const decl = makeDecl({
+      _hasDuplicatePeriod: false,
+      _duplicatePeriodPresented: false,
+      identification: { tipo_declaracion: 'I', rectificativa: true, motivo_rectificacion: 'R', bank_iban: 'ES1234567890123456789012' },
+    });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    // The "Generar fichero" button's own onClick only opens FileGenModal303 — the real
+    // handleGenerate (where this guard lives) is that modal's onConfirm.
+    fireEvent.click(screen.getByTestId('FmModel303Page__generate'));
+    fireEvent.click(screen.getByTestId('filegen-modal-confirm'));
+    expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+  });
+
+  it('blocks "Guardar" as ordinaria when another ordinaria is already presented (mirror rule)', async () => {
+    const { toast } = await import('sonner');
+    const decl = makeDecl({
+      _hasDuplicatePeriod: true,
+      _duplicatePeriodPresented: true,
+      identification: { tipo_declaracion: 'I', rectificativa: false },
+    });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('FmModel303Page__save'));
+    expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.ordinaria_exists');
+  });
+
+  it('allows "Guardar" for a plain ordinaria with no conflicting sibling', async () => {
+    const { toast } = await import('sonner');
+    const decl = makeDecl({ _hasDuplicatePeriod: false, _duplicatePeriodPresented: false });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('FmModel303Page__save'));
+    expect(toast.error).not.toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+    expect(toast.error).not.toHaveBeenCalledWith('fm.duplicate_period.ordinaria_exists');
   });
 });

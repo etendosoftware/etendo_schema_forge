@@ -455,6 +455,11 @@ describe('FmModel303Page — single-flight explicit-save write path (ETP-5255 / 
       decl: {
         ...BASE_DECL,
         manualData: { identification: { tipo_declaracion: 'N', bank_iban: 'ES0000000000000000000000', motivo_rectificacion: 'R' } },
+        // ETP-5725 (reopened QA fix) — checking rectificativa live is now ALSO gated by the
+        // corrective-consistency guard at Presentar time: it needs a presented ordinaria
+        // sibling. Not what this test is about (the single-flight save path), so a sibling is
+        // simply assumed.
+        _duplicatePeriodPresented: true,
       },
     });
 
