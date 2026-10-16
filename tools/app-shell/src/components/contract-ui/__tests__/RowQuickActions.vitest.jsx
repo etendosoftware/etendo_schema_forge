@@ -526,6 +526,7 @@ describe('RowQuickActions', () => {
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'reactivate' }),
         { ok: true },
+        POSTED_ROW,
       );
     });
 
