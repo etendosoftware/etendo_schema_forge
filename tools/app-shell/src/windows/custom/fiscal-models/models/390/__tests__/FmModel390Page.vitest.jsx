@@ -1,5 +1,8 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/FmModel390Page.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/FmBoxes390.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/usePreload390.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/Reconciliation390.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/Settlements303Table390.jsx
 //
 // Also: the Facturas tab wiring — "Ver facturas" on an invoice box opens the tab filtered by it.
 //
@@ -25,6 +28,7 @@ vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
     formatAmount: (n) => (n == null ? '—' : String(n)),
     persistManualData: vi.fn().mockResolvedValue({ ok: true }),
     fetchDeclarationIncidents: vi.fn().mockResolvedValue({ blocking: 0, warning: 0, items: [] }),
+    fetchDeclaration: vi.fn(),
   };
 });
 vi.mock('../fm390Api.js', () => ({
@@ -33,6 +37,7 @@ vi.mock('../fm390Api.js', () => ({
   checkModified390: vi.fn(),
   generatedFileName: () => '390_0A_2026.txt',
   fetchSources390: vi.fn(),
+  fetchPreload390: vi.fn(),
 }));
 vi.mock('../FmSources390.jsx', () => ({
   default: ({ filter, isSubmitted }) => React.createElement('div', {
@@ -83,8 +88,8 @@ vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
 }));
 
 import FmModel390Page, { substituteIdentifierError, summaryOf } from '../FmModel390Page.jsx';
-import { fetchBoxes390, generate390File } from '../fm390Api.js';
-import { persistManualData, fetchDeclarationIncidents } from '../../../fiscalModelsUtils.js';
+import { fetchBoxes390, generate390File, fetchPreload390 } from '../fm390Api.js';
+import { persistManualData, fetchDeclarationIncidents, fetchDeclaration } from '../../../fiscalModelsUtils.js';
 import { toast } from 'sonner';
 
 const PAYLOAD = {
@@ -99,6 +104,22 @@ const PAYLOAD = {
   inputs: {},
   warnings: [{ code: 'UNSUPPORTED_RATE', parameter: 'VAT_PURCHASE_NORMAL', rate: '3.00' }],
   invoiceBoxes: [1, 2, 5, 6, 33, 34, 48, 49, 99, 190, 191],
+};
+
+const EMPTY_PRELOAD = { year: 2026, declarations: [], missingPeriods: ['T1', 'T2', 'T3', 'T4'], inputs: {}, expectedResult: null, warnings: [] };
+const PRELOAD = {
+  year: 2026,
+  periodicity: 'quarterly',
+  declarations: [
+    { id: 'd303-1', period: 'T1', month: '03', status: 'submitted', submitted: true, source: 'snapshot', result: '300.00', periodResult: '300.00', kind: 'pay', superseded: 0 },
+    { id: 'd303-4', period: 'T4', month: '12', status: 'draft', submitted: false, source: 'live', result: '60.00', periodResult: '60.00', kind: 'pay', superseded: 1 },
+  ],
+  missingPeriods: ['T2', 'T3'],
+  lastPeriod: 'T4',
+  inputs: { INGRESAR_03: '300.00', INGRESAR_06: '0.00', INGRESAR_09: '0.00', INGRESAR_12: '60.00', TOTAL_LASTPERIOD: '0.00', TOTAL_LASTPERIOD_DEVOLVER: '0.00', LIQANUAL_COMPENSATION: '0.00', LIQANUAL_ENDCOMPENSATION: '0.00' },
+  expectedResult: '360.00',
+  tolerance: '1.00',
+  warnings: [{ code: 'DRAFT_303', periods: 'T4' }],
 };
 
 const makeDecl = (overrides = {}) => ({
@@ -120,6 +141,7 @@ beforeEach(() => {
   persistManualData.mockResolvedValue({ ok: true });
   generate390File.mockResolvedValue({ ok: true });
   fetchBoxes390.mockResolvedValue(PAYLOAD);
+  fetchPreload390.mockResolvedValue(EMPTY_PRELOAD);
   fetchDeclarationIncidents.mockResolvedValue({ blocking: 0, warning: 0, items: [] });
 });
 
@@ -494,5 +516,100 @@ describe('FmModel390Page — Facturas tab', () => {
     render(<FmModel390Page decl={makeDecl({ _precomputed: legacy })} {...props()} />);
     goToBlock('iva_devengado');
     expect(screen.queryByTestId('FmBoxes390__viewInvoices_5')).toBeNull();
+  });
+});
+
+describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () => {
+  const savedManualData = () => persistManualData.mock.calls.at(-1)[1];
+
+  it('a draft never preloaded takes the 303 values into its empty inputs and saves them with aeatPreloaded', async () => {
+    fetchPreload390.mockResolvedValue(PRELOAD);
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(fetchPreload390).toHaveBeenCalled());
+    expect(fetchPreload390.mock.calls[0][1].monthlyReturn).toBe(false);
+    goToBlock('resultado_liquidaciones');
+    await waitFor(() => expect(screen.getByTestId('FmBoxes390__input_INGRESAR_03').getAttribute('data-origin')).toBe('preloaded'));
+    fireEvent.click(screen.getByTestId('FmModel390Page__save'));
+    await waitFor(() => expect(persistManualData).toHaveBeenCalled());
+    const md = savedManualData();
+    expect(md.aeatInputs.INGRESAR_03).toBe('300.00');
+    expect(md.aeatInputs.INGRESAR_12).toBe('60.00');
+    expect(md.aeatInputs.INGRESAR_06).toBeUndefined();
+    expect(md.aeatPreloaded).toEqual(PRELOAD.inputs);
+  });
+
+  it('opening an already preloaded draft does not re-apply; Calcular applies only the unmodified inputs', async () => {
+    const manualData = {
+      aeatInputs: { INGRESAR_03: '350.00', INGRESAR_12: '60.00' },
+      aeatPreloaded: { INGRESAR_03: '300.00', INGRESAR_12: '60.00' },
+    };
+    fetchPreload390.mockResolvedValue({ ...PRELOAD, inputs: { INGRESAR_03: '310.00', INGRESAR_12: '70.00' } });
+    render(<FmModel390Page decl={makeDecl({ manualData })} {...props()} />);
+    await waitFor(() => expect(fetchPreload390).toHaveBeenCalledTimes(1));
+    goToBlock('resultado_liquidaciones');
+    expect(screen.getByTestId('FmBoxes390__inputField_INGRESAR_12').value).toBe('60');
+
+    await act(async () => { fireEvent.click(screen.getByTestId('FmModel390Page__compute')); });
+    await waitFor(() => expect(persistManualData).toHaveBeenCalled());
+    expect(fetchPreload390).toHaveBeenCalledTimes(2);
+    const md = savedManualData();
+    expect(md.aeatInputs.INGRESAR_03).toBe('350.00'); // the user's value survives
+    expect(md.aeatInputs.INGRESAR_12).toBe('70.00');
+    expect(md.aeatPreloaded).toEqual({ INGRESAR_03: '310.00', INGRESAR_12: '70.00' });
+    // the boxes were computed with the preloaded inputs
+    expect(fetchBoxes390.mock.calls.at(-1)[1].inputs.INGRESAR_12).toBe('70.00');
+  });
+
+  it('a modified preloaded box shows "Modificado" and Restaurar returns to the preloaded value', async () => {
+    const manualData = { aeatInputs: { LIQANUAL_COMPENSATION: '80.00' }, aeatPreloaded: { LIQANUAL_COMPENSATION: '50.00' } };
+    render(<FmModel390Page decl={makeDecl({ manualData })} {...props()} />);
+    goToBlock('resultado_liquidacion');
+    expect(screen.getByTestId('FmBoxes390__input_LIQANUAL_COMPENSATION').getAttribute('data-origin')).toBe('modified');
+    fireEvent.click(screen.getByTestId('FmBoxes390__restore_LIQANUAL_COMPENSATION'));
+    expect(screen.getByTestId('FmBoxes390__input_LIQANUAL_COMPENSATION').getAttribute('data-origin')).toBe('preloaded');
+    fireEvent.click(screen.getByTestId('FmModel390Page__save'));
+    await waitFor(() => expect(persistManualData).toHaveBeenCalled());
+    expect(savedManualData().aeatInputs.LIQANUAL_COMPENSATION).toBe('50.00');
+    expect(savedManualData().aeatPreloaded).toEqual({ LIQANUAL_COMPENSATION: '50.00' });
+  });
+
+  it('lists the 303s of the year in block 9 and opens one', async () => {
+    fetchPreload390.mockResolvedValue(PRELOAD);
+    const target = { id: 'd303-1', model: '303', year: 2026, period: 'T1' };
+    fetchDeclaration.mockResolvedValue(target);
+    const onOpenDeclaration = vi.fn();
+    render(<FmModel390Page decl={makeDecl()} {...props()} onOpenDeclaration={onOpenDeclaration} />);
+    goToBlock('resultado_liquidaciones');
+    await waitFor(() => expect(screen.getByTestId('Settlements303Table390__row_T1')).toBeTruthy());
+    expect(screen.getByTestId('Settlements303Table390__result_T1').textContent).toBe('300');
+    expect(screen.getByTestId('Settlements303Table390__row_T4').textContent).toContain('fm.m390.preload.source_live');
+    expect(screen.getByTestId('Settlements303Table390__missing')).toBeTruthy();
+    expect(screen.getByTestId('Settlements303Table390__warning_DRAFT_303')).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByTestId('Settlements303Table390__open_T1')); });
+    await waitFor(() => expect(onOpenDeclaration).toHaveBeenCalledWith(target));
+  });
+
+  it('the cuadre is OK within 1,00 € of the 303s and a warning beyond it', async () => {
+    fetchPreload390.mockResolvedValue({ ...PRELOAD, expectedResult: '359.50', missingPeriods: [] });
+    const { unmount } = render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
+    await waitFor(() => expect(screen.getByTestId('Reconciliation390__ok')).toBeTruthy());
+    expect(screen.queryByTestId('Reconciliation390__missing')).toBeNull();
+    unmount();
+
+    fetchPreload390.mockResolvedValue({ ...PRELOAD, expectedResult: '300.00' });
+    render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
+    await waitFor(() => expect(screen.getByTestId('Reconciliation390__difference')).toBeTruthy());
+    expect(screen.getByTestId('Reconciliation390__difference').textContent).toContain('fm.m390.reconcile.difference');
+    expect(screen.getByTestId('Reconciliation390__missing')).toBeTruthy();
+    // non-blocking: Generar stays enabled
+    expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(false);
+  });
+
+  it('without 303s of the year there is nothing to reconcile and nothing is preloaded', async () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(screen.getByTestId('Reconciliation390__no303')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('FmModel390Page__save'));
+    await waitFor(() => expect(persistManualData).toHaveBeenCalled());
+    expect(savedManualData().aeatPreloaded).toBeUndefined();
   });
 });
