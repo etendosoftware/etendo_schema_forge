@@ -81,13 +81,15 @@ describe('amount helpers', () => {
 describe('deriveInputBoxes — mirror of Fiscal390DerivedBoxes', () => {
   const computed = { 47: '500.00', 64: '200.00', 65: '300.00', 84: '300.00', 86: '300.00', 108: '1000.00' };
 
-  it('liquidation: [84] = [65] + [658] − [661], [86] = [84] + [659] − [85]', () => {
+  it('liquidation: [64] += [661], [65] = [47] − [64], [84] = [65] + [658], [86] = [84] + [659] − [85]', () => {
     const { boxes, mode } = deriveInputBoxes(computed, {}, {
       [INPUT.REGULARIZATION]: '10.00', [INPUT.NO_CURRENT_TYPE_AMOUNT]: '5.00',
       [INPUT.VAT_IMPORT]: '20.00', [INPUT.COMPENSATION]: '15.00',
     });
     expect(mode).toBe('liquidation');
-    expect(boxes[84]).toBe(305);
+    expect(boxes[64]).toBe(205);
+    expect(boxes[65]).toBe(295);
+    expect(boxes[84]).toBe(305); // 295 + 10: [661] already in [65], not subtracted twice
     expect(boxes[85]).toBe(15);
     expect(boxes[86]).toBe(310);
     expect(boxes[658]).toBe(10);
@@ -101,13 +103,38 @@ describe('deriveInputBoxes — mirror of Fiscal390DerivedBoxes', () => {
       [INPUT.VAT_IMPORT]: '2.00', [INPUT.COMMON_TERRITORY_COMPENSATION]: '3.00',
     });
     expect(mode).toBe('territory');
-    expect(boxes[84]).toBe(301); // classic does not subtract [661] here
+    expect(boxes[64]).toBe(300);
+    expect(boxes[65]).toBe(200);
+    expect(boxes[84]).toBe(301); // 200 + 100 + 1: the classic file does not take [661] off this slot
     expect(boxes[92]).toBe(100.32); // 301 × 33.33 % = 100.3233 → 100.32
     expect(boxes[94]).toBe(99.32);
     expect(boxes[87]).toBe(33.33);
     expect(boxes[85]).toBeUndefined();
     expect(boxes[86]).toBeUndefined();
     expect(annualResultOf(boxes, mode)).toBe(99.32);
+  });
+
+  it('[64] / [65] swap the [661] they were computed with for the one on screen', () => {
+    const fromServer = { 47: '500.00', 64: '205.00', 65: '295.00', 84: '295.00', 86: '295.00' };
+    const { boxes } = deriveInputBoxes(fromServer, { [INPUT.NO_CURRENT_TYPE_AMOUNT]: '5.00' }, {
+      [INPUT.NO_CURRENT_TYPE_AMOUNT]: '8.00',
+    });
+    expect(boxes[64]).toBe(208);
+    expect(boxes[65]).toBe(292);
+    expect(boxes[84]).toBe(292);
+    expect(boxes[86]).toBe(292);
+    expect(boxes[661]).toBe(8);
+    const cleared = deriveInputBoxes(fromServer, { [INPUT.NO_CURRENT_TYPE_AMOUNT]: '5.00' }, {}).boxes;
+    expect(cleared[64]).toBe(200);
+    expect(cleared[65]).toBe(300);
+    expect(cleared[661]).toBeUndefined();
+  });
+
+  it('[112] is gone: not in the 2025 model, never written by classic', () => {
+    const rows = getLayout390(2025).find(b => b.id === 'volumen_operaciones').items.map(r => r.id);
+    expect(rows).not.toContain('box112');
+    expect(Object.values(INPUT)).not.toContain('390OTHER_UEMENBER');
+    expect(deriveInputBoxes({}, {}, { '390OTHER_UEMENBER': '999' }).boxes[112]).toBeUndefined();
   });
 
   it('[95] / [96] sum the monthly INGRESAR / DEVOLVER inputs', () => {
@@ -205,6 +232,9 @@ describe('classic consistency of the manual inputs', () => {
     expect(sanitizeAeatInputs390({ ConcursoUltPer: 'Y' })).toEqual({ ConcursoUltPer: 'N' });
     expect(sanitizeAeatInputs390({ ConcursoUltPer: 'Y', ConcursoAcr: 'Y' })).toEqual({ ConcursoUltPer: 'Y', ConcursoAcr: 'Y' });
     expect(sanitizeAeatInputs390(undefined)).toEqual({});
+    // An old draft's obsolete [112] input is dropped on save.
+    expect(sanitizeAeatInputs390({ '390OTHER_UEMENBER': '9.00', TOTAL_LASTPERIOD: '1.00' }))
+      .toEqual({ TOTAL_LASTPERIOD: '1.00' });
   });
 
   it('buildManualData390 stores the sanitized inputs', () => {

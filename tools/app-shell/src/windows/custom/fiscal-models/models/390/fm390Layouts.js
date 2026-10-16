@@ -45,7 +45,6 @@ export const INPUT = Object.freeze({
   TOTAL_LASTPERIOD: 'TOTAL_LASTPERIOD',                  // [97]
   TOTAL_LASTPERIOD_DEVOLVER: 'TOTAL_LASTPERIOD_DEVOLVER', // [98]
   END_COMPENSATION: 'LIQANUAL_ENDCOMPENSATION',          // [662]
-  OTHER_UE_MEMBER: '390OTHER_UEMENBER',                  // [112]
   OPS_SUJETAS_OSS: '390OPSUJETASCONOSS',                 // [127]
   OPS_INTRAGRUPO: '390OPSINTRAGRUPO',                    // [128]
   REAGYP: '390REAGYP',                                   // [101] (out of scope, kept for [108])
@@ -53,6 +52,12 @@ export const INPUT = Object.freeze({
   TRAVEL_AGENCY: '390TRAVEL_AGENCY',                     // [228] (out of scope, kept for [108])
   OPER_MONTHLY_RETURN: 'OPER_MONTHLYRETURN',             // [111]
 });
+
+/**
+ * Inputs an older GO version could store but the 2025 model no longer has, dropped on save:
+ * `390OTHER_UEMENBER` (old [112], never written by classic from 2021 on, not in DR390e2025).
+ */
+export const OBSOLETE_INPUTS_390 = Object.freeze(['390OTHER_UEMENBER']);
 
 /** Per-month inputs of "Resultado de las liquidaciones": INGRESAR_01..12 / DEVOLVER_01..12. */
 export const MONTH_CODES = Object.freeze(['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']);
@@ -169,7 +174,7 @@ const BLOCKS = Object.freeze([
     items: Object.freeze([
       row('box65', 'fm.m390.box.65', [65], { total: true, formula: '(47 − 64)' }),
       row('box658', 'fm.m390.box.658', [input(INPUT.REGULARIZATION, { box: 658 })]),
-      row('box84', 'fm.m390.box.84', [84], { total: true, formula: '(65 + 658 − 661)' }),
+      row('box84', 'fm.m390.box.84', [84], { total: true, formula: '(65 + 658)' }),
       row('box659', 'fm.m390.box.659', [input(INPUT.VAT_IMPORT, { box: 659 })]),
       row('box85', 'fm.m390.box.85', [input(INPUT.COMPENSATION, { box: 85, nonNegative: true, liquidationOnly: true })]),
       row('box86', 'fm.m390.box.86', [86], { total: true, formula: '(84 + 659 − 85)' }),
@@ -219,7 +224,6 @@ const BLOCKS = Object.freeze([
       row('box106', 'fm.m390.box.106', [106], { formula: '(−)' }),
       row('box107', 'fm.m390.box.107', [107], { formula: '(−)' }),
       row('box108', 'fm.m390.box.108', [108], { total: true }),
-      row('box112', 'fm.m390.box.112', [input(INPUT.OTHER_UE_MEMBER, { box: 112 })]),
     ]),
   }),
   Object.freeze({
@@ -363,9 +367,12 @@ export function territoryPercentSum(inputs) {
 // inputs, so an edit shows its effect on the totals immediately, before "Calcular". The backend
 // stays authoritative: "Calcular" (and the generated file) recompute everything server-side.
 //
-//   echo boxes  [660] [661] [658] [659] [97] [98] [662] [112] [101] [227] [228] [127] [128] [111]
-//   liquidation [84] = [65] + [658] − [661]   [85] = compensation (≥ 0,01)   [86] = [84] + [659] − compensation
-//   territory   [84] = [65] + [658]           [92] = round2([84] × [87] / 100)   [94] = [92] + [659] − [93]
+//   echo boxes  [660] [661] [658] [659] [97] [98] [662] [101] [227] [228] [127] [128] [111]
+//   [64] = deductible cuotas + [661]    [65] = [47] − [64]   (the file adds [661] to [64], page 4)
+//   liquidation [84] = [65] + [658]   [85] = compensation (≥ 0,01)   [86] = [84] + [659] − compensation
+//   territory   [84] = [65] + [661] + [658]  (classic prints the pre-[661] result here — a quirk of
+//               the file, reproduced so screen = file)
+//               [92] = round2([84] × [87] / 100)   [94] = [92] + [659] − [93]
 //               plus the echoed [87]-[91] and [93]
 //   [95] = Σ INGRESAR_xx    [96] = Σ DEVOLVER_xx
 //   [108] = invoice volume + [127] + [128] + [101] + [227] + [228]
@@ -378,7 +385,6 @@ const ECHO_BOXES = Object.freeze({
   [INPUT.TOTAL_LASTPERIOD]: 97,
   [INPUT.TOTAL_LASTPERIOD_DEVOLVER]: 98,
   [INPUT.END_COMPENSATION]: 662,
-  [INPUT.OTHER_UE_MEMBER]: 112,
   [INPUT.REAGYP]: 101,
   [INPUT.USED_GOODS]: 227,
   [INPUT.TRAVEL_AGENCY]: 228,
@@ -424,13 +430,19 @@ export function deriveInputBoxes(computedBoxes, computedInputs, currentInputs) {
 
   for (const [key, box] of Object.entries(ECHO_BOXES)) putIfNonZero(box, inputCents(currentInputs, key));
 
-  const box65 = cents[65] ?? 0;
+  // [64]/[65] carry [661]: back out the one they were computed with, apply the one on screen.
+  const computedNoCurrentType = inputCents(computedInputs, INPUT.NO_CURRENT_TYPE_AMOUNT);
+  const noCurrentType = inputCents(currentInputs, INPUT.NO_CURRENT_TYPE_AMOUNT);
+  const resRegGeneral = (cents[65] ?? 0) + computedNoCurrentType; // classic ResRegGeneral
+  put(64, (cents[64] ?? 0) - computedNoCurrentType + noCurrentType);
+  const box65 = resRegGeneral - noCurrentType;
+  put(65, box65);
   const regularization = inputCents(currentInputs, INPUT.REGULARIZATION);
   const vatImport = inputCents(currentInputs, INPUT.VAT_IMPORT);
   const territory = isTerritoryMode(currentInputs);
   if (territory) {
     for (const [key, box] of Object.entries(TERRITORY_ECHO_BOXES)) putIfNonZero(box, inputCents(currentInputs, key));
-    const box84 = box65 + regularization;
+    const box84 = resRegGeneral + regularization;
     const box92 = Math.round(box84 * (parseAmount(currentInputs?.[INPUT.COMMON_TERRITORY]) ?? 0) / 100);
     put(84, box84);
     put(92, box92);
@@ -440,7 +452,7 @@ export function deriveInputBoxes(computedBoxes, computedInputs, currentInputs) {
   } else {
     for (const box of Object.values(TERRITORY_ECHO_BOXES)) delete cents[box];
     const compensation = inputCents(currentInputs, INPUT.COMPENSATION);
-    const box84 = box65 + regularization - inputCents(currentInputs, INPUT.NO_CURRENT_TYPE_AMOUNT);
+    const box84 = box65 + regularization;
     put(84, box84);
     if (compensation >= 1) put(85, compensation); else delete cents[85];
     put(86, box84 + vatImport - compensation);
@@ -521,6 +533,7 @@ export function isConcurso(inputs) {
  */
 export function sanitizeAeatInputs390(inputs) {
   const next = { ...(inputs ?? {}) };
+  OBSOLETE_INPUTS_390.forEach(k => { delete next[k]; });
   if (isTerritoryMode(next)) delete next[INPUT.COMPENSATION];
   if (!isMonthlyReturn(next)) MONTH_CODES.forEach(m => { delete next[devolverKey(m)]; });
   if (!isConcurso(next) && next[FLAG.CONCURSO_LAST_PERIOD] === 'Y') next[FLAG.CONCURSO_LAST_PERIOD] = 'N';
