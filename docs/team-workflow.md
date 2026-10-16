@@ -174,14 +174,10 @@ PR opened/updated
 
 ## 8. Release Flow
 
-```
-develop (accumulated features)
-  → Create PR: develop → main
-  → Title: "Release: v0.X.X"
-  → Final CI check
-  → Squash merge
-  → Tag: git tag v0.X.X
-```
+Production updates once a day through the **daily cut**: `mergeblock/ETP-XXXX`, a cut of `develop`
+with `main` merged in, reaches `main` through one PR with the full pipeline and a human merge
+(regular merge, never squash). The order of operations, who does what, and what to do when the
+cut's pipeline fails are in `docs/branch-workflow.md` § Daily Cut.
 
 ---
 
