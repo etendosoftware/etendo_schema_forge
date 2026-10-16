@@ -121,6 +121,28 @@ See `e2e/tests/helpers/__tests__/period-helpers.test.js` for the guard's own uni
 
 ---
 
+## Document Creation Paths — `CREATION_PATHS` (ETP-5771)
+
+A new document's header can reach the server before its first line in two ways, and every integration spec that creates a document must **name the path it takes**. The helpers live in `e2e/tests/helpers/purchase-helpers.js` (generic despite the file name):
+
+| Helper | What it does |
+|---|---|
+| `CREATION_PATHS` | `['emptyState', 'save']`. `emptyState` is the real user flow: fill the header on `/<spec>/new` and go straight to an empty-lines action ("+ Añadir líneas", "Importar desde …"), which saves the header itself — no Guardar click. `save` clicks Guardar (`saveDraft`) first, then the same action on the saved record. |
+| `leaveNewDocumentThroughEmptyLines(page, { spec, via, trigger? })` | Runs the chosen path from `/<spec>/new` and returns the saved record id. With `emptyState` it asserts the action is offered on the UNSAVED document and that clicking it moves to `/<spec>/<id>`. `trigger` defaults to "+ Añadir líneas"; pass an import button for the import paths. An unknown `via` throws. |
+| `openFirstLineRow(page, { spec, via })` | The above, then waits for the inline-add row of the first line (re-clicking only if the click was lost to the redirect). For specs that fill the line themselves. |
+| `createDraftWithFirstLine(page, { spec, via, ...line })` | `openFirstLineRow` plus committing the product line (`productName`, `productIndex`, `quantity`, as in `addProductLine`). |
+
+Rules:
+
+- **Declare the path explicitly** in every spec that creates a document. Most use `emptyState`; a minority keep `save` (today `purchase-order-full-flow`, `sales-quotation-full-flow`, `sales-order-return-rectificativa`, `goods-receipt-stock-defaults`, `printable-download-purchase`) so both paths stay covered.
+- `addProductLine({ isFirst: true })` now **throws**. Add the first line with `createDraftWithFirstLine`; `addProductLine` is only for further lines through "+ Añadir línea".
+
+Why: every spec used to save first, so nothing noticed that "+ Añadir líneas" never rendered on an unsaved sales order, sales invoice, purchase order or quotation — the header totals sat in `requiredHeaderFields` and `/defaults` returned them null.
+
+`e2e/tests/flows/platform/new-movement-document-first-lines.integration.spec.js` covers the documents that had no from-scratch creation spec: goods shipment ("+ Añadir líneas" → the first product line persists), customer return ("Importar desde albarán" opens the shipment import) and return to vendor ("Añadir desde Albarán" opens the receipt import), all without Guardar. Gated by `E2E_SALES_INTEGRATION=1`.
+
+---
+
 ## NEO Backend Contract Smokes (ETP-4793)
 
 Three API-level specs validate NEO Headless backend contracts directly against the `request`
