@@ -1,0 +1,11 @@
+{
+  "outcome": "notPossible",
+  "probeId": "q-both-not-possible",
+  "declaration": {
+    "kind": "setup",
+    "reason": "No tool for payroll.",
+    "missingTools": []
+  },
+  "catalogueSha": "sha-local",
+  "check": "ok"
+}

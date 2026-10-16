@@ -18,6 +18,7 @@ import { showBulkActionToast } from '@/hooks/useBulkActionToast';
 
 // ETP-5022: this page carried its own buildHeaders copy; header policy now has one home.
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { useCopyPageLink } from '@/hooks/useCopyLinkAction.js';
 import {
   translateBackendError,
@@ -289,12 +290,17 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         const rawMessage = res.status === 403 ? null : json?.message;
         // ETP-5175 — the identity lets the Invalid-Account failure render in the UI locale, the
         // same sentence the document windows show.
-        toast.error(rawMessage
+        const messageKeys = extractBackendMessageKeys(json);
+        const text = rawMessage
           ? translateBackendError(rawMessage, ui, {
-            messageKeys: extractBackendMessageKeys(json),
+            messageKeys,
             messageParams: extractBackendMessageParams(json),
           })
-          : ui('postingFailed'));
+          : ui('postingFailed');
+        // ETP-5577 — a period refusal offers the calendar, on the fiscal year of the row's date.
+        const recovery = periodNotAvailableToastOptions(messageKeys, ui, { date: row.accountingDate });
+        if (Object.keys(recovery).length > 0) toast.error(text, recovery);
+        else toast.error(text);
       }
     } catch {
       toast.error(ui('postingFailed'));

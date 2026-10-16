@@ -26,7 +26,8 @@ import {
  * Props:
  *   open           boolean               — controlled open state
  *   onOpenChange   (open: boolean) => void
- *   process        object | null         — process definition (from the `processes` array)
+ *   process        object | null         — process definition (from the `processes` array);
+ *                                          a `select` param may carry a `defaultValue`
  *   onConfirm      (paramValues: object) => void — called with collected values on confirm
  */
 export function ProcessParamDialog({ open, onOpenChange, process, onConfirm }) {
@@ -40,7 +41,9 @@ export function ProcessParamDialog({ open, onOpenChange, process, onConfirm }) {
     for (const param of process.params) {
       if (param.hidden) continue;
       if (param.type === 'select' && param.options?.length) {
-        initial[param.key] = param.options[0].value;
+        // `defaultValue` wins only when it is one of the options; otherwise the first option.
+        const preset = param.options.find((option) => option.value === param.defaultValue);
+        initial[param.key] = (preset ?? param.options[0]).value;
       }
     }
     setValues(initial);
