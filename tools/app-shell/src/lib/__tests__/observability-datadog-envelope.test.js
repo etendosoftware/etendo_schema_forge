@@ -180,8 +180,13 @@ describe('real Datadog RUM requests (ETP-4578)', () => {
 
   it('drops an unhandled error whose cause it cannot rewrite, and only that one', async () => {
     intake.length = 0;
-    unhandledError(new Error('Save failed', { cause: new Error(`rejected for ${EMAIL}`) }));
-    unhandledError(new Error('Load failed', { cause: new Error('timeout') }));
+    // Fixed stacks: a real one carries this checkout's path, and a folder named like an id
+    // (schema_forge-ETP-5695) makes the clean cause look rewritable too, so both errors would drop.
+    const appStack = (error) => Object.assign(error, {
+      stack: `Error: ${error.message}\n    at load (https://go.etendo.cloud/go/assets/index.js:1:2)`,
+    });
+    unhandledError(appStack(new Error('Save failed', { cause: appStack(new Error(`rejected for ${EMAIL}`)) })));
+    unhandledError(appStack(new Error('Load failed', { cause: appStack(new Error('timeout')) })));
     await flush();
     const sent = ofType('error').map((event) => [event.error.message, event.error.causes?.map((cause) => cause.message)]);
     assert.deepEqual(sent, [['Load failed', ['timeout']]]);
