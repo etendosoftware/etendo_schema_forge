@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-08-13T11:56:58.444Z",
-  "updatedAt": "2026-10-13T15:55:25.386Z",
-  "checksum": "7be35fd65d57fcee",
+  "updatedAt": "2026-10-15T19:36:08.443Z",
+  "checksum": "f617658376aff36e",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -51,10 +51,12 @@
       "salesTheme": true,
       "labelOverrides": {
         "en_US": {
-          "EM_ETGO_Currency_ID": "Currency"
+          "EM_ETGO_Currency_ID": "Currency",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
-          "EM_ETGO_Currency_ID": "Moneda"
+          "EM_ETGO_Currency_ID": "Moneda",
+          "C_UOM_ID": "Unidad"
         }
       },
       "dateFilterKey": "movementDate",
@@ -809,6 +811,7 @@
             "lookup": true,
             "section": "principal",
             "seq": 10,
+            "gridOrder": 1,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -841,6 +844,7 @@
             "defaultValue": "0",
             "section": "principal",
             "seq": 20,
+            "gridOrder": 2,
             "validation": {
               "required": true,
               "maxLength": 10
@@ -849,6 +853,33 @@
               "raw": "@Processed@='Y' | @UomManagement@='Y'",
               "evaluable": true,
               "js": "(record['processed'] === true || record['processed'] === 'Y') || record['uomManagement'] === 'Y'"
+            }
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "label": "UOM",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "UOM",
+            "inputMode": "selector",
+            "display": "tag",
+            "gridOrder": 3,
+            "gridReadOnly": true,
+            "validation": {
+              "required": true,
+              "maxLength": 22
+            },
+            "readOnlyLogic": {
+              "raw": "@UomManagement@='Y'",
+              "evaluable": true,
+              "js": "record['uomManagement'] === 'Y'"
             }
           },
           {
@@ -880,6 +911,7 @@
             "form": true,
             "section": "principal",
             "seq": 30,
+            "gridOrder": 4,
             "gridReadOnly": true,
             "validation": {
               "maxLength": 10
@@ -1020,10 +1052,12 @@
       "salesTheme": true,
       "labelOverrides": {
         "en_US": {
-          "EM_ETGO_Currency_ID": "Currency"
+          "EM_ETGO_Currency_ID": "Currency",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
-          "EM_ETGO_Currency_ID": "Moneda"
+          "EM_ETGO_Currency_ID": "Moneda",
+          "C_UOM_ID": "Unidad"
         }
       },
       "dateFilterKey": "movementDate",
@@ -1688,7 +1722,7 @@
             "apiKey": "uOM",
             "column": "C_UOM_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -2099,6 +2133,14 @@
       },
       {
         "entity": "goodsShipmentLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/uOM"
+      },
+      {
+        "entity": "goodsShipmentLine",
         "field": "project",
         "column": "C_Project_ID",
         "reference": "Project",
@@ -2228,10 +2270,12 @@
     },
     "labelOverrides": {
       "en_US": {
-        "EM_ETGO_Currency_ID": "Currency"
+        "EM_ETGO_Currency_ID": "Currency",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "EM_ETGO_Currency_ID": "Moneda"
+        "EM_ETGO_Currency_ID": "Moneda",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -2692,6 +2736,14 @@
         "description": "Field 'project' should be present in goodsShipmentLine"
       },
       {
+        "id": "t-field-presence-goodsShipmentLine-uOM",
+        "category": "field-presence",
+        "entity": "goodsShipmentLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should be present in goodsShipmentLine"
+      },
+      {
         "id": "t-field-type-goodsShipment-businessPartner",
         "category": "field-type",
         "entity": "goodsShipment",
@@ -2868,6 +2920,14 @@
         "description": "Field 'project' should have type 'string' in goodsShipmentLine"
       },
       {
+        "id": "t-field-type-goodsShipmentLine-uOM",
+        "category": "field-type",
+        "entity": "goodsShipmentLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should have type 'string' in goodsShipmentLine"
+      },
+      {
         "id": "t-readonlylogic-evaluable-goodsShipment-businessPartner",
         "category": "readonlylogic-evaluable",
         "entity": "goodsShipment",
@@ -2972,6 +3032,14 @@
         "description": "Read-only logic for 'project' in goodsShipmentLine should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-goodsShipmentLine-uOM",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsShipmentLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Read-only logic for 'uOM' in goodsShipmentLine should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-valid-goodsShipment-businessPartner",
         "category": "readonlylogic-valid",
         "entity": "goodsShipment",
@@ -3074,6 +3142,14 @@
         "field": "project",
         "runner": "node",
         "description": "Read-only logic for 'project' in goodsShipmentLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-goodsShipmentLine-uOM",
+        "category": "readonlylogic-valid",
+        "entity": "goodsShipmentLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Read-only logic for 'uOM' in goodsShipmentLine should be valid JS"
       },
       {
         "id": "t-rule-declared-BP-AutoFill-Address",
@@ -3229,6 +3305,14 @@
         "field": "project",
         "runner": "node",
         "description": "Selector endpoint for 'project' in goodsShipmentLine should exist"
+      },
+      {
+        "id": "t-selector-endpoint-goodsShipmentLine-uOM",
+        "category": "selector-endpoint",
+        "entity": "goodsShipmentLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Selector endpoint for 'uOM' in goodsShipmentLine should exist"
       },
       {
         "id": "t-system-field-goodsShipment-accountingDate",
@@ -3879,14 +3963,6 @@
         "description": "System field 'storageBin' should exist in backend but not frontend for goodsShipmentLine"
       },
       {
-        "id": "t-system-field-goodsShipmentLine-uOM",
-        "category": "system-field",
-        "entity": "goodsShipmentLine",
-        "field": "uOM",
-        "runner": "node",
-        "description": "System field 'uOM' should exist in backend but not frontend for goodsShipmentLine"
-      },
-      {
         "id": "t-system-field-goodsShipmentLine-updated",
         "category": "system-field",
         "entity": "goodsShipmentLine",
@@ -3918,25 +3994,25 @@
       }
     ],
     "summary": {
-      "total": 211,
+      "total": 215,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
         "default-value-type": 7,
         "displaylogic-evaluable": 7,
         "displaylogic-valid": 7,
-        "field-presence": 22,
-        "field-type": 22,
-        "readonlylogic-evaluable": 13,
-        "readonlylogic-valid": 13,
+        "field-presence": 23,
+        "field-type": 23,
+        "readonlylogic-evaluable": 14,
+        "readonlylogic-valid": 14,
         "rule-declared": 5,
         "searchable-filters": 6,
-        "selector-endpoint": 9,
-        "system-field": 84,
+        "selector-endpoint": 10,
+        "system-field": 83,
         "visibility": 2
       },
       "byRunner": {
-        "node": 211,
+        "node": 215,
         "junit": 0
       }
     }

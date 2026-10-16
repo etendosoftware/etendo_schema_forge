@@ -590,3 +590,17 @@ kebab. Repeat on another quotation with «Facturar directamente» and verify «F
 `tools/app-shell/src/windows/custom/sales-quotation/__tests__/QuotationActionModals.etp5398.vitest.jsx`,
 `e2e/tests/flows/sales/sales-quotation-happy-path.integration.spec.js`,
 `e2e/tests/flows/sales/sales-quotation-full-flow.integration.spec.js`.
+
+## Unit column in the lines grid (ETP-5696)
+
+The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. pedido**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
+
+- **Declaration (`decisions.json`, entity `lines`, field `uOM`):** `visibility: "readOnly"`, `grid: true`, `gridOrder: 4 (price, discount, tax and gross amount moved to 5–8)`, `gridReadOnly: true`, `display: "tag"` — it was `system` (hidden, derived by the backend). The column is the real AD column `C_UOM_ID`, not a synthetic one. `window.labelOverrides` carries `C_UOM_ID` → `Unidad` (es_ES) / `Unit` (en_US), because the AD label is the untranslated "UOM".
+- **Where the value comes from:** the unit of the line's product. In the add row the pill appears as soon as the product is chosen (the line callout returns the unit).
+- **Width:** a `display: "tag"` column is fixed at 144px and never grows (`lib/linesColumnWidth.js`), so the space goes to Product/Description; `columnWidth` in `decisions.json` overrides the pixel value.
+- **Read-only:** the unit cannot be edited in the line (inline edit or add row); it only changes when the line's product changes.
+- **Not part of this change:** no sorting or filtering was added — the inline lines grid offers neither for any column.
+- **Generic mechanism:** `display: "tag"` (`DataTable.cellRenderers.jsx` `renderNeutralTagCell`, `InlineLinesPanel` `ReadCell`, `DataTable` `renderDerivedAddCell`), the add-row fill from the selector's `_aux` (`lib/auxReference.js`) and the fixed width are documented in `docs/decisions-reference.md` (`display`).
+- **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
+
+**Manual verification:** open a draft quotation; confirm `Unidad` sits after Cant. pedido; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.

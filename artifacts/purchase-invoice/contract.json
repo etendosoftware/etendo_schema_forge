@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "updatedAt": "2026-10-13T17:27:54.927Z",
-  "checksum": "58c24d86641d2803",
+  "updatedAt": "2026-10-15T19:36:08.920Z",
+  "checksum": "ce2fef2147c9a97d",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -70,7 +70,8 @@
           "PriceList": "Precio",
           "Foreign_Amount": "Importe en Moneda Objetivo",
           "em_etgo_tbai_status": "Estado Batuz",
-          "DocumentNo": "N° interno"
+          "DocumentNo": "N° interno",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "POReference": "Document No.",
@@ -80,10 +81,12 @@
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount",
           "em_etgo_tbai_status": "Batuz Status",
-          "DocumentNo": "Internal No."
+          "DocumentNo": "Internal No.",
+          "C_UOM_ID": "Unit"
         },
         "es_AR": {
-          "OutstandingAmt": "Saldo pendiente"
+          "OutstandingAmt": "Saldo pendiente",
+          "C_UOM_ID": "Unidad"
         }
       },
       "subsetFilters": [
@@ -1996,7 +1999,7 @@
             "sourceRequired": true,
             "columnType": "amount",
             "section": "principal",
-            "gridOrder": 4,
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -2024,7 +2027,7 @@
             "form": true,
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 5,
+            "gridOrder": 6,
             "min": 0,
             "max": 100,
             "validation": {
@@ -2055,7 +2058,7 @@
               "lineNetAmount"
             ],
             "section": "principal",
-            "gridOrder": 6,
+            "gridOrder": 7,
             "validation": {
               "maxLength": 22
             },
@@ -2133,6 +2136,31 @@
             }
           },
           {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "label": "UOM",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "UOM",
+            "inputMode": "selector",
+            "display": "tag",
+            "gridOrder": 4,
+            "gridReadOnly": true,
+            "validation": {
+              "maxLength": 22
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' | (@UomManagement@='Y' & @Financial_Invoice_Line@='N')",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y') || (record['uomManagement'] === 'Y' && (record['financialInvoiceLine'] !== true && record['financialInvoiceLine'] !== 'Y'))"
+            }
+          },
+          {
             "name": "unitPrice",
             "apiKey": "unitPrice",
             "column": "PriceActual",
@@ -2206,7 +2234,7 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 7,
+            "gridOrder": 8,
             "validation": {
               "maxLength": 12
             }
@@ -5369,7 +5397,8 @@
           "PriceList": "Precio",
           "Foreign_Amount": "Importe en Moneda Objetivo",
           "em_etgo_tbai_status": "Estado Batuz",
-          "DocumentNo": "N° interno"
+          "DocumentNo": "N° interno",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "POReference": "Document No.",
@@ -5379,10 +5408,12 @@
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount",
           "em_etgo_tbai_status": "Batuz Status",
-          "DocumentNo": "Internal No."
+          "DocumentNo": "Internal No.",
+          "C_UOM_ID": "Unit"
         },
         "es_AR": {
-          "OutstandingAmt": "Saldo pendiente"
+          "OutstandingAmt": "Saldo pendiente",
+          "C_UOM_ID": "Unidad"
         }
       },
       "subsetFilters": [
@@ -6901,7 +6932,7 @@
             "apiKey": "uOM",
             "column": "C_UOM_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -10247,6 +10278,14 @@
       },
       {
         "entity": "lines",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/purchase-invoice/lines/selectors/uOM"
+      },
+      {
+        "entity": "lines",
         "field": "salesOrderLine",
         "column": "C_OrderLine_ID",
         "reference": "OrderLine",
@@ -10772,7 +10811,8 @@
         "PriceList": "Precio",
         "Foreign_Amount": "Importe en Moneda Objetivo",
         "em_etgo_tbai_status": "Estado Batuz",
-        "DocumentNo": "N° interno"
+        "DocumentNo": "N° interno",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "POReference": "Document No.",
@@ -10782,10 +10822,12 @@
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount",
         "em_etgo_tbai_status": "Batuz Status",
-        "DocumentNo": "Internal No."
+        "DocumentNo": "Internal No.",
+        "C_UOM_ID": "Unit"
       },
       "es_AR": {
-        "OutstandingAmt": "Saldo pendiente"
+        "OutstandingAmt": "Saldo pendiente",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -12795,6 +12837,14 @@
         "description": "Field 'unitPrice' should be present in lines"
       },
       {
+        "id": "t-field-presence-lines-uOM",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should be present in lines"
+      },
+      {
         "id": "t-field-presence-paymentDetails-amount",
         "category": "field-presence",
         "entity": "paymentDetails",
@@ -14067,6 +14117,14 @@
         "description": "Field 'unitPrice' should have type 'number' in lines"
       },
       {
+        "id": "t-field-type-lines-uOM",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should have type 'string' in lines"
+      },
+      {
         "id": "t-field-type-paymentDetails-amount",
         "category": "field-type",
         "entity": "paymentDetails",
@@ -14867,6 +14925,14 @@
         "description": "Read-only logic for 'unitPrice' in lines should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-lines-uOM",
+        "category": "readonlylogic-evaluable",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Read-only logic for 'uOM' in lines should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-reversedInvoices-aEAT349BPBaseAmount",
         "category": "readonlylogic-evaluable",
         "entity": "reversedInvoices",
@@ -15457,6 +15523,14 @@
         "field": "unitPrice",
         "runner": "node",
         "description": "Read-only logic for 'unitPrice' in lines should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-lines-uOM",
+        "category": "readonlylogic-valid",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Read-only logic for 'uOM' in lines should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-reversedInvoices-aEAT349BPBaseAmount",
@@ -16106,6 +16180,14 @@
         "field": "tax",
         "runner": "node",
         "description": "Selector endpoint for 'tax' in lines should exist"
+      },
+      {
+        "id": "t-selector-endpoint-lines-uOM",
+        "category": "selector-endpoint",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Selector endpoint for 'uOM' in lines should exist"
       },
       {
         "id": "t-selector-endpoint-paymentDetails-finPaymentID",
@@ -18084,14 +18166,6 @@
         "description": "System field 'standardPrice' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-uOM",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "uOM",
-        "runner": "node",
-        "description": "System field 'uOM' should exist in backend but not frontend for lines"
-      },
-      {
         "id": "t-system-field-lines-updated",
         "category": "system-field",
         "entity": "lines",
@@ -18840,25 +18914,25 @@
       }
     ],
     "summary": {
-      "total": 1012,
+      "total": 1016,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 13,
         "default-value-type": 39,
         "displaylogic-evaluable": 25,
         "displaylogic-valid": 25,
-        "field-presence": 159,
-        "field-type": 159,
-        "readonlylogic-evaluable": 74,
-        "readonlylogic-valid": 74,
+        "field-presence": 160,
+        "field-type": 160,
+        "readonlylogic-evaluable": 75,
+        "readonlylogic-valid": 75,
         "rule-declared": 23,
         "searchable-filters": 6,
-        "selector-endpoint": 53,
-        "system-field": 323,
+        "selector-endpoint": 54,
+        "system-field": 322,
         "visibility": 13
       },
       "byRunner": {
-        "node": 1012,
+        "node": 1016,
         "junit": 0
       }
     }

@@ -1,7 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "generatedAt": "2026-08-13T11:56:58.791Z",
-  "contractChecksum": "af06d44605264878",
+  "updatedAt": "2026-10-15T19:36:09.429Z",
+  "contractChecksum": "8e195420b9b986d1",
   "apiPrediction": {
     "specName": "return-to-vendor-shipment",
     "baseUrl": "/sws/neo/return-to-vendor-shipment",
@@ -411,12 +412,14 @@
       "es_ES": {
         "sourceReceiptDocNo": "Albarán origen",
         "MovementQty": "Cant. a devolver",
-        "QuantityOrder": "Cant. pedida"
+        "QuantityOrder": "Cant. pedida",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "sourceReceiptDocNo": "Source Receipt",
         "MovementQty": "Return Qty",
-        "QuantityOrder": "Ordered Qty"
+        "QuantityOrder": "Ordered Qty",
+        "C_UOM_ID": "Unit"
       }
     }
   },
@@ -595,5 +598,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "a9bf582fb7f6f902"
+  "checksum": "0cf829c146439af1"
 }

@@ -183,3 +183,17 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 - The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped).
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Unit column in the lines grid (ETP-5696)
+
+The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. movida** and before **Almacén**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
+
+- **Declaration (`decisions.json`, entity `lines`, field `uOM`):** `visibility: "readOnly"`, `grid: true`, `gridOrder: 3 (explicit `gridOrder` on all four grid columns: product 1, movementQuantity 2, uOM 3, storageBin 4)`, `gridReadOnly: true`, `display: "tag"` — it was already a read-only grid column in that position; `gridReadOnly` and `display: "tag"` were added. The column is the real AD column `C_UOM_ID`, not a synthetic one. `window.labelOverrides` carries `C_UOM_ID` → `Unidad` (es_ES, es_AR) / `Unit` (en_US), because the AD label is the untranslated "UOM".
+- **Where the value comes from:** the unit of the line's product. In the add row the pill appears as soon as a product/location is picked in the stock drawer (from the selected item's `_aux._UOM`); the backend stores the same unit on save.
+- **Width:** a `display: "tag"` column is fixed at 144px and never grows (`lib/linesColumnWidth.js`), so the space goes to Product/Description; `columnWidth` in `decisions.json` overrides the pixel value.
+- **Read-only:** the unit cannot be edited in the line (inline edit or add row); it only changes when the line's product changes.
+- **Not part of this change:** no sorting or filtering was added — the inline lines grid offers neither for any column.
+- **Generic mechanism:** `display: "tag"` (`DataTable.cellRenderers.jsx` `renderNeutralTagCell`, `InlineLinesPanel` `ReadCell`, `DataTable` `renderDerivedAddCell`), the add-row fill from the selector's `_aux` (`lib/auxReference.js`) and the fixed width are documented in `docs/decisions-reference.md` (`display`).
+- **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
+
+**Manual verification:** open a draft internal consumption; confirm `Unidad` sits after Cant. movida; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.

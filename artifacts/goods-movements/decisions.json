@@ -67,13 +67,15 @@
         "Processed": "Status",
         "M_Locator_ID": "Source Warehouse",
         "M_LocatorTo_ID": "Destination Warehouse",
-        "MovementQty": "Quantity"
+        "MovementQty": "Quantity",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
         "Processed": "Estado",
         "M_Locator_ID": "Almacén origen",
         "M_LocatorTo_ID": "Almacén destino",
-        "MovementQty": "Cantidad"
+        "MovementQty": "Cantidad",
+        "C_UOM_ID": "Unidad"
       }
     },
     "customComponents": {
@@ -217,27 +219,29 @@
           "grid": true,
           "readOnlyLogic": null,
           "reason": "Source storage bin — key field for movement lines",
-          "gridOrder": 3
+          "gridOrder": 2
         },
         "newStorageBin": {
           "grid": true,
           "readOnlyLogic": null,
           "excludeValueOf": "storageBin",
           "reason": "Destination storage bin — key field for movement lines; cannot equal the source bin",
-          "gridOrder": 4
+          "gridOrder": 3
         },
         "movementQuantity": {
           "grid": true,
           "readOnlyLogic": null,
           "defaultValue": "1",
           "columnWidth": 160,
-          "gridOrder": 5
+          "gridOrder": 4
         },
         "uOM": {
           "visibility": "readOnly",
           "grid": true,
           "readOnlyLogic": null,
-          "gridOrder": 2
+          "gridOrder": 5,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "description": {
           "readOnlyLogic": null,

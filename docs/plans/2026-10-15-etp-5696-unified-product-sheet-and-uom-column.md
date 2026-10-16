@@ -144,3 +144,72 @@ Derived from `docs/generated-custom-windows/product.md` (every documented behavi
 
 ### Part A — execution status (2026-10-15)
 Cases A1–A8, B1–B5, C1–C4, D1–D4 verified live and green (details and DB evidence in `docs/generated-custom-windows/product.md` → *Verification evidence — ETP-5696*). Automated suites run and green. Pending: C6 live import/export (unit-covered), D5 NEO `--dry-run`, and Part B. The "Gestión de stock" caption/separator was dropped by decision.
+
+## 8. Part B — refined plan and scope (2026-10-15)
+
+### 8.1 What the investigation changed
+- **All in-scope windows use `linesLayout: "inlineEditable"`**, so the lines grid is rendered by `InlineLinesPanel.jsx` (its own `ReadCell`), NOT by `DataTable`'s `CELL_RENDERERS`. The neutral-tag rendering must therefore live in `InlineLinesPanel` (and, for consistency, in `DataTable`).
+- **No core change is needed for the tag.** `decisions.json → display` is already forwarded generically by the generator (`generate-frontend.js` → `display: '<value>'`, allowed by `resolve-curated.js` and `generate-contract.js`); today only `'dot'` is consumed. A new value (`'tag'`) is a pure consumer change in this repo, so the whole of Part B stays in `etendo_schema_forge` (no publish of `schema_forge_core`).
+- **`requisition`, `manage-requisitions`, `cost-adjustment`, `bom-production`, `inventory-quality-inspection` are "Enterprise windows (removed)"** in `windows/registry.js` (not in the menu, not routable). A "Propuesta de compra" window does not exist in this app.
+
+### 8.2 Scope
+| In scope (10 windows, quantity column → Unit right after it) | Quantity column | Today's `uOM` |
+|---|---|---|
+| sales-quotation | `orderedQuantity` | `system` |
+| sales-order | `orderedQuantity` | `system` |
+| goods-shipment | `movementQuantity` ("Cant. movida") | `system` |
+| sales-invoice | `invoicedQuantity` | `system` |
+| purchase-order | `orderedQuantity` | `grid:false, form:false` (+ `readOnlyLogic @UomManagement@='Y'`) |
+| goods-receipt | `movementQuantity` | unset |
+| purchase-invoice | `invoicedQuantity` | `system` |
+| physical-inventory | after `quantityCount` (the 2nd quantity: book, then counted), before the diff columns | `readOnly`, grid, `gridOrder 2` → move |
+| goods-movements | `movementQuantity` | `readOnly`, grid, `gridOrder 2` → move |
+| internal-consumption | `movementQuantity` | `readOnly`, grid, `gridOrder 2` → move |
+
+**Pending your confirmation:** `return-to-vendor-shipment` and `return-material-receipt` (sales "Albarán de devolución") have lines in the app but the ticket does not list them ("cualquier otro documento ... con líneas" is only said of Inventory). Proposed: include them (same mechanism, two more `decisions.json` entries); drop on request. **Out of scope:** the 5 removed windows above (unreachable).
+
+### 8.3 Changes
+1. **Renderer (`InlineLinesPanel.jsx` `ReadCell`, mirrored in `DataTable.cellRenderers.jsx`):** `col.display === 'tag'` on a selector/search/FK column → neutral `Tag` (grey background, secondary text) with the identifier (UOM `name`); empty value → renders nothing (lines with no product). Documented in `docs/decisions-reference.md`.
+2. **`decisions.json` per window:** `uOM` → `visibility: readOnly`, `grid: true`, `gridReadOnly: true`, `display: 'tag'`, `gridOrder` = quantity's order + 1; reorder the 3 inventory windows. Keep it a real AD column (`C_UOM_ID`, `column:` set) so filter/sort work like any other column — no synthetic `custom` column (CLAUDE.md "List Columns Must Be Real Columns").
+3. **Refresh on product change:** when the line's `product` changes (inline add row and inline edit), set `uOM` + `uOM$_identifier` from the selector item's `_aux` `product_UOM` (the plumbing exists: `mergeSelectorAuxFields`, `resolveSnapshotIdentifiers`, `inlineLineUpdateHandlers`). Clear it when the product is cleared. **Spike first:** confirm which product selectors actually return `_aux.UOM` (sales/purchase vs the stock-search drawers used by inventory windows) — if one does not, resolve it from the product record or the NEO line defaults; a backend change in `com.etendoerp.go` (via `@NeoExtension`, never an identity check) only as a last resort.
+4. **Persistence:** verify the backend stores the UOM the UI shows (the goods-movements doc says "resolved on save by the backend"); no data migration expected, existing lines already hold `C_UOM_ID`.
+5. **Regen** all touched windows with `make regen ONLY=<list> FROM_CACHE=1` (the local DB translation drift strips es_ES enum labels otherwise), `sf-validate-pipeline` per window, then re-verify each (generator/contract shared).
+6. **Docs:** one section per window `docs/generated-custom-windows/<window>.md` + `decisions-reference.md`.
+
+### 8.4 Order of work
+1. **Spike on `sales-order`** (renderer + decisions + product-change refresh + filter/sort) — the pilot decides the exact mechanism; checkpoint with you.
+2. Roll out to the other 9 (then the 2 return windows if confirmed), batching the regen.
+3. Tests via `tester-functional` (reuse-first, `make find-tests`): renderer unit test (value / empty / neutral variant), one decisions guard asserting for every in-scope window that `uOM` is grid + read-only + immediately after the quantity column (physical-inventory: after `quantityCount`), product-change refresh unit test, one mocked e2e for "change product → unit updates".
+4. Live verification per window (create line, change product, sort, filter, empty line) with DB evidence, documented like Part A.
+
+### 8.5 Risks
+- **`uOM` is `system` in 6 windows** (a derived, hidden field): turning it `readOnly`/visible must not change what the create/PATCH payload sends or how NEO derives it — verify on the pilot before rolling out.
+- **`purchase-order`**: `uOM` carries `readOnlyLogic @UomManagement@='Y'` and is `form:false`; with the alternative-UOM preference on, the meaningful unit may differ. Check against the requirement "read-only".
+- **Sort/filter on an FK column** orders by the identifier text; confirm in each grid (inline lines grids may not expose sort/filter the same way `DataTable` does — if they do not, the "ordenación y filtrado" criterion needs its own decision).
+- **Shared renderer**: `InlineLinesPanel` is used by every inline-lines window → regression run over all of them, not only the 10.
+- `display: 'tag'` must survive regen — it is declared in `decisions.json`, never patched into generated files.
+
+### 8.6 Decisions after review (2026-10-15)
+- **Scope = 12 windows:** the 10 above **plus** `return-to-vendor-shipment` and `return-material-receipt` (confirmed by the user). **"Relación albarán-factura" (`matched-purchase-invoices`) is deferred**: `M_MatchInv` has no `C_UOM_ID`, so it cannot be a real column and would need a stored computed column / backend change. The purchase proposal is out (window removed from the app).
+- **Visual:** the unit is rendered with the same pill as "Estado doc." — `StatusTag` (`@/components/ui/status-tag`) with `tone="neutral"` FIXED (grey), never `getStatusTone(value)`. Text = UOM `name` (a symbol would be a later one-line change). Implemented as `display: 'tag'` → `renderNeutralTagCell` (`DataTable.cellRenderers.jsx`), used by `InlineLinesPanel.ReadCell` and `DataTable`'s default renderer.
+- **Pilot started on `sales-order`:** renderer + `decisions.json` (`uOM`: `readOnly`, grid, `gridOrder 4`, `gridReadOnly`, `display: tag`; price/discount/tax/gross shifted to 5–8). Note `product` already lists `uOM` in `forceCalloutFields`, so the callout may already return the unit on product change — to be confirmed live.
+
+
+### 8.7 Pilot result and decisions (2026-10-15)
+- **Pilot `sales-order` verified live:** column after "Cant. pedido" with the grey `StatusTag`; header "Unidad" (`labelOverrides` `C_UOM_ID`); read-only in edit mode; product change updates the unit immediately and persists `C_UOM_ID` (DB checked: `Teclado 01 → Centimeter`, `Producto Prueba 3 → Unit`); the pill also shows in the inline ADD row (`renderDerivedAddCell` in `DataTable.jsx` now uses `renderNeutralTagCell` for `display: 'tag'`).
+- **Agreed with the user:** the inline lines grid has no sort/filter on any column → the unit column behaves like the others (no new sort/filter work); the dash `—` in the add row while no product is selected is correct; the F23 validator warning (DB rows without VISIBILITY) is left as is.
+- **MCP:** `uOM` moving from `system` to `readOnly` changes `contract.mcp.json` (the line field is now exposed) — **the general MCP tests at the end of the task must cover the 12 windows' line payloads** (create/update line with and without product, the unit must follow the product and must not be required from the caller).
+- Roll-out edits to the other 11 `decisions.json` prepared (field orders: product → … → quantity → **uOM** → rest; `gridReadOnly`, `display: tag`; `labelOverrides` `C_UOM_ID` Unidad/Unit in es_ES, en_US and es_AR where that block exists). Pending: batched `make regen`, live checks per window, tests, per-window docs.
+
+### 8.8 Column width (analyst request, 2026-10-15)
+The unit column reserved the 192px selector tier. `display: 'tag'` columns now get a FIXED, non-growing 144px basis (`columnFlex`/`columnMinWidthPx` in `lib/linesColumnWidth.js`), enough for the longest unit name ("Square Centimeter", 17 chars) — the freed width goes to Product/Description. Per-window override: `columnWidth` in `decisions.json` (sets that pixel basis; for a `tag` column it does not make it elastic). Verified live with "Square Centimeter" in a `sales-order` line (no clipping). Regenerate nothing: the width is renderer-side.
+
+
+### 8.9 MCP verification (2026-10-16, `etendo-mcp-local`)
+- **The MCP is driven by the pushed NEO config (`ETGO_SF_FIELD`), not by `contract.json`.** No `sf-push-neo` was run, so `etendo_schema` still reports line `uOM` as `visibility: system` / `readOnly` (unchanged by this ticket). Pushing would move it to `readOnly`; nothing in the UI depends on the push.
+- **Line creation without sending the unit — OK in 9 specs** (`sales-order`, `sales-quotation`/`quotationLine`, `purchase-order`, `sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt`, `goods-movements`, `physical-inventory`, `internal-consumption`): every response carries `uOM` + `uOM$_identifier` = the product's unit (`Centimeter` for Papel A4 / Teclado 01). `etendo_list` on both return specs returns `uOM` per line.
+- **Product via MCP — OK:** a Service created with `productType: S` ends `stocked=false, returnable=false`, `sale=true, purchase=true`, no weight UOM; the Item keeps `stocked/returnable = true`. `weight`, `uOMForWeight`, `sale`, `purchase` remain writable through the MCP (the sheet only hides them).
+- **Findings NOT caused by this ticket (pre-existing backend behaviour):**
+  1. `etendo_update` on a line that changes `product` fails with `422 Unit of Measure mismatch (product/transaction)`: `uOM` is read-only and the server does not re-derive it on update. An agent has to delete and re-create the line (the UI works because its PATCH carries the new `uOM`).
+  2. `etendo_update` of a product from `productType: I` to `S` leaves `IsStocked=Y` and `Returnable=Y` (checked in the DB). `ProductDefaultsHandler.enforceNonStockableProductTypes` is only called from `handle()` for POST/PATCH, so the MCP update path does not trigger it. The UI is unaffected: `ProductStockDefaultsWatcher` sends the flags in the same PATCH.
+- The UI evidence for B4 ("save a type change with no other edit") therefore proves the watcher + PATCH, not the server guard in isolation; the server guard is only proven for creation.

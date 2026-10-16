@@ -329,6 +329,14 @@ export const api = {
     },
     {
       "entity": "lines",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/lines/selectors/uOM"
+    },
+    {
+      "entity": "lines",
       "field": "project",
       "column": "C_Project_ID",
       "reference": "Project",
@@ -624,7 +632,8 @@ export const api = {
       "C_DocTypeTarget_ID": "Tipo de documento",
       "PriceList": "Precio",
       "Foreign_Amount": "Importe en Moneda Objetivo",
-      "em_etgo_tbai_status": "Estado TicketBAI"
+      "em_etgo_tbai_status": "Estado TicketBAI",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "OutstandingAmt": "Outstanding Amount",
@@ -632,10 +641,12 @@ export const api = {
       "em_etgo_delivery_status": "Delivery Status",
       "C_DocTypeTarget_ID": "Document Type",
       "Foreign_Amount": "Target Currency Amount",
-      "em_etgo_tbai_status": "TicketBAI Status"
+      "em_etgo_tbai_status": "TicketBAI Status",
+      "C_UOM_ID": "Unit"
     },
     "es_AR": {
-      "OutstandingAmt": "Saldo pendiente"
+      "OutstandingAmt": "Saldo pendiente",
+      "C_UOM_ID": "Unidad"
     }
   }
 };

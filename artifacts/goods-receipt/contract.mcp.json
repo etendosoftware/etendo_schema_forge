@@ -1,8 +1,8 @@
 {
-  "version": "0.38.0",
+  "version": "0.39.0",
   "generatedAt": "2026-07-30T22:14:36.474Z",
-  "updatedAt": "2026-09-09T13:39:24.257Z",
-  "contractChecksum": "8b51cf3a5cce78ff",
+  "updatedAt": "2026-10-15T19:36:08.304Z",
+  "contractChecksum": "9c4e14033a072ded",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",
@@ -564,10 +564,12 @@
     },
     "labelOverrides": {
       "en_US": {
-        "EM_ETGO_Currency_ID": "Currency"
+        "EM_ETGO_Currency_ID": "Currency",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "EM_ETGO_Currency_ID": "Moneda"
+        "EM_ETGO_Currency_ID": "Moneda",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -847,5 +849,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "b83925b9579cc99f"
+  "checksum": "a707033b64c9df68"
 }

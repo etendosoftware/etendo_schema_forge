@@ -49,6 +49,14 @@ const ELASTIC_BASIS_PX = {
 
 const SELECTOR_TYPES = new Set(['selector', 'search', 'foreignKey']);
 
+// ETP-5696 — a `display: 'tag'` column (the unit of measure of a document line) shows a short
+// grey pill, not a selector-sized value, so it must NOT reserve the 192px selector tier: the
+// space belongs to the product column. 144px holds the longest unit name ("Square Centimeter",
+// 17 chars) plus the pill and cell padding. FIXED (`0 0`), never elastic, so it does not take
+// a share of the leftover width either; an explicit `col.minWidth` (decisions `columnWidth`)
+// still sets the basis, but does not make it grow.
+const TAG_BASIS_PX = 144;
+
 // A `boolean` column with `badge: true` renders a rounded pill (see `Tag`,
 // DataTable.cellRenderers.jsx), not a plain "Sí"/"No" string — the generic
 // 120px fallback below fits the latter but clips the former: "Sin
@@ -129,6 +137,7 @@ export function columnFlex(col, idx) {
   // the narrower create-contact popup is the "future window" that reintroduced it.
   // `1 0` matches every other branch: minWidth still WINS as the basis (ETP-5210's
   // override contract is unchanged), it just can no longer shrink below it.
+  if (col.display === 'tag') return `0 0 ${col.minWidth ?? TAG_BASIS_PX}px`;
   if (col.minWidth) return `1 0 ${col.minWidth}px`;
   if (col.type === 'boolean' && col.badge) return `0 0 ${booleanBadgeBasisPx(col)}px`;
   if (SELECTOR_TYPES.has(col.type)) return selectorFlex(col, idx);
@@ -146,6 +155,7 @@ export function columnFlex(col, idx) {
  * display table — keeping header wrapping consistent across both modes.
  */
 export function columnMinWidthPx(col) {
+  if (col.display === 'tag') return col.minWidth ?? TAG_BASIS_PX;
   if (col.minWidth) return col.minWidth;
   if (col.type === 'boolean' && col.badge) return booleanBadgeBasisPx(col);
   if (SELECTOR_TYPES.has(col.type)) return 192;

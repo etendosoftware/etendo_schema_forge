@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "generatedAt": "2026-07-29T14:51:09.206Z",
-  "updatedAt": "2026-10-13T17:27:53.449Z",
-  "checksum": "c3ef9bcfcde37655",
+  "updatedAt": "2026-10-15T19:36:08.124Z",
+  "checksum": "f754e568c750dd75",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -46,13 +46,15 @@
           "Processed": "Status",
           "M_Locator_ID": "Source Warehouse",
           "M_LocatorTo_ID": "Destination Warehouse",
-          "MovementQty": "Quantity"
+          "MovementQty": "Quantity",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
           "Processed": "Estado",
           "M_Locator_ID": "Almacén origen",
           "M_LocatorTo_ID": "Almacén destino",
-          "MovementQty": "Cantidad"
+          "MovementQty": "Cantidad",
+          "C_UOM_ID": "Unidad"
         }
       },
       "listViewOptions": {
@@ -497,7 +499,7 @@
               "source": "1"
             },
             "defaultValue": "1",
-            "gridOrder": 5,
+            "gridOrder": 4,
             "columnWidth": 160,
             "validation": {
               "required": true,
@@ -523,7 +525,9 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
-            "gridOrder": 2,
+            "display": "tag",
+            "gridOrder": 5,
+            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -543,7 +547,7 @@
             "sourceRequired": true,
             "reference": "Locator",
             "inputMode": "selector",
-            "gridOrder": 3,
+            "gridOrder": 2,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -569,7 +573,7 @@
             "reference": "Locator",
             "inputMode": "selector",
             "excludeValueOf": "storageBin",
-            "gridOrder": 4,
+            "gridOrder": 3,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -647,13 +651,15 @@
           "Processed": "Status",
           "M_Locator_ID": "Source Warehouse",
           "M_LocatorTo_ID": "Destination Warehouse",
-          "MovementQty": "Quantity"
+          "MovementQty": "Quantity",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
           "Processed": "Estado",
           "M_Locator_ID": "Almacén origen",
           "M_LocatorTo_ID": "Almacén destino",
-          "MovementQty": "Cantidad"
+          "MovementQty": "Cantidad",
+          "C_UOM_ID": "Unidad"
         }
       },
       "listViewOptions": {
@@ -1298,13 +1304,15 @@
         "Processed": "Status",
         "M_Locator_ID": "Source Warehouse",
         "M_LocatorTo_ID": "Destination Warehouse",
-        "MovementQty": "Quantity"
+        "MovementQty": "Quantity",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
         "Processed": "Estado",
         "M_Locator_ID": "Almacén origen",
         "M_LocatorTo_ID": "Almacén destino",
-        "MovementQty": "Cantidad"
+        "MovementQty": "Cantidad",
+        "C_UOM_ID": "Unidad"
       }
     }
   },

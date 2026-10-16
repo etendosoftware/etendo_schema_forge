@@ -200,13 +200,15 @@ export const api = {
       "Processed": "Status",
       "M_Locator_ID": "Source Warehouse",
       "M_LocatorTo_ID": "Destination Warehouse",
-      "MovementQty": "Quantity"
+      "MovementQty": "Quantity",
+      "C_UOM_ID": "Unit"
     },
     "es_ES": {
       "Processed": "Estado",
       "M_Locator_ID": "Almacén origen",
       "M_LocatorTo_ID": "Almacén destino",
-      "MovementQty": "Cantidad"
+      "MovementQty": "Cantidad",
+      "C_UOM_ID": "Unidad"
     }
   }
 };

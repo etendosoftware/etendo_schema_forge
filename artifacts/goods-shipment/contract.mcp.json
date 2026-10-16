@@ -1,7 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-08-13T11:56:58.444Z",
-  "contractChecksum": "7be35fd65d57fcee",
+  "updatedAt": "2026-10-15T19:36:08.443Z",
+  "contractChecksum": "f617658376aff36e",
   "apiPrediction": {
     "specName": "goods-shipment",
     "baseUrl": "/sws/neo/goods-shipment",
@@ -115,6 +116,14 @@
         "reference": "Product",
         "inputMode": "search",
         "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/product"
+      },
+      {
+        "entity": "goodsShipmentLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/uOM"
       },
       {
         "entity": "goodsShipmentLine",
@@ -455,10 +464,12 @@
     },
     "labelOverrides": {
       "en_US": {
-        "EM_ETGO_Currency_ID": "Currency"
+        "EM_ETGO_Currency_ID": "Currency",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "EM_ETGO_Currency_ID": "Moneda"
+        "EM_ETGO_Currency_ID": "Moneda",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -543,6 +554,11 @@
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
             "defaultValue": "0"
+          },
+          "uOM": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@UomManagement@='Y'"
           },
           "description": {},
           "orderQuantity": {
@@ -673,5 +689,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "ada737dc47980d55"
+  "checksum": "130149d7d6a553de"
 }

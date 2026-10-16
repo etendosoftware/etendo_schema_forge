@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/linesColumnWidth.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { columnFlex, columnMinWidthPx } from '../linesColumnWidth.js';
@@ -238,6 +239,31 @@ describe('linesColumnWidth', () => {
         const col = { type: 'boolean', badge: true, column: 'Posted' };
         assert.equal(columnMinWidthPx(col), 240);
         assert.equal(columnMinWidthPx(col), basis(columnFlex(col, 1)));
+      });
+    });
+    describe('display: tag basis', () => {
+      it('is fixed at 144px and never elastic', () => {
+        assert.equal(columnFlex({ type: 'selector', display: 'tag' }, 1), '0 0 144px');
+        assert.equal(columnFlex({ type: 'foreignKey', display: 'tag' }, 0), '0 0 144px');
+        assert.equal(columnFlex({ type: 'string', display: 'tag' }, 0), '0 0 144px');
+      });
+
+      it('columnMinWidthPx is 144 and matches the flex basis', () => {
+        const col = { type: 'selector', display: 'tag' };
+        assert.equal(columnMinWidthPx(col), 144);
+        assert.equal(columnMinWidthPx(col), basis(columnFlex(col, 1)));
+      });
+
+      it('an explicit minWidth sets the pixel basis but stays 0 0', () => {
+        const col = { type: 'selector', display: 'tag', minWidth: 200 };
+        assert.equal(columnFlex(col, 0), '0 0 200px');
+        assert.equal(columnMinWidthPx(col), 200);
+      });
+
+      it('a non-tag selector column is unchanged (192px, elastic at idx 0)', () => {
+        assert.equal(columnMinWidthPx({ type: 'selector' }), 192);
+        assert.equal(columnFlex({ type: 'selector' }, 0), '1 0 192px');
+        assert.equal(columnFlex({ type: 'selector' }, 1), '0 0 192px');
       });
     });
   });
