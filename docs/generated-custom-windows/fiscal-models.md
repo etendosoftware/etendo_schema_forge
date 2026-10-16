@@ -3428,8 +3428,8 @@ ETP-5456 deployment trap above applies: verify in a fresh tab after deploying.
 ETP-5716, phase "skeleton + boxes". The annual VAT summary, built on the classic module through
 `/fiscal390/*` (backend contract: `{etendo_root}/modules/com.etendoerp.go/docs/aeat-390-endpoints.md`).
 Everything 390-specific lives in `models/390/`; the shared surfaces only read the registry.
-Later phases plug in where noted: invoices tab, incident rules, 303 preload, telematic filing and
-the substitute-from-presented flow.
+Later phases plug in where noted: incident rules, 303 preload, telematic filing and the
+substitute-from-presented flow. The invoices (Facturas) tab is described below.
 
 ### Registry entry and shared surfaces
 
@@ -3475,8 +3475,8 @@ the substitute-from-presented flow.
   muted line under the cards says so (`fm.m390.result.informative_hint`). The "cuadre con los 303"
   line under Resultado belongs to the 303-preload phase. Cards go 2×2 below 1100 px
   (`.fm-390-kpis`).
-- **Tabs:** Casillas, Incidencias (shared `IncidentsTab`), Justificante (shared `AttachmentsTab`).
-  Facturas arrives with the invoices phase.
+- **Tabs:** Casillas, Facturas (`FmSources390.jsx`, see below), Incidencias (shared
+  `IncidentsTab`), Justificante (shared `AttachmentsTab`).
 
 ### "Casillas" tab (`FmBoxes390.jsx` + `fm390Layouts.js`)
 
@@ -3553,6 +3553,41 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
   `AEAT390_2025_Y`), a muted "Diseño de registro 2025" with an explanatory tooltip.
 - **Backend warnings** (`UNSUPPORTED_RATE`, `NO_BOX`) are listed in an amber note above the block
   (they make the classic file fail or differ); they become incidents in the incidents phase.
+- **"Ver facturas":** a calculated cell whose box is in the payload's `invoiceBoxes` (the boxes
+  filled from invoices — never a derived total like [47]/[64]/[86]/[108]) carries a small receipt
+  button that opens the Facturas tab filtered by that box. Not shown on a presented declaration
+  nor for a payload without `invoiceBoxes` (snapshot taken before the field existed).
+
+### "Facturas" tab (`FmSources390.jsx` + `sources390.js`)
+
+The invoice-tax lines behind the invoice boxes, from `GET /fiscal390/sources`
+(`fetchSources390`). The backend builds them from the same box computation, so **for each box
+the sum of the lines filtered by it equals the box value** (contract and inclusion rules in
+`aeat-390-endpoints.md`, "GET /fiscal390/sources"). Differences from the shared 303 `SourcesTab`
+(not reused: the 303 tab is client-side over an inline `sources` array, the 390 one is server-side
+filtered and paged):
+
+- **Columns:** the 303 ones (Fecha factura, Fecha contable, N° documento, Tipo, Contacto, Base,
+  Cuota, Total, Casillas) plus **Impuesto**; Tipo is Venta/Compra (`type: sales|purchase`). With a
+  box filter a last column "Importe casilla [nn]" shows each line's contribution to that box (the
+  base for a base box, the cuota for a cuota box).
+- **Filters:** box chips (one per invoice box, with its value; click toggles), Casilla, Tipo and
+  Impuesto selects (options from the payload's unfiltered `boxes`/`taxes`), search (document
+  number, contact or tax; debounced 300 ms, Enter sends at once), "Limpiar filtros". All filtering
+  and paging is done by the backend (25 rows per page).
+- **Totals:** a sticky footer with base/cuota/total of every filtered line (not just the page) and,
+  with a box filter, the box total plus a "Cuadra con la casilla [nn]" check against the box value
+  (amber "No cuadra" otherwise — should never happen).
+- **Exportar CSV:** re-requests every filtered row (`pageSize=0`) and downloads
+  `facturas_390_<year>[_casilla_<nn>].csv` (`buildSources390Csv`): UTF-8 BOM, comma separator,
+  ISO dates, plain 2-decimal amounts, every header and cell through the canonical `csvField`
+  (formula neutralization — a negative amount comes out as `'-100.00`, per the CSV policy).
+- **Filter ownership:** `FmModel390Page` holds the filter, so "Ver facturas" (Casillas tab, and the
+  incidents phase) opens the tab pre-filtered with `sourcesFilterForBox(box)` from `sources390.js`.
+- **Presented declaration:** like the 303, the per-invoice detail is not kept — the tab shows
+  `fm.snapshot.invoice_detail_not_kept` and makes no request (the backend answers
+  `submitted: true` with no rows anyway).
+- Rows reload after a recompute (`refreshKey` = the boxes payload).
 
 ### Save flow
 
