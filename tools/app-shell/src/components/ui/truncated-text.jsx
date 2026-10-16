@@ -27,8 +27,20 @@ import { cn } from '@/lib/utils';
  * @param {React.ReactNode} props.text the string to render; also the tooltip body
  * @param {string} [props.className] classes merged onto the text span
  * @param {number} [props.delayDuration] Radix hover delay, ms
+ * @param {number} [props.lines] ETP-5510 — max visible lines before the ellipsis (default 1).
+ *   Above 1 the text wraps and is clamped with `line-clamp`; "clipped" is then measured on
+ *   height (`scrollHeight > clientHeight`) instead of width.
  */
-export function TruncatedText({ text, className, delayDuration = 200, 'data-testid': testId }) {
+// Inline style (not a `line-clamp-N` class) so any `lines` value works without Tailwind having
+// to see the literal class name at build time.
+const CLAMP_STYLE = {};
+function clampStyle(lines) {
+  return CLAMP_STYLE[lines] ?? (CLAMP_STYLE[lines] = {
+    display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: lines, overflow: 'hidden',
+  });
+}
+
+export function TruncatedText({ text, className, delayDuration = 200, lines = 1, 'data-testid': testId }) {
   const ref = useRef(null);
   const [open, setOpen] = useState(false);
 
@@ -38,8 +50,11 @@ export function TruncatedText({ text, className, delayDuration = 200, 'data-test
       return;
     }
     const el = ref.current;
-    setOpen(!!el && el.scrollWidth > el.clientWidth + 1);
-  }, []);
+    const clipped = lines > 1
+      ? el?.scrollHeight > el?.clientHeight + 1
+      : el?.scrollWidth > el?.clientWidth + 1;
+    setOpen(!!el && !!clipped);
+  }, [lines]);
 
   return (
     <TooltipProvider data-testid="TooltipProvider__TruncatedText">
@@ -49,7 +64,8 @@ export function TruncatedText({ text, className, delayDuration = 200, 'data-test
         delayDuration={delayDuration}
         data-testid="Tooltip__TruncatedText">
         <TooltipTrigger asChild data-testid="TooltipTrigger__TruncatedText">
-          <span ref={ref} className={cn('block w-full truncate', className)} data-testid={testId}>
+          <span ref={ref} className={cn(lines > 1 ? 'block w-full whitespace-normal break-words' : 'block w-full truncate', className)}
+            style={lines > 1 ? clampStyle(lines) : undefined} data-testid={testId}>
             {text}
           </span>
         </TooltipTrigger>

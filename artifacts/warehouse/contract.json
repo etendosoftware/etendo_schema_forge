@@ -1,8 +1,8 @@
 {
   "version": "0.24.0",
   "generatedAt": "2026-04-29T18:11:37.816Z",
-  "updatedAt": "2026-10-14T16:48:18.716Z",
-  "checksum": "e236f2e8e5c0e020",
+  "updatedAt": "2026-10-16T12:07:18.911Z",
+  "checksum": "8c33a6e1dfa8a797",
   "frontendContract": {
     "window": {
       "id": "139",
@@ -24,7 +24,6 @@
         }
       },
       "detailEntity": null,
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "layoutType": "default"
     },
@@ -855,7 +854,6 @@
         }
       },
       "detailEntity": null,
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2"
     },
     "entities": {

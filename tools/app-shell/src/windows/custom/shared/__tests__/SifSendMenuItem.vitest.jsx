@@ -46,9 +46,9 @@ describe('SifSendMenuItem — form kebab entry (ETP-5700)', () => {
     });
   });
 
-  // Repro: the kebab entry used to ask the topbar SendToSifButton to open the modal.
-  // On a completed invoice that button is not rendered, so the click did nothing.
-  it('opens the send modal when the topbar SendToSifButton is NOT rendered', () => {
+  // Repro: the kebab entry used to delegate the modal to a conditionally rendered
+  // component, so on a completed invoice the click did nothing. The host is always mounted.
+  it('opens the send modal through the always-mounted host', () => {
     const onClose = vi.fn();
     render(
       <>
@@ -98,6 +98,71 @@ describe('SifSendMenuItem — form kebab entry (ETP-5700)', () => {
         data-testid="item" />,
     );
     expect(screen.getByTestId('menu-action-sendToSif')).toHaveTextContent('sendToSifLabelSii');
+  });
+
+  // The entry cannot flush unsaved header edits before sending, so a dirty form must
+  // refuse to send rather than send the last-persisted invoice.
+  it('renders disabled with the save-first hint and opens no modal while the header is dirty', () => {
+    const onClose = vi.fn();
+    render(
+      <>
+        <SifSendModalHost apiBaseUrl="/sws/neo/sales-invoice" recordId="INV_85" data-testid="host" />
+        <SifSendMenuItem
+          data={COMPLETED_INVOICE}
+          recordId="INV_85"
+          apiBaseUrl="/sws/neo/sales-invoice"
+          onClose={onClose}
+          isDirty
+          data-testid="item" />
+      </>,
+    );
+    const entry = screen.getByTestId('menu-action-sendToSif');
+    expect(entry).toHaveAttribute('aria-disabled', 'true');
+    expect(entry).toHaveAttribute('title', 'sendToSifSaveFirst');
+    expect(entry).toHaveTextContent('sendToSifLabelSii');
+
+    fireEvent.click(entry);
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'sendToSifTitle' })).not.toBeInTheDocument();
+  });
+
+  it('is enabled with no hint when the header is clean', () => {
+    render(
+      <SifSendMenuItem
+        data={COMPLETED_INVOICE}
+        recordId="INV_85"
+        apiBaseUrl="/sws/neo/sales-invoice"
+        onClose={() => {}}
+        isDirty={false}
+        data-testid="item" />,
+    );
+    const entry = screen.getByTestId('menu-action-sendToSif');
+    expect(entry).not.toHaveAttribute('aria-disabled');
+    expect(entry).not.toHaveAttribute('title');
+  });
+
+  // Since ETP-5700 the kebab is the purchase form's ONLY send entry point too (the
+  // topbar button is gone), so the purchase spec must open its own host's modal.
+  it('opens the purchase-invoice send modal from the kebab entry', () => {
+    render(
+      <>
+        <SifSendModalHost apiBaseUrl="/sws/neo/purchase-invoice" recordId="INV_85" data-testid="host" />
+        <SifSendMenuItem
+          data={COMPLETED_INVOICE}
+          recordId="INV_85"
+          apiBaseUrl="/sws/neo/purchase-invoice"
+          onClose={() => {}}
+          data-testid="item" />
+      </>,
+    );
+    const entry = screen.getByTestId('menu-action-sendToSif');
+    expect(entry).toHaveTextContent('sendToSifLabelSii');
+
+    fireEvent.click(entry);
+
+    expect(screen.getByRole('dialog', { name: 'sendToSifTitle' })).toBeInTheDocument();
+    expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
   });
 
   it('renders nothing when the invoice is not completed', () => {

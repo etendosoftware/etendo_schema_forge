@@ -478,11 +478,49 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
       scrollEl = scrollEl.parentElement;
     }
     if (!scrollEl) return;
-    const update = () => { root.style.minHeight = scrollEl.clientHeight + 'px'; };
+    // ETP-5510 — the root must fill the scroller (so the sidebar divider reaches the bottom with
+    // few rows) WITHOUT forcing overflow: min-height = scroller clientHeight
+    //   - its own padding-top/bottom
+    //   - the height (+ margins) of every sibling that shares the scroller with the root, at any
+    //     level between the root and the scroller (the "all records loaded" footer, the
+    //     "loading more" row). Using the bare clientHeight made the content always taller than
+    //     the pane, giving a needless scrollbar. Never negative.
+    const siblingsOf = () => {
+      const out = [];
+      for (let node = root; node && node !== scrollEl; node = node.parentElement) {
+        const parent = node.parentElement;
+        if (!parent) break;
+        for (const sib of parent.children) if (sib !== node) out.push(sib);
+      }
+      return out;
+    };
+    const outerHeight = (el) => {
+      const cs = window.getComputedStyle(el);
+      if (cs.display === 'none' || cs.position === 'absolute' || cs.position === 'fixed') return 0;
+      return el.offsetHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+    };
+    const update = () => {
+      const cs = window.getComputedStyle(scrollEl);
+      const padding = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const others = siblingsOf().reduce((sum, el) => sum + outerHeight(el), 0);
+      root.style.minHeight = Math.max(0, scrollEl.clientHeight - padding - others) + 'px';
+    };
     update();
-    const obs = new ResizeObserver(update);
-    obs.observe(scrollEl);
-    return () => obs.disconnect();
+    // Observes the scroller and the siblings (their size never depends on the root's min-height,
+    // so setting it cannot retrigger this), and the ancestors' child lists so a sibling that
+    // appears/disappears (footer, spinner) is picked up and observed too.
+    const resizeObs = new ResizeObserver(update);
+    const watchSiblings = () => {
+      resizeObs.disconnect();
+      resizeObs.observe(scrollEl);
+      siblingsOf().forEach((el) => resizeObs.observe(el));
+    };
+    watchSiblings();
+    const mutationObs = new MutationObserver(() => { watchSiblings(); update(); });
+    for (let node = root; node && node !== scrollEl; node = node.parentElement) {
+      if (node.parentElement) mutationObs.observe(node.parentElement, { childList: true });
+    }
+    return () => { resizeObs.disconnect(); mutationObs.disconnect(); };
   }, []);
 
   // ETP-5601 — ListView's list toolbar no longer draws a bottom border (Figma: 56px, no line),
