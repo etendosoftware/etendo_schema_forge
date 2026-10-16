@@ -169,8 +169,8 @@
           "Read the list's Type column badges as customer/vendor business-role flags — **Cliente** (purple) and/or **Proveedor** (blue) — not as the Company/Person persona toggle used in the detail header. A record with neither flag shows \"—\".",
           "Inline-edit a contact directly from the list by hovering a row and clicking the pencil icon. The active row's editable cells become inputs without navigating to the detail view.",
           "Delete a single contact from the list by hovering a row and clicking the trash icon; a confirmation dialog appears before the DELETE is sent. If the record has associated elements the API error message is shown as a toast.",
-          "Select multiple contacts with checkboxes and use the selection bar to bulk-delete them. All selected rows are deleted in parallel, so a record that cannot be deleted (e.g. it has associated elements) does not block the others from being deleted. Exactly one outcome toast is shown: a success toast when every row was deleted, an error toast when none were, or a single warning toast reporting how many were deleted and how many were not on a partial failure. On a partial failure the rows that failed stay selected/checked so the user can retry; rows that succeeded are deselected and the list refetches. Error messages are shown translated to Spanish, including a specific \"cannot be deleted because it has associated records\" message for FK-violation failures.",
-          "Open a detail view with a General tab for the core record and a Financial tab for billing and credit preferences."
+          "Open a detail view with a General tab for the core record and a Financial tab for billing and credit preferences.",
+          "Add and maintain child people in the Person area."
         ],
         "functionalDoc": "docs/generated-custom-windows/contacts.md"
       },
@@ -334,8 +334,8 @@
           "Read the list's Type column badges as customer/vendor business-role flags — **Cliente** (purple) and/or **Proveedor** (blue) — not as the Company/Person persona toggle used in the detail header. A record with neither flag shows \"—\".",
           "Inline-edit a contact directly from the list by hovering a row and clicking the pencil icon. The active row's editable cells become inputs without navigating to the detail view.",
           "Delete a single contact from the list by hovering a row and clicking the trash icon; a confirmation dialog appears before the DELETE is sent. If the record has associated elements the API error message is shown as a toast.",
-          "Select multiple contacts with checkboxes and use the selection bar to bulk-delete them. All selected rows are deleted in parallel, so a record that cannot be deleted (e.g. it has associated elements) does not block the others from being deleted. Exactly one outcome toast is shown: a success toast when every row was deleted, an error toast when none were, or a single warning toast reporting how many were deleted and how many were not on a partial failure. On a partial failure the rows that failed stay selected/checked so the user can retry; rows that succeeded are deselected and the list refetches. Error messages are shown translated to Spanish, including a specific \"cannot be deleted because it has associated records\" message for FK-violation failures.",
-          "Open a detail view with a General tab for the core record and a Financial tab for billing and credit preferences."
+          "Open a detail view with a General tab for the core record and a Financial tab for billing and credit preferences.",
+          "Add and maintain child people in the Person area."
         ],
         "functionalDoc": "docs/generated-custom-windows/contacts.md"
       },
@@ -477,8 +477,8 @@
           "Read the list's Type column badges as customer/vendor business-role flags — **Cliente** (purple) and/or **Proveedor** (blue) — not as the Company/Person persona toggle used in the detail header. A record with neither flag shows \"—\".",
           "Inline-edit a contact directly from the list by hovering a row and clicking the pencil icon. The active row's editable cells become inputs without navigating to the detail view.",
           "Delete a single contact from the list by hovering a row and clicking the trash icon; a confirmation dialog appears before the DELETE is sent. If the record has associated elements the API error message is shown as a toast.",
-          "Select multiple contacts with checkboxes and use the selection bar to bulk-delete them. All selected rows are deleted in parallel, so a record that cannot be deleted (e.g. it has associated elements) does not block the others from being deleted. Exactly one outcome toast is shown: a success toast when every row was deleted, an error toast when none were, or a single warning toast reporting how many were deleted and how many were not on a partial failure. On a partial failure the rows that failed stay selected/checked so the user can retry; rows that succeeded are deselected and the list refetches. Error messages are shown translated to Spanish, including a specific \"cannot be deleted because it has associated records\" message for FK-violation failures.",
-          "Open a detail view with a General tab for the core record and a Financial tab for billing and credit preferences."
+          "Open a detail view with a General tab for the core record and a Financial tab for billing and credit preferences.",
+          "Add and maintain child people in the Person area."
         ],
         "functionalDoc": "docs/generated-custom-windows/contacts.md"
       },
