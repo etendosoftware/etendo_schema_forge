@@ -1,0 +1,4 @@
+{
+  "_doc": "Flaky mocked tests left out of every gating run (pre-push, CI) while they are fixed; run-e2e-full.sh still runs them without blocking. Entry: {file: 'tests/…mocked.spec.js', title: 'describe › test', reason, ticket: 'ETP-NNNN', since, until: at most 14 days later}. Policy: docs/testing/flaky-tests.md.",
+  "tests": []
+}
