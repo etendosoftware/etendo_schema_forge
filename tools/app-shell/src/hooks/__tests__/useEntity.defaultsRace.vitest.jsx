@@ -7,7 +7,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 // user can already be typing, and the merge that applies the defaults must not
 // clobber what they entered. These tests pin the agreed contract:
 //   - defaultsLoading is exposed so the form can gate itself while defaults fly
-//   - the fetch is abortable, and the 4000ms timer RELEASES THE GATE ONLY: it
+//   - the fetch is abortable, and the DEFAULTS_TIMEOUT_MS timer RELEASES THE GATE ONLY: it
 //     never invalidates the session, so a slow response still merges when it
 //     finally lands (the timer is a UX budget, not a correctness mechanism)
 //   - invalidation is reserved for genuinely superseded sessions: a newer
@@ -58,7 +58,7 @@ vi.mock('@/i18n', () => ({
 
 import { useEntity } from '../useEntity';
 
-const DEFAULTS_TIMEOUT_MS = 4000;
+const DEFAULTS_TIMEOUT_MS = 10000;
 
 function deferred() {
   let resolve;
@@ -799,6 +799,42 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
       ).toHaveLength(0);
     });
 
+    // ETP-4742 — the epoch alone made a superseded session inert but let it run
+    // its full round trip against a form that would ignore it. A newer handleNew
+    // must also abort the previous fetch (network saving), without changing any
+    // observable state: the newest session stays live and emits the only event.
+    it('aborts the superseded defaults request on re-entry', async () => {
+      const first = deferred();
+      const second = deferred();
+      const inits = [];
+      globalThis.fetch
+        .mockImplementationOnce((_url, init) => { inits.push(init); return first.promise; })
+        .mockImplementationOnce((_url, init) => { inits.push(init); return second.promise; });
+
+      const { result } = renderEntity('salesOrder');
+      await act(async () => {
+        result.current.handleNew();
+      });
+      await act(async () => {
+        result.current.handleNew();
+      });
+
+      expect(
+        inits[0]?.signal?.aborted,
+        'a superseded handleNew must abort its in-flight defaults fetch, not only make it inert'
+      ).toBe(true);
+      expect(
+        inits[1]?.signal?.aborted,
+        'the newest defaults session must stay live'
+      ).toBe(false);
+
+      await resolveWith(second, { paymentTerms: 'SECOND' });
+      expect(
+        result.current.editing?.paymentTerms,
+        'the surviving session still merges normally after the abort'
+      ).toBe('SECOND');
+    });
+
     it('emits exactly one timing event once the surviving call settles', async () => {
       const { first, second } = await startTwoOverlappingCalls();
 
@@ -1123,7 +1159,7 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
   // E — ETP-5002: the required-field gate must not block on a default in flight
   //
   // ETP-4933 disables every primary persist action while a required field is
-  // empty. ETP-4741's 4s budget releases defaultsLoading EARLY, without settling
+  // empty. ETP-4741's DEFAULTS_TIMEOUT_MS budget releases defaultsLoading EARLY, without settling
   // the request — so on a slow `GET /<entity>/defaults` the form unlocks with the
   // defaults still in the air, and the gate then blocks Guardar/Confirmar on a
   // value the backend was about to supply. `purchase-order` marks `warehouse`
@@ -1168,7 +1204,7 @@ describe('useEntity — creation defaults race (ETP-4741)', () => {
       await settle();
     });
 
-    it('keeps deferring after the 4s UX budget expires — the request is what matters', async () => {
+    it(`keeps deferring after the ${DEFAULTS_TIMEOUT_MS}ms UX budget expires — the request is what matters`, async () => {
       vi.useFakeTimers();
       const pending = deferred();
       globalThis.fetch.mockReturnValue(pending.promise);

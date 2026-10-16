@@ -298,7 +298,13 @@ const BATCH_SIZE = 75;
 // working, and nothing else: the request is NOT aborted and its session is NOT
 // invalidated, so it keeps running, stays cancellable, and its response still
 // merges when it lands. See handleNew below.
-const DEFAULTS_TIMEOUT_MS = 4000;
+//
+// ETP-4742 — raised from 4 s to 10 s: under network throttling /defaults
+// competes with the catalog/selector reads that mount alongside it and 4 s was
+// routinely overrun, releasing an empty form. The value is a UX budget, so the
+// `defaults_block` timing event (status `timeout`) keeps measuring the real
+// distribution and this constant can be re-tuned with staging data.
+const DEFAULTS_TIMEOUT_MS = 10000;
 
 // ETP-5037 — a process-rejection message (e.g. Goods Movements' combined, multi-product
 // insufficient-stock message) can run considerably longer than sonner's default 4s toast
@@ -1323,7 +1329,7 @@ export function useEntity(entity, childEntity, {
     // creation form can gate itself instead of letting the user race the merge.
     const [defaultsLoading, setDefaultsLoading] = useState(false);
     // ETP-5002: true while the defaults SESSION is still pending — which is NOT the
-    // same window as defaultsLoading above. defaultsLoading is a 4s UX budget: it
+    // same window as defaultsLoading above. defaultsLoading is a UX budget: it
     // releases early so the user can start working while the request keeps running.
     // This flag tracks the request itself, and only clears when the response lands,
     // errors, or the session is neutralized. The required-field gate (ETP-4933) needs
@@ -1941,6 +1947,14 @@ export function useEntity(entity, childEntity, {
         const epoch = defaultsEpochRef.current + 1;
         defaultsEpochRef.current = epoch;
         const isCurrent = () => defaultsEpochRef.current === epoch;
+        // ETP-4742 — a newer handleNew supersedes the previous defaults session.
+        // The epoch above already makes that session inert (its response can no
+        // longer merge, release the gate or report), but until this call it kept
+        // its request running to completion — up to the whole round trip of pure
+        // network waste. Abort it AFTER the epoch bump so the aborted session's
+        // catch/finally see isCurrent() === false and stay silent. The abort
+        // handle is the previous one: this line runs before it is overwritten below.
+        defaultsAbortRef.current?.abort();
         const settleTiming = startTiming(OBSERVABILITY_EVENTS.DEFAULTS_BLOCK, {
             properties: { entity },
         });

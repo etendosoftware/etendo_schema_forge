@@ -4,8 +4,11 @@
  * the isNew branches of handleAddLineClick / handleImportClick / the secondary
  * "add line" toggles (all module-internal, unreachable except through a live
  * render). Harness mirrors DetailView.lineCalloutFlow.vitest.jsx.
+ *
+ * @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+ * @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
  */
-import { render, act, waitFor } from '@testing-library/react';
+import { render, act, waitFor, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { DetailView } from '../DetailView.jsx';
 
@@ -69,8 +72,15 @@ vi.mock('@/hooks/useDisplayLogic', () => ({
   useDisplayLogic: () => ({ visibleFields: [], hiddenFields: new Set() }),
 }));
 
+// Hoisted so a test can hand the initial-callout chain a promise it controls
+// (ETP-4742 gate coverage below).
+const calloutControl = vi.hoisted(() => ({ executeCallout: vi.fn() }));
 vi.mock('@/hooks/useCallout', () => ({
-  useCallout: () => ({ calloutResult: null, calloutLoading: false, executeCallout: vi.fn() }),
+  useCallout: () => ({
+    calloutResult: null,
+    calloutLoading: false,
+    executeCallout: calloutControl.executeCallout,
+  }),
 }));
 
 vi.mock('@/hooks/useCurrency', () => ({ useCurrency: () => 'USD' }));
@@ -416,5 +426,47 @@ describe('handleImportClick — isNew branch (DetailExtraActions.onSave)', () =>
     await act(async () => { outcome = await importCaptured.onSave(); });
     expect(outcome).toBe(false);
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ETP-4742 — the creation form's loading gate must also cover the staggered
+ * initial-callout chain. The chain is scheduled by useDefaultCallouts once the
+ * defaults land; without the gate the form renders first and the callout
+ * responses mutate its derived fields (priceList, paymentTerms, address…)
+ * afterwards. The hook's own accounting is unit-tested in
+ * detailViewHelpers.vitest.js — here we assert the observable wiring: the gate
+ * is up while the chain is pending, and the form renders when it is not.
+ */
+describe('DetailView /new initial-callout gate (ETP-4742)', () => {
+  afterEach(() => {
+    calloutControl.executeCallout.mockReset();
+    mockHook.editing = { documentNo: '', documentStatus: 'DR', uOM: 'U1' };
+  });
+
+  it('keeps the loading gate up while the initial callout chain is pending', async () => {
+    calloutControl.executeCallout.mockReturnValue(new Promise(() => {}));
+    mockHook.editing = { documentNo: '', documentStatus: 'DR', businessPartner: 'BP-DEFAULT' };
+    renderNew({ api: { selectors: [{ field: 'businessPartner', entity: 'header' }] } });
+
+    await waitFor(() => expect(screen.getByTestId('detail-loading-gate')).toBeInTheDocument());
+    expect(
+      screen.queryAllByTestId('mock-form'),
+      'the form must not render while the derived fields are still on their way',
+    ).toHaveLength(0);
+    expect(calloutControl.executeCallout).toHaveBeenCalledWith(
+      'businessPartner',
+      'BP-DEFAULT',
+      expect.any(Object),
+      expect.any(Object),
+    );
+  });
+
+  it('renders the form when no initial callout chain is armed', async () => {
+    mockHook.editing = { documentNo: '', documentStatus: 'DR' };
+    renderNew({ api: { selectors: [{ field: 'businessPartner', entity: 'header' }] } });
+
+    await waitFor(() => expect(screen.queryAllByTestId('mock-form').length).toBeGreaterThan(0));
+    expect(screen.queryByTestId('detail-loading-gate')).toBeNull();
   });
 });

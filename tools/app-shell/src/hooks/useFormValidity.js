@@ -72,7 +72,7 @@ export function fieldsSignature(fields) {
  * to fill it in — it is the form not being ready to be judged at all. Blocking on it
  * turns a slow `GET /<entity>/defaults` into a dead primary button: `purchase-order`
  * marks `warehouse` required with no contract-level default, so every new PO whose
- * defaults request outran ETP-4741's 4s UX budget rendered Guardar AND Confirmar
+ * defaults request outran ETP-4741's UX budget rendered Guardar AND Confirmar
  * disabled, reading "Completa primero los campos obligatorios: Almacen" for a value
  * the user was never meant to type. While the caller reports the form as pending
  * nothing blocks; the moment it settles the gate applies in full. The backend's own

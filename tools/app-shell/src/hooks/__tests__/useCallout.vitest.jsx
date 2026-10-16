@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useCallout.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useCallout } from '../useCallout';
 
@@ -636,5 +637,162 @@ describe('useCallout', () => {
       expect(result.current.calloutResult.blockingCondition).toBeNull();
       expect(toastMock.info).toHaveBeenCalledWith('Record updated');
     });
+  });
+});
+
+// ETP-4742 — executeCallout returns a settlement promise. The new-record gate
+// uses it to keep the form closed until every initial callout has been accounted
+// for: `true` means a result was handed to the consumer through `calloutResult`
+// (the consumer applies it and, when it gates the form, releases on its own apply
+// effect — see useDefaultCallouts), `false` means there is nothing to apply
+// (non-OK response, network error or abort), so the caller can release at once.
+describe('useCallout — executeCallout settlement promise (ETP-4742)', () => {
+  const opts = { token: 'test-token', apiBaseUrl: 'http://localhost/api' };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  async function advanceDebounce() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+  }
+
+  it('resolves true after handing a callout result to the consumer', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ updates: { a: { value: 1 } }, combos: {}, messages: [] }),
+    });
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    let settled;
+    act(() => {
+      settled = result.current.executeCallout('businessPartner', 'BP001', { id: '1' });
+    });
+    expect(settled).toBeInstanceOf(Promise);
+
+    await advanceDebounce();
+
+    await expect(settled).resolves.toBe(true);
+    expect(result.current.calloutResult).toEqual(
+      expect.objectContaining({ triggerField: 'businessPartner' }),
+    );
+  });
+
+  it('resolves false when the endpoint answers non-OK', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    let settled;
+    act(() => {
+      settled = result.current.executeCallout('businessPartner', 'BP001', { id: '1' });
+    });
+    await advanceDebounce();
+
+    await expect(settled).resolves.toBe(false);
+    expect(result.current.calloutResult).toBeNull();
+  });
+
+  it('resolves false when the request fails with a network error', async () => {
+    globalThis.fetch.mockRejectedValue(new Error('network down'));
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    let settled;
+    act(() => {
+      settled = result.current.executeCallout('businessPartner', 'BP001', { id: '1' });
+    });
+    await advanceDebounce();
+
+    await expect(settled).resolves.toBe(false);
+  });
+
+  it('resolves false when a newer dispatch for the same field aborts the request', async () => {
+    let firstSignal;
+    globalThis.fetch.mockImplementationOnce((_url, init) => {
+      firstSignal = init?.signal;
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          { once: true },
+        );
+      });
+    });
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    let first;
+    act(() => {
+      first = result.current.executeCallout('businessPartner', 'BP001', { id: '1' });
+    });
+    await advanceDebounce();
+    expect(firstSignal.aborted).toBe(false);
+
+    globalThis.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ updates: {}, combos: {}, messages: [] }),
+    });
+    let second;
+    act(() => {
+      second = result.current.executeCallout('businessPartner', 'BP002', { id: '1' });
+    });
+    await advanceDebounce();
+
+    await expect(first).resolves.toBe(false);
+    await expect(second).resolves.toBe(true);
+  });
+
+  it('resolves false without fetching when field or entity is missing', async () => {
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    await expect(result.current.executeCallout('', 'v', {})).resolves.toBe(false);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  // ETP-4742 review finding 1: a second dispatch for the same field cancels the first
+  // debounce. The cancelled call must SETTLE (false), not leave its promise pending —
+  // otherwise a caller gating on it (the initial-callout chain) hangs until the budget.
+  it('resolves the superseded debounce with false when the same field is dispatched again', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ updates: {}, combos: {}, messages: [] }),
+    });
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    let first;
+    let second;
+    act(() => {
+      first = result.current.executeCallout('businessPartner', 'BP001', { id: '1' });
+    });
+    act(() => {
+      second = result.current.executeCallout('businessPartner', 'BP002', { id: '1' });
+    });
+
+    await expect(first).resolves.toBe(false);
+
+    await advanceDebounce();
+    await expect(second).resolves.toBe(true);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  // ETP-4742 review finding 1: unmount must not leave a debounce promise pending.
+  it('settles a pending debounce with false when the hook unmounts', async () => {
+    const { result, unmount } = renderHook(() => useCallout('header', opts));
+
+    let settled;
+    act(() => {
+      settled = result.current.executeCallout('businessPartner', 'BP001', { id: '1' });
+    });
+
+    unmount();
+
+    await expect(settled).resolves.toBe(false);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

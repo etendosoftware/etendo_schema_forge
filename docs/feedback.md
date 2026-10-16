@@ -3168,3 +3168,36 @@ other two ticket items (accent in "Almacén", "Unidad de Medida" capitalization)
 ETP-5492.
 
 **Reference:** `docs/plans/2026-10-13-etp-5573-stock-report-warehouse-selector.md`.
+
+---
+
+## [2026-10-16] ETP-4742 — Creation-form callout chain now gated; defaults budget 10 s; superseded fetch aborted
+
+**Component:** `tools/app-shell` — `detailViewHelpers.jsx` (`useDefaultCallouts`, `isLoadingRecordForRoute`),
+`DetailView.jsx` (gate wiring), `useCallout.js`, `useEntity.js`.
+
+**Symptom (fixed):** on a `/new` route the loading gate released as soon as `/defaults` settled, and the
+staggered initial-callout chain then mutated the form after it had rendered — `priceList`, `paymentTerms`
+and the partner address changed under the user's eyes. Two related defects carried over from ETP-4741: a
+superseded `handleNew()` was epoch-inert but still ran its full round trip, and the callout latch armed on
+`editing` becoming non-empty for any reason (the "known gap" recorded in the 2026-07-31 entries above),
+which could consume the latch before the defaults landed.
+
+**Fix:**
+- `useDefaultCallouts` (in `detailViewHelpers.jsx`, out of the growth-guarded `DetailView.jsx`) owns the
+  chain and exposes `pending`. The gate `isLoadingRecordForRoute(..., { initialCalloutsPending })` keeps
+  the "Cargando…" placeholder up until every dispatched callout has settled without a result or had its
+  result **applied** (the `[calloutResult]` effect calls `markApplied`; tokens are drained in bulk so two
+  responses batched into one apply do not strand the gate). A 10 s budget releases a callout that never
+  settles. The latch now arms only on a non-empty triggers set.
+- `useCallout.executeCallout` returns a promise (`true` = a result was handed to the consumer) so the
+  gate can distinguish "nothing to apply" from "wait for the apply effect".
+- `DEFAULTS_TIMEOUT_MS` raised 4 s → 10 s: under throttling `/defaults` competes with the catalog reads
+  and 4 s was routinely overrun, releasing an empty form.
+- `handleNew` aborts the superseded controller after bumping the epoch, so the aborted session's
+  `catch`/`finally` stay silent.
+
+**Lesson:** a UI gate keyed on a fetch's settlement is not enough when the response is applied by a
+later React effect (passive effects run after paint) — the gate has to key on the **apply**, not the
+resolve. And when a component is guarded against growth (`.claude/hooks/check-detailview-growth.mjs`),
+move the new logic into a hook beside `useNewRouteEditingReset` instead of growing the file.
