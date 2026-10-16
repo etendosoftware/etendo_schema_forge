@@ -161,15 +161,29 @@ function buildFormFromData(header, info) {
  * (sentence-case title + description) and a flexible right column (fields).
  * `divider` draws the border between sections — every section but the last one.
  */
+/** DOM ids of the sections another window can deep-link to (`/organization#<id>`). */
+export const ORG_SECTION_ANCHOR = Object.freeze({
+  fiscal: 'org-section-fiscal',
+  iae: 'org-section-iae',
+  modelo390: 'org-section-390',
+});
+
+/** The section id a location hash names (`#org-section-iae`), or `null` when it names none. */
+export function sectionAnchorFromHash(hash) {
+  const id = String(hash ?? '').replace(/^#/, '');
+  return Object.values(ORG_SECTION_ANCHOR).includes(id) ? id : null;
+}
+
 function FieldError({ message, testId }) {
   if (!message) return null;
   return <p role="alert" className="text-xs text-destructive mt-0.5" data-testid={testId}>{message}</p>;
 }
 
-function SectionRow({ titleKey, descKey, divider = true, testId, children }) {
+function SectionRow({ titleKey, descKey, divider = true, testId, anchorId, children }) {
   const ui = useUI();
   return (
     <section
+      id={anchorId}
       className={
         'grid gap-2 py-4' + (divider ? ' border-b border-border' : '')
       }
@@ -213,6 +227,14 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
       setSeededBaseline(JSON.stringify(seeded));
     }
   }, [loading, error, header, info]);
+
+  // Deep link to a section (`/organization#org-section-iae`, e.g. "Editar en Organización" from a
+  // Modelo 390 incident, ETP-5716): once the page is rendered, scroll to it.
+  useEffect(() => {
+    if (loading || error) return;
+    const anchor = sectionAnchorFromHash(typeof window !== 'undefined' ? window.location.hash : '');
+    if (anchor) document.getElementById(anchor)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+  }, [loading, error]);
 
   const baseline = useMemo(() => buildFormFromData(header, info), [header, info]);
   const isDirty = useMemo(
@@ -422,6 +444,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         <SectionRow
           titleKey="orgSectionFiscal"
           descKey="orgSectionFiscalDesc"
+          anchorId={ORG_SECTION_ANCHOR.fiscal}
           testId="OrganizationPage__section-fiscal"
           data-testid="SectionRow__a5f503">
           <div className="grid grid-cols-2 gap-4">
@@ -611,6 +634,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         <SectionRow
           titleKey="orgSectionIae"
           descKey="orgSectionIaeDesc"
+          anchorId={ORG_SECTION_ANCHOR.iae}
           testId="OrganizationPage__section-iae"
           data-testid="SectionRow__a5f503">
           <ActividadesIaeSection
@@ -627,6 +651,7 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
         <SectionRow
           titleKey="orgSection390"
           descKey="orgSection390Desc"
+          anchorId={ORG_SECTION_ANCHOR.modelo390}
           divider={false}
           testId="OrganizationPage__section-390"
           data-testid="SectionRow__a5f503">

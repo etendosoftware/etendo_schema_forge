@@ -56,7 +56,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import OrganizationPage from '../OrganizationPage.jsx';
+import OrganizationPage, { ORG_SECTION_ANCHOR, sectionAnchorFromHash } from '../OrganizationPage.jsx';
 
 const API_BASE_URL = '/sws/neo/organization';
 const ORG_ID = 'ORG_1';
@@ -720,5 +720,17 @@ describe('OrganizationPage', () => {
       expect(toastError).toHaveBeenCalled();
       expect(infoPatchBody()).toBeNull();
     });
+  });
+});
+
+// ETP-5716 — "Editar en Organización" from a Modelo 390 incident deep-links to a section.
+describe('OrganizationPage — section deep links', () => {
+  it('reads only the section ids the page declares from the location hash', () => {
+    expect(sectionAnchorFromHash('#org-section-iae')).toBe(ORG_SECTION_ANCHOR.iae);
+    expect(sectionAnchorFromHash('org-section-390')).toBe(ORG_SECTION_ANCHOR.modelo390);
+    expect(sectionAnchorFromHash('#org-section-fiscal')).toBe(ORG_SECTION_ANCHOR.fiscal);
+    expect(sectionAnchorFromHash('#somewhere-else')).toBeNull();
+    expect(sectionAnchorFromHash('')).toBeNull();
+    expect(sectionAnchorFromHash(undefined)).toBeNull();
   });
 });
