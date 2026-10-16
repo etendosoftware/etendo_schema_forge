@@ -575,7 +575,7 @@ and verify the title, the «Completada» badge and that «Ver factura» opens th
 **Automated evidence.** `tools/app-shell/src/windows/custom/return-material-receipt/__tests__/ConfirmWithCreditButton.spec.jsx`,
 `tools/app-shell/src/windows/custom/return-material-receipt/__tests__/index.test.js`,
 `e2e/tests/flows/purchases/return-material-receipt.mocked.spec.js`,
-`e2e/tests/flows/return-row-confirm-rectify.mocked.spec.js`.
+`e2e/tests/flows/sales-purchases/return-row-confirm-rectify.mocked.spec.js`.
 
 ## Accounting visibility — "Show Accounting Fields" (ETP-5684)
 

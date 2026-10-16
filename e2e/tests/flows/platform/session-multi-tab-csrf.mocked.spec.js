@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, MOCK_ORG_ID } from '../helpers/auth.js';
+import { login, MOCK_ORG_ID } from '../../helpers/auth.js';
 
 /**
  * Two tabs, one browser session (ETP-5550).
