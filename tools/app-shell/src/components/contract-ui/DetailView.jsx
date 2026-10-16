@@ -69,12 +69,10 @@ import { useLineSaveConflict } from './useLineSaveConflict.js';
 import { buildLineRowUpdateHandler, resolveCompletedLineFieldGate } from './inlineLineUpdateHandlers.js';
 import {
   CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildCustomAddModalOnSaved, buildCustomAddModalOnParentRefresh, buildCustomAddModalSeed, buildPostCreateState, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, computeBalanceGate, customTabKey, getCustomTabSaveFirstHint, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getBreadcrumbItems, getDocumentReadOnly, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, normalizePatchFieldValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, refreshRecordAfterMutation, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite, EXCHANGE_RATES_TAB_KEY, refreshHeaderCurrencyRate, withExchangeRateHeaderSync, getDangerIconClass, getProcessButtonVariant, isDangerProcess,
-} from './detailViewHelpers.jsx';
-// ETP-4731 (slice 2 of 3): the secondary-tab helpers and the remaining free module scope moved to
-// detailViewHelpers.jsx. Imported here only for the ones this component's body still uses.
-import {
+  // ETP-4731 (slice 2 of 3): the secondary-tab helpers and the remaining free module scope moved
+  // to detailViewHelpers.jsx; imported here only for the symbols this component body still uses.
   formatAmount, NO_GATE_EXCLUSIONS, detailContentPadding, getTabStripBleedClassName,
-  buildSecondaryLineHandlers, SecondaryFormTab, SecondaryTableTab, getSelectedLinesTotalLabel,
+  buildSecondaryLineHandlers, SecondaryFormTab, SecondaryTableTab,
   getAddLineWrapperStyle, buildDeleteRowHandler, getDraftModeCompleted, shouldRenderSaveActionsRow,
   onlySaveButtonForCompletedDoc, getDetailContentContainerClassName, getLinesTabsSectionClassName,
   computeIsDirty, shouldShowLinesEmptyState, DIMENSION_MACRO_KEYS, shouldShowLineActionButtons,
@@ -86,10 +84,8 @@ import {
 export { buildInlineRowUpdateHandler } from './inlineLineUpdateHandlers.js';
 export {
   SecondaryPanelTab, applyCalloutFieldUpdates, applyLocalChildRowUpdate, buildHeaderFormData, buildInitialTabs, buildLineRowClickHandler, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, dispatchProcessAction, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDeleteChildButtonLabel, getDetailContentClassName, getDocsRowClassName, getDocumentIds, getFullBreadcrumb, getInlineEditableShrinkClassName, getLinesContainerClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, insertLinesTab, isBulkDeleteBarVisible, isCustomPrimaryTabActive, isInitialChildrenLoading, maybeSaveBeforeConfirm, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderSidePanel, resolveCanAddLines, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, runAddLineAction, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar,
-} from './detailViewHelpers.jsx';
-// ETP-4731 (slice 2 of 3) — same re-export contract as above: the suites keep importing these from
-// 'DetailView.jsx', so only the definition site moved.
-export {
+  // ETP-4731 (slice 2 of 3) — same re-export contract: the suites keep importing these from
+  // 'DetailView.jsx', so only the definition site moved.
   getTabStripBleedClassName, getSecondarySelectionChangeHandler, getSecondaryRowUpdateHandler,
   buildSecondaryLineHandlers, SecondaryFormTab, SecondaryTableTab, getSelectedLinesTotalLabel,
   getAddLineWrapperStyle, resolveCanAddSecondaryLines, buildDeleteRowHandler,
