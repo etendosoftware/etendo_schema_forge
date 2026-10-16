@@ -3168,3 +3168,37 @@ other two ticket items (accent in "Almacén", "Unidad de Medida" capitalization)
 ETP-5492.
 
 **Reference:** `docs/plans/2026-10-13-etp-5573-stock-report-warehouse-selector.md`.
+
+---
+
+## [2026-10-16] ETP-4744 — Initial-callout latch no longer consumed before the defaults land
+
+**Component:** `tools/app-shell/src/components/contract-ui/DetailView.jsx` — the "fire callouts for
+non-dependent selector fields" effect; now backed by `resolveInitialCalloutTriggers`
+(`detailViewHelpers.jsx`).
+
+**Symptom:** same as the pre-existing defect recorded under `[2026-07-31] ETP-4741` below: on a `/new` route
+the backend defaults merge into the form, but the initial callout chain (`businessPartner` → `priceList` /
+`paymentTerms` / address) never runs, so the dependent fields stay empty until the user re-picks a value.
+
+**Root cause:** the effect's one-shot latch (`defaultCalloutsTriggeredRef`) armed on `editing` becoming
+non-empty *for any reason*, not on the defaults session having settled. A keystroke in a plain, non-selector
+field while `GET /{entity}/defaults` was in flight consumed the latch with an empty trigger list; when the
+defaults merged the effect returned early on the already-set latch, and it only resets on `!isNew`, so the
+chain stayed broken for the whole creation session. ETP-4741's 4s gate narrowed the window to
+`4s → late response` but did not close it.
+
+**Fix:** the latch is now armed by the arrival of the defaults session. The new helper waits for
+`hook.defaultsPending` (useEntity's request window, ETP-5002) to clear — and for `editing` to hold a value —
+before reporting `ready`, and computes its trigger list from the merged state. A form left empty never consumes
+the latch; a session that settles with no selector value consumes it (so a later manual pick cannot make the
+effect fire a second callout).
+
+**Lesson:** a "the form has some value" predicate is not a "the async seed has arrived" predicate. When an
+effect must act once, on the completion of an async load, gate it on that load's own lifecycle flag
+(`defaultsPending`), never on a side effect (the form being non-empty) that other actors — the user, a seed —
+can also produce.
+
+**Reference:** `docs/generated-custom-windows/app-shell-functional-flows.md` §4; tests
+`DetailView.newRecordEffects.vitest.jsx` ("initial callout chain is armed by the defaults session") and
+`DetailView.extractedHelpers.vitest.js` (`resolveInitialCalloutTriggers`).

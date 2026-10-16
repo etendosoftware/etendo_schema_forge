@@ -120,6 +120,7 @@ import {
   isDeleteButtonVisible,
   renderPrimaryTabButtons,
   resolveHeaderContent,
+  resolveInitialCalloutTriggers,
   isBulkDeleteBarVisible,
   isCustomPrimaryTabActive,
   getDetailContentClassName,
@@ -792,6 +793,105 @@ describe('isLoadingRecordForRoute — new-record defaults gate (ETP-4741)', () =
       isLoadingRecordForRoute({ loading: false, defaultsLoading: true, selected: { id: '123' } }, false, '123'),
       'defaultsLoading only gates creation forms, never an existing record'
     ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-4744 — the initial-callout chain is armed by the arrival of the defaults
+// session, not by `editing` becoming non-empty.
+// ---------------------------------------------------------------------------
+describe('resolveInitialCalloutTriggers', () => {
+  const api = {
+    selectors: [
+      { field: 'businessPartner', entity: 'header', inputMode: 'search' },
+      { field: 'partnerAddress', entity: 'header', inputMode: 'dependent' },
+      { field: 'priceList', entity: 'header', inputMode: 'selector' },
+      { field: 'product', entity: 'lines', inputMode: 'selector' },
+      { field: 'warehouse', entity: 'header', inputMode: 'search' },
+    ],
+  };
+
+  it('resets (never arms) for a non-new record', () => {
+    expect(resolveInitialCalloutTriggers({
+      isNew: false, editing: { businessPartner: 'BP1' }, api, entity: 'header',
+    })).toEqual({ reset: true, ready: false, triggers: [] });
+  });
+
+  it('does NOT arm while the defaults session is still pending, even with a value present', () => {
+    // The regression: a keystroke in a plain field (here `documentNo`) while GET /defaults
+    // is in flight must not consume the one-shot latch.
+    expect(resolveInitialCalloutTriggers({
+      isNew: true,
+      editing: { documentNo: 'PO-TYPED' },
+      api,
+      entity: 'header',
+      defaultsPending: true,
+    })).toEqual({ reset: false, ready: false, triggers: [] });
+    expect(resolveInitialCalloutTriggers({
+      isNew: true,
+      editing: { businessPartner: 'BP1' },
+      api,
+      entity: 'header',
+      defaultsPending: true,
+    }).ready).toBe(false);
+  });
+
+  it('arms with the header non-dependent selectors once the session settled', () => {
+    const { reset, ready, triggers } = resolveInitialCalloutTriggers({
+      isNew: true,
+      editing: { documentNo: 'PO-TYPED', businessPartner: 'BP1', priceList: 'PL1' },
+      api,
+      entity: 'header',
+      defaultsPending: false,
+    });
+    expect(reset).toBe(false);
+    expect(ready).toBe(true);
+    expect(triggers.map(s => s.field)).toEqual(['businessPartner', 'priceList']);
+  });
+
+  it('excludes dependent selectors and selectors of another entity', () => {
+    const { triggers } = resolveInitialCalloutTriggers({
+      isNew: true,
+      editing: { businessPartner: 'BP1', partnerAddress: 'ADDR1', product: 'P1' },
+      api,
+      entity: 'header',
+      defaultsPending: false,
+    });
+    expect(triggers.map(s => s.field)).toEqual(['businessPartner']);
+  });
+
+  it('arms with an empty trigger list when the settled form holds only non-selector values', () => {
+    // The latch is allowed to be consumed here: a later manual selector pick fires its own
+    // callout through handleChange, and this effect must not fire a second one.
+    expect(resolveInitialCalloutTriggers({
+      isNew: true, editing: { documentNo: 'PO-1' }, api, entity: 'header', defaultsPending: false,
+    })).toEqual({ reset: false, ready: true, triggers: [] });
+  });
+
+  it('does not arm against an empty form (the latch must survive the initial /new render)', () => {
+    expect(resolveInitialCalloutTriggers({
+      isNew: true, editing: {}, api, entity: 'header', defaultsPending: false,
+    })).toEqual({ reset: false, ready: false, triggers: [] });
+  });
+
+  it('does not arm when editing is null or the api has no selectors', () => {
+    expect(resolveInitialCalloutTriggers({
+      isNew: true, editing: null, api, entity: 'header', defaultsPending: false,
+    }).ready).toBe(false);
+    expect(resolveInitialCalloutTriggers({
+      isNew: true, editing: { businessPartner: 'BP1' }, api: {}, entity: 'header', defaultsPending: false,
+    }).ready).toBe(false);
+    expect(resolveInitialCalloutTriggers({
+      isNew: true, editing: { businessPartner: 'BP1' }, api: null, entity: 'header',
+    }).ready).toBe(false);
+  });
+
+  it('treats an absent defaultsPending as "no defaults session" (prior behavior preserved)', () => {
+    const { ready, triggers } = resolveInitialCalloutTriggers({
+      isNew: true, editing: { businessPartner: 'BP1' }, api, entity: 'header',
+    });
+    expect(ready).toBe(true);
+    expect(triggers.map(s => s.field)).toEqual(['businessPartner']);
   });
 });
 
