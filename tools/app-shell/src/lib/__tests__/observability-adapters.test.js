@@ -116,6 +116,9 @@ describe('Datadog observability provider (behind the gateway)', () => {
   it('sends errors with their stack and only approved details', async () => {
     const { observability, calls } = await observedDatadog();
     const error = new TypeError('failed');
+    // A fixed stack: a real one carries this checkout's path, and a folder named like an id
+    // (schema_forge-ETP-5695) is rewritten to :id like any other id.
+    error.stack = 'TypeError: failed\n    at save (https://go.etendo.cloud/go/assets/index.js:1:2)';
     await observability.captureException(error, { component: 'header', password: 'secret', email: 'private@example.com' });
     const [, sentError, details] = calls.find(([method]) => method === 'addError');
     assert.equal(sentError.name, 'TypeError');
