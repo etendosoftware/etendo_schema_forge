@@ -110,7 +110,7 @@ export default function RowQuickActions({
   onClone,
   onEmail,
   onDelete,
-  onMenuActionExecuted, // (action, result) — host can refresh after execution
+  onMenuActionExecuted, // (action, result, row) — host can refresh after execution
   // Optional per-action config from decisions.json → window.rowQuickActions.actions.
   // Shape: { edit: { show: true, visibleWhen?: string }, duplicate: ..., email: ..., delete: ...,
   //          <processKey>: { show: 'fixed'|'kebab'|false, visibleWhen?: string } }
@@ -270,7 +270,7 @@ export default function RowQuickActions({
           return;
         }
         const result = await docAction.execute(row?.id, action.documentAction);
-        onMenuActionExecuted?.(action, result);
+        onMenuActionExecuted?.(action, result, row);
         return;
       }
       if (action.neoAction) {
@@ -306,12 +306,12 @@ export default function RowQuickActions({
           return;
         }
         const result = await neoAction.execute(row?.id, wireActionName);
-        onMenuActionExecuted?.(action, result);
+        onMenuActionExecuted?.(action, result, row);
         return;
       }
       if (action.onClick) {
         const result = await action.onClick({ row, windowName, apiBaseUrl, token });
-        onMenuActionExecuted?.(action, result);
+        onMenuActionExecuted?.(action, result, row);
         return;
       }
       // columnName-based AD process buttons require the detail-page hook (handleProcess)
@@ -325,7 +325,10 @@ export default function RowQuickActions({
       // {success:false} instead), so without this the host never heard about a failed
       // documentAction row action and the user saw nothing at all. Hand it the same
       // {success:false, message} shape the neoAction path already delivers.
-      onMenuActionExecuted?.(action, { success: false, message: err?.message });
+      // ETP-5577 — and its identity plus the row, so a period refusal can offer the calendar.
+      onMenuActionExecuted?.(action, {
+        success: false, message: err?.message, messageKeys: err?.messageKeys,
+      }, row);
     } finally {
       setInFlight(prev => {
         const next = { ...prev };

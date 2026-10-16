@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * ETP-5133 BUG-1 regression guard — pure-function coverage for
  * `growColumnWidth()`'s two branches, with no DOM/rendering involved at all
@@ -47,7 +48,8 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({ resolveIdentifier: (d, f) => d?.[
 vi.mock('@/lib/resolveColumnLabel.js', () => ({ resolveColumnLabel: (c) => c.label }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => String(v) }));
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({ applyCalloutUpdates: vi.fn() }));
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   columnMinWidthPx: () => 100,
   columnFlex: () => '1 0 100px',
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
