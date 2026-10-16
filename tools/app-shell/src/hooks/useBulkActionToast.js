@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 
 const STORAGE_KEY = 'bulkActionResult';
 
@@ -50,13 +51,15 @@ export function showBulkActionToast(ui, result) {
     // rather than by its text — the text carries AD line numbers (10, 20, 30…) that match no
     // literal and point at nothing the user can find in the document. Absent against a backend
     // that does not send them, in which case this is the pre-existing text-only translation.
-    toast.error(
-      translateBackendError(failed[0].message, ui, {
-        messageKeys: failed[0].messageKeys,
-        messageParams: failed[0].messageParams,
-      })
-      || ui('actionFailed'),
-    );
+    const text = translateBackendError(failed[0].message, ui, {
+      messageKeys: failed[0].messageKeys,
+      messageParams: failed[0].messageParams,
+    })
+      || ui('actionFailed');
+    // ETP-5577: a "period not open" refusal also offers the way to open it.
+    const recovery = periodNotAvailableToastOptions(failed[0].messageKeys, ui);
+    if (Object.keys(recovery).length > 0) toast.error(text, recovery);
+    else toast.error(text);
     return;
   }
 

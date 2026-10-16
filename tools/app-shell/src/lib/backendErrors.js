@@ -410,6 +410,14 @@ const BACKEND_ERROR_KEY_MAP = {
   // process"), the STATUS_DocumentLocked message DocumentPostingService names in `messageKeys`
   // when another posting process holds the record (or AcctServer cannot take its lock).
   OtherPostingProcessActive: 'backendError.recordBeingPosted',
+  // ETP-5577 — core `PeriodNotAvailable` ("The period does not exist or is not open"): raised by
+  // the completion procedures (C_INVOICE_POST, M_INOUT_POST…), named in `messageKeys` by
+  // DocumentPostingService (STATUS_PeriodClosed) and by the payment services. A productive
+  // tenant starts with every period never-opened, so this is its first refusal.
+  PeriodNotAvailable: 'backendError.periodNotAvailable',
+  // ETP-5577 — core `PeriodNotValid`: the same refusal raised by GL_JOURNAL_CHK_RESTRICT_TRG when a
+  // journal is saved with a date whose period is not open.
+  PeriodNotValid: 'backendError.periodNotAvailable',
   // ETP-5692 — the invoice post/unpost refusals (com.etendoerp.go CompletedInvoiceWriteFence,
   // InvoicePostingGate, InvoiceExchangeRateHandler, DocumentPostingService). These are NOT
   // AD_MESSAGE records: the backend sends plain English plus these stable identity strings, so
@@ -706,6 +714,23 @@ function matchZeroOrNegativeQtyProcess(msg) {
     ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX.length,
     -ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX.length,
   );
+  if (!products) return null;
+  return { products };
+}
+
+// InvoiceCompletionLineGuard.java (com.etendoerp.go — ETP-5710), `error.code = invoiceLinesWithoutAmount`
+// — raised when completing an invoice whose lines kept a net amount of 0. The lines are named by
+// product (the line numbers are internal, the UI never shows them), joined with ", " — a
+// locale-neutral separator, so the list passes through as one opaque {products} param (same shape
+// as matchInsufficientStockProcess).
+const INVOICE_LINES_NO_AMOUNT_PREFIX = 'The invoice cannot be completed: the lines of ';
+const INVOICE_LINES_NO_AMOUNT_SUFFIX = ' have a quantity and a price but a net amount of 0, so the totals would be wrong. Save those lines again so the amount is recalculated, then complete.';
+
+function matchInvoiceLinesWithoutAmount(msg) {
+  if (!msg.startsWith(INVOICE_LINES_NO_AMOUNT_PREFIX) || !msg.endsWith(INVOICE_LINES_NO_AMOUNT_SUFFIX)) {
+    return null;
+  }
+  const products = msg.slice(INVOICE_LINES_NO_AMOUNT_PREFIX.length, -INVOICE_LINES_NO_AMOUNT_SUFFIX.length);
   if (!products) return null;
   return { products };
 }
@@ -1100,6 +1125,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchInsufficientStockLine, 'backendError.insufficientStockLine'],
   [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
   [matchZeroOrNegativeQtyProcess, 'backendError.zeroOrNegativeQtyProcess'],
+  [matchInvoiceLinesWithoutAmount, 'backendError.invoiceLinesWithoutAmount'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
