@@ -1865,6 +1865,9 @@ Customer/Vendor Accounting, etc.).
    ETP-4565, and the per-tab `visibleWhenCapability` role gate added in ETP-5116 — used by
    `product`/`asset-group`/`assets`/`warehouse`/`contacts`'s Accounting tab(s) to hide behind
    `showAccountingFields`): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   A capability-hidden tab is also never fetched in the background (ETP-5648). When the
+   accounting tab is the window's *detail* tab (`detailEntity`, as in `product-category` and
+   `business-partner-category`), gate it with `window.detailVisibleWhenCapability` instead.
    **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
    (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
    every other entry, not just within its own group — see `docs/decisions-reference.md`'s
