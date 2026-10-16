@@ -938,7 +938,7 @@ ordinaria: another ordinaria declaration is already presented for this period").
 
 **Shared backend implementation.** `FiscalDeclCrudHandler#checkCorrectiveConsistency(clientId,
 orgId, model, year, period, excludeId, effectivelyCorrective)` is the single method behind both
-directions — returns a violation message or `null`. Three callers:
+directions — returns a violation message or `null`. Four callers:
 
 - `rejectCorrectiveConsistencyViolation` — the `PUT /fiscal{model}/declarations` guard. Fires
   whenever `previousStatus` is NOT already in `SUBMITTED_STATUSES`, regardless of whether the PUT
@@ -965,6 +965,20 @@ directions — returns a violation message or `null`. Three callers:
   check) could file a corrective declaration with AEAT with no presented ordinaria, or file a
   duplicate ordinaria, with the server accepting it. 349 has no equivalent gap — there is no AEAT
   telematic submit entity for it, only PUT-present and generate, both already gated.
+- `FiscalDeclCrudHandler#handleDeclPost` (CREATE, `POST /fiscal{model}/declarations` — ETP-5725
+  SENTINEL/QA FIX, BUG-1) — gated on the POST's own `status` being in `SUBMITTED_STATUSES`.
+  **Sentinel found the same gap pattern as review Blocker B1, one call site over**: a declaration
+  can be created directly via POST with ANY status, not just `draft`; `rejectCorrectiveConsistencyViolation`
+  (the PUT guard above) deliberately exits early once `previousStatus` is already submitted-family
+  (re-presentation is a different, already-blocked case) — so a row created straight into
+  `submitted`/`submitted_ext`/`submitted_ack` could never have this rule enforced on it afterward
+  by ANY later PUT either. POST does not accept `manualData`/identification at creation time (no
+  `MANUAL_DATA_KEY` handling anywhere in `handleDeclPost`), so `effectivelyCorrective` is always
+  `false` here — the corrective-without-ordinaria direction is structurally unreachable via POST,
+  not merely unchecked. The mirror direction (another ordinaria already presented) is fully
+  reachable, and is exactly what QA demonstrated: a direct POST with `status: "submitted_ack"` for
+  a period that already has a presented ordinaria sibling bypassed the rule entirely. `excludeId`
+  is `null` (the row does not exist yet).
 
 **`effectivelyCorrective` with no persisted row to trust.** Neither `generate` nor `submit` have a
 declaration id guaranteed to carry a flushed save (303's `handleGenerate`/`AeatSubmitFlow.jsx`
