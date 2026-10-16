@@ -1,8 +1,8 @@
 {
   "version": "0.14.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-10-09T15:04:44.887Z",
-  "checksum": "f416cc0a65e0c48a",
+  "updatedAt": "2026-10-15T12:37:56.770Z",
+  "checksum": "c6b4c9fb8c9e1e41",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -86,7 +86,6 @@
       "tabsBarPaddingX": "px-2",
       "primaryTabsVariant": "pill",
       "toolbarPaddingX": "px-2",
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "attachments": true,
       "customPanelTabs": [
@@ -2590,7 +2589,6 @@
       "tabsBarPaddingX": "px-2",
       "primaryTabsVariant": "pill",
       "toolbarPaddingX": "px-2",
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "attachments": true,
       "customPanelTabs": [
