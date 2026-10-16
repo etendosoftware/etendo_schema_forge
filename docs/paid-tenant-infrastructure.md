@@ -8,6 +8,11 @@
 > it caused an incident: the browser resolved it through ConfigCat while the backend resolved it
 > through local properties that were unset in every deployed environment, so accounts were charged
 > and then handed a Demo environment.
+>
+> **A third change since:** the hosted control plane now exists. Both ends read Datadog Feature
+> Flags first, with ConfigCat as the fallback (ETP-5751), so the "local control plane" wording in
+> §2.4, §2.5 and Part 5.1 is historical. Current state: `docs/feature-flags.md` and, for the backend,
+> `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md`.
 
 **About this document.** This is a single linear account of one feature: how a user on a
 free Etendo GO tenant gets a second, paid, productive one — and of the two systems built
@@ -323,7 +328,7 @@ combination per session, not one per render, because the flag is re-evaluated on
 the raw stream would be uncountable. The provider is part of the key on purpose: the hook is
 registered before the real control plane is ready, so the very first evaluation on every page
 load — practically every session, since the initial render is synchronous and the real provider
-needs an async import plus, for ConfigCat, a network round-trip — goes through OpenFeature's
+needs an async import plus, for a remote provider, a network round-trip — goes through OpenFeature's
 built-in no-op default. Deduplicating on value alone let that transient result permanently claim
 the session's report, silently swallowing every later evaluation once the real provider took
 over. And it **never disturbs evaluation** — the hook runs inside flag resolution, never awaits
@@ -332,11 +337,14 @@ and never throws, so a reporting failure cannot change what a flag resolves to.
 The `provider` value itself is pinned by `createFlagProvider`, not read as-is from the SDK:
 ConfigCat's own provider names itself from its JS class name, which a minifier can rename per
 build — seen as both `_ConfigCatWebProvider` and `ut` across different production deploys. Both
-mean the same live control plane; `createFlagProvider` now reports it as the stable `configcat`
-regardless of build.
+mean the same live control plane; `createFlagProvider` now reports it as the stable
+`ConfigCatWebProvider` regardless of build, and the Datadog Feature Flags provider (ETP-5751) as
+`datadog`.
 
-This hook is temporary by design: a hosted control plane reports exposures natively, and
-keeping both would double-count.
+A hosted control plane can report exposures natively, and keeping both would double-count. For
+Datadog Feature Flags (ETP-5751) the provider's own RUM tracking is switched off
+(`enableRumFeatureFlagTracking: false`) so this hook stays the single RUM exposure source; see
+`docs/feature-flags.md`.
 
 ## 2.6 Where flagged code is allowed to live
 

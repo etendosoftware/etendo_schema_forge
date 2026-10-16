@@ -293,13 +293,15 @@ describe('DataTable — render coverage', () => {
 
     // The sticky quick-actions cell fades into the row's own hovered background
     // (`--row-hover-bg`, set per row state), falling back to the card colour — not to a
-    // hardcoded slate literal that only matched the old translucent tint.
+    // hardcoded slate literal that only matched the old translucent tint. The fade ends at
+    // 12px (the cell's left padding) so the band under the buttons is opaque and the column
+    // the cell floats over never shows through them (Figma "Sticky Acciones").
     it('fades the quick-actions cell into the row hover background, with a card fallback', () => {
       const cols = [{ key: 'n', label: 'N', type: 'string' }];
       const rows = [{ id: 'rq1', n: 'a' }];
       render(<DataTable columns={cols} data={rows} rowQuickActions={{ enabled: true, onEdit: vi.fn() }} selectable={false} />);
       const cell = screen.getByTestId('rqa-rq1').closest('td');
-      const fade = 'bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card))))]';
+      const fade = 'bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]';
 
       expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining([
         `group-hover/row:${fade}`,

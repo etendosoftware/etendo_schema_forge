@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/windows/custom/shared/OcrSidePanel.jsx
+// @covers tools/app-shell/src/windows/custom/shared/UploadedFileViewer.jsx
+// @covers tools/app-shell/src/windows/custom/shared/FileLightbox.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -28,22 +31,9 @@ import { login } from '../../helpers/auth.js';
  * if a future regression ever re-reads it, this fixture returns an
  * obviously-wrong file name that would fail these tests immediately.
  *
- * Separately, ETP-4855 removed OcrSidePanel's tab bar (`role="tablist"` —
- * the "File" / "Messages" / "History" tabs, the latter two permanent
- * "coming soon" placeholders). OcrSidePanel now renders its single view
- * (`FileTab` → `DocumentView`) directly with no tabs at all — see
- * tools/app-shell/src/windows/custom/shared/OcrSidePanel.jsx. `DocumentView`
- * shows the resolved file's name in a plain
- * `<span className="truncate">{storedFile.fileName}</span>`, with no
- * data-testid reaching the DOM on that span or its container — the nearby
- * `FileText` icon carries the codemod-generated `FileText__c851a1` testid
- * (its hash suffix is derived from OcrSidePanel.jsx alone and appears
- * nowhere else in the app), which lucide-react forwards onto the rendered
- * `<svg>`. That icon and the file-name span are both direct children of the
- * same row `<div>`, so scoping through the icon's parent reliably isolates
- * the sidebar's rendered file name from the unrelated "Adjuntos" tab, which
- * fetches the same real-attachments endpoint and stays mounted (hidden, not
- * unmounted) while the "General" tab is active.
+ * Separately, ETP-4855 removed OcrSidePanel's tab bar and ETP-5518 its file-name
+ * header row: the sidebar now renders only the viewer (UploadedFileViewer), so the
+ * file name is observable only in the lightbox header (`file-lightbox-title`).
  *
  * These two suites render BOTH surfaces for the SAME record id and assert
  * the preview shows the exact same file the sidebar/tab already show. This
@@ -95,6 +85,17 @@ async function installPreviewFileMock(page, response) {
  *
  * PDF bytes are returned for any single-file download GET (`/file/{id}`).
  */
+// A parseable one-page PDF: the sidebar viewer only exposes its expand button
+// (`file-viewer-expand`) once pdf.js reports numPages > 0, so opaque bytes would
+// keep the lightbox unreachable. pdf.js rebuilds a missing xref table, so none is needed.
+const MINIMAL_PDF = Buffer.from(
+  '%PDF-1.4\n'
+  + '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n'
+  + '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n'
+  + '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n'
+  + 'trailer<</Root 1 0 R/Size 4>>\n%%EOF\n',
+);
+
 async function installAttachmentsMock(page, tableName, items) {
   await page.route('**/sws/neo/attachments/**', async (route) => {
     const url = route.request().url();
@@ -111,7 +112,7 @@ async function installAttachmentsMock(page, tableName, items) {
         await route.fulfill({
           status: 200,
           contentType: 'application/pdf',
-          body: Buffer.from('%PDF-1.4 real supplier document bytes'),
+          body: MINIMAL_PDF,
         });
       } else {
         route.fallback();
@@ -144,15 +145,25 @@ function previewDownloadAnchor(modal, fileName) {
   return modal.locator(`a[title*="${fileName}"]`);
 }
 
-// Scopes to OcrSidePanel's rendered file-name row via the `FileText__c851a1`
-// testid — a codemod-generated id whose hash suffix is unique to
-// OcrSidePanel.jsx (verified: no other file in the app renders it). OcrSidePanel
-// no longer has a tablist (ETP-4855) to anchor on, and neither `DocumentView`'s
-// file-name `<span>` nor its container forward a testid to the DOM, so the
-// icon — which lucide-react does forward onto its `<svg>` — is the only stable
-// anchor. The icon and the file-name span are siblings in the same row `<div>`.
-function sidebarFileRow(page) {
-  return page.locator('[data-testid="FileText__c851a1"]').locator('xpath=..');
+// ETP-5518 removed the file-name row (StoredFileHeader) from OcrSidePanel: a sidebar
+// with a stored file now shows only the viewer, and the name appears solely in the
+// lightbox header. So the sidebar's resolved file is read the way a user reads it:
+// expand the viewer and check the lightbox title, and the attachment id the viewer
+// downloaded (GET /attachments/file/{id}) is captured as the second signal.
+function attachmentFileRequest(page, attachmentId) {
+  return page.waitForRequest(
+    (req) => req.method() === 'GET' && req.url().includes(`/attachments/file/${attachmentId}`),
+    { timeout: 15_000 },
+  );
+}
+
+async function expectSidebarShowsFile(page, attachment) {
+  const expand = page.getByTestId('file-viewer-expand').first();
+  await expect(expand).toBeVisible({ timeout: 15_000 });
+  await expand.click();
+  await expect(page.getByTestId('file-lightbox-title')).toHaveText(attachment.name, { timeout: 5_000 });
+  await page.getByTestId('file-lightbox-close').click();
+  await expect(page.getByTestId('file-lightbox')).toBeHidden({ timeout: 5_000 });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -228,21 +239,14 @@ test.describe('Purchase Invoice — attachment/preview sync (ETP-4315, mocked)',
     await installAttachmentsMock(page, 'C_Invoice', [PI_REAL_ATTACHMENT]);
     await installPurchaseInvoiceHeaderMocks(page, [PI_ROW]);
 
+    const downloaded = attachmentFileRequest(page, PI_REAL_ATTACHMENT.id);
     await page.goto(`/purchase-invoice/${PI_ID}`);
     await page.waitForLoadState('domcontentloaded');
-    // The sidebar only renders the "has file" branch (the one with the
-    // FileText testid sidebarFileRow scopes to) once useMainAttachment's two
-    // SEQUENTIAL fetches (fetchMainAttachment, then fetchAttachmentBlobUrl)
-    // both resolve — on top of purchase-invoice's own heavier HeaderPage load
-    // (combos, lines, evaluate-display). Wait for the network to settle
-    // before polling the DOM, so a slow/cold run doesn't race the 15s budget.
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
 
-    // See sidebarFileRow() above for why this is the correct scope now that
-    // OcrSidePanel no longer renders a tablist (ETP-4855).
-    const fileRow = sidebarFileRow(page);
-    await expect(fileRow).toBeVisible({ timeout: 15_000 });
-    await expect(fileRow.getByText(PI_REAL_ATTACHMENT.name)).toBeVisible({ timeout: 15_000 });
+    // The viewer downloads the record's real attachment (id from /main) ...
+    await downloaded;
+    // ... and the user-visible name of what the sidebar shows is the real file.
+    await expectSidebarShowsFile(page, PI_REAL_ATTACHMENT);
   });
 
   test('list-view preview modal must show the SAME file as the sidebar for the same record', async ({ page }) => {
@@ -253,13 +257,11 @@ test.describe('Purchase Invoice — attachment/preview sync (ETP-4315, mocked)',
 
     // First confirm the sidebar's ground truth for this exact record, same
     // as the test above — this is the file the preview is expected to match.
+    const downloaded = attachmentFileRequest(page, PI_REAL_ATTACHMENT.id);
     await page.goto(`/purchase-invoice/${PI_ID}`);
     await page.waitForLoadState('domcontentloaded');
-    // See the sibling test above for why this wait matters here too.
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-    const fileRow = sidebarFileRow(page);
-    await expect(fileRow).toBeVisible({ timeout: 15_000 });
-    await expect(fileRow.getByText(PI_REAL_ATTACHMENT.name)).toBeVisible({ timeout: 15_000 });
+    await downloaded;
+    await expectSidebarShowsFile(page, PI_REAL_ATTACHMENT);
 
     // Now open the list-view preview (GenericPreviewModal) for the SAME
     // record and compare. It resolves via useMainAttachment — the same

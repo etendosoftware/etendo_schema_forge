@@ -1,5 +1,8 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailTabStrip.jsx
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
+import { openFormViewTab } from '../../helpers/secondaryTabsInteractions.js';
 
 /**
  * Contacts client-cache — request-amplification counter (mocked). ETP-4564 / SEC T-01.
@@ -246,10 +249,10 @@ test.describe('Contacts client-cache — request amplification (mocked)', () => 
     // ── Step 3: visit each of the 5 child tabs ───────────────────────────
     // Children were fetched eagerly on detail open; clicking each tab must not
     // add child GETs (already-loaded + cache), so we snapshot after visiting.
+    // Contacts has 6 tabs, so the strip shows 4 + a "More" menu and picking a hidden tab
+    // rotates the dynamic slot; openFormViewTab reaches each one wherever it currently is.
     for (const entity of CHILD_ENTITIES) {
-      const tab = page.getByTestId(`tab-${entity}`);
-      await expect(tab).toBeVisible({ timeout: 10_000 });
-      await tab.click();
+      await openFormViewTab(page, entity);
     }
     const afterFirstOpen = snap(counts);
 
@@ -257,9 +260,7 @@ test.describe('Contacts client-cache — request amplification (mocked)', () => 
     expect(get(afterFirstOpen, 'attachments')).toBe(0);
 
     // ── Step 4: open the Attachments tab ─────────────────────────────────
-    const attTab = page.getByTestId('tab-custom:attachments');
-    await expect(attTab).toBeVisible({ timeout: 10_000 });
-    await attTab.click();
+    await openFormViewTab(page, 'custom:attachments');
     await expect
       .poll(() => get(counts, 'attachments'), { timeout: 10_000 })
       .toBeGreaterThanOrEqual(1);

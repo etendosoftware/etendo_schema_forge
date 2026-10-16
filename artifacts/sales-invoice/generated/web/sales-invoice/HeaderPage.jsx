@@ -55,7 +55,8 @@ const draftMode = {
   "keepSaveWhenCompletedFields": [
     "accountingDate",
     "project",
-    "costcenter"
+    "costcenter",
+    "aeatsiiErrorRegistral"
   ],
   "editableLineFieldsWhenCompleted": [
     "project",

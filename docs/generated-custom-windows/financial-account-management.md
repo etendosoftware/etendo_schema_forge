@@ -117,7 +117,7 @@ not a change.
     `AutoMatchSupport.computeAmountTolerance()` / `withinDateWindow()` apply them. They are
     unrelated to the `0.01` epsilon that gates the `Conciliar` button.
   - **Difference settings** (`GlItemDifferenceSection`, ETP-4795, **all account types**):
-    **Cuenta contable** — a `ChipSelect` over `useGLItemLookup`, persisting
+    **Cuenta contable** — a `ChipSelect` (thin wrapper over the shared `CreatableSearchSelect`, the same selector as "País"; its chevron toggles the list, ETP-5728) over `useGLItemLookup`, persisting
     `FIN_Financial_Account.EM_Aprm_Glitem_Diff` (DAL `aprmGlitemDiff`, an OBUISEL selector on
     `C_GLItem`). **This is the accounting account the residual amount is posted against when a cash
     close or a reconciliation does not balance**; it is the same column Classic's manual
@@ -885,7 +885,7 @@ consequence, not a side effect: it is the same bug on both sides.
 `BankConnectionFlowUI`'s `<Dialog open={connecting}>` is controlled with no `onOpenChange` — so
 the X was rendered but inert, and Escape / outside-click are `preventDefault()`-ed as well. It is
 now hidden with `[&>button]:hidden` on the `DialogContent` className, the same idiom used by
-`AddPaymentModal`, `DetailView`, `NewMovementWizard` and `NewTransactionModal`. The flow is
+`AddPaymentModal`, `DetailView` and `NewTransactionModal` (the former `NewMovementWizard` shared it until it was deleted in ETP-5728). The flow is
 cancelled by closing the Salt Edge popup window, which `waitForConnection`'s `popup.closed` poll
 picks up within 500 ms (`useBankConnectionActions.js:70-80`), resolving `null` so nothing is
 created or linked and the user can retry without reloading. Wiring the X instead would have
@@ -1252,8 +1252,8 @@ Transfer* button (`aprmFundsTrans`) is now listed as withdrawn with `useInstead:
 
 **Add payment from the account is not offered — to people or agents.** The endpoint
 (`?action=create-payment`, `AddPaymentService`) still exists, but its only SPA caller,
-`NewMovementWizard`, has been mounted nowhere since ETP-4500 replaced it with
-`NewTransactionModal`. Payments and collections are registered from the invoice
+`NewMovementWizard`, was mounted nowhere since ETP-4500 replaced it with
+`NewTransactionModal`, and was deleted in ETP-5728. Payments and collections are registered from the invoice
 (`registerPayment`), so the MCP does not declare it either.
 
 Posting stays on `financial-account/transaction` (`post` / `unpost`). Runtime reference:
