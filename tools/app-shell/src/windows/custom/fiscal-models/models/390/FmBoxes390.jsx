@@ -251,6 +251,33 @@ function EditInOrganization({ ctx }) {
   );
 }
 
+const TAXPAYER_NAME_FIELDS = new Set(['socialName', 'surname1', 'surname2', 'firstName']);
+const REPRESENTATIVE_NAME_FIELDS = new Set(['personRepresentative', 'legalRepresentative']);
+
+/**
+ * Non-blocking notice for the identity texts classic cuts in the file (useOrg390Identity
+ * `nameWarnings`, filtered to the fields of one block).
+ */
+function NameTruncationWarnings({ ctx, fields, testId }) {
+  const warnings = (ctx.orgIdentity?.nameWarnings ?? []).filter(w => fields.has(w.field));
+  if (warnings.length === 0) return null;
+  return (
+    <div className="fm-390-warnings" role="status" data-testid={testId}>
+      <TriangleAlert size={14} strokeWidth={1.75} />
+      <ul>
+        {warnings.map((w, i) => (
+          <li key={`${w.field}-${i}`}>
+            {ctx.t('fm.m390.ident.truncated', {
+              field: ctx.t(`fm.m390.ident.field.${w.field}`, { name: w.label ?? '' }),
+              limit: w.limit,
+            })}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function IdentityBlock({ ctx }) {
   const org = ctx.orgIdentity;
   return (
@@ -259,6 +286,7 @@ function IdentityBlock({ ctx }) {
         <ReadOnlyField label={ctx.t('fm.ident.nif')} value={org?.nif} testId="FmBoxes390__nif" />
         <ReadOnlyField label={ctx.t('fm.ident.nombre')} value={org?.name} testId="FmBoxes390__name" />
       </div>
+      <NameTruncationWarnings ctx={ctx} fields={TAXPAYER_NAME_FIELDS} testId="FmBoxes390__nameTruncated" />
       <FlagCheckbox flag={FLAG.MONTHLY_RETURN} labelKey="fm.m390.flag.monthly_return" ctx={ctx} />
       <FlagCheckbox flag={FLAG.CONCURSO} labelKey="fm.m390.flag.concurso" ctx={ctx} />
       {isFlagOn(ctx.inputs, FLAG.CONCURSO) && (
@@ -369,6 +397,7 @@ function RepresentativeBlock({ ctx }) {
   return (
     <div className="fm-aeat-ident">
       {body ?? <p className="fm-390-hint" data-testid="FmBoxes390__noRepresentative">{ctx.t('fm.m390.representative.empty')}</p>}
+      <NameTruncationWarnings ctx={ctx} fields={REPRESENTATIVE_NAME_FIELDS} testId="FmBoxes390__repNameTruncated" />
       <EditInOrganization ctx={ctx} />
     </div>
   );

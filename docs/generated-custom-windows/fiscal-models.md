@@ -3485,16 +3485,16 @@ below 1200 px) and Anterior / Siguiente at the bottom:
 
 | # | Block | Content | Origin |
 |---|---|---|---|
-| 1 | Identificación | NIF, razón social; marks "Inscrito en el registro de devolución mensual" (`ISMONTHLYRETURN`), "Declarado en concurso de acreedores en el ejercicio" (`ConcursoAcr`) and, under it, "… en el último periodo" (`ConcursoUltPer`) | NIF/name from `/session`, read-only; marks manual |
+| 1 | Identificación | NIF and the name the file carries (legal entity: `AD_Org.socialName`, or `name` when empty; natural person `aeat390Isperson`: `aeat390Surname1` + `aeat390Surname2` + `aeat390Firstname` of the Organization information); marks "Inscrito en el registro de devolución mensual" (`ISMONTHLYRETURN`), "Declarado en concurso de acreedores en el ejercicio" (`ConcursoAcr`) and, under it, "… en el último periodo" (`ConcursoUltPer`) | NIF from `/session`, name from `organization/organization` + `organization/information`, read-only; marks manual |
 | 2 | Devengo | Ejercicio, tipo, identificador anterior, "por rectificación de cuotas" | read-only reflection of the header Tipo |
 | 3 | Datos estadísticos | IAE activities (activity, key, epígrafe, principal first); mark "operaciones con terceras personas" (`YEARLY_BP_DECLARATION`) | `organization/actividadesDelIae`, read-only + "Editar en Organización" |
 | 4 | Representante | Natural person: `information.aeat390RepNif/RepName`; otherwise the first 3 `representanteLegal` rows by line (NIF, name, power date, notary) | Organization, read-only + "Editar en Organización" |
 | 5 | IVA devengado | Régimen ordinario and intra-EU goods/services by rate (0, 2, 4, 5, 7.5, 10, 21 %), [27]/[28], [29]/[30], [31]/[32], totals [33]/[34] and [47] | calculated |
-| 6 | IVA deducible | Interior corrientes / bienes de inversión, importaciones, intra-EU (per rate + group totals [48]…[59], [597]/[598]), [639]/[62], [63]; manual [660]/[661]; total [64] | calculated; [660]/[661] manual |
-| 7 | Resultado liquidación anual | [65] total, [658] manual, [84] total, [659] manual, [85] manual (disabled AND cleared in territory mode; refused while [93] has a value), [86] total | |
+| 6 | IVA deducible | Interior corrientes / bienes de inversión, importaciones, intra-EU (per rate + group totals [48]…[59], [597]/[598]), [639]/[62], [63]; manual [660]/[661]; total [64] (deductible cuotas + [661], as the classic file writes it) | calculated; [660]/[661] manual |
+| 7 | Resultado liquidación anual | [65] total (= [47] − [64]), [658] manual, [84] total (= [65] + [658]), [659] manual, [85] manual (disabled AND cleared in territory mode; refused while [93] has a value), [86] total | |
 | 8 | Tributación por territorio | Toggle "Tributo a varias Administraciones"; % [87]–[91] (each 0–99), [92] total, [93] manual (refused while [85] has a value), [94] total; inline error when the percentages do not add up to 100 % | turning the toggle off clears the territory inputs |
 | 9 | Resultado de las liquidaciones | Per month "A ingresar" / "A devolver" (`INGRESAR_xx` / `DEVOLVER_xx`; the "A devolver" column is disabled unless `ISMONTHLYRETURN = 'Y'`), totals [95] / [96], [97], [98], [662] manual; inline error when DEVOLVER_12 and [97] are both filled, amber warning when [98] is filled with [96] or [97] | preloaded from the 303s in a later phase |
-| 10 | Volumen de operaciones | [99] [103] [104] [105] [110] [125] [126] calculated, [127] [128] manual, [106] [107] (subtracted), total [108], [112] manual (not added) | |
+| 10 | Volumen de operaciones | [99] [103] [104] [105] [110] [125] [126] calculated, [127] [128] manual, [106] [107] (subtracted), total [108] | [112] is not shown: it is not in the 2025 model (AEAT DR390e2025) and classic never writes it from 2021 on; an old draft's `390OTHER_UEMENBER` is dropped on save |
 | 11 | Operaciones específicas | [230] [109] [231] [232] [113] [523] calculated, [111] manual | |
 
 Out of scope and not shown (the backend may still return them): criterio de caja, recargo de
@@ -3527,10 +3527,21 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
   investment-goods regularization cannot declare it in either system; adding it needs a GO-side input
   that post-patches the classic file (page 3, position 149).
 - **Rates without operations** are folded behind "Sin operaciones (N tipos) · Mostrar".
-- **Live derivation:** the input-dependent boxes ([84]–[86], [92]–[94], [95]/[96], echoed inputs,
-  [108]) are recomputed on screen by `deriveInputBoxes`, a mirror of the backend's
-  `Fiscal390DerivedBoxes` (same formulas, cents arithmetic). The backend stays authoritative:
-  Calcular and the generated file recompute server-side.
+- **Live derivation:** the input-dependent boxes ([64]/[65] through [661], [84]–[86], [92]–[94],
+  [95]/[96], echoed inputs, [108]) are recomputed on screen by `deriveInputBoxes`, a mirror of the
+  backend's `Fiscal390DerivedBoxes` (same formulas, cents arithmetic). The backend stays
+  authoritative: Calcular and the generated file recompute server-side.
+- **[661] and screen = file.** Classic adds [661] to [64] and takes it off [65] only while writing
+  the TXT (page 4), so the screen does the same; in liquidation mode [84] = [65] + [658] (no second
+  [661]). In territory mode the classic file prints the territory [84] (and so [92]/[94]) WITHOUT
+  taking [661] off — [84] = [65] + [661] + [658] — a classic inconsistency the screen reproduces so
+  every box shown equals the file. Detail: `com.etendoerp.go/docs/aeat-390-endpoints.md`.
+- **Name truncation notice.** Classic cuts the identity texts in the file (`AEAT390String`): razón
+  social 37 characters; a natural person's first name and each surname 15; the natural-person
+  representative name 37; each legal representative name 36. Lengths are measured on what the file
+  keeps (upper case, accents folded, characters outside `[A-Z0-9. ]` — Ñ included — dropped). A
+  longer text shows a non-blocking amber notice in Identificación / Representante ("La razón social
+  se recortará a 37 caracteres en el fichero."); Generar is not blocked.
 - **Box search:** "Buscar casilla" + Enter — a number (`86`, `[86]`, `086`) or a concept fragment
   (accent/case-insensitive) — opens the block, scrolls to the cell, focuses it if editable and
   highlights it for 2.5 s; "No se encontró la casilla" otherwise.
@@ -4206,7 +4217,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `models/390/FmBoxes390.jsx` | Modelo 390 "Casillas" tab — block index, box search, origin legend, blocks |
 | `models/390/fm390Layouts.js` | Modelo 390 declarative layout (11 blocks), search index, `deriveInputBoxes`, `buildManualData390` |
 | `models/390/fm390Api.js` | `/fiscal390/boxes`, `/modified`, `/generate` requests |
-| `models/390/useOrg390Identity.js` | Organization data of the read-only blocks (session, information, IAE activities, legal representatives) |
+| `models/390/useOrg390Identity.js` | Organization data of the read-only blocks (session, organization header, information, IAE activities, legal representatives); the file's taxpayer name and the name-truncation notices |
 | `models/390/newDeclWarning390.js` | "Nueva declaración" notice: 303s of the year missing |
 | `fiscalPeriods.js` | `ANNUAL_PERIOD` (`'0A'`) and annual helpers |
 | `useOrgSiiStatus.js` | Is the selected organization in the SII (catalog warning for 390) |

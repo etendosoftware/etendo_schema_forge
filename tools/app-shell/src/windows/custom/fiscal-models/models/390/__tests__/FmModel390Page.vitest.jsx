@@ -31,12 +31,14 @@ vi.mock('../fm390Api.js', () => ({
   checkModified390: vi.fn(),
   generatedFileName: () => '390_0A_2026.txt',
 }));
+const orgIdentityMock = vi.hoisted(() => ({ nameWarnings: [] }));
 vi.mock('../useOrg390Identity.js', () => ({
   default: () => ({
     loaded: true, nif: 'B12345678', name: 'Acme SL',
     activities: [{ id: 'a1', activity: 'Comercio', type: 'A', code: '651.1', isDefault: true }],
     isPerson: false, personRepresentative: null,
     representatives: [{ id: 'r1', nif: '12345678Z', name: 'Ana Pérez', powerDate: '2024-03-05', notary: 'Notaría 1' }],
+    nameWarnings: orgIdentityMock.nameWarnings,
   }),
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
@@ -105,6 +107,7 @@ const props = () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  orgIdentityMock.nameWarnings = [];
   persistManualData.mockResolvedValue({ ok: true });
   generate390File.mockResolvedValue({ ok: true });
   fetchBoxes390.mockResolvedValue(PAYLOAD);
@@ -147,6 +150,25 @@ describe('FmModel390Page — skeleton', () => {
     goToBlock('representante');
     expect(screen.getByTestId('FmBoxes390__representatives').textContent).toContain('Ana Pérez');
     expect(screen.getByTestId('FmBoxes390__editOrganization')).toBeTruthy();
+  });
+
+  it('shows no name-truncation notice when every name fits', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    expect(screen.queryByTestId('FmBoxes390__nameTruncated')).toBeNull();
+  });
+
+  it('lists each name the file will cut in its own block, without blocking Generar', () => {
+    orgIdentityMock.nameWarnings = [
+      { field: 'socialName', limit: 37 },
+      { field: 'legalRepresentative', limit: 36, label: '12345678Z' },
+    ];
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    const ident = screen.getByTestId('FmBoxes390__nameTruncated');
+    expect(ident.querySelectorAll('li')).toHaveLength(1);
+    expect(ident.textContent).toContain('fm.m390.ident.truncated');
+    goToBlock('representante');
+    expect(screen.getByTestId('FmBoxes390__repNameTruncated').querySelectorAll('li')).toHaveLength(1);
+    expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(false);
   });
 
   it('renders the calculated boxes of IVA devengado and folds the rates without operations', () => {
