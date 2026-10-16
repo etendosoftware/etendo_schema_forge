@@ -323,9 +323,9 @@ Handler precedence: `documentAction` > `columnName` > `action` > `component` > e
 
 **Save-before-action guard (ETP-4940).** Before invoking a `documentAction` entry, `DetailMoreActionsMenu.jsx`'s `runDocumentAction` now calls `maybeSaveBeforeConfirm` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`) to persist any pending header edit first — otherwise an edit made without clicking Save first was silently discarded, the action running against the last-persisted value. On save failure the action does not run (the existing `handleSave` error toast surfaces the failure). **Known gap:** unlike the draftMode Confirm button (which guards on the fuller `isDirty` — header OR line-edit/add-row state), this guard is scoped to `hook.isDirtyHeader` only, so a pending line-row edit with a clean header is not saved before a kebab `documentAction` fires. This is currently unreachable via any shipped generated window — the only kebab `documentAction` is `reactivate` (RE), which only appears once a document is already Completed, where lines are normally read-only — but it is pinned by an explicit regression test (`DetailMoreActionsMenu.saveBeforeConfirm.vitest.jsx`, look for "KNOWN GAP W1") so it does not silently widen if a future window wires a kebab action for a non-completed status.
 
-**Dynamic kebab entries — `customComponents.moreMenuContent`.** When an entry's caption or visibility depends on more than the document status or a record field (e.g. the org's fiscal configuration), declare a component instead: `"customComponents": { "moreMenuContent": "<Component>" }`. It is rendered inside the menu after the `menuActions` items and receives `data`, `recordId`, `token`, `apiBaseUrl`, `onClose`, `onRefresh`; returning `null` hides it. The menu unmounts it on close (a click inside a modal closes the menu too), so an entry that opens a modal must delegate the modal to a host that the window mounts **unconditionally** — not to a sibling that may itself be hidden, such as a topbar button.
+**Dynamic kebab entries — `customComponents.moreMenuContent`.** When an entry's caption or visibility depends on more than the document status or a record field (e.g. the org's fiscal configuration), declare a component instead: `"customComponents": { "moreMenuContent": "<Component>" }`. It is rendered inside the menu after the `menuActions` items and receives `data`, `recordId`, `token`, `apiBaseUrl`, `onClose`, `onRefresh` and `isDirty` (the header has unsaved edits — `hook.isDirtyHeader`, header fields only, not pending line edits; ETP-5700); returning `null` hides it. The menu unmounts it on close (a click inside a modal closes the menu too), so an entry that opens a modal must delegate the modal to a host that the window mounts **unconditionally** — not to a sibling that may itself be hidden, such as a topbar button.
 
-Example (ETP-5700): `SifSendMenuItem` (`tools/app-shell/src/windows/custom/shared/`, re-exported from `artifacts/{sales,purchase}-invoice/custom/`) computes the pending fiscal targets with `useInvoiceSifSending` (the same hook as the topbar `SendToSifButton`), closes the menu and calls `requestSifSendModal(specName, recordId, pendingTargets)` from `sifSending.js`. That dispatches the `sif:open-send-modal` window event; `SifSendModalHost`, which the invoice window wrapper (`index.jsx`) renders next to the form for as long as a record is open, filters it with `isSifSendRequestFor` (same spec, same record id) and portals the shared `SifSendingModal`. After a successful send it fires `${specName}:invoice-updated` so the topbar refreshes the record.
+Example (ETP-5700): `SifSendMenuItem` (`tools/app-shell/src/windows/custom/shared/`, re-exported from `artifacts/{sales,purchase}-invoice/custom/`) computes the pending fiscal targets with `useInvoiceSifSending`, closes the menu and calls `requestSifSendModal(specName, recordId, pendingTargets)` from `sifSending.js`. That dispatches the `sif:open-send-modal` window event; `SifSendModalHost`, which the invoice window wrapper (`index.jsx`) renders next to the form for as long as a record is open, filters it with `isSifSendRequestFor` (same spec, same record id) and portals the shared `SifSendingModal`. After a successful send it fires `${specName}:invoice-updated` so the topbar refreshes the record. Since ETP-5700 this kebab entry is the invoice form view's only send entry point: the topbar `SendToSifButton` was removed because the action showed twice.
 
 ```json
 "customComponents": { "moreMenuContent": "SifSendMenuItem" }
@@ -336,7 +336,7 @@ Example (ETP-5700): `SifSendMenuItem` (`tools/app-shell/src/windows/custom/share
 <SifSendModalHost apiBaseUrl={apiBaseUrl} recordId={recordId} />
 ```
 
-Known limitation of this pattern: the kebab entry has no save handle, so it does not flush pending header edits before sending (the topbar button does). Field reference: `docs/decisions-reference.md` → Custom Components.
+The kebab content has no save handle, so it cannot flush pending header edits itself. An entry whose action must see the saved values should use `isDirty` to refuse to run on a dirty form: `SifSendMenuItem` renders disabled (`aria-disabled`, dimmed) with the `sendToSifSaveFirst` tooltip ("Guarda los cambios antes de enviar") and ignores clicks until the user saves. Field reference: `docs/decisions-reference.md` → Custom Components.
 
 **The ⋮ button auto-hides when empty.** `DetailView` only renders the "more" button when, for the current record state, there is at least one visible `menuActions` entry **or** a `customComponents.moreMenuContent` is set. If every action is gated out (e.g. all `visibleWhenStatus: "CO"` while the document is in Draft), the button is not shown at all — it never renders as an empty, clickable dropdown.
 
@@ -640,13 +640,15 @@ generator compiles into the `listViewOptions` prop it passes to `ListView`),
 `hideBulkDelete` has **no decisions.json/generator wiring yet** — that
 compilation step lives in the generator (`schema_forge_core`, out of scope for
 this sub-task). Today the only way to set it is to pass `listViewOptions`
-directly from a hand-written `windows/custom/{window}/index.jsx` wrapper, the
-same way `contacts` does it. **That object REPLACES — it does not merge with —
+directly from a hand-written `windows/custom/{window}/index.jsx` wrapper (no
+window does so today — `contacts`, the only former user, migrated to the
+generic action in ETP-5758). **That object REPLACES — it does not merge with —
 the `listViewOptions` the generated page already passes to `ListView`**, so the
 wrapper must repeat every flag the generated page sets (`hidePrint`,
 `hideCounter`, `hideLink`, …) alongside `hideBulkDelete`, or those get silently
-dropped. See `tools/app-shell/src/windows/custom/contacts/index.jsx` for the
-canonical example.
+dropped. `tools/app-shell/src/windows/custom/contacts/index.jsx` shows the
+replace-not-merge pattern (it repeats the generated flags, without
+`hideBulkDelete`).
 
 > **ETP-4644:** the selection bar's "Vista Previa" (eye) button — and its
 > `listViewOptions.hideEye` / `hideEyeCount` opt-out flags — were removed
@@ -654,13 +656,15 @@ canonical example.
 > apply to any window, so it is gone unconditionally, with no flag needed or
 > supported anymore.
 
-**Known gap — `contacts`:** `contacts` sets `hideBulkDelete: true`, but this
-does **not** mean "this window has no bulk delete." `contacts` has its own,
-older bulk-delete affordance (a trash + X button pair rendered via
-`selectionBarRightActions`, predating this mechanism) that was **not**
-unified with `useBulkRowDelete` in this sub-task — that migration is tracked
-as a follow-up. Read `hideBulkDelete: true` on a window as "has a different,
-not-yet-migrated bulk-delete," never as "has none."
+**`contacts` migrated (ETP-5758):** `contacts` used to set `hideBulkDelete: true`
+and render its own, older bulk delete (a trash button via
+`selectionBarRightActions` plus its own confirm dialog). That dialog closed
+before the deletes ran and left the trash button enabled, so a user could
+launch several batches over the same rows. It now uses the generic action,
+whose dialog stays open and read-only (buttons disabled, no Esc/overlay close)
+until the batch settles, while the toolbar button is `disabled={bulkDeleting}`.
+A window that opts out with `hideBulkDelete` and rolls its own bulk delete must
+give it the same in-flight guard.
 
 **`listViewOptions.hideListBar` gates only the IDLE list bar — never the
 selection bar (ETP-4658 regression fix).** `hideListBar` exists for windows whose
@@ -965,7 +969,7 @@ auto-inserted after each):
 
 Because the shell no longer provides its own cancel/X affordance for callers
 to duplicate, any caller migrating from the old `LinesSelectionBar` (or a
-hand-rolled bar, like `contacts`' `selectionBarRightActions` and Financial
+hand-rolled bar, like `contacts`' former `selectionBarRightActions` and Financial
 Accounts' `BulkDeleteSelectionBar`) should **drop its own standalone X
 button** — `SelectionToolbar` always renders one as the trailing segment.
 

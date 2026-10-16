@@ -665,3 +665,7 @@ works; one document may now have several returns (the old 409 "A return already 
   (`agent-prompts/return-material-receipt/spec.md`) now also describes the `createReturn` fast path and the cap. The
   classic "Pick/Edit Lines" button (`RM_Receipt_PickEdit`, no process) redirects to `importShipmentLines` through
   `MCP_CONFIG`. Currency is unchanged (ETP-5704).
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the document's accounting date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

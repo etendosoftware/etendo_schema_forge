@@ -1,0 +1,80 @@
+{
+  "id": "accounting-calendar",
+  "schemaVersion": 1,
+  "revision": 2,
+  "titleKey": "walkthroughCalendarTitle",
+  "descriptionKey": "walkthroughCalendarDescription",
+  "navPathSpeedMs": 3000,
+  "steps": [
+    {
+      "id": "calendar-list",
+      "route": "/calendar",
+      "navTimeoutMs": 15000,
+      "navPath": [
+        {
+          "targetTestId": "sidebar-expand",
+          "optional": true,
+          "timeoutMs": 800
+        },
+        {
+          "targetTestId": "menu-group-finance",
+          "skipIf": {
+            "targetTestId": "menu-item-calendar"
+          }
+        },
+        {
+          "targetTestId": "menu-item-calendar"
+        }
+      ],
+      "targetTestId": "list-view",
+      "titleKey": "walkthroughCalendarStepListTitle",
+      "bodyKey": "walkthroughCalendarStepListBody",
+      "placement": "center",
+      "advance": {
+        "on": "manual"
+      }
+    },
+    {
+      "id": "next-year",
+      "route": "/calendar",
+      "targetTestId": "action-new",
+      "titleKey": "walkthroughCalendarStepNextYearTitle",
+      "bodyKey": "walkthroughCalendarStepNextYearBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "manual"
+      }
+    },
+    {
+      "id": "open-year",
+      "route": "/calendar",
+      "target": "tr[data-testid^=\"row-\"]",
+      "titleKey": "walkthroughCalendarStepYearTitle",
+      "bodyKey": "walkthroughCalendarStepYearBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "periods-tab",
+      "targetTestId": "tab-periods",
+      "titleKey": "walkthroughCalendarStepPeriodsTabTitle",
+      "bodyKey": "walkthroughCalendarStepPeriodsTabBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "open-close-period",
+      "target": "[data-testid^=\"period-openclose-\"]",
+      "titleKey": "walkthroughCalendarStepOpenCloseTitle",
+      "bodyKey": "walkthroughCalendarStepOpenCloseBody",
+      "placement": "left",
+      "advance": {
+        "on": "manual"
+      }
+    }
+  ]
+}

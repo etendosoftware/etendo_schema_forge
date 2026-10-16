@@ -56,7 +56,7 @@ class EmptyCompletion(RuntimeError):
 
 def is_empty_completion(message: Any) -> bool:
     """An AI turn with neither text nor tool calls: the model said nothing."""
-    if message.__class__.__name__ not in ("AIMessage", "AIMessageChunk"):
+    if not _is_ai(message):
         return False
     if getattr(message, "tool_calls", None):
         return False
@@ -172,6 +172,112 @@ def _result_text(content: Any) -> str:
     return str(content)
 
 
+def _is_ai(message: Any) -> bool:
+    return message.__class__.__name__ in ("AIMessage", "AIMessageChunk")
+
+
+def _answer_text(content: Any) -> str:
+    """The text an AI turn said to the user, without reasoning or other blocks.
+
+    Unlike `_result_text`, a non-text block is DROPPED rather than serialised: a
+    reasoning model may hand back `{"type": "reasoning", ...}` blocks next to the
+    answer, and those are not what the user read.
+    """
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = [
+            block if isinstance(block, str) else block.get("text", "")
+            for block in content
+            if isinstance(block, str)
+            or (isinstance(block, dict) and block.get("type", "text") == "text"
+                and isinstance(block.get("text"), str))
+        ]
+        return "\n".join(p for p in parts if p)
+    return str(content)
+
+
+def final_answer(messages: list[Any]) -> str | None:
+    """The last thing the agent told the user, before the reporting call (plan §5.5).
+
+    It is the last AI turn of the TOOL LOOP — never the verdict, which is asked
+    for afterwards, in English, by the harness. `None` when the loop did not end
+    on an answer: the last AI turn still asked for tools (a blown step cap), or
+    there was no AI turn at all. An answer that is present but empty is `""`.
+    """
+    for message in reversed(messages):
+        if _is_ai(message):
+            if getattr(message, "tool_calls", None):
+                return None
+            return _answer_text(getattr(message, "content", None))
+    return None
+
+
+#: The usage keys summed per turn. `cachedInputTokens` is the provider's
+#: `input_token_details.cache_read`; a gateway that reports usage but not the
+#: cache split leaves it None rather than 0.
+_USAGE_KEYS = ("inputTokens", "outputTokens", "totalTokens", "cachedInputTokens")
+
+
+def _turn_usage(message: Any) -> dict[str, int | None] | None:
+    """One AI turn's token usage, or None when the provider sent none."""
+    usage = getattr(message, "usage_metadata", None)
+    if not usage:
+        return None
+    details = usage.get("input_token_details") or {}
+    cached = details.get("cache_read")
+    return {
+        "inputTokens": usage.get("input_tokens"),
+        "outputTokens": usage.get("output_tokens"),
+        "totalTokens": usage.get("total_tokens"),
+        "cachedInputTokens": cached if isinstance(cached, int) else None,
+    }
+
+
+def sum_usage(messages: list[Any]) -> dict[str, Any]:
+    """Token usage summed over the AI turns of `messages` (plan §5.7).
+
+    Missing is null, never 0 (D12's spirit applied to cost): a total is given
+    only when EVERY turn reported it, because a sum over the turns that happened
+    to carry usage would understate the cost without saying so. `turns` and
+    `turnsWithUsage` are kept so a reader can see why a total is null.
+
+    Turns dropped as empty completions are not in `messages`, so they are not
+    counted: they are provider noise (MAX_EMPTY_COMPLETIONS), already counted in
+    `emptyCompletions`, and not a cost of doing the task.
+    """
+    per_turn = [_turn_usage(m) for m in messages if _is_ai(m)]
+    reported = [u for u in per_turn if u is not None]
+    complete = bool(per_turn) and len(reported) == len(per_turn)
+    out: dict[str, Any] = {"turns": len(per_turn), "turnsWithUsage": len(reported)}
+    for key in _USAGE_KEYS:
+        values = [u[key] for u in reported]
+        out[key] = sum(values) if complete and all(isinstance(v, int) for v in values) else None
+    return out
+
+
+def served_model(messages: list[Any]) -> dict[str, list[str]]:
+    """What the gateway says it actually served, per distinct value (plan §6 pins).
+
+    The requested model id is in run.json; a gateway may route it elsewhere or
+    update it behind a stable id, and `system_fingerprint` is the only trace of
+    that. Distinct values in order of first appearance; empty when not reported.
+    """
+    models: list[str] = []
+    fingerprints: list[str] = []
+    for message in messages:
+        if not _is_ai(message):
+            continue
+        meta = getattr(message, "response_metadata", None) or {}
+        for value, bucket in ((meta.get("model_name"), models),
+                              (meta.get("system_fingerprint"), fingerprints)):
+            if isinstance(value, str) and value and value not in bucket:
+                bucket.append(value)
+    return {"models": models, "systemFingerprints": fingerprints}
+
+
 def _tool_calls_from(
     messages: list[Any],
     *,
@@ -261,6 +367,8 @@ async def run_probe(
     messages: list[Any] = []
     exhausted = False
     empty_completions = 0
+    report_usage: dict[str, Any] | None = None
+    report_messages: list[Any] = []
 
     def record(**extra: Any) -> dict[str, Any]:
         """The objective half of the result, always buildable from `messages`."""
@@ -273,6 +381,15 @@ async def run_probe(
             # Model turns that came back empty and were asked again from the
             # same state. Non-zero is worth knowing: it is provider noise.
             "emptyCompletions": empty_completions,
+            # What the user was told, in the task's language (plan §5.5). The
+            # verdict is the instrument's report, in English; read checks must
+            # match against this, never against `verdict.achieved`.
+            "finalAnswer": final_answer(messages),
+            # `loop` is the cost of the task; `report` is the instrument talking
+            # and is NOT cost (plan §5.7). `report` stays None until the
+            # reporting call has answered.
+            "usage": {"loop": sum_usage(messages), "report": report_usage},
+            "servedModel": served_model([*messages, *report_messages]),
             **extra,
         }
 
@@ -368,14 +485,25 @@ async def run_probe(
     # (§6.3: "the exact arguments sent") and so cannot declare
     # additionalProperties:false. Keeping the verdict schema verbatim is worth
     # more than strict mode.
-    reporter = model.with_structured_output(Verdict, method="function_calling")
+    # include_raw=True so the reporting turn's own AIMessage — and with it its
+    # usage and served model — is not thrown away by the parser.
+    reporter = model.with_structured_output(Verdict, method="function_calling", include_raw=True)
     instruction = _REPORT_INSTRUCTION
     if exhausted:
         instruction += (
             "\nYou ran out of steps before finishing. Report the outcome accordingly."
         )
     try:
-        verdict: Verdict = await reporter.ainvoke([*messages, ("user", instruction)])
+        reported = await reporter.ainvoke([*messages, ("user", instruction)])
+        raw = reported.get("raw")
+        if raw is not None:
+            report_messages = [raw]
+            report_usage = sum_usage(report_messages)
+        if reported.get("parsing_error") is not None or reported.get("parsed") is None:
+            # include_raw turns a parse failure into a value; it is still a
+            # reporter failure, exactly as it was when the parser raised.
+            raise reported.get("parsing_error") or ValueError("the reporter returned no verdict")
+        verdict: Verdict = reported["parsed"]
     except Exception as exc:  # noqa: BLE001 - the tool calls must outlive the reporter
         raise ProbeAborted(exc, record()) from exc
 

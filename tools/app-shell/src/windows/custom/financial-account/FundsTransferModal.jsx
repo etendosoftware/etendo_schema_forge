@@ -21,6 +21,8 @@ import { useGLItemLookup } from '@/hooks/useMovementLookups';
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { getApiBase } from '@/hooks/useNeoResource';
 import { todayCalendarISO } from '@/lib/dateOnly.js';
+import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
+import { PeriodRecoveryLink } from '@/components/contract-ui/PeriodRecoveryLink.jsx';
 import { useConversionRate } from '../shared/useConversionRate.js';
 
 /**
@@ -190,6 +192,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
   const [feeTo, setFeeTo] = useState('');
   const [description, setDescription] = useState(() => ui('financeAccountTransferDescriptionDefault'));
   const [error, setError] = useState(null);
+  const [errorRecovery, setErrorRecovery] = useState({});
 
   const source = useMemo(
     () => accounts.find((a) => a.id === sourceAccountId) ?? null,
@@ -261,6 +264,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
 
   const handleConfirm = async () => {
     setError(null);
+    setErrorRecovery({});
     if (destId === sourceAccountId) {
       setError(ui('financeAccountTransferErrorSameAccount'));
       return;
@@ -299,8 +303,12 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
       // That is a truthy string translateBackendError passes through untouched, so it used
       // to defeat the `||` fallback below and put a raw HTTP code on screen (PSD-23). The
       // flag says whether there is a real backend message worth showing at all.
-      const backendMessage = err?.hasBackendMessage ? translateBackendError(err.message, ui) : null;
+      const backendMessage = err?.hasBackendMessage
+        ? translateBackendError(err.message, ui, { messageKeys: err.messageKeys })
+        : null;
       setError(backendMessage || ui('financeAccountTransferError'));
+      // ETP-5577 — a period refusal offers the calendar, on the fiscal year of the transfer date.
+      setErrorRecovery(periodNotAvailableToastOptions(err?.messageKeys, ui, { date: rateDate }));
     }
   };
 
@@ -507,7 +515,13 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
           </div>
 
           {error ? (
-            <p className="text-sm text-[hsl(var(--destructive))]" data-testid="transfer-error">{error}</p>
+            <div className="text-sm text-[hsl(var(--destructive))]" data-testid="transfer-error">
+              {error}
+              <PeriodRecoveryLink
+                recovery={errorRecovery}
+                onBeforeGo={onClose}
+                data-testid="PeriodRecoveryLink__7ff08b" />
+            </div>
           ) : null}
         </div>
 
