@@ -114,6 +114,9 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
             setDeclManualDataPatch({ id, patch: { manualData } });
           }}
           onDeclarationCreated={(created) => setDeclAdded({ decl: created })}
+          // ETP-5716 — open another declaration from a detail page (a 303 listed by the 390): the
+          // same one-shot `declAdded`, which only inserts the row when the list lacks it.
+          onOpenDeclaration={(target) => setDeclAdded({ decl: target })}
           data-testid={`FmModel${detailType}Page__ca1112`} />
       )}
       {debugMode && <FmDebugPanel view={view} setView={setView} data-testid="FmDebugPanel__ca1112" />}

@@ -125,3 +125,26 @@ export async function fetchSources390(decl, { token, apiBaseUrl, params } = {}) 
   }
   return res.json();
 }
+
+/**
+ * `GET /fiscal390/preload` — the year's Modelo 303 declarations and the 390 inputs they preload:
+ * `{ year, periodicity, monthlyReturn, declarations: [...], missingPeriods, lastPeriod, inputs,
+ * totals, territory, carryOverKnown, expectedResult, tolerance, warnings }` (preload390.js).
+ * `monthlyReturn` (the on-screen ISMONTHLYRETURN) decides where refunds go; omitted, the backend
+ * reads the stored one. No timeout: a draft 303 is computed live, up to 12 of them.
+ * Throws on a failed request (message in `error.message`).
+ */
+export async function fetchPreload390(decl, { token, apiBaseUrl, monthlyReturn } = {}) {
+  if (!apiBaseUrl) throw new Error('missing credentials');
+  const params = periodParams(decl);
+  if (monthlyReturn != null) params.set('monthlyReturn', monthlyReturn ? 'Y' : 'N');
+  const res = await apiFetch(`${neoRoot(apiBaseUrl)}/fiscal390/preload?${params}`, { baseUrl: '', token, timeout: 0 });
+  if (!res.ok) {
+    const message = await readServerMessage(res);
+    const err = new Error(message || `preload fetch failed: ${res.status}`);
+    err.status = res.status;
+    err.serverMessage = message;
+    throw err;
+  }
+  return res.json();
+}

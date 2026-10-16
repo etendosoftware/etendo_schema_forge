@@ -20,9 +20,14 @@
 // ask "Declaro que los datos … son conformes". A submitted 390 shows the "Presentación en la
 // AEAT" card and "Crear declaración sustitutiva" (submission390.js).
 //
+// 303 preload (ETP-5716, preload390.js): `GET /fiscal390/preload` gives the year's 303s and the
+// block-9 / [85] / territory values they determine. They are applied to the inputs the user has
+// not changed — on opening a draft never preloaded before, and on every Calcular — and recorded in
+// `manualData.aeatPreloaded` (origin "Modificado" + Restaurar). The Resultado card shows the cuadre
+// with the 303s (Reconciliation390) and block 9 lists them (Settlements303Table390).
+//
 // Later phases plug in here: incident rules (backend `replaceIncidents`, already listed by the
-// Incidencias tab) and the 303 preload (`manualData.aeatPreloaded`, already read for the origin
-// legend / restore).
+// Incidencias tab; `preloadIncidents390` gives the "faltan 303" / "diferencia" candidates).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -48,7 +53,7 @@ import {
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import {
   formatAmount, persistManualData, fetchDeclarationIncidents, resolveResultColors,
-  RECEIPT_ATTACHMENT_CONFIG,
+  RECEIPT_ATTACHMENT_CONFIG, fetchDeclaration,
 } from '../../fiscalModelsUtils.js';
 import { getIncidentIndicator } from '../../incidentSeverity.js';
 import { FORMER_STATEMENT_LENGTH, isValidFormerStatement, sanitizeFormerStatementInput } from '../../formerStatement.js';
@@ -61,10 +66,15 @@ import { emptySourcesFilter, sourcesFilterForBox } from './sources390.js';
 import FileGenModal390 from './FileGenModal390.jsx';
 import useOrg390Identity from './useOrg390Identity.js';
 import { fetchBoxes390, generate390File } from './fm390Api.js';
+import usePreload390 from './usePreload390.js';
+import { applyPreload390, reconcile390, restorePreloaded390 } from './preload390.js';
+import Reconciliation390 from './Reconciliation390.jsx';
+import Settlements303Table390 from './Settlements303Table390.jsx';
 import {
   getLayout390, deriveInputBoxes, annualResultOf, toBoxMap, normalizeInputValue,
   isSubstitutive, buildManualData390, TERRITORY_INPUTS, TERRITORY_PERCENT_MAX, FLAG,
   resultKind390, RESULT_LABEL_KEY_390, sanitizeAeatInputs390, conflictingInput390, isConcurso,
+  isMonthlyReturn,
 } from './fm390Layouts.js';
 import '../../fiscal-models.css';
 
@@ -203,6 +213,7 @@ function buildIncidentVariants(blocking, warning, t) {
 
 export default function FmModel390Page({
   decl, onBack, onStatusChange, onSubmittedRemotely, onDeclarationCreated, onManualDataSaved, token, apiBaseUrl,
+  onOpenDeclaration,
 }) {
   const t = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -216,7 +227,13 @@ export default function FmModel390Page({
   const isSubmitted = SUBMITTED_STATUSES.has(status);
   const [identification, setIdentification] = useState(() => ({ ...(decl.manualData?.identification ?? {}) }));
   const [aeatInputs, setAeatInputs] = useState(() => ({ ...(decl.manualData?.aeatInputs ?? {}) }));
-  const preloaded = decl.manualData?.aeatPreloaded ?? null;
+  // The values the 303 preload put in (`manualData.aeatPreloaded`); a ref too, for the handlers
+  // that apply a fresh preload and save in the same tick.
+  const [preloaded, setPreloaded] = useState(() => decl.manualData?.aeatPreloaded ?? null);
+  const preloadedRef = useRef(preloaded);
+  const aeatInputsRef = useRef(aeatInputs);
+  aeatInputsRef.current = aeatInputs;
+  const { preload, loading: preloadLoading, error: preloadError, load: loadPreload } = usePreload390({ decl, token, apiBaseUrl });
   const [payload, setPayload] = useState(() => submittedSnapshotOf(decl) ?? (decl._precomputed?.boxes != null ? decl._precomputed : null));
   const [computeError, setComputeError] = useState(null);
   const [computing, setComputing] = useState(false);
@@ -272,6 +289,17 @@ export default function FmModel390Page({
     compute(undefined);
   }, [decl.id]);
 
+  // Mount: the year's 303s (table + cuadre). A draft never preloaded before takes their values
+  // at once (only into inputs still empty — `applyPreload390`); it is saved with the next save.
+  useEffect(() => {
+    if (!apiBaseUrl) return;
+    loadPreload(isMonthlyReturn(aeatInputsRef.current)).then(res => {
+      if (!res || isSubmitted || preloadedRef.current != null) return;
+      if (!Array.isArray(res.declarations) || res.declarations.length === 0) return;
+      applyFreshPreload(res);
+    });
+  }, [decl.id]);
+
   useEffect(() => {
     if (!apiBaseUrl) return undefined;
     let cancelled = false;
@@ -297,6 +325,8 @@ export default function FmModel390Page({
   const resultColors = resolveResultColors(resultKind);
   const resultLabel = resultKind ? t(RESULT_LABEL_KEY_390[resultKind]) : t('fm.m303.summary.result_sub');
   const showResultHint = resultKind === 'positive' || resultKind === 'negative';
+  // Cuadre of the result on screen with the year's 303s (Reconciliation390).
+  const reconciliation = payload?.boxes ? reconcile390(summary.result, preload) : null;
 
   // ── Edits ─────────────────────────────────────────────────────────────────
   function markDirty() { dirtyRef.current = true; }
@@ -334,7 +364,22 @@ export default function FmModel390Page({
   function handleRestore(key) {
     if (!preloaded || !Object.hasOwn(preloaded, key)) return;
     markDirty();
-    setAeatInputs(prev => sanitizeAeatInputs390({ ...prev, [key]: preloaded[key] }));
+    setAeatInputs(prev => restorePreloaded390(prev, preloaded, key));
+  }
+
+  /**
+   * Applies a preload payload to the inputs the user has not changed and records its values as
+   * `aeatPreloaded`. Returns the resulting `{ inputs, preloaded }` (the state updates are async).
+   */
+  function applyFreshPreload(res) {
+    const result = applyPreload390(aeatInputsRef.current, preloadedRef.current, res?.inputs);
+    const before = JSON.stringify(preloadedRef.current ?? null);
+    preloadedRef.current = result.preloaded;
+    aeatInputsRef.current = result.inputs;
+    setPreloaded(result.preloaded);
+    setAeatInputs(result.inputs);
+    if (result.applied.length > 0 || before !== JSON.stringify(result.preloaded)) markDirty();
+    return result;
   }
 
   // Turning ISMONTHLYRETURN off clears DEVOLVER_01..12; turning ConcursoAcr off clears
@@ -363,7 +408,8 @@ export default function FmModel390Page({
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
-  const currentManualData = () => buildManualData390(lastSavedManualData.current, identification, aeatInputs);
+  const currentManualData = () => buildManualData390(
+    lastSavedManualData.current, identification, aeatInputsRef.current, preloadedRef.current);
 
   /** Persists manualData when something changed. Resolves `{ ok }`; never throws. */
   async function persistIfDirty({ force = false } = {}) {
@@ -392,7 +438,11 @@ export default function FmModel390Page({
     else toast.error(t('fm.action.save_error'));
   }
 
+  // Calcular re-reads the 303s first and applies them to the inputs the user has not changed, so
+  // the boxes are computed (and saved) with them.
   async function handleCompute() {
+    const fresh = await loadPreload(isMonthlyReturn(aeatInputsRef.current));
+    if (fresh) applyFreshPreload(fresh);
     const res = await compute(currentManualData().aeatInputs);
     if (!res) {
       toast.error(t('fm.m390.compute_error'));
@@ -558,6 +608,32 @@ export default function FmModel390Page({
 
   const hasBoxes = payload?.boxes != null;
 
+  // "Abrir" on a 303 of block 9: pending changes are saved first (the page is left), then the 303
+  // opens through the parent (FiscalModelsPage).
+  async function handleOpen303(id) {
+    if (!onOpenDeclaration) return;
+    const saved = await persistIfDirty();
+    if (!saved.ok) {
+      toast.error(t('fm.action.save_error'));
+      return;
+    }
+    const target = await fetchDeclaration(id, { token, apiBaseUrl });
+    if (target) onOpenDeclaration(target);
+    else toast.error(t('fm.m390.preload.open_error'));
+  }
+  const blockExtras = {
+    resultado_liquidaciones: (
+      <Settlements303Table390
+        preload={preload}
+        loading={preloadLoading}
+        error={preloadError}
+        year={decl.year}
+        onOpen={onOpenDeclaration ? handleOpen303 : undefined}
+        t={t}
+        bcpLocale={bcpLocale} />
+    ),
+  };
+
   return (
     <div className="fm-page fm-page--detail" data-testid="FmModel390Page">
       <FmDetailHeader>
@@ -657,7 +733,7 @@ export default function FmModel390Page({
             badgeBg="hsl(var(--muted))"
             badgeColor="hsl(var(--muted-foreground))" />
           {/* Resultado — [86], or [94] when filing to several administrations. The "cuadre con
-              los 303" line under it belongs to the 303-preload phase. */}
+              los 303" line (Reconciliation390) goes right under the cards. */}
           <KpiWidget
             icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__fm390kpi" />}
             iconColor="hsl(var(--foreground))"
@@ -668,6 +744,14 @@ export default function FmModel390Page({
             badgeBg={resultColors.badgeBg}
             badgeColor={resultColors.badgeColor} />
         </div>
+        {hasBoxes && (
+          <Reconciliation390
+            reconciliation={reconciliation}
+            preload={preload}
+            loading={preloadLoading}
+            year={decl.year}
+            t={t} />
+        )}
         {showResultHint && (
           <p className="fm-390-hint fm-390-result-hint" data-testid="FmModel390Page__resultHint">
             {t('fm.m390.result.informative_hint')}
@@ -719,6 +803,7 @@ export default function FmModel390Page({
                 onEditOrganization={() => navigate('/organization')}
                 invoiceBoxes={payload.invoiceBoxes}
                 onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}
+                blockExtras={blockExtras}
                 t={t}
                 bcpLocale={bcpLocale} />
             )}

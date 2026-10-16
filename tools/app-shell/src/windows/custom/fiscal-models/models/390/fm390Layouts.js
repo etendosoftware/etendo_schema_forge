@@ -581,7 +581,7 @@ export function inputMessages390(inputs) {
  *   'preloaded' the value came from a preload source (`preloaded[key]`) and is unchanged
  *   'modified'  a preloaded value the user changed — can be restored
  *   'manual'    no preload for this key
- * `preloaded` is `manualData.aeatPreloaded` (filled by the 303-preload phase; empty until then).
+ * `preloaded` is `manualData.aeatPreloaded` (the values the 303 preload put in, preload390.js).
  */
 export function inputOrigin(key, inputs, preloaded) {
   if (!preloaded || !Object.hasOwn(preloaded, key)) return 'manual';
@@ -623,14 +623,17 @@ export function substitutiveFlags(identification, inputs) {
 }
 
 /**
- * The `manualData` object persisted by "Guardar": the previous manualData (unknown keys kept, e.g.
- * a future `aeatPreloaded`), the identification (Tipo control) and the inputs, sanitized
- * (`sanitizeAeatInputs390`) and with the substitute flags applied. A `null` input value removes the
- * key.
+ * The `manualData` object persisted by "Guardar": the previous manualData (unknown keys kept), the
+ * identification (Tipo control) and the inputs, sanitized (`sanitizeAeatInputs390`) and with the
+ * substitute flags applied. A `null` input value removes the key. `aeatPreloaded` (the values the
+ * 303 preload put in, preload390.js — origin "Modificado" and Restaurar) replaces the previous one
+ * when given; omitted (or `null`), the previous one is kept.
  */
-export function buildManualData390(previous, identification, aeatInputs) {
+export function buildManualData390(previous, identification, aeatInputs, aeatPreloaded) {
   const sanitized = sanitizeAeatInputs390(aeatInputs);
   const merged = { ...sanitized, ...substitutiveFlags(identification, sanitized) };
   const cleaned = Object.fromEntries(Object.entries(merged).filter(([, v]) => v != null && v !== ''));
-  return { ...(previous ?? {}), identification: { ...(identification ?? {}) }, aeatInputs: cleaned };
+  const out = { ...(previous ?? {}), identification: { ...(identification ?? {}) }, aeatInputs: cleaned };
+  if (aeatPreloaded != null) out.aeatPreloaded = { ...aeatPreloaded };
+  return out;
 }

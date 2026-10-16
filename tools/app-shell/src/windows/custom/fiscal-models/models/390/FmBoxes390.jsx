@@ -579,11 +579,13 @@ function BlockIndex({ blocks, active, onSelect, t }) {
  * @param {Function} [props.onEditOrganization]
  * @param {Array}    [props.invoiceBoxes]    `invoiceBoxes` of the boxes payload (boxes with invoices)
  * @param {Function} [props.onViewInvoices]  (box) => void — "Ver facturas" on those boxes
+ * @param {object}   [props.blockExtras]     `{ <blockId>: node }` rendered under that block's boxes
+ *                                           (e.g. the year's 303s under "Resultado de las liquidaciones")
  */
 export default function FmBoxes390({
   layout, boxes, inputs, preloaded, identification, orgIdentity, taxReport, warnings, year, readOnly,
   onInputChange, onRestore, onFlagChange, onClearTerritory, onEditOrganization, t, bcpLocale = 'es-ES',
-  invoiceBoxes, onViewInvoices,
+  invoiceBoxes, onViewInvoices, blockExtras,
 }) {
   const [activeId, setActiveId] = useState(layout[0]?.id);
   const [highlightBox, setHighlightBox] = useState(null);
@@ -658,6 +660,7 @@ export default function FmBoxes390({
             {t(block.titleKey)}
           </div>
           <BlockBody key={block.id} block={block} boxes={boxes ?? {}} ctx={ctx} />
+          {blockExtras?.[block.id] ?? null}
         </section>
         <div className="fm-390-pager">
           <button
