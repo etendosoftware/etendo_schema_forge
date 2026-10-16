@@ -585,6 +585,12 @@ requires a backend recompile + restart before it is observable in the browser; a
 NOT sufficient. The frontend-only `includeTaxChildren` param addition has no effect until the
 backend change is deployed.
 
+## MCP agent actions — ETP-5709
+
+The MCP publishes `cloneRecord` for this window (declared by `SalesInvoiceHeaderHandler`), in addition to `post` / `unpost` (ETP-5692). `cloneRecord` clones into a NEW DRAFT with a new document number and none of the source's related documents (declared, no parameters; calling it twice creates two copies). Sales documents are created from their sources by the source window's actions (`createDraftInvoice` on `sales-order`, which creates AND completes the invoice). Reference: `modules/com.etendoerp.go/docs/neo-headless.md` (ETP-5709 paragraphs of §4.12.9).
+
+`cloneRecord` (ETP-5709): the copy also points at none of the source's related documents (corrected-invoice link (`EM_Aeatsii_Invoice_ID`), order, order line, shipment line and `EM_Etgo_Source_Invoiceline_ID`).
+
 ## Gap assessment
 
 - The `DocumentTotalsPanel` inside `InvoiceBottomPanel` computes subtotal, discount, tax, and total client-side from the saved lines plus the live add-row (`pendingLine`) and sidebar editing state (`editingLine`), so totals update in real time as the user types — without waiting for a server save. The panel is the source of truth for displayed amounts; it does not read from server-side header fields.
