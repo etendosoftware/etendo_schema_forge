@@ -1,6 +1,8 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/FmModel390Page.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/FmBoxes390.jsx
 //
+// Also: the Facturas tab wiring — "Ver facturas" on an invoice box opens the tab filtered by it.
+//
 // ETP-5716 — Modelo 390 detail page, skeleton + boxes phase: blocks rendered from a mocked
 // `GET /fiscal390/boxes` payload, the box search, manual inputs (live derivation + the saved
 // manualData), the substitute identifier validation, and the save ordering (inputs are saved in
@@ -30,6 +32,12 @@ vi.mock('../fm390Api.js', () => ({
   generate390File: vi.fn().mockResolvedValue({ ok: true }),
   checkModified390: vi.fn(),
   generatedFileName: () => '390_0A_2026.txt',
+  fetchSources390: vi.fn(),
+}));
+vi.mock('../FmSources390.jsx', () => ({
+  default: ({ filter, isSubmitted }) => React.createElement('div', {
+    'data-testid': 'FmSources390-stub', 'data-filter': JSON.stringify(filter), 'data-submitted': String(!!isSubmitted),
+  }),
 }));
 const orgIdentityMock = vi.hoisted(() => ({ nameWarnings: [] }));
 vi.mock('../useOrg390Identity.js', () => ({
@@ -90,6 +98,7 @@ const PAYLOAD = {
   taxReport: { searchKey: 'AEAT390_2025_Y', layoutYear: 2025, fallback: true },
   inputs: {},
   warnings: [{ code: 'UNSUPPORTED_RATE', parameter: 'VAT_PURCHASE_NORMAL', rate: '3.00' }],
+  invoiceBoxes: [1, 2, 5, 6, 33, 34, 48, 49, 99, 190, 191],
 };
 
 const makeDecl = (overrides = {}) => ({
@@ -463,5 +472,38 @@ describe('FmModel390Page — presented declaration', () => {
   it('summaryOf reads [47] / [64] and the annual result of the mode', () => {
     expect(summaryOf({ 47: '1', 64: '2', 86: '3', 94: '4' }, 'liquidation')).toEqual({ accrued: 1, deductible: 2, result: 3 });
     expect(summaryOf({ 86: '3', 94: '4' }, 'territory').result).toBe(4);
+  });
+});
+
+describe('FmModel390Page — Facturas tab', () => {
+  it('"Ver facturas" on an invoice box opens the Facturas tab filtered by that box', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    goToBlock('iva_devengado');
+    expect(screen.queryByTestId('FmBoxes390__viewInvoices_47')).toBeNull(); // derived total: no lines
+    fireEvent.click(screen.getByTestId('FmBoxes390__viewInvoices_5'));
+    const stub = screen.getByTestId('FmSources390-stub');
+    expect(JSON.parse(stub.getAttribute('data-filter'))).toEqual({ box: 5, type: '', tax: '', q: '' });
+    expect(screen.getByRole('tab', { name: 'fm.tab.sources' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('the Facturas tab opens unfiltered from the tab bar', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'fm.tab.sources' }));
+    expect(JSON.parse(screen.getByTestId('FmSources390-stub').getAttribute('data-filter')).box).toBeNull();
+  });
+
+  it('a presented declaration has no "Ver facturas" link and passes isSubmitted to the tab', () => {
+    render(<FmModel390Page decl={makeDecl({ status: 'submitted', submittedSnapshot: PAYLOAD, _precomputed: null })} {...props()} />);
+    goToBlock('iva_devengado');
+    expect(screen.queryByTestId('FmBoxes390__viewInvoices_5')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'fm.tab.sources' }));
+    expect(screen.getByTestId('FmSources390-stub').getAttribute('data-submitted')).toBe('true');
+  });
+
+  it('a payload without invoiceBoxes (older snapshot) shows no link', () => {
+    const { invoiceBoxes, ...legacy } = PAYLOAD;
+    render(<FmModel390Page decl={makeDecl({ _precomputed: legacy })} {...props()} />);
+    goToBlock('iva_devengado');
+    expect(screen.queryByTestId('FmBoxes390__viewInvoices_5')).toBeNull();
   });
 });
