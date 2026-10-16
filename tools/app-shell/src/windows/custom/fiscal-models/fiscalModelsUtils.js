@@ -630,6 +630,13 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
 
     if (identChecks) applyIdentParams(params, identChecks);
     if (manualOverrides) applyBoxParams(params, manualOverrides, identChecks);
+    // ETP-5725 (reopened QA fix) — a DEDICATED, unambiguous flag for the backend's
+    // corrective/ordinaria consistency guard (FiscalDeclCrudHandler#checkCorrectiveConsistency,
+    // read via Fiscal303BoxesHandler#dispatch). `applyIdentParams` above also sets
+    // `IsComplementary=Y` for the UNRELATED legacy "complementaria" checkbox, so that param
+    // cannot be trusted server-side to mean "this is a rectificativa" — this one always means
+    // exactly that, only ever "Y" or absent.
+    if (identChecks?.rectificativa) params.set('Rectificativa', 'Y');
 
     const url = `${base}/fiscal303/generate?${params}`;
     const res = await apiFetch(url, { baseUrl: '', token });
@@ -675,7 +682,18 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
       method: 'PUT',
       body: JSON.stringify(body),
     });
-    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    if (!res.ok) {
+      // ETP-5725 (reopened QA fix, UX follow-up) — on a reactivation blocked by a sibling
+      // declaration (FiscalDeclCrudHandler#rejectReactivationWithSibling), the 409 alone cannot
+      // tell the caller WHY: this same status also covers re-presenting an already-submitted
+      // declaration (rejectRepresentation) and the plain draft-sibling case. The backend tags
+      // its message with a stable `[reason=...]` marker precisely so this layer doesn't have to
+      // guess — see that guard's own `reactivationBlockReason` doc for the exact values.
+      const raw = await res.text().catch(() => '');
+      const message = parseServerMessage(raw);
+      const reasonMatch = message ? message.match(/\[reason=([a-z_]+)\]/) : null;
+      return { ok: false, error: `http_${res.status}`, reason: reasonMatch?.[1] };
+    }
     const snapshot = await readSubmittedSnapshot(res);
     return snapshot ? { ok: true, submittedSnapshot: snapshot } : { ok: true };
   } catch (_) {

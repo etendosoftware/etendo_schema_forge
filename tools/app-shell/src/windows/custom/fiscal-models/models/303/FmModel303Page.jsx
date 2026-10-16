@@ -393,7 +393,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // already saved this declaration at least once) always wins over the auto-default.
   const [identChecks, setIdentChecks] = useState(() => {
     const persisted = decl.manualData?.identification ?? decl.identification ?? {};
-    if (persisted.rectificativa === undefined && Boolean(decl._duplicatePeriodPresented)) {
+    // ETP-5725 (reopened QA fix, critical regression) — same root cause as the Bug 3 fix already
+    // applied to FmListPage.jsx's `resolveDeclTypeLabel`: `persisted.rectificativa === undefined`
+    // is NOT the same thing as "this declaration was never saved" — a genuinely persisted,
+    // presented ordinaria that was never explicitly toggled ALSO has `rectificativa === undefined`
+    // in its persisted identification. Without the `decl.status === 'draft'` gate, OPENING that
+    // ordinaria after a sibling becomes presented re-triggered this auto-default and showed
+    // "Autoliquidación rectificativa" checked on an already-submitted, correctly-ordinaria
+    // record — confirmed display-only. Only a `draft` declaration can legitimately be in the
+    // "never decided yet" state this auto-default exists for; once a row leaves draft its
+    // persisted identification is authoritative and must be rendered as-is.
+    if (decl.status === 'draft' && persisted.rectificativa === undefined
+        && Boolean(decl._duplicatePeriodPresented)) {
       return { ...persisted, rectificativa: true };
     }
     return persisted;
@@ -928,6 +939,20 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
       );
       return;
     }
+    // ETP-5725 (reopened QA fix) — "Generar fichero 303" produces the literal AEAT submission
+    // artifact (what the user uploads to the AEAT portal), not a preview, so it must be gated by
+    // the same corrective/ordinaria consistency rule as "Registrar/Presentar". Server-side is
+    // the authoritative gate (Fiscal303BoxesHandler#dispatch); this only gives earlier feedback.
+    if (correctiveWithoutPresentedOrdinaria) {
+      toast.error(t('fm.duplicate_period.requires_ordinaria')
+        ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+      return;
+    }
+    if (ordinariaAlreadyPresented) {
+      toast.error(t('fm.duplicate_period.ordinaria_exists')
+        ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+      return;
+    }
     setGenerating(true);
     // ETP-4975 pre-flight guard — mirrors the one in AeatSubmitFlow.jsx's handleSubmit
     // (see that file for the full rationale). "Generar fichero 303" hits the exact same
@@ -1087,6 +1112,22 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
       );
       return;
     }
+    // ETP-5725 (reopened QA fix) — "Guardar" PERSISTS `manualData.identification`, so it must be
+    // gated by the same corrective/ordinaria consistency rule as "Registrar/Presentar" and
+    // "Generar fichero" — nothing previously stopped a brand-new, never-presented declaration
+    // from being SAVED with "Autoliquidación rectificativa" checked. Server-side is the
+    // authoritative gate (FiscalDeclCrudHandler#checkCorrectiveConsistency, now run on every PUT,
+    // not just a status-transitioning one); this only gives earlier feedback.
+    if (correctiveWithoutPresentedOrdinaria) {
+      toast.error(t('fm.duplicate_period.requires_ordinaria')
+        ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+      return;
+    }
+    if (ordinariaAlreadyPresented) {
+      toast.error(t('fm.duplicate_period.ordinaria_exists')
+        ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+      return;
+    }
     const { ok } = await persistEditableFields();
     if (ok) {
       // ETP-5456 — same rationale as `handleComputeClick` above: an explicit save can persist a
@@ -1169,6 +1210,21 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
         'fm.validation.out_of_range_present',
         'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de marcar la declaración como presentada.',
       );
+      return;
+    }
+    // ETP-5725 (reopened QA fix, Bug 1) — same UX gate as the "Registrar/Presentar" button's own
+    // onClick above, re-checked here (this function is the modal's actual confirm path) per this
+    // file's existing double-check convention for present-time guards.
+    if (correctiveWithoutPresentedOrdinaria) {
+      toast.error(t('fm.duplicate_period.requires_ordinaria')
+        ?? 'No se puede presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+      return;
+    }
+    // ETP-5725 (reopened QA fix) — mirror of the check above: "Solo puede haber una ordinaria
+    // por periodo".
+    if (ordinariaAlreadyPresented) {
+      toast.error(t('fm.duplicate_period.ordinaria_exists')
+        ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva.');
       return;
     }
     // ETP-4975 / ETP-5432 pt.10 follow-up (real bug, found via live retest, not a race
@@ -1269,6 +1325,29 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // auto-checked here) before the declaration can be marked "Presentado". Cleared once submitted:
   // there is nothing left to gate on a declaration that already went through.
   const requiresRectificativa = Boolean(decl._hasDuplicatePeriod) && !identChecks.rectificativa && !isSubmitted;
+
+  // ETP-5725 (reopened QA fix, Bug 1) — UX-only mirror of the authoritative backend guard
+  // (`FiscalDeclCrudHandler#rejectCorrectiveWithoutOrdinariaPresented`): "Autoliquidación
+  // rectificativa" checked with NO presented sibling for this period at all means there is
+  // nothing for this declaration to correct — AEAT requires a genuine ordinaria to already be
+  // on file first. `decl._duplicatePeriodPresented` (set by FmListPage.jsx) is true only when a
+  // SIBLING is already in the submitted family; since a corrective can only reach that family
+  // itself once an ordinaria sibling already has (this same guard, applied to that earlier
+  // submission), "some sibling is presented" is an adequate frontend proxy for "a presented
+  // ordinaria exists" — the backend re-derives the exact rule from scratch regardless of what
+  // this check lets through.
+  const correctiveWithoutPresentedOrdinaria = Boolean(identChecks.rectificativa)
+    && !Boolean(decl._duplicatePeriodPresented) && !isSubmitted;
+
+  // ETP-5725 (reopened QA fix) — mirror of `correctiveWithoutPresentedOrdinaria` above: "Solo
+  // puede haber una ordinaria por periodo". The UI auto-defaults "Autoliquidación rectificativa"
+  // to checked when a presented sibling exists, but the user can manually uncheck it back to
+  // "Normal" and try to present anyway — this is the UX-only mirror of the authoritative backend
+  // guard (`FiscalDeclCrudHandler#rejectOrdinariaWhenAlreadyPresented`). Same
+  // `decl._duplicatePeriodPresented` proxy as above ("some sibling is presented" standing in for
+  // "a presented ordinaria exists") — the backend re-derives the exact rule regardless.
+  const ordinariaAlreadyPresented = !Boolean(identChecks.rectificativa)
+    && Boolean(decl._duplicatePeriodPresented) && !isSubmitted;
 
   // ETP-5187 — generic required-field gate: `getMissingRequiredFields` reads the SAME
   // `field.required` flags fm303Layouts.js declares for `identificacion`/`datos_bancarios`
@@ -1593,6 +1672,20 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                   }
                   if (requiresRectificativa) {
                     toast.error(t('fm.duplicate_period.warning') ?? 'Ya existe otra declaración para el mismo período. Marca "Autoliquidación rectificativa" antes de presentar esta declaración.');
+                    return;
+                  }
+                  // ETP-5725 (reopened QA fix, Bug 1) — UX gate, same rule enforced
+                  // authoritatively server-side.
+                  if (correctiveWithoutPresentedOrdinaria) {
+                    toast.error(t('fm.duplicate_period.requires_ordinaria')
+                      ?? 'No se puede presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+                    return;
+                  }
+                  // ETP-5725 (reopened QA fix) — mirror of the check above: "Solo puede haber
+                  // una ordinaria por periodo".
+                  if (ordinariaAlreadyPresented) {
+                    toast.error(t('fm.duplicate_period.ordinaria_exists')
+                      ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva.');
                     return;
                   }
                   setShowPresent(true);
