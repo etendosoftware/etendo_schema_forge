@@ -87,6 +87,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `hidePrint` | boolean | `false` | — | Hides the print button, unconditionally, in every document status — **in both the detail view action bar AND the list view** (the list's row-selection "Print (N)" bulk button and its toolbar Print/Report button — both call `printDocuments()`/open a report modal with no per-row status gating). One boolean, two surfaces; see the "Print Visibility" subsection below for why that matters when switching a window to `hidePrintWhen`. |
 | `hidePrintWhen` | object \| `true` | `null` | See below | Hides the print button in the **detail view** action bar only while a generic field condition matches the current record (e.g. only outside a given status). The literal `true` matches unconditionally — use it instead of `hidePrint: true` when a window must hide Print in every status but its list-view print buttons must stay untouched (see the pitfall note below). Only feeds the detail-view button either way — it has **no effect on the list view's print buttons**, which stay driven by the plain `hidePrint` (see below). See the "Print Visibility" subsection below. Added ETP-4714. |
 | `listViewOptions.hidePrint` | boolean | `null` | — | Per-list override for the list view's two print buttons (bulk "Print (N)" + toolbar Print/Report), independent of the detail-view `hidePrint`/`hidePrintWhen`. `ListView.jsx` reads `listViewOptions?.hidePrint ?? hidePrint` — set this explicitly when a window uses `hidePrintWhen` (which doesn't touch the list) but the list-level print should still stay hidden. See "Print Visibility" below. Added ETP-4714. |
+| `listViewOptions.defaultDatePreset` | string | `null` | `today`, `yesterday`, `last7`, `last30`, `last12m` | Date range the list opens with on a fresh visit, applied to the column named by `window.dateFilterKey`. Built by `buildDatePresetFilter()` (`contract-ui/datePresetFilter.js`, the same computation as the ListFilterBar date dropdown), so the dropdown shows the preset as selected. Recomputed from today at every mount. Skipped when a URL deep-link (`initialFiltersFromUrl`) or the window's own `initialColumnFilters[dateFilterKey]` already provides the date filter; a saved session snapshot wins over it. Absent = no date filter (unchanged behavior). Added ETP-5778. See "Default date preset" below. |
 | `hideMoreMenu` | boolean | `false` | — | Hides the triple-dot "more" menu in the detail view action bar. |
 | `hideStatusFilter` | boolean | `false` | — | Hides the status-filter dropdown ("All statuses") in the list toolbar, even when a `status`-typed column exists. The rest of the filter bar (date filter, Filters) is unaffected. |
 | `hideRecordCount` | boolean | `false` | — | Omits the small record-count badge next to the list title (`TopBar.jsx`'s `recordCount` badge, plumbed through `AppLayout.jsx`). `ListView.jsx` passes `recordCount: hideRecordCount ? undefined : hook.items.length` to `useSetPageMeta` — `undefined` is `TopBar.jsx`'s existing "don't render the badge" signal. Use this when the count would be misleading, e.g. a tree-view `headerTable` whose rows are not ListView's paginated page (`chart-of-accounts`). Added ETP-5101. |
@@ -234,6 +235,23 @@ behavior**, not a per-window flag — it applies uniformly to every window using
 regardless of `hidePrint`/`hidePrintWhen`/`listViewOptions.hidePrint` configuration. Do not add a
 per-window opt-out; if a window genuinely needs both prints visible during a selection, that is a
 product decision to revisit here, not to route around locally.
+
+### Default date preset (`window.listViewOptions.defaultDatePreset`)
+
+```json
+"window": {
+  "dateFilterKey": "paymentDate",
+  "listViewOptions": { "defaultDatePreset": "last30" }
+}
+```
+
+Requires `dateFilterKey` (the column the ListFilterBar date dropdown drives). `ListView.jsx` seeds
+`columnFilters[dateFilterKey]` with `{ mode: 'date', op: 'range', value: [from, to], originalValue: 'preset:<id>' }`
+when the list mounts with no URL deep-link, no `initialColumnFilters[dateFilterKey]` and no saved
+snapshot. Choosing "Any time"/"All time" afterwards removes the key from the grid; that view differs
+from the declared default, so it is persisted in the session snapshot and honoured on the way back from
+a record. "Clear all filters" empties the grid (it is not a "back to default" action in any window), so
+it also shows all time. Used by `payment-in` and `payment-out` (`last30`).
 
 ### Send Document (`window.sendDocument`)
 

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 /**
  * ETP-4994 — ListView restores the grid state the user left behind.
  *
@@ -793,5 +794,76 @@ describe('ListView session state — a URL deep-link wins over the snapshot', ()
     );
 
     expect(filterBarProps.advancedFilter).toEqual({ token: 'userTyped' });
+  });
+});
+
+// ─── listViewOptions.defaultDatePreset (ETP-5778) ───────────────────────────
+
+describe('ListView — listViewOptions.defaultDatePreset', () => {
+  const dateProps = {
+    ...defaultProps,
+    dateFilterKey: 'paymentDate',
+    listViewOptions: { defaultDatePreset: 'last30' },
+  };
+
+  it('seeds the date column from the preset on a fresh mount, without writing a snapshot', () => {
+    render(<ListView {...dateProps} />);
+
+    const f = filterBarProps.columnFilters.paymentDate;
+    expect(f).toMatchObject({ mode: 'date', op: 'range', originalValue: 'preset:last30' });
+    expect(f.value).toHaveLength(2);
+    expect(capturedEntityOptions.columnFilters.paymentDate).toEqual(f);
+    expect(storedSnapshot()).toBeNull();
+  });
+
+  it('adds nothing when the option is absent', () => {
+    render(<ListView {...defaultProps} dateFilterKey="paymentDate" />);
+    expect(filterBarProps.columnFilters).toEqual({});
+  });
+
+  it('adds nothing without a dateFilterKey', () => {
+    render(<ListView {...defaultProps} listViewOptions={{ defaultDatePreset: 'last30' }} />);
+    expect(filterBarProps.columnFilters).toEqual({});
+  });
+
+  it('keeps a date filter already provided by initialColumnFilters', () => {
+    const provided = { mode: 'date', op: 'range', value: ['2026-01-01', '2026-01-31'], originalValue: 'custom:2026-01-01:2026-01-31' };
+    render(<ListView {...dateProps} initialColumnFilters={{ paymentDate: provided }} />);
+    expect(filterBarProps.columnFilters.paymentDate).toEqual(provided);
+  });
+
+  it('does not apply the default to a URL deep-link', () => {
+    render(<ListView {...dateProps} initialColumnFilters={{ status: { value: 'CO' } }} initialFiltersFromUrl />);
+    expect(filterBarProps.columnFilters).toEqual({ status: { value: 'CO' } });
+  });
+
+  it('a saved snapshot wins over the default, keeping its saved dates', () => {
+    const saved = { mode: 'date', op: 'range', value: ['2026-01-01', '2026-01-31'], originalValue: 'custom:2026-01-01:2026-01-31' };
+    window.sessionStorage.setItem(listStateKey(WINDOW), JSON.stringify({ v: 1, columnFilters: { paymentDate: saved } }));
+    render(<ListView {...dateProps} />);
+    expect(filterBarProps.columnFilters.paymentDate).toEqual(saved);
+  });
+
+  it('an explicit "all time" survives re-render and a remount (not re-forced to the preset)', () => {
+    const first = render(<ListView {...dateProps} />);
+    // ListFilterBar emits null for the allTime preset.
+    act(() => { filterBarProps.onFilterChange('paymentDate', null); });
+    expect(filterBarProps.columnFilters).toEqual({});
+    first.rerender(<ListView {...dateProps} />);
+    expect(filterBarProps.columnFilters).toEqual({});
+    expect(storedSnapshot()).not.toBeNull();
+
+    first.unmount();
+    render(<ListView {...dateProps} />);
+    expect(filterBarProps.columnFilters).toEqual({});
+  });
+
+  it('returning the date filter to the preset stores nothing again', () => {
+    render(<ListView {...dateProps} />);
+    const original = filterBarProps.columnFilters.paymentDate;
+    act(() => { filterBarProps.onFilterChange('paymentDate', null); });
+    expect(storedSnapshot()).not.toBeNull();
+    act(() => { filterBarProps.onFilterChange('paymentDate', original); });
+    expect(storedSnapshot()).toBeNull();
   });
 });
