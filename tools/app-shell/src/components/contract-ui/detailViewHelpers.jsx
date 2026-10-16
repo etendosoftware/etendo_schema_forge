@@ -423,6 +423,50 @@ export function bumpFieldGeneration(key, fieldGenerationRef) {
 }
 
 /**
+ * ETP-4744 — decide whether the new-record initial-callout chain must be armed, and which
+ * selector fields it should fire for.
+ *
+ * On a creation route the backend `GET /{entity}/defaults` response is merged into the form
+ * asynchronously, and the values it brings (typically `businessPartner`) are what the chain
+ * fires callouts for, so the derived fields (`priceList`, `paymentTerms`, address…) populate
+ * the way classic Etendo does when a blank document is opened.
+ *
+ * The chain is one-shot: `DetailView` latches it so a chain cannot loop as callouts write
+ * values back. That latch must be armed by the ARRIVAL OF THE DEFAULTS SESSION, not by
+ * `editing` merely becoming non-empty: a user typing into a plain, non-selector field while
+ * `/defaults` is in flight used to consume the latch with an empty trigger list, and since the
+ * latch only resets on `!isNew`, the chain never ran once the defaults merged
+ * (`docs/feedback.md`, [2026-07-31] ETP-4741).
+ *
+ * @param {object} params
+ * @param {boolean} params.isNew whether the route is the creation route
+ * @param {object|null} params.editing current form state
+ * @param {object|null} params.api window api descriptor (`selectors`)
+ * @param {string} params.entity header entity key the selectors belong to
+ * @param {boolean} [params.defaultsPending] true while `GET /{entity}/defaults` is still in
+ *   flight (useEntity's request window; ETP-5002). Optional — an absent value is treated as
+ *   "no defaults session", preserving the behavior of consumers whose hook does not expose it.
+ * @returns {{ reset: boolean, ready: boolean, triggers: Array }} `reset` clears the latch
+ *   (the route left the creation state); `ready` means the latch may be consumed now; `triggers`
+ *   is the (possibly empty) list of selector fields to fire a callout for.
+ */
+export function resolveInitialCalloutTriggers({ isNew, editing, api, entity, defaultsPending = false }) {
+  if (!isNew) return { reset: true, ready: false, triggers: [] };
+  // Wait for the defaults session to settle so the trigger list is computed from the MERGED
+  // state, never from a half-filled form whose defaults are still in the air.
+  if (defaultsPending) return { reset: false, ready: false, triggers: [] };
+  if (!editing || !api?.selectors) return { reset: false, ready: false, triggers: [] };
+  // An empty form has nothing to fire and must not consume the one-shot latch: only arm once
+  // `editing` actually holds a value (the previous `hasValues` guard, kept so the initial
+  // `/new` render and `defaultsPending`-less consumers stay on their prior behavior).
+  const hasValues = Object.values(editing).some(v => v != null && v !== '');
+  if (!hasValues) return { reset: false, ready: false, triggers: [] };
+  const triggers = api.selectors
+    .filter(s => s.entity === entity && s.inputMode !== 'dependent' && editing[s.field]);
+  return { reset: false, ready: true, triggers };
+}
+
+/**
  * True when `key` is the declared destination of a one-way cascade from the window's own
  * document date, and that document date is what just triggered the callout.
  *
