@@ -45,6 +45,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | P1 | Scheduled processes | A GO-onboarded tenant has NO scheduled "Costing Background process" (`AD_PROCESS_REQUEST`, `CostingBackground`), so product costs are never calculated automatically — `M_Transaction.iscostcalculated` stays `'N'` forever unless an operator launches the process by hand. NOT the same as J1 (which was the missing `M_Costing_Rule`): here the rule exists and is validated, the engine that consumes it is simply never scheduled | **Split across two PRs.** Corrective only in ETP-5245: data-fix (`R36`) backfills already-onboarded tenants. The preventive half (an onboarding service; the `AD_PROCESS_REQUEST` dataset table is and must stay excluded) is closed by a **separate PR authored by someone else** — ETP-5245 touches `com.etendoerp.go` not at all. CUT deliberately NOT bumped: with no preventive front in this PR a newborn tenant is still born broken and must keep seeing `R36`; once the other PR lands, `R36`'s `@check` self-heals to 0 | ETP-5245 (corrective) + a separate PR (preventive) |
 | P2 | Scheduled processes | The costing schedule created by P1 runs every **5 minutes**, so a freshly onboarded user waits up to 5 minutes before their movements are costed; and some tenants carry more than one active `SCH` row for the process, so it fires twice. Target invariant: **exactly one active scheduled `CostingBackground` request per client, every 30 seconds** | Both fronts closed. Preventive: `OnboardingCostingScheduleService` builds the row as `frequency='1'` + `SECONDLY_INTERVAL=30` (the shape GOClient has run by hand since 2026-04-08). Corrective: **NOT a `.sql`** — a SQL `UPDATE` cannot change a live Quartz trigger, so it is `OnboardingCostingScheduleService#realignCadence`, run over every tenant by `CostingCadenceStartup` on application boot (the module's own deploy provides that boot, so no operator action is needed), plus the `SFCostingCadence` webhook as a per-tenant escape hatch. Re-arms the survivor with `OBScheduler.reschedule(...)`, unschedules the extras | ETP-5370 |
 | O1 | SII / Fiscal Master Data | The "Causa de exencion" (exemption cause) selector on the invoice SIF/SII tab was empty for every tenant except GOClient and one other tenant that had already received a private copy via `R17-sii-cause-exemption` (ETP-4751) — `AEATSII_CAUSE_EXEMPTION` had no `ad_client_id='0'` rows at all | **Redesigned mid-flight** (2026-09-25) from a per-tenant onboarding-dataset addition to SIX SHARED SYSTEM ROWS: preventive is `modules/com.etendoerp.go/src-db/database/sourcedata/AEATSII_CAUSE_EXEMPTION.xml` (module system data, `ad_client_id='0'`, loaded independently of any tenant's onboarding run — no `OnboardingDatasetDefinition.INCLUDED_TABLES` entry); corrective is `R40-aeatsii-cause-exemption-catalog`, run once against the System pseudo-tenant (`--client 0`), never swept per-tenant. CUT not applicable — the fix targets the System client, which the watermark mechanism does not cover | ETP-5481 |
+| T1 | Demo data transfer | Contacts copied by the demo-to-production transfer land with `BP_Currency_ID` NULL, so Core refuses to complete any invoice, order, shipment or payment for them (`InitBPCurrencyLnk`). The copy runs through DAL as System and bypasses the NEO hook that defaults a new contact's currency | Both fronts closed: preventive `DemoDataTransferEntityCopier#targetContactCurrency` (source currency, else the target organization's); corrective data-fix (`R49-bpartner-currency-from-org`) for **every** partner without currency, migrated or not. CUT NOT bumped — not an onboarding gap: the transfer runs after provisioning, so the watermark says nothing about it | ETP-5768 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -2998,6 +2999,47 @@ end-to-end on this class of environment.
 tenant is missing at least one of E1-E6; each `@apply` INSERT is independently guarded by `NOT EXISTS
 (ad_client_id, key)`, so a partial load (e.g. the module's own sourcedata load having already seeded
 some rows) converges safely to a complete six-row set.
+
+---
+
+## T — Demo Data Transfer
+
+### T1 — Migrated contacts without currency (ETP-5768)
+
+**Symptom:** after upgrading a demo tenant to production with the contact transfer enabled,
+completing a sales invoice for a migrated contact fails with "Por favor inicialice la moneda del
+tercero ... antes de procesar el documento." (`AD_Message` `InitBPCurrencyLnk`). The same check
+lives in `ProcessInvoiceUtil`, `ProcessOrderUtil`, `ProcessShipmentUtil`, `FIN_PaymentProcess` and
+`AddPaymentOnProcessActionHandler`, so orders, shipments and payments fail too.
+
+**Root cause:** `DemoDataTransferEntityCopier#copyBusinessPartnerFields` copied names, tax ID,
+flags and the `Etgo*` fields only. The copy runs through DAL as System, so
+`BusinessPartnerHandler#injectOrgCurrency` (ETP-5284), the NEO create hook that gives a new
+contact its organization's currency, never ran, and Core's `BusinessPartnerEventHandler` only
+derives the currency from a price list, which is not copied either.
+
+**Preventive front:** `DemoDataTransferEntityCopier#targetContactCurrency` sets the source
+contact's currency (a System row, reused as is), else `OBCurrencyUtils.getOrgCurrency(targetOrg)`
+— the hook's own default. A transfer that cannot resolve any currency fails visibly instead of
+creating an unusable contact.
+
+**Corrective fix:** `20261015T184242Z__R49-bpartner-currency-from-org.sql` — sets
+`BP_Currency_ID` on every partner of the tenant where it is NULL, with the same chain as
+`OBCurrencyUtils.getOrgCurrency`: the partner's organization currency, else its legal entity's,
+else `AD_Client.C_Currency_ID`. It is deliberately not limited to migrated contacts: a migrated
+row carries no marker, and a partner created by any other path before ETP-5284 fails the same way.
+A `@report` lists any partner the chain could not resolve. Regression guard:
+`cli/test/data-fixes-r49-bpartner-currency-from-org.test.js`.
+
+**Not in scope:** migrated contacts also have no price list, payment terms or payment method, but
+so does every contact created from the SPA — `BusinessPartnerHandler` strips those fields on
+create (ETP-3660). The paths that require them (`CreateDraftInvoiceHandler`,
+`ReturnShipmentUtils`) fail for any such contact, not only migrated ones.
+
+**Status:** both fronts written (2026-10-15). R49 verified on the local dev DB inside a
+rolled-back transaction: `keepDataProd2` (a transfer of `keepDataDemo`) 3 rows, `QA Testing` 6
+rows (3 of them in organization `0`, resolved from the client base currency), re-check 0 rows.
+Not yet run against the full dev tenant universe.
 
 ---
 
