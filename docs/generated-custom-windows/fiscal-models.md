@@ -3428,8 +3428,9 @@ ETP-5456 deployment trap above applies: verify in a fresh tab after deploying.
 ETP-5716, phase "skeleton + boxes". The annual VAT summary, built on the classic module through
 `/fiscal390/*` (backend contract: `{etendo_root}/modules/com.etendoerp.go/docs/aeat-390-endpoints.md`).
 Everything 390-specific lives in `models/390/`; the shared surfaces only read the registry.
-Later phases plug in where noted: incident rules and the 303 preload. The invoices (Facturas)
-tab and the presentation (telematic filing, manual registration, substitute) are described below.
+Later phases plug in where noted: incident rules. The invoices (Facturas) tab, the preload from
+the 303s with the cuadre, and the presentation (telematic filing, manual registration, substitute)
+are described below.
 
 ### Registry entry and shared surfaces
 
@@ -3475,7 +3476,7 @@ tab and the presentation (telematic filing, manual registration, substitute) are
   shared `deriveResultKind`). AEAT writes [86]/[94] "con el signo que corresponda" and classic only
   signs them; the payment, offset or refund was settled by the last 303, repeated in [97]/[98]. A
   muted line under the cards says so (`fm.m390.result.informative_hint`). The "cuadre con los 303"
-  line under Resultado belongs to the 303-preload phase. Cards go 2×2 below 1100 px
+  line under the cards is `Reconciliation390` (see "Preload from the 303s and cuadre"). Cards go 2×2 below 1100 px
   (`.fm-390-kpis`).
 - **Tabs:** Casillas, Facturas (`FmSources390.jsx`, see below), Incidencias (shared
   `IncidentsTab`), Justificante (shared `AttachmentsTab`).
@@ -3495,7 +3496,7 @@ below 1200 px) and Anterior / Siguiente at the bottom:
 | 6 | IVA deducible | Interior corrientes / bienes de inversión, importaciones, intra-EU (per rate + group totals [48]…[59], [597]/[598]), [639]/[62], [63]; manual [660]/[661]; total [64] (deductible cuotas + [661], as the classic file writes it) | calculated; [660]/[661] manual |
 | 7 | Resultado liquidación anual | [65] total (= [47] − [64]), [658] manual, [84] total (= [65] + [658]), [659] manual, [85] manual (disabled AND cleared in territory mode; refused while [93] has a value), [86] total | |
 | 8 | Tributación por territorio | Toggle "Tributo a varias Administraciones"; % [87]–[91] (each 0–99), [92] total, [93] manual (refused while [85] has a value), [94] total; inline error when the percentages do not add up to 100 % | turning the toggle off clears the territory inputs |
-| 9 | Resultado de las liquidaciones | Per month "A ingresar" / "A devolver" (`INGRESAR_xx` / `DEVOLVER_xx`; the "A devolver" column is disabled unless `ISMONTHLYRETURN = 'Y'`), totals [95] / [96], [97], [98], [662] manual; inline error when DEVOLVER_12 and [97] are both filled, amber warning when [98] is filled with [96] or [97] | preloaded from the 303s in a later phase |
+| 9 | Resultado de las liquidaciones | Per month "A ingresar" / "A devolver" (`INGRESAR_xx` / `DEVOLVER_xx`; the "A devolver" column is disabled unless `ISMONTHLYRETURN = 'Y'`), totals [95] / [96], [97], [98], [662] manual; inline error when DEVOLVER_12 and [97] are both filled, amber warning when [98] is filled with [96] or [97] | preloaded from the 303s (see "Preload from the 303s and cuadre"); the year's 303s are listed under the block |
 | 10 | Volumen de operaciones | [99] [103] [104] [105] [110] [125] [126] calculated, [127] [128] manual, [106] [107] (subtracted), total [108] | [112] is not shown: it is not in the 2025 model (AEAT DR390e2025) and classic never writes it from 2021 on; an old draft's `390OTHER_UEMENBER` is dropped on save |
 | 11 | Operaciones específicas | [230] [109] [231] [232] [113] [523] calculated, [111] manual | |
 
@@ -3549,8 +3550,9 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
   highlights it for 2.5 s; "No se encontró la casilla" otherwise.
 - **Origin legend:** Calculado, Manual o precargado, Modificado, Total. "Modificado" (amber border +
   ↺ "Restaurar valor calculado") applies to an input whose value differs from
-  `manualData.aeatPreloaded[key]` — empty until the 303-preload phase fills it, so today every
-  input reads "Manual".
+  `manualData.aeatPreloaded[key]` (the value the 303 preload put in); an input with no preloaded
+  value reads "Manual o precargado". Restaurar puts the preloaded value back (a preloaded zero
+  empties the input — `restorePreloaded390`).
 - **Design year note:** when `taxReport.fallback` is true (e.g. 2026 computed with the classic
   `AEAT390_2025_Y`), a muted "Diseño de registro 2025" with an explanatory tooltip.
 - **Backend warnings** (`UNSUPPORTED_RATE`, `NO_BOX`) are listed in an amber note above the block
@@ -3591,9 +3593,55 @@ filtered and paged):
   `submitted: true` with no rows anyway).
 - Rows reload after a recompute (`refreshKey` = the boxes payload).
 
+### Preload from the 303s and cuadre (`preload390.js`, ETP-5716)
+
+Data: `GET /fiscal390/preload` (`fetchPreload390`, hook `usePreload390`). The backend contract —
+which 303 counts per period (latest submitted, else latest draft), the boxes it uses (snapshot or
+live + `manualOverrides`, period figure = [69]) and the full **303 → 390 mapping table with its
+AEAT justification** — is in `com.etendoerp.go/docs/aeat-390-endpoints.md`, "GET
+/fiscal390/preload". In short: [69] > 0 → `INGRESAR_<closing month>` ([95]); refunds →
+`DEVOLVER_xx` ([96], monthly register only) or, last period, [98]; last-period credit → [97];
+prior-year credits applied (Σ[78], oldest first against the first 303's [110]) → [85] (or [93] in
+territory mode); in-year credits never applied → [662]; last 303 [65]/[89]–[92] → [87]–[91] when it
+files to several administrations.
+
+- **When it applies:** on opening a draft whose `manualData.aeatPreloaded` is absent (never
+  preloaded; nothing happens while the year has no 303) and on every **Calcular**, which re-reads
+  the 303s first, applies them and then computes the boxes with the result. Never on a presented
+  declaration (the 303 table and the cuadre are still shown).
+- **Only unmodified inputs** (`applyPreload390` / `isUnmodified`): an input takes the new value when
+  it still equals the previously preloaded one (or, never preloaded, is empty/zero). A value the
+  user changed is kept and shows "Modificado" against the new preloaded value. A preloaded zero
+  empties the input. A key the 303s no longer determine (e.g. the last 303 was deleted) keeps its
+  input and leaves `aeatPreloaded`. The on-screen `ISMONTHLYRETURN` is sent (`monthlyReturn`),
+  so refunds land in the right box.
+- **Persistence:** `aeatPreloaded` is saved with the inputs (`buildManualData390(previous,
+  identification, aeatInputs, aeatPreloaded)`); a preload applied on opening marks the page
+  dirty and goes out with the next Guardar / Calcular / Generar / Presentar. Reloading keeps the
+  manual values and the origin marks (acceptance criterion).
+- **303 table** (`Settlements303Table390`, under block 9 through the `blockExtras` slot of
+  `FmBoxes390`): period, status chip, result [71], result type (A ingresar / A compensar / A
+  devolver / Sin resultado), "calculado ahora" for a draft computed live, "sustituye a N" when a
+  later declaration replaced others, and **Abrir**, which saves pending changes and opens that 303
+  (`fetchDeclaration` → `onOpenDeclaration` → FiscalModelsPage's one-shot `declAdded`). Below it:
+  the territory note, the non-blocking "Faltan Modelos 303 de <año> (…)" (same key as the
+  Nueva declaración notice, `fm.m390.new_decl.missing_303`) and the preload warnings (draft 303s,
+  unknown [110] carry, refund without monthly register, compute failed, last period missing).
+- **Cuadre** (`Reconciliation390`, under the cards): `reconcile390(result on screen, preload)` —
+  the result shown on the Resultado card ([86], or [94] in territory mode) against
+  `expectedResult` = [95] − [96] − [97] − [98] − [662] of the 303s. "Cuadra con los 303 (X)"
+  within `RECONCILIATION_TOLERANCE_390` (1,00 €, named constant — the business rule is pending
+  confirmation); beyond it an amber, non-blocking "Diferencia con los 303: ±D (según los 303: X;
+  tolerancia 1,00 €)"; "Sin Modelos 303 de <año> con los que cuadrar" when there are none. The
+  missing-303 notice is repeated there. Neither blocks Generar nor Presentar. Why these boxes:
+  backend doc, "Cuadre".
+- **For the incidents phase:** `preloadIncidents390(preload, reconciliation)` returns the
+  candidates `MISSING_303` and `DIFF_303` (severity `warn`); server-side,
+  `Fiscal390PreloadAggregator.reconcile` gives the same comparison.
+
 ### Save flow
 
-`manualData` = previous manualData (unknown keys kept) + `identification` + `aeatInputs`
+`manualData` = previous manualData (unknown keys kept) + `identification` + `aeatInputs` + `aeatPreloaded`
 (`buildManualData390`). The classic substitute flags are written into `aeatInputs` on every save so
 the backend forwards them to the classic generator: ordinary → `ISSUPPLEMENTARY: 'N'`,
 `ISRECTIFICATION: 'N'`; substitute → `ISSUPPLEMENTARY: 'Y'` (or `ISRECTIFICATION: 'Y'` with
@@ -3604,7 +3652,7 @@ the backend forwards them to the classic generator: ordinary → `ISSUPPLEMENTAR
 | Action | Requests |
 |---|---|
 | Guardar | `PUT manualData` |
-| Calcular | `GET /fiscal390/boxes` with the on-screen inputs as query params (the backend overrides the stored ones with them), then `PUT manualData` when dirty |
+| Calcular | `GET /fiscal390/preload` (applied to the unmodified inputs), then `GET /fiscal390/boxes` with the on-screen inputs as query params (the backend overrides the stored ones with them), then `PUT manualData` when dirty |
 | Generar fichero 390 | `PUT manualData` when dirty (a failed save aborts) → `GET /fiscal390/generate` (reads the STORED inputs; body read as a Blob, ISO-8859-1 untouched; default name `390_0A_<año>.txt`, editable in `FileGenModal390`) |
 | Presentar a la AEAT | `PUT manualData` when dirty (a failed save aborts) → `AeatSubmitFlow` → `POST /fiscal390/submit` (the backend files the STORED inputs and freezes the snapshot from them) |
 | Registrar como presentada | `PUT manualData` with `submission` (and the pending inputs) → upload of the PDF → a SEPARATE `PUT status` (`submitted_ext`) — never the same PUT: the backend freezes the submission snapshot from the stored inputs before applying a same-request manualData |
