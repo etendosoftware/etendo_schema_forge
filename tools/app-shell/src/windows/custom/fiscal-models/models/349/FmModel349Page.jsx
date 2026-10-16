@@ -1128,7 +1128,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
       return;
     }
     // ETP-5725 (reopened QA fix, Bug 1) — UX-only mirror of the authoritative backend guard
-    // (`FiscalDeclCrudHandler#rejectCorrectiveWithoutOrdinariaPresented`): "Sustitutiva" selected
+    // (`FiscalDeclCrudHandler#checkCorrectiveConsistency`): "Sustitutiva" selected
     // with no sibling for this period in the submitted family at all means there is no ordinaria
     // on file to substitute — see FmModel303Page.jsx's `correctiveWithoutPresentedOrdinaria` for
     // the full rationale (`decl._duplicatePeriodPresented` as the "a presented ordinaria exists"

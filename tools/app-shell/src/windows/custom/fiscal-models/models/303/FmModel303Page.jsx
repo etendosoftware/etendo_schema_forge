@@ -1327,7 +1327,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   const requiresRectificativa = Boolean(decl._hasDuplicatePeriod) && !identChecks.rectificativa && !isSubmitted;
 
   // ETP-5725 (reopened QA fix, Bug 1) — UX-only mirror of the authoritative backend guard
-  // (`FiscalDeclCrudHandler#rejectCorrectiveWithoutOrdinariaPresented`): "Autoliquidación
+  // (`FiscalDeclCrudHandler#checkCorrectiveConsistency`): "Autoliquidación
   // rectificativa" checked with NO presented sibling for this period at all means there is
   // nothing for this declaration to correct — AEAT requires a genuine ordinaria to already be
   // on file first. `decl._duplicatePeriodPresented` (set by FmListPage.jsx) is true only when a
@@ -1343,7 +1343,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // puede haber una ordinaria por periodo". The UI auto-defaults "Autoliquidación rectificativa"
   // to checked when a presented sibling exists, but the user can manually uncheck it back to
   // "Normal" and try to present anyway — this is the UX-only mirror of the authoritative backend
-  // guard (`FiscalDeclCrudHandler#rejectOrdinariaWhenAlreadyPresented`). Same
+  // guard (`FiscalDeclCrudHandler#checkCorrectiveConsistency`). Same
   // `decl._duplicatePeriodPresented` proxy as above ("some sibling is presented" standing in for
   // "a presented ordinaria exists") — the backend re-derives the exact rule regardless.
   const ordinariaAlreadyPresented = !Boolean(identChecks.rectificativa)

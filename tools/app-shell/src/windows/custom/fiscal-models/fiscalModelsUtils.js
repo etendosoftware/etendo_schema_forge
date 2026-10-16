@@ -527,6 +527,19 @@ function applyComplementariaParams(params, identChecks) {
 
 export function applyIdentParams(params, identChecks) {
   applyMappedIdentParams(params, identChecks);
+  // ETP-5725 (reopened QA review, Blocker B1) — a DEDICATED, unambiguous flag for the backend's
+  // corrective/ordinaria consistency guard (FiscalDeclCrudHandler#checkCorrectiveConsistency,
+  // read via Fiscal303BoxesHandler#dispatch's GENERATE branch AND, as of this fix,
+  // Fiscal303SubmissionSupport#handleSubmit — the real AEAT telematic submit endpoint).
+  // Deliberately set here, in the SHARED param builder every 303 request that can file/generate
+  // goes through (`generate303File` AND `AeatSubmitFlow.jsx`'s own submit request), not in one
+  // caller — the original version of this fix set it only inside `generate303File`, which is
+  // exactly how `AeatSubmitFlow.jsx`'s submit request missed it and left the real filing
+  // endpoint unguarded (review B1). `applyRectificativaParams` below also sets
+  // `IsComplementary=Y`, but that param is shared with the UNRELATED legacy "complementaria"
+  // checkbox (`applyComplementariaParams`), so it cannot be trusted server-side to mean "this is
+  // a rectificativa" — this one always means exactly that, only ever "Y" or absent.
+  if (identChecks?.rectificativa) params.set('Rectificativa', 'Y');
   if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
   // Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA) — read by
   // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
@@ -630,13 +643,6 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
 
     if (identChecks) applyIdentParams(params, identChecks);
     if (manualOverrides) applyBoxParams(params, manualOverrides, identChecks);
-    // ETP-5725 (reopened QA fix) — a DEDICATED, unambiguous flag for the backend's
-    // corrective/ordinaria consistency guard (FiscalDeclCrudHandler#checkCorrectiveConsistency,
-    // read via Fiscal303BoxesHandler#dispatch). `applyIdentParams` above also sets
-    // `IsComplementary=Y` for the UNRELATED legacy "complementaria" checkbox, so that param
-    // cannot be trusted server-side to mean "this is a rectificativa" — this one always means
-    // exactly that, only ever "Y" or absent.
-    if (identChecks?.rectificativa) params.set('Rectificativa', 'Y');
 
     const url = `${base}/fiscal303/generate?${params}`;
     const res = await apiFetch(url, { baseUrl: '', token });

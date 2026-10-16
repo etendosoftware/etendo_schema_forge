@@ -930,7 +930,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           // ETP-5725 (reopened QA fix, UX follow-up) — the precise, commonly-hit case: a
           // rectificativa/sustitutiva sibling is already presented for this period, so
           // reactivating this one would strand it with nothing left to correct (see
-          // FiscalDeclCrudHandler#reactivationBlockReason).
+          // FiscalDeclCrudHandler#findReactivationBlockReason).
           toast.error(t('fm.list.reactivate_failed_corrective_exists')
             ?? 'No se puede reactivar: ya existe una declaración rectificativa/sustitutiva presentada para este periodo.');
         } else if (result.reason === 'sibling_exists') {
