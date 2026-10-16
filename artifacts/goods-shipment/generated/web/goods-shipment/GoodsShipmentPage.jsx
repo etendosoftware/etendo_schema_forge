@@ -184,6 +184,14 @@ export const api = {
     },
     {
       "entity": "goodsShipmentLine",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/uOM"
+    },
+    {
+      "entity": "goodsShipmentLine",
       "field": "project",
       "column": "C_Project_ID",
       "reference": "Project",
@@ -313,10 +321,12 @@ export const api = {
   },
   "labelOverrides": {
     "en_US": {
-      "EM_ETGO_Currency_ID": "Currency"
+      "EM_ETGO_Currency_ID": "Currency",
+      "C_UOM_ID": "Unit"
     },
     "es_ES": {
-      "EM_ETGO_Currency_ID": "Moneda"
+      "EM_ETGO_Currency_ID": "Moneda",
+      "C_UOM_ID": "Unidad"
     }
   }
 };

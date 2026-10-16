@@ -485,6 +485,14 @@ export const api = {
     },
     {
       "entity": "lines",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/purchase-invoice/lines/selectors/uOM"
+    },
+    {
+      "entity": "lines",
       "field": "salesOrderLine",
       "column": "C_OrderLine_ID",
       "reference": "OrderLine",
@@ -1010,7 +1018,8 @@ export const api = {
       "PriceList": "Precio",
       "Foreign_Amount": "Importe en Moneda Objetivo",
       "em_etgo_tbai_status": "Estado Batuz",
-      "DocumentNo": "N° interno"
+      "DocumentNo": "N° interno",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "POReference": "Document No.",
@@ -1020,10 +1029,12 @@ export const api = {
       "C_DocTypeTarget_ID": "Document Type",
       "Foreign_Amount": "Target Currency Amount",
       "em_etgo_tbai_status": "Batuz Status",
-      "DocumentNo": "Internal No."
+      "DocumentNo": "Internal No.",
+      "C_UOM_ID": "Unit"
     },
     "es_AR": {
-      "OutstandingAmt": "Saldo pendiente"
+      "OutstandingAmt": "Saldo pendiente",
+      "C_UOM_ID": "Unidad"
     }
   }
 };

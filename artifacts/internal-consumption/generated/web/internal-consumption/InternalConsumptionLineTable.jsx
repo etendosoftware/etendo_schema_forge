@@ -5,7 +5,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true, lookup: true, lookupDrawer: 'product-stock' },
   { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity', required: true, min: 1, minWidth: 160 },
-  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM' },
+  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', display: 'tag', readOnly: true },
   { key: 'storageBin', column: 'M_Locator_ID', type: 'selector', label: 'Warehouse', required: true },
 ];
 // @sf-generated-end columns:internalConsumptionLine

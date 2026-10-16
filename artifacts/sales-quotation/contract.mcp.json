@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
+  "version": "0.29.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-07-22T10:47:48.949Z",
-  "contractChecksum": "bfd80f66609db10e",
+  "updatedAt": "2026-10-15T19:36:09.758Z",
+  "contractChecksum": "a55ae7d013edee05",
   "apiPrediction": {
     "specName": "sales-quotation",
     "baseUrl": "/sws/neo/sales-quotation",
@@ -149,6 +149,14 @@
             }
           ]
         }
+      },
+      {
+        "entity": "quotationLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-quotation/quotationLine/selectors/uOM"
       }
     ],
     "actions": [
@@ -744,12 +752,14 @@
         "C_BPartner_ID": "Contacto",
         "C_Reject_Reason_ID": "Razón de rechazo",
         "DateOrdered": "Fecha de presupuesto",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
         "C_Reject_Reason_ID": "Reject Reason",
-        "DateOrdered": "Quotation Date"
+        "DateOrdered": "Quotation Date",
+        "C_UOM_ID": "Unit"
       }
     }
   },
@@ -851,6 +861,11 @@
           "lineGrossAmount": {
             "readOnly": true,
             "defaultValue": "0"
+          },
+          "uOM": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@UomManagement@='Y'"
           },
           "unitPrice": {
             "required": true,
@@ -1020,5 +1035,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "f98136a725d5400b"
+  "checksum": "b4c4703e844c371b"
 }

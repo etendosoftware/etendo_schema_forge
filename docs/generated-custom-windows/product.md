@@ -3,7 +3,7 @@
 ## Intent
 Product lets a user maintain the commercial and inventory identity of an item, then continue into the product-specific surfaces that matter after the master record exists: pricing, stock visibility, transaction history, and the contract-backed child datasets attached to the selected product.
 
-On `origin/develop`, the visible product page is still a generated route with custom surfaces embedded into it: a gallery list, a grouped `Additional Info` panel, a pricing tab, and a product-specific inventory sidebar.
+The visible product page is a generated route with custom surfaces embedded into it: a gallery list, a pricing tab, and a product-specific inventory sidebar.
 
 ## Theme roles
 
@@ -16,7 +16,7 @@ identity of separate data series and is not a UI status or theme role.
 - Browse products from the Inventory menu and recognize them quickly by image, name, search key, and category.
 - Participate in the global semantic search through the `product` DB Extended search target. The participation is declared by this window's Schema Forge contract, not by a Vite environment variable.
 - Create or update the core product definition, including search key, name, description, product type, category, UOM, image, tax category, sale/purchase flags, stocked flag, weight, UOM for weight, attribute set, brand, lifecycle status, returnable flag, active flag, and UPC/EAN.
-- Move between a main `General` tab and a separate `Additional Info` tab so commercial and logistics settings are grouped instead of mixed into one form.
+- Maintain the whole product from one unified sheet (ETP-5696) instead of switching between `General` and `Additional Info` tabs.
 - Review and edit pricing from a dedicated `Price` tab without leaving the product page. Pricing tables are entered via per-table pencil icons (one for Sales lists, one for Purchase lists) that open a focused dialog.
 - Click a product image to open a lightbox for full-size inspection. Upload, replace, and remove the image from within the same field in the form grid.
 - Inspect stock availability and stock movement context from the custom sidebar.
@@ -29,10 +29,10 @@ identity of separate data series and is not a UI status or theme role.
 ## Interaction model
 - **Route:** `/product` and `/product/:recordId`.
 - **Visibility:** visible from the `Inventory` section as `Product`.
-- **Implementation type:** generated window route loaded through `tools/app-shell/src/windows/registry.js`, with product-specific custom surfaces embedded in the generated page: `ProductGallery`, `ProductAdditionalInfoPanel`, `ProductPriceBar`, and `ProductSidebar`.
+- **Implementation type:** generated window route loaded through `tools/app-shell/src/windows/registry.js`, with product-specific custom surfaces embedded in the generated page: `ProductGallery`, `ProductPriceBar`, and `ProductSidebar`.
 - **Window shape:** master-child workspace. The selected product is the master entity, and product-related child datasets are attached to that record.
 
-The list surface is gallery-based rather than a plain grid. Product cards show the image when one exists and fall back to a package icon when no image is available. The cards are laid out by the shared width-driven `GalleryGrid` (ETP-5516): each card is at least `GALLERY_CARD_MIN_WIDTH_PX` (220 px) wide and the number of cards per row follows the width of the list area, not the viewport — at 1280 px wide that is 5 per row with the Navigation Rail collapsed and 4 with it expanded; cards that do not fit wrap to the next row, and long names are truncated with an ellipsis only when they exceed the card width. Opening a record takes the user into a detail screen with two primary tabs: `General` and `Additional Info`.
+The list surface is gallery-based rather than a plain grid. Product cards show the image when one exists and fall back to a package icon when no image is available. The cards are laid out by the shared width-driven `GalleryGrid` (ETP-5516): each card is at least `GALLERY_CARD_MIN_WIDTH_PX` (220 px) wide and the number of cards per row follows the width of the list area, not the viewport — at 1280 px wide that is 5 per row with the Navigation Rail collapsed and 4 with it expanded; cards that do not fit wrap to the next row, and long names are truncated with an ellipsis only when they exceed the card width. Opening a record takes the user into a single unified detail sheet (ETP-5696): there are no `General` / `Additional Info` primary tabs.
 
 The detail screen also changes the standard generated behavior in six visible ways:
 - the product's standard-cost history is surfaced through a **Cost** tab (classic grid+form, `CostingTable`/`CostingForm`), declared via `secondaryTabs` in `decisions.json` (ETP-5245)
@@ -95,9 +95,10 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 1. Open `/product` and confirm the list is a gallery of product cards rather than a flat table.
 1a. Open the global search, enter at least three characters, and confirm that the localized searching placeholder is shown while the request is in flight. Confirm that indexed `go.product` semantic matches appear before navigation results when the DB Extended Product Vector Source is active and the role can read Product. Each match must show the localized `Product` entity label sourced from the contract; selecting one opens that product in edit mode.
 2. Verify product cards show the product image when present and fall back to the package icon when no image exists.
-3. Open an existing product and confirm the detail surface exposes `General` and `Additional Info`.
-4. In `Additional Info`, verify the `Commercial` section contains `Tax Category`, `Sale`, and `Purchase` in a right-side `EntityForm` with a section title and description on the left. Confirm an HR divider separates it from the `Logistics` section, which contains `Almacenable` (not "Almacenado"), `Retornable`, `Peso`, and `Unidad de peso`. All input backgrounds should be white.
-4a. Set the product's `Tipo` to `Servicio` and confirm the `Logistics`/`Logística` section (and its divider) disappears entirely from `Additional Info`. If `Almacenable`/`Retornable` were checked, confirm they are cleared to unchecked as soon as the type switches. Switch the type back to `Artículo` and confirm the section reappears.
+3. Open an existing product and confirm the detail surface is one unified sheet: no `General` / `Additional Info` tabs (ETP-5696).
+4. Verify the sheet's rows: `Código`, `Nombre`, `Tipo` / `Categoría`, `Unidad`, `Grupo de impuesto` / `Almacenable` (not "Almacenado"), `Retornable`, `Activo` (the first two only for `Artículo`), then `Descripción` and the image. There is no `Peso`, `Unidad de peso`, `Disponibilidad` (Venta/Compra) or `Logística` anywhere (ETP-5696).
+4a. Set the product's `Tipo` to `Servicio` and confirm `Almacenable` and `Retornable` disappear (only `Activo` stays) and so does the stock side panel; save and confirm `IsStocked`/`Returnable` are `N` in the DB. Switch back to `Artículo`, confirm both reappear checked, save and confirm `Y`.
+4b. Create a product and confirm `IsSold`/`IsPurchased` are `Y` and `C_Uom_Weight_ID` is empty. Open a legacy product with either flag `N`: it is not dirtied by opening; the first edit saves both as `Y`.
 5. Open `/product/new` and confirm the `Price` tab says the product must be saved before pricing can be maintained.
 6. For a saved product, confirm the `Price` tab shows the `Venta` / `Compra` toggle and that the active section lists only the tariffs of that side. Change a `Unit price` and blur: only that column must be sent. Delete a row and confirm it disappears and the count badge drops.
 7. Open a product whose tariff name differs from its version name (any product priced in `Lista de venta (sin impuestos)`) and confirm the row shows **`Lista de venta (sin impuestos)`**, not `Version Lista de venta (sin impuestos)`. Open the add-tariff selector and confirm the options use tariff names too.
@@ -109,7 +110,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 11. In `Summary`, confirm `Available` and `Reserved` stat cards are hidden when `reserved === 0`. Open a product that has reserved stock and confirm those cards are visible.
 12. If the business depends on BOM, transactions, characteristics, stock, category price rule version, alternate UOM, or variant actions, verify which of those surfaces are actually visible in the running page. Current repo evidence does not fully prove all of them. (Costing was removed from this list in ETP-5245 — it now has its own tab, verified in step 15.)
 13. Select the **Attachments** tab (sits in the same tab strip as **Cost**, **Accounting** and **Price**, after the primary tab strip). Upload a file, verify it shows up in the table with name, size, and upload date, and that downloading and deleting it work correctly. When multiple files exist, tick two rows and confirm the selection bar appears with the selected count, that its ZIP download brings only the ticked files, and that its delete asks for confirmation first. The table header carries no 'Download all (ZIP)' or 'Delete all' control any more (ETP-5526).
-14. Open an existing product and confirm the secondary tab strip (below `General`/`Additional Info`) shows tabs in this exact order: **Cost**, **Accounting**, **Price**, **Attachments**. Select `Accounting` and confirm it renders as a classic grid+form (not a separate panel above the tab strip) with `Fixed Asset`, `Product Expense`, `Product Revenue`, `Product COGS`, `Invoice Price Variance` add/edit fields.
+14. Open an existing product and confirm the secondary tab strip (below the sheet) shows tabs in this exact order: **Cost**, **Accounting**, **Price**, **Attachments**. Select `Accounting` and confirm it renders as a classic grid+form (not a separate panel above the tab strip) with `Fixed Asset`, `Product Expense`, `Product Revenue`, `Product COGS`, `Invoice Price Variance` add/edit fields.
 15. See "Manual verification (ETP-5245)" below for the Cost tab, the cost warning banner and the seeded zero prices.
 
 ## Automated evidence
@@ -117,7 +118,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - Shared shell/route behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`, especially the generated/custom window loading flow and the shared entity list/detail flow.
 - Product-specific behavior is grounded in current code under `tools/app-shell/src/windows/custom/product/`:
   - `ProductGallery.jsx` for gallery browsing
-  - `ProductAdditionalInfoPanel.jsx` for the two-column row layout with `Commercial` and `Logistics` sections and HR divider between them, and (ETP-4943, extended in ETP-5091) for hiding the `Logistics` row and force-clearing `stocked`/`returnable` when `productType` is `'S'`, `'E'` or `'R'`
+  - `ProductStockDefaultsWatcher.jsx` for the product-level invariants that depend on a change (ETP-4943 / ETP-5091: force `stocked`/`returnable` when `productType` flips between Item and `'S'`/`'E'`/`'R'`; ETP-5696: hidden Sale/Purchase always saved as true)
   - `ProductPriceBar.jsx` for product pricing fetch/create/edit behavior, including the tariff-name labels, the bounded rows scroller, the per-open selector refetch and the "all tariffs already priced" hint. Amounts render through a local `CURRENCY_SYMBOLS` map plus the row's `currencySymbol`; migrating them to the canonical `formatCurrency()` util is pending the dedicated currency-format task.
   - `ImageField.jsx` was fully redesigned for ETP-4190 and extended in a follow-up: upload button inside the container, hover overlay with zoom icon and remove/replace actions, lightbox via `createPortal(document.body)` with ESC-to-close, `cursor-zoom-in` when an image exists. When no image exists (stretch mode), the area shows a full-height dashed dropzone with an upload icon button, "Selecciona o arrastra aquí tus archivos", and the constraint hint ("Hasta 30 MB y 7680 × 4320 píxeles (JPEG, JPG, PNG)"). The dropzone supports drag & drop (highlights on `isDragging`). Validation rejects non-JPEG/PNG types, files over 30 MB, and images exceeding 7680 × 4320 px — all errors surface as `toast.error()` (no inline message). The upload button at the bottom is hidden in the empty state (the entire zone is the upload target); it reappears once an image is loaded.
   - `ProductSidebar.jsx` for stock and transaction-driven sidebar summaries, including pill-style period tabs, bezier-curve SVG chart, dashed gridlines, expand link, smaller stat cards, conditional visibility of `Available`/`Reserved` cards, and divider between sections.
@@ -1549,3 +1550,49 @@ popup is titled with the translated field label, shows each `"<code> - <name>"` 
 by code or name and lists **posting accounts only** (`PostingAccountCombinationSelectorPolicy` in
 `com.etendoerp.go` hides summary headings).
 
+## Unified product sheet — ETP-5696
+
+The `General` and `Additional Info` primary tabs are gone: `window.primaryTabs` (and `primaryTabsVariant`) were removed from `decisions.json` and `ProductAdditionalInfoPanel.jsx` was deleted. The header is one form, in this order (3 columns, image on the right, description below):
+
+| Row | Fields |
+|---|---|
+| 1 | Code* · Name* · Type* |
+| 2 | Category* · Unit* · Tax category* |
+| 3 | `Almacenable` · `Retornable` (only when Type = Item) · `Active` |
+
+- `taxCategory`, `stocked` and `returnable` moved to `section: principal` with `seq` 6 / 7 / 8 (`active` is 9, `description` 10, `image` 11). `stocked` / `returnable` carry `displayLogicJs: "record.productType === 'I'"`, so a Service / Expense / Resource shows only `Active` on that row. The stock side panel (`ProductSidebar`) keeps hiding itself for `S`/`E`/`R` — the AD product types are only `I`, `S`, `R`, `E`, so "not Item" and "non-stockable" are the same set.
+- Hidden from the sheet with `form: false`: `weight`, `uOMForWeight` (stay empty), the whole Logistics block, `sale` / `purchase` (Availability), and the secondary fields that were only reachable through the old tab (`brand`, `attributeSet`, `uPCEAN`, `mProductStatusID`). They stay in the contract, the API and the CSV import.
+- `weight` / `uOMForWeight` are hidden, not cleared: a new product is created with no weight UOM, but a product that already has one keeps it (decided with the analyst, 2026-10-15: "empty by default" means at creation only; verified live — editing and saving a product with Kilogram/5 leaves both untouched).
+- `sale` / `purchase` are always saved as true: new records get `defaultValue: 'Y'`; `ProductStockDefaultsWatcher` additionally sets them to true the first time the user edits a legacy product that has either flag false. Merely opening a record never dirties it. Other creation paths (CSV import, MCP) are not changed by this ticket.
+- The "create product" popup (`lookupCreateTargets.js` → `RecordCreateModal`) mirrors the window, so its `tabs`/`tabsVariant` entries were removed and the modal renders one `principal` panel with no tab strip (`tabs.length > 1` gate). A drift test asserts the registry and `decisions.json` stay aligned.
+- `window.labelOverrides` sets `IsStocked` → "Almacenable" (es_ES / es_AR): the AD label is "Almacenado" and the old panel used the `productStocked` UI key (ETP-4943); now that the checkbox is a generated field, the override keeps the corrected term (mirrored in `lookupCreateTargets.js`, guarded by the drift test).
+- Removed i18n keys (all three locale files): `commercial`, `commercialDescription`, `availability`, `logistics`, `logisticsDescription`.
+- Design deviation, agreed with the analyst: the Claude Design mock draws a "Gestión de stock" caption before `Almacenable`/`Retornable` and a vertical separator before `Activo`. They are not rendered; the three checkboxes are plain adjacent form cells. The form engine has no field-group option, so replicating it means extending `EntityForm` and the generator in `schema_forge_core`.
+- Unchanged: bottom tabs (Price, Cost, Accounting, Attachments) and the toolbar.
+
+Tests: `ProductStockDefaultsWatcher.vitest.jsx` (Sale/Purchase cases), `lookupCreateTargets.vitest.js` (no-tabs drift guard and no-tabs target contract), `RecordCreateModal.vitest.jsx` (single panel, no tab strip), `e2e/tests/flows/products/product-logistics-nonstockable-types.mocked.spec.js` (stock flags per product type).
+
+### Verification evidence — ETP-5696 (2026-10-15)
+
+Run against `develop` + this change, local env (`localhost:3100`, GOClient), after `make regen ONLY=product FROM_CACHE=1` (`FROM_CACHE=1` is required here, see ETP-4603 follow-up) and `sf-validate-pipeline --scope=product` (0 violations). DB columns were read with `psql` after each save.
+
+| Case | Result |
+|---|---|
+| Unified sheet: no tabs, no "Mostrar más", rows in the specified order, `Grupo de impuesto` required | OK |
+| `Almacenable` label (es_ES, via `window.labelOverrides` `IsStocked`) | OK |
+| New Artículo: `IsSold=Y`, `IsPurchased=Y`, `IsStocked=Y`, `Returnable=Y`, weight UOM null, `Weight=0` | OK |
+| New Servicio (type changed before the first save): flags `N`/`N`, `IsSold=Y`, `IsPurchased=Y`; default tariffs seeded at 0 | OK |
+| Artículo → Servicio → Guardar without any other edit: `IsStocked=N`, `Returnable=N` persisted (server guard + watcher) | OK |
+| Servicio → Artículo → Guardar: both back to `Y`, row and stock panel reappear | OK |
+| Legacy product with `IsSold=N`/`IsPurchased=N`: opening does not enable Guardar nor write (`updated` unchanged); first edit persists `Y`/`Y` | OK |
+| Autosave on checkbox click (`Almacenable`) persists | OK |
+| `/product/new`: UOM, Tax category and category preselected; Precio says "save first"; adding a cost line refuses with the required-fields toast | OK |
+| Create popup from a sales-order line: unified sheet, no tab strip, no stock panel, Price/Cost/Accounting/Attachments, editable after save, product selected into the line; DB flags correct | OK |
+| Cost banner (shown for every type, ETP-5245 widening) and required-field gate | OK |
+| Saving a product that already has a weight UOM/weight from the sheet: both are left untouched (hidden, not cleared; "empty by default" = at creation only) | OK, by decision |
+| CSV import (2 rows, Artículo + Servicio, with prices): both created; Servicio ends with `IsStocked=N`/`Returnable=N` (server guard); `IsSold=Y`, `IsPurchased=Y`, weight UOM null; prices written to the default tariffs | OK |
+| `sf-push-neo product --dry-run`: the push only reads `visibility` and entity exclusion; the diff changes no `visibility`, so no push / `export.database` is needed | OK |
+
+Automated: Vitest 453 files / 9296 tests, `node --test` 2408 tests, Playwright mocked (`product-logistics-nonstockable-types`, `product-pricing`) 7/7 — all green. Not exercised live: the `en_US` "Stocked" label and the CSV export download (covered by `importExportColumns` unit tests).
+
+Observations unrelated to the change: the tax-category default shown on a new product is the System row `IVA Normal (FF808181)` (a local-data row, `IsDefault='Y'`, renamed in the DB itself); the create-product popup does not prefill `Nombre` with the lookup text.
