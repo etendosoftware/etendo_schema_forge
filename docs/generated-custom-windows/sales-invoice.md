@@ -592,6 +592,23 @@ The MCP publishes `cloneRecord` for this window (declared by `SalesInvoiceHeader
 
 `cloneRecord` (ETP-5709): the copy also points at none of the source's related documents (corrected-invoice link (`EM_Aeatsii_Invoice_ID`), order, order line, shipment line and `EM_Etgo_Source_Invoiceline_ID`).
 
+## Line discount, update recalculation and completion guard — ETP-5710
+
+`SalesInvoiceLineHandler` shares `InvoiceLineAmountSupport` with the new purchase-invoice line
+customization. Besides deriving `lineNetAmount` / `grossAmount` on a create (ETP-5528), it now applies the
+line discount (`unitPrice = listPrice × (1 − etgoDiscount / 100)`, never twice: a price different from the
+list price is the caller's) and recalculates the amounts when a PATCH / PUT changes quantity, price, list
+price, discount, gross price or tax. Without a tax in the body only the net is derived; the gross follows
+once the tax is known. Completing an invoice that has a product line with a quantity and a price but a net
+amount of 0 is refused with a 422 (`invoiceLinesWithoutAmount`) before the discount recalculation and the
+document action; the refusal names the products (not the line numbers) and the SPA shows it translated.
+The line create/edit form is unchanged, but the import modals are affected: `ImportFromSourceInvoiceModal`
+posts the undiscounted price (equal to the list price) plus the source discount, which used to persist
+the discount unapplied and is now discounted server-side (a fix of a pre-existing inconsistency), and
+`ImportFromOrderModal` reconstructs the list price (`unitPrice / (1 − discount/100)`) when the order
+line has none, so the server does not discount a second time. Rules and numbers: `purchase-invoice.md` and
+`modules/com.etendoerp.go/docs/neo-headless.md` §4.12.31.
+
 ## Gap assessment
 
 - The `DocumentTotalsPanel` inside `InvoiceBottomPanel` computes subtotal, discount, tax, and total client-side from the saved lines plus the live add-row (`pendingLine`) and sidebar editing state (`editingLine`), so totals update in real time as the user types — without waiting for a server save. The panel is the source of truth for displayed amounts; it does not read from server-side header fields.

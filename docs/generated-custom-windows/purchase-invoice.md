@@ -288,6 +288,45 @@ territory, where it is always Batuz (ETP-5087). By user decision the caption mir
 3. Under BIZKAIA with SII, "Envío SII+Batuz"; after sending one of them, the caption names the other.
 4. Under the Solo Lectura tier, none of the four entry points is offered.
 
+## Line amounts written by agents and API clients — ETP-5710
+
+The SPA computes `unitPrice`, the line net and the line gross client side and posts them. Agents
+(MCP `etendo_create` / `etendo_update` / `etendo_batch`) and other API clients do not, and nothing on
+the server used to: a purchase invoice line they wrote kept `lineNetAmount 0` / `grossAmount 0` (or the
+undiscounted amount), the header total, the tax rows and the payment plan summed those zeros, and the
+invoice completed with a total of 0, no payment plan and `paymentComplete = Y`.
+
+- **`purchase-invoice/lines` now has its own customization**, `PurchaseInvoiceLineHandler`
+  (`@NeoExtension(spec = "purchase-invoice", entity = "lines")`, extending `InvoiceLineHandler`). It
+  derives, on every channel, the discounted `unitPrice` (`listPrice × (1 − etgoDiscount / 100)`),
+  `lineNetAmount` and `grossAmount` of a created line, and recalculates them when a PATCH / PUT changes the
+  quantity, price, list price, discount, gross price or tax of an existing one. The same rules apply to
+  sales invoice lines (shared `InvoiceLineAmountSupport`).
+- **The discount rule.** A line with a non-zero discount and no explicit gross price: no price or a price
+  equal to the list price → the price becomes `listPrice × (1 − d/100)`; a price different from the list
+  price is the caller's and is kept (this is the SPA's body, so it is never discounted twice); a price with
+  no list price is taken as the list price (10 × 25 at 2 % → price 24.50, net 245.00, gross 296.45 at 21 %).
+  On an update the price is re-derived only when the patch carries `etgoDiscount` or `listPrice` (or a
+  price equal to the list price).
+- **SPA impact.** The line create/edit form is unchanged (it posts a discounted price different from the
+  list price, which the server keeps). The import-from-document modals are affected:
+  `ImportFromSourceInvoiceModal` posts the undiscounted price (equal to the list price), the source
+  `etgoDiscount` and an undiscounted net, which used to persist the discount unapplied; the server now
+  discounts it (a fix of a pre-existing inconsistency). `ImportFromPurchaseOrderModal` posts the order
+  line's already-discounted price, so when the order line has no list price (for example orders created by
+  MCP agents) and a discount, it now reconstructs the list price (`unitPrice / (1 − discount/100)`, 6
+  decimals) so the price differs from the list price and is not discounted a second time (the sales
+  twin, `ImportFromOrderModal`, has the same fix).
+- **Completion guard.** Completing (`documentAction = CO`, from the SPA, REST or MCP) is refused with a 422
+  (`error.code = invoiceLinesWithoutAmount`, `error.lines` = `[{line, product, quantity}]`; the message names the products, not the line numbers, and the SPA shows it translated) when a product line has a
+  quantity and a price whose product is at least half a cent but a net amount of 0. Free lines (price 0),
+  zero quantities and negative (return) lines still complete. The guard runs before the total discount is
+  recalculated and before the document action.
+- **Global discount.** `etgoTotalDiscount` keeps working as described above: one negative `ETGO_DTO` line per
+  tax group, computed from the line nets — which are now real. (Before, every group's net was 0 and no
+  discount line was created.)
+- Technical reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.31.
+
 ## Gap assessment
 
 - The UI clearly presents payable amounts and payment registration entry points, but the exact accounting consequences of adding or updating payments are not documented in this window evidence. Treat downstream posting semantics as backend behavior, not confirmed UI behavior here.

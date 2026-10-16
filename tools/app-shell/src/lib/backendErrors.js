@@ -710,6 +710,23 @@ function matchZeroOrNegativeQtyProcess(msg) {
   return { products };
 }
 
+// InvoiceCompletionLineGuard.java (com.etendoerp.go — ETP-5710), `error.code = invoiceLinesWithoutAmount`
+// — raised when completing an invoice whose lines kept a net amount of 0. The lines are named by
+// product (the line numbers are internal, the UI never shows them), joined with ", " — a
+// locale-neutral separator, so the list passes through as one opaque {products} param (same shape
+// as matchInsufficientStockProcess).
+const INVOICE_LINES_NO_AMOUNT_PREFIX = 'The invoice cannot be completed: the lines of ';
+const INVOICE_LINES_NO_AMOUNT_SUFFIX = ' have a quantity and a price but a net amount of 0, so the totals would be wrong. Save those lines again so the amount is recalculated, then complete.';
+
+function matchInvoiceLinesWithoutAmount(msg) {
+  if (!msg.startsWith(INVOICE_LINES_NO_AMOUNT_PREFIX) || !msg.endsWith(INVOICE_LINES_NO_AMOUNT_SUFFIX)) {
+    return null;
+  }
+  const products = msg.slice(INVOICE_LINES_NO_AMOUNT_PREFIX.length, -INVOICE_LINES_NO_AMOUNT_SUFFIX.length);
+  if (!products) return null;
+  return { products };
+}
+
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
 // orderId. Fixed English prefix + dynamic order id appended, no closing delimiter
 // (ETP-4831 case 4, family B). Same plain-string-slicing rationale as
@@ -1100,6 +1117,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchInsufficientStockLine, 'backendError.insufficientStockLine'],
   [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
   [matchZeroOrNegativeQtyProcess, 'backendError.zeroOrNegativeQtyProcess'],
+  [matchInvoiceLinesWithoutAmount, 'backendError.invoiceLinesWithoutAmount'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
