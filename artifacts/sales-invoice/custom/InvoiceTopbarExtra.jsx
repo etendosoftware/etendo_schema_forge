@@ -7,7 +7,7 @@ import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { TruncatedText } from '@/components/ui/truncated-text';
+import BadgeAmount from '@/windows/custom/shared/BadgeAmount.jsx';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -231,8 +231,9 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         </span>
       );
     }
-    // ETP-5268 follow-up — amount shown again, capped to ~6 digits via
-    // TruncatedText (tooltip only opens when it genuinely truncates).
+    // ETP-5268 follow-up — amount shown again. ETP-5729: BadgeAmount sizes it to its content up
+    // to a max width (no longer a fixed 72px box that clipped "1.452,00 €"); the tooltip only
+    // opens when it genuinely truncates.
     return (
       <>
         <button
@@ -244,9 +245,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
           {ui('cpFavorBadge')}
-          <TruncatedText
+          <BadgeAmount
             text={fmt(outstandingAbs, currency)}
-            className="w-[72px] shrink-0 text-left"
             data-testid="TruncatedText__329004" />
         </button>
         {showPaymentsModal && (

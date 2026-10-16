@@ -2350,3 +2350,13 @@ until it no longer fits and confirm only the tabs drop to a second row, with no 
 between "Filtros" and the actions; widen it again and confirm they come back. Switching tab
 filters the grid from either row.
 
+## "A favor" topbar chip shows the whole amount — ETP-5729
+
+QA CP-14: the "A favor" chip next to Save truncated a 4-digit balance to "A favor 1.452,0…"
+because the amount sat in a fixed `w-[72px]` box. Both invoice topbars (sales
+`artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`, purchase
+`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceTopbar.jsx`) now render the amount
+through the shared `tools/app-shell/src/windows/custom/shared/BadgeAmount.jsx`: content-sized up to
+`max-w-[8.5rem]`, enough for 7 integer digits plus decimals and the symbol ("1.234.567,00 €").
+Longer values still ellipsise with the full amount in a tooltip. The list-column badges in the
+header tables keep their fixed width on purpose (row-to-row alignment) and were not changed.
