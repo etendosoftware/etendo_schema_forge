@@ -276,11 +276,11 @@ const TAXPAYER_NAME_FIELDS = new Set(['socialName', 'surname1', 'surname2', 'fir
 const REPRESENTATIVE_NAME_FIELDS = new Set(['personRepresentative', 'legalRepresentative']);
 
 /**
- * Non-blocking notice for the identity texts classic cuts in the file (useOrg390Identity
- * `nameWarnings`, filtered to the fields of one block).
+ * Non-blocking notice for the identity texts classic cuts in the file (`nameWarnings`: the
+ * backend's NAME_TRUNCATED incidents, filtered to the fields of one block).
  */
 function NameTruncationWarnings({ ctx, fields, testId }) {
-  const warnings = (ctx.orgIdentity?.nameWarnings ?? []).filter(w => fields.has(w.field));
+  const warnings = (ctx.nameWarnings ?? []).filter(w => fields.has(w.field));
   if (warnings.length === 0) return null;
   return (
     <div className="fm-390-warnings" role="status" data-testid={testId}>
@@ -581,11 +581,16 @@ function BlockIndex({ blocks, active, onSelect, t }) {
  * @param {Function} [props.onViewInvoices]  (box) => void — "Ver facturas" on those boxes
  * @param {object}   [props.blockExtras]     `{ <blockId>: node }` rendered under that block's boxes
  *                                           (e.g. the year's 303s under "Resultado de las liquidaciones")
+ * @param {object}   [props.goToBox]         `{ box, nonce }` — opens the block of that box and
+ *                                           highlights it ("Ir a la casilla" of an incident); a new
+ *                                           nonce repeats the jump to the same box
+ * @param {Array}    [props.nameWarnings]    `[{ field, limit, label? }]` — the identity texts the
+ *                                           file will cut (the NAME_TRUNCATED incidents)
  */
 export default function FmBoxes390({
   layout, boxes, inputs, preloaded, identification, orgIdentity, taxReport, warnings, year, readOnly,
   onInputChange, onRestore, onFlagChange, onClearTerritory, onEditOrganization, t, bcpLocale = 'es-ES',
-  invoiceBoxes, onViewInvoices, blockExtras,
+  invoiceBoxes, onViewInvoices, blockExtras, goToBox, nameWarnings,
 }) {
   const [activeId, setActiveId] = useState(layout[0]?.id);
   const [highlightBox, setHighlightBox] = useState(null);
@@ -605,6 +610,15 @@ export default function FmBoxes390({
     return () => clearTimeout(timer);
   }, [highlightBox, activeId]);
 
+  // "Ir a la casilla" from an incident: same jump as the box search.
+  useEffect(() => {
+    if (goToBox?.box == null) return;
+    const hit = findBox(String(goToBox.box), index, t);
+    if (!hit) return;
+    setActiveId(hit.blockId);
+    setHighlightBox(hit.box);
+  }, [goToBox?.box, goToBox?.nonce]);
+
   const onSearch = (query) => {
     const hit = findBox(query, index, t);
     setNotFound(!hit && String(query ?? '').trim() !== '');
@@ -622,6 +636,7 @@ export default function FmBoxes390({
   const messages = readOnly ? [] : inputMessages390(inputs);
   const ctx = {
     t, bcpLocale, inputs, preloaded, identification, orgIdentity, year, readOnly, highlightBox, messages,
+    nameWarnings: nameWarnings ?? [],
     onInputChange, onRestore, onFlagChange, onClearTerritory, onEditOrganization,
     invoiceBoxes: invoiceBoxSet, onViewInvoices,
   };

@@ -811,18 +811,33 @@ export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model =
     const res = await apiFetch(`${base}/fiscal${model}/incidents?id=${encodeURIComponent(id)}`, { baseUrl: '', token });
     if (!res.ok) return EMPTY_INCIDENTS;
     const body = await res.json().catch(() => null);
-    const rows = Array.isArray(body?.data) ? body.data : [];
-    const items = rows.map(r => ({
-      origin: r.code ?? '',
-      message: r.message ?? '',
-      severity: r.severity === 'warn' ? 'warn' : 'block',
-    }));
-    const blocking = items.filter(i => i.severity === 'block').length;
-    const warning = items.filter(i => i.severity === 'warn').length;
-    return { blocking, warning, items };
+    return incidentsFromRows(body?.data);
   } catch (_) {
     return EMPTY_INCIDENTS;
   }
+}
+
+/**
+ * The backend incident rows (`GET /fiscal<model>/incidents`, `POST /fiscal390/validate`) as
+ * `{ blocking, warning, items }`. Each item's `origin` is the incident code; an incident a model
+ * computes itself (ETP-5716, Modelo 390) also carries its `params` and `action` — the page
+ * translates it by code and offers the action.
+ */
+export function incidentsFromRows(data) {
+  const rows = Array.isArray(data) ? data : [];
+  const items = rows.map(r => {
+    const item = {
+      origin: r.code ?? '',
+      message: r.message ?? '',
+      severity: r.severity === 'warn' ? 'warn' : 'block',
+    };
+    if (r.params && typeof r.params === 'object') item.params = r.params;
+    if (r.action && typeof r.action === 'object') item.action = r.action;
+    return item;
+  });
+  const blocking = items.filter(i => i.severity === 'block').length;
+  const warning = items.filter(i => i.severity === 'warn').length;
+  return { blocking, warning, items };
 }
 
 export const STATUSES = [

@@ -37,12 +37,13 @@ vi.mock('../fm390Api.js', () => ({
   checkModified390: vi.fn(),
   generatedFileName: () => '390_0A_2026.txt',
   fetchSources390: vi.fn(),
+  validate390: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('../FmSources390.jsx', () => ({ default: () => null }));
 vi.mock('../useOrg390Identity.js', () => ({
   default: () => ({
     loaded: true, nif: 'B12345678', name: 'Acme SL', activities: [], isPerson: false,
-    personRepresentative: null, representatives: [], nameWarnings: [],
+    personRepresentative: null, representatives: [],
   }),
 }));
 vi.mock('../../../FmCommon.jsx', () => ({

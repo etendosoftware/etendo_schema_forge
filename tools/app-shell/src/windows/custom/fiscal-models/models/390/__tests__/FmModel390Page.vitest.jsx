@@ -3,6 +3,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/usePreload390.js
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/Reconciliation390.jsx
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/Settlements303Table390.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/Incidents390Tab.jsx
 //
 // Also: the Facturas tab wiring — "Ver facturas" on an invoice box opens the tab filtered by it.
 //
@@ -19,7 +20,8 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
-vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
+const navigateMock = vi.hoisted(() => vi.fn());
+vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
   const actual = await importOriginal();
@@ -38,20 +40,20 @@ vi.mock('../fm390Api.js', () => ({
   generatedFileName: () => '390_0A_2026.txt',
   fetchSources390: vi.fn(),
   fetchPreload390: vi.fn(),
+  validate390: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('../FmSources390.jsx', () => ({
   default: ({ filter, isSubmitted }) => React.createElement('div', {
     'data-testid': 'FmSources390-stub', 'data-filter': JSON.stringify(filter), 'data-submitted': String(!!isSubmitted),
   }),
 }));
-const orgIdentityMock = vi.hoisted(() => ({ nameWarnings: [] }));
+const orgIdentityMock = vi.hoisted(() => ({}));
 vi.mock('../useOrg390Identity.js', () => ({
   default: () => ({
     loaded: true, nif: 'B12345678', name: 'Acme SL',
     activities: [{ id: 'a1', activity: 'Comercio', type: 'A', code: '651.1', isDefault: true }],
     isPerson: false, personRepresentative: null,
     representatives: [{ id: 'r1', nif: '12345678Z', name: 'Ana Pérez', powerDate: '2024-03-05', notary: 'Notaría 1' }],
-    nameWarnings: orgIdentityMock.nameWarnings,
   }),
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
@@ -88,7 +90,7 @@ vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
 }));
 
 import FmModel390Page, { substituteIdentifierError, summaryOf } from '../FmModel390Page.jsx';
-import { fetchBoxes390, generate390File, fetchPreload390 } from '../fm390Api.js';
+import { fetchBoxes390, generate390File, fetchPreload390, validate390 } from '../fm390Api.js';
 import { persistManualData, fetchDeclarationIncidents, fetchDeclaration } from '../../../fiscalModelsUtils.js';
 import { toast } from 'sonner';
 
@@ -137,12 +139,12 @@ const props = () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  orgIdentityMock.nameWarnings = [];
   persistManualData.mockResolvedValue({ ok: true });
   generate390File.mockResolvedValue({ ok: true });
   fetchBoxes390.mockResolvedValue(PAYLOAD);
   fetchPreload390.mockResolvedValue(EMPTY_PRELOAD);
   fetchDeclarationIncidents.mockResolvedValue({ blocking: 0, warning: 0, items: [] });
+  validate390.mockResolvedValue(null);
 });
 
 const goToBlock = (id) => fireEvent.click(screen.getByTestId(`FmBoxes390__index_${id}`));
@@ -161,7 +163,8 @@ describe('FmModel390Page — skeleton', () => {
     expect(kpiValue('fm.m390.kpi.accrued')).toBe('460');
     expect(kpiValue('fm.m390.kpi.deductible')).toBe('100');
     expect(kpiValue('fm.m390.kpi.result')).toBe('360');
-    expect(kpiValue('fm.tab.incidents')).toBe('0');
+    expect(screen.getByTestId('FmModel390Page__incidentsBlocking').textContent).toBe('0fm.m390.incidents.blocking_short');
+    expect(screen.getByTestId('FmModel390Page__incidentsWarnings').textContent).toBe('0fm.m390.incidents.warnings_short');
   });
 
   it('renders the index of the 11 blocks, the legend and the design-year note', () => {
@@ -188,13 +191,13 @@ describe('FmModel390Page — skeleton', () => {
     expect(screen.queryByTestId('FmBoxes390__nameTruncated')).toBeNull();
   });
 
-  it('lists each name the file will cut in its own block, without blocking Generar', () => {
-    orgIdentityMock.nameWarnings = [
-      { field: 'socialName', limit: 37 },
-      { field: 'legalRepresentative', limit: 36, label: '12345678Z' },
-    ];
+  it('lists each name the file will cut (NAME_TRUNCATED incidents) in its own block, without blocking Generar', async () => {
+    fetchDeclarationIncidents.mockResolvedValue({ blocking: 0, warning: 2, items: [
+      { origin: 'NAME_TRUNCATED', severity: 'warn', message: 'cut', params: { field: 'socialName', limit: 37 } },
+      { origin: 'NAME_TRUNCATED', severity: 'warn', message: 'cut', params: { field: 'legalRepresentative', limit: 36, label: '12345678Z' } },
+    ] });
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
-    const ident = screen.getByTestId('FmBoxes390__nameTruncated');
+    const ident = await screen.findByTestId('FmBoxes390__nameTruncated');
     expect(ident.querySelectorAll('li')).toHaveLength(1);
     expect(ident.textContent).toContain('fm.m390.ident.truncated');
     goToBlock('representante');
@@ -611,5 +614,106 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     fireEvent.click(screen.getByTestId('FmModel390Page__save'));
     await waitFor(() => expect(persistManualData).toHaveBeenCalled());
     expect(savedManualData().aeatPreloaded).toBeUndefined();
+  });
+});
+
+describe('FmModel390Page — incidents (ETP-5716)', () => {
+  const INCIDENTS = {
+    blocking: 2, warning: 2,
+    items: [
+      { origin: 'TERRITORY_PERCENT_SUM', severity: 'block', message: 'sum', params: { sum: '90' }, action: { type: 'box', box: 87 } },
+      { origin: 'NO_MAIN_IAE', severity: 'block', message: 'iae', action: { type: 'organization', section: 'iae' } },
+      { origin: 'UNPOSTED_INVOICES', severity: 'warn', message: 'unposted', params: { count: 1 }, action: { type: 'invoices', sales: 1, purchase: 0 } },
+      { origin: 'AEAT-W1', severity: 'warn', message: 'Aviso de la AEAT' },
+    ],
+  };
+  const openIncidents = () => fireEvent.click(screen.getByRole('tab', { name: 'fm.tab.incidents' }));
+
+  it('a draft has its rules recomputed by the backend on opening', async () => {
+    validate390.mockResolvedValue(INCIDENTS);
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(validate390).toHaveBeenCalledWith(expect.objectContaining({ id: 'decl-390' }), expect.anything()));
+    await waitFor(() => expect(screen.getByTestId('FmModel390Page__incidentsBlocking').textContent).toBe('2fm.m390.incidents.blocking_short'));
+    expect(screen.getByTestId('FmModel390Page__incidentsWarnings').textContent).toBe('2fm.m390.incidents.warnings_short');
+    expect(fetchDeclarationIncidents).not.toHaveBeenCalled();
+    // the AEAT warning is listed, but only the rule incidents gate Generar / Presentar
+    expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true);
+  });
+
+  it('a presented declaration keeps its frozen incidents: nothing is recomputed', async () => {
+    const snapshot = { ...PAYLOAD };
+    render(<FmModel390Page decl={makeDecl({ status: 'submitted', submittedSnapshot: snapshot, _precomputed: null })} {...props()} />);
+    await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalled());
+    expect(validate390).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the stored incidents when the recompute fails', async () => {
+    fetchDeclarationIncidents.mockResolvedValue(INCIDENTS);
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true));
+  });
+
+  it('every successful save recomputes them', async () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(validate390).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('FmModel390Page__save'));
+    await waitFor(() => expect(persistManualData).toHaveBeenCalled());
+    await waitFor(() => expect(validate390).toHaveBeenCalledTimes(2));
+  });
+
+  it('Calcular recomputes them even with nothing to save', async () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(validate390).toHaveBeenCalledTimes(1));
+    await act(async () => { fireEvent.click(screen.getByTestId('FmModel390Page__compute')); });
+    await waitFor(() => expect(validate390).toHaveBeenCalledTimes(2));
+  });
+
+  it('the tab splits Bloqueantes and Advertencias and an AEAT answer shows its code', async () => {
+    validate390.mockResolvedValue(INCIDENTS);
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true));
+    openIncidents();
+    const blocking = screen.getByTestId('Incidents390Tab__blocking');
+    expect(blocking.querySelectorAll('li')).toHaveLength(2);
+    // this file's `t` echoes keys without params, so the text falls back to the stored message
+    // (the translation by code is incidents390.vitest.js)
+    expect(blocking.textContent).toContain('sum');
+    expect(blocking.textContent).toContain('fm.m390.incidents.go_to_box');
+    const warnings = screen.getByTestId('Incidents390Tab__warnings');
+    expect(warnings.querySelectorAll('li')).toHaveLength(2);
+    expect(screen.getByTestId('Incidents390Tab__item_AEAT-W1').textContent).toContain('Aviso de la AEAT');
+  });
+
+  it('"Ir a la casilla" opens the Casillas tab at that box', async () => {
+    validate390.mockResolvedValue(INCIDENTS);
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true));
+    openIncidents();
+    fireEvent.click(screen.getByTestId('Incidents390Tab__action_box'));
+    await waitFor(() => expect(screen.getByTestId('FmBoxes390__block_territorio')).toBeTruthy());
+  });
+
+  it('"Editar en Organización" and the invoice list save first, then navigate', async () => {
+    validate390.mockResolvedValue(INCIDENTS);
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true));
+    openIncidents();
+    await act(async () => { fireEvent.click(screen.getByTestId('Incidents390Tab__action_organization')); });
+    expect(navigateMock).toHaveBeenCalledWith('/organization#org-section-iae');
+    await act(async () => { fireEvent.click(screen.getByTestId('Incidents390Tab__action_sales')); });
+    expect(navigateMock).toHaveBeenCalledWith('/sales-invoice');
+  });
+
+  it('a 409 BLOCKING_INCIDENTS on Generar shows the fresh list', async () => {
+    generate390File.mockResolvedValue({ ok: false, error: 'blocking_incidents', incidents: INCIDENTS });
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(validate390).toHaveBeenCalledTimes(1));
+    validate390.mockResolvedValue(INCIDENTS);
+    fireEvent.click(screen.getByTestId('FmModel390Page__generate'));
+    await act(async () => { fireEvent.click(screen.getByTestId('FileGenModal390-confirm')); });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.m390.blocked_by_incidents'));
+    await waitFor(() => expect(screen.getByTestId('Incidents390Tab__blocking')).toBeTruthy());
+    expect(validate390).toHaveBeenCalledTimes(2);
   });
 });

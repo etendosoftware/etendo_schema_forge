@@ -26,8 +26,12 @@
 // `manualData.aeatPreloaded` (origin "Modificado" + Restaurar). The Resultado card shows the cuadre
 // with the 303s (Reconciliation390) and block 9 lists them (Settlements303Table390).
 //
-// Later phases plug in here: incident rules (backend `replaceIncidents`, already listed by the
-// Incidencias tab; `preloadIncidents390` gives the "faltan 303" / "diferencia" candidates).
+// Incidents (ETP-5716, incidents390.js): the rules are computed by the backend. `POST
+// /fiscal390/validate` recomputes them from the STORED inputs — on opening a draft and after
+// every successful save (Guardar, Calcular, the saves before Generar / Presentar) — and answers
+// every incident of the declaration. The Incidencias tab (Incidents390Tab) and card split them
+// into Bloqueantes and Advertencias; Generar / Presentar are disabled while a blocking RULE
+// incident exists (ruleBlockingCount) and the backend refuses them too (409 BLOCKING_INCIDENTS).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -41,7 +45,6 @@ import {
   FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta, buildDeclTitle,
   tabCount, incidentsTabBadge, FmEmptyState,
 } from '../../FmDetailChrome.jsx';
-import { IncidentsTab } from '../../FmTabContent.jsx';
 import { PresentModal } from '../../FmOverlays.jsx';
 import AeatSubmitFlow from '../303/AeatSubmitFlow.jsx';
 import RegisterSubmitted390Modal from './RegisterSubmitted390Modal.jsx';
@@ -65,7 +68,9 @@ import FmSources390 from './FmSources390.jsx';
 import { emptySourcesFilter, sourcesFilterForBox } from './sources390.js';
 import FileGenModal390 from './FileGenModal390.jsx';
 import useOrg390Identity from './useOrg390Identity.js';
-import { fetchBoxes390, generate390File } from './fm390Api.js';
+import { fetchBoxes390, generate390File, validate390 } from './fm390Api.js';
+import Incidents390Tab from './Incidents390Tab.jsx';
+import { groupIncidents390, nameWarningsFromIncidents390 } from './incidents390.js';
 import usePreload390 from './usePreload390.js';
 import { applyPreload390, reconcile390, restorePreloaded390 } from './preload390.js';
 import Reconciliation390 from './Reconciliation390.jsx';
@@ -255,6 +260,12 @@ export default function FmModel390Page({
     setSourcesFilter(sourcesFilterForBox(box));
     setActiveTab('sources');
   };
+  // "Ir a la casilla" of an incident: the Casillas tab, at that box (FmBoxes390 `goToBox`).
+  const [goToBox, setGoToBox] = useState(null);
+  const goToBoxOfIncident = (box) => {
+    setActiveTab('boxes');
+    setGoToBox(prev => ({ box, nonce: (prev?.nonce ?? 0) + 1 }));
+  };
   const [incidents, setIncidents] = useState(decl.incidents?.items ? decl.incidents : EMPTY_INCIDENTS);
   // Edits since the last successful save — a ref so a handler can read it synchronously.
   const dirtyRef = useRef(false);
@@ -300,16 +311,30 @@ export default function FmModel390Page({
     });
   }, [decl.id]);
 
-  // `incidentsVersion` re-reads them after an AEAT attempt (the backend replaces the AEAT ones).
+  // Incidents: a draft has its rules recomputed by the backend on opening (validate390 — the
+  // organization or the invoices may have changed since the last save); a presented declaration
+  // keeps its frozen incidents. `incidentsVersion` re-reads them after an AEAT attempt (the
+  // backend replaces the AEAT ones).
   const [incidentsVersion, setIncidentsVersion] = useState(0);
   useEffect(() => {
     if (!apiBaseUrl) return undefined;
     let cancelled = false;
-    fetchDeclarationIncidents(decl.id, { token, apiBaseUrl, model: MODEL_ID }).then(res => {
-      if (!cancelled) setIncidents(res);
+    const read = () => fetchDeclarationIncidents(decl.id, { token, apiBaseUrl, model: MODEL_ID });
+    const load = incidentsVersion === 0 && !isSubmitted
+      ? validate390(decl, { token, apiBaseUrl }).then(res => res ?? read())
+      : read();
+    load.then(res => {
+      if (!cancelled && res) setIncidents(res);
     });
     return () => { cancelled = true; };
   }, [decl.id, token, apiBaseUrl, incidentsVersion]);
+
+  /** Recomputes the rule incidents from what is stored (after a save). Never throws. */
+  async function revalidate() {
+    if (!apiBaseUrl || isSubmitted) return;
+    const res = await validate390(decl, { token, apiBaseUrl });
+    if (res) setIncidents(res);
+  }
 
   // Display values: a presented declaration shows the snapshot as frozen; a draft re-derives the
   // input-dependent boxes from the inputs on screen (fm390Layouts.deriveInputBoxes).
@@ -427,6 +452,7 @@ export default function FmModel390Page({
         lastSavedManualData.current = manualData;
         invalidateFiscalComputeCache(decl.id);
         onManualDataSaved?.(decl.id, manualData);
+        revalidate();
       }
       return result;
     } finally {
@@ -451,8 +477,11 @@ export default function FmModel390Page({
       return;
     }
     invalidateFiscalComputeCache(decl.id);
+    const wasDirty = dirtyRef.current;
     const { ok } = await persistIfDirty();
     if (!ok) toast.error(t('fm.action.save_error'));
+    // A save revalidates by itself; with nothing to save the invoices may still have changed.
+    else if (!wasDirty) revalidate();
   }
 
   function guardSubstituteIdentifier() {
@@ -488,7 +517,15 @@ export default function FmModel390Page({
         return;
       }
       const result = await generate390File(decl, { token, apiBaseUrl, fileName });
-      if (!result.ok) toast.error(result.serverMessage || t('fm.m390.generate_error'));
+      if (result.error === 'blocking_incidents') {
+        // The backend found a blocking rule the page did not know yet (e.g. the organization
+        // changed): show the fresh list.
+        toast.error(t('fm.m390.blocked_by_incidents'));
+        revalidate();
+        setActiveTab('incidents');
+      } else if (!result.ok) {
+        toast.error(result.serverMessage || t('fm.m390.generate_error'));
+      }
     } finally {
       setGenerating(false);
     }
@@ -601,6 +638,8 @@ export default function FmModel390Page({
   });
 
   const incidentVariants = buildIncidentVariants(blocking, warning, t);
+  const incidentGroups = groupIncidents390(incidents?.items);
+  const nameWarnings = nameWarningsFromIncidents390(incidents?.items);
   const typeLabel = isSubstitutive(identification) ? t('fm.m349.type.substitutive') : t('fm.m349.type.normal');
   const blockedTitle = ruleBlocking > 0 ? t('fm.m390.blocked_by_incidents') : undefined;
 
@@ -625,6 +664,16 @@ export default function FmModel390Page({
     const target = await fetchDeclaration(id, { token, apiBaseUrl });
     if (target) onOpenDeclaration(target);
     else toast.error(t('fm.m390.preload.open_error'));
+  }
+  // "Editar en Organización" / an invoice list from an incident: pending changes are saved first
+  // (the page is left).
+  async function handleNavigateAway(path) {
+    const saved = await persistIfDirty();
+    if (!saved.ok) {
+      toast.error(t('fm.action.save_error'));
+      return;
+    }
+    navigate(path);
   }
   const blockExtras = {
     resultado_liquidaciones: (
@@ -711,16 +760,32 @@ export default function FmModel390Page({
           t={t} />
 
         <div className="fm-390-kpis">
+          {/* Incidencias — split into Bloqueantes and Advertencias (the tab lists them). */}
           <KpiWidget
             icon={blocking > 0
               ? <OctagonAlert size={20} strokeWidth={1.75} data-testid="OctagonAlert__fm390" />
               : <TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__fm390kpi" />}
             iconColor={incidentVariants.iconColor}
             label={t('fm.tab.incidents')}
-            value={String(blocking + warning)}
-            badge={incidentVariants.badge}
-            badgeBg={incidentVariants.badgeBg}
-            badgeColor={incidentVariants.badgeColor} />
+            onClick={() => setActiveTab('incidents')}
+            value={(
+              <span className="fm-390-kpi-split" data-testid="FmModel390Page__incidentsSplit">
+                <span
+                  style={{ color: incidentGroups.blocking.length > 0 ? 'hsl(var(--destructive))' : undefined }}
+                  data-testid="FmModel390Page__incidentsBlocking"
+                >
+                  {incidentGroups.blocking.length}
+                  <span className="fm-390-kpi-split__label">{t('fm.m390.incidents.blocking_short')}</span>
+                </span>
+                <span
+                  style={{ color: incidentGroups.warnings.length > 0 ? 'var(--status-warning-fg)' : undefined }}
+                  data-testid="FmModel390Page__incidentsWarnings"
+                >
+                  {incidentGroups.warnings.length}
+                  <span className="fm-390-kpi-split__label">{t('fm.m390.incidents.warnings_short')}</span>
+                </span>
+              </span>
+            )} />
           <KpiWidget
             icon={<TrendingUp size={20} strokeWidth={1.75} data-testid="TrendingUp__fm390kpi" />}
             iconColor="hsl(var(--foreground))"
@@ -806,6 +871,8 @@ export default function FmModel390Page({
                 onFlagChange={handleFlagChange}
                 onClearTerritory={handleClearTerritory}
                 onEditOrganization={() => navigate('/organization')}
+                goToBox={goToBox}
+                nameWarnings={nameWarnings}
                 invoiceBoxes={payload.invoiceBoxes}
                 onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}
                 blockExtras={blockExtras}
@@ -830,7 +897,12 @@ export default function FmModel390Page({
         )}
         {activeTab === 'incidents' && (
           <div className="fm-page__body" style={{ padding: 0 }}>
-            <IncidentsTab decl={{ ...decl, incidents }} blocking={blocking} warning={warning} t={t} />
+            <Incidents390Tab
+              incidents={incidents}
+              onGoToBox={goToBoxOfIncident}
+              onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}
+              onNavigate={handleNavigateAway}
+              t={t} />
           </div>
         )}
         {activeTab === 'receipt' && (

@@ -4,8 +4,11 @@
 // A plain module: it uses the core `apiFetch` (never a bare `fetch`, see docs/request-policy.md),
 // with the explicit `token` the callers already hold as an override.
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
-import { triggerDownload } from '../../fiscalModelsUtils.js';
+import { incidentsFromRows, triggerDownload } from '../../fiscalModelsUtils.js';
 import { ANNUAL_PERIOD } from '../../fiscalPeriods.js';
+
+/** `error.code` of the 409 `generate` / `submit` answer while a blocking rule holds. */
+export const BLOCKING_INCIDENTS_390 = 'BLOCKING_INCIDENTS';
 
 /** `/sws/neo/<entity>` → `/sws/neo` (the fiscal routes hang off the NEO base). */
 function neoRoot(apiBaseUrl) {
@@ -19,7 +22,18 @@ function periodParams(decl) {
 // The error message of a failed request: `{ error: { message } }` or `{ message }`, with a Java
 // exception prefix and Openbravo `@Key@` delimiters stripped (same rule as the 303/349 helpers).
 export async function readServerMessage(res) {
-  const raw = await res.text().catch(() => '');
+  return messageOf(await res.text().catch(() => ''));
+}
+
+function parseJson(raw) {
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    return null;
+  }
+}
+
+function messageOf(raw) {
   try {
     const parsed = JSON.parse(raw);
     const full = parsed?.error?.message || parsed?.message || '';
@@ -84,7 +98,9 @@ export function generatedFileName(decl, typed) {
  * `GET /fiscal390/generate` — downloads the AEAT TXT file. The inputs are read by the backend
  * from the STORED `manualData.aeatInputs`, so the caller saves pending changes first. The body is
  * ISO-8859-1: it is read as a Blob (never as text) so no byte is re-encoded.
- * Resolves `{ ok: true }` or `{ ok: false, error, serverMessage }` (409 when already submitted).
+ * Resolves `{ ok: true }`, `{ ok: false, error: 'blocking_incidents', incidents }` (409 — the
+ * backend re-evaluates the blocking rules from the stored inputs, ETP-5716) or
+ * `{ ok: false, error, serverMessage }` (409 when already submitted).
  */
 export async function generate390File(decl, { token, apiBaseUrl, fileName } = {}) {
   if (!apiBaseUrl) return { ok: false, error: 'no_token' };
@@ -93,7 +109,12 @@ export async function generate390File(decl, { token, apiBaseUrl, fileName } = {}
       baseUrl: '', token, timeout: 0,
     });
     if (!res.ok) {
-      return { ok: false, error: `http_${res.status}`, serverMessage: await readServerMessage(res) };
+      const raw = await res.text().catch(() => '');
+      const error = parseJson(raw)?.error;
+      if (res.status === 409 && error?.code === BLOCKING_INCIDENTS_390) {
+        return { ok: false, error: 'blocking_incidents', incidents: incidentsFromRows(error.incidents) };
+      }
+      return { ok: false, error: `http_${res.status}`, serverMessage: messageOf(raw) };
     }
     const blob = await res.blob();
     triggerDownload(blob, generatedFileName(decl, fileName));
@@ -147,4 +168,26 @@ export async function fetchPreload390(decl, { token, apiBaseUrl, monthlyReturn }
     throw err;
   }
   return res.json();
+}
+
+/**
+ * `POST /fiscal390/validate` — the backend recomputes the declaration's rule incidents from its
+ * STORED inputs (save first) and answers every incident of the declaration (rule + AEAT ones), as
+ * `{ blocking, warning, items }` (incidentsFromRows). A submitted declaration is not recomputed
+ * (`frozen`). Resolves `null` on any failure: the caller keeps what it has.
+ */
+export async function validate390(decl, { token, apiBaseUrl } = {}) {
+  if (!apiBaseUrl || !decl?.id) return null;
+  try {
+    const params = periodParams(decl);
+    params.set('id', decl.id);
+    const res = await apiFetch(`${neoRoot(apiBaseUrl)}/fiscal390/validate?${params}`, {
+      method: 'POST', baseUrl: '', token, timeout: 0,
+    });
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => null);
+    return body ? { ...incidentsFromRows(body.data), frozen: body.frozen === true } : null;
+  } catch (_) {
+    return null;
+  }
 }

@@ -234,4 +234,28 @@ describe('fetchDeclarationIncidents', () => {
       ],
     });
   });
+
+  // ETP-5716 — an incident a model computes itself (Modelo 390 rules) keeps its params and
+  // action, so the page can translate it by code and offer "Ir a la casilla" & co.
+  it('keeps the params and action of a structured (rule) incident', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [
+        { code: 'TERRITORY_PERCENT_SUM', message: 'Sum is 90 %', severity: 'block',
+          params: { sum: '90' }, action: { type: 'box', box: 87 } },
+        { code: 'AEAT-E1', message: 'NIF', severity: 'warn' },
+      ] }),
+    });
+
+    const result = await fetchDeclarationIncidents('390-2026', { ...OPTS, model: '390' });
+
+    expect(fetch.mock.calls[0][0]).toBe('http://host/neo/fiscal390/incidents?id=390-2026');
+    expect(result.items[0]).toEqual({
+      origin: 'TERRITORY_PERCENT_SUM', message: 'Sum is 90 %', severity: 'block',
+      params: { sum: '90' }, action: { type: 'box', box: 87 },
+    });
+    expect(result.items[1]).toEqual({ origin: 'AEAT-E1', message: 'NIF', severity: 'warn' });
+    expect(result.blocking).toBe(1);
+    expect(result.warning).toBe(1);
+  });
 });
