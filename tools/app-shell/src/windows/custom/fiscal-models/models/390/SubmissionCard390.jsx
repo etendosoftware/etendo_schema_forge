@@ -34,7 +34,7 @@ function Row({ label, value, testId }) {
 }
 
 export default function SubmissionCard390({ submission, t, bcpLocale }) {
-  const manual = submission?.method === 'manual_ext';
+  const manual = submission?.method !== 'aeat_telematic';
   return (
     <section
       style={{

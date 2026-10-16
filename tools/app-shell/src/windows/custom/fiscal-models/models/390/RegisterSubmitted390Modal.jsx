@@ -2,7 +2,8 @@
 // (AEAT portal, an advisor) is registered with its justificante number, its presentation date
 // and, optionally, the justificante PDF. Confirming requires "Declaro que los datos de esta
 // declaración son conformes". The page then saves `manualData.submission`, uploads the PDF and
-// sets the status to `submitted_ext` ("Presentado · otra plataforma").
+// sets the 303/349 manual-register status: `submitted_ack` / `manual_ack` with the PDF,
+// `submitted` / `manual_no_receipt` without it (manualRegistrationStatus).
 import React, { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';

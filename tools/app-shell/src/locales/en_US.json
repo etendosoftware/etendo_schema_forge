@@ -22320,7 +22320,7 @@
     "fm.m390.register.pdf": "Receipt PDF (optional)",
     "fm.m390.submission.title": "Submission to the AEAT",
     "fm.m390.submission.method_telematic": "Filed electronically",
-    "fm.m390.submission.method_manual": "Registered as filed on another platform",
+    "fm.m390.submission.method_manual": "Registered manually",
     "fm.m390.submission.date": "Date and time",
     "fm.m390.submission.justificante": "Receipt number",
     "fm.m390.submission.csv": "CSV",

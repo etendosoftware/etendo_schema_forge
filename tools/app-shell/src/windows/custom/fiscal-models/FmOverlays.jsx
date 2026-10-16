@@ -174,7 +174,7 @@ function PresentModalColumn({ icon, titleKey, descKey, paths, path, setPath, t, 
 // logic are unchanged from the single-column version — only the visual
 // grouping changed.
 // `registerPaths` (optional, ETP-5716): replaces the left column's 2 manual paths — the 390
-// registers a filing made elsewhere as one path (`submitted_ext`, "Registrar como presentada")
+// registers a filing made elsewhere as one path (`manual_register`, "Registrar como presentada")
 // whose details are asked in a step of its own. A path with `continues: true` confirms with
 // "Continuar" (its caller opens that next step). Omitted, the column is exactly as before.
 const DEFAULT_REGISTER_PATHS = [

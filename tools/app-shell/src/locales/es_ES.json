@@ -22556,7 +22556,7 @@
     "fm.m390.register.pdf": "Justificante en PDF (opcional)",
     "fm.m390.submission.title": "Presentación en la AEAT",
     "fm.m390.submission.method_telematic": "Presentada por vía telemática",
-    "fm.m390.submission.method_manual": "Registrada como presentada en otra plataforma",
+    "fm.m390.submission.method_manual": "Registrada manualmente",
     "fm.m390.submission.date": "Fecha y hora",
     "fm.m390.submission.justificante": "Número de justificante",
     "fm.m390.submission.csv": "CSV",

@@ -86,7 +86,7 @@ describe('PresentModal', () => {
   // details come in a next step: it confirms with "Continuar" and reports its own status.
   it('registerPaths replaces the manual paths; a `continues` path confirms with Continuar', () => {
     const onConfirm = vi.fn();
-    const paths = [{ id: 'submitted_ext', titleKey: 'fm.m390.present.path.register', descKey: 'x', continues: true }];
+    const paths = [{ id: 'manual_register', titleKey: 'fm.m390.present.path.register', descKey: 'x', continues: true }];
     const { container } = render(
       <PresentModal decl={{ ...decl, model: '390', period: '0A' }} onConfirm={onConfirm} onClose={vi.fn()} showAeatPath registerPaths={paths} />,
     );
@@ -97,7 +97,7 @@ describe('PresentModal', () => {
     const confirmBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent.includes('fm.action.continue'));
     expect(confirmBtn.disabled).toBe(false);
     fireEvent.click(confirmBtn);
-    expect(onConfirm).toHaveBeenCalledWith({ status: 'submitted_ext', acuseFile: null });
+    expect(onConfirm).toHaveBeenCalledWith({ status: 'manual_register', acuseFile: null });
   });
 
   it('calls onClose when overlay is clicked', () => {

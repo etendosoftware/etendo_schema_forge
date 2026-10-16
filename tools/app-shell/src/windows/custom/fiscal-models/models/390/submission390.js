@@ -4,8 +4,11 @@
 //
 // `manualData.submission` (written by the backend on a telematic filing, by the page on a manual
 // registration — aeat-390-endpoints.md, "Submission"):
-//   { method: 'aeat_telematic' | 'manual_ext', presentationDate, justificante, csv?,
+//   { method: 'aeat_telematic' | 'manual', presentationDate, justificante, csv?,
 //     registryNumber?, user, submittedAt }
+//
+// A manual registration gets the SAME status + submissionMethod as the 303/349 manual register
+// (`manualRegistrationStatus`), so it can be reactivated; a telematic filing cannot.
 //
 // A plain module: requests go through the core `apiFetch` (docs/request-policy.md).
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
@@ -15,9 +18,39 @@ import { isValidFormerStatement } from '../../formerStatement.js';
 import { buildManualData390, isSubstitutive } from './fm390Layouts.js';
 
 export const SUBMISSION_KEY = 'submission';
-export const SUBMISSION_METHOD_MANUAL_EXT = 'manual_ext';
-/** Status of a declaration registered as filed elsewhere ("Presentado · otra plataforma"). */
-export const STATUS_SUBMITTED_EXT = 'submitted_ext';
+/** `manualData.submission.method` of a manual registration. */
+export const SUBMISSION_RECORD_MANUAL = 'manual';
+/** PresentModal path id of "Registrar como presentada" (a sentinel, never a status). */
+export const REGISTER_PATH = 'manual_register';
+/** Code prefix of the incidents stored from an AEAT answer (backend AEAT_INCIDENT_CODE_PREFIX). */
+export const AEAT_INCIDENT_PREFIX = 'AEAT-';
+
+/**
+ * Status and submissionMethod of a manual registration — the 303/349 manual register values:
+ * with the justificante PDF `submitted_ack` / `manual_ack`, without it `submitted` /
+ * `manual_no_receipt`.
+ */
+export function manualRegistrationStatus(file) {
+  return file
+    ? { status: 'submitted_ack', submissionMethod: 'manual_ack' }
+    : { status: 'submitted', submissionMethod: 'manual_no_receipt' };
+}
+
+/** True for an incident stored from an AEAT answer (`AEAT-<code>`): informative, never blocking. */
+export function isAeatIncident(item) {
+  return String(item?.origin ?? '').startsWith(AEAT_INCIDENT_PREFIX);
+}
+
+/**
+ * Blocking incidents that gate Generar / Presentar: the model's own rules only. AEAT answers are
+ * listed and counted on the cards, but never block the retry that fixes them (the backend guard
+ * counts the same).
+ */
+export function ruleBlockingCount(incidents) {
+  const items = Array.isArray(incidents?.items) ? incidents.items : null;
+  if (!items) return incidents?.blocking ?? 0;
+  return items.filter(i => i.severity !== 'warn' && !isAeatIncident(i)).length;
+}
 
 /** The filing data of a declaration (`manualData.submission`), or `null`. */
 export function submissionOf(manualData) {
@@ -31,7 +64,7 @@ export function submissionOf(manualData) {
  */
 export function buildManualSubmission({ justificante, date, user, now = new Date() } = {}) {
   return {
-    method: SUBMISSION_METHOD_MANUAL_EXT,
+    method: SUBMISSION_RECORD_MANUAL,
     justificante: String(justificante ?? '').trim(),
     presentationDate: date ?? '',
     user: user ?? '',

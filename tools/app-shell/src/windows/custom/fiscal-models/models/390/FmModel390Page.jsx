@@ -16,7 +16,7 @@
 // Presentar (ETP-5716): PresentModal offers the AEAT telematic filing (AeatSubmitFlow with the
 // 390 adapter, `POST /fiscal390/submit` — the backend sets submitted_ack + the filing data) and
 // "Registrar como presentada" (RegisterSubmitted390Modal: justificante, date, PDF → PUT
-// manualData.submission, then PUT status submitted_ext). Both save pending changes first and both
+// manualData.submission, then PUT status — the 303/349 manual-register status and method). Both save pending changes first and both
 // ask "Declaro que los datos … son conformes". A submitted 390 shows the "Presentación en la
 // AEAT" card and "Crear declaración sustitutiva" (submission390.js).
 //
@@ -47,7 +47,7 @@ import AeatSubmitFlow from '../303/AeatSubmitFlow.jsx';
 import RegisterSubmitted390Modal from './RegisterSubmitted390Modal.jsx';
 import SubmissionCard390 from './SubmissionCard390.jsx';
 import {
-  AEAT_SUBMIT_390, STATUS_SUBMITTED_EXT, SUBMISSION_KEY, SUBMISSION_METHOD_MANUAL_EXT,
+  AEAT_SUBMIT_390, REGISTER_PATH, SUBMISSION_KEY, manualRegistrationStatus, ruleBlockingCount,
   buildManualSubmission, createSubstitute390, submissionFromResponse, submissionOf,
 } from './submission390.js';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
@@ -84,7 +84,7 @@ const SUBMITTED_STATUSES = new Set(['submitted', 'submitted_ext', 'submitted_ack
 const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
 /** PresentModal's left column for the 390: one "Registrar como presentada" path (step 2 follows). */
 const REGISTER_PATHS_390 = [
-  { id: STATUS_SUBMITTED_EXT, titleKey: 'fm.m390.present.path.register', descKey: 'fm.m390.present.path.register_desc', continues: true },
+  { id: REGISTER_PATH, titleKey: 'fm.m390.present.path.register', descKey: 'fm.m390.present.path.register_desc', continues: true },
 ];
 
 // ── Pure helpers (exported for their unit tests) ─────────────────────────────
@@ -300,6 +300,8 @@ export default function FmModel390Page({
     });
   }, [decl.id]);
 
+  // `incidentsVersion` re-reads them after an AEAT attempt (the backend replaces the AEAT ones).
+  const [incidentsVersion, setIncidentsVersion] = useState(0);
   useEffect(() => {
     if (!apiBaseUrl) return undefined;
     let cancelled = false;
@@ -307,7 +309,7 @@ export default function FmModel390Page({
       if (!cancelled) setIncidents(res);
     });
     return () => { cancelled = true; };
-  }, [decl.id, token, apiBaseUrl]);
+  }, [decl.id, token, apiBaseUrl, incidentsVersion]);
 
   // Display values: a presented declaration shows the snapshot as frozen; a draft re-derives the
   // input-dependent boxes from the inputs on screen (fm390Layouts.deriveInputBoxes).
@@ -462,10 +464,12 @@ export default function FmModel390Page({
   }
 
   const blocking = incidents?.blocking ?? 0;
+  // Only the model's own blocking rules gate Generar / Presentar — never a stored AEAT answer.
+  const ruleBlocking = ruleBlockingCount(incidents);
   const warning = incidents?.warning ?? 0;
 
   function openGenerate() {
-    if (blocking > 0) {
+    if (ruleBlocking > 0) {
       toast.error(t('fm.m390.blocked_by_incidents'));
       return;
     }
@@ -491,7 +495,7 @@ export default function FmModel390Page({
   }
 
   function openPresent() {
-    if (blocking > 0) {
+    if (ruleBlocking > 0) {
       toast.error(t('fm.m390.blocked_by_incidents'));
       return;
     }
@@ -503,7 +507,7 @@ export default function FmModel390Page({
   // stored inputs); a failed save stops here. Then the next step opens: the AEAT flow, or the
   // registration form.
   async function handlePresentPath({ status: path }) {
-    if (path !== 'aeat_telematic' && path !== STATUS_SUBMITTED_EXT) return;
+    if (path !== 'aeat_telematic' && path !== REGISTER_PATH) return;
     setPresenting(true);
     try {
       const saved = await persistIfDirty();
@@ -551,9 +555,10 @@ export default function FmModel390Page({
       onManualDataSaved?.(decl.id, manualData);
       if (file) uploadReceipt?.(file);
       const previous = { status, submissionMethod };
-      setStatus(STATUS_SUBMITTED_EXT);
-      setSubmissionMethod(SUBMISSION_METHOD_MANUAL_EXT);
-      const result = await onStatusChange?.(decl.id, STATUS_SUBMITTED_EXT, SUBMISSION_METHOD_MANUAL_EXT);
+      const next = manualRegistrationStatus(file);
+      setStatus(next.status);
+      setSubmissionMethod(next.submissionMethod);
+      const result = await onStatusChange?.(decl.id, next.status, next.submissionMethod);
       if (result?.ok === false) {
         setStatus(previous.status);
         setSubmissionMethod(previous.submissionMethod);
@@ -597,7 +602,7 @@ export default function FmModel390Page({
 
   const incidentVariants = buildIncidentVariants(blocking, warning, t);
   const typeLabel = isSubstitutive(identification) ? t('fm.m349.type.substitutive') : t('fm.m349.type.normal');
-  const blockedTitle = blocking > 0 ? t('fm.m390.blocked_by_incidents') : undefined;
+  const blockedTitle = ruleBlocking > 0 ? t('fm.m390.blocked_by_incidents') : undefined;
 
   const tabs = [
     { id: 'boxes', label: t('fm.tab.boxes'), icon: <ClipboardCheck size={16} strokeWidth={1.75} data-testid="ClipboardCheck__fm390" /> },
@@ -666,7 +671,7 @@ export default function FmModel390Page({
               </FmDetailButton>
               <FmDetailButton
                 onClick={openGenerate}
-                disabled={busy || !hasBoxes || blocking > 0}
+                disabled={busy || !hasBoxes || ruleBlocking > 0}
                 title={blockedTitle}
                 data-testid="FmModel390Page__generate"
               >
@@ -684,7 +689,7 @@ export default function FmModel390Page({
               <FmDetailButton
                 primary
                 onClick={openPresent}
-                disabled={busy || !hasBoxes || blocking > 0}
+                disabled={busy || !hasBoxes || ruleBlocking > 0}
                 title={blockedTitle}
                 data-testid="FmModel390Page__present"
               >
@@ -872,6 +877,7 @@ export default function FmModel390Page({
           apiBaseUrl={apiBaseUrl}
           onResult={handleTelematicResult}
           onAttached={() => listReceipts?.()}
+          onIncidentsChanged={() => setIncidentsVersion(v => v + 1)}
           onClose={() => setShowAeatFlow(false)} />
       )}
       {showRegister && (

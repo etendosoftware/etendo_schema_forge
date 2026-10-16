@@ -6,7 +6,9 @@
 // ETP-5716 — Modelo 390 presentation: "Presentar" offers the AEAT telematic filing and
 // "Registrar como presentada"; both save pending changes first. A telematic success mirrors the
 // backend's submitted_ack + filing data; an AEAT error keeps the draft. A manual registration
-// saves manualData.submission in its own PUT, then changes the status to submitted_ext. A
+// saves manualData.submission in its own PUT, then sets the 303/349 manual-register status
+// (submitted_ack + manual_ack with the PDF, submitted + manual_no_receipt without). AEAT answers
+// are stored as `AEAT-` incidents that never gate Generar / Presentar. A
 // submitted 390 shows the "Presentación en la AEAT" card and "Crear declaración sustitutiva".
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -54,7 +56,7 @@ vi.mock('../../../FmOverlays.jsx', () => ({
     presentProps.current = p;
     return React.createElement('div', null,
       React.createElement('button', { type: 'button', 'data-testid': 'PresentModal-aeat', onClick: () => p.onConfirm({ status: 'aeat_telematic' }) }, 'aeat'),
-      React.createElement('button', { type: 'button', 'data-testid': 'PresentModal-register', onClick: () => p.onConfirm({ status: 'submitted_ext' }) }, 'register'));
+      React.createElement('button', { type: 'button', 'data-testid': 'PresentModal-register', onClick: () => p.onConfirm({ status: 'manual_register' }) }, 'register'));
   },
 }));
 const flowProps = vi.hoisted(() => ({ current: null }));
@@ -91,6 +93,7 @@ import { fetchBoxes390 } from '../fm390Api.js';
 import { persistManualData, fetchDeclarationIncidents } from '../../../fiscalModelsUtils.js';
 import {
   AEAT_SUBMIT_390, createSubstitute390, formerStatementFrom, substituteManualData, submissionOf,
+  manualRegistrationStatus, ruleBlockingCount,
 } from '../submission390.js';
 import { presentationDateLabel } from '../SubmissionCard390.jsx';
 import { toast } from 'sonner';
@@ -139,7 +142,7 @@ describe('FmModel390Page — Presentar', () => {
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     fireEvent.click(screen.getByTestId('FmModel390Page__present'));
     expect(presentProps.current.showAeatPath).toBe(true);
-    expect(presentProps.current.registerPaths.map(p => p.id)).toEqual(['submitted_ext']);
+    expect(presentProps.current.registerPaths.map(p => p.id)).toEqual(['manual_register']);
     expect(presentProps.current.registerPaths[0].continues).toBe(true);
   });
 
@@ -197,15 +200,15 @@ describe('FmModel390Page — Presentar', () => {
     expect(p.onSubmittedRemotely).not.toHaveBeenCalled();
   });
 
-  it('manual: saves manualData.submission in its own PUT, uploads the PDF, then sets submitted_ext', async () => {
+  it('manual: saves manualData.submission in its own PUT, uploads the PDF, then sets submitted_ack / manual_ack', async () => {
     const p = props();
     render(<FmModel390Page decl={makeDecl()} {...p} />);
     fireEvent.click(screen.getByTestId('FmModel390Page__present'));
     fireEvent.click(screen.getByTestId('PresentModal-register'));
     fireEvent.click(await screen.findByTestId('Register-confirm'));
-    await waitFor(() => expect(p.onStatusChange).toHaveBeenCalledWith('decl-390', 'submitted_ext', 'manual_ext'));
+    await waitFor(() => expect(p.onStatusChange).toHaveBeenCalledWith('decl-390', 'submitted_ack', 'manual_ack'));
     const saved = persistManualData.mock.calls.at(-1)[1];
-    expect(saved.submission).toMatchObject({ method: 'manual_ext', justificante: '3901234567890', presentationDate: '2027-01-10', user: 'ayelen' });
+    expect(saved.submission).toMatchObject({ method: 'manual', justificante: '3901234567890', presentationDate: '2027-01-10', user: 'ayelen' });
     expect(saved.aeatInputs.LIQANUAL_VAT_IMPORT).toBe('5');
     expect(persistManualData.mock.invocationCallOrder.at(-1)).toBeLessThan(p.onStatusChange.mock.invocationCallOrder[0]);
     expect(uploadMock).toHaveBeenCalledWith({ name: 'j.pdf' });
@@ -222,6 +225,39 @@ describe('FmModel390Page — Presentar', () => {
     fireEvent.click(await screen.findByTestId('Register-confirm'));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.action.save_error'));
     expect(p.onStatusChange).not.toHaveBeenCalled();
+  });
+
+  it('stored AEAT errors (AEAT- incidents) do not block a new attempt; rule incidents do', async () => {
+    fetchDeclarationIncidents.mockResolvedValue({
+      blocking: 1, warning: 0, items: [{ origin: 'AEAT-E390001', severity: 'block', message: 'x' }],
+    });
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('FmModel390Page__present').disabled).toBe(false));
+    fireEvent.click(screen.getByTestId('FmModel390Page__present'));
+    expect(presentProps.current).not.toBeNull();
+  });
+
+  it('an AEAT attempt re-reads the incidents', async () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    fireEvent.click(screen.getByTestId('FmModel390Page__present'));
+    fireEvent.click(screen.getByTestId('PresentModal-aeat'));
+    await waitFor(() => expect(flowProps.current).not.toBeNull());
+    const before = fetchDeclarationIncidents.mock.calls.length;
+    flowProps.current.onIncidentsChanged();
+    await waitFor(() => expect(fetchDeclarationIncidents.mock.calls.length).toBe(before + 1));
+  });
+
+  it('manual without PDF: submitted / manual_no_receipt (reactivatable, like 303/349)', () => {
+    expect(manualRegistrationStatus(null)).toEqual({ status: 'submitted', submissionMethod: 'manual_no_receipt' });
+    expect(manualRegistrationStatus({ name: 'j.pdf' })).toEqual({ status: 'submitted_ack', submissionMethod: 'manual_ack' });
+  });
+
+  it('ruleBlockingCount ignores warnings and AEAT- rows', () => {
+    expect(ruleBlockingCount({ items: [
+      { origin: 'AEAT-1', severity: 'block' }, { origin: 'NO_IAE', severity: 'block' }, { origin: 'W', severity: 'warn' },
+    ] })).toBe(1);
+    expect(ruleBlockingCount({ blocking: 2 })).toBe(2);
   });
 
   it('blocking incidents: Presentar is disabled and never opens the picker', async () => {
