@@ -1372,6 +1372,39 @@ describe('useDefaultCallouts (ETP-4742)', () => {
     ).toBe(false);
   });
 
+  // ETP-4742 review finding 2: tokens must be registered when the cycle arms, not when each
+  // stagger timer fires. Otherwise the first callout can settle and be applied before the
+  // second has even been dispatched, `outstanding` looks empty, the gate drops, and the
+  // second callout then mutates a form the user can already see.
+  it('keeps pending when the first staggered callout settles before the next one fires', async () => {
+    vi.useFakeTimers();
+    let resolveSecond;
+    const executeCallout = vi.fn((field) => (
+      field === 'businessPartner'
+        ? Promise.resolve(true)
+        : new Promise((resolve) => { resolveSecond = resolve; })
+    ));
+    const { result } = renderHook(() => useCallouts({
+      editing: { businessPartner: 'BP1', warehouse: 'WH1' },
+      executeCallout,
+      selectors: twoSelectors,
+    }));
+
+    // t=0: only the first trigger fires; it settles with a result, which is then applied.
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    await act(async () => { result.current.markApplied(); });
+    expect(
+      result.current.pending,
+      'the gate must stay up until the later staggered callouts have fired and settled too',
+    ).toBe(true);
+
+    // t=400ms: the second trigger fires and settles without a result.
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    expect(executeCallout).toHaveBeenCalledWith('warehouse', 'WH1', expect.any(Object), expect.any(Object));
+    await act(async () => { resolveSecond(false); });
+    expect(result.current.pending).toBe(false);
+  });
+
   it('is exposed through isLoadingRecordForRoute as the new-record gate', () => {
     expect(
       isLoadingRecordForRoute(

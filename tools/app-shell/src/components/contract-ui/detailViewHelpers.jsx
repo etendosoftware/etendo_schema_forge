@@ -2061,12 +2061,21 @@ export function useDefaultCallouts({ isNew, defaultsLoading, editing, selectors,
 
     const snapshot = { ...editing };
     triggers.forEach(({ field }, i) => {
+      const token = `${field}#${i}`;
+      // Register the token NOW, when the cycle arms — never inside the stagger timer.
+      // Otherwise the first callout could settle and be applied before the second has
+      // even been dispatched, `outstanding` would look empty and the gate would drop
+      // while a later callout was still coming (ETP-4742 review finding 2).
+      outstanding.set(token, { settledWithResult: false });
       staggerTimersRef.current.push(setTimeout(() => {
         if (cycleRef.current !== cycle) return;
         const value = snapshot[field];
-        if (!value) return;
-        const token = `${field}#${i}`;
-        outstanding.set(token, { settledWithResult: false });
+        if (!value) {
+          // Nothing to dispatch for this trigger: retire its token.
+          outstanding.delete(token);
+          settle();
+          return;
+        }
         // ETP-4772: bump + snapshot BEFORE dispatch so a manual edit racing this
         // in-flight callout is detected as newer once the response comes back.
         fieldGenerationRef.current[field] = (fieldGenerationRef.current[field] || 0) + 1;

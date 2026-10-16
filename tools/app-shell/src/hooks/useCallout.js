@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -39,18 +39,44 @@ export function useCallout(entity, { token, apiBaseUrl }) {
   const apiFetch = useApiFetch(apiBaseUrl);
   const [calloutResult, setCalloutResult] = useState(null);
   const [calloutLoading, setCalloutLoading] = useState(false);
-  // Per-field debounce timers and abort controllers so concurrent callouts don't cancel each other
-  const debounceMapRef = useRef({});
+  // Per-field debounce timers and abort controllers so concurrent callouts don't cancel each
+  // other. ETP-4742: each debounce entry also carries its own `resolve`, so a superseded
+  // debounce (or an unmount) can SETTLE the promise it handed out instead of leaving it
+  // pending forever — a caller gating on that promise would otherwise wait for its budget.
+  const debounceMapRef = useRef({}); // field -> { timer, resolve }
   const abortMapRef = useRef({});
+
+  const settleSupersededDebounce = useCallback((field) => {
+    const pending = debounceMapRef.current[field];
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    delete debounceMapRef.current[field];
+    pending.resolve(false);
+  }, []);
+
+  // Unmount: clear every pending debounce (settling it) and abort every in-flight request,
+  // so no promise handed to a caller is left hanging.
+  useEffect(() => () => {
+    Object.values(debounceMapRef.current).forEach(({ timer, resolve }) => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+    debounceMapRef.current = {};
+    Object.values(abortMapRef.current).forEach(controller => controller.abort());
+    abortMapRef.current = {};
+  }, []);
 
   const executeCallout = useCallback((field, value, formState, meta) => {
     if (!field || !apiBaseUrl || !entity) return Promise.resolve(false);
 
-    // Cancel any pending debounced call for THIS field only
-    if (debounceMapRef.current[field]) clearTimeout(debounceMapRef.current[field]);
+    // Cancel any pending debounced call for THIS field only, settling its promise.
+    settleSupersededDebounce(field);
 
     return new Promise((resolve) => {
-      debounceMapRef.current[field] = setTimeout(async () => {
+      const entry = { resolve, timer: null };
+      entry.timer = setTimeout(async () => {
+        // This debounce fired: drop it so a later supersede does not try to settle it.
+        if (debounceMapRef.current[field] === entry) delete debounceMapRef.current[field];
         // Abort previous in-flight request for THIS field only
         if (abortMapRef.current[field]) abortMapRef.current[field].abort();
         const controller = new AbortController();
@@ -117,8 +143,9 @@ export function useCallout(entity, { token, apiBaseUrl }) {
           resolve(hasResult);
         }
       }, 300);
+      debounceMapRef.current[field] = entry;
     });
-  }, [entity, token, apiBaseUrl, apiFetch]);
+  }, [entity, token, apiBaseUrl, apiFetch, settleSupersededDebounce]);
 
   return { calloutResult, calloutLoading, executeCallout };
 }

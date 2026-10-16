@@ -754,4 +754,45 @@ describe('useCallout — executeCallout settlement promise (ETP-4742)', () => {
     await expect(result.current.executeCallout('', 'v', {})).resolves.toBe(false);
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
+
+  // ETP-4742 review finding 1: a second dispatch for the same field cancels the first
+  // debounce. The cancelled call must SETTLE (false), not leave its promise pending —
+  // otherwise a caller gating on it (the initial-callout chain) hangs until the budget.
+  it('resolves the superseded debounce with false when the same field is dispatched again', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ updates: {}, combos: {}, messages: [] }),
+    });
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    let first;
+    let second;
+    act(() => {
+      first = result.current.executeCallout('businessPartner', 'BP001', { id: '1' });
+    });
+    act(() => {
+      second = result.current.executeCallout('businessPartner', 'BP002', { id: '1' });
+    });
+
+    await expect(first).resolves.toBe(false);
+
+    await advanceDebounce();
+    await expect(second).resolves.toBe(true);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  // ETP-4742 review finding 1: unmount must not leave a debounce promise pending.
+  it('settles a pending debounce with false when the hook unmounts', async () => {
+    const { result, unmount } = renderHook(() => useCallout('header', opts));
+
+    let settled;
+    act(() => {
+      settled = result.current.executeCallout('businessPartner', 'BP001', { id: '1' });
+    });
+
+    unmount();
+
+    await expect(settled).resolves.toBe(false);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
 });
