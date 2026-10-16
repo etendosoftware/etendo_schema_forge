@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth.js';
+import { login } from '../../helpers/auth.js';
 
 /**
  * Presupuesto de Venta — the selection bar must offer "Procesar" for a Borrador row (mocked).

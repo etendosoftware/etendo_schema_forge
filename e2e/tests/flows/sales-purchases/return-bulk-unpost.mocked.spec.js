@@ -2,7 +2,7 @@
 // @covers tools/app-shell/src/components/contract-ui/RowQuickActions.jsx
 // @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 import { test, expect } from '@playwright/test';
-import { login, installNonAdminCapabilities } from '../helpers/auth.js';
+import { login, installNonAdminCapabilities } from '../../helpers/auth.js';
 
 /**
  * Return windows — the selection bar must offer Descontabilizar for a posted row (mocked).

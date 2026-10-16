@@ -83,7 +83,7 @@ The provider names are the gateway's adapter names: `datadog`, `aws-rum`, `mixpa
 
 ### Verifying egress in a browser
 
-`e2e/tests/flows/telemetry-egress.mocked.spec.js` aborts and records every request to the
+`e2e/tests/flows/platform/telemetry-egress.mocked.spec.js` aborts and records every request to the
 providers' hosts (Datadog intake, Mixpanel, CloudWatch RUM data plane and Cognito). Providers
 are configured at BUILD time, so each scenario needs its own bundle; `run-e2e-full.sh` builds
 one and passes `VITE_*` through to it. The fake values below never reach a real account.
