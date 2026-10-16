@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * Tests for pure exported helpers in DataTable.jsx.
  */
@@ -26,7 +27,8 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({ resolveIdentifier: (d, f) => d?.[
 vi.mock('@/lib/resolveColumnLabel.js', () => ({ resolveColumnLabel: (c) => c.label }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => String(v) }));
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({ applyCalloutUpdates: vi.fn() }));
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   columnMinWidthPx: () => 100,
   columnFlex: () => '1 0 100px',
   isLineGridColumn: (col) => col?.type !== 'dimensionsPanel',
@@ -153,9 +155,11 @@ describe('DataTable helpers', () => {
       expect(getTableContainerStyle()).not.toHaveProperty('minWidth');
     });
 
-    it('ignores extra arguments (no minWidth budget parameter exists)', () => {
-      expect(getTableContainerStyle(992)).toEqual({ tableLayout: 'fixed', width: '100%' });
-      expect(getTableContainerStyle(992)).not.toHaveProperty('minWidth');
+    // ETP-5510 — plain lists pass `listTableMinWidthPx(...)` so the table scrolls instead of
+    // squeezing its columns; the budget is applied as `min-width` only when given.
+    it('adds a px min-width only when a positive budget is given', () => {
+      expect(getTableContainerStyle(992)).toEqual({ tableLayout: 'fixed', width: '100%', minWidth: '992px' });
+      expect(getTableContainerStyle(0)).toEqual({ tableLayout: 'fixed', width: '100%' });
     });
   });
 });

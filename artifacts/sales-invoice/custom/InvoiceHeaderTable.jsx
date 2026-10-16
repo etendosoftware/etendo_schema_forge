@@ -5,6 +5,7 @@ import { TruncatedText } from '@/components/ui/truncated-text';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatCalendarDate } from '@/lib/dateOnly';
+import { ACCOUNTING_CAPABILITY } from '@/lib/capabilityVisibility.js';
 import { formatCurrency } from '@/lib/formatCurrency';
 import {
   getDueDateState,
@@ -16,6 +17,7 @@ import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate
 import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
+import { renderPercentCell } from '@/components/contract-ui/DataTable.cellRenderers.jsx';
 import { getArSubtype } from './invoiceSubtype';
 
 // ─── Invoice-specific status logic ───────────────────────────────
@@ -237,7 +239,8 @@ export default function InvoiceHeaderTable(props) {
       },
       { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string', required: true },
       { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn'), required: true },
-      { key: 'posted', column: 'Posted', type: 'boolean', required: true, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } } },
+      // ETP-5684 — DataTable drops it for a role without "Show Accounting Fields".
+      { key: 'posted', column: 'Posted', type: 'boolean', required: true, visibleWhenCapability: ACCOUNTING_CAPABILITY, badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } } },
       ...fiscalCols,
       { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: t('impTotal'), required: true },
       {
@@ -315,7 +318,17 @@ export default function InvoiceHeaderTable(props) {
           );
         },
       },
-      { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
+      {
+        key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent',
+        // ETP-5706: a rectificative invoice has no delivery to track (the backend
+        // counts the return receipt as a delivery), so its cell stays empty.
+        // `type: 'percent'` + `column:` are kept so width, header wrap, sort and
+        // the numeric advanced filter are unchanged; `render` only overrides the
+        // cell, delegating every other row to DataTable's own percent renderer.
+        render: (row) => (getArSubtype(row) === 'RECTIFICATIVA'
+          ? null
+          : renderPercentCell({ row, col: { key: 'eTGODeliveryStatus' } })),
+      },
     ];
   }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, vfColLabel, earliestSiiCutoverDate, earliestVerifactuCutoverDate]);
 

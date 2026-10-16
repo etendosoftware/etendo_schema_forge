@@ -130,6 +130,46 @@ test.describe('Calendar — year detail', () => {
   });
 });
 
+// ETP-5682: several periods opened from the floating selection bar, one request per period.
+test.describe('Calendar — bulk open periods', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installYearMock(page);
+    await installPeriodControlMock(page, [
+      PERIOD_OPEN,
+      PERIOD_CLOSED,
+      { ...PERIOD_CLOSED, id: 'period-003', name: 'Mar-2027', periodNo: 3 },
+    ]);
+    await installAccountingMock(page);
+    await page.goto('/calendar/year-001');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
+  test('opens the selected closed periods and skips the one already open', async ({ page }) => {
+    await page.getByTestId('tab-periods').click();
+    await expect(page.getByTestId('period-name-period-001')).toBeVisible();
+    await expect(page.getByTestId('period-bulk-open')).toHaveCount(0);
+
+    await page.getByTestId('period-select-all').click();
+    await expect(page.getByTestId('period-bulk-open')).toBeVisible();
+
+    const posted = [];
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && /\/periodControl\/[^/]+\/action\/openClose/.test(r.url())) {
+        posted.push(r.url().match(/periodControl\/([^/]+)\//)[1]);
+      }
+    });
+
+    await page.getByTestId('period-bulk-open').click();
+    await expect(page.getByTestId('periods-bulk-confirm-names')).toBeVisible();
+    await page.getByTestId('periods-bulk-confirm-ok').click();
+
+    // period-001 is already open: not posted. The others go in date order.
+    await expect.poll(() => posted).toEqual(['period-002', 'period-003']);
+    await expect(page.getByTestId('period-bulk-open')).toHaveCount(0);
+  });
+});
+
 test.describe('Calendar — Cerrar Año guard', () => {
   test('stays disabled while a period is still open', async ({ page }) => {
     await login(page);
@@ -160,5 +200,76 @@ test.describe('Calendar — Cerrar Año guard', () => {
     await page.getByTestId('action-more').click();
     await page.getByTestId('menu-action-closeYear').click();
     await expect(page.getByTestId('close-year-confirm')).not.toBeDisabled();
+  });
+});
+
+/**
+ * ETP-5577 — the `accounting-calendar` guided tour (`walkthrough/flows/accounting-calendar.json`),
+ * run end to end so every selector it names is proven against the real window: the menu path, the
+ * list's New action, the year row, the Periods tab and the open/close button, plus "Atrás" from
+ * inside a year. Also covers its launcher in the First Steps calendar review row.
+ *
+ * @covers tools/app-shell/src/walkthrough/flows/accounting-calendar.json
+ * @covers tools/app-shell/src/pages/first-steps/CalendarReviewPanel.jsx
+ */
+test.describe('Calendar — guided tour (ETP-5577)', () => {
+  test('walks list → next year → year → Periods → open/close, and back', async ({ page }) => {
+    test.setTimeout(90_000);
+    await login(page);
+    await installYearMock(page);
+    await installPeriodControlMock(page, [PERIOD_OPEN, PERIOD_CLOSED]);
+    await installAccountingMock(page);
+    // Started where a new productive tenant meets it: the "Revisar calendario contable" row in
+    // Primeros pasos. Not Calendar itself, so step 1 has to travel the menu path.
+    await page.route('**/sws/go/onboarding/calendar-review**', (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ required: true, reviewed: false, canRegenerate: true }),
+    }));
+    await page.goto('/first-steps');
+    await page.getByTestId('first-steps-title-calendar-review').click();
+    await page.getByTestId('first-steps-calendar-review-view-guide').click();
+
+    const overlay = page.getByTestId('walkthrough-overlay');
+    const atStep = (id) => expect(overlay).toHaveAttribute('data-walkthrough-step', id, { timeout: 20_000 });
+    const card = page.getByTestId('walkthrough-card');
+
+    await atStep('calendar-list');
+    // The menu path is three animated hops of up to 3s each (`navPathSpeedMs`).
+    await expect(page).toHaveURL(/\/calendar$/, { timeout: 20_000 });
+    await expect(card).not.toContainText(/walkthroughCalendar/);
+    await page.getByTestId('walkthrough-next').click();
+
+    await atStep('next-year');
+    await expect(page.getByTestId('walkthrough-error-message')).toHaveCount(0);
+    await page.getByTestId('walkthrough-next').click();
+
+    await atStep('open-year');
+    await page.getByTestId('row-year-001').click();
+
+    await atStep('periods-tab');
+    await page.getByTestId('tab-periods').click();
+
+    await atStep('open-close-period');
+    await expect(page.getByTestId('walkthrough-error-message')).toHaveCount(0);
+
+    // "Atrás" from inside the year: the list steps declare `route`, so going back returns to the
+    // year list instead of looking for its rows on the year's own screen.
+    await page.getByTestId('walkthrough-previous').click();
+    await atStep('periods-tab');
+    await page.getByTestId('walkthrough-previous').click();
+    await atStep('open-year');
+    await expect(page).toHaveURL(/\/calendar$/, { timeout: 20_000 });
+    await expect(page.getByTestId('walkthrough-error-message')).toHaveCount(0);
+    await page.getByTestId('row-year-001').click();
+    await atStep('periods-tab');
+    await page.getByTestId('tab-periods').click();
+
+    await atStep('open-close-period');
+    await expect(page.getByTestId('walkthrough-error-message')).toHaveCount(0);
+    await page.getByTestId('walkthrough-finish').click();
+    // The completion card; the last flow in the registry offers no next tour.
+    await expect(page.getByTestId('walkthrough-next-flow')).toHaveCount(0);
+    await page.getByTestId('walkthrough-close').click();
+    await expect(overlay).toHaveCount(0, { timeout: 10_000 });
   });
 });

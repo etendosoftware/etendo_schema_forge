@@ -592,6 +592,26 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
 
       expectInvoiceBulkUnpostWiring(callFor);
     });
+
+    // ETP-5745 follow-up — the process (reactivate) bulk instance must carry
+    // makeInvoiceReactivateRowFilter's rowFilter, gated to the 'RE' action. The gate itself
+    // (fetch, reactivationBlocked, fail-open) is covered exhaustively in
+    // useInvoiceWindow.test.js; this only proves the window wires it through onto the right
+    // bulk instance, not e.g. the Post one.
+    it('passes a rowFilter to the process (reactivate) bulk instance, gated to the RE action', async () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const { rowFilter } = callFor('process');
+      expect(typeof rowFilter).toBe('function');
+      // action !== 'RE' resolves synchronously to true with no network call — safe to await here.
+      await expect(rowFilter({ id: 'inv-1' }, 'unpost', (k) => k)).resolves.toBe(true);
+    });
+
+    it('does NOT pass the reactivate rowFilter to the Post bulk instance', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(callFor('post').rowFilter).not.toBe(callFor('process').rowFilter);
+    });
   });
 });
 

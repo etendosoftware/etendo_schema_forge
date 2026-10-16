@@ -6,6 +6,12 @@
  *   cd tools/app-shell && LOCAL_CORE=1 npx vitest run \
  *     src/windows/custom/contacts/__tests__/ContactsFinanceContext.cache.vitest.jsx
  */
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsFinanceContext.jsx
+// Requests go through `useApiFetch` (docs/request-policy.md): mocked with one stable function.
+// AuthProvider + DataProvider stay real — they own the cache scope under test.
+const { mockApiFetch } = vi.hoisted(() => ({ mockApiFetch: vi.fn() }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
+
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 
 import { render, screen, act, waitFor } from '@testing-library/react';
@@ -22,14 +28,17 @@ const API = '/api/sws/neo/contacts';
 function makeFetch() {
   const counts = {};
   const bump = (k) => { counts[k] = (counts[k] || 0) + 1; };
-  const fetchMock = vi.fn(async (url) => {
+  mockApiFetch.mockReset();
+  mockApiFetch.mockImplementation(async (url) => {
     const kind = url.includes('/bp-stats') ? 'bp-stats' : url.includes('/bp-trend') ? 'bp-trend' : 'other';
-    const id = new URL(url, 'http://x').searchParams.get('businessPartnerId') || '?';
+    const params = new URL(url, 'http://x').searchParams;
+    const id = params.get('businessPartnerId') || '?';
     bump(`${kind}:${id}`);
+    if (params.has('months')) bump(`${kind}:${id}:m${params.get('months')}`);
     const data = kind === 'bp-trend' ? { labels: ['a'], revenue: [1], expenses: [0] } : [{ key: 'k', value: 1 }];
     return { ok: true, json: async () => ({ response: { data } }) };
   });
-  return { fetchMock, counts };
+  return { counts };
 }
 
 let captured = null;
@@ -38,6 +47,12 @@ function FinanceProbe({ recordId }) {
   captured = ctx;
   useSyncFinanceRecordId(recordId);
   return <span data-testid="stats">{ctx.stats === null ? 'null' : 'loaded'}</span>;
+}
+
+const statsLoaded = () => waitFor(() => expect(screen.getByTestId('stats').textContent).toBe('loaded'));
+async function selectPeriod(period) {
+  await act(async () => { captured.setPeriod(period); });
+  await statsLoaded();
 }
 
 function renderFinance(recordId, cache) {
@@ -59,8 +74,7 @@ describe('ContactsFinanceContext — shared cache (ETP-4564)', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('reopening the same contact within freshness does not repeat the KPI requests', async () => {
-    const { fetchMock, counts } = makeFetch();
-    globalThis.fetch = fetchMock;
+    const { counts } = makeFetch();
 
     const a = renderFinance('BP1', cache);
     await waitFor(() => expect(screen.getByTestId('stats').textContent).toBe('loaded'));
@@ -75,8 +89,7 @@ describe('ContactsFinanceContext — shared cache (ETP-4564)', () => {
   });
 
   it('a different contact uses a distinct key and fetches its own KPIs', async () => {
-    const { fetchMock, counts } = makeFetch();
-    globalThis.fetch = fetchMock;
+    const { counts } = makeFetch();
 
     const a = renderFinance('BP1', cache);
     await waitFor(() => expect(counts['bp-stats:BP1']).toBe(1));
@@ -86,20 +99,50 @@ describe('ContactsFinanceContext — shared cache (ETP-4564)', () => {
     expect(counts['bp-stats:BP1']).toBe(1); // untouched
   });
 
-  it('refresh() forces a new KPI request even when cached', async () => {
-    const { fetchMock, counts } = makeFetch();
-    globalThis.fetch = fetchMock;
+  it('refresh() forces both KPI requests for the current period even when cached', async () => {
+    const { counts } = makeFetch();
 
     renderFinance('BP1', cache);
     await waitFor(() => expect(counts['bp-stats:BP1']).toBe(1));
+    await statsLoaded();
+    await selectPeriod('6M');
+    expect(counts['bp-stats:BP1:m6']).toBe(1);
 
     await act(async () => { captured.refresh(); });
-    await waitFor(() => expect(counts['bp-stats:BP1']).toBe(2));
+    await waitFor(() => expect(counts['bp-stats:BP1:m6']).toBe(2));
+    await waitFor(() => expect(counts['bp-trend:BP1']).toBe(2));
+    expect(counts['bp-stats:BP1:m3']).toBe(1); // the inactive period is not forced
+  });
+
+  it('switching back to a period already loaded is served from the cache', async () => {
+    const { counts } = makeFetch();
+
+    renderFinance('BP1', cache);
+    await statsLoaded();
+    await selectPeriod('6M');
+    await selectPeriod('3M');
+
+    expect(counts['bp-stats:BP1:m3']).toBe(1);
+    expect(counts['bp-stats:BP1:m6']).toBe(1);
+  });
+
+  it('invalidating bp-stats marks every period stale', async () => {
+    const { counts } = makeFetch();
+
+    renderFinance('BP1', cache);
+    await statsLoaded();
+    await selectPeriod('6M');
+
+    act(() => { cache.invalidate({ entity: 'bp-stats' }); });
+
+    await selectPeriod('3M');
+    await waitFor(() => expect(counts['bp-stats:BP1:m3']).toBe(2));
+    await selectPeriod('6M');
+    await waitFor(() => expect(counts['bp-stats:BP1:m6']).toBe(2));
   });
 
   it('invalidating bp-stats makes the next open refetch it (mutation hook)', async () => {
-    const { fetchMock, counts } = makeFetch();
-    globalThis.fetch = fetchMock;
+    const { counts } = makeFetch();
 
     const a = renderFinance('BP1', cache);
     await waitFor(() => expect(counts['bp-stats:BP1']).toBe(1));
@@ -114,8 +157,7 @@ describe('ContactsFinanceContext — shared cache (ETP-4564)', () => {
   });
 
   it('KPI data cannot leak across organizations (scope isolation)', async () => {
-    const { fetchMock, counts } = makeFetch();
-    globalThis.fetch = fetchMock;
+    const { counts } = makeFetch();
 
     // org o1
     const a = render(

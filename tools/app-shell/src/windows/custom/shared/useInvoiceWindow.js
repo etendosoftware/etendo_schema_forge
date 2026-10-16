@@ -6,6 +6,9 @@ import { useCallback } from 'react';
 import { isPosted as isRowPosted } from '../../../lib/preUnpost.js';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 import { buildMenuActionExecutedHandler } from './buildDocumentRowQuickActions.js';
+// Plain (hook-free) module, never the `@/auth/api.js` barrel — see
+// makeInvoiceReactivateRowFilter's doc for why this file cannot use `useApiFetch`.
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 
 export function getInvoiceDraftMode(ui, options = {}) {
   const { showVerifactuProcessingModal = false, keepSaveWhenCompletedFields = [], editableLineFieldsWhenCompleted = [], afterProcess } = options;
@@ -56,7 +59,14 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
   // ETP-5700 — `extraMenuActions(row)` appends window-specific row-kebab entries after
   // the document actions (the fiscal "send to SII/TBAI" entry). It may return one
   // descriptor, an array of them, or nothing.
-  const { showEmail = true, onRefresh, ui, extraMenuActions = null } = options;
+  const { showEmail = true, onRefresh, ui, extraMenuActions = null, apiBaseUrl, token } = options;
+  // ETP-5745 QA follow-up — the row-hover kebab is a THIRD surface running the same
+  // preUnpost-then-reactivate sequence as the detail kebab and the bulk bar, and list rows
+  // are never GET-enriched with `reactivationBlocked` (only the detail GET is), so it needs
+  // the exact same per-row check `makeInvoiceReactivateRowFilter` already does for the bulk
+  // bar. Reused as-is rather than re-implemented, wired through the generic
+  // `action.preUnpostGuard` hook point `RowQuickActions.jsx` now reads.
+  const reactivateRowFilter = makeInvoiceReactivateRowFilter({ apiBaseUrl, token });
   return {
     enabled: true,
     editMode: 'navigate',
@@ -124,6 +134,9 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
             // Reactivating a posted invoice must reverse its accounting first, or the
             // backend rejects the bare docAction — same flag the form-view kebab uses.
             preUnpost: true,
+            // ETP-5745 QA follow-up — checked BEFORE preUnpost; see reactivateRowFilter above.
+            preUnpostGuard: (currentRow, currentAction, uiFn) =>
+              reactivateRowFilter(currentRow, currentAction, uiFn),
           }]
           : []),
         ...(!isPosted && isProcessed
@@ -171,6 +184,50 @@ export const invoiceUnpostRowFilter = (row, action, ui) => {
   if (!isRowPosted(row)) return ui('bulkRowNotPosted');
   if (invoiceStatusOf(row) !== 'CO') return ui('bulkRowNotCompleted');
   return true;
+};
+
+/**
+ * ETP-5745 follow-up — bulk-bar equivalent of the detail kebab's `reactivationBlocked` check
+ * (`DetailMoreActionsMenu.jsx`): a row whose reactivation is already known to be refused (fiscally
+ * accepted + a completed rectificativa) must never reach `runPreUnpost`, or the bulk run un-posts
+ * it and THEN fails to reactivate it — the exact side effect ETP-5745 exists to prevent.
+ *
+ * Unlike `invoiceUnpostRowFilter`, this CANNOT be answered from the list row alone — "has a
+ * completed rectificativa" is not a grid column, it is the same `C_Invoice_Reverse` join the
+ * backend guard runs. So this one row-fetches per candidate row, reusing the same read-only
+ * `reactivationBlocked*` fields `InvoiceReactivationGuard#enrichReactivationBlock`
+ * (com.etendoerp.go) already puts on GET — never re-derived client-side. `BulkDocumentAction`'s
+ * `rowFilter` is evaluated with `Promise.all` over only the SELECTED rows (see its ETP-5414
+ * note), so the cost is bounded by how many invoices the user picked for this bulk reactivate, not
+ * by the list size.
+ *
+ * Uses the PLAIN (hook-free) `apiFetch` module, not `useApiFetch`: `*BulkAction` (sales-invoice,
+ * purchase-invoice) is invoked by `ListView` as a bare function call, not rendered as JSX — it
+ * cannot call hooks (see the ETP-5209 note in `BulkDocumentAction.jsx`), so neither can anything
+ * built inside it, including this factory's call site. A plain top-level export like
+ * `invoiceUnpostRowFilter` would do here too; it is a factory only because it needs
+ * `apiBaseUrl`/`token`, which the caller already has as plain props.
+ *
+ * @param {{apiBaseUrl: string, token: string}} params the caller's own `apiBaseUrl`/`token` props
+ * @returns {function(object, string, function): Promise<true|string>} a `rowFilter`
+ */
+export const makeInvoiceReactivateRowFilter = ({ apiBaseUrl, token }) => async (row, action, ui) => {
+  if (action !== 'RE' || !row?.id || !apiBaseUrl) return true;
+  try {
+    const res = await apiFetch(`${apiBaseUrl}/header/${row.id}`, { baseUrl: '', token });
+    if (!res.ok) return true; // fails OPEN, mirrors the backend guard's own read-failure stance
+    const json = await res.json().catch(() => null);
+    const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? null;
+    if (!record?.reactivationBlocked) return true;
+    return ui('backendError.invoiceReactivateFiscalRectified', {
+      fiscalSystem: record.reactivationBlockedFiscalSystem,
+      rectificativas: Array.isArray(record.reactivationBlockedRectificativas)
+        ? record.reactivationBlockedRectificativas.join(', ')
+        : record.reactivationBlockedRectificativas,
+    });
+  } catch {
+    return true; // same fail-open stance — a lookup failure must not block a legitimate bulk row
+  }
 };
 
 export function useClearSavedRecord(setSavedRecord, location, navigate) {

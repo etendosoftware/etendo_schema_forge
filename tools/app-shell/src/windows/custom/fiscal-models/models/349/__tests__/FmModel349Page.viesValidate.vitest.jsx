@@ -37,6 +37,8 @@ const ES = {
   'fm.m349.banner.vies_title': '{count} NIF-IVA con validación VIES pendiente',
 };
 
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => {
     const raw = ES[key];

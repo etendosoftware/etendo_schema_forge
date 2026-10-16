@@ -32,6 +32,7 @@ export default function GoodsShipmentConfirmModal({ base, recordId, data, onConf
         documentNo: data?.documentNo,
         bpName: data?.['businessPartner$_identifier'],
       }}
+      periodDate={data?.movementDate}
       infoRowPre={ui('goodsShipment.confirmModal.infoRowPre')}
       infoRowBold={ui('goodsShipment.confirmModal.infoRowBold')}
       infoRowPost={ui('goodsShipment.confirmModal.infoRowPost')}

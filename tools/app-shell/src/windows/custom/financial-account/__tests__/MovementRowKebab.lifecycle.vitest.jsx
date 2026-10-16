@@ -14,6 +14,9 @@
 // absence observable: if params ever came back, every reason assertion below would see a
 // `:{"…"}` suffix and fail instead of quietly passing on the key alone. Every other ui() call in
 // this component is param-less, so the pre-existing bare-key assertions are unaffected.
+// ETP-5684 — Post/Unpost need showAccountingFields (fail closed); this suite asserts on them.
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => {
     const base = key.startsWith('backendError.') ? `translated:${key}` : key;
@@ -90,6 +93,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }) => <div>{children}</div>,
 }));
 
+import { setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MovementRowKebab } from '../MovementRowKebab.jsx';
@@ -741,5 +745,24 @@ describe('MovementRowKebab — Post/Unpost translate a mapped backend error (ETP
     await user.click(screen.getByTestId('movement-row-post'));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Some unmapped business error'));
+  });
+
+  it('ETP-5577: Post refused for a closed period offers the calendar of the movement date', async () => {
+    const go = vi.fn();
+    setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
+    mockTransactionResponse({ success: false, message: 'El Periodo no existe', messageKeys: ['PeriodNotAvailable'] });
+    try {
+      const user = userEvent.setup();
+      renderKebab({ ...PROCESSED_NOT_POSTED, accountingDate: '2026-10-15' });
+      await user.click(screen.getByTestId('movement-row-post'));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledOnce());
+      const options = toastError.mock.calls[0][1];
+      expect(options.action.label).toBe('periodNotAvailableOpenCalendar');
+      options.action.onClick();
+      expect(go).toHaveBeenCalledWith('2026-10-15');
+    } finally {
+      setPeriodRecovery(null);
+    }
   });
 });

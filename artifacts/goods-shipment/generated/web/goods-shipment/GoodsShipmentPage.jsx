@@ -31,7 +31,7 @@ const statusField = 'documentStatus';
 
 // @sf-generated-start extraBadges:goodsShipment
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:goodsShipment
 

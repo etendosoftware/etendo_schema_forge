@@ -301,11 +301,12 @@
           "section": "suspense"
         },
         "suspenseErrorUse": {
-          "visibility": "editable",
-          "section": "suspense"
+          "visibility": "discarded",
+          "reason": "ETP-5682 — not exposed in Etendo GO: Etendo core loads UseSuspenseError/SuspenseError_Acct (AcctSchema.java) but posting never uses them, so the switch and its account have no effect."
         },
         "suspenseError": {
-          "visibility": "discarded"
+          "visibility": "discarded",
+          "reason": "ETP-5682 — not exposed in Etendo GO: Etendo core loads UseSuspenseError/SuspenseError_Acct (AcctSchema.java) but posting never uses them, so the switch and its account have no effect."
         },
         "currencyBalancingUse": {
           "visibility": "editable",

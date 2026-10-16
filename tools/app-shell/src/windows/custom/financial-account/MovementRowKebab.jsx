@@ -15,9 +15,12 @@ import {
 import MovementLifecycleConfirmModal from './MovementLifecycleConfirmModal';
 import { DeleteConfirmDialog } from '@/components/contract-ui/DeleteConfirmDialog.jsx';
 import { resolveMovementDeleteBlock, resolveMovementReactivateBlock, movementHasUndoableState } from './movementActionEligibility.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { translateBackendError, extractBackendMessageKeys } from '@/lib/backendErrors.js';
+import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { ACCOUNTING_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 // Post (contabilizar) / Unpost (descontabilizar) go through the financial-account spec's
 // document-posting action (Java_Qualifier `document-posting` on the transaction entity).
 const POST_URL = (id) =>
@@ -34,8 +37,9 @@ async function callTransactionAction(apiFetch, url, token) {
   const body = await res.json().catch(() => null);
   const nested = body?.response?.data?.[0];
   const message = nested?.message ?? body?.response?.message ?? body?.message;
+  const messageKeys = extractBackendMessageKeys(nested) ?? extractBackendMessageKeys(body);
   const success = res.ok && (nested?.success ?? body?.success ?? true);
-  return { success, message };
+  return { success, message, messageKeys };
 }
 
 /**
@@ -62,6 +66,8 @@ async function callTransactionAction(apiFetch, url, token) {
  */
 export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly }) {
   const ui = useUI();
+  // ETP-5684 — Contabilizar / Descontabilizar only for a role with "Show Accounting Fields".
+  const showAccounting = isCapabilityVisible(useCapabilitiesSafe(), ACCOUNTING_CAPABILITY);
   const { token } = useAuth();
   const apiFetch = useApiFetch(getApiBase());
   const { processMovement, processing } = useProcessMovement();
@@ -99,7 +105,9 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
   const deleteBlock = resolveMovementDeleteBlock(movement);
   const reactivateBlock = resolveMovementReactivateBlock(movement);
   // Contabilizar only makes sense once the movement is Processed (and not yet posted).
-  const canPost = isProcessed && !isPosted;
+  const canPost = showAccounting && isProcessed && !isPosted;
+  // Descontabilizar is offered while posted, for the same roles as Contabilizar.
+  const canUnpost = showAccounting && isPosted;
   // "Is there anything to undo?" — the movement is posted (contabilizado) and/or reconciled.
   // Two different jobs read it: Reactivar uses it to decide whether to confirm AT ALL (a
   // merely-Processed movement reactivates on the spot), while Eliminar always confirms and uses it
@@ -126,12 +134,20 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
   // Is there anything ABOVE the Delete item? Delete is the only unconditional item (ETP-5111), so
   // its separator has to be gated on this or it renders as a stray leading divider — precisely on
   // the payment-linked draft this change exists to serve, where every other flag is false.
-  const hasActionsAboveDelete = canEdit || canProcess || canPost || isPosted || canReactivate;
+  const hasActionsAboveDelete = canEdit || canProcess || canPost || canUnpost || canReactivate;
 
   // No "nothing to offer" early return any more (ETP-5111): Delete is now rendered on every row,
   // so the menu is never empty. It used to be hidden entirely for, say, a payment-linked draft —
   // exactly the row whose delete refusal we now have to explain.
   const busy = posting || unposting || processing || reactivating || deleting;
+
+  // ETP-5577 — a refusal for a period that is not open offers the calendar of the movement's date.
+  const toastRefusal = (text, messageKeys) => {
+    const recovery = periodNotAvailableToastOptions(messageKeys, ui,
+      { date: documentPeriodDate(movement) ?? movement.date });
+    if (Object.keys(recovery).length > 0) toast.error(text, recovery);
+    else toast.error(text);
+  };
 
   async function runLifecycle(fn, successKey, errorKey) {
     if (busy) return;
@@ -143,7 +159,8 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
       // The hooks now throw the backend's own business message (useCreateMovement.postAction), so
       // it goes through the shared translator before being shown — otherwise the user reads it in
       // English. Falls back to the generic per-action key when there was no message at all.
-      toast.error(translateBackendError(e?.message, ui) || ui(errorKey));
+      toastRefusal(translateBackendError(e?.message, ui, { messageKeys: e?.messageKeys }) || ui(errorKey),
+        e?.messageKeys);
     }
   }
 
@@ -193,12 +210,13 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
     if (busy) return;
     setPosting(true);
     try {
-      const { success, message } = await callTransactionAction(apiFetch, POST_URL(movement.id), token);
+      const { success, message, messageKeys } = await callTransactionAction(apiFetch, POST_URL(movement.id), token);
       if (success) {
         toast.success(ui('documentPosted'));
         onReload?.();
       } else {
-        toast.error(message ? translateBackendError(message, ui) : ui('financeAccountMovementsRowPostError'));
+        toastRefusal(translateBackendError(message, ui, { messageKeys }) || ui('financeAccountMovementsRowPostError'),
+          messageKeys);
       }
     } catch {
       toast.error(ui('financeAccountMovementsRowPostError'));
@@ -283,7 +301,7 @@ export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly })
 
           {/* Unpost — descontabilizar; enabled while posted. No reconciliation-state field is
               exposed on the row, so it cannot be gated on reconciliation status here. */}
-          {isPosted && (
+          {canUnpost && (
             <DropdownMenuItem
               onClick={handleUnpost}
               disabled={busy}

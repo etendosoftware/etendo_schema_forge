@@ -361,21 +361,52 @@ function sortTree(nodes, key, direction) {
   return walk(nodes);
 }
 
-function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui, activeChecked, activeDisabled, onActiveToggle }) {
+// Controls inside a row that own their own click (chevron, name link, status switch). A
+// double-click on one of them must not also open the record from the row.
+const ROW_CONTROL_SELECTOR = 'button, input, [role="switch"]';
+
+/**
+ * Row interactions (ETP-5733): a single click selects any row and never navigates, so a
+ * leaf can be the starting point of "Nueva subcuenta". A leaf opens from its name (a
+ * link-styled button), a double-click on the row, or Enter on the focused row. Space
+ * selects.
+ */
+function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, onOpen, ui, activeChecked, activeDisabled, onActiveToggle }) {
   const isSummary = item.summaryLevel === 'Y';
   const indent = (item.depth ?? 0) * 16;
   const isProtected = isProtectedLeafCode(item);
+
+  const handleDoubleClick = (e) => {
+    if (item.isVirtual || e.target.closest?.(ROW_CONTROL_SELECTOR)) return;
+    onOpen(item);
+  };
+
+  // Only keys pressed on the row itself: a focused button inside it handles its own.
+  const handleKeyDown = (e) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (item.isVirtual) onRowClick(item);
+      else onOpen(item);
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      onRowClick(item);
+    }
+  };
 
   return (
     <TableRow
       data-testid={`account-tree-row-${item.id}`}
       aria-selected={isSelected}
       data-state={isSelected ? 'selected' : undefined}
+      tabIndex={0}
       className={[
         'cursor-pointer text-sm select-none',
         isSummary ? 'font-semibold text-[hsl(var(--foreground))]' : 'font-normal text-[hsl(var(--muted-foreground))]',
       ].join(' ')}
       onClick={() => onRowClick(item)}
+      onDoubleClick={handleDoubleClick}
+      onKeyDown={handleKeyDown}
     >
       {/* Code — indent spacer (grows with depth), expand toggle, code in Space Mono */}
       <TableCell data-testid="TableCell__c9cb6e">
@@ -400,7 +431,23 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
       {/* Account name */}
       <TableCell data-testid="TableCell__c9cb6e">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate">{item.name}</span>
+          {item.isVirtual ? (
+            <span className="truncate">{item.name}</span>
+          ) : (
+            <button
+              type="button"
+              className="truncate text-left hover:underline focus-visible:underline focus-visible:outline-none"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen(item);
+              }}
+              aria-label={ui('accountTreeOpenAccount', { name: item.name })}
+              title={ui('accountTreeOpenAccount', { name: item.name })}
+              data-testid={`account-tree-open-${item.id}`}
+            >
+              {item.name}
+            </button>
+          )}
           {isProtected && (
             <Lock
               size={12}
@@ -426,8 +473,12 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
       </TableCell>
 
       {/* Status toggle — leaf rows only, disabled for protected placeholders. Folder rows
-          keep the (empty) cell so the columns stay aligned (ETP-5399). */}
-      <TableCell onClick={(e) => e.stopPropagation()} data-testid="TableCell__c9cb6e">
+          keep the (empty) cell so the columns stay aligned (ETP-5399). Only a leaf's cell
+          stops the click, so flipping the switch never changes the selection; a folder's
+          empty cell selects the row like the rest of it (ETP-5733). */}
+      <TableCell
+        onClick={item.isVirtual ? undefined : (e) => e.stopPropagation()}
+        data-testid="TableCell__c9cb6e">
         {item.isVirtual ? (
           <span aria-hidden="true" data-testid={`account-tree-active-placeholder-${item.id}`} />
         ) : (
@@ -455,7 +506,8 @@ const selectSavedGeneration = (s) => s.savedGeneration;
  *                         ListView.jsx only ever hands this one paginated BATCH_SIZE
  *                         page (`hook.items`), so it is used as the initial/fallback
  *                         dataset — see the self-fetch note below.
- *   onNavigate          — (item) => void — called when a non-virtual row is clicked (receives the full row object)
+ *   onNavigate          — (item) => void — opens a leaf (receives the full row object): from
+ *                         its name, a double-click or Enter. A plain click only selects.
  *   onDataMutated       — () => void  — called after a new sub-account is saved
  *   token / apiBaseUrl  — used for the self-fetch and the active toggle
  *   sortColumn / sortDirection — ListView's sort (toolbar Sort popover). Only `searchKey`
@@ -728,12 +780,13 @@ export default function AccountTreeView({
     }, { persist: !hasActiveFilter });
   }, [hasActiveFilter]);
 
-  const handleRowClick = useCallback(
+  // A click only selects (ETP-5733): navigating would unmount the tree and clear the
+  // selection, so a leaf could never seed "Nueva subcuenta". Opening is handleOpen's job.
+  const handleRowClick = useCallback((item) => setSelectedId(item.id), []);
+
+  const handleOpen = useCallback(
     (item) => {
-      setSelectedId(item.id);
-      if (!item.isVirtual) {
-        onNavigate?.(item);
-      }
+      if (!item.isVirtual) onNavigate?.(item);
     },
     [onNavigate],
   );
@@ -791,6 +844,7 @@ export default function AccountTreeView({
                 isSelected={item.id === selectedId}
                 onToggle={handleToggle}
                 onRowClick={handleRowClick}
+                onOpen={handleOpen}
                 ui={ui}
                 activeChecked={rawActive === true || rawActive === 'Y' || rawActive === 'true'}
                 activeDisabled={windowReadOnly || !!savingActiveToggles[toggleKey]}

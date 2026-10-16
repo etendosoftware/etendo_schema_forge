@@ -169,7 +169,7 @@ vi.mock('@phosphor-icons/react', () => {
     Star: iconStub,
     IdentificationCard: iconStub,
     ShareNetwork: iconStub,
-    TrendUp: iconStub,
+    ChartLineUp: iconStub,
     Receipt: iconStub,
     Bank: iconStub,
     Package: iconStub,
@@ -516,8 +516,9 @@ describe('SideMenu', () => {
       fireEvent.mouseEnter(trigger);
       const activeLink = screen.getByTestId('menu-item-dashboard');
       const inactiveLink = screen.getByTestId('menu-item-dashboard-extra');
-      expect(activeLink.className).toMatch(/bg-accent-highlight/);
-      expect(inactiveLink.className).not.toMatch(/bg-accent-highlight/);
+      expect(activeLink.className).toMatch(/bg-card/);
+      expect(activeLink.className).toMatch(/ring-border-control/);
+      expect(inactiveLink.className).not.toMatch(/bg-card/);
       fireEvent.mouseLeave(trigger);
     });
 
@@ -599,8 +600,9 @@ describe('SideMenu', () => {
       render(<SideMenu {...defaultProps} menuGroups={COLLAPSED_DIRECT_GROUPS} expanded={false} />);
       const activeLink = screen.getByTestId('menu-item-dashboard');
       const inactiveLink = screen.getByTestId('menu-item-settings');
-      expect(activeLink.className).toMatch(/bg-accent-highlight/);
-      expect(inactiveLink.className).not.toMatch(/bg-accent-highlight/);
+      expect(activeLink.className).toMatch(/bg-card/);
+      expect(activeLink.className).toMatch(/ring-border-control/);
+      expect(inactiveLink.className).not.toMatch(/bg-card/);
     });
 
     it('shows the empty-favorites hint when the Favorites group is expanded with no favorites', async () => {
