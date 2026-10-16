@@ -47,6 +47,23 @@ const ELASTIC_BASIS_PX = {
   // happens — see `hasDimensionsPanel` there), so no basis entry is needed.
 };
 
+// ETP-5510 — plain-list-only bases (`columnMinWidthPx`; the lines/add-row flex layout in
+// `columnFlex` is untouched). Both types used to fall through to the generic 120px:
+//  - `status`: a StatusTag pill ("Cobro depositado" is ~153px of text + the cell padding)
+//    was wider than its column and got cut with no ellipsis.
+//  - `multiField`: the identity cell (media + bold title + chip) needs real room; at 120px
+//    the title was unreadable.
+const LIST_BASIS_PX = {
+  status: 184,
+  multiField: 240,
+};
+
+// ETP-5510 — floor of the ONE width-less (`grow`) column. A <col> without a width gets
+// "whatever is left" under `table-layout: fixed`, which is 0 when the other columns already
+// fill the viewport (Products at 1280px). The floor is applied through the table's
+// `min-width` (`listTableMinWidthPx`), so the list scrolls horizontally instead.
+export const GROW_COLUMN_MIN_PX = 320;
+
 const SELECTOR_TYPES = new Set(['selector', 'search', 'foreignKey']);
 
 // A `boolean` column with `badge: true` renders a rounded pill (see `Tag`,
@@ -150,5 +167,36 @@ export function columnMinWidthPx(col) {
   if (col.type === 'boolean' && col.badge) return booleanBadgeBasisPx(col);
   if (SELECTOR_TYPES.has(col.type)) return 192;
   if (col.type === 'percent') return PERCENT_LIST_BASIS_PX;
+  if (LIST_BASIS_PX[col.type] !== undefined) return LIST_BASIS_PX[col.type];
   return ELASTIC_BASIS_PX[col.type] ?? FIXED_BASIS_PX[col.type] ?? 120;
+}
+
+/**
+ * ETP-5510 — a plain list always needs exactly one width-less column to absorb the leftover
+ * space; otherwise `table-layout: fixed` stretches EVERY <col> proportionally (the 40px
+ * selection column became 65px in Warehouse, which declares no `grow` column). Returns the
+ * columns unchanged when one already grows, otherwise marks the first column that does not
+ * pin its own width (`headClass`/`cellClass`) as `grow`.
+ */
+export function withImplicitGrowColumn(columns) {
+  if (columns.length === 0 || columns.some(c => c.grow)) return columns;
+  const idx = columns.findIndex(c => !c.headClass && !c.cellClass);
+  if (idx === -1) return columns;
+  return columns.map((c, i) => (i === idx ? { ...c, grow: true } : c));
+}
+
+/**
+ * ETP-5510 — minimum table width (px) of a plain list: every sized column at its
+ * `columnMinWidthPx`, the `grow` column at `GROW_COLUMN_MIN_PX` (at least its own basis),
+ * plus the fixed slots (selection checkbox, row actions). Columns that pin their width with
+ * `headClass` are not counted — their width lives in a class this helper cannot read.
+ * Applied as `min-width` on the header AND body tables so columns never compress below
+ * their floor: the scroll container scrolls instead.
+ */
+export function listTableMinWidthPx(columns, fixedSlotsPx = 0) {
+  return columns.reduce((sum, col) => {
+    if (col.headClass) return sum;
+    const basis = columnMinWidthPx(col);
+    return sum + (col.grow ? Math.max(basis, GROW_COLUMN_MIN_PX) : basis);
+  }, fixedSlotsPx);
 }

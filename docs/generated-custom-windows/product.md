@@ -247,8 +247,10 @@ anymore — the same `type: 'multiField'` column any window can adopt (see
   "multiField" blob).
 
 The two segments are relabeled via `parts[].labels` — *Identifier* / *Identificador* for `searchKey`
-and *Name* / *Nombre* for `name` — so the composite header reads *"Identifier & Name"* /
-*"Identificador & Nombre"* (default `partSeparator` `" & "`) rather than the raw field labels.
+and *Name* / *Nombre* for `name` — so the composite header reads *"Identifier / Name"* /
+*"Identificador / Nombre"* rather than the raw field labels. The list is the hand-built
+`ProductCustomTable.jsx`, which sets `partSeparator: ' / '` on the column (ETP-5510); the
+`multiField` default separator elsewhere stays `" & "`.
 
 **Absorbed fields keep their data.** `searchKey` (subtitle) and `image` (media) no longer render as
 their own standalone columns — they fold into the identity cell — but their per-row data still arrives,

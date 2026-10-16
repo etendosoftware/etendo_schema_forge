@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
 /**
  * ETP-4735 — the add-row-only companion <table> DataTable renders under
  * InlineLinesPanel (hideHeader=true, when addRow.active) must reserve the
@@ -42,7 +43,8 @@ vi.mock('@/lib/resolveIdentifier.js', () => ({ resolveIdentifier: (d, f) => d?.[
 vi.mock('@/lib/resolveColumnLabel.js', () => ({ resolveColumnLabel: (c) => c.label }));
 vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (v) => String(v) }));
 vi.mock('@/lib/applyCalloutUpdates.js', () => ({ applyCalloutUpdates: vi.fn() }));
-vi.mock('@/lib/linesColumnWidth.js', () => ({
+vi.mock('@/lib/linesColumnWidth.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   columnMinWidthPx: () => 100,
   columnFlex: () => '1 0 100px',
   // ETP-4803 — real predicate (not an always-true stub), so this file's own
