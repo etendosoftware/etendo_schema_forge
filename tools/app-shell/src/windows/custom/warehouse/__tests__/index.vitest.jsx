@@ -101,6 +101,9 @@ describe('WarehouseWindow', () => {
       compactSidebarPadding: true,
       noHeaderBorder: true,
     });
+    // ETP-5603 — the list toolbar padding comes from the generic ListView default (56px bar).
+    expect(lastWarehousePageProps).not.toHaveProperty('listbarPaddingX');
+    expect(lastWarehousePageProps).not.toHaveProperty('listbarPaddingY');
   });
 
   // ETP-5513 — the sidebar is a fixed 320 px column, not a share of the viewport

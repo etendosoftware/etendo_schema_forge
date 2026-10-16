@@ -4,10 +4,10 @@ import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
-import { checkReceiverTaxId } from './receiverTaxIdCheck';
+import { checkReceiverTaxId, cleanTaxId } from './receiverTaxIdCheck';
 import { getOcrDocType } from './ocrDocTypes';
 import { useBatch } from './ingest/useBatch';
-import { buildPurchaseInvoiceBatch } from './ingest/purchaseInvoiceDescriptor';
+import { buildPurchaseInvoiceBatch, findBpLocation, toIsoDate } from './ingest/purchaseInvoiceDescriptor';
 import ProductResolverPopup from './ProductResolverPopup';
 import OcrReviewModal from './OcrReviewModal';
 import OcrLinesReviewModal from './OcrLinesReviewModal';
@@ -36,11 +36,24 @@ async function fetchOrgTaxId(apiFetch) {
 }
 
 // ETP-5585 — per-docType pre-flight checks, named by `docType.validateExtraction`. Each runs after
-// the extraction and before any modal. Returns `{ error }` to block the flow, or null to continue.
+// the extraction and before any modal. Returns `{ error }` to block the flow, `{ notice }` to
+// continue with a non-blocking flag for the review modal, or null to continue untouched.
+// The mismatch error stays on screen until the user closes it (QA ETP-5585: a transient toast read
+// as "nothing happened"). The stable id makes a second wrong invoice replace it instead of stacking.
+const RECEIVER_MISMATCH_TOAST_ID = 'ocr-receiver-tax-id-mismatch';
+const RECEIVER_MISMATCH_TOAST_OPTIONS = {
+  id: RECEIVER_MISMATCH_TOAST_ID,
+  duration: Infinity,
+  closeButton: true,
+};
+
 const VALIDATORS = {
   async receiverTaxId(payload, { apiFetch, ui }) {
-    // The org id is only needed once a receiver id is present, so skip the call otherwise.
-    if (!payload?.receiver?.tax_id_raw) return null;
+    // A new validation run clears the previous (persistent) mismatch error before comparing.
+    toast.dismiss(RECEIVER_MISMATCH_TOAST_ID);
+    // The org id is only needed once a receiver id is present, so skip the call otherwise. An
+    // absent receiver id is not a reason to stop: the review modal shows a non-blocking notice.
+    if (!cleanTaxId(payload?.receiver?.tax_id_raw)) return { notice: 'receiverTaxIdAbsent' };
     const org = await fetchOrgTaxId(apiFetch);
     if (org.failed) {
       toast.warning(ui('ocrReceiverTaxIdUnverified'));
@@ -49,7 +62,10 @@ const VALIDATORS = {
     const orgTaxId = org.taxId;
     const { status, receiverTaxId } = checkReceiverTaxId(payload, orgTaxId);
     if (status === 'mismatch') {
-      return { error: ui('ocrReceiverTaxIdMismatch', { receiver: receiverTaxId }) };
+      return {
+        error: ui('ocrReceiverTaxIdMismatch', { receiver: receiverTaxId }),
+        toastOptions: RECEIVER_MISMATCH_TOAST_OPTIONS,
+      };
     }
     if (status === 'no-org-tax-id') toast.warning(ui('ocrOrgTaxIdMissing'));
     return null;
@@ -91,6 +107,15 @@ function mapLineValue(column, row) {
   return row;
 }
 
+// ETP-5585 — what the backend `defaultTax` action needs: the vendor's location (the same one
+// the batch header uses) and the invoice date. `cache`/`noMatch` are per OCR run.
+async function buildTaxContext(reviewed, payload, { token, apiBaseUrl }) {
+  const bpId = reviewed?.vendor?.bpId ?? reviewed?.vendor?.id ?? null;
+  const partnerAddressId = bpId ? await findBpLocation({ token, apiBaseUrl, bpId }) : null;
+  const invoiceDate = toIsoDate(reviewed?.invoiceDate ?? payload?.invoice_date);
+  return { partnerAddressId, invoiceDate, cache: new Map(), noMatch: new Set() };
+}
+
 async function resolveLines(columns, lines, context) {
   const entityColumns = (columns || []).filter((column) => column?.kind === 'entity' && column?.preResolve);
   if (entityColumns.length === 0) return Array.isArray(lines) ? lines : [];
@@ -99,7 +124,13 @@ async function resolveLines(columns, lines, context) {
     let nextLine = { ...line };
     for (const column of entityColumns) {
       const resolved = await resolveField(column, nextLine, context);
-      if (!resolved) continue;
+      if (!resolved) {
+        // ETP-5585 — the backend answered but has no purchase tax at the printed rate.
+        if (column.key === 'tax' && context?.taxContext?.noMatch?.has(Number(nextLine.tax_rate))) {
+          nextLine = { ...nextLine, tax_no_rate_match: true };
+        }
+        continue;
+      }
       const idKey = `${column.key}_id`;
       const rateKey = `${column.key}_rate`;
       nextLine = {
@@ -149,6 +180,7 @@ export function useOcrFlow({
   const [reviewExtracted, setReviewExtracted] = useState(null);
   const [reviewPreResolved, setReviewPreResolved] = useState({});
   const [reviewResolving, setReviewResolving] = useState(false);
+  const [reviewReceiverAbsent, setReviewReceiverAbsent] = useState(false);
   const resolveRef = useRef(null);
 
   const [linesOpen, setLinesOpen] = useState(false);
@@ -195,13 +227,14 @@ export function useOcrFlow({
     setLinesOpen(true);
   }), []);
 
-  const askUserToReview = useCallback((extracted) => new Promise((resolve) => {
+  const askUserToReview = useCallback((extracted, { receiverTaxIdAbsent = false } = {}) => new Promise((resolve) => {
     resolveRef.current = resolve;
     // Resolve pre-resolvers BEFORE opening the modal so the initial render
     // already shows the matched vendor with its toggle on. OcrReviewModal seeds
     // its row state from `preResolved` in a useState initializer that only
     // runs on mount, so a late update would otherwise be ignored.
     setReviewExtracted(extracted);
+    setReviewReceiverAbsent(receiverTaxIdAbsent);
     setReviewPreResolved({});
     setReviewResolving(true);
     (async () => {
@@ -234,20 +267,24 @@ export function useOcrFlow({
       setResult(null);
       try {
         const validate = VALIDATORS[docType.validateExtraction];
-        const blocked = validate ? await validate(payload, { apiFetch, ui }) : null;
+        const outcome = validate ? await validate(payload, { apiFetch, ui }) : null;
+        const blocked = outcome?.error ? outcome : null;
         if (blocked) {
           // NOT showResult: it reads `failed[0].message`, and this flow passes `{ reason }`.
-          toast.error(blocked.error);
+          toast.error(blocked.error, blocked.toastOptions);
           setResult({ committed: false, error: blocked.error });
           return;
         }
-        const reviewed = await askUserToReview(payload);
+        const reviewed = await askUserToReview(payload, { receiverTaxIdAbsent: outcome?.notice === 'receiverTaxIdAbsent' });
         if (!reviewed) {
           markCancelled();
           return;
         }
+        const taxContext = hasLinesToReview(docType, payload)
+          ? await buildTaxContext(reviewed, payload, { token, apiBaseUrl })
+          : null;
         const extractedLines = hasLinesToReview(docType, payload)
-          ? await resolveLines(docType.lineColumns, payload.line_items, { token, apiBaseUrl })
+          ? await resolveLines(docType.lineColumns, payload.line_items, { token, apiBaseUrl, taxContext })
           : [];
         let reviewedLines = null;
         if (extractedLines.length > 0) {
@@ -345,6 +382,7 @@ export function useOcrFlow({
         fields={docType.headerFields}
         preResolved={reviewPreResolved}
         resolving={reviewResolving}
+        receiverTaxIdAbsent={reviewReceiverAbsent}
         contactsBase={contactsBase}
         apiBaseUrl={apiBaseUrl}
         token={token}

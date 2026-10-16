@@ -25,7 +25,7 @@ const statusField = 'processed';
 
 // @sf-generated-start extraBadges:movement
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', hintKeys: {"D":"goodsMovementsPostedDisabledHint"} },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields', hintKeys: {"D":"goodsMovementsPostedDisabledHint"} },
 ];
 // @sf-generated-end extraBadges:movement
 
@@ -275,7 +275,6 @@ export default function MovementPage({ windowName, recordId, ...props }) {
       api={api}
       listViewOptions={{"hideStatusFilter":true}}
       dateFilterKey="movementDate"
-      listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
       hideLink

@@ -480,11 +480,11 @@ test.describe('Reconciliation difference — post the remainder to a G/L item (m
     const confirm = dialog.getByTestId('recon-difference-confirm');
     await expect(confirm).toBeDisabled();
 
-    // Pick a concept from the lookup, which unblocks it. The ChipSelect popover is PORTALED to the
+    // Pick a concept from the lookup, which unblocks it. The ChipSelect panel (CreatableSearchSelect's, ETP-5728) is PORTALED to the
     // body (so it is never clipped by the modal body), hence scoped to `page`, not to `dialog`.
-    await dialog.getByTestId('recon-difference-concept-search').fill('Dif');
-    await page.getByTestId('recon-difference-concept-option-gl-picked').click();
-    await expect(dialog.getByTestId('recon-difference-concept-chip')).toBeVisible();
+    await dialog.getByTestId('field-recon-difference-concept').fill('Dif');
+    await page.getByTestId('option-recon-difference-concept-gl-picked').click();
+    await expect(dialog.getByTestId('field-recon-difference-concept-chip')).toBeVisible();
     await expect(confirm).toBeEnabled();
 
     const postRequest = page.waitForRequest((r) =>

@@ -100,7 +100,7 @@ vi.mock('@phosphor-icons/react', () => {
     Star: iconStub,
     IdentificationCard: iconStub,
     ShareNetwork: iconStub,
-    TrendUp: iconStub,
+    ChartLineUp: iconStub,
     Receipt: iconStub,
     Bank: iconStub,
     Package: iconStub,
@@ -135,6 +135,10 @@ const transfer = vi.hoisted(() => ({
 // A 404 from the backend means this flag is off, so the productive checklist has seven rows.
 vi.mock('@/pages/first-steps/useDemoDataTransfer.js', () => ({
   useDemoDataTransfer: () => transfer,
+}));
+// No calendar review marker (ETP-5577): the row is absent.
+vi.mock('@/pages/first-steps/useCalendarReview.js', () => ({
+  useCalendarReview: () => ({ required: false, reviewed: false, loading: false }),
 }));
 
 import SideMenu from '../SideMenu.jsx';

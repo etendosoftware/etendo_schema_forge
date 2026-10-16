@@ -8,6 +8,8 @@ import { paymentDisplayState } from './paymentStatuses';
 import { useRecordRefreshSignal } from './useRecordRefreshSignal';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { ACCOUNTING_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
   return formatCurrency(currency || 'EUR', n);
@@ -222,6 +224,8 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const [events, setEvents] = useState([]);
   const refreshSignal = useRecordRefreshSignal(data?.id);
   const [postedAt, setPostedAt] = useState(null);
+  // ETP-5684 — the accounting entry is shown only to a role with "Show Accounting Fields".
+  const showAccounting = isCapabilityVisible(useCapabilitiesSafe(), ACCOUNTING_CAPABILITY);
 
   const isIn = dir === 'in';
   // Shared with the grid, the invoice modal and the invoice preview so the four cannot disagree
@@ -325,7 +329,6 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const paymentDate = data?.paymentDate;
   const createdDate = data?.creationDate || data?.created || paymentDate;
 
-  const sign = isIn ? '+ ' : '− ';
   const titleKey = isIn ? 'amountLabelIn' : 'amountLabelOut';
 
   const hasConfirmedEvent = events.some(ev => ev.type === 'confirmed');
@@ -380,7 +383,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       date: paymentDate,
       dot: confirmedDot,
     }] : []),
-    ...((!isDraft && data?.posted === 'Y') || postedAt ? [{
+    ...(showAccounting && ((!isDraft && data?.posted === 'Y') || postedAt) ? [{
       label: ui('asientoContabilizado'),
       confirmedAt: postedAt,
       date: data?.updatedAt || data?.updated,
@@ -405,7 +408,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       {/* Datos: amount, padding 4px 12px 8px */}
       <div style={{ padding: '4px 12px 8px' }}>
         {(() => {
-          const formatted = sign + fmtAmt(Math.abs(totalAmount), currency);
+          const formatted = fmtAmt(Math.abs(totalAmount), currency);
           const len = formatted.length;
           const fs = len <= 13 ? 30 : 26;
           const lh = fs === 30 ? '32px' : '30px';

@@ -9,10 +9,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // bar's counter can be asserted for real instead of only for its key; every other
 // param (e.g. `{max}` on attachmentsFileTooLarge) is ignored, leaving the existing
 // exact-key assertions untouched.
+// The table renders through the generic DataTable (ETP-5526), which also reads the
+// label / locale hooks — identity stubs keep it rendering without the provider.
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (
     params && params.count !== undefined ? `${key}:${params.count}` : key
   ),
+  useLabel: () => (key) => key,
+  useMenuLabel: () => (key) => key,
+  useLocale: () => ({ genericLabels: {}, statuses: {} }),
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
 // Mock sonner toasts (used by UploadDropzone on validation errors).
@@ -352,7 +358,7 @@ describe('AttachmentsTab — a processed document allows attachment work (ETP-55
   it('keeps the selection bar delete when isDocumentReadOnly is true', () => {
     render(<AttachmentsTab {...baseProps} isDocumentReadOnly />);
 
-    fireEvent.click(within(screen.getByTestId('attachment-row-1')).getByRole('checkbox'));
+    fireEvent.click(within(screen.getByTestId('row-1')).getByRole('checkbox'));
 
     expect(screen.getByTestId('attachments-delete-selected')).toBeInTheDocument();
   });
@@ -374,15 +380,18 @@ describe('AttachmentsTab — the fiscal readOnly prop still blocks delete (ETP-5
     hookState.items = [{ id: '1', name: 'first.pdf', size: 100 }];
   });
 
-  it('hides the per-row delete when readOnly=true', () => {
+  it('hides the per-row delete when readOnly=true, but keeps the per-row download', () => {
     render(<AttachmentsTab {...baseProps} readOnly />);
     expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
+    // readOnly is delete-only: the row action cell still offers the download.
+    fireEvent.click(screen.getByTestId('attachment-download-1'));
+    expect(hookState.download).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }));
   });
 
   it('hides the selection bar delete when readOnly=true, but keeps its download', () => {
     render(<AttachmentsTab {...baseProps} readOnly />);
 
-    fireEvent.click(within(screen.getByTestId('attachment-row-1')).getByRole('checkbox'));
+    fireEvent.click(within(screen.getByTestId('row-1')).getByRole('checkbox'));
 
     expect(screen.getByTestId('attachments-selection-bar')).toBeInTheDocument();
     expect(screen.queryByTestId('attachments-delete-selected')).not.toBeInTheDocument();
@@ -415,8 +424,8 @@ describe('AttachmentsTab — selection bar (ETP-5526)', () => {
     ];
   });
 
-  const tickRow = (id) =>
-    fireEvent.click(within(screen.getByTestId(`attachment-row-${id}`)).getByRole('checkbox'));
+  const rowCheckbox = (id) => within(screen.getByTestId(`row-${id}`)).getByRole('checkbox');
+  const tickRow = (id) => fireEvent.click(rowCheckbox(id));
 
   it('stays hidden until something is selected, and reports the count', () => {
     render(<AttachmentsTab {...baseProps} />);
@@ -459,13 +468,34 @@ describe('AttachmentsTab — selection bar (ETP-5526)', () => {
     expect(hookState.removeMany).toHaveBeenCalledWith(['1', '2']);
   });
 
-  it('dismisses itself when the selection is cleared from the bar', () => {
+  it('dismisses itself when the selection is cleared from the bar, and unticks the rows', () => {
     render(<AttachmentsTab {...baseProps} />);
 
     tickRow('1');
+    expect(rowCheckbox('1')).toBeChecked();
     fireEvent.click(screen.getByTestId('SelectionToolbar__close'));
 
     expect(screen.queryByTestId('attachments-selection-bar')).not.toBeInTheDocument();
+    // The tab owns the Set but DataTable keeps its own checkbox state: clearing the
+    // Set must reach the checkboxes too, or the next tick would resurrect the old row.
+    expect(rowCheckbox('1')).not.toBeChecked();
+  });
+
+  it('prunes a deleted row from the selection and keeps the survivors ticked', () => {
+    const { rerender } = render(<AttachmentsTab {...baseProps} />);
+
+    tickRow('1');
+    tickRow('2');
+    expect(screen.getByTestId('attachments-selection-count')).toHaveTextContent('selected:2');
+
+    // The hook reloads without row 1 (deleted from its row action).
+    hookState.items = [{ id: '2', name: 'second.pdf', size: 200 }];
+    rerender(<AttachmentsTab {...baseProps} />);
+
+    expect(screen.getByTestId('attachments-selection-count')).toHaveTextContent('selected:1');
+    expect(rowCheckbox('2')).toBeChecked();
+    fireEvent.click(screen.getByTestId('attachments-download-selected'));
+    expect(hookState.downloadSelection).toHaveBeenCalledWith(['2']);
   });
 
   it('drops the selection when the tab moves to another record', () => {

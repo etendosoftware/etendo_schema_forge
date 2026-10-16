@@ -18,6 +18,11 @@ import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { DetailView } from '../DetailView.jsx';
 
+// ETP-5684 — posting actions/status are gated on showAccountingFields (fail closed);
+// this suite asserts on them, so it grants the capability.
+vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
+  (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {

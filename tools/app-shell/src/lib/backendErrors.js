@@ -211,6 +211,14 @@ const BACKEND_ERROR_MAP = {
   'There is already an asset with this identifier in this organization.': 'backendError.assetSearchKeyDuplicate',
   // Goods Movements line (GoodsMovementLineHandler) validation messages
   'This product is of type Service and cannot be used in inventory movements.': 'backendError.productNotStockable',
+  // ETP-5704 — OrderReactivationGuard (com.etendoerp.go): Reactivate (docAction RE) on a sales order
+  // that has a linked shipment or invoice. AD_Message ETGO_OrderReactivateLinkedDocs /
+  // ETGO_OrderLinkedDocsCheckFailed, both English-only in the module like every ETGO_* message.
+  // The first reuses the bulk bar's own rowFilter sentence, so the refusal reads the same whether
+  // the SPA hid the action or the backend caught a stale screen.
+  'This order cannot be reactivated because it has linked shipments or invoices.': 'cannotReactivateLinkedDocs',
+  'The documents linked to this order could not be checked, so it has not been reactivated. Try again.':
+    'backendError.orderLinkedDocsCheckFailed',
   // Product category (ProductCategoryDefaultHandler) validation messages
   'Only one product category can be marked as default.': 'backendError.productCategoryCannotSetMultipleDefault',
   // Costing engine (core `NotCalculatedCostWithTransaction` AD_MESSAGE) — the backend
@@ -402,6 +410,14 @@ const BACKEND_ERROR_KEY_MAP = {
   // process"), the STATUS_DocumentLocked message DocumentPostingService names in `messageKeys`
   // when another posting process holds the record (or AcctServer cannot take its lock).
   OtherPostingProcessActive: 'backendError.recordBeingPosted',
+  // ETP-5577 — core `PeriodNotAvailable` ("The period does not exist or is not open"): raised by
+  // the completion procedures (C_INVOICE_POST, M_INOUT_POST…), named in `messageKeys` by
+  // DocumentPostingService (STATUS_PeriodClosed) and by the payment services. A productive
+  // tenant starts with every period never-opened, so this is its first refusal.
+  PeriodNotAvailable: 'backendError.periodNotAvailable',
+  // ETP-5577 — core `PeriodNotValid`: the same refusal raised by GL_JOURNAL_CHK_RESTRICT_TRG when a
+  // journal is saved with a date whose period is not open.
+  PeriodNotValid: 'backendError.periodNotAvailable',
   // ETP-5692 — the invoice post/unpost refusals (com.etendoerp.go CompletedInvoiceWriteFence,
   // InvoicePostingGate, InvoiceExchangeRateHandler, DocumentPostingService). These are NOT
   // AD_MESSAGE records: the backend sends plain English plus these stable identity strings, so
@@ -419,6 +435,7 @@ const BACKEND_ERROR_KEY_MAP = {
   ETGO_CompletedInvoiceFieldsLocked: 'backendError.completedInvoiceFieldsLocked',
   ETGO_InvoiceFieldsLockedStatus: 'backendError.invoiceStatusDimensionsLocked',
   ETGO_InvoiceFieldsLockedSiiSent: 'backendError.invoiceSiiSentReferenceLocked',
+  ETGO_InvoiceReactivateFiscalRectified: 'backendError.invoiceReactivateFiscalRectified',
   // ETP-5692 — core `PostedDocument` ("Document already Posted."), which DocumentPostingService
   // now names instead of the misleading "being posted by another process" when a post hits a
   // document someone else already posted. Resolved in the GO locale server-side, so mapping it
@@ -539,16 +556,31 @@ function translateInvalidAccount(messageKeys, messageParams, t) {
   return [base, entity, groupAccounts, productAccounts].filter(Boolean).join(' ');
 }
 
+// `t(key, params)` interpolates `{var}` tokens (single-brace — this codebase's real
+// `useUI()` syntax, `text.replace('{param}', ...)`, NOT i18next's `{{var}}`); an array value
+// (e.g. `messageParams.fields`) has to become a string first or it renders as a bare comma
+// join with no spacing. A key whose locale string has no `{var}` token simply ignores the
+// extra params, so this is safe to pass unconditionally for every mapped key.
+function toInterpolationParams(messageParams) {
+  if (!messageParams || typeof messageParams !== 'object') return undefined;
+  const out = {};
+  for (const [key, value] of Object.entries(messageParams)) {
+    out[key] = Array.isArray(value) ? value.join(', ') : value;
+  }
+  return out;
+}
+
 // Resolves the FIRST key we recognise, so a message that mixes a structural token with a real
 // failure (`@Inline@` + `@lockedProduct@`) lands on the failure. Returns null when no key is
 // known, or when the mapped locale entry is missing — an untranslated result is indistinguishable
 // from no result for the caller, same convention as translateSingleMessage.
-function translateByMessageKey(messageKeys, t) {
+function translateByMessageKey(messageKeys, t, messageParams) {
   if (!Array.isArray(messageKeys)) return null;
+  const params = toInterpolationParams(messageParams);
   for (const raw of messageKeys) {
     const key = BACKEND_ERROR_KEY_MAP[raw];
     if (!key) continue;
-    const translated = t(key);
+    const translated = t(key, params);
     if (translated && translated !== key) return translated;
   }
   return null;
@@ -682,6 +714,23 @@ function matchZeroOrNegativeQtyProcess(msg) {
     ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX.length,
     -ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX.length,
   );
+  if (!products) return null;
+  return { products };
+}
+
+// InvoiceCompletionLineGuard.java (com.etendoerp.go — ETP-5710), `error.code = invoiceLinesWithoutAmount`
+// — raised when completing an invoice whose lines kept a net amount of 0. The lines are named by
+// product (the line numbers are internal, the UI never shows them), joined with ", " — a
+// locale-neutral separator, so the list passes through as one opaque {products} param (same shape
+// as matchInsufficientStockProcess).
+const INVOICE_LINES_NO_AMOUNT_PREFIX = 'The invoice cannot be completed: the lines of ';
+const INVOICE_LINES_NO_AMOUNT_SUFFIX = ' have a quantity and a price but a net amount of 0, so the totals would be wrong. Save those lines again so the amount is recalculated, then complete.';
+
+function matchInvoiceLinesWithoutAmount(msg) {
+  if (!msg.startsWith(INVOICE_LINES_NO_AMOUNT_PREFIX) || !msg.endsWith(INVOICE_LINES_NO_AMOUNT_SUFFIX)) {
+    return null;
+  }
+  const products = msg.slice(INVOICE_LINES_NO_AMOUNT_PREFIX.length, -INVOICE_LINES_NO_AMOUNT_SUFFIX.length);
   if (!products) return null;
   return { products };
 }
@@ -1076,6 +1125,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchInsufficientStockLine, 'backendError.insufficientStockLine'],
   [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
   [matchZeroOrNegativeQtyProcess, 'backendError.zeroOrNegativeQtyProcess'],
+  [matchInvoiceLinesWithoutAmount, 'backendError.invoiceLinesWithoutAmount'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
@@ -1254,7 +1304,8 @@ export function translateBackendError(msg, t, options = {}) {
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.
-  const byKey = translateByMessageKey(options.messageKeys ?? extractRawMessageKeys(msg), t);
+  const byKey = translateByMessageKey(options.messageKeys ?? extractRawMessageKeys(msg), t,
+    options.messageParams);
   if (byKey !== null) return byKey;
 
   if (!msg) return msg;

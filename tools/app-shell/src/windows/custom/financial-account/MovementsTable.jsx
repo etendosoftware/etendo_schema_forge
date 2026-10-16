@@ -34,6 +34,8 @@ import { useDimensionLookup } from '@/hooks/useMovementLookups';
 import { useUpdateMovement, buildDimensionUpdatePayload } from '@/hooks/useCreateMovement';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { ACCOUNTING_CAPABILITY, isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 
 // ETP-5101 — the "Más información" panel's editable dimension fields. Only these three:
 // FinancialAccountTransactionsHandler#applyEditableDimensions (the backend `update` action)
@@ -209,6 +211,9 @@ const MOVEMENT_CELL_RENDERERS = {
       {
         key: 'posted',
         labelKey: 'financeAccountMovementsColPosted',
+        // ETP-5684 — only for a role with "Show Accounting Fields" (header segment, sort entry
+        // and the dot in the cell).
+        visibleWhenCapability: ACCOUNTING_CAPABILITY,
         // The translated PostingStatusDot text, so the states group the way they read.
         sortValue: (m, ctx) => ctx.getPostedLabel(m),
       },
@@ -222,7 +227,7 @@ const MOVEMENT_CELL_RENDERERS = {
             value={ctx.getTrxTypeLabel(m)}
             className="text-sm leading-5 text-[hsl(var(--foreground))]"
             data-testid="MovementTruncatedText__ae5a16" />
-          <PostingStatusDot posted={m.posted} data-testid="PostingStatusDot__ae5a16" />
+          {ctx.showAccounting && <PostingStatusDot posted={m.posted} data-testid="PostingStatusDot__ae5a16" />}
         </div>
       </TableCell>
     ),
@@ -588,13 +593,18 @@ export function buildMovementSortAccessors(sortCtx) {
   };
 }
 
+/** The header segments the current role may see (ETP-5684: `posted` needs showAccountingFields). */
+function visibleParts(renderer, capabilities) {
+  return renderer.parts.filter((part) => isCapabilityVisible(capabilities, part.visibleWhenCapability));
+}
+
 /** The sortable columns, flattened over multi-segment headers, for the toolbar popover's menu. */
-export function buildMovementSortColumns(ui) {
+export function buildMovementSortColumns(ui, capabilities) {
   return [
     ...CONTRACT_COLUMNS.flatMap((col) => {
       const renderer = MOVEMENT_CELL_RENDERERS[col.name];
       if (renderer?.parts) {
-        return renderer.parts.map((part) => ({ key: part.key, label: ui(part.labelKey) }));
+        return visibleParts(renderer, capabilities).map((part) => ({ key: part.key, label: ui(part.labelKey) }));
       }
       return [{ key: col.name, label: renderer ? ui(renderer.labelKey) : col.label }];
     }),
@@ -656,6 +666,7 @@ export function MovementsTable({
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const getTrxTypeLabel = useTrxTypeLabel();
+  const capabilities = useCapabilitiesSafe();
   const [expandedId, setExpandedId] = useState(null);
   const { updateMovement } = useUpdateMovement();
   // ETP-5101 — mirrors MovementRowKebab's own `canEdit` exactly (isGlTransaction && !isPosted):
@@ -712,6 +723,7 @@ export function MovementsTable({
   const cellCtx = {
     ui, bcpLocale, getTrxTypeLabel, openPayment, openTransferCounterpart,
     canEditDimensions, updateMovement, accountCurrencyId, onReload,
+    showAccounting: isCapabilityVisible(capabilities, ACCOUNTING_CAPABILITY),
   };
 
   const renderRow = (movement) => {
@@ -827,7 +839,7 @@ export function MovementsTable({
                 <TableHead key={col.name} data-testid="TableHead__ae5a16">
                   {renderer?.parts ? (
                     <SortableHeaderSegments
-                      parts={renderer.parts.map((part) => ({ key: part.key, label: ui(part.labelKey) }))}
+                      parts={visibleParts(renderer, capabilities).map((part) => ({ key: part.key, label: ui(part.labelKey) }))}
                       activeKey={sortKey}
                       direction={sortDirection}
                       onSort={onSort}

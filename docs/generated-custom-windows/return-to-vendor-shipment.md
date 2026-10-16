@@ -297,6 +297,22 @@ into `ConfirmWithCreditButtonBase.jsx`, and replacing both `window.location.relo
 sites (closing the result modal without navigating away, and confirming a draft without creating
 an invoice) with `onRefresh?.()`, mirroring `GoodsReceiptActions.jsx`'s exact pattern.
 
+## Document type default scoped to the tenant — ETP-5682
+
+`header.fields.documentType` (a hidden `system` field) carries a client-scoped `defaultExpr`:
+`DocBaseType='MMR'`, purchase (`IsSOTrx='N'`), return (`IsReturn='Y'`), active, organization
+included, own `AD_Client_ID`, `ORDER BY IsDefault DESC` then organization distance. It mirrors
+`NeoHandlerUtils.findReturnDocType`, which the create handler uses, so the `/defaults` preview
+(document type and DocumentNo `<…>` from the tenant's own sequence) matches what is saved.
+
+The previous `ETGO_SF_FIELD` default (written by hand in ETP-4034) had no client filter and ended in
+`LIMIT 1`, so the preview showed another tenant's document type and numbering; once the generic
+NEO tenant guard landed it resolved to nothing instead. Never add a `LIMIT` to an `@SQL=` default:
+it defeats the guard (`com.etendoerp.go` `docs/neo-headless.md` §4.3.6).
+
+Manual check: `GET /sws/neo/return-to-vendor-shipment/returnToVendorShipment/defaults` as a tenant
+user returns that tenant's "RTV Shipment" document type and a `<…>` DocumentNo from its sequence.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.
@@ -480,3 +496,16 @@ now a thin wrapper over `RelatedDocumentsSection`) and the preview card
 source goods receipts (`sourceReceipts`) and return invoices (`returnInvoices`). The preview passes
 `relatedLoadsDetail` so the card loads the detail record instead of reading the list row. See
 `docs/ui-customization.md` §7.a.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field was already gated (ETP-4520); `ListView` now also drops it from the filter, sort and export.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the document's accounting date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

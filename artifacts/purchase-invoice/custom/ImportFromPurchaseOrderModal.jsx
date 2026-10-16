@@ -81,9 +81,16 @@ const afterImport = async ({ importedDocIds, sharedContext, base, invoiceId }) =
 
 const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
   const unitPrice = Number(line.unitPrice) || 0;
-  const listPrice = Number(line.listPrice) || unitPrice;
   const grossUnitPrice = Number(line.grossUnitPrice) || 0;
   const discount = Number(line.discount) || 0;
+  // ETP-5710: unitPrice is the order line's already-discounted price. Without a list price the
+  // old fallback posted U == L next to etgoDiscount, which the server reads as "not yet
+  // discounted" and discounts again. Rebuild the list price so U != L (6 decimals, as the SPA).
+  const storedListPrice = Number(line.listPrice) || 0;
+  const listPrice = storedListPrice
+    || (discount > 0 && discount < 100
+      ? Math.round((unitPrice / (1 - discount / 100)) * 1e6) / 1e6
+      : unitPrice);
   return {
     parentId: invoiceId,
     product: line.product,

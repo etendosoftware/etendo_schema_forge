@@ -14,6 +14,12 @@ vi.mock('@/i18n', () => ({
 
 import ProductResolverPopup from '../ProductResolverPopup.jsx';
 
+// Explicitly skips a row through its dropdown entry.
+async function skipRow(user, idx) {
+  await user.click(screen.getByTestId(`ocr-product-open-${idx}`));
+  await user.click(await screen.findByTestId(`ocr-product-skip-option-${idx}`));
+}
+
 describe('ProductResolverPopup', () => {
   const defaultProps = {
     unmatched: [],
@@ -142,7 +148,7 @@ describe('ProductResolverPopup', () => {
       });
       render(<ProductResolverPopup {...defaultProps} unmatched={suggested} />);
       await user.click(screen.getByTestId('ocr-product-skip-0'));
-      await user.click(screen.getByText('ocrProductSkip', { selector: 'span' }));
+      await user.click(screen.getByTestId('ocr-product-main-0'));
       await user.click(await screen.findByText('Other Product'));
       expect(screen.getByTestId('ocr-product-skip-0')).toBeInTheDocument();
       await user.click(screen.getByText('continue'));
@@ -169,23 +175,167 @@ describe('ProductResolverPopup', () => {
     });
   });
 
-  it('calls onSubmit with null for unselected rows', async () => {
+  it('submits null for rows the user explicitly skipped', async () => {
     const user = userEvent.setup();
     const unmatched = [
       { idx: 0, description: 'Widget A' },
       { idx: 1, description: 'Gadget B' },
     ];
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
+    await skipRow(user, 0);
+    await skipRow(user, 1);
     await user.click(screen.getByText('continue'));
     expect(defaultProps.onSubmit).toHaveBeenCalledWith({ 0: null, 1: null });
   });
 
-  it('renders skip label in selector buttons when nothing is selected', () => {
-    const unmatched = [
-      { idx: 0, description: 'Widget A' },
-    ];
-    render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
-    expect(screen.getByText('ocrProductSkip')).toBeInTheDocument();
+  // ETP-5585 QA — an unsuggested row is undecided, not skipped.
+  describe('undecided rows', () => {
+    const plainRows = [{ idx: 0, description: 'Widget A' }];
+
+    it('shows "+ Create product" (not the skip label) on a row without suggestion', () => {
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      expect(screen.getByTestId('ocr-product-main-0')).toHaveTextContent('createProduct');
+      expect(screen.queryByText('ocrProductSkip')).not.toBeInTheDocument();
+    });
+
+    it('does not auto-open the create modal nor POST anything', () => {
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      expect(screen.queryByText('ocrProductCreateTitle')).not.toBeInTheDocument();
+      expect(globalThis.fetch.mock.calls.some(([, o]) => o?.method === 'POST')).toBe(false);
+    });
+
+    it('disables Continue and shows the helper while a row is undecided', async () => {
+      const user = userEvent.setup();
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      expect(screen.getByText('continue').closest('button')).toBeDisabled();
+      expect(screen.getByTestId('ocr-product-incomplete-hint')).toHaveTextContent('ocrProductResolverIncomplete');
+      await user.click(screen.getByText('continue'));
+      expect(defaultProps.onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('opens the create modal when the label is clicked', async () => {
+      const user = userEvent.setup();
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      await user.click(screen.getByTestId('ocr-product-main-0'));
+      expect(await screen.findByText('ocrProductCreateTitle')).toBeInTheDocument();
+    });
+
+    it('cancelling the create modal leaves the row undecided', async () => {
+      const user = userEvent.setup();
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      await user.click(screen.getByTestId('ocr-product-main-0'));
+      await user.click(await screen.findByTestId('Button__b3ae11_createCancel'));
+      expect(screen.getByText('continue').closest('button')).toBeDisabled();
+      expect(screen.getByTestId('ocr-product-main-0')).toHaveTextContent('createProduct');
+    });
+
+    it('explicit skip from the dropdown enables Continue and submits null', async () => {
+      const user = userEvent.setup();
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      await skipRow(user, 0);
+      expect(screen.getByTestId('ocr-product-main-0')).toHaveTextContent('ocrProductSkip');
+      expect(screen.queryByTestId('ocr-product-incomplete-hint')).not.toBeInTheDocument();
+      await user.click(screen.getByText('continue'));
+      expect(defaultProps.onSubmit).toHaveBeenCalledWith({ 0: null });
+    });
+
+    it('picking an existing product enables Continue and submits its id', async () => {
+      const user = userEvent.setup();
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [{ id: 'p1', name: 'Product One' }] }) });
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      await user.click(screen.getByTestId('ocr-product-open-0'));
+      await user.click(await screen.findByText('Product One'));
+      expect(screen.getByText('continue').closest('button')).toBeEnabled();
+      await user.click(screen.getByText('continue'));
+      expect(defaultProps.onSubmit).toHaveBeenCalledWith({ 0: 'p1' });
+    });
+
+    it('a skipped row can go back to creating a product', async () => {
+      const user = userEvent.setup();
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      await skipRow(user, 0);
+      await user.click(screen.getByTestId('ocr-product-open-0'));
+      await user.click(await screen.findByText('createProduct'));
+      expect(await screen.findByText('ocrProductCreateTitle')).toBeInTheDocument();
+    });
+
+    it('a skipped row can go back to picking a product', async () => {
+      const user = userEvent.setup();
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [{ id: 'p1', name: 'Product One' }] }) });
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      await skipRow(user, 0);
+      await user.click(screen.getByTestId('ocr-product-main-0'));
+      await user.click(await screen.findByText('Product One'));
+      await user.click(screen.getByText('continue'));
+      expect(defaultProps.onSubmit).toHaveBeenCalledWith({ 0: 'p1' });
+    });
+
+    it('mixed rows: Continue stays disabled until every row is decided', async () => {
+      const user = userEvent.setup();
+      const rows = [
+        { idx: 0, description: 'Suggested', suggestion: { id: 'p-s', name: 'Suggested Product' } },
+        { idx: 1, description: 'Widget A' },
+        { idx: 2, description: 'Gadget B' },
+      ];
+      render(<ProductResolverPopup {...defaultProps} unmatched={rows} />);
+      const cont = () => screen.getByText('continue').closest('button');
+      expect(cont()).toBeDisabled();
+      await skipRow(user, 1);
+      expect(cont()).toBeDisabled();
+      await skipRow(user, 2);
+      expect(cont()).toBeEnabled();
+      await user.click(cont());
+      expect(defaultProps.onSubmit).toHaveBeenCalledWith({ 0: 'p-s', 1: null, 2: null });
+    });
+
+    it('links the helper to Continue via aria-describedby only while it is disabled', async () => {
+      const user = userEvent.setup();
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      const cont = () => screen.getByTestId('Button__b3ae11_continue');
+      const hintId = screen.getByTestId('ocr-product-incomplete-hint').id;
+      expect(hintId).toBeTruthy();
+      expect(cont()).toHaveAttribute('aria-describedby', hintId);
+      await skipRow(user, 0);
+      expect(cont()).toBeEnabled();
+      expect(cont()).not.toHaveAttribute('aria-describedby');
+    });
+
+    it('ghost skip on a row with a product keeps Continue enabled and submits null', async () => {
+      const user = userEvent.setup();
+      const rows = [{ idx: 0, description: 'Suggested', suggestion: { id: 'p-s', name: 'Suggested Product' } }];
+      render(<ProductResolverPopup {...defaultProps} unmatched={rows} />);
+      await user.click(screen.getByTestId('ocr-product-skip-0'));
+      expect(screen.getByText('continue').closest('button')).toBeEnabled();
+      await user.click(screen.getByText('continue'));
+      expect(defaultProps.onSubmit).toHaveBeenCalledWith({ 0: null });
+    });
+
+    it('ghost skip on a row whose product was picked submits null, not the picked id', async () => {
+      const user = userEvent.setup();
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [{ id: 'p1', name: 'Product One' }] }) });
+      render(<ProductResolverPopup {...defaultProps} unmatched={plainRows} />);
+      await user.click(screen.getByTestId('ocr-product-open-0'));
+      await user.click(await screen.findByText('Product One'));
+      await user.click(screen.getByTestId('ocr-product-skip-0'));
+      expect(screen.getByText('continue').closest('button')).toBeEnabled();
+      await user.click(screen.getByText('continue'));
+      expect(defaultProps.onSubmit).toHaveBeenCalledWith({ 0: null });
+    });
+
+    it('a row with a suggestion starts decided: Continue enabled, no helper', () => {
+      const rows = [{ idx: 0, description: 'Suggested', suggestion: { id: 'p-s', name: 'Suggested Product' } }];
+      render(<ProductResolverPopup {...defaultProps} unmatched={rows} />);
+      expect(screen.getByText('continue').closest('button')).toBeEnabled();
+      expect(screen.queryByTestId('ocr-product-incomplete-hint')).not.toBeInTheDocument();
+    });
+
+    it('without a product spec the label is a neutral prompt that opens the dropdown', async () => {
+      const user = userEvent.setup();
+      render(<ProductResolverPopup {...defaultProps} productSpecUrl={null} unmatched={plainRows} />);
+      expect(screen.getByTestId('ocr-product-main-0')).toHaveTextContent('ocrProductCreateSelect');
+      await user.click(screen.getByTestId('ocr-product-main-0'));
+      expect(await screen.findByPlaceholderText('ocrProductSearchPlaceholder')).toBeInTheDocument();
+    });
   });
 
   it('handles null productSpecUrl gracefully (no create button)', () => {
@@ -224,9 +374,8 @@ describe('ProductResolverPopup', () => {
       json: async () => ({ items: [{ id: 'p1', name: 'Product One' }] }),
     });
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
-    // Click the selector button (shows "ocrProductSkip" initially)
-    const selectorBtn = screen.getByText('ocrProductSkip');
-    await user.click(selectorBtn);
+    // The chevron opens the search dropdown (the label would open the create modal)
+    await user.click(screen.getByTestId('ocr-product-open-0'));
     // After opening, the search input and dropdown appear
     await waitFor(() => {
       expect(screen.getByPlaceholderText('ocrProductSearchPlaceholder')).toBeInTheDocument();
@@ -244,7 +393,7 @@ describe('ProductResolverPopup', () => {
     });
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
     // Open selector
-    await user.click(screen.getByText('ocrProductSkip'));
+    await user.click(screen.getByTestId('ocr-product-open-0'));
     // Wait for options to load
     await waitFor(() => {
       expect(screen.getByText('Product One')).toBeInTheDocument();
@@ -269,7 +418,7 @@ describe('ProductResolverPopup', () => {
     });
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} onSubmit={onSubmit} />);
     // Open selector and pick product
-    await user.click(screen.getByText('ocrProductSkip'));
+    await user.click(screen.getByTestId('ocr-product-open-0'));
     await waitFor(() => {
       expect(screen.getByText('Product One')).toBeInTheDocument();
     });
@@ -279,7 +428,7 @@ describe('ProductResolverPopup', () => {
     expect(onSubmit).toHaveBeenCalledWith({ 0: 'p1' });
   });
 
-  it('submits null for unresolved products when some rows are unselected', async () => {
+  it('submits null for the skipped row next to a resolved one', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     const unmatched = [
@@ -292,13 +441,13 @@ describe('ProductResolverPopup', () => {
     });
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} onSubmit={onSubmit} />);
     // Only pick product for first row
-    const skipBtns = screen.getAllByText('ocrProductSkip');
-    await user.click(skipBtns[0]);
+    await user.click(screen.getByTestId('ocr-product-open-0'));
     await waitFor(() => {
       expect(screen.getByText('Product One')).toBeInTheDocument();
     });
     await user.click(screen.getByText('Product One'));
-    // Submit — second row still unresolved
+    // Second row explicitly skipped
+    await skipRow(user, 1);
     await user.click(screen.getByText('continue'));
     expect(onSubmit).toHaveBeenCalledWith({ 0: 'p1', 1: null });
   });
@@ -321,9 +470,10 @@ describe('ProductResolverPopup', () => {
       json: async () => ({ items: [] }),
     });
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
-    await user.click(screen.getByText('ocrProductSkip'));
+    await user.click(screen.getByTestId('ocr-product-open-0'));
+    // Row label + the dropdown's own create entry
     await waitFor(() => {
-      expect(screen.getByText('createProduct')).toBeInTheDocument();
+      expect(screen.getAllByText('createProduct')).toHaveLength(2);
     });
   });
 
@@ -337,7 +487,7 @@ describe('ProductResolverPopup', () => {
       json: async () => ({ items: [] }),
     });
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
-    await user.click(screen.getByText('ocrProductSkip'));
+    await user.click(screen.getByTestId('ocr-product-open-0'));
     await waitFor(() => {
       expect(screen.getByText('noResults')).toBeInTheDocument();
     });
@@ -350,7 +500,7 @@ describe('ProductResolverPopup', () => {
     ];
     globalThis.fetch.mockRejectedValue(new Error('network error'));
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
-    await user.click(screen.getByText('ocrProductSkip'));
+    await user.click(screen.getByTestId('ocr-product-open-0'));
     await waitFor(() => {
       expect(screen.getByText('ocrProductLoadError')).toBeInTheDocument();
     });
@@ -394,9 +544,7 @@ describe('ProductResolverPopup', () => {
     });
 
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
-    await user.click(screen.getByText('ocrProductSkip'));
-    await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
-    await user.click(screen.getByText('createProduct'));
+    await user.click(screen.getByTestId('ocr-product-main-0'));
 
     expect(await screen.findByText('ocrProductCreateTitle')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('ocrProductCreateDefaultsFailed')).toBeInTheDocument());
@@ -440,9 +588,7 @@ describe('ProductResolverPopup', () => {
     });
 
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} onSubmit={onSubmit} />);
-    await user.click(screen.getByText('ocrProductSkip'));
-    await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
-    await user.click(screen.getByText('createProduct'));
+    await user.click(screen.getByTestId('ocr-product-main-0'));
 
     expect(await screen.findByText('ocrProductCreateTitle')).toBeInTheDocument();
     expect(screen.getAllByDisplayValue('Widget A').length).toBeGreaterThan(0);
@@ -498,9 +644,7 @@ describe('ProductResolverPopup', () => {
     });
 
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
-    await user.click(screen.getByText('ocrProductSkip'));
-    await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
-    await user.click(screen.getByText('createProduct'));
+    await user.click(screen.getByTestId('ocr-product-main-0'));
 
     expect(await screen.findByText('Unidad')).toBeInTheDocument();
     expect(screen.getByText('IVA Normal')).toBeInTheDocument();
@@ -530,9 +674,7 @@ describe('ProductResolverPopup', () => {
     });
 
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
-    await user.click(screen.getByText('ocrProductSkip'));
-    await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
-    await user.click(screen.getByText('createProduct'));
+    await user.click(screen.getByTestId('ocr-product-main-0'));
     await screen.findByText('ocrProductCreateTitle');
 
     await user.click(screen.getAllByText('ocrProductCreateSelect')[0]);
@@ -550,7 +692,7 @@ describe('ProductResolverPopup', () => {
     const user = userEvent.setup();
     render(<ProductResolverPopup {...defaultProps} unmatched={[{ idx: 0, description: 'Widget A' }]} />);
 
-    const trigger = screen.getByText('ocrProductSkip');
+    const trigger = screen.getByTestId('ocr-product-open-0');
     await user.click(trigger);
 
     const input = await screen.findByPlaceholderText('ocrProductSearchPlaceholder');
@@ -567,12 +709,150 @@ describe('ProductResolverPopup', () => {
     expect(continueBtn.className).not.toContain('bg-status-info');
   });
 
+  // ETP-5585 — the create form prefills the tax category of the line's own tax; priority is
+  // user pick > line tax's category > /product/defaults, whatever the order of the two loads.
+  describe('create-product form — tax category from the line tax', () => {
+    const DEFAULTS = { defaults: { uOM: 'uom-def', 'uOM$_identifier': 'Unidad', taxCategory: 'cat-normal', 'taxCategory$_identifier': 'IVA Normal' } };
+    const TAX_RECORD = { response: { data: [{ id: 'TAX10', taxCategory: 'cat-reducido', 'taxCategory$_identifier': 'IVA Reducido' }] } };
+
+    function deferred() {
+      let resolve;
+      const promise = new Promise((r) => { resolve = r; });
+      return { promise, resolve };
+    }
+
+    // Defaults / tax record responses are gated so each test picks the resolution order.
+    function mockBackend({ defaults, tax, taxResponse = { ok: true, json: async () => TAX_RECORD } }) {
+      globalThis.fetch.mockImplementation((url) => {
+        const href = String(url);
+        if (href.endsWith('/product/defaults')) return defaults.promise.then(() => ({ ok: true, json: async () => DEFAULTS }));
+        if (href.includes('/tax/tax/')) return tax.promise.then(() => taxResponse);
+        if (href.includes('/selectors/C_TaxCategory_ID')) {
+          return Promise.resolve({ ok: true, json: async () => ({ items: [{ id: 'cat-user', name: 'Exento' }] }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+      });
+    }
+
+    async function open(user, row = { idx: 0, description: 'Widget A', taxId: 'TAX10' }) {
+      render(<ProductResolverPopup {...defaultProps} unmatched={[row]} />);
+      await user.click(screen.getByTestId('ocr-product-main-0'));
+      await screen.findByText('ocrProductCreateTitle');
+    }
+
+    const taxCalls = () => globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/tax/tax/'));
+
+    it('tax category wins over defaults when defaults resolve first', async () => {
+      const user = userEvent.setup();
+      const defaults = deferred(); const tax = deferred();
+      mockBackend({ defaults, tax });
+      await open(user);
+      await act(async () => { defaults.resolve(); });
+      await screen.findByText('IVA Normal');
+      await act(async () => { tax.resolve(); });
+      expect(await screen.findByText('IVA Reducido')).toBeInTheDocument();
+      expect(screen.queryByText('IVA Normal')).toBeNull();
+    });
+
+    it('tax category wins over defaults when the tax record resolves first', async () => {
+      const user = userEvent.setup();
+      const defaults = deferred(); const tax = deferred();
+      mockBackend({ defaults, tax });
+      await open(user);
+      await act(async () => { tax.resolve(); });
+      await screen.findByText('IVA Reducido');
+      await act(async () => { defaults.resolve(); });
+      await waitFor(() => expect(screen.getByText('Unidad')).toBeInTheDocument());
+      expect(screen.getByText('IVA Reducido')).toBeInTheDocument();
+      expect(screen.queryByText('IVA Normal')).toBeNull();
+    });
+
+    it('never overwrites a category the user picked, before either response', async () => {
+      const user = userEvent.setup();
+      const defaults = deferred(); const tax = deferred();
+      mockBackend({ defaults, tax });
+      await open(user);
+      await user.click(screen.getAllByText('ocrProductCreateSelect')[1]);
+      await user.click(await screen.findByText('Exento'));
+      await act(async () => { defaults.resolve(); tax.resolve(); });
+      await waitFor(() => expect(screen.getByText('Unidad')).toBeInTheDocument());
+      await waitFor(() => expect(taxCalls()).toHaveLength(1));
+      expect(screen.getByText('Exento')).toBeInTheDocument();
+      expect(screen.queryByText('IVA Reducido')).toBeNull();
+      expect(screen.queryByText('IVA Normal')).toBeNull();
+    });
+
+    it('never overwrites a category the user picked after the defaults but before the tax record', async () => {
+      const user = userEvent.setup();
+      const defaults = deferred(); const tax = deferred();
+      mockBackend({ defaults, tax });
+      await open(user);
+      await act(async () => { defaults.resolve(); });
+      await screen.findByText('IVA Normal');
+      await user.click(screen.getByText('IVA Normal'));
+      await user.click(await screen.findByText('Exento'));
+      await act(async () => { tax.resolve(); });
+      await waitFor(() => expect(taxCalls()).toHaveLength(1));
+      expect(screen.getByText('Exento')).toBeInTheDocument();
+      expect(screen.queryByText('IVA Reducido')).toBeNull();
+    });
+
+    it('requests the tax record only when the form opens, through the shared apiFetch', async () => {
+      const user = userEvent.setup();
+      const defaults = deferred(); const tax = deferred();
+      mockBackend({ defaults, tax });
+      render(<ProductResolverPopup {...defaultProps} unmatched={[{ idx: 0, description: 'Widget A', taxId: 'TAX10' }]} />);
+      expect(taxCalls()).toHaveLength(0);
+      await user.click(screen.getByTestId('ocr-product-main-0'));
+      await screen.findByText('ocrProductCreateTitle');
+      await waitFor(() => expect(taxCalls()).toHaveLength(1));
+      const [url, options] = taxCalls()[0];
+      expect(String(url)).toBe('http://localhost/sws/neo/tax/tax/TAX10');
+      expect(JSON.stringify(options)).toContain('test-token');
+    });
+
+    it('keeps the defaults category and makes no tax request for a row without taxId', async () => {
+      const user = userEvent.setup();
+      const defaults = deferred(); const tax = deferred();
+      mockBackend({ defaults, tax });
+      await open(user, { idx: 0, description: 'Widget A', taxId: null });
+      await act(async () => { defaults.resolve(); });
+      expect(await screen.findByText('IVA Normal')).toBeInTheDocument();
+      expect(taxCalls()).toHaveLength(0);
+    });
+
+    it.each([
+      ['non-OK answer', { ok: false, status: 403 }],
+      ['a record without taxCategory', { ok: true, json: async () => ({ response: { data: [{ id: 'TAX10' }] } }) }],
+    ])('keeps the defaults category on %s', async (_label, taxResponse) => {
+      const user = userEvent.setup();
+      const defaults = deferred(); const tax = deferred();
+      mockBackend({ defaults, tax, taxResponse });
+      await open(user);
+      await act(async () => { tax.resolve(); defaults.resolve(); });
+      expect(await screen.findByText('IVA Normal')).toBeInTheDocument();
+      expect(screen.queryByText('IVA Reducido')).toBeNull();
+    });
+
+    it('keeps the defaults category when the tax request fails on the network', async () => {
+      const user = userEvent.setup();
+      const defaults = deferred();
+      globalThis.fetch.mockImplementation((url) => {
+        const href = String(url);
+        if (href.endsWith('/product/defaults')) return defaults.promise.then(() => ({ ok: true, json: async () => DEFAULTS }));
+        if (href.includes('/tax/tax/')) return Promise.reject(new Error('network'));
+        return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+      });
+      await open(user);
+      await act(async () => { defaults.resolve(); });
+      expect(await screen.findByText('IVA Normal')).toBeInTheDocument();
+    });
+  });
+
   describe('create-product form', () => {
     async function openCreateForm(user) {
       render(<ProductResolverPopup {...defaultProps} unmatched={[{ idx: 0, description: 'Widget A' }]} />);
-      await user.click(screen.getByText('ocrProductSkip'));
-      await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
-      await user.click(screen.getByText('createProduct'));
+      await user.click(screen.getByTestId('ocr-product-main-0'));
       await screen.findByText('ocrProductCreateTitle');
     }
 

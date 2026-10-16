@@ -92,7 +92,7 @@
       "processField": "documentAction",
       "processValue": "CO",
       "label": "Confirm",
-      "keepSaveWhenCompletedFields": ["accountingDate", "project", "costcenter"],
+      "keepSaveWhenCompletedFields": ["accountingDate", "project", "costcenter", "aeatsiiErrorRegistral"],
       "editableLineFieldsWhenCompleted": ["project", "costcenter"]
     },
     "dateFilterKey": "invoiceDate",
@@ -138,7 +138,7 @@
         "field": "posted",
         "trueKey": "postedStatus",
         "falseKey": "notPostedStatus",
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
       }
     ],
     "rowQuickActions": {

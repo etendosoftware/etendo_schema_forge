@@ -26,6 +26,8 @@ import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-
 import { useWindowImportDialog } from './useWindowImportDialog.js';
 import { useListToolbarTabsFit } from './useListToolbarTabsFit.js';
 import { buildAdvancedFilterCriteria, extractQueryParamConditions } from '@/lib/gridQuery';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 import {
   readListState,
   persistListState,
@@ -433,7 +435,7 @@ function newButtonGroupClass(isSplitNew) {
 
 function newButtonClass(isSplitNew) {
   const focusRing = isSplitNew ? ` ${SPLIT_NEW_FOCUS_RING}` : '';
-  return `group h-10 rounded-none rounded-l-lg gap-2 pl-2 pr-3 text-sm leading-6 font-medium bg-[#121217] text-white hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors [&_svg]:size-5${focusRing}`;
+  return `group h-10 rounded-none rounded-l-lg gap-2 pl-2 pr-3 text-sm leading-6 font-medium bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground transition-colors [&_svg]:size-5${focusRing}`;
 }
 
 async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }) {
@@ -626,7 +628,20 @@ export function ListView({
     restoredListState ? (restoredListState.advancedFilter ?? null) : initialAdvancedFilter,
   );
 
-  const [tableColumns, setTableColumns] = useState(initialColumns ?? []);
+  const [reportedColumns, setTableColumns] = useState(initialColumns ?? []);
+  // ETP-5684 — DataTable hides a `visibleWhenCapability` column from the grid, but the
+  // advanced filter, the sort popover, the report/export drawer and useEntity's columnDefs
+  // all read these columns too. Gate them once here so a role without the capability
+  // cannot filter, sort or export by a column it cannot see.
+  const capabilities = useCapabilitiesSafe();
+  const tableColumns = useMemo(
+    () => reportedColumns.filter(c => isCapabilityVisible(capabilities, c.visibleWhenCapability)),
+    [reportedColumns, capabilities],
+  );
+  const gatedColumnKeys = useMemo(
+    () => new Set(reportedColumns.filter(c => !isCapabilityVisible(capabilities, c.visibleWhenCapability)).map(c => c.key)),
+    [reportedColumns, capabilities],
+  );
 
   const [showImportDialog, setShowImportDialog] = useState(false);
   // A file handed in by the caller of `openImportDialog` (e.g. dropped on an empty-list
@@ -814,6 +829,26 @@ export function ListView({
     initialSortColumn: restoredListState?.sortColumn ?? initialSortColumn,
     initialSortDirection: restoredListState?.sortDirection ?? initialSortDirection,
   });
+
+  // ETP-5684 — a filter, funnel condition or sort on a capability-gated column can come
+  // back from the session snapshot or a saved preset. Drop it, instead of letting it narrow
+  // or order the list by a column the user cannot see.
+  useEffect(() => {
+    if (gatedColumnKeys.size === 0) return;
+    setColumnFilters(prev => {
+      const kept = Object.entries(prev ?? {}).filter(([key]) => !gatedColumnKeys.has(key));
+      return kept.length === Object.keys(prev ?? {}).length ? prev : Object.fromEntries(kept);
+    });
+    setAdvancedFilter(prev => {
+      if (!Array.isArray(prev?.conditions)) return prev;
+      const conditions = prev.conditions.filter(c => !gatedColumnKeys.has(c?.field));
+      return conditions.length === prev.conditions.length ? prev : { ...prev, conditions };
+    });
+    if (gatedColumnKeys.has(hook.sortColumn)) {
+      hook.setSortColumn(initialSortColumn);
+      hook.setSortDirection(initialSortDirection);
+    }
+  }, [gatedColumnKeys, hook.sortColumn, hook.setSortColumn, hook.setSortDirection, initialSortColumn, initialSortDirection]);
 
   // ETP-4994 — mirror the live grid state into the session snapshot. Writes nothing (and
   // removes any previous key) while the list is still at the window's own default, so an
@@ -1408,7 +1443,7 @@ export function ListView({
               data-testid="list-toolbar">
               <div
                 ref={toolbarFit.rowRef}
-                className="flex flex-wrap items-center gap-2"
+                className="flex flex-wrap items-start gap-2"
                 data-tabs-placement={toolbarTabsPlacement}
                 data-testid="list-toolbar-main-row">
                 {hasTabs && (
@@ -1561,7 +1596,7 @@ export function ListView({
                   )}
                   {/* Split "New" button */}
                   {canCreate && (
-                    <div className={newButtonGroupClass(isSplitNew)}>
+                    <div className={newButtonGroupClass(isSplitNew)} data-testid="action-new-group">
                       <Button
                         className={newButtonClass(isSplitNew)}
                         data-testid="action-new"
@@ -1578,7 +1613,7 @@ export function ListView({
                           <DropdownMenu data-testid="DropdownMenu__620cbc">
                             <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
                               <Button
-                                className={`h-10 rounded-none rounded-r-lg px-2 bg-[#121217] text-white hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors ${SPLIT_NEW_FOCUS_RING}`}
+                                className={`h-10 rounded-none rounded-r-lg px-2 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground transition-colors ${SPLIT_NEW_FOCUS_RING}`}
                                 aria-label={ui('moreOptions')}
                                 title={ui('moreOptions')}
                                 data-testid="action-new-more">

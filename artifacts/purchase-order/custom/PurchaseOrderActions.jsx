@@ -11,7 +11,10 @@ import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf
 import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
+import { periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
+import { PeriodRecoveryLink } from '@/components/contract-ui/PeriodRecoveryLink.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
@@ -337,6 +340,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
   const [createInvoice,  setCreateInvoice]  = useState(false);
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState(null);
+  const [errorRecovery,  setErrorRecovery]  = useState({});
   const [freshData,      setFreshData]      = useState(null);
   const [lineCount,      setLineCount]      = useState(null);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
@@ -406,6 +410,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
     if (loading) return;
     setLoading(true);
     setError(null);
+    setErrorRecovery({});
 
     // ETP-4468 — force-save any unsaved header edit before confirming. Without
     // this, an edit made right before clicking Confirm (without hitting Save
@@ -493,7 +498,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
           // ETP-5381: mirrors the sales twin — this was the only branch here not translating the
           // backend message, so the new duplicate-invoice and completion messages would have
           // surfaced in English.
-          throw new Error(ui('poOrderConfirmedInvoiceError') + ' ' + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
+          throw invoiceRefusal(e, res.status, ui, ui('poOrderConfirmedInvoiceError') + ' ');
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
@@ -509,6 +514,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         trackDocumentCreated('purchase-invoice');
       } catch (e) {
         errors.push(e.message || ui('poErrorOccurred'));
+        setErrorRecovery(invoiceRefusalRecovery(e, ui));
       }
     }
 
@@ -662,6 +668,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, 
         {error && (
           <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
             {error}
+            <PeriodRecoveryLink recovery={errorRecovery} onBeforeGo={onClose} />
           </div>
         )}
 
@@ -743,6 +750,20 @@ function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, im
 
 // ── CreateDocsModal (CO orders — create docs without re-confirming) ────────────
 
+// ETP-5577 — a refused purchase invoice keeps its identity (`messageKeys`), so a period refusal
+// renders in the UI locale and offers the calendar. The invoice is dated today.
+function invoiceRefusal(body, status, ui, prefix = '') {
+  const messageKeys = extractBackendMessageKeys(body);
+  const raw = body?.error?.message || body?.response?.message || body?.message || `Error (${status})`;
+  const err = new Error(prefix + translateBackendError(raw, ui, { messageKeys }));
+  err.messageKeys = messageKeys;
+  return err;
+}
+
+function invoiceRefusalRecovery(err, ui) {
+  return periodNotAvailableToastOptions(err?.messageKeys, ui, { date: todayCalendarISO() });
+}
+
 export function CreateDocsModal({ orderId, data, base, currency, derived, onClose, onCreated }) {
   const apiFetch = useApiFetch('');
   const ui = useUI();
@@ -756,6 +777,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
   const [createInvoice, setCreateInvoice] = useState(false);
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState(null);
+  const [errorRecovery, setErrorRecovery] = useState({});
 
   const d          = data || {};
   const documentNo = d.documentNo || '';
@@ -787,6 +809,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
     if (loading || (!receiptWanted && !invoiceWanted)) return;
     setLoading(true);
     setError(null);
+    setErrorRecovery({});
     try {
       const result = {};
 
@@ -808,7 +831,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
           { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
+          throw invoiceRefusal(e, res.status, ui);
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
@@ -822,6 +845,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
       onCreated(result);
     } catch (e) {
       setError(e.message || ui('poErrorOccurred'));
+      setErrorRecovery(invoiceRefusalRecovery(e, ui));
       setLoading(false);
     }
   };
@@ -885,6 +909,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
         {error && (
           <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))', whiteSpace: 'pre-line' }}>
             {error}
+            <PeriodRecoveryLink recovery={errorRecovery} onBeforeGo={onClose} />
           </div>
         )}
 

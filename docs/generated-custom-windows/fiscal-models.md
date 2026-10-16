@@ -3239,8 +3239,8 @@ rules apply to both 303 and 349.
   - The operator "origin" filter empties use the same component, with the filter message as the
     title.
   - **Why no app-wide component is reused.** The app has no shared generic empty-state
-    component: `LinesEmptyState` is specific to adding lines, and `AttachmentsTable`'s empty row
-    is inline markup.
+    component: `LinesEmptyState` is specific to adding lines, and `AttachmentsTable` uses the
+    generic `DataTable` empty state (`emptyState` override, since ETP-5526).
   - **Justificante** keeps the app's own `AttachmentsTab` empty state, which is also an icon plus
     a text. Its wording belongs to the formats work (P13).
 - **Sticky operators column header (P15).**
@@ -3867,6 +3867,17 @@ from a `Date`. There was no locale leak to fix on 303.
 
 **Search** was removed entirely — the search input/icon button is gone from the toolbar. Narrowing the list is handled by the existing year/model/status `FilterDropdown` filters instead.
 
+### Row hover look (ETP-5600)
+
+`.fm-table` is a hand-built table, not `DataTable`, but its hovered row matches the shared list row
+(`docs/ui-customization.md` §13 → *List row visuals*): white cells, Shadows/lg
+(`0 4px 6px -2px rgba(18,18,23,.05), 0 10px 15px -3px rgba(18,18,23,.08)`), no transition. The
+raised row (`position: relative; z-index: 2`) used to paint over the line above it (the previous
+row's `border-bottom` in the collapsed-border grid); `.fm-table tbody tr:hover td` now redraws it as
+`box-shadow: inset 0 1px 0 var(--fm-border-1)`. `.fm-table__row--selected` keeps its own inset
+borders: both rules have the same specificity (0,2,3), so it wins by source order (it is declared
+after the hover rule in `fiscal-models.css`).
+
 ### Row hover actions — Edit/Delete/Reactivar (`FmRowActions`, ETP-5187, ETP-5338)
 
 Each **draft** declaration row (`decl.status === 'draft'`) reveals a small Edit/Delete icon pair on
@@ -4399,7 +4410,8 @@ hid the "Modelos Fiscales" menu entry for a role without the grant, but:
   `'none'` tier renders the access-denied screen instead of `FiscalModelsPage`; `'read-only'` and
   `'full'` both render the page (this window is window-gated, not write-gated, on the frontend).
 - **Backend** (`com.etendoerp.go`) — two separate gates, both calling
-  `NeoAccessHelper.hasWindowAccess(NeoAttachmentAuthorizer.TAX_REPORT_WINDOW_ID, method)`:
+  `NeoAccessHelper.hasWindowAccess(RoleAccessMatrix.TAX_MODELS_PROXY_WINDOW_ID, method)` (the
+  single backend constant for this id since ETP-5540; the attachment authorizer reads it too):
   - `AbstractFiscalHandler.handle(entityName, method, request, response)` — the single entry point
     every `/fiscal303/*` and `/fiscal349/*` sub-route funnels through (declarations, incidents,
     boxes, submit, modified, validate-vies) — checks access first, before any entity routing,

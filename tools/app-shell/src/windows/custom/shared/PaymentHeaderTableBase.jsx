@@ -6,7 +6,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { DataTable } from '@/components/contract-ui';
 import PaymentLifecycleConfirmModal from './PaymentLifecycleConfirmModal';
 import PaymentEditModalLauncher from './PaymentEditModalLauncher';
-import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST, PAYMENT_STATUS_ERROR, STATUS_PAYMENT_MADE, paymentDisplayState } from './paymentStatuses';
+import { DEPOSITED_STATUSES, DEPOSITED_STATUSES_LIST, PAYMENT_STATUS_ERROR, STATUS_PAYMENT_MADE } from './paymentStatuses';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const ENTITY_BY_SPEC = { 'payment-in': 'finPayment', 'payment-out': 'header' };
@@ -54,18 +54,11 @@ function buildColumns(dir, ui, locale) {
       // otherwise resolves to "Importe cobrado/pagado".
       labels: { [locale]: ui('amount') },
       render: (row) => {
-        const isDeposited = isOut
-          ? paymentDisplayState(row) === 'deposited'
-          : DEPOSITED_STATUSES.has(row.status || '');
         const amt = parseFloat(row.amount ?? 0);
         const curr = row['currency$_identifier'] || 'EUR';
-        let sign = '';
-        if (amt > 0) {
-          sign = dir === 'in' ? '+ ' : '− ';
-        }
         return (
-          <span className="tabular-nums" style={{ color: isDeposited ? 'var(--status-success-fg)' : 'hsl(var(--foreground))', fontWeight: 600, whiteSpace: 'nowrap' }}>
-            {sign}{fmtAmt(amt, curr)}
+          <span className="tabular-nums" style={{ color: 'hsl(var(--foreground))', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {fmtAmt(amt, curr)}
           </span>
         );
       },
@@ -272,10 +265,7 @@ function PaymentSidebar({ dir, data, ui }) {
     [data]
   );
 
-  const heroColor = isIn ? 'var(--status-success-fg)' : 'hsl(var(--foreground))';
   const heroLabel = isIn ? ui('cobradoEsteMes') : ui('pagadoEsteMes');
-  const heroSign = isIn ? '+' : '−';
-
   return (
     <aside
       style={{
@@ -318,8 +308,8 @@ function PaymentSidebar({ dir, data, ui }) {
         {data === null ? (
           <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
         ) : (
-          <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 30, lineHeight: '32px', color: heroColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-            {thisMonth > 0 ? `${heroSign} ` : ''}{fmtAmt(thisMonth, currency)}
+          <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 30, lineHeight: '32px', color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+            {fmtAmt(thisMonth, currency)}
           </span>
         )}
       </div>
@@ -488,11 +478,49 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
       scrollEl = scrollEl.parentElement;
     }
     if (!scrollEl) return;
-    const update = () => { root.style.minHeight = scrollEl.clientHeight + 'px'; };
+    // ETP-5510 — the root must fill the scroller (so the sidebar divider reaches the bottom with
+    // few rows) WITHOUT forcing overflow: min-height = scroller clientHeight
+    //   - its own padding-top/bottom
+    //   - the height (+ margins) of every sibling that shares the scroller with the root, at any
+    //     level between the root and the scroller (the "all records loaded" footer, the
+    //     "loading more" row). Using the bare clientHeight made the content always taller than
+    //     the pane, giving a needless scrollbar. Never negative.
+    const siblingsOf = () => {
+      const out = [];
+      for (let node = root; node && node !== scrollEl; node = node.parentElement) {
+        const parent = node.parentElement;
+        if (!parent) break;
+        for (const sib of parent.children) if (sib !== node) out.push(sib);
+      }
+      return out;
+    };
+    const outerHeight = (el) => {
+      const cs = window.getComputedStyle(el);
+      if (cs.display === 'none' || cs.position === 'absolute' || cs.position === 'fixed') return 0;
+      return el.offsetHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+    };
+    const update = () => {
+      const cs = window.getComputedStyle(scrollEl);
+      const padding = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const others = siblingsOf().reduce((sum, el) => sum + outerHeight(el), 0);
+      root.style.minHeight = Math.max(0, scrollEl.clientHeight - padding - others) + 'px';
+    };
     update();
-    const obs = new ResizeObserver(update);
-    obs.observe(scrollEl);
-    return () => obs.disconnect();
+    // Observes the scroller and the siblings (their size never depends on the root's min-height,
+    // so setting it cannot retrigger this), and the ancestors' child lists so a sibling that
+    // appears/disappears (footer, spinner) is picked up and observed too.
+    const resizeObs = new ResizeObserver(update);
+    const watchSiblings = () => {
+      resizeObs.disconnect();
+      resizeObs.observe(scrollEl);
+      siblingsOf().forEach((el) => resizeObs.observe(el));
+    };
+    watchSiblings();
+    const mutationObs = new MutationObserver(() => { watchSiblings(); update(); });
+    for (let node = root; node && node !== scrollEl; node = node.parentElement) {
+      if (node.parentElement) mutationObs.observe(node.parentElement, { childList: true });
+    }
+    return () => { resizeObs.disconnect(); mutationObs.disconnect(); };
   }, []);
 
   // ETP-5601 — ListView's list toolbar no longer draws a bottom border (Figma: 56px, no line),

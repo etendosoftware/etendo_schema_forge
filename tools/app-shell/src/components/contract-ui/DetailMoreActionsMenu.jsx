@@ -2,9 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { documentPeriodDate, periodNotAvailableToastOptions } from '@/lib/periodNotAvailable.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
 import { runPreUnpost, preUnpostErrorIdentity } from '@/lib/preUnpost.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { filterPostingActions } from '@/lib/capabilityVisibility.js';
 
 /**
  * Kebab ("more actions") menu of the detail toolbar.
@@ -31,6 +34,7 @@ export function DetailMoreActionsMenu({
   windowReadOnly,
 }) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const capabilities = useCapabilitiesSafe();
   const moreMenuRef = useRef(null);
   // Probe to detect whether customMenuContent actually renders anything for the
   // current record. A custom kebab component may return null based on status
@@ -38,7 +42,17 @@ export function DetailMoreActionsMenu({
   // popover would open as an empty box. Mirrors Sales Order's menuActions
   // behavior where the kebab opens nothing when no action applies.
   const moreMenuProbeRef = useRef(null);
-  const [customMenuHasContent, setCustomMenuHasContent] = useState(customMenuContent ? null : false);
+  // ETP-5562 — the probe verdict is only valid for the record it was measured on. A `false`
+  // measured on `/new` (custom content renders null for an unsaved header) used to stick after
+  // the first save: the early `return null` below unmounts the probe, so nothing could ever flip
+  // it back and the kebab stayed hidden until a full reload. Keying the verdict by record id makes
+  // it read as "unknown" (null → probe mounts again) as soon as the record identity changes.
+  const probeKey = data?.id || recordId;
+  const [probeVerdict, setProbeVerdict] = useState({ key: probeKey, has: customMenuContent ? null : false });
+  // A verdict measured on another record is stale: unknown (null) when there is custom content to
+  // probe, nothing to show (false) when there is none.
+  const staleVerdict = customMenuContent ? null : false;
+  const customMenuHasContent = probeVerdict.key === probeKey ? probeVerdict.has : staleVerdict;
 
   useEffect(() => {
     if (!showMoreMenu) return;
@@ -56,7 +70,7 @@ export function DetailMoreActionsMenu({
   useEffect(() => {
     if (!customMenuContent) return;
     const has = !!(moreMenuProbeRef.current && moreMenuProbeRef.current.childElementCount > 0);
-    setCustomMenuHasContent(prev => (prev === has ? prev : has));
+    setProbeVerdict(prev => (prev.key === probeKey && prev.has === has ? prev : { key: probeKey, has }));
   });
 
   // More actions — only render the button when there is something to show
@@ -69,9 +83,10 @@ export function DetailMoreActionsMenu({
   // same "!windowReadOnly && ..." pattern DetailView.jsx already applies to
   // renderSaveActions/processes/detailProcesses (see ETP-5116 sibling commit).
   const normalizedActions = Array.isArray(resolvedActions) ? resolvedActions : [];
+  // ETP-5684: a role without "Show Accounting Fields" sees no post/unpost action.
   const visibleActions = windowReadOnly
     ? []
-    : normalizedActions.filter(a => a.visible !== false);
+    : filterPostingActions(normalizedActions, capabilities).filter(a => a.visible !== false);
   // Every existing customMenuContent implementation (GoodsShipmentMoreMenu,
   // InventoryMenuContent, InternalConsumptionActions) fires a write action
   // (post/void/update quantities) on click, so it must be gated the same way
@@ -80,6 +95,23 @@ export function DetailMoreActionsMenu({
   if (visibleActions.length === 0 && !hasCustomContent) return null;
   const currentId = data?.id || recordId;
   const runDocumentAction = async (action) => {
+    // ETP-5745 follow-up (PM decision: "if it can't reactivate, it must not do anything"):
+    // a reactivation this guard already knows will be refused must not even run its
+    // pre-unpost step — un-posting a fiscally-accepted, already-rectified invoice and THEN
+    // failing to reactivate it left a visible side effect (the invoice stayed un-posted).
+    // `reactivationBlocked*` is read-only, enriched on GET by
+    // `InvoiceReactivationGuard#enrichReactivationBlock` (com.etendoerp.go), computed from the
+    // exact same condition the backend 422 enforces — so this is a prediction of that same
+    // refusal, not a separate rule.
+    if (action.documentAction === 'RE' && data?.reactivationBlocked) {
+      toast.error(ui('backendError.invoiceReactivateFiscalRectified', {
+        fiscalSystem: data.reactivationBlockedFiscalSystem,
+        rectificativas: Array.isArray(data.reactivationBlockedRectificativas)
+          ? data.reactivationBlockedRectificativas.join(', ')
+          : data.reactivationBlockedRectificativas,
+      }));
+      return false;
+    }
     // ETP-4783 / ETP-4940: Flush any pending header edit before running the document
     // action (Complete/Void/etc., and before any preUnpost) so the server sees the
     // latest field values. Without this, fields that are intentionally editable on a
@@ -114,7 +146,13 @@ export function DetailMoreActionsMenu({
       hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } catch (err) {
-      toast.error(err.message);
+      // ETP-5704 — translated like every other action failure of this menu (preUnpost above,
+      // runNeoMenuAction below): useDocumentAction carries the backend's English text and its
+      // AD_MESSAGE keys, and the toast must read in the UI locale.
+      toast.error(translateBackendError(err.message, ui, {
+        messageKeys: err.messageKeys,
+        messageParams: err.messageParams,
+      }) || ui('actionFailed'));
     }
     return true;
   };
@@ -134,10 +172,14 @@ export function DetailMoreActionsMenu({
       setDocsRefreshSignal(v => v + 1);
     } else {
       // ETP-5175 — same identity the row-kebab Post forwards (buildMenuActionExecutedHandler).
-      toast.error(translateBackendError(result.message, ui, {
+      const text = translateBackendError(result.message, ui, {
         messageKeys: result.messageKeys,
         messageParams: result.messageParams,
-      }) || ui('actionFailed'));
+      }) || ui('actionFailed');
+      const recovery = periodNotAvailableToastOptions(result.messageKeys, ui,
+        { date: documentPeriodDate(data) });
+      if (Object.keys(recovery).length > 0) toast.error(text, recovery);
+      else toast.error(text);
     }
   };
   return (
@@ -232,6 +274,9 @@ export function DetailMoreActionsMenu({
               apiBaseUrl={apiBaseUrl}
               onClose={() => setShowMoreMenu(false)}
               onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
+              // ETP-5700 — the header's unsaved-edit signal (the same one runDocumentAction
+              // flushes), so an entry that cannot save first can refuse to run on a dirty form.
+              isDirty={!!hook?.isDirtyHeader}
               data-testid="CustomMenuContent__fa3275" />
           );
         })()}

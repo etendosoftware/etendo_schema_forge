@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from '../../helpers/auth.js';
+import { login, installNonAdminCapabilities } from '../../helpers/auth.js';
 
 /**
  * Roles Overview — Configuración > Roles (ETP-4907 redesign, mocked).
@@ -183,33 +183,6 @@ async function installRolesOverviewMock(page) {
   });
 }
 
-/**
- * Downgrades the SFWindowAccessMap capabilities to a non-admin shape. Must be
- * registered AFTER login() so its addInitScript runs AFTER login's own
- * full-access override (Playwright runs addInitScripts in registration order
- * on every navigation) — it wraps the already-patched `window.fetch` and
- * overrides just this one path. Because it only takes effect on the NEXT
- * navigation, callers must follow this with a fresh `page.goto()`.
- */
-async function installNonAdminCapabilities(page) {
-  await page.addInitScript(() => {
-    const adminFetch = window.fetch.bind(window);
-    window.fetch = (input, init) => {
-      const url = typeof input === 'string' ? input : input?.url;
-      if (url && url.includes('/sws/neo/windowaccessmap')) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve({
-            windowAccess: new Proxy({}, { get: () => 'full' }),
-            capabilities: { showAccountingFields: false, isAdminOrClientAdmin: false },
-          }),
-        });
-      }
-      return adminFetch(input, init);
-    };
-  });
-}
 
 test.describe('Roles overview — admin/client-admin', () => {
   test.beforeEach(async ({ page }) => {

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/warehouse/WarehouseProductsTab.jsx
 // --- Mocks (before imports) ---
 
 vi.mock('@/i18n', () => ({
@@ -257,6 +258,35 @@ describe('WarehouseProductsTab', () => {
       useWarehouseStock.mockReturnValue({ loading: false, error: null, products: sampleProducts });
       render(<WarehouseProductsTab parentId="wh-1" token="t" apiBaseUrl="/api" />);
       expect(screen.getByText('Widget A')).toBeInTheDocument();
+    });
+  });
+
+  describe('no-cost products (null cost / valuation)', () => {
+    it('renders the placeholder in cost and valuation cells and does not format them', () => {
+      useWarehouseStock.mockReturnValue({
+        loading: false,
+        error: null,
+        products: [{ id: 'p1', label: 'No Cost Item', uom: 'Each', valuation: null, qty: 7, cost: null }],
+      });
+      render(<WarehouseProductsTab {...defaultProps} />);
+      expect(screen.getAllByText('—')).toHaveLength(2);
+      expect(formatCurrency).not.toHaveBeenCalled();
+      expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+    });
+
+    it('formats cost and valuation only for the product that has a cost', () => {
+      useWarehouseStock.mockReturnValue({
+        loading: false,
+        error: null,
+        products: [
+          { id: 'p1', label: 'No Cost Item', uom: 'Each', valuation: null, qty: 7, cost: null },
+          { id: 'p2', label: 'Costed Item', uom: 'Each', valuation: 300, qty: 3, cost: 100 },
+        ],
+      });
+      render(<WarehouseProductsTab {...defaultProps} />);
+      expect(screen.getByText('USD:100')).toBeInTheDocument();
+      expect(screen.getByText('USD:300')).toBeInTheDocument();
+      expect(screen.getAllByText('—')).toHaveLength(2);
     });
   });
 });
