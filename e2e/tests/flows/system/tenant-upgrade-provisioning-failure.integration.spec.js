@@ -15,6 +15,13 @@ const RUN = process.env.E2E_PROVISIONING_FAILURE === '1';
 const BASE_URL = String(process.env.BASE_URL || 'http://localhost:3100').trim();
 const LOCAL_BASE_URL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(BASE_URL);
 const FIXTURE_PATH = '/sws/go/dev/provisioning-failure-fixture';
+// With no READY fixture tenant, the fixture call provisions one synchronously before answering:
+// 35-50 s on a local backend, more on a loaded machine, well past the 15 s request default. A
+// client-side timeout does not stop the backend: it finishes the reservation and nobody holds its
+// cleanup token, so the reservation is orphaned and the next run has to build another tenant.
+// Setup therefore waits as long as the test budget allows.
+const FIXTURE_SETUP_TIMEOUT_MS = 240_000;
+const FIXTURE_CLEANUP_TIMEOUT_MS = 60_000;
 const credentials = loadCredentials();
 
 async function authenticatedJson(page, path, options = {}) {
@@ -26,8 +33,10 @@ async function authenticatedJson(page, path, options = {}) {
 }
 
 test.describe('Paid pooled tenant provisioning failure — real backend', () => {
-  // First run may build the dedicated pool client before the browser starts provisioning.
-  test.describe.configure({ timeout: 360_000 });
+  // First run may build the dedicated pool client before the browser starts provisioning: the
+  // budget covers the worst setup and cleanup plus three minutes for login, the browser flow (up
+  // to a minute) and the status requests, so the cleanup in `finally` is never cut short.
+  test.describe.configure({ timeout: FIXTURE_SETUP_TIMEOUT_MS + FIXTURE_CLEANUP_TIMEOUT_MS + 180_000 });
   test.skip(!RUN, 'The local backend fixture is not configured (E2E_PROVISIONING_FAILURE=1).');
 
   test('keeps the paid purchase and shows the failed provisioning in the browser', async ({ page }) => {
@@ -45,14 +54,10 @@ test.describe('Paid pooled tenant provisioning failure — real backend', () => 
     expect(password, 'A local test owner password is required').toBeTruthy();
     await login(page, { user: email, password });
 
-    // With no READY fixture tenant the endpoint provisions one synchronously before answering:
-    // 35-50 s on a local backend, well past the 15 s request default that used to abort it. The
-    // aborted request still claimed the tenant it built, so the next run had to build another one
-    // and timed out the same way.
     const setup = await authenticatedJson(page, FIXTURE_PATH, {
       method: 'POST',
       data: { clientName: `E2E Pool Failure ${Date.now()}` },
-      timeout: 180_000,
+      timeout: FIXTURE_SETUP_TIMEOUT_MS,
     });
     expect(setup.ok(), `Fixture setup failed (${setup.status()}): ${await setup.text()}`)
       .toBe(true);
@@ -120,7 +125,8 @@ test.describe('Paid pooled tenant provisioning failure — real backend', () => 
       expect(purchase.status).toBe('PROVISIONING');
     } finally {
       const cleanup = await authenticatedJson(
-        page, `${FIXTURE_PATH}/${encodeURIComponent(fixture.cleanupToken)}`, { method: 'DELETE' },
+        page, `${FIXTURE_PATH}/${encodeURIComponent(fixture.cleanupToken)}`,
+        { method: 'DELETE', timeout: FIXTURE_CLEANUP_TIMEOUT_MS },
       );
       expect(cleanup.ok(), `Fixture cleanup failed (${cleanup.status()}): ${await cleanup.text()}`)
         .toBe(true);
