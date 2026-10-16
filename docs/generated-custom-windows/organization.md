@@ -331,6 +331,21 @@ A sixth `SectionRow` in `OrganizationPage.jsx`, **"Representante legal / Modelo 
   `yyyy-MM-dd` with local getters (`toCalendarISO`, built on `parseCalendarDate`) before it is sent,
   and displayed with `formatCalendarDate` in the UI locale — no timezone shift.
 
+### Section deep links (ETP-5716)
+
+Three sections carry a DOM id another window can link to — `/organization#<id>` — and the page
+scrolls to it once loaded (`sectionAnchorFromHash`, `ORG_SECTION_ANCHOR` in `OrganizationPage.jsx`;
+an unknown hash is ignored):
+
+| Id | Section |
+|---|---|
+| `org-section-fiscal` | Datos fiscales (NIF, razón social) |
+| `org-section-iae` | Actividades del IAE |
+| `org-section-390` | Representante legal / Modelo 390 |
+
+Used by "Editar en Organización" of the Modelo 390 incidents (`fiscal-models.md`, "Incidents"):
+the link names the section where the incident is fixed.
+
 ## Field change: SII/TicketBAI/Verifactu config flags exposed as `system` fields (ETP-4784)
 
 Three `AD_OrgInfo` columns — `EM_Etsg_Has_Sii_Config`, `EM_Etsg_Has_Tbai_Config`,

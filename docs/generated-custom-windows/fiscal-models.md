@@ -3428,9 +3428,8 @@ ETP-5456 deployment trap above applies: verify in a fresh tab after deploying.
 ETP-5716, phase "skeleton + boxes". The annual VAT summary, built on the classic module through
 `/fiscal390/*` (backend contract: `{etendo_root}/modules/com.etendoerp.go/docs/aeat-390-endpoints.md`).
 Everything 390-specific lives in `models/390/`; the shared surfaces only read the registry.
-Later phases plug in where noted: incident rules. The invoices (Facturas) tab, the preload from
-the 303s with the cuadre, and the presentation (telematic filing, manual registration, substitute)
-are described below.
+The invoices (Facturas) tab, the preload from the 303s with the cuadre, the presentation
+(telematic filing, manual registration, substitute) and the incidents are described below.
 
 ### Registry entry and shared surfaces
 
@@ -3452,8 +3451,8 @@ are described below.
 - **Action bar** (same chrome as 303/349): left Cancelar, status chip and **Tipo: Normal | Sustitutiva**;
   right **Calcular**, **Generar fichero 390**, **Guardar** and **Registrar/Presentar** (primary). Once
   presented, the right group is only **Crear declaración sustitutiva**. Generar and
-  Registrar/Presentar are disabled while the declaration has blocking incidents (tooltip
-  `fm.m390.blocked_by_incidents`) or nothing is computed.
+  Registrar/Presentar are disabled while the declaration has blocking RULE incidents (tooltip
+  `fm.m390.blocked_by_incidents`, see "Incidents") or nothing is computed.
 - **Registrar/Presentar** opens the shared `PresentModal` with the AEAT path and, as its left
   column, the single path **Registrar como presentada** (`registerPaths`, sentinel id
   `manual_register`) — see "Presentation" below.
@@ -3469,8 +3468,8 @@ are described below.
   `manualData.identification.{sustitutiva, formerStatement, rectificacionCuotas}` — the list "Tipo"
   column reads `sustitutiva` like 349's. `rectificacionCuotas` is deliberately not named
   `rectificativa` (that one means "Rectificativa" in the list).
-- **Cards:** Incidencias (persisted incidents of `/fiscal390/incidents`; the 390 rules arrive in the
-  incidents phase), IVA devengado [47], IVA deducible [64], Resultado [86] — or [94] when filing to
+- **Cards:** Incidencias (split into **N bloqueantes · N advertencias**, click opens the tab — see
+  "Incidents"), IVA devengado [47], IVA deducible [64], Resultado [86] — or [94] when filing to
   several administrations — with an informative badge: **Resultado positivo / negativo** (or
   "Resultado cero" / "Sin resultado"), neutral colours (`resultKind390` in `fm390Layouts.js`, NOT the
   shared `deriveResultKind`). AEAT writes [86]/[94] "con el signo que corresponda" and classic only
@@ -3478,8 +3477,8 @@ are described below.
   muted line under the cards says so (`fm.m390.result.informative_hint`). The "cuadre con los 303"
   line under the cards is `Reconciliation390` (see "Preload from the 303s and cuadre"). Cards go 2×2 below 1100 px
   (`.fm-390-kpis`).
-- **Tabs:** Casillas, Facturas (`FmSources390.jsx`, see below), Incidencias (shared
-  `IncidentsTab`), Justificante (shared `AttachmentsTab`).
+- **Tabs:** Casillas, Facturas (`FmSources390.jsx`, see below), Incidencias (`Incidents390Tab.jsx`,
+  see "Incidents"), Justificante (shared `AttachmentsTab`).
 
 ### "Casillas" tab (`FmBoxes390.jsx` + `fm390Layouts.js`)
 
@@ -3519,12 +3518,14 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
   | [85] with any territory % | `BothTerritoryAndLiqAnual` | a territory % > 0 removes [85] from `aeatInputs` (not just disables the cell) |
   | [85] with [93] | `BothAmtPrevious` | typing one while the other has a value is refused (`fm.m390.input.compensation_conflict`) |
   | DEVOLVER_xx without ISMONTHLYRETURN | `AEAT390_MonthlyReturn_Check` | "A devolver" cells disabled (`monthlyReturnOnly`); unmarking the flag clears them |
-  | DEVOLVER_12 with [97] | `AEAT390_TotalLastPeriod_Check` | inline error in block 9 (`inputMessages390`); does not disable Generar |
+  | DEVOLVER_12 with [97] | `AEAT390_TotalLastPeriod_Check` | inline error in block 9 (`inputMessages390`) and the blocking incident `LAST_PERIOD_REFUND_CONFLICT` (disables Generar / Presentar) |
   | [98] with [96] or [97] | AEAT instructions ("no cumplimente la 98") | amber, non-blocking warning in block 9 |
   | ConcursoUltPer without ConcursoAcr | rejected | unmarking ConcursoAcr sets ConcursoUltPer to `N` |
 
   All the "drop" rules live in one place, `sanitizeAeatInputs390`, applied after every edit and on
-  every save (`buildManualData390`), so stored data never carries the rejected combinations.
+  every save (`buildManualData390`), so stored data never carries the rejected combinations. The
+  backend checks every one of them again as a blocking incident (see "Incidents"), so a value that
+  reached the stored inputs another way still blocks the file.
 - **Known gap — [63] (regularización de inversiones):** read-only and always 0, exactly like
   Classic, which has no parameter for it (nor for [522]) and always writes 0. A declarant with an
   investment-goods regularization cannot declare it in either system; adding it needs a GO-side input
@@ -3542,9 +3543,11 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
 - **Name truncation notice.** Classic cuts the identity texts in the file (`AEAT390String`): razón
   social 37 characters; a natural person's first name and each surname 15; the natural-person
   representative name 37; each legal representative name 36. Lengths are measured on what the file
-  keeps (upper case, accents folded, characters outside `[A-Z0-9. ]` — Ñ included — dropped). A
-  longer text shows a non-blocking amber notice in Identificación / Representante ("La razón social
-  se recortará a 37 caracteres en el fichero."); Generar is not blocked.
+  keeps (upper case, accents folded, characters outside `[A-Z0-9. ]` — Ñ included — dropped). The
+  backend reports a longer text as the warning `NAME_TRUNCATED` (moved server-side in the incidents
+  phase so the rule lives once); the page shows those incidents as a non-blocking amber notice in
+  Identificación / Representante ("La razón social se recortará a 37 caracteres en el fichero.",
+  `nameWarningsFromIncidents390`) and in the Incidencias tab; Generar is not blocked.
 - **Box search:** "Buscar casilla" + Enter — a number (`86`, `[86]`, `086`) or a concept fragment
   (accent/case-insensitive) — opens the block, scrolls to the cell, focuses it if editable and
   highlights it for 2.5 s; "No se encontró la casilla" otherwise.
@@ -3556,7 +3559,8 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
 - **Design year note:** when `taxReport.fallback` is true (e.g. 2026 computed with the classic
   `AEAT390_2025_Y`), a muted "Diseño de registro 2025" with an explanatory tooltip.
 - **Backend warnings** (`UNSUPPORTED_RATE`, `NO_BOX`) are listed in an amber note above the block
-  (they make the classic file fail or differ); they become incidents in the incidents phase.
+  (they make the classic file fail or differ) and are also incidents: `UNSUPPORTED_RATE` blocking,
+  `NO_BOX` a warning.
 - **"Ver facturas":** a calculated cell whose box is in the payload's `invoiceBoxes` (the boxes
   filled from invoices — never a derived total like [47]/[64]/[86]/[108]) carries a small receipt
   button that opens the Facturas tab filtered by that box. Not shown on a presented declaration
@@ -3586,8 +3590,9 @@ filtered and paged):
   `facturas_390_<year>[_casilla_<nn>].csv` (`buildSources390Csv`): UTF-8 BOM, comma separator,
   ISO dates, plain 2-decimal amounts, every header and cell through the canonical `csvField`
   (formula neutralization — a negative amount comes out as `'-100.00`, per the CSV policy).
-- **Filter ownership:** `FmModel390Page` holds the filter, so "Ver facturas" (Casillas tab, and the
-  incidents phase) opens the tab pre-filtered with `sourcesFilterForBox(box)` from `sources390.js`.
+- **Filter ownership:** `FmModel390Page` holds the filter, so "Ver facturas" (Casillas tab, and an
+  incident with a `sources` action) opens the tab pre-filtered with `sourcesFilterForBox(box)` from
+  `sources390.js`.
 - **Presented declaration:** like the 303, the per-invoice detail is not kept — the tab shows
   `fm.snapshot.invoice_detail_not_kept` and makes no request (the backend answers
   `submitted: true` with no rows anyway).
@@ -3635,9 +3640,10 @@ files to several administrations.
   tolerancia 1,00 €)"; "Sin Modelos 303 de <año> con los que cuadrar" when there are none. The
   missing-303 notice is repeated there. Neither blocks Generar nor Presentar. Why these boxes:
   backend doc, "Cuadre".
-- **For the incidents phase:** `preloadIncidents390(preload, reconciliation)` returns the
-  candidates `MISSING_303` and `DIFF_303` (severity `warn`); server-side,
-  `Fiscal390PreloadAggregator.reconcile` gives the same comparison.
+- **Incidents:** the backend raises the same two findings as the warnings `MISSING_303` and
+  `DIFF_303` (from the stored inputs, `Fiscal390PreloadAggregator.reconcile`); the page does not
+  compute them (`preloadIncidents390` is the same comparison on the live screen, kept for the
+  cuadre line).
 
 ### Save flow
 
@@ -3658,7 +3664,9 @@ the backend forwards them to the classic generator: ordinary → `ISSUPPLEMENTAR
 | Registrar como presentada | `PUT manualData` with `submission` (and the pending inputs) → upload of the PDF → a SEPARATE `PUT status` (`submitted_ack`/`manual_ack` with the PDF, `submitted`/`manual_no_receipt` without) — never the same PUT: the backend freezes the submission snapshot from the stored inputs before applying a same-request manualData |
 
 Every successful save invalidates the list's session cache for the declaration
-(`invalidateFiscalComputeCache`) and patches the list (`onManualDataSaved`).
+(`invalidateFiscalComputeCache`), patches the list (`onManualDataSaved`) and recomputes the
+incidents (`POST /fiscal390/validate`, see "Incidents"); Calcular with nothing to save recomputes
+them too (the invoices may have changed).
 
 ### Presentation (`submission390.js`, `RegisterSubmitted390Modal.jsx`, `SubmissionCard390.jsx`)
 
@@ -3682,8 +3690,9 @@ esta declaración son conformes"** (`fm.present.conformity`).
   codes); the page re-reads the incidents after each attempt (`onIncidentsChanged`). They show in
   the Incidencias tab and on the card, but **never gate Generar / Presentar**: the gate is
   `ruleBlockingCount` (`submission390.js`, the model's own blocking rules only), and the backend
-  `BLOCKING_INCIDENTS` guard counts the same — so a stored AEAT error never blocks the retry that
-  fixes it, as in 303 (which does not gate its filing on stored incidents at all).
+  `BLOCKING_INCIDENTS` guard evaluates the rules, not the stored rows — so a stored AEAT error never
+  blocks the retry that fixes it, as in 303 (which does not gate its filing on stored incidents at
+  all).
 - **Registrar como presentada** — `RegisterSubmitted390Modal`: **Número de justificante** (13
   digits), **Fecha de presentación** (default today, not in the future), optional PDF (same types
   as the Justificante tab) and the conformity check. Then `PUT manualData` with
@@ -3715,6 +3724,50 @@ existing answers 409 → toast `fm.m390.substitute.draft_exists`.
 Reactivation follows the shared rule: a manually registered 390 (`submitted`/`submitted_ack`,
 manual method) can be reactivated from the list ("Reactivar declaración"); a telematic one
 (`aeat_telematic`) cannot (`canReactivate` + backend `rejectTelematicReactivation`).
+
+### Incidents (`incidents390.js`, `Incidents390Tab.jsx`, ETP-5716)
+
+The rules are computed by the **backend** (`Fiscal390IncidentRules` in com.etendoerp.go — the
+rule table with each rule's classic source, severity and action is in
+`com.etendoerp.go/docs/aeat-390-endpoints.md`, "Incidents"). Anything classic rejects while
+generating the file is blocking; the rest are warnings. The page never decides a rule; it shows
+what the backend stored.
+
+- **When they are recomputed:** `POST /fiscal390/validate` (`validate390`, fm390Api.js) on
+  opening a draft (the organization or the invoices may have changed since the last save) and
+  after every successful save — Guardar, Calcular (also with nothing to save), and the saves
+  before Generar / Presentar / leaving the page. It answers every incident of the declaration
+  (rule + AEAT ones). A presented declaration's incidents are frozen: the page only reads them
+  (`GET /fiscal390/incidents`), and the backend refuses to recompute them. When `validate` fails
+  the page falls back to the stored incidents.
+- **Gate:** Generar / Presentar are disabled while a blocking RULE incident exists
+  (`ruleBlockingCount`; `AEAT-…` rows never gate). The backend enforces the same server-side with
+  a fresh evaluation: `GET /fiscal390/generate` answers `409 BLOCKING_INCIDENTS` with the
+  incidents (`generate390File` → `{ error: 'blocking_incidents' }`: toast
+  `fm.m390.blocked_by_incidents`, recompute, Incidencias tab opened) and `POST /fiscal390/submit`
+  its `BLOCKING_INCIDENTS` failure.
+- **Card:** "Incidencias" shows **N bloqueantes · N advertencias** (destructive / warning colour when
+  non-zero) and opens the tab.
+- **Tab** (`Incidents390Tab`): two groups, **Bloqueantes** ("Resuélvelas antes de generar el
+  fichero") and **Advertencias** ("No impiden generar el fichero"), each with a counter; every row
+  is the incident text and its actions. An AEAT answer is listed in the group of its severity with
+  its `AEAT-<code>` and the AEAT text as it came. Empty: "Sin incidencias".
+- **Text:** translated by code, `fm.m390.incident.<CODE>` with the incident's params
+  (`incidentText390`: amounts with `formatAmount`, rates with `formatPercent`, `NAME_TRUNCATED`'s
+  field with `fm.m390.ident.field.*`); a code with no translation shows the backend's English
+  fallback. Keys exist in es_ES, en_US and es_AR (guarded by `incidents390.vitest.js`).
+- **Actions** (`incidentActions390`):
+
+  | `action.type` | Button | Does |
+  |---|---|---|
+  | `box` | Ir a la casilla N | Casillas tab, opens the block and highlights the box (`FmBoxes390` `goToBox`, same jump as the box search) |
+  | `sources` | Ver facturas | Facturas tab filtered by the box (`sourcesFilterForBox`); not on a presented declaration |
+  | `organization` | Editar en Organización | saves pending changes, then `/organization#<section>` — `org-section-fiscal` (NIF, razón social), `org-section-iae`, `org-section-390`; the Organization page scrolls to it (see `organization.md`) |
+  | `invoices` | Ver facturas de venta / de compra | saves pending changes, then the Sales / Purchase invoice list (one link per side with unposted invoices) |
+
+- **Tests:** `incidents390.vitest.js` (grouping, text, actions, i18n of every code, the two
+  requests), `FmModel390Page.vitest.jsx` "incidents" (recompute on open / save / Calcular, frozen
+  when presented, gate, tab, actions, 409 on Generar).
 
 ### AeatSubmitFlow model adapters (ETP-5716)
 
@@ -4363,7 +4416,9 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `models/390/FmModel390Page.jsx` | Modelo 390 detail (ETP-5716) — header, Tipo Normal/Sustitutiva, KPIs, save/compute/generate/register flows |
 | `models/390/FmBoxes390.jsx` | Modelo 390 "Casillas" tab — block index, box search, origin legend, blocks |
 | `models/390/fm390Layouts.js` | Modelo 390 declarative layout (11 blocks), search index, `deriveInputBoxes`, `buildManualData390` |
-| `models/390/fm390Api.js` | `/fiscal390/boxes`, `/modified`, `/generate` requests |
+| `models/390/fm390Api.js` | `/fiscal390/boxes`, `/modified`, `/generate`, `/sources`, `/preload`, `/validate` requests |
+| `models/390/incidents390.js` | Modelo 390 incidents (ETP-5716) — grouping, translated text by code, actions |
+| `models/390/Incidents390Tab.jsx` | Modelo 390 "Incidencias" tab — Bloqueantes / Advertencias with "Ir a la casilla", "Ver facturas", "Editar en Organización" |
 | `models/390/submission390.js` | Presentation (ETP-5716): `AEAT_SUBMIT_390` adapter, `manualData.submission` helpers, `createSubstitute390` / `substituteManualData` |
 | `models/390/RegisterSubmitted390Modal.jsx` | "Registrar como presentada" step 2: justificante, date, PDF, conformity check |
 | `models/390/SubmissionCard390.jsx` | "Presentación en la AEAT" card of a presented 390 |
