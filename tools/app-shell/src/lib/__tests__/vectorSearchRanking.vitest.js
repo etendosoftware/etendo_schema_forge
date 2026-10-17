@@ -54,4 +54,58 @@ describe('rankVectorMatches', () => {
     expect(result.exact.map(({ fields }) => fields.name)).toEqual(['Claras pasteurizadas 500ml']);
     expect(result.semantic.map(({ fields }) => fields.name)).toEqual(['Bebida de avena 1L']);
   });
+
+  describe('noise detection (no text match and a flat score distribution)', () => {
+    const invoice = (score, documentNo) => ({ score, fields: { documentNo } });
+
+    it('treats gibberish as noise: ten near-identical scores and no text match show nothing', () => {
+      const flat = [0.80, 0.80, 0.79, 0.79, 0.79, 0.79, 0.78, 0.78, 0.78, 0.78]
+        .map((score, i) => invoice(score, `F-${i}`));
+      const result = rankVectorMatches(flat, 'zzzz');
+
+      expect(result.exact).toEqual([]);
+      expect(result.semantic).toEqual([]);
+      expect(result.related).toEqual([]);
+      expect(result.relevant).toEqual([]);
+    });
+
+    it('keeps a text match and the remaining candidates under the usual rules when one result stands out', () => {
+      const result = rankVectorMatches([
+        { score: 0.86, fields: { Name: 'Britney Spears', Value: 'T-1' } },
+        { score: 0.74, fields: { Name: 'Otro tercero', Value: 'T-2' } },
+        { score: 0.70, fields: { Name: 'Tercero tres', Value: 'T-3' } },
+      ], 'Britney');
+
+      expect(result.exact.map(({ fields }) => fields.Name)).toEqual(['Britney Spears']);
+      expect(result.semantic).toEqual([]);
+      expect(result.related.map(({ fields }) => fields.Name)).toEqual(['Otro tercero', 'Tercero tres']);
+    });
+
+    it('keeps a semantic search without text match when the top result clearly stands out', () => {
+      const result = rankVectorMatches([
+        match(0.88, 'Bebida vegetal'),
+        match(0.70, 'Pan integral'),
+        match(0.69, 'Salmón'),
+        match(0.66, 'Carne'),
+      ], 'leche de soja');
+
+      expect(result.exact).toEqual([]);
+      expect(result.semantic.map(({ fields }) => fields.name)).toEqual(['Bebida vegetal']);
+    });
+
+    it('does not apply flat detection to fewer than three candidates', () => {
+      expect(rankVectorMatches([], 'zzzz').relevant).toEqual([]);
+      const one = rankVectorMatches([match(0.80, 'Algo')], 'zzzz');
+      expect(one.semantic).toHaveLength(1);
+      const two = rankVectorMatches([match(0.80, 'Algo'), match(0.79, 'Otro')], 'zzzz');
+      expect(two.semantic.length + two.related.length).toBe(2);
+    });
+
+    it('never discards a text match even when every score is flat', () => {
+      const flat = [0.80, 0.79, 0.79, 0.78].map((score, i) => match(score, i === 3 ? 'Zzzz SL' : `F-${i}`));
+      const result = rankVectorMatches(flat, 'zzzz');
+
+      expect(result.exact.map(({ fields }) => fields.name)).toEqual(['Zzzz SL']);
+    });
+  });
 });
