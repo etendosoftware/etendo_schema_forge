@@ -10,6 +10,7 @@ import {
   UPGRADE_ERROR_CODES,
   createBillingPurchase,
   createCheckoutSession,
+  fetchPlans,
   getBillingOffer,
   getBillingOverview,
   getBillingPurchase,
@@ -148,6 +149,7 @@ describe('the module surface', () => {
       'createBillingPurchase',
       'createCheckoutSession',
       'createPortalSession',
+      'fetchPlans',
       'getBillingOffer',
       'getBillingOverview',
       'getBillingPurchase',
@@ -155,6 +157,69 @@ describe('the module surface', () => {
       'getSubscription',
       'runPaidOnboarding',
     ]);
+  });
+});
+
+describe('fetchPlans', () => {
+  const PLAN = {
+    planKey: 'productive-monthly',
+    name: 'Productive',
+    description: 'A second tenant for real work',
+    displayPrice: '49.00',
+    currency: 'EUR',
+    billingInterval: 'month',
+  };
+
+  it('reads the catalog as a plain GET and sends no price field', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ plans: [PLAN] }));
+
+    assert.deepEqual(await fetchPlans('https://api.test'), [PLAN]);
+    assert.equal(calls[0][0], 'https://api.test/sws/go/plans');
+    assert.equal(calls[0][1].method ?? 'GET', 'GET');
+    assert.equal(calls[0][1].body, undefined);
+    // The canonical helper, so Accept-Language rides along and the backend answers reference
+    // data in the UI locale rather than the account's AD language (ETP-5022).
+    assert.ok(headersOf()['accept-language']);
+    assert.equal(headersOf().authorization, undefined);
+  });
+
+  it('treats an empty catalog as an answer, not a failure', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ plans: [] }));
+
+    // "Nothing is on sale" is a state the page renders (checkout disabled), not an error it
+    // reports as a broken backend.
+    assert.deepEqual(await fetchPlans(''), []);
+  });
+
+  it('returns an empty list when the payload carries no plans array', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({}));
+
+    assert.deepEqual(await fetchPlans(''), []);
+  });
+
+  it('raises a stable error the page can translate when the catalog cannot be read', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ message: 'boom' }, { ok: false, status: 503 }));
+
+    // It must REJECT rather than fall back to a guessed key: a guess would be a purchase nobody
+    // reviewed.
+    await assert.rejects(
+      () => fetchPlans(''),
+      error => error.code === UPGRADE_ERROR_CODES.plansUnavailable && error.status === 503
+    );
+  });
+
+  it('reports an expired session distinctly from an unreadable catalog', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({}, { ok: false, status: 401 }));
+
+    await assert.rejects(
+      () => fetchPlans(''),
+      error => error.code === UPGRADE_ERROR_CODES.sessionExpired
+    );
   });
 });
 
@@ -177,6 +242,7 @@ describe('createCheckoutSession', () => {
       action: 'productive-tenant',
       clientName: 'Acme Productive',
       language: 'es_ES',
+      planKey: 'productive-monthly',
     });
 
     assert.deepEqual(result, {
@@ -188,9 +254,12 @@ describe('createCheckoutSession', () => {
     assert.deepEqual(JSON.parse(calls[0][1].body), {
       action: 'productive-tenant',
       upgradeAction: 'create-productive',
+      planKey: 'productive-monthly',
       clientName: 'Acme Productive',
       language: 'es_ES',
     });
+    // A plan KEY, never a price. The server owns the Stripe Price ID; there is no request field
+    // for one and no code path that reads one.
     assert.doesNotMatch(calls[0][1].body, /cardNumber|paymentToken|priceId|amount/);
   });
 
@@ -231,6 +300,16 @@ describe('createCheckoutSession', () => {
     assert.deepEqual(storageWrites, []);
   });
 
+  it('omits planKey when the caller did not name a plan', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ requestId: 'req-2', checkoutUrl: 'https://c.test/s2' }));
+
+    await createCheckoutSession('https://api.test', { clientName: 'Acme Productive' });
+
+    // The server decides what a missing key means; the client never guesses what is for sale.
+    assert.equal('planKey' in JSON.parse(calls[0][1].body), false);
+  });
+
   it('raises a stable error when session creation fails', async () => {
     declareCookieSession();
     installFetch(jsonResponse({ message: 'Stripe unavailable' }, { ok: false, status: 503 }));
@@ -238,6 +317,38 @@ describe('createCheckoutSession', () => {
     await assert.rejects(
       () => createCheckoutSession('', {}),
       (error) => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed && error.status === 503
+    );
+  });
+
+  // ETP-5046 — the server's legacy price fallback retires itself when the first priced plan is
+  // created, so a page loaded before that flip still offers `legacy-productive` and gets a 400
+  // PLAN_NOT_AVAILABLE. That must reach the page as its own code, whose copy says "reload" —
+  // not as the generic failure, which would leave the buyer retrying a plan that is gone.
+  it('maps a PLAN_NOT_AVAILABLE refusal onto planNotAvailable', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse(
+      { error: { code: 'PLAN_NOT_AVAILABLE', message: 'The selected plan is no longer available.' } },
+      { ok: false, status: 400 },
+    ));
+
+    await assert.rejects(
+      () => createCheckoutSession('', { planKey: 'legacy-productive' }),
+      (error) => error.code === UPGRADE_ERROR_CODES.planNotAvailable
+        && error.code === 'upgradePlanNotAvailable'
+        && error.status === 400,
+    );
+  });
+
+  it('keeps any other 400 on the generic checkout failure', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse(
+      { error: { code: 'INVALID_CLIENT_NAME', message: 'bad name' } },
+      { ok: false, status: 400 },
+    ));
+
+    await assert.rejects(
+      () => createCheckoutSession('', {}),
+      (error) => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed,
     );
   });
 
@@ -530,6 +641,19 @@ describe('createBillingPurchase', () => {
 
   // A 409 that names no purchase is not a duplicate the page can reopen, and must not be reported
   // as one — the screen would navigate to a purchase nobody named.
+  it('maps a PLAN_NOT_AVAILABLE refusal onto planNotAvailable', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse(
+      { error: { code: 'PLAN_NOT_AVAILABLE', message: 'The selected plan is no longer available.' } },
+      { ok: false, status: 400 },
+    ));
+
+    await assert.rejects(
+      () => createBillingPurchase('', { planKey: 'legacy-productive' }),
+      (error) => error.code === UPGRADE_ERROR_CODES.planNotAvailable && error.status === 400,
+    );
+  });
+
   it('falls back to the generic failure on a 409 that names no purchase', async () => {
     declareCookieSession();
     installFetch(jsonResponse({ message: 'conflict' }, { ok: false, status: 409 }));
