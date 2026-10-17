@@ -593,6 +593,7 @@ actual gallery cards, while missing these 5 real ones.
   - On environment login, `OnboardingPage` clears caches before redirecting to `/dashboard`.
 - **Failure or edge behavior:**
   - If cache deletion fails during environment login, the code only warns in the console and continues.
+  - A reload deferred because the user was editing is dropped if a full-page navigation has started in the meantime (ETP-5775), so the deferred flush can never race and cancel the post-login redirect.
   - `clearServiceWorkerStateAndReload()` exists as a last-resort recovery path, but it is a hook utility, not a currently exposed route action.
   - `UpdateToast.jsx` exists as a persistent update-notification helper, but `App.jsx` does not currently wire it into the visible shell flow.
 - **Automated evidence:**
