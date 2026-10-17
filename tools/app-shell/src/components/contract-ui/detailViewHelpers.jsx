@@ -1,7 +1,7 @@
 /**
  * Extracted from DetailView.jsx via ast-refactor.
  */
-import React, {useEffect, useRef, useState} from 'react';
+import React, {lazy, useEffect, useRef, useState} from 'react';
 import {Button} from '@/components/ui/button.jsx';
 import {Trash2} from 'lucide-react';
 import {toast} from 'sonner';
@@ -2010,4 +2010,87 @@ export function isRecordUnavailableForRoute(hook, isNew, recordId) {
   if (isNew) return false;
   if (!hook?.recordError) return false;
   return !hasRecordForRoute(isNew, hook, recordId);
+}
+
+export const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
+
+export function applyCalloutComboUpdates(combos, ctx) {
+  const { triggerField } = ctx;
+  for (const [key, combo] of Object.entries(combos)) {
+    // Never override the field the user just changed via its own combo response.
+    // The callout may refresh the list of options for that field, but the user's
+    // explicit selection must always win — auto-selecting the first entry would
+    // silently revert their choice (e.g., NC → FAC on invoice doc type).
+    if (key === triggerField) continue;
+    applyOneComboEntry(key, combo, ctx);
+  }
+}
+
+// Builds the form-footer render pieces. A formFooter may opt into rendering INSIDE
+// the header card (single-field footers like TaxSifField set the static marker
+// `inlineInHeaderCard`), aligned in the same horizontal grid as the native header
+// fields, instead of the default detached block below the card (multi-section
+// panels like AssetsDetailPanel). Inline footers are spliced into the principal
+// Form's grid via its `trailing` slot (a bare grid cell, WITHOUT the pointer-events
+// wrapper, so it is a direct grid sibling of the native fields). Non-marked footers
+// keep the detached `footerElement` block and are completely unaffected.
+/**
+ * The side panel a window renders next to its form, or nothing when the window is embedded
+ * in a host dialog.
+ *
+ * A side panel is context for the full window — a stock summary, a period selector — and
+ * noise inside a popup, where the whole point is the form. `chromeless` covers both embed
+ * modes (the read-only preview and the interactive one); everything else about the window
+ * is untouched.
+ */
+/**
+ * The toolbar's "cancel" — which navigates back to the window's LIST.
+ *
+ * Rendered as its own component so the decision lives with the reason: inside a host
+ * dialog that navigation is meaningless, it would swap the form for a product list within
+ * the popup, and the dialog's own close is the way out. Keeping the `chromeless` test here
+ * also keeps it out of DetailView's already large render.
+ */
+export function DetailCancelButton({ chromeless, label, onCancel }) {
+  if (chromeless) return null;
+  return (
+    <Button
+      className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[#121217] text-sm leading-6 font-medium hover:bg-[hsl(var(--muted))] transition-colors"
+      data-testid="action-cancel"
+      onClick={onCancel}
+    >
+      {label}
+    </Button>
+  );
+}
+
+export function resolveEmbeddedSidebarContent(chromeless, sidebarContent) {
+  return chromeless ? null : sidebarContent;
+}
+
+export function buildHeaderFooter({ formFooter, embedded, data, entity, handleChangeWithCallout, hook, catalogs, api, token, apiBaseUrl }) {
+  if (!formFooter) return { footerInline: false, footerElement: null, inlineTrailing: undefined };
+  const footerInline = !!formFooter.inlineInHeaderCard;
+  const footerNode = React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing, registerFields: hook.registerFields, fieldErrors: hook.fieldErrors });
+  const footerElement = (
+    <div className={embedded ? 'pointer-events-none' : ''}>
+      {footerNode}
+    </div>
+  );
+  const inlineTrailing = footerInline ? footerNode : undefined;
+  return { footerInline, footerElement, inlineTrailing };
+}
+
+export function populateIdentifierFields(api, result, detailEntity, catalogs) {
+  if (api?.selectors) {
+    for (const key of Object.keys(result)) {
+      if (key.includes('$_identifier')) continue;
+      if (result[key + '$_identifier']) continue;
+      const selConfig = api.selectors.find(s => s.field === key && s.entity === detailEntity);
+      if (!selConfig) continue;
+      const opts = getCatalogOptions(catalogs, detailEntity, selConfig);
+      const match = opts.find(o => o.id === result[key]);
+      if (match) result[key + '$_identifier'] = match.label || match.name || match._identifier || '';
+    }
+  }
 }
