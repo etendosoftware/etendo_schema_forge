@@ -70,6 +70,14 @@ export function useServiceWorker({ onUpdateAvailable } = {}) {
 
     function doReload() {
       if (reloading) return;
+      // Guard 3 also covers the deferred flush (ETP-5775): if a full-page
+      // navigation started while the reload was deferred, drop it — flushing
+      // now would race and can cancel that navigation — and clear the pending
+      // flag so later focusout events never revive it.
+      if (navigatingAway) {
+        pendingReload = false;
+        return;
+      }
       reloading = true;
       onUpdateRef.current?.();
       window.location.reload();

@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/hooks/useServiceWorker.js
+
 import { renderHook, act } from '@testing-library/react';
 import { useServiceWorker } from '../useServiceWorker';
 
@@ -144,6 +146,70 @@ describe('useServiceWorker', () => {
     });
 
     // The flush happens inside a setTimeout(0).
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+
+    expect(window.location.reload).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
+  it('Guard 3: drops a deferred reload when a navigation starts before the flush', () => {
+    vi.useFakeTimers();
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const onUpdateAvailable = vi.fn();
+    const { unmount } = renderHook(() =>
+      useServiceWorker({ onUpdateAvailable }),
+    );
+
+    // A new SW takes over while the user is typing → the reload is deferred.
+    act(() => {
+      fireSwEvent('controllerchange');
+    });
+    expect(window.location.reload).not.toHaveBeenCalled();
+
+    // The post-login redirect starts (OnboardingFlow dispatches this right
+    // before window.location.href = …) and then focus leaves the field.
+    act(() => {
+      window.dispatchEvent(new Event('etendo-go:navigating'));
+      input.blur();
+      document.body.focus();
+      fireDocEvent('focusout');
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+
+    // The deferred flush must not race (and cancel) the in-flight navigation.
+    expect(window.location.reload).not.toHaveBeenCalled();
+    expect(onUpdateAvailable).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('Guard 3 control: a deferred reload still flushes when no navigation is in flight', () => {
+    vi.useFakeTimers();
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const { unmount } = renderHook(() => useServiceWorker());
+
+    act(() => {
+      fireSwEvent('controllerchange');
+    });
+    expect(window.location.reload).not.toHaveBeenCalled();
+
+    act(() => {
+      input.blur();
+      document.body.focus();
+      fireDocEvent('focusout');
+    });
     act(() => {
       vi.advanceTimersByTime(0);
     });
