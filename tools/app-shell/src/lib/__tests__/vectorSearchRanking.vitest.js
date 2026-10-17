@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/lib/vectorSearchRanking.js
 import { describe, expect, it } from 'vitest';
 import { rankVectorMatches } from '../vectorSearchRanking.js';
 
