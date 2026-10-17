@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Return to Vendor Shipment",
+    "agentPrompt": "#REF#agent-prompts/return-to-vendor-shipment/spec.md",
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -211,6 +212,10 @@
         },
         "freightCurrency": {
           "visibility": "discarded"
+        },
+        "etgoCurrency": {
+          "visibility": "system",
+          "defaultExpr": "@C_Currency_ID@"
         },
         "freightCostRule": {
           "visibility": "discarded"
