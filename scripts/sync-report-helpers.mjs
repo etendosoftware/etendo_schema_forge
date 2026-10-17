@@ -90,7 +90,12 @@ const MANIFEST_DESCRIPTION = [
   'cli/test/report-jsreport-helpers-builder.test.js (mirror).',
 ].join(' ');
 
-/** CRLF is a checkout artifact, not a content difference: hash line-ending-agnostic text. */
+/**
+ * CRLF is a checkout artifact, not a content difference: hash line-ending-agnostic text.
+ *
+ * @param {string} text Raw module source.
+ * @returns {string} The same source with `\r\n` collapsed to `\n`.
+ */
 export function normalizeNewlines(text) {
   return text.replace(/\r\n/g, '\n');
 }
@@ -129,12 +134,23 @@ export function canonicalDigest(text) {
   return createHash('sha256').update(canonicalize(text), 'utf8').digest('hex');
 }
 
-/** @returns {string} Absolute path of a repo-relative path inside a checkout dir. */
+/**
+ * Resolve one mirrored module's path inside a checkout.
+ *
+ * @param {string} dir Checkout root.
+ * @param {string} name Module file name, e.g. `report-html-helpers.js`.
+ * @returns {string} Absolute path of the module inside the checkout.
+ */
 export function modulePath(dir, name) {
   return join(dir, HELPERS_DIR, name);
 }
 
-/** @returns {string} Absolute path of the parity manifest inside a checkout dir. */
+/**
+ * Resolve the parity manifest's path inside a checkout.
+ *
+ * @param {string} dir Checkout root.
+ * @returns {string} Absolute path of `parity.json` inside the checkout.
+ */
 export function manifestPath(dir) {
   return join(dir, HELPERS_DIR, PARITY_FILE);
 }
@@ -161,7 +177,12 @@ export function buildManifest() {
   };
 }
 
-/** @returns {string} The manifest's serialized bytes (exactly what is committed). */
+/**
+ * Serialize the manifest to exactly the bytes both repos commit.
+ *
+ * @param {object} manifest Manifest object, as returned by `buildManifest()`.
+ * @returns {string} The manifest's serialized text.
+ */
 export function serializeManifest(manifest) {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
@@ -219,7 +240,8 @@ export function relativizeImport(dir) {
  * @param {object} options
  * @param {string} options.coreDir Root of the schema_forge_core checkout.
  * @param {boolean} [options.check=false] Report what would change, write nothing.
- * @returns {{changed: boolean, report: string[]}}
+ * @returns {{changed: boolean, report: string[]}} Whether anything was written, and one line per file.
+ * @throws {Error} When `coreDir` is not a schema_forge_core checkout.
  */
 export function syncReportHelpers({ coreDir, check = false }) {
   if (!existsSync(join(coreDir, 'cli/src/report-i18n.js'))) {
