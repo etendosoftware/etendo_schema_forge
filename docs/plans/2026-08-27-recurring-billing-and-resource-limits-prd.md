@@ -57,10 +57,12 @@ This also fails the shipped PRD, which requires the request id to be an idempote
 | Operational tables exposed as Classic windows | 6 AD windows, 5 menu entries: Data-Fix History, Match Rule, Survey Configuration, Schema Forge Configuration, Fiscal Declarations NEO Support, Transaction Type | The Classic surface (§10). `ETGO_DATA_FIX_HISTORY` is the closest analogue: an audit trail deliberately readable without DB access. |
 | CDI handler discovery by `@Named` | `NeoServlet` resolving `NeoHandler` | The counting-strategy SPI (§7). Note the documented trap: `@Named` only, never `@ApplicationScoped`, because a proxied bean loses the non-inherited qualifier and is silently skipped. |
 | Configurable query fragments in AD | `AD_TAB.whereclause`, `AD_REF_TABLE.whereclause`, `AD_VAL_RULE` | The HQL resource restriction (§7.2). |
-| Scheduled job registration | `OnboardingPsd2SyncService` (`AD_Process_Request` + `OBScheduler`) | The aggregation and reconciliation jobs. |
+| Scheduled job registration | `OnboardingPsd2SyncService` (`AD_Process_Request` + `OBScheduler`) — *since removed (ETP-5275); the live precedent for one global request at client 0 is `TenantPoolScheduleStartup` (ETP-5389), which ETP-5048 copies* | The aggregation and reconciliation jobs. |
 | Layered configuration lookup | `PublicUrlResolver.readProperty` | Kill switches and runtime settings. |
 
 One precedent is **absent** and must not be assumed: there is no manually launchable background process in this module. `AD_PROCESS.xml` contains two entries, both `ISBACKGROUND=N`, and zero `AD_MENU` rows point at a process. Giving reconciliation an operator-triggered entry point is design work, not registration (§9).
+
+> **Superseded (2026-10-18, ETP-5048).** ETP-5050 has since shipped the first manually launchable background process (`ETGO_UsageAggregation`, `ISBACKGROUND=Y`, on an `ACTION=P` menu entry) and ETP-5389 a second background process (`ETGO_TenantPoolFill`). ETP-5048's reconciliation copies the ETP-5050 shape; its design of record is `com.etendoerp.go/docs/plans/2026-10-18-etp-5048-billing-reconciliation-design.md`.
 
 ---
 
@@ -314,7 +316,7 @@ Already-issued NEO JWTs continue to work until they expire. The accepted window 
 
 With consumption measured by recomputation rather than instrumentation, reconciliation is not a safety net — it is the primary correctness mechanism of the subsystem.
 
-- Scheduled, plus **operator-triggerable from Etendo Classic**. Note §2.3: there is no precedent for a menu-launched process in this module, so this entry point is design work.
+- Scheduled, plus **operator-triggerable from Etendo Classic**. Note §2.3: there is no precedent for a menu-launched process in this module, so this entry point is design work. *(Resolved in ETP-5048: the background process `ETGO_BillingReconciliation` on the System menu entry **Billing Reconciliation**, with a Dry run parameter; scheduled runs gated by the `billing-reconciliation-schedule` flag, off by default. Design of record and the boundary with ETP-5396's work record: `com.etendoerp.go/docs/plans/2026-10-18-etp-5048-billing-reconciliation-design.md`.)*
 - **Provider to local:** a paid checkout session with no provisioned tenant is repaired by completing provisioning, and the repair is alerted. A Stripe subscription without our correlation metadata is foreign and never touched.
 - **Local to provider:** for every locally active subscription, read the *real* Stripe status. Anything not `active` or `trialing` — cancelled, paused, `incomplete_expired`, absent — is corrected locally. Reading the actual status, rather than only reacting to a deletion event, is what catches paused collection and dashboard actions that emit no event.
 - **Abandoned checkouts:** a stale request row is closed only after re-reading the provider. **A row whose provider session id is missing is never closed automatically** — it is alerted for manual review, because closing it is the one unrecoverable answer.
