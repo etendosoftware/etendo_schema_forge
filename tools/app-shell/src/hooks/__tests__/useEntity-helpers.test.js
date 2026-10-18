@@ -1069,14 +1069,19 @@ describe('handleSaveErrorResponse', () => {
   const ui = (key) => key;
 
   // Minimal fake Response: clone() returns an object whose json() resolves to `body`.
-  const fakeResponse = (body, status = 400) => ({
-    status,
-    clone() {
-      return { json: async () => body };
-    },
-    // extractErrorMessage reads res.json() on the original (used in the fallback path).
-    json: async () => body,
-  });
+  // Like a real Response, the body can be read once: clone() after json() throws.
+  const fakeResponse = (body, status = 400) => {
+    let used = false;
+    return {
+      status,
+      clone() {
+        if (used) throw new TypeError('Response body is already used');
+        return { json: async () => body };
+      },
+      // extractErrorMessage reads res.json() on the original (used in the fallback path).
+      json: async () => { used = true; return body; },
+    };
+  };
 
   it('maps a MISSING_REQUIRED_FIELDS error to per-field errors', async () => {
     const fieldErrorCalls = [];
@@ -1120,6 +1125,31 @@ describe('handleSaveErrorResponse', () => {
     assert.equal(result, undefined);
     assert.equal(fieldErrorsCalled, false);
     assert.deepEqual(saveErrorCalls, ['bad']);
+  });
+
+  // ETP-5577 — a save refused for the document's period (GL_JOURNAL's trigger raises
+  // `PeriodNotValid`) offers the calendar, opened on the fiscal year of the record's date.
+  it('offers the calendar on a period refusal, dated from the record', async () => {
+    const { setPeriodRecovery } = await import('../../lib/periodNotAvailable.js');
+    const opened = [];
+    setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go: (date) => opened.push(date) });
+    const calls = [];
+    const original = toast.error;
+    toast.error = (...args) => calls.push(args);
+    try {
+      const res = fakeResponse({
+        error: { message: 'Periodo no válido para esta fecha de contabilidad', messageKeys: ['PeriodNotValid'] },
+      });
+      await handleSaveErrorResponse(res, ui, () => {}, () => {}, undefined,
+        { accountingDate: '2026-10-31' });
+      const [, options] = calls[0];
+      assert.equal(options.action.label, 'periodNotAvailableOpenCalendar');
+      options.action.onClick();
+      assert.deepEqual(opened, ['2026-10-31']);
+    } finally {
+      toast.error = original;
+      setPeriodRecovery(null);
+    }
   });
 });
 

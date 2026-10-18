@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 5,
+  "runId": "run-holded",
+  "probeId": "q-tokens-missing",
+  "attempt": 3,
+  "replaces": null,
+  "mode": "read",
+  "prompt": "p",
+  "startedAt": "2026-10-14T10:00:00Z",
+  "finishedAt": "2026-10-14T10:01:00Z",
+  "effectVerified": true,
+  "effectCheck": null,
+  "silentWrong": false,
+  "finalAnswer": "listo",
+  "usage": {
+    "loop": {
+      "turns": 1,
+      "turnsWithUsage": 0,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "cachedInputTokens": null
+    },
+    "report": null
+  },
+  "servedModel": {
+    "models": [
+      "gpt-5.2"
+    ],
+    "systemFingerprints": [
+      "fp_1"
+    ]
+  },
+  "toolCallCount": 1,
+  "toolCalls": [
+    {
+      "id": "c-list_contacts",
+      "tool": "list_contacts",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 1000,
+      "resultTruncated": false
+    }
+  ],
+  "exhausted": false,
+  "setup": [],
+  "teardown": [],
+  "teardownClean": null,
+  "harnessError": null,
+  "verdict": {
+    "schemaVersion": 3,
+    "outcome": "OKAY",
+    "summary": "s",
+    "achieved": "a",
+    "frictions": [],
+    "failures": [],
+    "wastedCalls": [],
+    "suggestions": []
+  }
+}

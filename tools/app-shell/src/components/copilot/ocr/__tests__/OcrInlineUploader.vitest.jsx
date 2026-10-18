@@ -59,6 +59,9 @@ vi.mock('../buildOcrSchema', () => ({
 
 vi.mock('../useOcrExtraction', () => ({
   OCR_NO_DATA_ERROR: 'ocr-no-data',
+  OCR_TIMEOUT_ERROR: 'ocr-timeout',
+  OCR_NETWORK_ERROR: 'ocr-network',
+  OCR_SESSION_CHANGED_ERROR: 'ocr-session-changed',
   useOcrExtraction: () => mockExtractionReturn,
 }));
 
@@ -244,6 +247,43 @@ describe('OcrInlineUploader', () => {
     expect(screen.getByText('ocrNoDataExtracted')).toBeInTheDocument();
     expect(listener).not.toHaveBeenCalled();
     window.removeEventListener('copilot:ocr-prefill:purchase-invoice', listener);
+  });
+
+  // ETP-5585 — classified failures get a translated message and a manual retry (never automatic).
+  describe.each([
+    ['ocr-timeout', 'ocrExtractTimeout'],
+    ['ocr-network', 'networkErrorRetry'],
+    ['ocr-session-changed', 'ocrExtractSessionChanged'],
+  ])('classified error %s', (sentinel, messageKey) => {
+    it('shows its translated message and a retry button that re-runs the extraction for the same file', async () => {
+      mockExtractionReturn.extract = vi.fn().mockRejectedValue(new Error('x'));
+      mockExtractionReturn.status = 'error';
+      mockExtractionReturn.error = sentinel;
+      const file = createPdfFile();
+
+      const { container } = render(<OcrInlineUploader {...defaultProps} />);
+      fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
+      expect(screen.getByText(messageKey)).toBeInTheDocument();
+      // No automatic retry: nothing ran until the user acts.
+      expect(mockExtractionReturn.extract).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByTestId('ocr-retry'));
+      await waitFor(() => expect(mockExtractionReturn.extract).toHaveBeenCalledTimes(1));
+      expect(mockExtractionReturn.extract).toHaveBeenCalledWith(file);
+      expect(screen.getByTestId('ocr-retry')).toHaveTextContent('retry');
+    });
+  });
+
+  it('offers no retry for the no-data or a generic error', () => {
+    mockExtractionReturn.status = 'error';
+    mockExtractionReturn.error = 'ocr-no-data';
+    const { container, rerender } = render(<OcrInlineUploader {...defaultProps} />);
+    fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [createPdfFile()] } });
+    expect(screen.queryByTestId('ocr-retry')).toBeNull();
+    mockExtractionReturn.error = 'Copilot request failed (500)';
+    rerender(<OcrInlineUploader {...defaultProps} />);
+    expect(screen.getByText('Copilot request failed (500)')).toBeInTheDocument();
+    expect(screen.queryByTestId('ocr-retry')).toBeNull();
   });
 
   it('shows uploading status', () => {

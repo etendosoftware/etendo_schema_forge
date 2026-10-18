@@ -4,7 +4,8 @@ vi.mock('@/i18n', () => ({
   getStoredLocale: () => 'es_ES',
 }));
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import AmortizationConfirmModal from '@generated/amortization/custom/AmortizationConfirmModal';
 
 function mockFetchSequence({ header = {}, lines = [] } = {}) {
@@ -56,5 +57,34 @@ describe('AmortizationConfirmModal — amount formatting', () => {
 
     expect(screen.getByText(/250,00\s\$/)).toBeInTheDocument();
     expect(screen.queryByText(/USD/)).toBeNull();
+  });
+});
+
+describe('AmortizationConfirmModal — period refusal (ETP-5577)', () => {
+  it('offers the calendar of the accounting date under the error, closing the modal first', async () => {
+    const go = vi.fn();
+    const onClose = vi.fn();
+    setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
+    const read = mockFetchSequence({
+      header: { name: 'AM-3', accountingDate: '2026-10-31', 'currency$_identifier': 'EUR' },
+      lines: [{ amortizationAmount: 100, amortizationPercentage: 8.33 }],
+    });
+    globalThis.fetch = vi.fn((url, init) => (url.includes('/action/Processed')
+      ? Promise.resolve({ ok: false, status: 400, json: async () => ({
+        status: 'error', message: 'El Periodo no existe', messageKeys: ['PeriodNotAvailable'] }) })
+      : read(url, init)));
+    try {
+      render(<AmortizationConfirmModal {...BASE_PROPS} recordId="amort-3" onClose={onClose} />);
+      await waitFor(() => expect(screen.getByText('AM-3')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('amortizationConfirmAction'));
+
+      const link = await screen.findByTestId('PeriodRecoveryLink');
+      expect(link).toHaveTextContent('periodNotAvailableOpenCalendar');
+      fireEvent.click(link);
+      expect(onClose).toHaveBeenCalledWith(false);
+      expect(go).toHaveBeenCalledWith('2026-10-31');
+    } finally {
+      setPeriodRecovery(null);
+    }
   });
 });

@@ -7,7 +7,12 @@
 // unaffected (only 'cpExcessInline', which IS called with params, was updated
 // to a regex match accordingly).
 vi.mock('@/i18n', () => ({
-  useUI: () => (key, params) => (params ? `${key} ${JSON.stringify(params)}` : key),
+  // ETP-5577: one real translation, so the keyed "period not open" refusal can be told apart from
+  // the raw-message fallback (translateBackendError ignores a key that translates to itself).
+  useUI: () => (key, params) => {
+    if (key === 'backendError.periodNotAvailable') return 'Period not open (translated)';
+    return params ? `${key} ${JSON.stringify(params)}` : key;
+  },
 }));
 
 // NOTE: `@/lib/formatCurrency` is intentionally NOT mocked. MoneyAmount now delegates to the
@@ -2458,18 +2463,18 @@ describe('NewPaymentEntryModal', () => {
     // the network tab. Reported live with an unsupported DOMESTIC template on a Salt Edge sandbox
     // provider (ETP-5084).
     describe('backend error surfacing (ETP-5084)', () => {
-      function withRegisterError(message) {
+      function withRegisterError(message, messageKeys) {
         const base = buildPisApiFetch();
         mockApiFetch = vi.fn(async (path, opts) => {
           if (path.includes('registerPayment')) {
-            return jsonRes({ error: { message, status: 400 } }, false);
+            return jsonRes({ error: { message, messageKeys, status: 400 } }, false);
           }
           return base(path, opts);
         });
       }
 
-      async function confirmAndFail(message) {
-        withRegisterError(message);
+      async function confirmAndFail(message, messageKeys) {
+        withRegisterError(message, messageKeys);
         renderModal({ dir: 'out', specName: 'purchase-invoice' });
         await screen.findByTestId('cp-pis-section');
         const confirm = screen.getByTestId('cp-confirm');
@@ -2504,6 +2509,13 @@ describe('NewPaymentEntryModal', () => {
         await confirmAndFail('Some brand new backend rule nobody has mapped yet');
         expect(await screen.findByText('Some brand new backend rule nobody has mapped yet'))
           .toBeInTheDocument();
+      });
+
+      // ETP-5577 — a payment dated in a never-opened period is refused by identity, not by text.
+      it('translates a refusal by its messageKeys identity', async () => {
+        await confirmAndFail('The period does not exist or is not open', ['PeriodNotAvailable']);
+        expect(await screen.findByText('Period not open (translated)')).toBeInTheDocument();
+        expect(screen.queryByText('The period does not exist or is not open')).not.toBeInTheDocument();
       });
 
       it('still falls back to cpSaveFailed when the response carries no message at all', async () => {

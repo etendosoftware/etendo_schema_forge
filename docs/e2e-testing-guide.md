@@ -153,14 +153,17 @@ Like the contextual-selector smoke above, they get a bearer JWT through
 ## Paid Provisioning Failure Integration (ETP-5548)
 
 `e2e/tests/flows/system/tenant-upgrade-provisioning-failure.integration.spec.js` runs in the
-ordinary integration project through `scripts/run-e2e-full.sh`, including the local
-`make test-e2e-headless` run and the pre-push E2E gate, where the runner sets
-`E2E_PROVISIONING_FAILURE=1`. Under Jenkins (detected by a non-empty `JENKINS_URL`) the
-runner sets `E2E_PROVISIONING_FAILURE=0` and the spec self-skips: on first run the backend
-fixture (`POST /sws/go/dev/provisioning-failure-fixture`) provisions a whole dedicated pool
-tenant synchronously, which takes minutes and exceeds the 15 s `actionTimeout`. An explicit
-`E2E_PROVISIONING_FAILURE` value always wins — export `E2E_PROVISIONING_FAILURE=1` to force
-the spec on (including under Jenkins), or `0` to skip it locally.
+ordinary integration project through `scripts/run-e2e-full.sh`: the local
+`make test-e2e-headless` run, and the pre-push only with `PRE_PUSH_INTEGRATION=1` (the pre-push
+leaves integration specs to CI since ETP-5695). There the runner sets
+`E2E_PROVISIONING_FAILURE=1`. Under Jenkins (detected by a non-empty `JENKINS_URL`) the runner
+sets `E2E_PROVISIONING_FAILURE=0` and the spec self-skips, unless the job opts in with
+`E2E_PROVISIONING_FAILURE=1`, as the develop → main cut does. On first run the backend fixture
+(`POST /sws/go/dev/provisioning-failure-fixture`) provisions a whole dedicated pool tenant
+synchronously, which takes minutes: the spec gives that request 240 s instead of the 15 s
+`actionTimeout`, because a request the client abandons still completes on the backend and
+leaves a reservation nobody can clean up. An explicit `E2E_PROVISIONING_FAILURE` value always
+wins — export `E2E_PROVISIONING_FAILURE=1` to force the spec on, or `0` to skip it locally.
 The spec creates a paid checkout through a local backend fixture, follows the real
 `/upgrade?checkout=success` browser path, checks that the UI sends onboarding with the
 same request ID, verifies the durable `provisioning_failed` state and visible recovery
@@ -1032,6 +1035,12 @@ make test-e2e-report    # Opens the report in browser
 
 Reports are saved to `artifacts/e2e-report/`. Screenshots from failed tests are in `e2e/test-results/`.
 
+## Flaky Mocked Tests
+
+A mocked test that fails and then passes with no change is a flake: log it, and quarantine it when it
+repeats, in `e2e/quarantine.json`. Gating runs leave quarantined tests out and `run-e2e-full.sh` runs
+them afterwards without blocking. The log and the rules are in `docs/testing/flaky-tests.md`.
+
 ## `data-testid` Convention
 
 Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit `data-testid` attributes automatically. Use `page.getByTestId()` in tests — it's language-independent and survives text changes.
@@ -1051,14 +1060,17 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `attachments-tab-panel` | — | AttachmentsTab root container |
 | `attachments-dropzone` | — | UploadDropzone drag-and-drop area |
 | `attachments-file-input` | — | Hidden `<input type="file">` — use `setInputFiles()` |
-| `attachments-table` | — | AttachmentsTable `<table>` element |
+| `attachments-table` | — | AttachmentsTable root (wraps the generic `DataTable`, ETP-5526) |
 | `attachments-empty-state` | — | Empty state shown when no files exist |
-| `attachments-download-all` | — | "Download All (ZIP)" header button |
-| `attachments-delete-all` | — | "Delete All" header button |
-| `attachment-row-{id}` | `attachment-row-att-001` | Individual attachment row |
+| `attachments-download-all` | — | "Download All (ZIP)" link above the grid (only callers passing `onDownloadAll`, e.g. SifAttachmentsSection) |
+| `attachments-table-toolbar` | — | Row above the grid holding `attachments-download-all` (only rendered when `onDownloadAll` is passed) |
+| `attachments-table-body` | — | Wrapper around the attachments `DataTable` |
+| `row-{id}` | `row-att-001` | Individual attachment row — DataTable's own row testid since ETP-5526 (was `attachment-row-{id}`). Row checkboxes and the select-all are DataTable's (`Checkbox__eb5261`); the old `attachment-select-{id}` / `attachments-select-all` are gone |
+| `attachment-uploading-{id}` | — | Name cell of an in-flight upload row (spinner, disabled checkbox when selection is on, no actions) |
+| `attachment-actions-{id}` | `attachment-actions-att-001` | Hover action strip of a row (inside DataTable's quick-actions cell) |
 | `attachment-name-{id}` | `attachment-name-att-001` | File name cell |
-| `attachment-download-{id}` | `attachment-download-att-001` | Per-row download button (revealed on hover) |
-| `attachment-delete-{id}` | `attachment-delete-att-001` | Per-row delete button (revealed on hover) |
+| `attachment-download-{id}` | `attachment-download-att-001` | Per-row download button (revealed on hover, `ROW_ACTION_BUTTON_NEUTRAL`) |
+| `attachment-delete-{id}` | `attachment-delete-att-001` | Per-row delete button (revealed on hover, `ROW_ACTION_BUTTON_DESTRUCTIVE` + `IconicTrashIcon`) |
 | `confirm-delete-dialog` | — | ConfirmDeleteDialog content (also used for replace confirmation) |
 | `confirm-delete-confirm` | — | Confirm button inside the dialog |
 | `confirm-delete-cancel` | — | Cancel button inside the dialog |

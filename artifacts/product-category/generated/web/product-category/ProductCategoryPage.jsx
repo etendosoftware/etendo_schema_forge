@@ -215,7 +215,6 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
       hideLink

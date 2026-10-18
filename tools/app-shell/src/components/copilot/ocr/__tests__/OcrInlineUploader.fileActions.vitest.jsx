@@ -43,6 +43,10 @@ vi.mock('../buildOcrSchema', () => ({
 }));
 
 vi.mock('../useOcrExtraction', () => ({
+  OCR_NO_DATA_ERROR: 'ocr-no-data',
+  OCR_TIMEOUT_ERROR: 'ocr-timeout',
+  OCR_NETWORK_ERROR: 'ocr-network',
+  OCR_SESSION_CHANGED_ERROR: 'ocr-session-changed',
   useOcrExtraction: () => mockExtractionReturn,
 }));
 

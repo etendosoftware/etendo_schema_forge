@@ -24,6 +24,8 @@ const { toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn(), toastSuccessMock: vi.fn(),
 }));
 
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({ useLocaleSwitch: () => ({ locale: 'es_ES' }), useUI: () => (key, params) => {
   // Minimal real interpolation so the plural/singular assertions below can check actual text,
   // mirroring the real dictionary strings (en_US.json/es_ES.json) closely enough to assert on.

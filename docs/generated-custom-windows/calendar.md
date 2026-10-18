@@ -82,14 +82,24 @@ keep every spec single-window, and let the custom frontend do the aggregation.
    user (or a user whose oldest role is the GOOrg-scoped one) is the reliable way to verify the
    `AccDefUtility` fix above in isolation.
 - Trigger **Create Periods** on a year to generate 12 standard periods plus an optional adjustment
-  period. The required **Fiscal Year Range** choice defaults to **January - December** and also
-  offers **April - March**, **July - June** and **October - September**; selecting, say,
+  period. The required **Fiscal Year Range** choice offers **January - December**,
+  **April - March**, **July - June** and **October - September**, and is preselected with the
+  start month of the calendar's current fiscal year (ETP-5577, see below; January - December when
+  it cannot be known); selecting, say,
   **July - June** for Fiscal Year 2027 creates July 2027 through June 2028, with chronological
   period numbers 1-12 (April-March and October-September shift the same way from their own start
   month). January-December remains the untouched core process-100 flow; April-March, July-June and
   October-September are handled by the `year-close` NEO handler because core process metadata has
   no range parameter. A year must not already contain periods for a different range. Invalid range
   values are rejected server-side rather than silently falling back to January.
+  **ETP-5577 — same start as the other years.** A range whose periods would overlap another fiscal
+  year of the calendar is refused with `409` ("These periods would overlap another fiscal year of
+  the calendar…"): a July - June calendar can only get July - June years. When the request carries
+  no range at all (e.g. an MCP call), `FiscalYearPeriodsHandler` uses the start month of the
+  calendar's latest year instead of January. The SPA preset comes from `fiscalYearStart` of
+  `GET /sws/go/onboarding/calendar-review` (`index.jsx` → `withFiscalYearStartDefault`), which
+  `ProcessParamDialog` honours through the select param's `defaultValue` (only when it is one of
+  the options).
   **ETP-4948 — Hide once periods exist.** The **Create Periods** button is no longer offered once
   the year already has at least one `C_Period` record — `tools/app-shell/src/windows/custom/
   calendar/useYearHasPeriods.js`'s `useYearHasPeriods` hook issues a lightweight existence check
@@ -114,6 +124,28 @@ keep every spec single-window, and let the custom frontend do the aggregation.
     description) for reviewing the year's accounting entries.
 - Trigger **Cerrar Año** (Close Year) from the kebab ("more") menu once every period is
   Closed or Permanently Closed, and **Deshacer Cierre de Año** (Undo Close Year) to reverse it.
+- **New productive tenants start with every period never-opened (ETP-5577).** Which periods to
+  open is the owner's decision: the "Revisar calendario contable" First Steps row (confirm the
+  calendar, or regenerate it with another fiscal-year start while nothing depends on it — see
+  `com.etendoerp.go/docs/onboarding-flow.md`, "Accounting calendar review") ends here, on
+  `/calendar`. Opening any period also completes that row. Demos keep their periods open through
+  the end of the trial. Ships unflagged by decision (2026-10-14): the initial state, the review step and the
+  refusal recovery land in one release, so a flag would guard nothing. A document dated in a period that is not open is refused with
+  `PeriodNotAvailable`; the refusal toast offers **Ir al calendario** (or, while the review is
+  pending, sends the owner back to the review row), and the MCP answer carries a hint naming the
+  `openClose` action. **Ir al calendario** opens `/calendar/<yearId>` of the fiscal year whose
+  period contains the document's date (accounting date, else movement or payment date), never a
+  year chosen by label: on a July–June calendar a January 2027 invoice opens the year that started
+  in July 2026. The form-view kebab, the list row kebab, the draft Confirm, a refused save (a G/L journal's trigger raises `PeriodNotValid` for the same condition), the goods receipt/shipment and return Confirm modals, the purchase order invoice modals, the funds transfer modal and the amortization Confirm modal (as a link under their error, `PeriodRecoveryLink`), Not Posted Documents' Post, the financial account's new movement, movement row kebab (Post, Process, Reactivate) and cash close, and the internal consumption row Confirm carry the date; without one (bulk actions) or a matching period it opens the list.
+  Completion still requires an open period — the core `*_POST` procedures check it; there is no
+  bypass.
+- **Guided tour (ETP-5577).** `walkthrough/flows/accounting-calendar.json` ("Calendario contable")
+  walks through creating next year with **Nuevo**, opening a year, its **Periods** tab and the
+  **Abrir/Cerrar Periodo** action. The steps on the year list declare `route: "/calendar"`, so
+  "Atrás" from inside a year goes back to the list; the tour never returns into a year after
+  leaving it (that step could not name the year's URL). Productive tenants only (`PRODUCTIVE_ONLY_FLOW_IDS`): it is
+  offered by the top-bar launcher and by the review row's **Ver guía**. See
+  `docs/walkthrough-flows.md`.
 - The top-level `calendar` entity (`C_Calendar`) itself is not exposed as a browsable tab — most
   tenants have exactly one calendar per organization, provisioned by onboarding, not managed here.
 
@@ -399,8 +431,12 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 
 ## Gap assessment
 - `ProcessParamDialog` only renders `type: "select"` parameters — `FISCALYEARSTART` and
-  `CREATEADJUSTMENT` are modeled as selects. The former defaults to January - December; the latter
-  remains the optional Yes/No adjustment-period choice.
+  `CREATEADJUSTMENT` are modeled as selects. The former is preselected with the calendar's current
+  fiscal-year start (ETP-5577; January - December when unknown); the latter remains the optional
+  Yes/No adjustment-period choice.
+- The tour's `open-year` step spotlights the **first** year row: with several years the user
+  cannot pick another one while the step is shown. Fine for a new tenant (ETP-5577), which has one
+  or two years.
 - ~~The `calendar` field on `year` is auto-derived server-side (`NeoDefaultsService.tryInjectFirstFromLookup`,
    "the org's first active calendar") rather than resolved via its actual AD parent-link
    (`ISPARENT='Y'`) relationship — on a tenant with more than one active calendar this picks the
@@ -509,7 +545,21 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
     mixed "Crear períodos completed" (ETP-4948 QA finding — Spanglish toast, fixed via the
     `processNowCompleted` key in `genericLabels`).
 
+21. (ETP-5577) On a calendar whose years start in July, open an empty year and click **Create
+    Periods**: **Fiscal Year Range** is preselected **July - June**. Choose **January - December**
+    and confirm the run is refused with the overlap message and no period is created.
+22. (ETP-5577) On a new productive tenant, complete a draft invoice before opening any period:
+    the refusal toast offers **Revisar calendario contable** (owner) and leads to First Steps, and
+    **Ir al calendario** to any other user who can open the period there; once
+    a period is open, the same refusal for another month offers **Ir al calendario**, which opens
+    the fiscal year holding that month (on a July–June calendar, a January date opens the year
+    that started the previous July).
+
 ## Automated evidence
+- ETP-5577: `FiscalYearPeriodsHandlerTest` (default start month, 409 overlap),
+  `ProcessParamDialog.vitest.jsx` (`defaultValue`), `e2e/tests/flows/accounting/calendar.mocked.spec.js`
+  (full tour run), `lib/__tests__/periodNotAvailable.test.js` and
+  `hooks/__tests__/useEntity.blockingCondition.vitest.jsx` (refusal toast).
 - `tools/app-shell/src/menu.json` exposes `calendar` in the Finance group (`windowId: "117"`);
   `fiscal-calendar`/`open-close-period-control` remain with `"hidden": true` for routing.
 - `tools/app-shell/src/windows/registry.js`: `calendar` → `./custom/calendar/index.jsx`

@@ -92,7 +92,7 @@
       "processField": "documentAction",
       "processValue": "CO",
       "label": "Confirm",
-      "keepSaveWhenCompletedFields": ["accountingDate", "project", "costcenter"],
+      "keepSaveWhenCompletedFields": ["accountingDate", "project", "costcenter", "aeatsiiErrorRegistral"],
       "editableLineFieldsWhenCompleted": ["project", "costcenter"]
     },
     "dateFilterKey": "invoiceDate",

@@ -18,7 +18,6 @@
     },
     "hidePrint": true,
     "hideLink": true,
-    "listbarPaddingX": "px-2",
     "tablePaddingX": "px-2"
   },
   "entities": {
@@ -85,7 +84,6 @@
     },
     "binContents": {
       "name": "binContents",
-      "javaQualifier": "binContentsHandler",
       "fields": {
         "etgoCost": {
           "grid": true,

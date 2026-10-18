@@ -12,6 +12,7 @@ function normaliseRow(line, columns) {
   }
   base.tax_id = line?.tax_id ?? null;
   base.tax_rate = line?.tax_rate ?? null;
+  base.tax_no_rate_match = Boolean(line?.tax_no_rate_match);
   return base;
 }
 
@@ -33,7 +34,7 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-foreground/30 p-4">
       <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-card shadow-2xl">
-        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-3">
+        <div className="flex items-start justify-between gap-4 px-5 py-3">
           <div>
             <h2 className="text-lg font-semibold text-foreground">{ui('ocrLinesReviewTitle')}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{ui('ocrLinesReviewSubtitle')}</p>
@@ -48,13 +49,13 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto px-6 py-3">
+        <div className="flex-1 overflow-auto px-5 pb-3">
           {rows.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border-control px-4 py-8 text-center text-sm text-muted-foreground">
               {ui('ocrLinesEmpty')}
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full table-fixed text-sm">
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-muted-foreground">
                   {columns.map((column) => (
@@ -68,7 +69,7 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
                 {rows.map((row, idx) => (
                   <tr key={row._rowId} className="border-t border-border-subtle align-middle">
                     {columns.map((column) => (
-                      <td key={column.key} className="px-2 py-2">
+                      <td key={column.key} className="min-w-0 px-2 py-2">
                         <KindRenderer
                           mode="cell"
                           kind={column.kind}
@@ -79,9 +80,14 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
                           token={token}
                           apiBaseUrl={apiBaseUrl}
                           onChange={(value) => update(idx, column.kind === 'entity'
-                            ? { tax_id: value?.id || null, [column.extractFrom]: value?.label || row[column.extractFrom] }
+                            ? { tax_id: value?.id || null, tax_no_rate_match: false, [column.extractFrom]: value?.label || row[column.extractFrom] }
                             : { [column.extractFrom]: value })}
                           data-testid="KindRenderer__cdff87" />
+                        {column.kind === 'entity' && !row.tax_id && row.tax_no_rate_match && (
+                          <p className="mt-1 text-xs text-status-warning-foreground" data-testid="ocr-tax-no-rate-match">
+                            {ui('ocrLinesTaxNoRateMatch', { rate: row.tax_rate })}
+                          </p>
+                        )}
                       </td>
                     ))}
                   </tr>
@@ -91,7 +97,7 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-border-subtle px-6 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-border-subtle px-5 py-3">
           <button
             type="button"
             onClick={onCancel}
@@ -102,7 +108,7 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
           <button
             type="button"
             onClick={handleSubmit}
-            className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-foreground"
+            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             {ui('ocrReviewSubmit')}
           </button>

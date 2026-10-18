@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { recordAccessLoadError } from '@/lib/accessLoadError.js';
 import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from '@/lib/menuTree.js';
 
 /**
@@ -72,8 +73,10 @@ export function useRoleMenu() {
         if (!isCurrentSession(snapshot)) return;
         setAllowedIds(collectAllowedIds(data?.tree));
       })
-      .catch(() => {
-        if (isCurrentSession(snapshot)) setAllowedIds(null);
+      .catch((error) => {
+        if (!isCurrentSession(snapshot)) return;
+        recordAccessLoadError(error); // ETP-5489 — only for the session that asked
+        setAllowedIds(null);
       });
     return undefined;
   }, [isAuthenticated, isSessionReady, accessLoaded, authRevision, menuAccess, captureSession, isCurrentSession]);

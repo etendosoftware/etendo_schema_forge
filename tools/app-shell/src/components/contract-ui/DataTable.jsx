@@ -13,7 +13,7 @@ import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
-import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
+import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, listTableMinWidthPx } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
 import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
@@ -149,8 +149,8 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 // which sets no background of its own), composited to match the row's own
 // translucent hover tint (see quickActionsColumnClassName's own comment for
 // the exact math) while staying solid enough to mask real data underneath
-// while floating. (ETP-5600: no longer solid — a fade to the row hover
-// colour, see the class list below.)
+// while floating. (ETP-5600: solid under the buttons in the row hover colour,
+// with a fade across the cell's left padding — see the class list below.)
 function quickActionsColumnClassName(extraClassName) {
   // `relative` (not `sticky`) is the resting state — gives RowQuickActions'
   // `position: absolute` pill a containing block scoped to this cell either
@@ -171,14 +171,20 @@ function quickActionsColumnClassName(extraClassName) {
     // `has-[[data-state=open]]` keeps the cell sticky while a row kebab menu is open: the
     // portaled menu takes the pointer, the row loses `group-hover/row`, and without this the
     // cell falls back to its in-flow spot at the table's end and Radix re-anchors the menu there.
-    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card))))] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card))))]',
-    // ETP-5600 — Figma "Fila / Hover": a left-to-right fade from transparent to the row's own
-    // background instead of a solid band, so the column it floats over fades out under the
-    // buttons rather than being cut off. The end colour is `--row-hover-bg`, which every data
-    // row sets for its own state in getRowClassName (white on a lifted hover, the selected
-    // colour on a checked/active row, the composited tint under rowHoverStyle="tint"), so no
-    // window needs its own CSS variable. The `hsl(var(--card))` fallback only covers a row
-    // that does not set it (the header row never hovers as a group, so it never shows).
+    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]',
+    // ETP-5510 — a subtle left edge on the floating zone (inset shadow, so it adds no width to
+    // the fixed-layout cell) so the hand-off from scrolled content to the actions is not an
+    // abrupt cut; it only exists while the cell is sticky, i.e. while it floats over content.
+    'group-hover/row:shadow-[inset_1px_0_0_hsl(var(--border-control)/0.35)] has-[[data-state=open]]:shadow-[inset_1px_0_0_hsl(var(--border-control)/0.35)]',
+    // ETP-5600 — Figma "Fila Contactos / State=Hover", layer "Sticky Acciones": a white
+    // linear gradient (0% -> 100% opacity) whose fade lives in the cell's 12px left padding
+    // (RowQuickActions' `px-3`, QUICK_ACTIONS_CONTAINER_PADDING_PX) and is OPAQUE from there
+    // on, so the column it floats over fades out at the edge and never shows through the
+    // buttons. The end colour is `--row-hover-bg`, which every data row sets for its own
+    // state in getRowClassName (white on a lifted hover, the selected colour on a
+    // checked/active row, the composited tint under rowHoverStyle="tint"), so no window needs
+    // its own CSS variable. The `hsl(var(--card))` fallback only covers a row that does not
+    // set it (the header row never hovers as a group, so it never shows).
     extraClassName,
   ].filter(Boolean).join(' ');
 }
@@ -1997,8 +2003,14 @@ function oneIfTrue(bool) {
 // container, now absorbed by one intentional column instead of stretching
 // all of them. Must stay in sync with StickyHeaderRow's own inline table
 // style just below (see its comment).
-export function getTableContainerStyle() {
-  return { tableLayout: 'fixed', width: '100%' };
+//
+// ETP-5510 — `minWidthPx` (plain list only, see listTableMinWidthPx) is the matching floor:
+// the table never gets narrower than its columns' minimums, so the `grow` column can no
+// longer collapse to 0px and the scroll container scrolls horizontally instead of squeezing.
+export function getTableContainerStyle(minWidthPx) {
+  return minWidthPx
+    ? { tableLayout: 'fixed', width: '100%', minWidth: `${minWidthPx}px` }
+    : { tableLayout: 'fixed', width: '100%' };
 }
 
 function renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled) {
@@ -2069,6 +2081,16 @@ function isLiftHover(rowHoverStyle) {
   return rowHoverStyle !== 'tint';
 }
 
+/**
+ * Whether a row raises on hover. Under `lift` only a clickable row does; `lift-always`
+ * (ETP-5526) lifts every row, for a grid whose rows have no click target of their own but
+ * expose hover actions (the attachments table), so it still reads like every other list.
+ */
+function rowLifts(rowHoverStyle, clickable) {
+  if (rowHoverStyle === 'lift-always') return true;
+  return Boolean(clickable) && isLiftHover(rowHoverStyle);
+}
+
 function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine }) {
   // Inline-lines focus keeps its own look: a muted fill plus the focus ring.
   if (isSelectedLine) return 'bg-muted ring-1 ring-focus-ring hover:bg-muted [--row-hover-bg:hsl(var(--muted))]';
@@ -2089,6 +2111,8 @@ function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelect
  *     `elevated` is the former name of this style and stays an alias.
  *   - `tint`: the pre-ETP-5600 translucent `bg-muted/50` wash, kept as an explicit
  *     opt-out for a grid where a raised white row would read wrong.
+ *   - `lift-always` (ETP-5526): the `lift` look on EVERY row, clickable or not — for a
+ *     grid with hover actions but no row click (attachments). The cursor stays default.
  * Selection always wins over hover: a checked / active row keeps its selection colour
  * when hovered. Under `lift` it still gets the shadow, so the pointer feedback stays
  * the same on every clickable row. Every row also sets `--row-hover-bg` to its own
@@ -2099,8 +2123,9 @@ function getRowClassName({
   rowHoverStyle = 'lift',
 }) {
   const clickable = onRowClick || onNavigate;
-  // Only a clickable row lifts; a non-clickable row renders as it did before ETP-5600.
-  const liftRow = clickable && isLiftHover(rowHoverStyle);
+  // Only a clickable row lifts (non-clickable rows render as before ETP-5600), unless
+  // the caller opted into `lift-always`.
+  const liftRow = rowLifts(rowHoverStyle, clickable);
   const selectionClass = rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine });
   let hoverClass = '';
   if (liftRow && !isSelectedLine) {
@@ -2321,7 +2346,7 @@ function renderMainColgroup({
  */
 function renderHeaderSection({
   useOwnStickyHeader, headerRowContent, horizontalScrollElRef, horizontalScrollAttachSeq,
-  hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
+  listMinWidthPx, hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
   fixedColsTotalPx, growCount, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
   onCloneRow, quickActionsEnabled, ilpReservesActionSlot, quickActionsColWidthPx,
   // ETP-5133 follow-up (BUG-1, pass 2) — see renderLinesColgroup/growColumnWidth.
@@ -2333,6 +2358,7 @@ function renderHeaderSection({
         <StickyHeaderRow
           elRef={horizontalScrollElRef}
           attachSeq={horizontalScrollAttachSeq}
+          minWidthPx={listMinWidthPx}
           data-testid="StickyHeaderRow__eb5261">
           <TableHeader data-testid="TableHeader__eb5261">{headerRowContent}</TableHeader>
         </StickyHeaderRow>
@@ -2364,7 +2390,7 @@ function renderHeaderSection({
   };
 }
 
-function StickyHeaderRow({ elRef, attachSeq, children }) {
+function StickyHeaderRow({ elRef, attachSeq, minWidthPx, children }) {
   const tableRef = useRef(null);
 
   useEffect(() => {
@@ -2395,7 +2421,7 @@ function StickyHeaderRow({ elRef, attachSeq, children }) {
           different total than the body, drifting the two apart column by
           column. See getTableContainerStyle()'s own comment for the full
           mechanism. */}
-      <table ref={tableRef} style={{ tableLayout: 'fixed', width: '100%', willChange: 'transform' }}>
+      <table ref={tableRef} style={{ ...getTableContainerStyle(minWidthPx), willChange: 'transform' }}>
         {children}
       </table>
     </div>
@@ -2445,7 +2471,7 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
           return (
             <span key={part.key} className="inline-flex items-center">
               {partIdx > 0 && (
-                <span className="mx-0.5 font-normal text-text-primary/40 select-none">{separator}</span>
+                <span className="mx-0.5 font-normal text-text-primary select-none">{separator}</span>
               )}
               {partSortable ? (
                 <button
@@ -3268,8 +3294,11 @@ export function DataTable({
     // hold (e.g. `posted` on sales-invoice/purchase-invoice, restricted to
     // "showAccountingFields"). Absent visibleWhenCapability ⇒ always kept.
     base = base.filter(col => isCapabilityVisible(capabilities, col.visibleWhenCapability));
-    return base;
-  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities]);
+    // ETP-5510 — plain list only (the lines/add-row modes size from columnFlex and must stay
+    // aligned with InlineLinesPanel): guarantee one width-less column to absorb leftover
+    // space so the fixed-width slots (selection checkbox = 40px) are never stretched.
+    return hideHeader || linesLayout === 'inlineEditable' ? base : withImplicitGrowColumn(base);
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities, hideHeader, linesLayout]);
 
   // Columns that feed the footer total. `amount` is a FORMATTING type (decimals,
   // separators, symbol, right alignment, numeric filter) — it does not by itself
@@ -3488,6 +3517,14 @@ export function DataTable({
   // (add-row-only) and inlineEditable (already sticky via a bounded flex box
   // elsewhere) are unaffected — both keep the header exactly where it was.
   const useOwnStickyHeader = !hideHeader && linesLayout !== 'inlineEditable';
+  // ETP-5510 — floor of the plain list's table width (fixed slots + every column's minimum).
+  const listMinWidthPx = useOwnStickyHeader
+    ? listTableMinWidthPx(visibleColumns, computeActionColsWidthPx({
+      selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
+      onCloneRow, quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
+      quickActionsColWidthPx,
+    }))
+    : undefined;
   const headerRowContent = (
     <TableRow className="border-b border-border/40" data-testid="TableRow__eb5261">
       {/* ETP-4735 — mirrors the leading chevron cell added to InlineAddRow/TableDataRow
@@ -3523,7 +3560,7 @@ export function DataTable({
 
   const { stickyHeader, colgroup: tableColgroup, inlineHeader } = renderHeaderSection({
     useOwnStickyHeader, headerRowContent, horizontalScrollElRef, horizontalScrollAttachSeq,
-    hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
+    listMinWidthPx, hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
     fixedColsTotalPx, growCount, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
     onCloneRow, quickActionsEnabled, ilpReservesActionSlot, quickActionsColWidthPx,
     hostWidthPx, growBasisTotalPx,
@@ -3548,8 +3585,8 @@ export function DataTable({
         table.jsx: `<div className="relative w-full overflow-auto">`, this div's direct
         child — the same one `[&>div]` reaches below for the scrollbar): it sizes itself
         to exactly the `<table>`'s content height with zero slack. `[&>div]:pb-6` pads
-        that inner box so the shadow has room. Only when rows can be clicked (no lift
-        otherwise), and not for `inlineEditable`, whose wrapper is `overflow-visible`.
+        that inner box so the shadow has room. Only when rows lift (clickable rows, or
+        `lift-always`), and not for `inlineEditable`, whose wrapper is `overflow-visible`.
 
         ETP-5600 — that room must not read as a 24px gap under the last row (Figma ends a
         list at its last row / totals row, and a tab grid runs straight into its add-line
@@ -3595,12 +3632,12 @@ export function DataTable({
             // above this thumb once scrolled into view ("al final se ven
             // 2") — the `[&>div]` combinator reaches into that child instead.
             : 'overflow-x-auto overflow-y-visible [&>div]:[scrollbar-width:none] [&>div::-webkit-scrollbar]:hidden',
-          linesLayout !== 'inlineEditable' && isLiftHover(rowHoverStyle) && (onRowClick || onNavigate)
+          linesLayout !== 'inlineEditable' && rowLifts(rowHoverStyle, onRowClick || onNavigate)
             ? '!-mb-6 [&>div]:pb-6 [&>div]:pointer-events-none [&>div>table]:pointer-events-auto'
             : '',
         ].filter(Boolean).join(' ')}
       >
-        <Table style={getTableContainerStyle()} data-testid="Table__eb5261">
+        <Table style={getTableContainerStyle(listMinWidthPx)} data-testid="Table__eb5261">
           {/* When hideHeader is true (add-row-only mode), or the header just moved out to
               StickyHeaderRow above, a <colgroup> drives column widths instead of the (now
               absent-from-this-table, or hidden) header row's own cell widths. */}

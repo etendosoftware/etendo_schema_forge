@@ -48,6 +48,36 @@ export const UNIFIED_CALENDAR_POC = 'unified-calendar-poc';
  */
 export const IMPORT_BATCH_SIZE = 'import-batch-size';
 
+/**
+ * Reveals the "Mis empresas" entry in the user menu (ETP-5734): the page that lists the account's
+ * companies, split into owned and invited, with pending invitations. Visual gating only: the
+ * `/companies` route is registered unconditionally and every backend call it makes is
+ * authorized by the account session, never by this flag. Frontend-only on purpose — see the
+ * `targeting-key-divergence` item in flags-registry.json.
+ */
+export const MY_COMPANIES_PAGE = 'my-companies-page';
+
+/**
+ * Telemetry kill switches (ETP-4578, D2). They are "kill" flags: `true` STOPS telemetry, so the
+ * safe default is `false` (today's shipped behaviour: providers run as configured). They are
+ * read by `observability/killSwitch.js`, never rendered by the UI, and are excluded from flag
+ * exposure reporting so that reading a switch does not itself emit telemetry.
+ *
+ * The global switch stops every provider; a per-provider switch stops one. The keys after
+ * `telemetry-kill-` are the adapter names the gateway knows.
+ */
+export const TELEMETRY_KILL_ALL = 'telemetry-kill-all';
+export const TELEMETRY_KILL_PROVIDER_FLAGS = Object.freeze({
+  datadog: 'telemetry-kill-datadog',
+  'aws-rum': 'telemetry-kill-aws-rum',
+  mixpanel: 'telemetry-kill-mixpanel',
+});
+
+/** Flags that must never be reported through the observability layer they control. */
+export const NO_EXPOSURE_FLAGS = Object.freeze(
+  new Set([TELEMETRY_KILL_ALL, ...Object.values(TELEMETRY_KILL_PROVIDER_FLAGS)])
+);
+
 export const FLAG_DEFAULTS = Object.freeze({
   [PROOF_OF_CONCEPT_MENU]: false,
   [WEBMCP_AGENT_CHAT]: false,
@@ -56,6 +86,9 @@ export const FLAG_DEFAULTS = Object.freeze({
   [PUBLIC_API_KEYS]: false,
   [UNIFIED_CALENDAR_POC]: false,
   [IMPORT_BATCH_SIZE]: 0,
+  [MY_COMPANIES_PAGE]: false,
+  [TELEMETRY_KILL_ALL]: false,
+  ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
 });
 
 /**
