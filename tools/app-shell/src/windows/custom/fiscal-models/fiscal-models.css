@@ -1636,9 +1636,9 @@
 }
 .fm-390-rank--main { background: hsl(var(--foreground)); border-color: hsl(var(--foreground)); color: hsl(var(--background)); }
 .fm-390-rank--muted { color: hsl(var(--muted-foreground)); white-space: normal; text-align: left; }
-/* In-block tables (IAE activities, representatives, the year's 303s): the 303 `.fm-dtable--plain`
-   look; the header does not stick (it would slide under the sticky tabs bar). */
-.fm-390-mini-table { max-width: 760px; margin-bottom: 8px; }
+/* In-block table of the year's 303s (Settlements303Table390): the 303 `.fm-dtable--plain` look,
+   full section width; the header does not stick (it would slide under the sticky tabs bar). */
+.fm-390-mini-table { width: 100%; margin-bottom: 8px; }
 .fm-390-mini-table thead { position: static; }
 .fm-390-rate-group { margin-bottom: 4px; }
 .fm-390-fold { display: inline-block; margin: 2px 0 6px; font-size: 13px; }
