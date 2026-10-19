@@ -506,6 +506,40 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
 
+## Over-return cap, MCP actions and currency — ETP-5711
+
+The server never lets a return take more than what is still returnable of a source line: *returnable = quantity of
+the source line − what every non-voided return line linked to it already holds, drafts included* (the same figure
+the picker lists show as `movementQuantity`). It is enforced when the return is created from the document, when
+lines are imported, and when the quantity of an existing return line is edited (the line's own quantity does not
+count against itself). A violation is a 422 `returnQuantityExceedsAvailable` ("Cannot return 5 of Agua: only 4 can
+still be returned from this line (10 on the source document)."), translated in the SPA
+(`backendError.returnQuantityExceeds`), and nothing is created. A second partial return with exactly what is left
+works; one document may now have several returns (the old 409 "A return already exists for shipment" is gone).
+
+- **Lines arrive only by import.** Two ways: create the return from ONE receipt (`createPurchaseReturn` on the goods
+  receipt, see `goods-receipt.md`) or "Añadir desde Albarán" on a draft return (`importReceiptLines`: lines from one or
+  more receipts of the same vendor, each line linked to its source line). There is no manual line entry with a
+  product, and the line fields' visibility is unchanged. **The server enforces it:** a direct `POST` of a line on the
+  CRUD endpoint (REST, `etendo_batch` or MCP `etendo_create`) answers 422 `returnLineRequiresImport` ("Return lines
+  cannot be created directly. Add them to the return with importReceiptLines, or create the whole return from the
+  source document with createPurchaseReturn."), translated in the SPA. Quantity edits (PATCH/PUT) of existing lines
+  stay allowed and capped; a legacy line with no source link is not capped.
+- **No double return under concurrency:** the source receipt lines are row-locked (`FOR UPDATE`, sorted ids) before
+  the returned total is read, so two simultaneous creates/imports cannot both pass the cap. A reversed return still
+  counts as returned (only a voided one frees the quantity). `reason` over the description length answers 422
+  `returnReasonTooLong`. See `neo-headless.md` §4.12.32.
+- **Published to MCP.** `availableReceipts`, `availableReceiptLines` (`receiptId` + `businessPartner`),
+  `importReceiptLines`, `rectifiableInvoices`, `createReturnInvoice` and `documentAction` (CO) are declared by
+  `ReturnToVendorShipmentHeaderHandler.actionContracts()`; the spec `agentPrompt`
+  (`agent-prompts/return-to-vendor-shipment/spec.md`) describes the flow. The classic "Pick/Edit Lines" button
+  (`RM_Shipment_Pickedit`, no process) redirects to `importReceiptLines` through `MCP_CONFIG`.
+- **Currency.** `etgoCurrency` is `system` with `defaultExpr: "@C_Currency_ID@"` (organisation currency, as the goods
+  receipt and `return-material-receipt`). Before, a header created through MCP/REST failed with `Missing required
+  fields: etgoCurrency`. No visible UI change; the regen only adds `agentPrompt` to `contract.json` /
+  `contract.mcp.json`. `push-to-neo` writes the default to `ETGO_SF_FIELD.DefaultValue`; run
+  `./gradlew export.database` to persist it in the module.
+
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the document's accounting date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
