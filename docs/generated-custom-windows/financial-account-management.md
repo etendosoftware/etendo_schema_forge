@@ -1268,7 +1268,7 @@ The two disconnect options of "Editar cuenta" and the row kebab (see "Disconnect
 
 | Action | Mode | Effect |
 |---|---|---|
-| `disconnectBank` | soft, reversible (`permanentDeletion=false`) | Sync stops; normally the account keeps its link and history and can be reconnected from the UI; a connection shared by several accounts is unlinked instead (`permanent:true, reconnectable:false`), so the agent reads `reconnectable`. Repeating it is safe. Releases the account for manual bank statements, which a connected account rejects with 409 |
+| `disconnectBank` | soft, reversible (`permanentDeletion=false`) | Sync stops; normally the account keeps its link and history and can be reconnected from the UI; a connection shared by several accounts is unlinked instead (`permanent:true, reconnectable:false`), so the agent reads `reconnectable`. Repeating it while the account is still soft-disconnected is safe (200); once the account is unlinked there is nothing left to disconnect and it answers 404. Releases the account for manual bank statements, which a connected account rejects with 409 |
 | `deleteBankConnection` | permanent, irreversible (`permanentDeletion=true`) | Deletes the connection at Salt Edge and unlinks the account; the bank connection then no longer blocks deleting it (other delete blockers may still apply). Its description instructs the agent to ask the user first and call it only after they confirm |
 
 Both answer `{disconnected, permanent, reconnectable}`; an account with no connection answers 404.
