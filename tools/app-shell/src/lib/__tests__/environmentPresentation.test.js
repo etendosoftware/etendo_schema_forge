@@ -59,3 +59,10 @@ test('a demo that already originated a productive environment is not a purchase 
   assert.equal(isPurchaseSourceDemo({ plan: 'productive' }), false);
   assert.equal(isPurchaseSourceDemo(undefined), false);
 });
+
+test('a demo the account was only invited into is not a purchase source', () => {
+  assert.equal(isPurchaseSourceDemo({ plan: 'free', ownedByAccount: true }), true);
+  assert.equal(isPurchaseSourceDemo({ plan: 'free', ownedByAccount: false }), false);
+  // A backend that predates the field omits it; the demo keeps being offered.
+  assert.equal(isPurchaseSourceDemo({ plan: 'free' }), true);
+});

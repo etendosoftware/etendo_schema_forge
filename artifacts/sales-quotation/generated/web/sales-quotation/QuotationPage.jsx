@@ -21,8 +21,6 @@ const breadcrumb = 'Sales / Sales Quotation';
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'rejectReason', column: 'C_Reject_Reason_ID', type: 'selector' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'amount' },
 ];
 
 const statusField = 'documentStatus';
@@ -57,7 +55,7 @@ const draftMode = {
 // @sf-generated-end draftMode:quotation
 
 // @sf-generated-start requiredHeaderFields:quotation
-const requiredHeaderFields = ['currency', 'priceList', 'documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'grandTotalAmount', 'summedLineAmount'];
+const requiredHeaderFields = ['currency', 'priceList', 'orderDate', 'businessPartner', 'partnerAddress', 'paymentTerms'];
 // @sf-generated-end requiredHeaderFields:quotation
 
 // @sf-generated-start addLineFields:quotationLine

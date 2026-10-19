@@ -468,6 +468,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listViewOptions={{"defaultDatePreset":"last30"}}
       dateFilterKey="paymentDate"
       hidePrint
       hideCreate

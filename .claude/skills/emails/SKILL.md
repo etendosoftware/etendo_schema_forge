@@ -5,7 +5,7 @@ description: Work on any email Etendo sends — changing its wording, layout, la
 
 # Etendo Emails
 
-Etendo sends **23 distinct emails** from **two independent stacks**. Full inventory with per-email
+Etendo sends **24 distinct emails** from **two independent stacks**. Full inventory with per-email
 file references: `docs/email-inventory.md`. Design decisions and rollout plan:
 `docs/plans/2026-08-25-etp-5003-unified-email-template.md` (ETP-5003).
 
@@ -136,6 +136,24 @@ through the GO provider. It is a fallback, not an override — SMTP wins when pr
 - Its sibling: accepting an invitation *also* sends `new-account` when the account is created right
   there. That welcome uses `sendNewAccountForInvitee`, whose button points at the dashboard — an
   operator never runs onboarding, so the standard welcome link would strand them.
+
+### demo-trial-notice (ETP-5453)
+- Sent by the background process *Demo Trial Notices*, which is scheduled **by hand** (daily, in
+  Process Request) on every instance — nothing schedules it at startup, so an instance where nobody
+  did sends no notices. Never sent from the browser: the contract
+  refuses any caller outside the System context with 403, and its command carries only `clientId`.
+  Whether a notice is owed, which one, the recipient and the language are re-derived from the
+  environment by `DemoTrialNoticeSource`, so a caller can never pick the copy or the recipient.
+- Two copy prefixes under one contract: `demo-trial-reminder.*` (days left, end date) and
+  `demo-trial-expired.*`. The day count uses a MessageFormat `choice`, so "1 día" / "3 días" is
+  catalog copy, not a code branch. The wording mirrors the SPA's blocked-access screen.
+- Idempotency key: `demo-trial-notice:<clientId>:<clientId>:<trialStartedAt>:<milestone>:v1`. A
+  re-run answers `DUPLICATE`; a trial restarted with a new start is notified again.
+- No per-domain throttle on purpose: one daily run legitimately mails many owners on gmail.com.
+- Language is `AD_Client.AD_Language`, which onboarding does not set today, so these go out in
+  Spanish until it does.
+- Rules, thresholds and local verification: `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`
+  → *Trial notices* and `docs/etp-5396-local-lifecycle-tool.md`.
 
 ### login-alert
 - Registered, migrated, reachable over the endpoint — and **nobody calls it**. There is no producer

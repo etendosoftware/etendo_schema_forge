@@ -2212,6 +2212,62 @@ describe('translateBackendError — over-return refusals (ETP-5711)', () => {
   });
 });
 
+// ReturnShipmentUtils.java (com.etendoerp.go — ETP-5712): the factura rectificativa of a return.
+// The zero-amount refusal (`error.code = returnInvoiceWithoutAmount`) names the products by the
+// fixed delimiters of its sentence; the "nothing to rectify" 400 is an exact-match sentence.
+describe('translateBackendError — return factura rectificativa (ETP-5712)', () => {
+  const es = fakeUiTranslator({
+    'backendError.returnInvoiceWithoutAmount': 'No se puede crear la factura rectificativa: no se ha encontrado precio para {products}, y quedaría confirmada con importe cero.',
+    'backendError.rectifiedInvoiceRequired': 'Esta devolución no tiene factura que rectificar.',
+  });
+  const PREFIX = 'The corrective invoice (factura rectificativa) cannot be created: no price could be found for ';
+  const SUFFIX = ', so it would be confirmed with a zero amount. Set a price for those products (on the invoice being rectified or in its price list) and try again.';
+
+  it('translates the zero-amount refusal keeping the product names', () => {
+    assert.equal(
+      translateBackendError(`${PREFIX}Agua, Sal${SUFFIX}`, es),
+      'No se puede crear la factura rectificativa: no se ha encontrado precio para Agua, Sal, y quedaría confirmada con importe cero.',
+    );
+  });
+
+  it('keeps a product name that itself contains a comma', () => {
+    assert.equal(
+      translateBackendError(`${PREFIX}Tornillo 4, 5 mm${SUFFIX}`, es),
+      'No se puede crear la factura rectificativa: no se ha encontrado precio para Tornillo 4, 5 mm, y quedaría confirmada con importe cero.',
+    );
+  });
+
+  it('leaves a message with the prefix but no products untouched', () => {
+    const odd = `${PREFIX.trimEnd()}${SUFFIX}`;
+    assert.equal(translateBackendError(odd, es), odd);
+  });
+
+  it('translates the "no invoice to rectify" sentence the backend sends now', () => {
+    assert.equal(
+      translateBackendError('This return has no invoice to rectify: the document it returns has not been invoiced, so the factura rectificativa has nothing to link to. Invoice the original document first, or pass originInvoices with the id of an invoice from rectifiableInvoices.', es),
+      'Esta devolución no tiene factura que rectificar.',
+    );
+  });
+
+  it('has the new key with {products} in en_US, es_ES and es_AR, and the rectified sentence is the new one', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.ok(flat.match(/"backendError\.returnInvoiceWithoutAmount":\s*"[^"]*\{products\}/), `${loc} lost {products}`);
+    }
+    const en = readFileSync(new URL('../../locales/en_US.json', import.meta.url), 'utf8');
+    assert.ok(en.includes('"backendError.rectifiedInvoiceRequired": "This return has no invoice to rectify'), 'en_US still carries the old sentence');
+  });
+
+  it('ships backendError.rectifiedInvoiceRequired in every locale, es_AR in voseo', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      assert.match(flat, /"backendError\.rectifiedInvoiceRequired":\s*"[^"]+"/, `${loc} is missing rectifiedInvoiceRequired`);
+    }
+    const ar = readFileSync(new URL('../../locales/es_AR.json', import.meta.url), 'utf8');
+    assert.match(ar, /"backendError\.rectifiedInvoiceRequired":\s*"[^"]*Facturá primero[^"]*seleccioná/);
+  });
+});
+
 // AmortizationConfirmGuard.java (com.etendoerp.go — ETP-5414). Simple exact-match
 // BACKEND_ERROR_MAP entries, same shape as the "duplicate email" block above — no dynamic
 // value, so no fakeUiTranslator/regex match needed. Three of the four reuse the SAME key

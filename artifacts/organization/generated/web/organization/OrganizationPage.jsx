@@ -62,8 +62,8 @@ const addLineFields = {
 // @sf-generated-end addLineFields:information
 
 export const api = {
-  "specName": "organizaci-n",
-  "baseUrl": "/sws/neo/organizaci-n",
+  "specName": "organization",
+  "baseUrl": "/sws/neo/organization",
   "crud": {
     "organization": {
       "get": true,
@@ -72,8 +72,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/organizaci-n/organization",
-      "detailUrl": "/sws/neo/organizaci-n/organization/{id}",
+      "listUrl": "/sws/neo/organization/organization",
+      "detailUrl": "/sws/neo/organization/organization/{id}",
       "supportedFilters": []
     },
     "information": {
@@ -83,8 +83,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/organizaci-n/information",
-      "detailUrl": "/sws/neo/organizaci-n/information/{id}",
+      "listUrl": "/sws/neo/organization/information",
+      "detailUrl": "/sws/neo/organization/information/{id}",
       "supportedFilters": []
     },
     "actividadesDelIae": {
@@ -94,8 +94,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/organizaci-n/actividadesDelIae",
-      "detailUrl": "/sws/neo/organizaci-n/actividadesDelIae/{id}",
+      "listUrl": "/sws/neo/organization/actividadesDelIae",
+      "detailUrl": "/sws/neo/organization/actividadesDelIae/{id}",
       "supportedFilters": []
     }
   },
@@ -106,7 +106,7 @@ export const api = {
       "column": "C_Currency_ID",
       "reference": "Currency",
       "inputMode": "selector",
-      "url": "/sws/neo/organizaci-n/organization/selectors/currency"
+      "url": "/sws/neo/organization/organization/selectors/currency"
     },
     {
       "entity": "information",
@@ -114,7 +114,7 @@ export const api = {
       "column": "C_Location_ID",
       "reference": "Location",
       "inputMode": "search",
-      "url": "/sws/neo/organizaci-n/information/selectors/locationAddress"
+      "url": "/sws/neo/organization/information/selectors/locationAddress"
     },
     {
       "entity": "actividadesDelIae",
@@ -122,7 +122,7 @@ export const api = {
       "column": "Epiae_Epigraph_ID",
       "reference": "EPIAE_Epigraph",
       "inputMode": "selector",
-      "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epgrafeIAE"
+      "url": "/sws/neo/organization/actividadesDelIae/selectors/epgrafeIAE"
     },
     {
       "entity": "actividadesDelIae",
@@ -130,7 +130,7 @@ export const api = {
       "column": "Epiae_Type_ID",
       "reference": "epiae_type",
       "inputMode": "selector",
-      "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epiaeType"
+      "url": "/sws/neo/organization/actividadesDelIae/selectors/epiaeType"
     },
     {
       "entity": "actividadesDelIae",
@@ -138,7 +138,7 @@ export const api = {
       "column": "Epiae_Code_ID",
       "reference": "EPIAE_Code",
       "inputMode": "selector",
-      "url": "/sws/neo/organizaci-n/actividadesDelIae/selectors/epiaeCode"
+      "url": "/sws/neo/organization/actividadesDelIae/selectors/epiaeCode"
     }
   ],
   "actions": [
@@ -146,7 +146,7 @@ export const api = {
       "entity": "organization",
       "field": "ready",
       "column": "IsReady",
-      "url": "/sws/neo/organizaci-n/organization/{id}/action/ready",
+      "url": "/sws/neo/organization/organization/{id}/action/ready",
       "processId": "53863D4359114ADE92133F772135AEEB",
       "processType": "classic"
     },
@@ -154,7 +154,7 @@ export const api = {
       "entity": "organization",
       "field": "etsgAddCertificate",
       "column": "EM_Etsg_Add_Certificate",
-      "url": "/sws/neo/organizaci-n/organization/{id}/action/etsgAddCertificate",
+      "url": "/sws/neo/organization/organization/{id}/action/etsgAddCertificate",
       "processId": "77AAF82CC5344022AAD6ECBC9925E574",
       "processType": "obuiapp"
     }
