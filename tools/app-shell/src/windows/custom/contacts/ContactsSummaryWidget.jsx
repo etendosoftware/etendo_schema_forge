@@ -7,7 +7,7 @@ import { BPChartSVGContent } from './BPChartSVGContent';
 import ContactsPeriodButton from './ContactsPeriodButton';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
-import { formatCurrency } from '@/lib/formatCurrency';
+import { formatCurrency, formatGroupedNumber } from '@/lib/formatCurrency';
 import { useContactsFinance, useSyncFinanceRecordId, PERIOD_MONTHS } from './ContactsFinanceContext';
 
 /* eslint-disable react/prop-types */
@@ -88,6 +88,15 @@ function buildKpis(stats) {
 const TREND_ICONS = { up: IconicArrowUpIcon, down: IconicArrowDownIcon };
 
 /**
+ * ETP-5600 (QA pass 2) — the largest variation shown in full: up to |9.999| % the
+ * rounded value is printed whole (grouped with the instance thousands separator,
+ * `formatGroupedNumber`). From |10.000| % up the chip keeps the width the 4-digit
+ * cap would take and the text ends in an ellipsis; the full value is in the
+ * tooltip (`title`, as the other contacts components do).
+ */
+const MAX_FULL_PERCENT = 9999;
+
+/**
  * Variation chip (Figma "Badge sm", pill, no border): 24px high, 4px/8px padding,
  * gap 0, 16px icon then Inter 400 12/16 text. Both the ARROW and the COLOUR
  * follow the SIGN of the change, for every KPI including Expenses (ETP-5600 QA
@@ -105,6 +114,13 @@ function TrendBadge({ trend, period, ui }) {
   const sign = up ? '+' : '\u2212';
   const vsLabel = period === '6M' ? ui('bpVsLast6Months') : ui('bpVsLast3Months');
   const Arrow = up ? TREND_ICONS.up : TREND_ICONS.down;
+  const text = `${sign}${formatGroupedNumber(rounded)}% ${vsLabel}`;
+  const capped = rounded > MAX_FULL_PERCENT;
+  // `ch` cap = the length of the same text at the 4-digit maximum, so the chip never
+  // grows past the width a |9.999| % chip takes.
+  const capStyle = capped
+    ? { maxWidth: `${`${sign}${formatGroupedNumber(MAX_FULL_PERCENT)}% ${vsLabel}`.length}ch` }
+    : undefined;
   // StatusTag (core) does not spread extra props, so the testid lives on a wrapper.
   return (
     <span className="inline-flex shrink-0" data-testid="StatusTag__22ed51">
@@ -114,10 +130,35 @@ function TrendBadge({ trend, period, ui }) {
         label={(
           <>
             <Arrow className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="Arrow__22ed51" />
-            <span>{`${sign}${rounded}% ${vsLabel}`}</span>
+            <span
+              className={capped ? 'block min-w-0 truncate' : undefined}
+              style={capStyle}
+              title={capped ? text : undefined}
+              data-testid="contacts-trend-text"
+            >
+              {text}
+            </span>
           </>
         )}
         data-testid="StatusTag__22ed51" />
+    </span>
+  );
+}
+
+/**
+ * ETP-5600 (QA pass 2) — no previous period to compare with (bp-stats `hasPrevious`
+ * false, or a missing/zero previous value): neutral muted text instead of a chip,
+ * mirroring the dashboard's FinancialSummaryCard (`financial-summary-no-trend`):
+ * the chip's box (24px, 4px/8px padding, 12/16), muted foreground, no pill, no arrow,
+ * ellipsis when it does not fit.
+ */
+function NoPreviousTrend({ ui }) {
+  return (
+    <span
+      data-testid="contacts-summary-no-trend"
+      className="flex items-center h-6 px-2 py-1 max-w-full min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-xs leading-4 font-normal text-[hsl(var(--muted-foreground))]"
+    >
+      {ui('financialSummaryNoPrevious')}
     </span>
   );
 }
@@ -131,11 +172,15 @@ function KpiBlock({ kpi, period, currencyCode, ui }) {
         <span className="text-base font-medium leading-6" style={{ color: valueColor }}>
           {formatCurrency(currencyCode ?? 'USD', kpi.value)}
         </span>
-        <TrendBadge
-          trend={kpi.trend}
-          period={period}
-          ui={ui}
-          data-testid="TrendBadge__22ed51" />
+        {kpi.trend == null ? (
+          <NoPreviousTrend ui={ui} data-testid="NoPreviousTrend__22ed51" />
+        ) : (
+          <TrendBadge
+            trend={kpi.trend}
+            period={period}
+            ui={ui}
+            data-testid="TrendBadge__22ed51" />
+        )}
       </div>
     </div>
   );

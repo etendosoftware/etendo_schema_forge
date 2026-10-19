@@ -39,8 +39,11 @@ vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
 vi.mock('@/hooks/useCurrency', () => ({ useCurrency: () => 'USD' }));
 
 // Identifiable stub (not a formatter): proves the value and the currency code reach the
-// canonical utility; its real output is covered by formatCurrency's own tests.
-vi.mock('@/lib/formatCurrency', () => ({
+// canonical utility; its real output is covered by formatCurrency's own tests. The real
+// `formatGroupedNumber` is kept: the chip's grouped % (default es-ES config, `.` thousands)
+// is what the digit-cap cases assert.
+vi.mock('@/lib/formatCurrency', async (importOriginal) => ({
+  ...(await importOriginal()),
   formatCurrency: (currency, val) => `${currency}:${val}`,
 }));
 
@@ -125,6 +128,7 @@ function renderWidget(data = { id: 'BP1' }) {
 /** The KPI block whose label is `labelKey` (label span -> block container). */
 const kpiBlock = (labelKey) => screen.getByText(labelKey).parentElement;
 const chipOf = (labelKey) => within(kpiBlock(labelKey)).queryByTestId('StatusTag__22ed51');
+const noTrendOf = (labelKey) => within(kpiBlock(labelKey)).queryByTestId('contacts-summary-no-trend');
 
 async function switchTo6M(user) {
   await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
@@ -232,28 +236,62 @@ describe('ContactsSummaryWidget', () => {
     expectChip('bpRevenue', { text: `${pct} bpVsLast3Months`, direction, tone });
   });
 
+  // Each KPI shows exactly one of: a chip ('chip'), the muted "no previous period" text
+  // ('none' — QA pass 2, mirrors the dashboard), or nothing ('hidden' — a change that rounds
+  // to 0% has a previous period but carries no information).
   it.each([
     ['no block has a previous window (trend ignored without hasPrevious)',
       [block('revenue', 100, 50, 100, false), block('expenses', 40, 20, 100, false)],
-      { bpNetBalance: false, bpRevenue: false, bpExpenses: false }],
+      { bpNetBalance: 'none', bpRevenue: 'none', bpExpenses: 'none' }],
     ['every change rounds to 0%',
       [block('revenue', 1002, 1000, 0.2), block('expenses', 200, 200, 0)],
-      { bpNetBalance: false, bpRevenue: false, bpExpenses: false }],
-    ['previous net is 0 — net chip hidden, block chips kept',
+      { bpNetBalance: 'hidden', bpRevenue: 'hidden', bpExpenses: 'hidden' }],
+    ['previous net is 0 — no base for the net, block chips kept',
       [block('revenue', 500, 300, 66.67), block('expenses', 100, 300, -66.67)],
-      { bpNetBalance: false, bpRevenue: true, bpExpenses: true }],
+      { bpNetBalance: 'none', bpRevenue: 'chip', bpExpenses: 'chip' }],
+    ['a previous value of 0 cannot give a ratio',
+      [block('revenue', 500, 0, 0), block('expenses', 100, 50, 100)],
+      { bpNetBalance: 'chip', bpRevenue: 'none', bpExpenses: 'chip' }],
     ['empty stats — zeroed KPIs',
       [],
-      { bpNetBalance: false, bpRevenue: false, bpExpenses: false }],
+      { bpNetBalance: 'none', bpRevenue: 'none', bpExpenses: 'none' }],
   ])('shows a chip only when it carries information: %s', async (_name, stats3, shown) => {
     serve({ stats3 });
     renderWidget();
     await waitFor(() => expect(screen.getByText('bpNetBalance')).toBeInTheDocument());
-    for (const [labelKey, visible] of Object.entries(shown)) {
-      if (visible) expect(chipOf(labelKey)).not.toBeNull();
+    for (const [labelKey, state] of Object.entries(shown)) {
+      if (state === 'chip') expect(chipOf(labelKey)).not.toBeNull();
       else expect(chipOf(labelKey)).toBeNull();
+      if (state === 'none') {
+        expect(noTrendOf(labelKey)).toHaveTextContent('financialSummaryNoPrevious');
+      } else {
+        expect(noTrendOf(labelKey)).toBeNull();
+      }
     }
     if (stats3.length === 0) expect(screen.getAllByText('USD:0')).toHaveLength(3);
+  });
+
+  // Digit cap (QA pass 2): up to |9.999| % the grouped value shows in full; from |10.000| %
+  // the text is capped to the 4-digit width with an ellipsis and the full value is the title.
+  it.each([
+    ['9.999% shows in full with the thousands separator', 10099, 100, '+9.999%', false, 'up', 'success'],
+    ['10.000% is capped, full value in the tooltip', 10100, 100, '+10.000%', true, 'up', 'success'],
+    ['a large negative variation is capped too', -12445, 100, `${MINUS}12.545%`, true, 'down', 'destructive'],
+  ])('caps the variation digits: %s', async (_name, value, previousValue, pct, capped, direction, tone) => {
+    serve({ stats3: [block('revenue', value, previousValue, 0), block('expenses', 0, 0, 0, false)] });
+    renderWidget();
+    await waitFor(() => expect(chipOf('bpRevenue')).not.toBeNull());
+    const text = `${pct} bpVsLast3Months`;
+    expectChip('bpRevenue', { text, direction, tone });
+    const label = within(chipOf('bpRevenue')).getByTestId('contacts-trend-text');
+    if (capped) {
+      expect(label).toHaveAttribute('title', text);
+      expect(label).toHaveClass('truncate');
+      expect(label.style.maxWidth).toBe(`${`${pct.startsWith(MINUS) ? MINUS : '+'}9.999% bpVsLast3Months`.length}ch`);
+    } else {
+      expect(label).not.toHaveAttribute('title');
+      expect(label).not.toHaveClass('truncate');
+    }
   });
 
   it('opens the chart dialog with focus on the dialog content, not on the close X', async () => {
