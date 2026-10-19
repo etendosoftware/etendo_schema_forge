@@ -19,27 +19,39 @@
  * forwarded untouched, as the same call with the same `init`:
  *
  *   1. `GET <base>/sws/neo/session` — PAGE MEMO. The payload (currency, standard precision,
- *      `brandingUpdated`, account identity, org tax id) is constant for a page load; that is what
- *      the core's `CurrencyProvider` already assumes when it fetches once per session identity.
- *      Only an `ok` response is memoized. The memo is dropped when the session changes: any
- *      non-GET to `.../sws/go/session` or `.../sws/neo/session` (login, logout, entering an
- *      environment, switching role/org) drops it on dispatch AND again when it settles, so a
- *      concurrent read cannot repopulate it with pre-mutation data.
+ *      account identity, org tax id) is constant for a page load; that is what the core's
+ *      `CurrencyProvider` already assumes when it fetches once per session identity. Only an `ok`
+ *      response is memoized. The memo is dropped when the session changes: any non-GET to
+ *      `.../sws/go/session` or `.../sws/neo/session` (login, logout, entering an environment,
+ *      switching role/org). `brandingUpdated` is the exception to "constant": it moves when the
+ *      company branding is written (ETP-5541 compares cached PDFs against it), so the memo is
+ *      ALSO dropped by every non-GET to a branding-writing endpoint (see `BRANDING_WRITE`).
+ *      A generation counter, bumped on dispatch AND on settle of every such request, makes sure a
+ *      read that was already in flight cannot repopulate the memo with pre-change data, and that
+ *      callers arriving after the change never join it.
+ *      Limit, by construction: a change made by ANOTHER tab, user or channel (MCP, backoffice) is
+ *      invisible to this page, so `brandingUpdated` can lag it until the page reloads.
  *
  *   2. `GET <base>/sws/neo/<spec>/header/<id>` and
  *      `GET <base>/sws/neo/attachments/<table>/<id>[/main|/count]` — IN-FLIGHT COALESCING ONLY.
  *      While such a read is outstanding every caller joins it; once it settles the next read goes
- *      to the network. No memo: these records change (a save, an upload marks a new main
+ *      to the network. A write (any non-GET/HEAD/OPTIONS under `/sws/neo/`) ends the sharing: reads
+ *      started before it are never joined by reads issued after it, so the post-save refetch of
+ *      `useEntity` cannot be handed the pre-save bytes. No memo: these records change (a save, an upload marks a new main
  *      attachment), so serving a stored copy would show the user stale data, which is exactly what
  *      `useEntity`'s own `force` refetches exist to avoid.
  *
  * Aborts: a caller's `AbortSignal` is NEVER handed to the shared request — one caller unmounting
  * (the aborted attachment read the issue reported) must not cancel the read the others are waiting
  * for. Each caller's signal instead rejects only that caller. The shared request carries its own
- * timeout so a hung socket can never keep an in-flight entry alive forever.
+ * timeout so a hung socket can never keep an in-flight entry alive forever. That timeout is
+ * {@link SHARED_READ_TIMEOUT_MS} for EVERY coalesced read: a caller that passes `timeout: 0`
+ * ("long read, no cap") to `apiFetch` still has its coalesced header/attachment/session read cut
+ * at that limit. None of the three listed reads is a long one, so this is accepted.
  *
- * Requests are keyed by method + full URL + `Authorization`, so two different sessions (or a
- * different user's token) never share a response.
+ * Requests are keyed by method + full URL + `Authorization` + `Accept-Language` (the backend
+ * resolves translated reference data from it), so two different sessions, users or UI locales
+ * never share a response.
  */
 
 /** Kind returned by {@link dedupePolicyFor}: the response is memoized for the page load. */
@@ -64,6 +76,23 @@ const RECORD_READS = [
 ];
 /** A request that can change the session (login, logout, entering an environment, role/org). */
 const SESSION_MUTATION = /\/sws\/(?:go|neo)\/session(?:\/|$)/;
+/**
+ * The endpoints that write the rows `brandingUpdated` is computed from (organization name,
+ * `AD_OrgInfo` tax id / logo reference, the address `C_Location`, the logo `AD_Image` —
+ * `NeoSessionService.resolveBrandingUpdated`). In this SPA they are written by the Organization
+ * screen: `PATCH .../organization/<id>` and `.../information/<id>` (spec `organization`),
+ * `POST .../image` (logo upload), and the plain `C_Location` CRUD behind the address modal
+ * (`.../<spec>/location[Address]`, reached through the warehouse spec). Matching is deliberately
+ * a little wider than that (the whole `organization` spec) — dropping a memo too often costs one
+ * request; too rarely shows a stale logo on a printed document.
+ */
+const BRANDING_WRITE = [
+  /\/sws\/neo\/organization(?:\/|$)/,
+  /\/sws\/neo\/image(?:\/|$)/,
+  /\/sws\/neo\/[^/]+\/location(?:Address)?(?:\/|$)/,
+];
+/** Any NEO request (the namespace every record write goes through). */
+const NEO_PATH = /\/sws\/neo\//;
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 /** Mirrors the core apiFetch's own default timeout; only exists so a hung socket cannot pin an entry. */
@@ -102,6 +131,33 @@ export function isSessionMutationRequest(url, method = 'GET') {
   return SESSION_MUTATION.test(path) && !READ_METHODS.has(String(method || 'GET').toUpperCase());
 }
 
+/**
+ * True when this request can change the company branding and therefore the session payload's
+ * `brandingUpdated`.
+ *
+ * @param {string} url
+ * @param {string} [method]
+ * @returns {boolean}
+ */
+export function isBrandingMutationRequest(url, method = 'GET') {
+  const path = pathOf(url);
+  if (!path || READ_METHODS.has(String(method || 'GET').toUpperCase())) return false;
+  return BRANDING_WRITE.some((re) => re.test(path));
+}
+
+/**
+ * True for any write under `/sws/neo/`: after it, an in-flight read of a record may predate it, so
+ * later callers must not join that read.
+ *
+ * @param {string} url
+ * @param {string} [method]
+ * @returns {boolean}
+ */
+export function isNeoWriteRequest(url, method = 'GET') {
+  const path = pathOf(url);
+  return Boolean(path) && NEO_PATH.test(path) && !READ_METHODS.has(String(method || 'GET').toUpperCase());
+}
+
 /** The pathname of a URL (path only), or null when it cannot be parsed. */
 function pathOf(url) {
   if (typeof url !== 'string' || !url) return null;
@@ -120,12 +176,12 @@ function abortError() {
   return err;
 }
 
-/** Reads the `Authorization` proof out of a Headers instance or a plain object. */
-function authorizationOf(headers) {
+/** Reads one header out of a Headers instance or a plain object (case-insensitive). */
+function headerOf(headers, name) {
   if (!headers) return '';
-  if (typeof headers.get === 'function') return headers.get('authorization') || '';
+  if (typeof headers.get === 'function') return headers.get(name) || '';
   for (const [key, value] of Object.entries(headers)) {
-    if (String(key).toLowerCase() === 'authorization') return String(value);
+    if (String(key).toLowerCase() === name) return String(value);
   }
   return '';
 }
@@ -186,8 +242,20 @@ export function installNeoRequestDedupe(target = globalThis) {
   const inFlight = new Map();
   state = { sessionMemo, inFlight };
 
+  // Generation counters. A shared read is keyed by the generations it started under, and only
+  // writes the memo while its session generation is still current, so nothing that began before a
+  // change can be joined or stored after it.
+  let writeGen = 0;
+  let sessionGen = 0;
+
   /** Drops every memoized session payload: the session about to change, or just changed. */
-  const dropSessionMemo = () => sessionMemo.clear();
+  const bumpSession = () => {
+    sessionGen += 1;
+    sessionMemo.clear();
+  };
+  const bumpWrite = () => {
+    writeGen += 1;
+  };
 
   async function readOnce(input, init) {
     const controller = new AbortController();
@@ -211,17 +279,33 @@ export function installNeoRequestDedupe(target = globalThis) {
     const request = normalize(input, init);
     if (!request) return realFetch.call(target, input, init);
 
-    if (isSessionMutationRequest(request.url, request.method)) {
-      // Both on dispatch and on settle: a read that resolved while the mutation was in flight
-      // would otherwise leave the pre-mutation payload behind for the whole page load.
-      dropSessionMemo();
-      return realFetch.call(target, input, init).finally(dropSessionMemo);
+    const sessionChange = isSessionMutationRequest(request.url, request.method)
+      || isBrandingMutationRequest(request.url, request.method);
+    const neoWrite = isNeoWriteRequest(request.url, request.method);
+    if (sessionChange || neoWrite) {
+      // Both on dispatch and on settle: a read started while the write was in flight may have been
+      // answered from either side of it, so nothing started before the settle may be reused.
+      const settle = () => {
+        bumpWrite();
+        if (sessionChange) bumpSession();
+      };
+      bumpWrite();
+      if (sessionChange) bumpSession();
+      return realFetch.call(target, input, init).finally(settle);
     }
 
     const kind = dedupePolicyFor(request.url, request.method);
     if (!kind) return realFetch.call(target, input, init);
 
-    const key = `${request.method} ${request.url} ${authorizationOf(init?.headers ?? input?.headers)}`;
+    const headers = init?.headers ?? input?.headers;
+    const key = [
+      request.method,
+      request.url,
+      headerOf(headers, 'authorization'),
+      headerOf(headers, 'accept-language'),
+      // The session payload does not depend on record writes; only a session change moves it.
+      kind === PAGE_MEMO ? `s${sessionGen}` : `w${writeGen}`,
+    ].join(' ');
     if (kind === PAGE_MEMO) {
       const hit = sessionMemo.get(key);
       if (hit) return Promise.resolve(materialize(hit));
@@ -229,14 +313,15 @@ export function installNeoRequestDedupe(target = globalThis) {
 
     let shared = inFlight.get(key);
     if (!shared) {
+      const startedAt = sessionGen;
       shared = readOnce(input, init).then(
         (entry) => {
-          inFlight.delete(key);
-          if (kind === PAGE_MEMO && entry.ok) sessionMemo.set(key, entry);
+          if (inFlight.get(key) === shared) inFlight.delete(key);
+          if (kind === PAGE_MEMO && entry.ok && startedAt === sessionGen) sessionMemo.set(key, entry);
           return entry;
         },
         (error) => {
-          inFlight.delete(key);
+          if (inFlight.get(key) === shared) inFlight.delete(key);
           throw error;
         },
       );

@@ -412,16 +412,30 @@ request and nobody shared them, so the burst queued against itself at the backen
 decorates `globalThis.fetch` with a three-entry allowlist; every other request is forwarded
 untouched, as the same call with the same `init`:
 
-- `GET .../sws/neo/session` — **memoized for the page load** (the payload is constant per session:
-  currency, standard precision, `brandingUpdated`, account identity, org tax id). Only an `ok`
-  response is memoized, and the memo is dropped when the session changes — any non-GET under
-  `.../sws/go/session` or `.../sws/neo/session` (login, logout, entering an environment, switching
-  role/org), on dispatch **and** on settle, so a read resolving mid-mutation cannot leave the
-  pre-mutation payload behind.
+- `GET .../sws/neo/session` — **memoized for the page load** (currency, standard precision,
+  account identity, org tax id). Only an `ok` response is memoized. The memo is dropped by:
+  - any non-GET under `.../sws/go/session` or `.../sws/neo/session` (login, logout, entering an
+    environment, switching role/org);
+  - any non-GET to an endpoint that writes the company branding. `brandingUpdated` in this payload
+    is **not** constant: ETP-5541 (`attachmentFreshness.js`, `listAttachments.js`) compares a cached
+    PDF against it, so a logo / organization name / tax id / address change must be seen at once.
+    The branding writers are the Organization screen's `PATCH .../organization/<id>` and
+    `.../information/<id>`, the logo upload `POST .../image`, and the plain `C_Location` CRUD behind
+    the address modal (`.../<spec>/location` and `.../<spec>/locationAddress`). The matcher is
+    `BRANDING_WRITE` in `neoRequestDedupe.js` (deliberately a bit wider: the whole `organization`
+    spec); over-invalidating costs one request, under-invalidating shows a stale logo on a document.
+  A generation counter is bumped on dispatch **and** on settle of each of those requests. A session
+  read already in flight cannot repopulate the memo with pre-change data, and a caller arriving
+  after the change never joins it. **Limit:** a change made from another tab, another user or
+  another channel (MCP, backoffice) cannot be seen by this page, so `brandingUpdated` can lag it
+  until the page reloads.
 - `GET .../<spec>/header/<id>` and `GET .../attachments/<table>/<id>[/main|/count]` — **in-flight
   coalescing only**. Once the read settles the next one goes to the network: these records change
   (a save, an upload marking a new main attachment), and serving a stored copy is exactly what
-  `useEntity`'s forced refetches exist to avoid.
+  `useEntity`'s forced refetches exist to avoid. A **write ends the sharing**: any non-GET/HEAD/
+  OPTIONS under `/sws/neo/` (on dispatch and on settle) means reads that started before it are never
+  joined by reads issued after it, so the post-save refetch cannot be handed the pre-save bytes.
+  Writes themselves are forwarded untouched.
 
 It lives at the transport layer, not in the shared record cache, for two reasons. Three of the
 readers are plain modules (`pdfUtils.js`, `listAttachments.js`, `related-documents/helpers.js`) with
@@ -429,12 +443,15 @@ no access to a `DataProvider`; and two readers of the same URL disagree on the s
 `useEntity` caches a normalized row while `useTaxSifLineRowActions` reads the raw
 `response.data[0]` envelope — so a shared cache entry would have to pick one and break the other.
 Sharing the response bytes lets every caller parse exactly as before. Requests are keyed by method +
-full URL + `Authorization`, so two sessions never share a response.
+full URL + `Authorization` + `Accept-Language` (the backend resolves translated reference data from
+it), so two sessions, users or UI locales never share a response.
 
 A caller's `AbortSignal` is never handed to the shared request: one component unmounting (the
 aborted attachment read the issue reported) must not cancel the read the others are waiting for.
-Each caller's signal rejects only that caller, and the shared request carries its own timeout so a
-hung socket cannot pin an in-flight entry.
+Each caller's signal rejects only that caller, and the shared request carries its own 30 s timeout so a
+hung socket cannot pin an in-flight entry. That cap applies to every coalesced read regardless of the
+`timeout` the caller passed to `apiFetch` (including `timeout: 0`); none of the three listed reads is a
+long one, so a new entry that can be slow must not be added without revisiting it.
 
 Adding an entry is a policy decision, not a refactor: list a URL pattern in that module (and its
 test) only for a read measured to be duplicated, and only when concurrent callers really want the
