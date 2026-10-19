@@ -23,7 +23,7 @@ const BOOLEAN_FIELDS = [
   'telematicFiling', 'syncDraftComputeToDetail', 'siiWarningOnActivate', 'singleOrdinaryPerYear',
 ];
 // Optional hooks: a function, or `null` when the model has none (ETP-5716).
-const NULLABLE_FUNCTION_FIELDS = ['monthlyDeadline', 'annualDeadline', 'newDeclWarning'];
+const NULLABLE_FUNCTION_FIELDS = ['monthlyDeadline', 'annualDeadline', 'newDeclWarning', 'selectableYears'];
 const isFnOrNull = (v) => v === null || typeof v === 'function';
 const KNOWN_PERIODICITIES = new Set(['monthly', 'quarterly', 'annual']);
 
@@ -78,6 +78,7 @@ describe('modelRegistry — entries', () => {
     });
     ['303', '349'].forEach(id => expect(getModel(id)).toMatchObject({
       annualDeadline: null, siiWarningOnActivate: false, singleOrdinaryPerYear: false, newDeclWarning: null,
+      selectableYears: null,
     }));
   });
 
@@ -92,6 +93,10 @@ describe('modelRegistry — entries', () => {
     // Filed from January 1 to January 30 of the following year.
     expect(getModel('390').annualDeadline(2026)).toEqual(new Date(2027, 0, 30));
     expect(getModel('390').annualDeadline('2026')).toEqual(new Date(2027, 0, 30));
+  });
+
+  it('offers the 390 for 2026 and the previous exercise 2025 in "Nueva declaración"', () => {
+    expect(getModel('390').selectableYears()).toEqual([2026, 2025]);
   });
 
   it('warns on "Nueva declaración" of a 390 when 303s of the year are missing', () => {

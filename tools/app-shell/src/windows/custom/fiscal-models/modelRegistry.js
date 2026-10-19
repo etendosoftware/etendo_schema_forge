@@ -35,10 +35,13 @@
 //                               second one with 409 DUPLICATE_ORDINARY); the modal pre-checks it.
 //   newDeclWarning              (existingDecls, year) => { key, params } | null — non-blocking
 //                               notice of "Nueva declaración" for this model, or `null` (no hook).
+//   selectableYears             () => number[] — the exercises "Nueva declaración" offers for this
+//                               model, or `null` to use the shared `SELECTABLE_YEARS` (fm303Layouts).
 import { monthlyDeadline303 } from './models/303/deadline303.js';
 import { monthlyDeadline349 } from './models/349/deadline349.js';
 import { annualDeadline390 } from './models/390/deadline390.js';
 import { newDeclWarning390 } from './models/390/newDeclWarning390.js';
+import { selectableYears390 } from './models/390/selectableYears390.js';
 
 const MODELS = Object.freeze([
   Object.freeze({
@@ -56,6 +59,7 @@ const MODELS = Object.freeze([
     siiWarningOnActivate: false,
     singleOrdinaryPerYear: false,
     newDeclWarning: null,
+    selectableYears: null,
   }),
   Object.freeze({
     id: '349',
@@ -72,6 +76,7 @@ const MODELS = Object.freeze([
     siiWarningOnActivate: false,
     singleOrdinaryPerYear: false,
     newDeclWarning: null,
+    selectableYears: null,
   }),
   // Annual VAT summary. Not active by default (an opt-in model: SII entities are exempt). Filed
   // telematically (`POST /fiscal390/submit`) or registered as presented elsewhere.
@@ -90,6 +95,7 @@ const MODELS = Object.freeze([
     siiWarningOnActivate: true,
     singleOrdinaryPerYear: true,
     newDeclWarning: newDeclWarning390,
+    selectableYears: selectableYears390,
   }),
 ]);
 

@@ -38,7 +38,7 @@ vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
 // SPA navigation itself, so a plain stub is enough — mirrors FmModel303Page.vitest.jsx's own mock.
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
-import { PresentModal, FileGenModal, NewDeclModal } from '../FmOverlays.jsx';
+import { PresentModal, FileGenModal, NewDeclModal, newDeclYearOptions, defaultNewDeclYear } from '../FmOverlays.jsx';
 import { toast } from 'sonner';
 import { RECEIPT_ATTACHMENT_CONFIG } from '../fiscalModelsUtils.js';
 import { SELECTABLE_YEARS } from '../models/303/fm303Layouts';
@@ -1482,6 +1482,63 @@ describe('NewDeclModal — annual model (390)', () => {
     render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': true }} existingDeclarations={[]} />);
     expect(screen.queryByTestId('NewDeclModal__modelWarning')).toBeNull();
     expect(screen.queryByTestId('NewDeclModal__duplicateOrdinary')).toBeNull();
+  });
+  // The 390 registry hook `selectableYears`: the previous exercise is still creatable.
+  it('offers 2026 and 2025 (most recent first), the current year pre-selected, and creates a 2025', () => {
+    const onConfirm = vi.fn();
+    const { container } = render(<NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} activeModels={only390} />);
+    openYearMenu(container);
+    expect(getYearOptions(container).map(o => o.textContent.trim())).toEqual(['2026', '2025']);
+    expect(getYearOption(container, 2026).className).toContain('fm-newdecl-year-option--selected');
+    fireEvent.click(getYearOption(container, 2025));
+    fireEvent.click(getCreateBtn(container));
+    expect(onConfirm).toHaveBeenCalledWith({ model: '390', year: 2025, period: '0A', status: 'draft' });
+  });
+
+  it('checks the one-ordinary rule and the missing 303s against the selected year (2025)', () => {
+    const decls = [
+      { id: 'd26', model: '390', year: 2026, period: '0A', status: 'draft', type: 'ord' },
+      ...['T1', 'T2', 'T3', 'T4'].map(p => ({ id: `a${p}`, model: '303', year: 2026, period: p, status: 'submitted' })),
+      ...['T1', 'T2'].map(p => ({ id: `b${p}`, model: '303', year: 2025, period: p, status: 'submitted' })),
+    ];
+    const { container } = render(
+      <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={only390} existingDeclarations={decls} />,
+    );
+    expect(screen.getByTestId('NewDeclModal__duplicateOrdinary')).toBeTruthy();
+    expect(screen.queryByTestId('NewDeclModal__modelWarning')).toBeNull();
+    selectYear(container, 2025);
+    expect(screen.queryByTestId('NewDeclModal__duplicateOrdinary')).toBeNull();
+    expect(getCreateBtn(container).disabled).toBe(false);
+    expect(screen.getByTestId('NewDeclModal__modelWarning')).toBeTruthy();
+  });
+
+  it('a 2025 picked for the 390 falls back to the 303 default when switching to 303', () => {
+    const onConfirm = vi.fn();
+    const { container } = render(
+      <NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} activeModels={{ '303': true, '390': true }} />,
+    );
+    openModelMenu(container);
+    fireEvent.click(getModelOption(container, '390'));
+    selectYear(container, 2025);
+    openModelMenu(container);
+    fireEvent.click(getModelOption(container, '303'));
+    openYearMenu(container);
+    expect(getYearOptions(container).map(o => o.textContent.trim())).toEqual(['2026']);
+    fireEvent.click(getYearOption(container, 2026));
+    fireEvent.click(getCreateBtn(container));
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ model: '303', year: 2026 }));
+  });
+});
+
+describe('newDeclYearOptions / defaultNewDeclYear', () => {
+  it('uses the entry hook when present, else the shared SELECTABLE_YEARS, most recent first', () => {
+    expect(newDeclYearOptions({ selectableYears: () => [2024, 2026, 2025] })).toEqual([2026, 2025, 2024]);
+    expect(newDeclYearOptions({ selectableYears: null })).toEqual([...SELECTABLE_YEARS].sort((a, b) => b - a));
+    expect(newDeclYearOptions(undefined)).toEqual([...SELECTABLE_YEARS].sort((a, b) => b - a));
+  });
+  it('pre-selects the current year when offered, else the most recent', () => {
+    expect(defaultNewDeclYear([2026, 2025], 2025)).toBe(2025);
+    expect(defaultNewDeclYear([2026, 2025], 2027)).toBe(2026);
   });
 });
 

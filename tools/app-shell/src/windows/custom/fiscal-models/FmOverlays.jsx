@@ -632,6 +632,21 @@ function YearSelectMenu({ year, years, onSelect, onClose }) {
   );
 }
 
+/**
+ * The years "Nueva declaración" offers for a model entry, most recent first: its
+ * `selectableYears()` registry hook when present, else the shared SELECTABLE_YEARS (ascending
+ * there, kept as is for its other consumers).
+ */
+export function newDeclYearOptions(entry) {
+  const years = entry?.selectableYears?.() ?? SELECTABLE_YEARS;
+  return [...years].sort((a, b) => b - a);
+}
+
+/** The pre-selected year: the current one when offered, else the most recent option. */
+export function defaultNewDeclYear(options, currentYear = new Date().getFullYear()) {
+  return options.includes(currentYear) ? currentYear : options[0];
+}
+
 // NewDeclModal — "Nueva declaración". `existingDeclarations` is optional (defaults
 // to none, matching every pre-existing caller/test): when provided (FmListPage
 // passes its `decls` array), periods that already have a declaration for the
@@ -659,7 +674,9 @@ function YearSelectMenu({ year, years, onSelect, onClose }) {
 //     year shows an inline notice with "Abrir declaración" (`onOpenExisting(decl)`) and disables
 //     "Crear declaración" (the backend would answer 409 DUPLICATE_ORDINARY anyway);
 //   - the entry's `newDeclWarning(existingDeclarations, year)` notice (390: missing 303s), amber,
-//     never blocking.
+//     never blocking;
+//   - the entry's `selectableYears()` years in the Año dropdown (390: 2026 and 2025), else the
+//     shared SELECTABLE_YEARS.
 export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclarations, onOpenExisting }) {
   const ui = useUI();
   const t = ui;
@@ -674,7 +691,7 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
   const canCreate = availableModels.length > 0;
   const [model, setModel] = useState(availableModels[0] ?? DEFAULT_MODEL_ID);
   const _cy = new Date().getFullYear();
-  const [year, setYear] = useState(SELECTABLE_YEARS.includes(_cy) ? _cy : SELECTABLE_YEARS[SELECTABLE_YEARS.length - 1]);
+  const [year, setYear] = useState(() => defaultNewDeclYear(newDeclYearOptions(getModel(availableModels[0] ?? DEFAULT_MODEL_ID)), _cy));
   const [frequency, setFrequency] = useState('quarterly'); // 'quarterly' | 'monthly' — drives the Período grid below
   const [period, setPeriod] = useState('T1');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
@@ -691,13 +708,10 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
     : null;
   const modelWarning = modelEntry?.newDeclWarning?.(existingDeclarations ?? [], year) ?? null;
   const canCreateNow = canCreate && !existingOrdinary;
-  // Most-recent-first for the Año dropdown — SELECTABLE_YEARS itself stays
-  // ascending (other consumers, if any, keep relying on that order).
-  // Restricted to the current filing year only (see SELECTABLE_YEARS in
-  // fm303Layouts.js) — past years remain resolvable for existing
-  // declarations via SUPPORTED_YEARS, but are not offered here as choices
-  // for a brand-new one.
-  const yearOptions = useMemo(() => [...SELECTABLE_YEARS].sort((a, b) => b - a), []);
+  // Most-recent-first for the Año dropdown, per model (`newDeclYearOptions`): the entry's
+  // `selectableYears` hook when it has one (390: 2026 and 2025), otherwise the shared
+  // SELECTABLE_YEARS (current filing year only).
+  const yearOptions = useMemo(() => newDeclYearOptions(modelEntry), [model]);
 
   // Periods that already carry a declaration for the currently selected model+year.
   // Rendered with a small dot badge in the grid below — informational only
@@ -783,7 +797,14 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
               <ModelSelectMenu
                 model={model}
                 availableModels={availableModels}
-                onSelect={(id) => { setModel(id); setPeriod(periods[0]); setModelMenuOpen(false); }}
+                onSelect={(id) => {
+                  setModel(id);
+                  setPeriod(periods[0]);
+                  // A year the new model does not offer falls back to its default.
+                  const options = newDeclYearOptions(getModel(id));
+                  if (!options.includes(year)) setYear(defaultNewDeclYear(options, _cy));
+                  setModelMenuOpen(false);
+                }}
                 onClose={() => setModelMenuOpen(false)}
                 t={t}
                 data-testid="ModelSelectMenu__cda0bb" />
