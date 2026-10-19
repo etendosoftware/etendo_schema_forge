@@ -58,6 +58,7 @@ vi.mock('../useOrg390Identity.js', () => ({
     ],
     isPerson: false, personRepresentative: null,
     representatives: [{ id: 'r1', nif: '12345678Z', name: 'Ana Pérez', powerDate: '2024-03-05', notary: 'Notaría 1' }],
+    ...orgIdentityMock,
   }),
 }));
 vi.mock('../../../FmCommon.jsx', () => ({
@@ -204,6 +205,54 @@ describe('FmModel390Page — skeleton', () => {
     goToBlock('representante');
     expect(screen.getByTestId('FmBoxes390__representatives').textContent).toContain('Ana Pérez');
     expect(screen.getByTestId('FmBoxes390__editOrganization')).toBeTruthy();
+  });
+
+  it('shows every organization block as a synced card with "Editar en Organización"', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    const taxpayer = screen.getByTestId('FmBoxes390__taxpayerCard');
+    expect(taxpayer.textContent).toContain('fm.m390.org_card.taxpayer_title');
+    expect(taxpayer.textContent).toContain('fm.m390.org_card.synced');
+    expect(screen.getByTestId('FmBoxes390__nif').querySelector('.fm-390-mono').textContent).toBe('B12345678');
+    // The user's flags stay outside the card.
+    expect(taxpayer.contains(screen.getByTestId('FmBoxes390__flag_ISMONTHLYRETURN'))).toBe(false);
+    fireEvent.click(screen.getByTestId('FmBoxes390__editOrganization'));
+    expect(navigateMock).toHaveBeenCalledWith('/organization');
+
+    goToBlock('datos_estadisticos');
+    const activities = screen.getByTestId('FmBoxes390__activitiesCard');
+    expect(activities.textContent).toContain('fm.m390.org_card.activities_title');
+    expect(activities.textContent).toContain('fm.m390.org_card.activities_many');
+    const [main, second, past] = screen.getAllByTestId('FmBoxes390__activityRow');
+    expect(main.querySelector('.fm-390-code-badge').textContent).toBe('A03');
+    expect(main.querySelector('.fm-390-rank--main')).toBeTruthy();
+    expect(second.querySelector('.fm-390-rank:not(.fm-390-rank--main)')).toBeTruthy();
+    expect(past.querySelector('.fm-390-rank--muted')).toBeTruthy();
+
+    goToBlock('representante');
+    const reps = screen.getByTestId('FmBoxes390__representativesCard');
+    expect(reps.textContent).toContain('fm.m390.org_card.representatives_title');
+    expect(reps.textContent).toContain('fm.m390.org_card.representatives_one');
+    expect(reps.contains(screen.getByTestId('FmBoxes390__representatives'))).toBe(true);
+  });
+
+  it('a natural person gets the "Representante" card with NIF and name, or the empty state', () => {
+    Object.assign(orgIdentityMock, { isPerson: true, personRepresentative: { nif: '11111111H', name: 'Luis Gil' } });
+    try {
+      const { unmount } = render(<FmModel390Page decl={makeDecl()} {...props()} />);
+      goToBlock('representante');
+      expect(screen.getByTestId('FmBoxes390__representativesCard').textContent).toContain('fm.m390.org_card.representative_title');
+      expect(screen.getByTestId('FmBoxes390__repNif').textContent).toBe('11111111H');
+      expect(screen.getByTestId('FmBoxes390__repName').textContent).toBe('Luis Gil');
+      unmount();
+      orgIdentityMock.personRepresentative = null;
+      render(<FmModel390Page decl={makeDecl()} {...props()} />);
+      goToBlock('representante');
+      const card = screen.getByTestId('FmBoxes390__representativesCard');
+      expect(card.contains(screen.getByTestId('FmBoxes390__noRepresentative'))).toBe(true);
+      expect(card.textContent).toContain('fm.m390.org_card.representatives_many');
+    } finally {
+      for (const k of Object.keys(orgIdentityMock)) delete orgIdentityMock[k];
+    }
   });
 
   it('shows no name-truncation notice when every name fits', () => {

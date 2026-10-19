@@ -3498,13 +3498,36 @@ bottom. The index items use the 303 section-nav metrics (8px 12px, 14/20, radius
 wide so every block name stays on one line at 1280×720. The block content has the 303 24px gutter;
 the in-block tables (IAE activities, representatives, the year's 303s) are `.fm-dtable--plain`
 like the 303 Facturas / Incidencias tables (header not sticky), and the block warnings have the 303
-warning-banner metrics:
+warning-banner metrics.
+
+**Organization-sourced blocks (Identificación, Datos estadísticos, Representante)** share one card,
+`OrgSyncedCard` in `FmBoxes390.jsx` (a flush `.fm-section-card` + `.fm-390-org-card*`): a bold title,
+a muted subtitle "… · sincronizado con Organización" and, on the right, an outlined pill with a
+pencil "Editar en Organización" (`FmBoxes390__editOrganization`, `onEditOrganization` →
+`/organization`). The read-only org data goes inside; the user's own marks (devolución mensual,
+concurso, operaciones con terceros) stay below the card, outside it, and the name-truncation
+notices stay inside it, under the data.
+
+- **Identificación** — "Sujeto pasivo" / "sincronizado con Organización": NIF (monospace) and
+  "Apellidos y Nombre o Razón Social" as label-over-value data (`FmBoxes390__taxpayerCard`).
+- **Datos estadísticos** — "Actividades declaradas" / "N actividad(es) · sincronizada(s) con
+  Organización" (`fm.m390.org_card.activities_one|_many`): uppercase muted headers A · Actividad,
+  B · Código de actividad, C · Epígrafe IAE, Tipo (right-aligned); the name semibold, the code a
+  small blue-tinted monospace badge plus its description muted, the epigraph bold monospace, Tipo a
+  dark pill with a star "Principal" for the main activity, an outlined pill "2ª"…"6ª" for the
+  others, and a muted outlined "No se declara (…)" for one past the limit
+  (`FmBoxes390__activitiesCard`).
+- **Representante** — "Representantes legales" (legal entity) or "Representante" (natural person)
+  / "N representante(s) · sincronizado(s) con Organización": table NIF (monospace) / Nombre /
+  Fecha de poder / Notario — the natural person's table has NIF / Nombre only
+  (`FmBoxes390__repNif` / `__repName`); the empty state is inside the card
+  (`FmBoxes390__representativesCard`).
 
 | # | Block | Content | Origin |
 |---|---|---|---|
 | 1 | Identificación | NIF and the name the file carries (legal entity: `AD_Org.socialName`, or `name` when empty; natural person `aeat390Isperson`: `aeat390Surname1` + `aeat390Surname2` + `aeat390Firstname` of the Organization information); marks "Inscrito en el registro de devolución mensual" (`ISMONTHLYRETURN`), "Declarado en concurso de acreedores en el ejercicio" (`ConcursoAcr`) and, under it, "… en el último periodo" (`ConcursoUltPer`) | NIF from `/session`, name from `organization/organization` + `organization/information`, read-only; marks manual |
 | 2 | Devengo | Ejercicio, tipo, identificador anterior, "por rectificación de cuotas" | read-only reflection of the header Tipo |
-| 3 | Datos estadísticos | IAE activities with the form's columns: **A · Actividad** (epigraph description), **B · Código de actividad** (e.g. `A03`, its description as secondary text/tooltip), **C · Epígrafe I.A.E.** (AEAT format: the file's `6732` shown as `673.2` — `formatIaeEpigraph390`), **Principal** (main first, then the others by line as `1ª…5ª`, as classic `AEAT390Utility.getEpigraphOrgInfo` writes them; one past the 5th is listed as "No se declara"). The IAE type ("Actividades empresariales sujetas al IAE") is not a 2025 form column — only the epígrafe cell tooltip. Values are the raw epigraph / code fields, requested with `_extraProperties=epgrafeIAE.epigraph,epgrafeIAE.description,epiaeCode.code,epiaeCode.description` (`IAE_EXTRA_PROPERTIES`; NEO allowlists them, `neo-headless.md` §4.3.5) — no backend or decisions change; the selector identifiers are only split as a fallback when a field is missing (`toActivities` in `useOrg390Identity.js`). Mark "operaciones con terceras personas" (`YEARLY_BP_DECLARATION`) | `organization/actividadesDelIae`, read-only + "Editar en Organización" |
+| 3 | Datos estadísticos | IAE activities with the form's columns: **A · Actividad** (epigraph description), **B · Código de actividad** (e.g. `A03`, its description as secondary text/tooltip), **C · Epígrafe IAE** (AEAT format: the file's `6732` shown as `673.2` — `formatIaeEpigraph390`), **Tipo** ("Principal" first, then the others by line as `2ª…6ª` — the 1st…5th other activity, as classic `AEAT390Utility.getEpigraphOrgInfo` writes them; one past the 5th is listed as "No se declara"). The IAE type ("Actividades empresariales sujetas al IAE") is not a 2025 form column — only the epígrafe cell tooltip. Values are the raw epigraph / code fields, requested with `_extraProperties=epgrafeIAE.epigraph,epgrafeIAE.description,epiaeCode.code,epiaeCode.description` (`IAE_EXTRA_PROPERTIES`; NEO allowlists them, `neo-headless.md` §4.3.5) — no backend or decisions change; the selector identifiers are only split as a fallback when a field is missing (`toActivities` in `useOrg390Identity.js`). Mark "operaciones con terceras personas" (`YEARLY_BP_DECLARATION`) | `organization/actividadesDelIae`, read-only + "Editar en Organización" |
 | 4 | Representante | Natural person: `information.aeat390RepNif/RepName`; otherwise the first 3 `representanteLegal` rows by line (NIF, name, power date, notary) | Organization, read-only + "Editar en Organización" |
 | 5 | IVA devengado | Régimen ordinario and intra-EU goods/services by rate (0, 2, 4, 5, 7.5, 10, 21 %), [27]/[28], [29]/[30], [31]/[32], totals [33]/[34] and [47] | calculated |
 | 6 | IVA deducible | Interior corrientes / bienes de inversión, importaciones, intra-EU (per rate + group totals [48]…[59], [597]/[598]), [639]/[62], [63]; manual [660]/[661]; total [64] (deductible cuotas + [661], as the classic file writes it) | calculated; [660]/[661] manual |

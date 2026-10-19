@@ -9,7 +9,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   TrendingUp, TrendingDown, Pencil, RotateCcw, Search, ChevronLeft, ChevronRight, TriangleAlert,
-  ReceiptText,
+  ReceiptText, Star,
 } from 'lucide-react';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -266,16 +266,45 @@ function FlagCheckbox({ flag, labelKey, ctx }) {
   );
 }
 
-function EditInOrganization({ ctx }) {
+/**
+ * Card of a block whose data comes from the Organization (Identificación, Estadística,
+ * Representante): bold title, muted "… sincronizado con Organización" subtitle and the
+ * "Editar en Organización" pill on the right; the read-only data goes in `children`.
+ */
+function OrgSyncedCard({ title, subtitle, ctx, testId, children }) {
   return (
-    <button
-      type="button"
-      className="fm-link-btn fm-link-btn--bold fm-390-org-link"
-      onClick={() => ctx.onEditOrganization?.()}
-      data-testid="FmBoxes390__editOrganization"
-    >
-      {ctx.t('fm.m390.edit_in_organization')}
-    </button>
+    <div className="fm-section-card fm-section-card--flush fm-390-org-card" data-testid={testId}>
+      <div className="fm-section-card__header">
+        <div>
+          <div className="fm-390-org-card__title">{title}</div>
+          <div className="fm-section-card__sub">{subtitle}</div>
+        </div>
+        <button
+          type="button"
+          className="fm-btn fm-btn--cancel-pill fm-390-org-card__edit"
+          onClick={() => ctx.onEditOrganization?.()}
+          data-testid="FmBoxes390__editOrganization"
+        >
+          <Pencil size={14} strokeWidth={1.75} data-testid="Pencil__fm390OrgCard" />
+          {ctx.t('fm.m390.edit_in_organization')}
+        </button>
+      </div>
+      <div className="fm-390-org-card__body">{children}</div>
+    </div>
+  );
+}
+
+/** "N <things> · sincronizado(s) con Organización", with the `_one` / `_many` keys. */
+function syncedCount(t, keyBase, count) {
+  return t(count === 1 ? `${keyBase}_one` : `${keyBase}_many`, { count });
+}
+
+function OrgField({ label, value, mono, testId }) {
+  return (
+    <div className="fm-390-org-field" data-testid={testId}>
+      <span className="fm-390-org-field__label">{label}</span>
+      <span className={`fm-390-org-field__value${mono ? ' fm-390-mono' : ''}`}>{value || '—'}</span>
+    </div>
   );
 }
 
@@ -310,17 +339,23 @@ function IdentityBlock({ ctx }) {
   const org = ctx.orgIdentity;
   return (
     <div className="fm-aeat-ident">
-      <div className="fm-aeat-ident-fields">
-        <ReadOnlyField label={ctx.t('fm.ident.nif')} value={org?.nif} testId="FmBoxes390__nif" />
-        <ReadOnlyField label={ctx.t('fm.ident.nombre')} value={org?.name} testId="FmBoxes390__name" />
-      </div>
-      <NameTruncationWarnings ctx={ctx} fields={TAXPAYER_NAME_FIELDS} testId="FmBoxes390__nameTruncated" />
+      <OrgSyncedCard
+        title={ctx.t('fm.m390.org_card.taxpayer_title')}
+        subtitle={ctx.t('fm.m390.org_card.synced')}
+        ctx={ctx}
+        testId="FmBoxes390__taxpayerCard"
+      >
+        <div className="fm-390-org-fields">
+          <OrgField label={ctx.t('fm.ident.nif')} value={org?.nif} mono testId="FmBoxes390__nif" />
+          <OrgField label={ctx.t('fm.ident.nombre')} value={org?.name} testId="FmBoxes390__name" />
+        </div>
+        <NameTruncationWarnings ctx={ctx} fields={TAXPAYER_NAME_FIELDS} testId="FmBoxes390__nameTruncated" />
+      </OrgSyncedCard>
       <FlagCheckbox flag={FLAG.MONTHLY_RETURN} labelKey="fm.m390.flag.monthly_return" ctx={ctx} />
       <FlagCheckbox flag={FLAG.CONCURSO} labelKey="fm.m390.flag.concurso" ctx={ctx} />
       {isFlagOn(ctx.inputs, FLAG.CONCURSO) && (
         <FlagCheckbox flag={FLAG.CONCURSO_LAST_PERIOD} labelKey="fm.m390.flag.concurso_last_period" ctx={ctx} />
       )}
-      <EditInOrganization ctx={ctx} />
     </div>
   );
 }
@@ -355,91 +390,110 @@ function DevengoBlock({ ctx }) {
 }
 
 /**
- * "Principal" column: the main activity, then the others in the order the file writes them
- * (1ª…5ª). One past the file's limit is listed but not declared (TOO_MANY_IAE incident).
+ * "Tipo" column: the main activity, then the others in the order the file writes them (2ª…6ª,
+ * `rank` 1…5). One past the file's limit is listed but not declared (TOO_MANY_IAE incident).
  */
-function activityRankLabel(activity, t) {
-  if (activity.isDefault) return t('fm.m390.statistics.main_yes');
-  if (activity.rank > MODELO_390_OTHER_ACTIVITY_LIMIT) return t('fm.m390.statistics.not_declared');
-  return t('fm.m390.statistics.other', { n: activity.rank });
+function ActivityRank({ activity, t }) {
+  if (activity.isDefault) {
+    return (
+      <span className="fm-390-rank fm-390-rank--main">
+        <Star size={11} strokeWidth={2} fill="currentColor" data-testid="Star__fm390Main" />
+        {t('fm.m390.statistics.main_yes')}
+      </span>
+    );
+  }
+  if (activity.rank > MODELO_390_OTHER_ACTIVITY_LIMIT) {
+    return <span className="fm-390-rank fm-390-rank--muted">{t('fm.m390.statistics.not_declared')}</span>;
+  }
+  return <span className="fm-390-rank">{t('fm.m390.statistics.other', { n: activity.rank + 1 })}</span>;
 }
 
 function StatisticsBlock({ ctx }) {
   const activities = ctx.orgIdentity?.activities ?? [];
   return (
     <div className="fm-aeat-ident">
-      {activities.length === 0 ? (
-        <p className="fm-390-hint" data-testid="FmBoxes390__noActivities">{ctx.t('fm.m390.statistics.empty')}</p>
-      ) : (
-        <table className="fm-dtable fm-dtable--plain fm-390-mini-table" data-testid="FmBoxes390__activities">
-          <thead>
-            <tr>
-              <th>{ctx.t('fm.m390.statistics.activity')}</th>
-              <th>{ctx.t('fm.m390.statistics.code')}</th>
-              <th>{ctx.t('fm.m390.statistics.epigraph')}</th>
-              <th>{ctx.t('fm.m390.statistics.main')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activities.map(a => (
-              <tr key={a.id ?? `${a.epigraph}-${a.code}`} data-testid="FmBoxes390__activityRow">
-                <td>{a.description || '—'}</td>
-                <td title={a.codeDescription || undefined}>
-                  {a.code || '—'}
-                  {a.codeDescription ? <span className="fm-390-hint"> {a.codeDescription}</span> : null}
-                </td>
-                <td title={a.typeLabel || undefined}>{a.epigraph || '—'}</td>
-                <td>{activityRankLabel(a, ctx.t)}</td>
+      <OrgSyncedCard
+        title={ctx.t('fm.m390.org_card.activities_title')}
+        subtitle={syncedCount(ctx.t, 'fm.m390.org_card.activities', activities.length)}
+        ctx={ctx}
+        testId="FmBoxes390__activitiesCard"
+      >
+        {activities.length === 0 ? (
+          <p className="fm-390-hint" data-testid="FmBoxes390__noActivities">{ctx.t('fm.m390.statistics.empty')}</p>
+        ) : (
+          <table className="fm-dtable fm-dtable--plain fm-390-org-table" data-testid="FmBoxes390__activities">
+            <thead>
+              <tr>
+                <th>{ctx.t('fm.m390.statistics.activity')}</th>
+                <th>{ctx.t('fm.m390.statistics.code')}</th>
+                <th>{ctx.t('fm.m390.statistics.epigraph')}</th>
+                <th className="num">{ctx.t('fm.m390.statistics.main')}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {activities.map(a => (
+                <tr key={a.id ?? `${a.epigraph}-${a.code}`} data-testid="FmBoxes390__activityRow">
+                  <td className="fm-390-org-table__name">{a.description || '—'}</td>
+                  <td title={a.codeDescription || undefined}>
+                    {a.code ? <span className="fm-390-code-badge">{a.code}</span> : '—'}
+                    {a.codeDescription ? <span className="fm-390-org-table__muted"> {a.codeDescription}</span> : null}
+                  </td>
+                  <td className="fm-390-mono strong" title={a.typeLabel || undefined}>{a.epigraph || '—'}</td>
+                  <td className="num"><ActivityRank activity={a} t={ctx.t} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </OrgSyncedCard>
       <FlagCheckbox flag={FLAG.THIRD_PARTY_DECLARATION} labelKey="fm.m390.flag.third_party" ctx={ctx} />
-      <EditInOrganization ctx={ctx} />
     </div>
   );
 }
 
 function RepresentativeBlock({ ctx }) {
   const org = ctx.orgIdentity ?? {};
-  let body;
+  let rows = [];
   if (org.isPerson) {
-    body = org.personRepresentative ? (
-      <div className="fm-aeat-ident-fields">
-        <ReadOnlyField label={ctx.t('fm.m390.representative.nif')} value={org.personRepresentative.nif} testId="FmBoxes390__repNif" />
-        <ReadOnlyField label={ctx.t('fm.m390.representative.name')} value={org.personRepresentative.name} testId="FmBoxes390__repName" />
-      </div>
-    ) : null;
-  } else if ((org.representatives ?? []).length > 0) {
-    body = (
-      <table className="fm-dtable fm-dtable--plain fm-390-mini-table" data-testid="FmBoxes390__representatives">
-        <thead>
-          <tr>
-            <th>{ctx.t('fm.m390.representative.nif')}</th>
-            <th>{ctx.t('fm.m390.representative.name')}</th>
-            <th>{ctx.t('fm.m390.representative.power_date')}</th>
-            <th>{ctx.t('fm.m390.representative.notary')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {org.representatives.map(rep => (
-            <tr key={rep.id ?? rep.nif}>
-              <td>{rep.nif || '—'}</td>
-              <td>{rep.name || '—'}</td>
-              <td>{rep.powerDate ? formatCalendarDate(rep.powerDate, ctx.bcpLocale) : '—'}</td>
-              <td>{rep.notary || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
+    if (org.personRepresentative) rows = [{ ...org.personRepresentative, person: true }];
+  } else {
+    rows = org.representatives ?? [];
   }
+  const full = !org.isPerson;
   return (
     <div className="fm-aeat-ident">
-      {body ?? <p className="fm-390-hint" data-testid="FmBoxes390__noRepresentative">{ctx.t('fm.m390.representative.empty')}</p>}
-      <NameTruncationWarnings ctx={ctx} fields={REPRESENTATIVE_NAME_FIELDS} testId="FmBoxes390__repNameTruncated" />
-      <EditInOrganization ctx={ctx} />
+      <OrgSyncedCard
+        title={ctx.t(org.isPerson ? 'fm.m390.org_card.representative_title' : 'fm.m390.org_card.representatives_title')}
+        subtitle={syncedCount(ctx.t, 'fm.m390.org_card.representatives', rows.length)}
+        ctx={ctx}
+        testId="FmBoxes390__representativesCard"
+      >
+        {rows.length === 0 ? (
+          <p className="fm-390-hint" data-testid="FmBoxes390__noRepresentative">{ctx.t('fm.m390.representative.empty')}</p>
+        ) : (
+          <table className="fm-dtable fm-dtable--plain fm-390-org-table" data-testid="FmBoxes390__representatives">
+            <thead>
+              <tr>
+                <th>{ctx.t('fm.m390.representative.nif')}</th>
+                <th>{ctx.t('fm.m390.representative.name')}</th>
+                {full && <th>{ctx.t('fm.m390.representative.power_date')}</th>}
+                {full && <th>{ctx.t('fm.m390.representative.notary')}</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(rep => (
+                <tr key={rep.id ?? rep.nif ?? 'person'}>
+                  <td className="fm-390-mono" data-testid={rep.person ? 'FmBoxes390__repNif' : undefined}>{rep.nif || '—'}</td>
+                  <td className="fm-390-org-table__name" data-testid={rep.person ? 'FmBoxes390__repName' : undefined}>{rep.name || '—'}</td>
+                  {full && <td>{rep.powerDate ? formatCalendarDate(rep.powerDate, ctx.bcpLocale) : '—'}</td>}
+                  {full && <td>{rep.notary || '—'}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <NameTruncationWarnings ctx={ctx} fields={REPRESENTATIVE_NAME_FIELDS} testId="FmBoxes390__repNameTruncated" />
+      </OrgSyncedCard>
     </div>
   );
 }
