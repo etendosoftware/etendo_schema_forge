@@ -58,7 +58,7 @@ import {
   formatAmount, persistManualData, fetchDeclarationIncidents, resolveResultColors,
   RECEIPT_ATTACHMENT_CONFIG, fetchDeclaration,
 } from '../../fiscalModelsUtils.js';
-import { getIncidentIndicator } from '../../incidentSeverity.js';
+import { incidentKpiVariants } from '../../incidentSeverity.js';
 import { FORMER_STATEMENT_LENGTH, isValidFormerStatement, sanitizeFormerStatementInput } from '../../formerStatement.js';
 import { invalidateFiscalComputeCache } from '../../useFiscalAutoCompute.js';
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
@@ -70,7 +70,7 @@ import FileGenModal390 from './FileGenModal390.jsx';
 import useOrg390Identity from './useOrg390Identity.js';
 import { fetchBoxes390, generate390File, validate390 } from './fm390Api.js';
 import Incidents390Tab from './Incidents390Tab.jsx';
-import { groupIncidents390, nameWarningsFromIncidents390 } from './incidents390.js';
+import { nameWarningsFromIncidents390, normalizeIncidents390 } from './incidents390.js';
 import usePreload390 from './usePreload390.js';
 import { applyPreload390, reconcile390, restorePreloaded390 } from './preload390.js';
 import Reconciliation390 from './Reconciliation390.jsx';
@@ -206,12 +206,6 @@ function SubstitutiveBanner({ identification, concurso, onChange, disabled, show
       </div>
     </div>
   );
-}
-
-function buildIncidentVariants(blocking, warning, t) {
-  const indicator = getIncidentIndicator({ blocking, warning }, t);
-  if (!indicator) return { iconColor: 'hsl(var(--text-disabled))', badge: null };
-  return { iconColor: indicator.iconColor, badge: indicator.label, badgeBg: indicator.badgeBg, badgeColor: indicator.badgeColor };
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -492,10 +486,10 @@ export default function FmModel390Page({
     return false;
   }
 
-  const blocking = incidents?.blocking ?? 0;
+  // Counts as the shared Incidencias table shows them (anything not `warn` is blocking).
+  const { blocking, warning } = normalizeIncidents390(incidents);
   // Only the model's own blocking rules gate Generar / Presentar — never a stored AEAT answer.
   const ruleBlocking = ruleBlockingCount(incidents);
-  const warning = incidents?.warning ?? 0;
 
   function openGenerate() {
     if (ruleBlocking > 0) {
@@ -637,8 +631,8 @@ export default function FmModel390Page({
     favLabel: t('fm.breadcrumb.section'),
   });
 
-  const incidentVariants = buildIncidentVariants(blocking, warning, t);
-  const incidentGroups = groupIncidents390(incidents?.items);
+  // Same Incidencias card as the 303: the total and the severity badge (incidentKpiVariants).
+  const incidentVariants = incidentKpiVariants({ blocking, warning }, t);
   const nameWarnings = nameWarningsFromIncidents390(incidents?.items);
   const typeLabel = isSubstitutive(identification) ? t('fm.m349.type.substitutive') : t('fm.m349.type.normal');
   const blockedTitle = ruleBlocking > 0 ? t('fm.m390.blocked_by_incidents') : undefined;
@@ -760,7 +754,7 @@ export default function FmModel390Page({
           t={t} />
 
         <div className="fm-390-kpis">
-          {/* Incidencias — split into Bloqueantes and Advertencias (the tab lists them). */}
+          {/* Incidencias — the 303 card: total + severity badge; a click opens the tab. */}
           <KpiWidget
             icon={blocking > 0
               ? <OctagonAlert size={20} strokeWidth={1.75} data-testid="OctagonAlert__fm390" />
@@ -768,24 +762,10 @@ export default function FmModel390Page({
             iconColor={incidentVariants.iconColor}
             label={t('fm.tab.incidents')}
             onClick={() => setActiveTab('incidents')}
-            value={(
-              <span className="fm-390-kpi-split" data-testid="FmModel390Page__incidentsSplit">
-                <span
-                  style={{ color: incidentGroups.blocking.length > 0 ? 'hsl(var(--destructive))' : undefined }}
-                  data-testid="FmModel390Page__incidentsBlocking"
-                >
-                  {incidentGroups.blocking.length}
-                  <span className="fm-390-kpi-split__label">{t('fm.m390.incidents.blocking_short')}</span>
-                </span>
-                <span
-                  style={{ color: incidentGroups.warnings.length > 0 ? 'var(--status-warning-fg)' : undefined }}
-                  data-testid="FmModel390Page__incidentsWarnings"
-                >
-                  {incidentGroups.warnings.length}
-                  <span className="fm-390-kpi-split__label">{t('fm.m390.incidents.warnings_short')}</span>
-                </span>
-              </span>
-            )} />
+            value={<span data-testid="FmModel390Page__incidentsCount">{String(blocking + warning)}</span>}
+            badge={incidentVariants.badge}
+            badgeBg={incidentVariants.badgeBg}
+            badgeColor={incidentVariants.badgeColor} />
           <KpiWidget
             icon={<TrendingUp size={20} strokeWidth={1.75} data-testid="TrendingUp__fm390kpi" />}
             iconColor="hsl(var(--foreground))"

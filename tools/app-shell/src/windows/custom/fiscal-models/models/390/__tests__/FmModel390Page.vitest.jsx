@@ -64,14 +64,16 @@ vi.mock('../../../FmCommon.jsx', () => ({
   KpiWidget: ({ value, label, badge }) => React.createElement(
     'div', { className: 'test-kpi390', 'data-label': label },
     React.createElement('span', { className: 'test-kpi390-value' }, value),
-    React.createElement('span', null, badge),
+    React.createElement('span', { className: 'test-kpi390-badge' }, badge),
   ),
+  EmptyState: ({ title, 'data-testid': testId }) => React.createElement('div', { 'data-testid': testId }, title),
   Tabs: ({ tabs, active, onSelect }) => React.createElement('div', { role: 'tablist' },
     tabs.map(t => React.createElement('button', {
       key: t.id, role: 'tab', 'aria-selected': String(t.id === active), onClick: () => onSelect(t.id),
     }, t.label))),
 }));
-vi.mock('../../../FmTabContent.jsx', () => ({ IncidentsTab: () => null }));
+// The real shared Incidencias table (Incidents390Tab renders through it).
+vi.mock('../../../FmTabContent.jsx', async (importOriginal) => importOriginal());
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: ({ onConfirm }) => React.createElement('button', {
     type: 'button', 'data-testid': 'PresentModal-confirm', onClick: () => onConfirm({ status: 'submitted' }),
@@ -153,6 +155,7 @@ beforeEach(() => {
 
 const goToBlock = (id) => fireEvent.click(screen.getByTestId(`FmBoxes390__index_${id}`));
 const kpiValue = (label) => document.querySelector(`.test-kpi390[data-label="${label}"] .test-kpi390-value`)?.textContent;
+const kpiBadge = (label) => document.querySelector(`.test-kpi390[data-label="${label}"] .test-kpi390-badge`)?.textContent;
 
 function typeInput(key, value) {
   const field = screen.getByTestId(`FmBoxes390__inputField_${key}`);
@@ -167,8 +170,7 @@ describe('FmModel390Page — skeleton', () => {
     expect(kpiValue('fm.m390.kpi.accrued')).toBe('460');
     expect(kpiValue('fm.m390.kpi.deductible')).toBe('100');
     expect(kpiValue('fm.m390.kpi.result')).toBe('360');
-    expect(screen.getByTestId('FmModel390Page__incidentsBlocking').textContent).toBe('0fm.m390.incidents.blocking_short');
-    expect(screen.getByTestId('FmModel390Page__incidentsWarnings').textContent).toBe('0fm.m390.incidents.warnings_short');
+    expect(screen.getByTestId('FmModel390Page__incidentsCount').textContent).toBe('0');
   });
 
   it('renders the index of the 11 blocks, the legend and the design-year note', () => {
@@ -648,8 +650,9 @@ describe('FmModel390Page — incidents (ETP-5716)', () => {
     validate390.mockResolvedValue(INCIDENTS);
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     await waitFor(() => expect(validate390).toHaveBeenCalledWith(expect.objectContaining({ id: 'decl-390' }), expect.anything()));
-    await waitFor(() => expect(screen.getByTestId('FmModel390Page__incidentsBlocking').textContent).toBe('2fm.m390.incidents.blocking_short'));
-    expect(screen.getByTestId('FmModel390Page__incidentsWarnings').textContent).toBe('2fm.m390.incidents.warnings_short');
+    // the 303 card: the total, with the severity badge ("Requiere revisión" while any blocks)
+    await waitFor(() => expect(screen.getByTestId('FmModel390Page__incidentsCount').textContent).toBe('4'));
+    expect(kpiBadge('fm.tab.incidents')).toBe('fm.kpi.incidents_sub');
     expect(fetchDeclarationIncidents).not.toHaveBeenCalled();
     // the AEAT warning is listed, but only the rule incidents gate Generar / Presentar
     expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true);
@@ -684,20 +687,24 @@ describe('FmModel390Page — incidents (ETP-5716)', () => {
     await waitFor(() => expect(validate390).toHaveBeenCalledTimes(2));
   });
 
-  it('the tab splits Bloqueantes and Advertencias and an AEAT answer shows its code', async () => {
+  it('the tab is the shared table: blocking first, origin, text and an AEAT answer as it came', async () => {
     validate390.mockResolvedValue(INCIDENTS);
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     await waitFor(() => expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true));
     openIncidents();
-    const blocking = screen.getByTestId('Incidents390Tab__blocking');
-    expect(blocking.querySelectorAll('li')).toHaveLength(2);
+    const rows = screen.getByTestId('Incidents390Tab').querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(4);
     // this file's `t` echoes keys without params, so the text falls back to the stored message
     // (the translation by code is incidents390.vitest.js)
-    expect(blocking.textContent).toContain('sum');
-    expect(blocking.textContent).toContain('fm.m390.incidents.go_to_box');
-    const warnings = screen.getByTestId('Incidents390Tab__warnings');
-    expect(warnings.querySelectorAll('li')).toHaveLength(2);
-    expect(screen.getByTestId('Incidents390Tab__item_AEAT-W1').textContent).toContain('Aviso de la AEAT');
+    expect(rows[0].textContent).toContain('fm.incidents.severity.block');
+    expect(rows[0].textContent).toContain('fm.m390.incidents.origin.box');
+    expect(rows[0].textContent).toContain('sum');
+    expect(rows[0].textContent).toContain('fm.m390.incidents.go_to_box');
+    expect(rows[1].textContent).toContain('fm.m390.incidents.origin.organization');
+    expect(rows[2].textContent).toContain('fm.incidents.severity.warn');
+    expect(screen.getByTestId('IncidentsTab__row_AEAT-W1').textContent).toContain('Aviso de la AEAT');
+    // the banner follows the severity, as on the 303
+    expect(screen.getByTestId('Incidents390Tab').textContent).toContain('fm.incidents.block_sub');
   });
 
   it('"Ir a la casilla" opens the Casillas tab at that box', async () => {
@@ -728,7 +735,7 @@ describe('FmModel390Page — incidents (ETP-5716)', () => {
     fireEvent.click(screen.getByTestId('FmModel390Page__generate'));
     await act(async () => { fireEvent.click(screen.getByTestId('FileGenModal390-confirm')); });
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.m390.blocked_by_incidents'));
-    await waitFor(() => expect(screen.getByTestId('Incidents390Tab__blocking')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('IncidentsTab__row_TERRITORY_PERCENT_SUM')).toBeTruthy());
     expect(validate390).toHaveBeenCalledTimes(2);
   });
 });

@@ -1672,20 +1672,11 @@
 .fm-390-sources__pager { display: inline-flex; align-items: center; gap: 12px; }
 .fm-390-sources__pager .fm-btn { display: inline-flex; align-items: center; gap: 4px; }
 /* Modelo 390 — Incidencias tab (Incidents390Tab, ETP-5716): Bloqueantes / Advertencias. */
-.fm-390-incidents { display: flex; flex-direction: column; gap: 16px; padding: 16px 20px; }
-.fm-390-incidents__title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; color: hsl(var(--foreground)); }
-.fm-390-incidents__group--blocking .fm-390-incidents__title svg { color: hsl(var(--destructive)); }
-.fm-390-incidents__group--warnings .fm-390-incidents__title svg { color: var(--status-warning-fg); }
-.fm-390-incidents__count { padding: 0 8px; border-radius: 360px; font-size: 12px; font-weight: 400; line-height: 20px; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
-.fm-390-incidents__group--blocking .fm-390-incidents__count { background: var(--status-destructive-bg); color: hsl(var(--destructive)); }
-.fm-390-incidents__group--warnings .fm-390-incidents__count { background: var(--status-warning-bg); color: var(--status-warning-fg); }
-.fm-390-incidents__sub { margin: 4px 0 8px; font-size: 13px; color: hsl(var(--muted-foreground)); }
-.fm-390-incidents__list { margin: 0; padding: 0; list-style: none; border: 1px solid hsl(var(--border-subtle)); border-radius: 8px; }
-.fm-390-incident { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 12px; font-size: 14px; color: hsl(var(--foreground)); }
-.fm-390-incident + .fm-390-incident { border-top: 1px solid var(--fm-border-1); }
-.fm-390-incident__text { flex: 1 1 320px; min-width: 0; }
-.fm-390-incident__origin { margin-right: 8px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.fm-390-incidents { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .fm-390-incident__actions { display: inline-flex; flex-wrap: wrap; gap: 12px; }
-.fm-390-incident__action { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; font-size: 14px; }
-.fm-390-kpi-split { display: inline-flex; align-items: baseline; gap: 12px; white-space: nowrap; }
-.fm-390-kpi-split__label { margin-left: 4px; font-size: 12px; font-weight: 400; color: hsl(var(--muted-foreground)); letter-spacing: 0; }
+/* Same link as the 303 Incidencias action ("Facturas >"): plain, underlined, 14px. */
+.fm-incident-action {
+  display: inline-flex; align-items: center; gap: 2px; padding: 0; border: none; background: none;
+  cursor: pointer; white-space: nowrap; font-size: 14px; color: hsl(var(--foreground)); text-decoration: underline;
+}
+.fm-incident-action:hover { opacity: .75; }

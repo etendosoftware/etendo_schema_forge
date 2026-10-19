@@ -120,3 +120,31 @@ export function nameWarningsFromIncidents390(items) {
       ? { field: i.params.field, limit: i.params.limit, label: i.params.label }
       : { field: i.params.field, limit: i.params.limit }));
 }
+
+/**
+ * The "Origen" column of the shared Incidencias table: the AEAT code of an AEAT answer, else what
+ * the incident is about, read from its action — "Casilla 86", "Organización", "Facturas" — or
+ * "Declaración" for a rule with no action.
+ */
+export function incidentOrigin390(item, t) {
+  if (isAeatIncident(item)) return item?.origin ?? null;
+  const a = item?.action;
+  const box = Number(a?.box);
+  if ((a?.type === 'box' || a?.type === 'sources') && Number.isInteger(box) && box > 0) {
+    return t('fm.m390.incidents.origin.box', { box: String(box).padStart(2, '0') });
+  }
+  if (a?.type === 'organization') return t('fm.m390.incidents.origin.organization');
+  if (a?.type === 'invoices') return t('fm.m390.incidents.origin.invoices');
+  return t('fm.m390.incidents.origin.declaration');
+}
+
+/**
+ * The incidents in the shape the shared Incidencias table reads: every item's severity normalised
+ * to `block` / `warn` (anything not `warn` is blocking, as `groupIncidents390` counts it).
+ */
+export function normalizeIncidents390(incidents) {
+  const items = (Array.isArray(incidents?.items) ? incidents.items : [])
+    .map(i => ({ ...i, severity: isBlocking(i) ? 'block' : 'warn' }));
+  const { blocking, warnings } = groupIncidents390(items);
+  return { ...(incidents ?? {}), items, blocking: blocking.length, warning: warnings.length };
+}

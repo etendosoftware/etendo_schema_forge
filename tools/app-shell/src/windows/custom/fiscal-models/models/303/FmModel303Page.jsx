@@ -25,7 +25,7 @@ import {
   clampNegativeOverrides, showIaeActivityReminder, showMissingRequiredFieldsReminder, buildValidatedBoxValue,
   RECEIPT_ATTACHMENT_CONFIG,
 } from '../../fiscalModelsUtils.js';
-import { getIncidentIndicator } from '../../incidentSeverity.js';
+import { incidentKpiVariants } from '../../incidentSeverity.js';
 import { getCachedFiscalCompute, setCachedFiscalCompute, invalidateFiscalComputeCache } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
@@ -267,15 +267,9 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
 // ETP-5597 — delegates to the shared `getIncidentIndicator` so the KPI card, the tab badge and
 // the list page all agree: blocking → destructive + "Requiere revisión", warning-only → warning
 // + "Advertencia". No incidents keeps the previous neutral rendering (no badge, disabled icon).
+// ETP-5716 — the body moved to `incidentKpiVariants` (incidentSeverity.js), shared with the 390.
 function buildIncidentVariants(blocking, warning, t) {
-  const indicator = getIncidentIndicator({ blocking, warning }, t);
-  if (!indicator) {
-    return { tone: null, iconColor: 'hsl(var(--text-disabled))', badge: null };
-  }
-  return {
-    tone: indicator.tone, iconColor: indicator.iconColor, badge: indicator.label,
-    badgeBg: indicator.badgeBg, badgeColor: indicator.badgeColor,
-  };
+  return incidentKpiVariants({ blocking, warning }, t);
 }
 
 // ETP-5456 (S3776 fix on FmModel303Page) — extracted out of the main component, pure refactor,

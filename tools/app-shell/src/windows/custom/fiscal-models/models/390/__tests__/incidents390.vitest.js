@@ -16,6 +16,7 @@ import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 import {
   groupIncidents390, incidentText390, incidentActions390, organizationPath,
   nameWarningsFromIncidents390, ORGANIZATION_SECTION_ANCHOR, INCIDENT_KEY_PREFIX_390,
+  incidentOrigin390, normalizeIncidents390,
 } from '../incidents390.js';
 import { validate390, generate390File } from '../fm390Api.js';
 import { ORG_SECTION_ANCHOR } from '@/windows/custom/organization/OrganizationPage.jsx';
@@ -33,8 +34,8 @@ const RULE_CODES = [
 const ACTION_KEYS = [
   'fm.m390.incidents.go_to_box', 'fm.m390.incidents.view_invoices',
   'fm.m390.incidents.view_sales_invoices', 'fm.m390.incidents.view_purchase_invoices',
-  'fm.m390.incidents.blocking_title', 'fm.m390.incidents.warnings_title',
-  'fm.m390.incidents.blocking_short', 'fm.m390.incidents.warnings_short',
+  'fm.m390.incidents.origin.box', 'fm.m390.incidents.origin.organization',
+  'fm.m390.incidents.origin.invoices', 'fm.m390.incidents.origin.declaration',
 ];
 
 /** A `t` that echoes the key and its params, so the tests see what was asked. */
@@ -122,6 +123,25 @@ describe('nameWarningsFromIncidents390', () => {
       { field: 'socialName', limit: 37 },
       { field: 'legalRepresentative', limit: 36, label: 'N1' },
     ]);
+  });
+});
+
+describe('incidentOrigin390 / normalizeIncidents390 (shared Incidencias table)', () => {
+  it('reads the origin from the action; an AEAT answer keeps its code', () => {
+    expect(incidentOrigin390({ origin: 'X', action: { type: 'box', box: 5 } }, t)).toBe('fm.m390.incidents.origin.box|{"box":"05"}');
+    expect(incidentOrigin390({ origin: 'X', action: { type: 'sources', box: 86 } }, t)).toBe('fm.m390.incidents.origin.box|{"box":"86"}');
+    expect(incidentOrigin390({ origin: 'X', action: { type: 'organization', section: 'iae' } }, t)).toBe('fm.m390.incidents.origin.organization');
+    expect(incidentOrigin390({ origin: 'X', action: { type: 'invoices', sales: 1 } }, t)).toBe('fm.m390.incidents.origin.invoices');
+    expect(incidentOrigin390({ origin: 'X' }, t)).toBe('fm.m390.incidents.origin.declaration');
+    expect(incidentOrigin390({ origin: 'AEAT-123', message: 'm' }, t)).toBe('AEAT-123');
+  });
+
+  it('normalises the severities and recounts them like groupIncidents390', () => {
+    const out = normalizeIncidents390({ items: [{ origin: 'A' }, { origin: 'B', severity: 'warn' }, { origin: 'C', severity: 'block' }] });
+    expect(out.items.map(i => i.severity)).toEqual(['block', 'warn', 'block']);
+    expect(out.blocking).toBe(2);
+    expect(out.warning).toBe(1);
+    expect(normalizeIncidents390(null)).toEqual({ items: [], blocking: 0, warning: 0 });
   });
 });
 
