@@ -22407,6 +22407,7 @@
     "fm.m390.preload.warning.compute_failed": "No se pudo calcular el 303 de {periods}; no se ha tenido en cuenta.",
     "fm.m390.preload.warning.last_period_missing": "Falta el 303 del último periodo: no se precargan [97], [98] ni los porcentajes de territorio.",
     "fm.m390.reconcile.difference": "Diferencia con los 303: {difference} (según los 303: {expected}; tolerancia {tolerance})",
+    "fm.m390.reconcile.no303": "Sin Modelos 303 de {year} con los que cuadrar",
     "fm.m390.reconcile.ok_title": "El resultado coincide con la suma de tus Modelos 303",
     "fm.m390.reconcile.ok_sub": "Es informativo: el ingreso o la devolución ya se gestionaron en el último 303 (casillas 97 y 98).",
     "fm.m390.reconcile.difference_title": "El resultado no coincide con la suma de tus Modelos 303",

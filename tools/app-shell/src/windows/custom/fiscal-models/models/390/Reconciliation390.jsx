@@ -6,9 +6,10 @@
 // "GET /fiscal390/preload"). Within RECONCILIATION_TOLERANCE_390 the shared success banner; beyond
 // it the shared warn one (non-blocking) with the difference. Both carry "Ver detalle por trimestre", which
 // opens the year's 303s (Settlements303Table390, block "Resultado de las liquidaciones").
-// Nothing is rendered while there is nothing to reconcile (no 303 of the year, not computed yet).
+// No 303 of the year: the shared info banner "Sin Modelos 303 de <año> con los que cuadrar".
+// Nothing while the preload loads or the boxes are not computed.
 import React from 'react';
-import { ArrowRight, CircleCheck, TriangleAlert } from 'lucide-react';
+import { ArrowRight, CircleCheck, Info, TriangleAlert } from 'lucide-react';
 import { Banner } from '../../FmCommon.jsx';
 import { formatAmount } from '../../fiscalModelsUtils.js';
 import { RECONCILIATION_TOLERANCE_390, missingPeriodsLabel } from './preload390.js';
@@ -22,7 +23,19 @@ import { RECONCILIATION_TOLERANCE_390, missingPeriodsLabel } from './preload390.
  */
 export default function Reconciliation390({ reconciliation, preload, year, onViewDetail, t }) {
   const status = reconciliation?.status;
-  if (status !== 'ok' && status !== 'difference') return null;
+  if (status !== 'ok' && status !== 'difference') {
+    // Loaded, but the year has no 303 to reconcile with: the shared info banner, no action.
+    // Still loading (no preload yet) or not computed: nothing.
+    if (!preload || status !== 'no303') return null;
+    return (
+      <div className="fm-390-reconcile-row" data-testid="Reconciliation390">
+        <Banner
+          tone="info"
+          icon={<Info size={16} strokeWidth={1.75} data-testid="Info__reconciliation390" />}
+          title={<span data-testid="Reconciliation390__no303">{t('fm.m390.reconcile.no303', { year })}</span>} />
+      </div>
+    );
+  }
   const ok = status === 'ok';
   const missing = missingPeriodsLabel(preload);
   const sub = (

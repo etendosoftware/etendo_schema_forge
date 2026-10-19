@@ -3700,8 +3700,10 @@ files to several administrations.
     (`Reconciliation390__viewDetail`), which opens the
     Casillas tab at block 9 and scrolls to / highlights the year's 303s for 2.5 s (`FmBoxes390`
     `goToBlock` → `FmBoxes390__extra_<blockId>`, `.fm-390-block-extra--highlight`).
-  - Nothing is rendered when there is nothing to reconcile (no 303 of the year, not computed yet,
-    preload loading). Neither state blocks Generar nor Presentar. Why these boxes: backend doc,
+  - No 303 of the year (preload loaded, `reconcile390` → `no303`): the shared
+    `Banner tone="info"` "Sin Modelos 303 de <año> con los que cuadrar"
+    (`Reconciliation390__no303`), without the action. Nothing is rendered while the preload
+    loads or before the boxes are computed. Neither state blocks Generar nor Presentar. Why these boxes: backend doc,
     "Cuadre".
 - **Incidents:** the backend raises the same two findings as the warnings `MISSING_303` and
   `DIFF_303` (from the stored inputs, `Fiscal390PreloadAggregator.reconcile`); the page does not

@@ -22171,6 +22171,7 @@
     "fm.m390.preload.warning.compute_failed": "The 303 of {periods} could not be computed and was left out.",
     "fm.m390.preload.warning.last_period_missing": "The 303 of the last period is missing: [97], [98] and the territory percentages are not preloaded.",
     "fm.m390.reconcile.difference": "Difference with the 303 returns: {difference} (per the 303 returns: {expected}; tolerance {tolerance})",
+    "fm.m390.reconcile.no303": "No Form 303 returns of {year} to reconcile with",
     "fm.m390.reconcile.ok_title": "The result matches the sum of your Form 303 returns",
     "fm.m390.reconcile.ok_sub": "It is informative: the payment or refund was already settled in the last 303 (boxes 97 and 98).",
     "fm.m390.reconcile.difference_title": "The result does not match the sum of your Form 303 returns",

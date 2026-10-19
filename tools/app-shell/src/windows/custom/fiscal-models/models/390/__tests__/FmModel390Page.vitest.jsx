@@ -737,10 +737,19 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     await waitFor(() => expect(extra.querySelector('[data-testid="Settlements303Table390__row_T1"]')).toBeTruthy());
   });
 
-  it('without 303s of the year there is nothing to reconcile and nothing is preloaded', async () => {
+  it('renders no cuadre banner while the preload is loading', async () => {
+    fetchPreload390.mockReturnValue(new Promise(() => {}));
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     await waitFor(() => expect(fetchPreload390).toHaveBeenCalled());
     expect(screen.queryByTestId('Reconciliation390')).toBeNull();
+  });
+
+  it('without 303s of the year there is nothing to reconcile and nothing is preloaded', async () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    // The shared info banner, without the "Ver detalle por trimestre" action.
+    await waitFor(() => expect(screen.getByTestId('Reconciliation390__no303')).toBeTruthy());
+    expect(screen.getByTestId('Reconciliation390').querySelector('.fm-banner--rich.fm-banner--info')).toBeTruthy();
+    expect(screen.queryByTestId('Reconciliation390__viewDetail')).toBeNull();
     fireEvent.click(screen.getByTestId('FmModel390Page__save'));
     await waitFor(() => expect(persistManualData).toHaveBeenCalled());
     expect(savedManualData().aeatPreloaded).toBeUndefined();
