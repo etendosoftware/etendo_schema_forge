@@ -39,19 +39,11 @@ async function fetchOrgTaxId(apiFetch) {
 // ETP-5585 — per-docType pre-flight checks, named by `docType.validateExtraction`. Each runs after
 // the extraction and before any modal. Returns `{ error }` to block the flow, `{ notice }` to
 // continue with a non-blocking flag for the review modal, or null to continue untouched.
-// The mismatch error stays on screen until the user closes it (QA ETP-5585: a transient toast read
-// as "nothing happened"). The stable id makes a second wrong invoice replace it instead of stacking.
-const RECEIVER_MISMATCH_TOAST_ID = 'ocr-receiver-tax-id-mismatch';
-const RECEIVER_MISMATCH_TOAST_OPTIONS = {
-  id: RECEIVER_MISMATCH_TOAST_ID,
-  duration: Infinity,
-  closeButton: true,
-};
+// The mismatch error is blocking and is shown inline by the uploader (`result.blocked`), like the
+// extraction errors, so it stays visible until the file changes or a new run starts.
 
 const VALIDATORS = {
   async receiverTaxId(payload, { apiFetch, ui }) {
-    // A new validation run clears the previous (persistent) mismatch error before comparing.
-    toast.dismiss(RECEIVER_MISMATCH_TOAST_ID);
     // The org id is only needed once a receiver id is present, so skip the call otherwise. An
     // absent receiver id is not a reason to stop: the review modal shows a non-blocking notice.
     if (!cleanTaxId(payload?.receiver?.tax_id_raw)) return { notice: 'receiverTaxIdAbsent' };
@@ -63,10 +55,7 @@ const VALIDATORS = {
     const orgTaxId = org.taxId;
     const { status, receiverTaxId } = checkReceiverTaxId(payload, orgTaxId);
     if (status === 'mismatch') {
-      return {
-        error: ui('ocrReceiverTaxIdMismatch', { receiver: receiverTaxId }),
-        toastOptions: RECEIVER_MISMATCH_TOAST_OPTIONS,
-      };
+      return { error: ui('ocrReceiverTaxIdMismatch', { receiver: receiverTaxId }) };
     }
     if (status === 'no-org-tax-id') toast.warning(ui('ocrOrgTaxIdMissing'));
     return null;
@@ -186,6 +175,8 @@ export function useOcrFlow({
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  // Lets the uploader drop a stale result (e.g. the blocking message) when the file changes.
+  const clearResult = useCallback(() => setResult(null), []);
 
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewExtracted, setReviewExtracted] = useState(null);
@@ -310,9 +301,9 @@ export function useOcrFlow({
         const outcome = validate ? await validate(payload, { apiFetch, ui }) : null;
         const blocked = outcome?.error ? outcome : null;
         if (blocked) {
-          // NOT showResult: it reads `failed[0].message`, and this flow passes `{ reason }`.
-          toast.error(blocked.error, blocked.toastOptions);
-          setResult({ committed: false, error: blocked.error });
+          // Shown inline by the uploader via `result.blocked`; no toast. A distinct field from
+          // `error` because `error` also carries failures that already surface as toasts.
+          setResult({ committed: false, blocked: blocked.error });
           return;
         }
         // ETP-5654 — the steps run as a small state machine so BACK can re-enter the previous
@@ -472,7 +463,7 @@ export function useOcrFlow({
     );
   }
 
-  return { result, loading, pendingModal };
+  return { result, loading, pendingModal, clearResult };
 }
 
 export default useOcrFlow;

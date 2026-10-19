@@ -601,6 +601,83 @@ describe('ProductResolverPopup', () => {
     expect(screen.queryByText('ocrProductCreateSearchKeyRequired')).not.toBeInTheDocument();
   });
 
+  // Routes for the create modal: configurable defaults, UoM / tax selectors, product POST (counted).
+  function mockCreateModalRoutes({ defaults = null } = {}) {
+    globalThis.fetch.mockImplementation((url, options = {}) => {
+      const href = String(url);
+      if (href.endsWith('/product/defaults')) {
+        return defaults
+          ? Promise.resolve({ ok: true, json: async () => ({ defaults }) })
+          : Promise.resolve({ ok: false, json: async () => ({}) });
+      }
+      if (href.includes('/selectors/C_UOM_ID')) {
+        return Promise.resolve({ ok: true, json: async () => ({ items: [{ id: 'uom-1', name: 'Unit' }] }) });
+      }
+      if (href.includes('/selectors/C_TaxCategory_ID')) {
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [{ id: 'tax-1', _identifier: 'VAT 21' }] } }) });
+      }
+      if (href.endsWith('/product') && options.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify({ response: { data: [{ id: 'prod-new', name: 'Widget A' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    });
+  }
+
+  const productPosts = () => globalThis.fetch.mock.calls.filter(
+    ([url, options]) => String(url).endsWith('/product') && options?.method === 'POST',
+  );
+
+  it('clears the UoM validation message when a UoM is picked through the selector', async () => {
+    const user = userEvent.setup();
+    mockCreateModalRoutes();
+    render(<ProductResolverPopup {...defaultProps} unmatched={[{ idx: 0, description: 'Widget A' }]} />);
+    await user.click(screen.getByTestId('ocr-product-main-0'));
+    await screen.findByText('ocrProductCreateTitle');
+    await waitFor(() => expect(screen.getByText('ocrProductCreateDefaultsFailed')).toBeInTheDocument());
+
+    await user.click(screen.getByText('ocrProductCreate'));
+    expect(screen.getByText('ocrProductCreateUomRequired')).toBeInTheDocument();
+
+    await user.click(screen.getAllByText('ocrProductCreateSelect')[0]);
+    await user.click(await screen.findByText('Unit'));
+    expect(screen.queryByText('ocrProductCreateUomRequired')).not.toBeInTheDocument();
+  });
+
+  it('clears the tax category validation message when a category is picked through the selector', async () => {
+    const user = userEvent.setup();
+    mockCreateModalRoutes({ defaults: { id: 'default-id', uOM: 'uom-def', 'uOM$_identifier': 'Unidad' } });
+    render(<ProductResolverPopup {...defaultProps} unmatched={[{ idx: 0, description: 'Widget A' }]} />);
+    await user.click(screen.getByTestId('ocr-product-main-0'));
+    await screen.findByText('Unidad');
+
+    await user.click(screen.getByText('ocrProductCreate'));
+    expect(screen.getByText('ocrProductCreateTaxRequired')).toBeInTheDocument();
+
+    // UoM is prefilled, so the only remaining "select" button is the tax category one.
+    await user.click(screen.getAllByText('ocrProductCreateSelect')[0]);
+    await user.click(await screen.findByText('VAT 21'));
+    expect(screen.queryByText('ocrProductCreateTaxRequired')).not.toBeInTheDocument();
+  });
+
+  it('keeps the validation message visible while nothing is edited', async () => {
+    const user = userEvent.setup();
+    mockCreateModalRoutes();
+    render(<ProductResolverPopup {...defaultProps} unmatched={[{ idx: 0, description: 'Widget A' }]} />);
+    await user.click(screen.getByTestId('ocr-product-main-0'));
+    await screen.findByText('ocrProductCreateTitle');
+    await waitFor(() => expect(screen.getByText('ocrProductCreateDefaultsFailed')).toBeInTheDocument());
+
+    await user.click(screen.getByText('ocrProductCreate'));
+    await user.click(screen.getByText('ocrProductCreateTitle'));
+    expect(screen.getByText('ocrProductCreateUomRequired')).toBeInTheDocument();
+    await user.click(screen.getByText('ocrProductCreate'));
+    expect(screen.getByText('ocrProductCreateUomRequired')).toBeInTheDocument();
+    expect(productPosts()).toHaveLength(0);
+  });
+
   it('keeps a server create error visible while the user edits a field', async () => {
     const user = userEvent.setup();
     const unmatched = [{ idx: 0, description: 'Widget A' }];
@@ -1025,5 +1102,50 @@ describe('ProductResolverPopup — back navigation', () => {
     await user.click(screen.getByTestId('Button__b3ae11_continue'));
 
     expect(onSubmit).toHaveBeenCalledWith({ 0: 'p-new', 2: 'p-gadget' });
+  });
+
+  it('a product created in the modal survives Back and re-entry as a plain pick: one POST, submitted by id', async () => {
+    const user = userEvent.setup();
+    const posts = () => globalThis.fetch.mock.calls.filter(
+      ([url, options]) => String(url).endsWith('/product') && options?.method === 'POST',
+    );
+    globalThis.fetch.mockImplementation((url, options = {}) => {
+      const href = String(url);
+      if (href.endsWith('/product/defaults')) {
+        return Promise.resolve({ ok: true, json: async () => ({ defaults: {
+          id: 'd', uOM: 'uom-def', 'uOM$_identifier': 'Unidad', taxCategory: 'tax-def', 'taxCategory$_identifier': 'IVA',
+        } }) });
+      }
+      if (href.endsWith('/product') && options.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          text: async () => JSON.stringify({ response: { data: [{ id: 'prod-new', name: 'Widget Created' }] } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+    });
+    const rows = [{ idx: 0, description: 'Widget', suggestion: null }];
+    const onStateChange = vi.fn();
+    const first = render(<ProductResolverPopup {...props} unmatched={rows} onBack={vi.fn()} onStateChange={onStateChange} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.click(screen.getByTestId('ocr-product-main-0'));
+    await screen.findByText('Unidad');
+    await user.click(screen.getByText('ocrProductCreate'));
+    await waitFor(() => expect(screen.queryByText('ocrProductCreateTitle')).not.toBeInTheDocument());
+    await user.click(screen.getByTestId('Button__b3ae11_back'));
+
+    expect(posts()).toHaveLength(1);
+    const saved = onStateChange.mock.calls[0][0];
+    first.unmount();
+
+    // Re-entry: the loop hands the saved selections back as initialSelections.
+    const onSubmit = vi.fn();
+    render(<ProductResolverPopup {...props} unmatched={rows} initialSelections={saved} onBack={vi.fn()} onSubmit={onSubmit} onCancel={vi.fn()} />);
+    expect(screen.getByTestId('ocr-product-main-0')).toHaveTextContent('Widget Created');
+    expect(screen.queryByText('ocrProductCreateTitle')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('Button__b3ae11_continue'));
+
+    expect(onSubmit).toHaveBeenCalledWith({ 0: 'prod-new' });
+    expect(posts()).toHaveLength(1);
   });
 });
