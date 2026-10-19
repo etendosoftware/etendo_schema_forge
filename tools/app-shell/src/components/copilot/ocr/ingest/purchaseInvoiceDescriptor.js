@@ -347,12 +347,9 @@ function buildHeaderBody(safe, bpId, partnerAddress, extras = {}) {
   return headerBody;
 }
 
-/**
- * Map line idx → productId. Falls back to the product-resolver popup when
- * simSearch leaves a line unmatched. Returns `{ cancelled: true }` when the
- * user dismisses the popup.
- */
-async function resolveProductsForLines({ lines, productMatches, askUserForProducts, apiBaseUrl }) {
+// Splits the lines into those already matched to a product (`productByIdx`) and those the user
+// must pick one for (`needsUserPick`).
+function partitionLinesByProductMatch(lines, productMatches) {
   const productByIdx = {};
   const needsUserPick = [];
   lines.forEach((line, idx) => {
@@ -373,6 +370,16 @@ async function resolveProductsForLines({ lines, productMatches, askUserForProduc
       taxId: line?._tax_id || null,
     });
   });
+  return { productByIdx, needsUserPick };
+}
+
+/**
+ * Map line idx → productId. Falls back to the product-resolver popup when
+ * simSearch leaves a line unmatched. Returns `{ cancelled: true }` when the
+ * user dismisses the popup.
+ */
+async function resolveProductsForLines({ lines, productMatches, askUserForProducts, apiBaseUrl }) {
+  const { productByIdx, needsUserPick } = partitionLinesByProductMatch(lines, productMatches);
   if (needsUserPick.length === 0 || typeof askUserForProducts !== 'function') {
     return { productByIdx };
   }

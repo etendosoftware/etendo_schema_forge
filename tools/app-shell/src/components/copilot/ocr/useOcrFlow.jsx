@@ -159,6 +159,129 @@ export function headerDependencyKey(reviewed, payload) {
   ]);
 }
 
+// Runs the doc type's pre-flight check, if it declares one. Null when there is nothing to report.
+async function runValidator(docType, payload, deps) {
+  const validate = VALIDATORS[docType.validateExtraction];
+  return validate ? validate(payload, deps) : null;
+}
+
+// ETP-5654 — the review steps run as a small state machine so BACK can re-enter the previous step
+// that was actually shown (lines only exist when there are lines to review). Each step reads and
+// writes the shared `flow` and returns the next step name, or STEP_CANCELLED.
+const STEP_CANCELLED = 'cancelled';
+
+async function runHeaderStep(flow) {
+  flow.reviewed = await flow.askUserToReview(flow.payload, {
+    receiverTaxIdAbsent: flow.receiverTaxIdAbsent,
+    initialState: flow.stepStateRef.current.header,
+  });
+  if (!flow.reviewed) return STEP_CANCELLED;
+  return flow.withLines ? 'lines' : 'build';
+}
+
+// Recompute rule: reuse the user's edited lines while the header inputs of the resolution (vendor,
+// invoice date) are unchanged; otherwise rebuild them from the OCR payload and drop the stale edits.
+async function refreshLineBase(flow) {
+  const { payload, docType, token, apiBaseUrl } = flow;
+  const key = headerDependencyKey(flow.reviewed, payload);
+  if (flow.lineBase?.key === key) return;
+  const taxContext = await buildTaxContext(flow.reviewed, payload, { token, apiBaseUrl });
+  flow.lineBase = {
+    key,
+    lines: await resolveLines(docType.lineColumns, payload.line_items, { token, apiBaseUrl, taxContext }),
+  };
+  flow.stepStateRef.current.lines = null;
+}
+
+async function runLinesStep(flow) {
+  await refreshLineBase(flow);
+  flow.reviewedLines = null;
+  if (flow.lineBase.lines.length > 0) {
+    const answer = await flow.askUserToReviewLines(flow.lineBase.lines, flow.stepStateRef.current.lines);
+    if (isBack(answer)) return 'header';
+    if (!answer) return STEP_CANCELLED;
+    flow.reviewedLines = answer;
+  }
+  return 'build';
+}
+
+async function runBuildStep(flow) {
+  flow.built = await flow.buildBatch(flow.payload, {
+    token: flow.token,
+    apiBaseUrl: flow.apiBaseUrl,
+    askUserForProducts: flow.askUserForProducts,
+    reviewedHeader: flow.reviewed,
+    reviewedLines: flow.reviewedLines,
+  });
+  if (flow.built?.back) {
+    // The product popup was backed out of: nothing was sent; previous shown step.
+    return flow.lineBase?.lines?.length > 0 ? 'lines' : 'header';
+  }
+  return 'done';
+}
+
+const STEP_RUNNERS = { header: runHeaderStep, lines: runLinesStep, build: runBuildStep };
+
+// Returns the built batch, or null when the user cancelled a step.
+async function runReviewSteps(flow) {
+  let step = 'header';
+  while (step !== 'done') {
+    step = await STEP_RUNNERS[step](flow);
+    if (step === STEP_CANCELLED) return null;
+  }
+  return flow.built;
+}
+
+function reportBatchResponse(response, unmatched, { showResult, setResult, onRefresh }) {
+  if (!response?.committed) {
+    const message = response?.error?.message
+      || `Operation '${response?.failedAt?.id}' failed`;
+    console.warn('[OCR][batch] not committed', response);
+    showResult({ ok: 0, failed: [{ reason: message }] });
+    setResult({
+      committed: false,
+      error: message,
+      failedAt: response?.failedAt,
+    });
+    return;
+  }
+  const recordOps = response.operations || [];
+  const headerOp = recordOps.find(o => o.id === 'inv');
+  const lineCount = recordOps.filter(o => /^ln\d+$/.test(o.id || '')).length;
+  // ETP-5289 — count the lines only. The invoice header is the document itself, not one
+  // of the records the user asked to process, so "1 + lines" overstated the result.
+  showResult({
+    ok: lineCount,
+    // ETP-5289 — an unmatched line is one the user skipped in "Match products" (the
+    // popup's "leave blank to skip the line"), so it is omitted, not failed. A line that
+    // genuinely fails cannot reach this branch: the batch is atomic, so any failure
+    // aborts the whole invoice and takes the not-committed path above.
+    omitted: unmatched.map(name => ({ reason: `product_not_found: ${name}` })),
+    failed: [],
+  });
+  setResult({
+    committed: true,
+    recordId: headerOp?.recordId,
+    linesCreated: lineCount,
+    linesFailed: 0,
+    unresolved: unmatched,
+  });
+  onRefresh?.(headerOp?.recordId);
+}
+
+async function submitBuiltBatch(built, { runBatch, showResult, setResult, onRefresh }) {
+  const ops = built.ops || [];
+  const unmatched = built.unmatched || [];
+  if (ops.length === 0) {
+    showResult({ ok: 0, failed: [{ reason: 'empty_batch' }] });
+    setResult({ committed: false, error: 'Empty batch' });
+    return;
+  }
+  console.log('[OCR][batch] POSTing', ops.length, 'op(s)');
+  const response = await runBatch(ops);
+  reportBatchResponse(response, unmatched, { showResult, setResult, onRefresh });
+}
+
 export function useOcrFlow({
   docTypeId,
   token,
@@ -297,123 +420,36 @@ export function useOcrFlow({
       setLoading(true);
       setResult(null);
       try {
-        const validate = VALIDATORS[docType.validateExtraction];
-        const outcome = validate ? await validate(payload, { apiFetch, ui }) : null;
-        const blocked = outcome?.error ? outcome : null;
-        if (blocked) {
+        const outcome = await runValidator(docType, payload, { apiFetch, ui });
+        if (outcome?.error) {
           // Shown inline by the uploader via `result.blocked`; no toast. A distinct field from
           // `error` because `error` also carries failures that already surface as toasts.
-          setResult({ committed: false, blocked: blocked.error });
+          setResult({ committed: false, blocked: outcome.error });
           return;
         }
-        // ETP-5654 — the steps run as a small state machine so BACK can re-enter the previous
-        // step that was actually shown (lines only exist when there are lines to review).
         stepStateRef.current = { header: null, lines: null, products: null };
-        const withLines = hasLinesToReview(docType, payload);
-        const receiverTaxIdAbsent = outcome?.notice === 'receiverTaxIdAbsent';
-        let reviewed = null;
-        let reviewedLines = null;
-        let lineBase = null; // { key, lines }: resolved lines and the header key they were built for
-        let built = null;
-        let step = 'header';
-        while (step !== 'done') {
-          if (step === 'header') {
-            reviewed = await askUserToReview(payload, { receiverTaxIdAbsent, initialState: stepStateRef.current.header });
-            if (!reviewed) {
-              markCancelled();
-              return;
-            }
-            step = withLines ? 'lines' : 'build';
-          } else if (step === 'lines') {
-            // Recompute rule: reuse the user's edited lines while the header inputs of the
-            // resolution (vendor, invoice date) are unchanged; otherwise rebuild them from the
-            // OCR payload and drop the stale line edits.
-            const key = headerDependencyKey(reviewed, payload);
-            if (lineBase?.key !== key) {
-              const taxContext = await buildTaxContext(reviewed, payload, { token, apiBaseUrl });
-              lineBase = {
-                key,
-                lines: await resolveLines(docType.lineColumns, payload.line_items, { token, apiBaseUrl, taxContext }),
-              };
-              stepStateRef.current.lines = null;
-            }
-            reviewedLines = null;
-            if (lineBase.lines.length > 0) {
-              const answer = await askUserToReviewLines(lineBase.lines, stepStateRef.current.lines);
-              if (isBack(answer)) {
-                step = 'header';
-                continue;
-              }
-              if (!answer) {
-                markCancelled();
-                return;
-              }
-              reviewedLines = answer;
-            }
-            step = 'build';
-          } else {
-            built = await buildBatch(payload, {
-              token,
-              apiBaseUrl,
-              askUserForProducts,
-              reviewedHeader: reviewed,
-              reviewedLines,
-            });
-            if (built?.back) {
-              // The product popup was backed out of: nothing was sent; previous shown step.
-              step = lineBase?.lines?.length > 0 ? 'lines' : 'header';
-              continue;
-            }
-            step = 'done';
-          }
-        }
+        const built = await runReviewSteps({
+          payload,
+          docType,
+          buildBatch,
+          token,
+          apiBaseUrl,
+          askUserToReview,
+          askUserToReviewLines,
+          askUserForProducts,
+          stepStateRef,
+          withLines: hasLinesToReview(docType, payload),
+          receiverTaxIdAbsent: outcome?.notice === 'receiverTaxIdAbsent',
+          reviewed: null,
+          reviewedLines: null,
+          lineBase: null, // { key, lines }: resolved lines and the header key they were built for
+          built: null,
+        });
         if (!built || built.cancelled) {
           markCancelled();
           return;
         }
-        const ops = built.ops || [];
-        const unmatched = built.unmatched || [];
-        if (ops.length === 0) {
-          showResult({ ok: 0, failed: [{ reason: 'empty_batch' }] });
-          setResult({ committed: false, error: 'Empty batch' });
-          return;
-        }
-        console.log('[OCR][batch] POSTing', ops.length, 'op(s)');
-        const response = await runBatch(ops);
-        if (response?.committed) {
-          const recordOps = response.operations || [];
-          const headerOp = recordOps.find(o => o.id === 'inv');
-          const lineCount = recordOps.filter(o => /^ln\d+$/.test(o.id || '')).length;
-          // ETP-5289 — count the lines only. The invoice header is the document itself, not one
-          // of the records the user asked to process, so "1 + lines" overstated the result.
-          showResult({
-            ok: lineCount,
-            // ETP-5289 — an unmatched line is one the user skipped in "Match products" (the
-            // popup's "leave blank to skip the line"), so it is omitted, not failed. A line that
-            // genuinely fails cannot reach this branch: the batch is atomic, so any failure
-            // aborts the whole invoice and takes the not-committed path below.
-            omitted: unmatched.map(name => ({ reason: `product_not_found: ${name}` })),
-            failed: [],
-          });
-          setResult({
-            committed: true,
-            recordId: headerOp?.recordId,
-            linesCreated: lineCount,
-            linesFailed: 0,
-            unresolved: unmatched,
-          });
-          onRefresh?.(headerOp?.recordId);
-        } else {
-          const message = response?.error?.message
-            || `Operation '${response?.failedAt?.id}' failed`;
-          console.warn('[OCR][batch] not committed', response);
-          showResult({ ok: 0, failed: [{ reason: message }] });
-          setResult({
-            committed: false,
-            error: message,
-            failedAt: response?.failedAt,
-          });
-        }
+        await submitBuiltBatch(built, { runBatch, showResult, setResult, onRefresh });
       } catch (e) {
         console.error('[OCR][batch] flow failed', e);
         showResult({ ok: 0, failed: [{ reason: e?.message || 'flow_failed' }] });
