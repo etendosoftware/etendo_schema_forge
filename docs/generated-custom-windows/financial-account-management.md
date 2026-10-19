@@ -1260,6 +1260,21 @@ Posting stays on `financial-account/transaction` (`post` / `unpost`). Runtime re
 `com.etendoerp.go/docs/neo-headless.md` §4.12.1.4 (movements), §4.12.1.5 (transfers) and §4.12.9
 (differences with the SPA's route).
 
+## MCP / agent access to the bank connection (ETP-5804)
+
+The two disconnect options of "Editar cuenta" and the row kebab (see "Disconnecting: two modes
+(ETP-4764)" above) are declared actions of `financial-account/account`, called with
+`etendo_action {spec:"financial-account", entity:"account", id:<financial account id>, action:...}`:
+
+| Action | Mode | Effect |
+|---|---|---|
+| `disconnectBank` | soft, reversible (`permanentDeletion=false`) | Sync stops; normally the account keeps its link and history and can be reconnected from the UI; a connection shared by several accounts is unlinked instead (`permanent:true, reconnectable:false`), so the agent reads `reconnectable`. Repeating it is safe. Releases the account for manual bank statements, which a connected account rejects with 409 |
+| `deleteBankConnection` | permanent, irreversible (`permanentDeletion=true`) | Deletes the connection at Salt Edge and unlinks the account; the bank connection then no longer blocks deleting it (other delete blockers may still apply). Its description instructs the agent to ask the user first and call it only after they confirm |
+
+Both answer `{disconnected, permanent, reconnectable}`; an account with no connection answers 404.
+Connecting and reconnecting stay hidden from the MCP: they need the account holder to authenticate at
+the bank (SCA). Runtime reference: `com.etendoerp.go/docs/neo-headless.md` §4.12.1.8.
+
 ## MCP / agent access to bank statements (ETP-5447, ETP-5469)
 
 Bank statements are reachable from the MCP as **declared actions of the R spec
