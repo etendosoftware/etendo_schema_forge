@@ -1211,6 +1211,11 @@ check that every own GLJ sequence is above the tenant's highest journal number i
 affected tenants (127 `SKIPPED_NOT_NEEDED`); applied, every journal and its 2 posted facts on the
 own doctype and category, sequences above the highest number; a re-run is `SKIPPED_NOT_NEEDED`.
 Prod scope on 2026-10-19: 17 journals in 11 tenants, 13 posted (32 fact rows).
+QA edge cases verified in rolled-back transactions: multi-org tenant with 2 `IsDefault` GLJ doctypes
+(target matches the ETP-5682 `defaultExpr` for every journal, both sequences advanced); tenant
+without an own GLJ doctype (untouched, listed by `@report`, one row per journal even with several
+fact rows); non-numeric `documentno` ignored by the advance; forward-only guard; other tenants
+unchanged; multi-line posted facts repointed with amounts unchanged.
 
 **Not in scope:** RTV shipments (`M_InOut`) with another tenant's `MMR` doctype — a separate live
 leak in `CreatePurchaseReturnHandler`, ETP-5801.
