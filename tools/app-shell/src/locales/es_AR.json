@@ -17087,6 +17087,8 @@
     "backendError.returnLineRequiresImport": "Las líneas de una devolución no se pueden crear directamente: agregalas con \"Añadir desde Albarán\" o creá la devolución completa desde el documento de origen.",
     "backendError.returnLineNotInDocument": "La línea {lineId} no es una línea de este documento.",
     "backendError.returnReasonTooLong": "El motivo es demasiado largo: puede tener como máximo {max} caracteres (tiene {length}).",
+    "backendError.returnInvoiceWithoutAmount": "No se puede crear la factura rectificativa: no se encontró precio para {products}, así que quedaría confirmada con importe cero. Definí un precio para esos productos (en la factura que se rectifica o en su tarifa) y probá de nuevo.",
+    "backendError.rectifiedInvoiceRequired": "Esta devolución no tiene ninguna factura que rectificar: el documento que devuelve no se facturó, así que la factura rectificativa no tiene a qué vincularse. Facturá primero el documento original o seleccioná una factura a rectificar.",
     "backendError.costingNoProduct": "Una línea de costo debe pertenecer a un producto.",
     "backendError.costingCostRequired": "Ingresá el costo.",
     "backendError.costingCostNegative": "El costo no puede ser negativo.",
