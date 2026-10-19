@@ -2932,6 +2932,13 @@ the same (one resolved, a different one appears in the same submission), the eff
 array won't fire and the banner stays dismissed — judged an acceptable simplification since
 `IncidentsTab`'s current props only expose the two counts, not the incident list, to key off of.
 
+**Shared with the 390 (ETP-5716).** `IncidentsTab` is the Incidencias table of every model. It
+takes three optional resolvers — `getMessage`, `getOrigin`, `renderAction` — that the 390 passes
+(see "Modelo 390 detail page › Incidents"); without them it shows `inc.message` / `inc.origin` and
+the casilla → Facturas action above, exactly as before (the 303 and 349 pass none). Each row also
+carries `data-testid="IncidentsTab__row_<origin>"`. The 303 KPI card's `buildIncidentVariants` now
+delegates to `incidentKpiVariants` (`incidentSeverity.js`), the same body, so the 390 card reuses it.
+
 ## Modelo 349 detail page (`FmModel349Page`)
 
 Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalAutoCompute` (same hook as 303) using `compute349Operators` / `checkModified349`.
@@ -3450,9 +3457,10 @@ The invoices (Facturas) tab, the preload from the 303s with the cuadre, the pres
 
 - **Action bar** (same chrome as 303/349): left Cancelar, status chip and **Tipo: Normal | Sustitutiva**;
   right **Calcular**, **Generar fichero 390**, **Guardar** and **Registrar/Presentar** (primary). Once
-  presented, the right group is only **Crear declaración sustitutiva**. Generar and
-  Registrar/Presentar are disabled while the declaration has blocking RULE incidents (tooltip
-  `fm.m390.blocked_by_incidents`, see "Incidents") or nothing is computed.
+  presented, the right group is only **Crear declaración sustitutiva**. Like the 303, a blocked
+  Generar or Registrar/Presentar stays clickable: with blocking RULE incidents a click shows the toast
+  `fm.m390.blocked_by_incidents` and opens nothing, and the Generar download icon is red (see
+  "Incidents"). Both are disabled only while nothing is computed or the page is busy.
 - **Registrar/Presentar** opens the shared `PresentModal` with the AEAT path and, as its left
   column, the single path **Registrar como presentada** (`registerPaths`, sentinel id
   `manual_register`) — see "Presentation" below.
@@ -3468,28 +3476,35 @@ The invoices (Facturas) tab, the preload from the 303s with the cuadre, the pres
   `manualData.identification.{sustitutiva, formerStatement, rectificacionCuotas}` — the list "Tipo"
   column reads `sustitutiva` like 349's. `rectificacionCuotas` is deliberately not named
   `rectificativa` (that one means "Rectificativa" in the list).
-- **Cards:** Incidencias (split into **N bloqueantes · N advertencias**, click opens the tab — see
+- **Cards:** Incidencias (the 303 card: total + severity badge, click opens the tab — see
   "Incidents"), IVA devengado [47], IVA deducible [64], Resultado [86] — or [94] when filing to
   several administrations — with an informative badge: **Resultado positivo / negativo** (or
   "Resultado cero" / "Sin resultado"), neutral colours (`resultKind390` in `fm390Layouts.js`, NOT the
   shared `deriveResultKind`). AEAT writes [86]/[94] "con el signo que corresponda" and classic only
-  signs them; the payment, offset or refund was settled by the last 303, repeated in [97]/[98]. A
-  muted line under the cards says so (`fm.m390.result.informative_hint`). The "cuadre con los 303"
-  line under the cards is `Reconciliation390` (see "Preload from the 303s and cuadre"). Cards go 2×2 below 1100 px
-  (`.fm-390-kpis`).
-- **Tabs:** Casillas, Facturas (`FmSources390.jsx`, see below), Incidencias (`Incidents390Tab.jsx`,
+  signs them; the payment, offset or refund was settled by the last 303, repeated in [97]/[98].
+  One compact row under the cards (`.fm-390-kpi-notes`, the 303 has none) holds the "cuadre con los
+  303" (`Reconciliation390`, see "Preload from the 303s and cuadre") and that muted note
+  (`fm.m390.result.informative_hint`), side by side. Cards go 2×2 below 1100 px (`.fm-390-kpis`).
+- **Tabs:** Casillas, Facturas (`FmSources390.jsx`, see below; its badge is the unfiltered line
+  count, known once the tab has loaded it — `onCountChange`; no badge on a presented declaration),
+  Incidencias (`Incidents390Tab.jsx`,
   see "Incidents"), Justificante (shared `AttachmentsTab`).
 
 ### "Casillas" tab (`FmBoxes390.jsx` + `fm390Layouts.js`)
 
-Declarative layout, one block at a time with a sticky index of the 11 blocks (folded into a select
-below 1200 px) and Anterior / Siguiente at the bottom:
+Declarative layout, one block at a time with a sticky index of the 11 blocks (folded into the
+app `Select` below 1200 px — no native select, the ETP-5584 rule) and Anterior / Siguiente at the
+bottom. The index items use the 303 section-nav metrics (8px 12px, 14/20, radius 8); it is 280 px
+wide so every block name stays on one line at 1280×720. The block content has the 303 24px gutter;
+the in-block tables (IAE activities, representatives, the year's 303s) are `.fm-dtable--plain`
+like the 303 Facturas / Incidencias tables (header not sticky), and the block warnings have the 303
+warning-banner metrics:
 
 | # | Block | Content | Origin |
 |---|---|---|---|
 | 1 | Identificación | NIF and the name the file carries (legal entity: `AD_Org.socialName`, or `name` when empty; natural person `aeat390Isperson`: `aeat390Surname1` + `aeat390Surname2` + `aeat390Firstname` of the Organization information); marks "Inscrito en el registro de devolución mensual" (`ISMONTHLYRETURN`), "Declarado en concurso de acreedores en el ejercicio" (`ConcursoAcr`) and, under it, "… en el último periodo" (`ConcursoUltPer`) | NIF from `/session`, name from `organization/organization` + `organization/information`, read-only; marks manual |
 | 2 | Devengo | Ejercicio, tipo, identificador anterior, "por rectificación de cuotas" | read-only reflection of the header Tipo |
-| 3 | Datos estadísticos | IAE activities with the form's columns: **A · Actividad** (epigraph description), **B · Código de actividad** (e.g. `A03`, its description as secondary text/tooltip), **C · Epígrafe I.A.E.** (AEAT format: the file's `6732` shown as `673.2` — `formatIaeEpigraph390`), **Principal** (main first, then the others by line as `1ª…5ª`, as classic `AEAT390Utility.getEpigraphOrgInfo` writes them; one past the 5th is listed as "No se declara"). The IAE type ("Actividades empresariales sujetas al IAE") is not a 2025 form column — only the epígrafe cell tooltip. Values are split from the selector identifiers (`toActivities` in `useOrg390Identity.js`). Mark "operaciones con terceras personas" (`YEARLY_BP_DECLARATION`) | `organization/actividadesDelIae`, read-only + "Editar en Organización" |
+| 3 | Datos estadísticos | IAE activities with the form's columns: **A · Actividad** (epigraph description), **B · Código de actividad** (e.g. `A03`, its description as secondary text/tooltip), **C · Epígrafe I.A.E.** (AEAT format: the file's `6732` shown as `673.2` — `formatIaeEpigraph390`), **Principal** (main first, then the others by line as `1ª…5ª`, as classic `AEAT390Utility.getEpigraphOrgInfo` writes them; one past the 5th is listed as "No se declara"). The IAE type ("Actividades empresariales sujetas al IAE") is not a 2025 form column — only the epígrafe cell tooltip. Values are the raw epigraph / code fields, requested with `_extraProperties=epgrafeIAE.epigraph,epgrafeIAE.description,epiaeCode.code,epiaeCode.description` (`IAE_EXTRA_PROPERTIES`; NEO allowlists them, `neo-headless.md` §4.3.5) — no backend or decisions change; the selector identifiers are only split as a fallback when a field is missing (`toActivities` in `useOrg390Identity.js`). Mark "operaciones con terceras personas" (`YEARLY_BP_DECLARATION`) | `organization/actividadesDelIae`, read-only + "Editar en Organización" |
 | 4 | Representante | Natural person: `information.aeat390RepNif/RepName`; otherwise the first 3 `representanteLegal` rows by line (NIF, name, power date, notary) | Organization, read-only + "Editar en Organización" |
 | 5 | IVA devengado | Régimen ordinario and intra-EU goods/services by rate (0, 2, 4, 5, 7.5, 10, 21 %), [27]/[28], [29]/[30], [31]/[32], totals [33]/[34] and [47] | calculated |
 | 6 | IVA deducible | Interior corrientes / bienes de inversión, importaciones, intra-EU (per rate + group totals [48]…[59], [597]/[598]), [639]/[62], [63]; manual [660]/[661]; total [64] (deductible cuotas + [661], as the classic file writes it) | calculated; [660]/[661] manual |
@@ -3563,7 +3578,10 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
   `NO_BOX` a warning.
 - **"Ver facturas":** a calculated cell whose box is in the payload's `invoiceBoxes` (the boxes
   filled from invoices — never a derived total like [47]/[64]/[86]/[108]) carries a small receipt
-  button that opens the Facturas tab filtered by that box. Not shown on a presented declaration
+  button that opens the Facturas tab filtered by that box. It overlays the right edge of the cell
+  only on hover or keyboard focus (always visible on touch screens, `hover: none`), so at rest the
+  value shows whole like any 303 cell — it used to take 32 px for good and truncate the amounts
+  at 1280 px. Not shown on a presented declaration
   nor for a payload without `invoiceBoxes` (snapshot taken before the field existed).
 
 ### "Facturas" tab (`FmSources390.jsx` + `sources390.js`)
@@ -3740,8 +3758,9 @@ what the backend stored.
   (rule + AEAT ones). A presented declaration's incidents are frozen: the page only reads them
   (`GET /fiscal390/incidents`), and the backend refuses to recompute them. When `validate` fails
   the page falls back to the stored incidents.
-- **Gate:** Generar / Presentar are disabled while a blocking RULE incident exists
-  (`ruleBlockingCount`; `AEAT-…` rows never gate). The backend enforces the same server-side with
+- **Gate:** Generar / Presentar refuse to open while a blocking RULE incident exists
+  (`ruleBlockingCount`; `AEAT-…` rows never gate): like the 303 gates, the buttons stay clickable,
+  a click shows the toast `fm.m390.blocked_by_incidents`, and the Generar icon is red. The backend enforces the same server-side with
   a fresh evaluation: `GET /fiscal390/generate` answers `409 BLOCKING_INCIDENTS` with the
   incidents (`generate390File` → `{ error: 'blocking_incidents' }`: toast
   `fm.m390.blocked_by_incidents`, recompute, Incidencias tab opened) and `POST /fiscal390/submit`
@@ -3749,13 +3768,20 @@ what the backend stored.
 - **Legal representative (AEAT PAR012):** a legal entity whose representatives the file carries
   (first 3 active by line) have no NIF raises the **blocking** `NO_LEGAL_REPRESENTATIVE` ("Editar
   en Organización" → `org-section-390`): the AEAT rejects such a declaration, so Generar /
-  Presentar are disabled until one is added. A natural person is unaffected.
-- **Card:** "Incidencias" shows **N bloqueantes · N advertencias** (destructive / warning colour when
-  non-zero) and opens the tab.
-- **Tab** (`Incidents390Tab`): two groups, **Bloqueantes** ("Resuélvelas antes de generar el
-  fichero") and **Advertencias** ("No impiden generar el fichero"), each with a counter; every row
-  is the incident text and its actions. An AEAT answer is listed in the group of its severity with
-  its `AEAT-<code>` and the AEAT text as it came. Empty: "Sin incidencias".
+  Presentar are blocked until one is added. A natural person is unaffected.
+- **Card:** the 303 Incidencias card — the total and the severity badge ("Requiere revisión" with
+  any blocking, "Advertencia" with warnings only), from `incidentKpiVariants` (`incidentSeverity.js`,
+  the 303 page's `buildIncidentVariants` body, now shared). A click opens the tab.
+- **Tab** (`Incidents390Tab`): the shared 303 table (`IncidentsTab`, `FmTabContent.jsx`) — severity
+  banner (destructive "Resuélvelas antes de generar el fichero" with any blocking, amber
+  `fm.incidents.warn_sub` otherwise, dismissible) and the columns Severidad · Origen · Mensaje ·
+  Acción, blocking first. `IncidentsTab` takes three optional resolvers the 390 passes and the
+  303/349 do not (so they are unchanged): `getMessage` (`incidentText390`), `getOrigin`
+  (`incidentOrigin390`: "Casilla 87" for a `box`/`sources` action, "Organización", "Facturas",
+  "Declaración" for a rule with no action, the `AEAT-<code>` of an AEAT answer —
+  `fm.m390.incidents.origin.*`) and `renderAction` (the action links below, 303 link style
+  `.fm-incident-action`). `normalizeIncidents390` maps every item to `block` / `warn` (anything not
+  `warn` blocks) and recounts them. Empty: "Sin incidencias".
 - **Text:** translated by code, `fm.m390.incident.<CODE>` with the incident's params
   (`incidentText390`: amounts with `formatAmount`, rates with `formatPercent`, `NAME_TRUNCATED`'s
   field with `fm.m390.ident.field.*`); a code with no translation shows the backend's English
@@ -3769,9 +3795,9 @@ what the backend stored.
   | `organization` | Editar en Organización | saves pending changes, then `/organization#<section>` — `org-section-fiscal` (NIF, razón social), `org-section-iae`, `org-section-390`; the Organization page scrolls to it (see `organization.md`) |
   | `invoices` | Ver facturas de venta / de compra | saves pending changes, then the Sales / Purchase invoice list (one link per side with unposted invoices) |
 
-- **Tests:** `incidents390.vitest.js` (grouping, text, actions, i18n of every code, the two
-  requests), `FmModel390Page.vitest.jsx` "incidents" (recompute on open / save / Calcular, frozen
-  when presented, gate, tab, actions, 409 on Generar).
+- **Tests:** `incidents390.vitest.js` (grouping, text, actions, origin, normalisation, i18n of every
+  code, the two requests), `FmModel390Page.vitest.jsx` "incidents" (recompute on open / save /
+  Calcular, frozen when presented, gate toast, shared table, actions, 409 on Generar).
 
 ### AeatSubmitFlow model adapters (ETP-5716)
 
