@@ -51,7 +51,7 @@ const draftMode = {
 // @sf-generated-end draftMode:returnToVendorShipment
 
 // @sf-generated-start requiredHeaderFields:returnToVendorShipment
-const requiredHeaderFields = ['documentNo', 'businessPartner', 'partnerAddress', 'movementDate', 'warehouse', 'etblkpBulkposting'];
+const requiredHeaderFields = ['businessPartner', 'partnerAddress', 'movementDate', 'warehouse'];
 // @sf-generated-end requiredHeaderFields:returnToVendorShipment
 
 // @sf-generated-start addLineFields:returnToVendorShipmentLine

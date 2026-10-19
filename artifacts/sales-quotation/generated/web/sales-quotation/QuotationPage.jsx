@@ -55,7 +55,7 @@ const draftMode = {
 // @sf-generated-end draftMode:quotation
 
 // @sf-generated-start requiredHeaderFields:quotation
-const requiredHeaderFields = ['currency', 'priceList', 'documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'paymentTerms'];
+const requiredHeaderFields = ['currency', 'priceList', 'orderDate', 'businessPartner', 'partnerAddress', 'paymentTerms'];
 // @sf-generated-end requiredHeaderFields:quotation
 
 // @sf-generated-start addLineFields:quotationLine
