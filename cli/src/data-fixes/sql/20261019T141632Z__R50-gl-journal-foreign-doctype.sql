@@ -113,7 +113,7 @@ JOIN c_doctype dt ON dt.c_doctype_id = j.c_doctype_id
 WHERE j.ad_client_id = :client_id
   AND dt.ad_client_id <> :client_id
 UNION ALL
-SELECT 'fact_acct still foreign', NULL, f.record_id
+SELECT DISTINCT 'fact_acct still foreign', NULL, f.record_id
 FROM fact_acct f
 LEFT JOIN c_doctype dt ON dt.c_doctype_id = f.c_doctype_id
 LEFT JOIN gl_category g ON g.gl_category_id = f.gl_category_id

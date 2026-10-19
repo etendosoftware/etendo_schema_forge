@@ -111,7 +111,7 @@ describe('R50 data-fix — repoint', () => {
 describe('R50 data-fix — @report', () => {
   it('lists journals and facts that are still foreign after the apply', () => {
     assert.match(normReport, /^SELECT 'journal still foreign/);
-    assert.match(normReport, /UNION ALL SELECT 'fact_acct still foreign'/);
+    assert.match(normReport, /UNION ALL SELECT DISTINCT 'fact_acct still foreign'/);
     assert.match(normReport, /f\.ad_table_id = '224'/);
   });
 });
