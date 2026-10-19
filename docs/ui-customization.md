@@ -323,9 +323,9 @@ Handler precedence: `documentAction` > `columnName` > `action` > `component` > e
 
 **Save-before-action guard (ETP-4940).** Before invoking a `documentAction` entry, `DetailMoreActionsMenu.jsx`'s `runDocumentAction` now calls `maybeSaveBeforeConfirm` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`) to persist any pending header edit first — otherwise an edit made without clicking Save first was silently discarded, the action running against the last-persisted value. On save failure the action does not run (the existing `handleSave` error toast surfaces the failure). **Known gap:** unlike the draftMode Confirm button (which guards on the fuller `isDirty` — header OR line-edit/add-row state), this guard is scoped to `hook.isDirtyHeader` only, so a pending line-row edit with a clean header is not saved before a kebab `documentAction` fires. This is currently unreachable via any shipped generated window — the only kebab `documentAction` is `reactivate` (RE), which only appears once a document is already Completed, where lines are normally read-only — but it is pinned by an explicit regression test (`DetailMoreActionsMenu.saveBeforeConfirm.vitest.jsx`, look for "KNOWN GAP W1") so it does not silently widen if a future window wires a kebab action for a non-completed status.
 
-**Dynamic kebab entries — `customComponents.moreMenuContent`.** When an entry's caption or visibility depends on more than the document status or a record field (e.g. the org's fiscal configuration), declare a component instead: `"customComponents": { "moreMenuContent": "<Component>" }`. It is rendered inside the menu after the `menuActions` items and receives `data`, `recordId`, `token`, `apiBaseUrl`, `onClose`, `onRefresh`; returning `null` hides it. The menu unmounts it on close (a click inside a modal closes the menu too), so an entry that opens a modal must delegate the modal to a host that the window mounts **unconditionally** — not to a sibling that may itself be hidden, such as a topbar button.
+**Dynamic kebab entries — `customComponents.moreMenuContent`.** When an entry's caption or visibility depends on more than the document status or a record field (e.g. the org's fiscal configuration), declare a component instead: `"customComponents": { "moreMenuContent": "<Component>" }`. It is rendered inside the menu after the `menuActions` items and receives `data`, `recordId`, `token`, `apiBaseUrl`, `onClose`, `onRefresh` and `isDirty` (the header has unsaved edits — `hook.isDirtyHeader`, header fields only, not pending line edits; ETP-5700); returning `null` hides it. The menu unmounts it on close (a click inside a modal closes the menu too), so an entry that opens a modal must delegate the modal to a host that the window mounts **unconditionally** — not to a sibling that may itself be hidden, such as a topbar button.
 
-Example (ETP-5700): `SifSendMenuItem` (`tools/app-shell/src/windows/custom/shared/`, re-exported from `artifacts/{sales,purchase}-invoice/custom/`) computes the pending fiscal targets with `useInvoiceSifSending` (the same hook as the topbar `SendToSifButton`), closes the menu and calls `requestSifSendModal(specName, recordId, pendingTargets)` from `sifSending.js`. That dispatches the `sif:open-send-modal` window event; `SifSendModalHost`, which the invoice window wrapper (`index.jsx`) renders next to the form for as long as a record is open, filters it with `isSifSendRequestFor` (same spec, same record id) and portals the shared `SifSendingModal`. After a successful send it fires `${specName}:invoice-updated` so the topbar refreshes the record.
+Example (ETP-5700): `SifSendMenuItem` (`tools/app-shell/src/windows/custom/shared/`, re-exported from `artifacts/{sales,purchase}-invoice/custom/`) computes the pending fiscal targets with `useInvoiceSifSending`, closes the menu and calls `requestSifSendModal(specName, recordId, pendingTargets)` from `sifSending.js`. That dispatches the `sif:open-send-modal` window event; `SifSendModalHost`, which the invoice window wrapper (`index.jsx`) renders next to the form for as long as a record is open, filters it with `isSifSendRequestFor` (same spec, same record id) and portals the shared `SifSendingModal`. After a successful send it fires `${specName}:invoice-updated` so the topbar refreshes the record. Since ETP-5700 this kebab entry is the invoice form view's only send entry point: the topbar `SendToSifButton` was removed because the action showed twice.
 
 ```json
 "customComponents": { "moreMenuContent": "SifSendMenuItem" }
@@ -336,7 +336,7 @@ Example (ETP-5700): `SifSendMenuItem` (`tools/app-shell/src/windows/custom/share
 <SifSendModalHost apiBaseUrl={apiBaseUrl} recordId={recordId} />
 ```
 
-Known limitation of this pattern: the kebab entry has no save handle, so it does not flush pending header edits before sending (the topbar button does). Field reference: `docs/decisions-reference.md` → Custom Components.
+The kebab content has no save handle, so it cannot flush pending header edits itself. An entry whose action must see the saved values should use `isDirty` to refuse to run on a dirty form: `SifSendMenuItem` renders disabled (`aria-disabled`, dimmed) with the `sendToSifSaveFirst` tooltip ("Guarda los cambios antes de enviar") and ignores clicks until the user saves. Field reference: `docs/decisions-reference.md` → Custom Components.
 
 **The ⋮ button auto-hides when empty.** `DetailView` only renders the "more" button when, for the current record state, there is at least one visible `menuActions` entry **or** a `customComponents.moreMenuContent` is set. If every action is gated out (e.g. all `visibleWhenStatus: "CO"` while the document is in Draft), the button is not shown at all — it never renders as an empty, clickable dropdown.
 
@@ -539,7 +539,9 @@ The handler delegates to the standard Etendo `AttachImplementationManager` and s
 
 **Bulk actions live in the selection bar (ETP-5526).** Ticking rows raises the shared `SelectionToolbar` — the same floating pill Contactos, Cuentas financieras, Amortización, Activos and the list views use — carrying the selected count, a ZIP download of just those files, and a delete that asks for confirmation first. The old header-wide **Descargar todo (ZIP)** and **Eliminar todo** controls are gone from this tab; the table header is exactly the five Figma columns (file name, size, upload date, last update, uploaded by) plus the hover action cell.
 
-`AttachmentsTable` is shared, so selection there is an **opt-in, controlled** capability: a caller that passes `selectedIds` + `onToggleRow` + `onToggleAll` gets the checkbox column, and a caller that does not gets no checkbox column at all. `SifAttachmentsSection` (the SII/TBAI/Verifactu "Adjuntos" block) is the second caller: it opts out — which also removed the checkboxes it used to show and could not act on — and keeps its own header-wide "Download all (ZIP)" control, which is why `onDownloadAll` still exists on the table.
+**The grid is the generic `DataTable` (ETP-5526).** `AttachmentsTable` no longer hand-builds a `<table>`: it feeds `DataTable` its own rows (attachments are not a NEO entity — `C_File` has no AD tab — so `ListView` does not apply), the same shape as `NotPostedDocumentsPage`. It therefore shares every list's row visuals (*List row visuals* in §13): the lift hover with Shadows/lg and the redrawn top separator (via `rowHoverStyle="lift-always"`, because attachment rows have no click target of their own), the `#F5F7F9` checked row, and the fade behind the row actions. The per-row Download / Delete buttons render through `rowQuickActions.render` with the shared `ROW_ACTION_BUTTON_NEUTRAL` / `ROW_ACTION_BUTTON_DESTRUCTIVE` classes and `IconicTrashIcon`, revealed on hover. Columns sort client-side (`useClientSort`); in-flight uploads stay on top with a spinner, a disabled checkbox (when selection is on — `isRowSelectable` is false for them) and no actions. Dates follow Figma: abbreviated weekday, day and month, in the UI locale and the viewer's local time — "Jue 30 abr" in es_ES, "Thu Apr 30" in en_US — with the year appended after a single space only when the date is not in the current year (local time): "Jue 30 abr 2024", "Thu Apr 30 2024"; parts in the locale's own order, weekday capitalized, no abbreviation dots. They are formatted by `formatAttachmentDate` through the columns' own `render` (the backend sends UTC instants, so this is not a `parseCalendarDate` case); `DataTable`'s shared date cell is untouched, and sorting still uses the raw ISO value, so it stays chronological.
+
+`AttachmentsTable` is shared, so selection there is an **opt-in, caller-owned** capability: a caller that passes `selectedIds` + `onSelectionChange(ids)` gets the checkbox column, and a caller that does not gets no checkbox column at all. `DataTable` keeps its own checkbox state; `AttachmentsTable` pushes the caller's changes down to it (an emptied Set clears it through `clearSelectionTrigger`; a selected row that left the list is dropped through `deselectTrigger`). `SifAttachmentsSection` (the SII/TBAI/Verifactu "Adjuntos" block) is the second caller: it opts out — which also removed the checkboxes it used to show and could not act on — and keeps its own "Download all (ZIP)" control (now a link right-aligned above the grid), which is why `onDownloadAll` still exists on the table.
 
 **A processed/completed document no longer blocks attachment work (ETP-5526).** `isDocumentReadOnly` — the generic lock `DetailView` wires from the document's own state — used to hide delete and disable the dropzone; it now does neither. Attachments are evidence *about* a document, not part of it, and a closed invoice is exactly when the signed copy has to be filed. The separate `readOnly` prop is unchanged: it still hides every delete action (per-row and the bar's) while leaving upload and download alone, which is what blocks deleting a non-draft fiscal declaration's justificante (ETP-5432). Consequence, known and accepted: there is currently no way to express a fully read-only attachments view through `AttachmentsTab`.
 
@@ -638,13 +640,15 @@ generator compiles into the `listViewOptions` prop it passes to `ListView`),
 `hideBulkDelete` has **no decisions.json/generator wiring yet** — that
 compilation step lives in the generator (`schema_forge_core`, out of scope for
 this sub-task). Today the only way to set it is to pass `listViewOptions`
-directly from a hand-written `windows/custom/{window}/index.jsx` wrapper, the
-same way `contacts` does it. **That object REPLACES — it does not merge with —
+directly from a hand-written `windows/custom/{window}/index.jsx` wrapper (no
+window does so today — `contacts`, the only former user, migrated to the
+generic action in ETP-5758). **That object REPLACES — it does not merge with —
 the `listViewOptions` the generated page already passes to `ListView`**, so the
 wrapper must repeat every flag the generated page sets (`hidePrint`,
 `hideCounter`, `hideLink`, …) alongside `hideBulkDelete`, or those get silently
-dropped. See `tools/app-shell/src/windows/custom/contacts/index.jsx` for the
-canonical example.
+dropped. `tools/app-shell/src/windows/custom/contacts/index.jsx` shows the
+replace-not-merge pattern (it repeats the generated flags, without
+`hideBulkDelete`).
 
 > **ETP-4644:** the selection bar's "Vista Previa" (eye) button — and its
 > `listViewOptions.hideEye` / `hideEyeCount` opt-out flags — were removed
@@ -652,13 +656,15 @@ canonical example.
 > apply to any window, so it is gone unconditionally, with no flag needed or
 > supported anymore.
 
-**Known gap — `contacts`:** `contacts` sets `hideBulkDelete: true`, but this
-does **not** mean "this window has no bulk delete." `contacts` has its own,
-older bulk-delete affordance (a trash + X button pair rendered via
-`selectionBarRightActions`, predating this mechanism) that was **not**
-unified with `useBulkRowDelete` in this sub-task — that migration is tracked
-as a follow-up. Read `hideBulkDelete: true` on a window as "has a different,
-not-yet-migrated bulk-delete," never as "has none."
+**`contacts` migrated (ETP-5758):** `contacts` used to set `hideBulkDelete: true`
+and render its own, older bulk delete (a trash button via
+`selectionBarRightActions` plus its own confirm dialog). That dialog closed
+before the deletes ran and left the trash button enabled, so a user could
+launch several batches over the same rows. It now uses the generic action,
+whose dialog stays open and read-only (buttons disabled, no Esc/overlay close)
+until the batch settles, while the toolbar button is `disabled={bulkDeleting}`.
+A window that opts out with `hideBulkDelete` and rolls its own bulk delete must
+give it the same in-flight guard.
 
 **`listViewOptions.hideListBar` gates only the IDLE list bar — never the
 selection bar (ETP-4658 regression fix).** `hideListBar` exists for windows whose
@@ -963,7 +969,7 @@ auto-inserted after each):
 
 Because the shell no longer provides its own cancel/X affordance for callers
 to duplicate, any caller migrating from the old `LinesSelectionBar` (or a
-hand-rolled bar, like `contacts`' `selectionBarRightActions` and Financial
+hand-rolled bar, like `contacts`' former `selectionBarRightActions` and Financial
 Accounts' `BulkDeleteSelectionBar`) should **drop its own standalone X
 button** — `SelectionToolbar` always renders one as the trailing segment.
 
@@ -1359,7 +1365,7 @@ The generic `LinesEmptyState` component lives at `tools/app-shell/src/components
 />
 ```
 
-`addLineGuard` receives current form data and must return `true` to enable adding lines. It gates both the button inside the empty state (`canAddLine` prop) and the `+ Add Line` button in the lines table header. Without a guard, adding is always allowed.
+`addLineGuard` receives current form data and must return `true` to enable adding lines. It gates both the button inside the empty state (`canAddLine` prop) and the `+ Add Line` button in the lines table header. Without a guard, the default gate is the generated `requiredHeaderFields` list (`resolveCanAddLines` in `detailViewHelpers.jsx`): adding is allowed once every listed header field holds a value, and always when the list is empty. `generate-frontend.js` builds that list from the header's `required` + `form` fields the user can fill — it excludes `visibility` `discarded`, `system` **and `readOnly`** (ETP-5676), because a readOnly field such as `grandTotalAmount`/`summedLineAmount`, `documentNo` or `docStatus` is filled by the backend after the save and would otherwise hide the button until then. A field that is only locked by `readOnlyLogic` (e.g. after completion) is still editable in draft and stays in the list.
 
 **`window.maxDetailLines` — cap the line count (decisions-driven; `0` = import-only lines):**
 
@@ -1535,11 +1541,12 @@ I want row quick actions on my window
 |---|---|---|
 | `lift` (default; `elevated` is the former name, kept as an alias) | transparent, 1px `border-subtle` separator | opaque `bg-card` (white), Shadows/lg (`0 4px 6px -2px rgba(18,18,23,.05), 0 10px 15px -3px rgba(18,18,23,.08)`), raised with `z-10`, **instant** (no colour transition: a fading background made the chips inside the row flash under the shadow) |
 | `tint` (explicit opt-out) | transparent | the pre-ETP-5600 `bg-muted/50` wash, `transition-colors` |
+| `lift-always` (ETP-5526) | as `lift` | as `lift`, but on **every** row, clickable or not (cursor stays default). For a grid with hover actions and no row click — the attachments table |
 
 - **Separators.** Both lines stay visible on a hovered row. The line above it is the previous row's `border-b` in the table's collapsed-border grid; the raised row paints over it, so `getRowClassName` redraws it on the row's own cells (`[&:hover>td]:shadow-[inset_0_1px_0_hsl(var(--border-subtle))]`), above every cell background — the checkbox cell and the sticky quick-actions gradient included. The shadow falls downward, over the line below. The token `--border-subtle` is `#E1E7EF`; the Figma divider (`color/border/menu/divider`) is `#E8EAEF`, a near match kept on the shared token.
 - **Selected / checked rows** use Figma's *Selected* colour `#F5F7F9` (`--field-hover`, exact match) and no shadow at rest. Selection always wins over hover: a checked (or active `selectedId`) row keeps its selection colour while hovered, and under `lift` it still gets the hover shadow, so every clickable row gives the same pointer feedback. The inline-lines focus row (`selectedRowId`) keeps its `bg-muted` + focus ring and does not lift.
 - **Quick-actions fade.** Each row sets `--row-hover-bg` for its state — `hsl(var(--card))` on a lifted hover, `--field-hover` when checked, the composited tint under `tint` — and `quickActionsColumnClassName` ends its gradient on it.
-- **Non-clickable rows** (no `onRowClick`/`onNavigate`) never lift; they keep the shared `TableRow` base `hover:bg-muted/50`.
+- **Non-clickable rows** (no `onRowClick`/`onNavigate`) never lift; they keep the shared `TableRow` base `hover:bg-muted/50` — unless the grid passes `rowHoverStyle="lift-always"`, which lifts them too (and adds the last-row shadow room below).
 - **Last-row shadow, without a gap.** Under `lift` with clickable rows (and not `linesLayout="inlineEditable"`), the table wrapper adds `[&>div]:pb-6` so the last row's shadow is not clipped by `<Table>`'s own `overflow-auto` box (ETP-5388), and takes that room back from the layout with `!-mb-6` on itself (ETP-5600). Figma ends a list at its last row (or the 40px totals row) and runs a tab grid straight into its add-line bar, so nothing below the table sees a 24px gap: the following element (pagination, add-line bar, Total block) starts right under the last row and overlaps the empty padding, which is made click-through (`[&>div]:pointer-events-none`, `auto` again on the `<table>`) because `<Table>`'s wrapper is `position: relative` and would otherwise swallow clicks on the top 24px of that element. The hovered row's shadow (`z-10`) paints over it; a shadow is never a hit target. The negative margin sits on the outer wrapper, not the inner one, because the outer wrapper is itself a scroll container (`overflow-x-auto` forces `overflow-y: auto`): an inner `-mb-6` would overflow it, raising a stray vertical scrollbar and clipping the shadow again. A vertically scrolling ancestor (ListView's ScrollPane, the Accounts scroll region) still counts the wrapper's full border box as scrollable overflow, so scrolled to the bottom the shadow keeps its 24px and no row ends up behind what follows. The `!` is required: the parent's `space-y-0` zeroes `margin-bottom` on every child after the sticky header with a stronger selector. ListView's own `tablePaddingBottom` (`pb-6` on its ScrollPane) is the page's bottom gutter, not shadow room, and is unchanged.
 - **Document lines (`InlineLinesPanel`, `linesLayout="inlineEditable"`, Figma "Fila Producto" / "Fila Editable" / "Fila Desplegable dimensiones").** Its rows are flex `<div>`s, not `DataTable` rows, but they take the same values from `components/contract-ui/rowVisuals.js`, shared with `DataTable`: rest `bg-card` (white); hover keeps white and adds Shadows/lg (`ROW_LIFT_SHADOW`), instant (`transition-none`), no border change, raised with `hover:relative hover:z-20`; a line being edited keeps the same Shadows/lg (`ROW_LIFT_SHADOW_STATIC`). A checked line uses `ROW_CHECKED_BG` (`#F5F7F9`, `--field-hover`) — Figma has no Selected variant for lines, so it takes the list's, and hover keeps it (it was `bg-primary/5` before ETP-5600). The open-line highlight (`selectedRowId`) keeps `bg-muted/40` + `ring-1 ring-focus-ring`. A flex row never overlaps the row above, so the top separator stays visible without the `<td>` redraw. Lines of a read-only (completed) document do not lift — Figma shows no hover there. **Last-line shadow.** The lines' body box is an `overflow-x-auto` scroll box (so it also clips vertically) and shows the native horizontal scrollbar. When the lines can lift and nothing else follows the last line inside that box (no open add-row, no balance footer), `computeBodyScrollClassName` adds `pb-4` (16px, enough for the visible ~14px Shadows/lg tail) so the last — often only — line's shadow is not cut. Without horizontal overflow (measured on resize, column-set and row-count changes) the box takes the room back with `-mb-4`, as `DataTable` does, so no gap shows and the add-line bar starts right under the last line; the padding is click-through (`pointer-events-none`, `auto` again on its children), and the bar, `sticky z-10`, still wins clicks on the overlap while the hovered line (`z-20`) paints its shadow over it. With horizontal overflow there is no negative margin (the bar would cover the scrollbar, and click-through would disable it): the scrollbar simply sits 16px lower.
 - Pass `rowHoverStyle="tint"` only where a raised white row reads wrong — a grid sitting on a grey panel. No current consumer needs it. Hand-built tables that do not use `DataTable` (`fiscal-models` `.fm-table`) mirror the same shadow and top-separator fix in their own CSS.
@@ -1778,7 +1785,7 @@ One more request precedes the paging: the selector **fails closed** (returns an 
 
 Either way the **save/complete gating logic is identical and unaffected** — both paths read `computeBalanceGate()`'s `balanceState` directly, never anything a renderer displays.
 
-**Add-row and `DataTable`'s generic footer-totals (ETP-5210):** for `inlineEditable` windows, when the add-row form is active `GLJournalLineTable` (and every generated `*LineTable.jsx` for this layout) renders `InlineLinesPanel` (existing lines + the balanceFooter row above) **alongside** a second, header/data-hidden `DataTable` instance used only to host the add-row form. `DataTable` has its own, unrelated, longstanding generic footer-totals feature (`showFooterTotals`, on by default whenever amount columns exist) — without a guard, that hidden instance would render a *second*, unformatted totals row directly under the add-row form, stacked below the properly `€`-formatted, column-aligned one from `InlineLinesPanel`. `DataTable` now accepts a `balanceFooter` prop (already threaded through via `{...props}` at the `*LineTable.jsx` call site) whose mere presence forces its own `showFooterTotals` to `false`, regardless of the `showFooterTotals` prop's own value — the specialized row already covers it. Windows without `window.balanceFooter` configured are unaffected: `balanceFooter` is `null`/absent for them, so `DataTable`'s generic footer-totals still renders exactly as before.
+**Add-row and `DataTable`'s generic footer-totals (ETP-5210):** for `inlineEditable` windows, when the add-row form is active `GLJournalLineTable` (and every generated `*LineTable.jsx` for this layout) renders `InlineLinesPanel` (existing lines + the balanceFooter row above) **alongside** a second, header/data-hidden `DataTable` instance used only to host the add-row form. `DataTable` has its own, unrelated, longstanding generic footer-totals feature (`showFooterTotals`, on by default whenever amount columns exist) — without a guard, that hidden instance would render a *second*, unformatted totals row directly under the add-row form, stacked below the properly `€`-formatted, column-aligned one from `InlineLinesPanel`. `DataTable` now accepts a `balanceFooter` prop (already threaded through via `{...props}` at the `*LineTable.jsx` call site) whose mere presence forces its own `showFooterTotals` to `false`, regardless of the `showFooterTotals` prop's own value — the specialized row already covers it. Independently of `balanceFooter`, a `DataTable` rendered with `hideDataRows` never renders the generic footer-totals row either (ETP-5771): it has no visible rows to total, and because the call site spreads the full lines list in as `data`, the row otherwise summed every `amount` column (e.g. unit prices plus a duplicate of the document total) right under the add-row form on windows without `balanceFooter` — exposed once a header summary stopped carrying `amount` fields and the `showDetailFooterTotals` default flipped to `true`. Normal `DataTable`s (no `hideDataRows`) keep rendering the generic footer-totals exactly as before.
 
 **When to use:** manual journals and any double-entry document where lines carry separate debit and credit amount columns that must balance before saving.
 
@@ -1800,7 +1807,7 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 - `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `computeBalanceGate()` produces `balanceState` (gates Save/Complete) and, for `inlineEditable` windows, `buildBalanceFooterGridTotals()` (in `detailViewHelpers.jsx`) formats it into the `balanceFooter` prop threaded into `<DetailTable>` → `InlineLinesPanel`. `renderTotalsBlock()` renders the classic-layout `BalanceFooterPanel` fallback instead of `DocumentTotalsPanel` only when `linesLayout !== "inlineEditable"`.
 - `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — `renderBalanceFooterRow()` renders the column-aligned totals row for `inlineEditable` windows.
 - `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + the classic-layout fallback renderer.
-- `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row (see "Add-row and `DataTable`'s generic footer-totals" above).
+- `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row; `hideDataRows` suppresses it too (ETP-5771) (see "Add-row and `DataTable`'s generic footer-totals" above).
 
 **Real example:** `simple-g-l-journal` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
 
@@ -1858,6 +1865,9 @@ Customer/Vendor Accounting, etc.).
    ETP-4565, and the per-tab `visibleWhenCapability` role gate added in ETP-5116 — used by
    `product`/`asset-group`/`assets`/`warehouse`/`contacts`'s Accounting tab(s) to hide behind
    `showAccountingFields`): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   A capability-hidden tab is also never fetched in the background (ETP-5648). When the
+   accounting tab is the window's *detail* tab (`detailEntity`, as in `product-category` and
+   `business-partner-category`), gate it with `window.detailVisibleWhenCapability` instead.
    **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
    (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
    every other entry, not just within its own group — see `docs/decisions-reference.md`'s
@@ -1973,6 +1983,34 @@ an accounting-schema row, the `secondaryTabs`-pattern equivalent of `window.maxD
 enforced client-side by `resolveCanAddSecondaryLines(st, childrenCount)` in `DetailView.jsx`,
 gating `secondaryAddLineBar`, the inline `addRow`, and the empty-state add trigger once the tab's
 own child count reaches the declared `maxDetailLines`.
+
+#### The "More" overflow menu of the Form View tab strip (ETP-5515)
+
+The Form View's bottom tab strip (`DetailTabStrip.jsx`, rendered by `DetailView`) shows at most
+**4 tabs plus a "Más" / "More" menu** in every window, with or without a sidebar; labels never
+wrap (`whitespace-nowrap`). With 4 tabs or fewer there is no menu. No `decisions.json` option:
+the rule is generic, so it applies to every window, declarative or custom.
+
+- **Dynamic slot.** The last visible tab (4th) is a slot. Picking a hidden tab from the menu puts
+  it in the slot and the tab that was there drops into the menu; selecting any fixed tab (the
+  first three) restores the original arrangement. The arrangement is derived purely from the
+  active tab key (`resolveTabStripLayout` in `detailTabStripLayout.js`), so it also follows
+  deep links (`location.state.openSecondaryTab`).
+- **Width-aware.** The limit of 4 is a ceiling: the visible count is `min(4, tabs that fit)` in the
+  strip's own width (`useFittingTabCount.js` + `computeFittingTabCount`), so a 4-tab window gets a
+  "Más" at narrow widths or high zoom and tabs never overlap the side panel. The rest of the rules
+  (slot, reset, active tab always visible) hold for any count. Floor: 1 fixed tab + the slot; if
+  even that does not fit, the strip clips (`min-w-0 overflow-hidden`) instead of overlapping.
+  Natural widths come from an invisible probe row rendered inside the strip (same box classes as `TabStripButton`, shared via `tabStripButtonBaseCls`; labels and counters are drawn with CSS `::after{content:attr(data-text)}`, so the probe adds no text nodes, test ids or focusable elements to the DOM); a `ResizeObserver`
+  on the strip and the probe re-measures on resize, sidebar open/close, zoom and font changes.
+  Without layout (jsdom, no `ResizeObserver`, zero width) it falls back to the count-only rule.
+- **Counters** (e.g. "Dirección 1") and the save-first disabled hint travel with the tab into and
+  out of the menu.
+- **Test ids.** Visible tabs keep `tab-<key>`; the trigger is `detail-tab-more` and menu entries
+  are `detail-tab-more-item-<key>`. A test that clicks `tab-<key>` for a tab beyond the 4th must
+  open `detail-tab-more` first.
+- Hand-built windows that render their own tab strip (e.g. financial-account `DetailTabs`) are not
+  affected.
 
 ---
 

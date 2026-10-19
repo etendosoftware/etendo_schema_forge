@@ -106,3 +106,10 @@ test('a canceled productive environment that is also marked as associated stays 
   // The plan-based predicate is deliberately unchanged: a canceled productive reads as not paying.
   assert.equal(isProductiveEnvironment(associated), false);
 });
+
+test('a demo the account was only invited into is not a purchase source', () => {
+  assert.equal(isPurchaseSourceDemo({ plan: 'free', ownedByAccount: true }), true);
+  assert.equal(isPurchaseSourceDemo({ plan: 'free', ownedByAccount: false }), false);
+  // A backend that predates the field omits it; the demo keeps being offered.
+  assert.equal(isPurchaseSourceDemo({ plan: 'free' }), true);
+});

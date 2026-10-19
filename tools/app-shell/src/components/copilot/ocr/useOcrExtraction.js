@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { isNetworkError } from '@etendosoftware/app-shell-core/auth';
 import { executeTool, extractAnswerText, uploadFile } from '../copilotApi';
 
 /**
@@ -8,7 +9,44 @@ import { executeTool, extractAnswerText, uploadFile } from '../copilotApi';
  */
 export const OCR_NO_DATA_ERROR = 'ocr-no-data';
 
+/**
+ * `error` value for a gateway cut-off (502/503/504). The extraction may still be running server
+ * side, so the UI offers a manual retry, never an automatic one. A sentinel, like
+ * OCR_NO_DATA_ERROR.
+ */
+export const OCR_TIMEOUT_ERROR = 'ocr-timeout';
+
+/**
+ * `error` value for a request that got no HTTP answer at all (offline, DNS, connection reset):
+ * a connection problem, not a slow server. The UI shows the core's translated network message.
+ */
+export const OCR_NETWORK_ERROR = 'ocr-network';
+
+/**
+ * `error` value for a request that core aborted because the session changed while it was in
+ * flight (`staleSessionError()` in app-shell-core `auth/api.js`: a DOMException named
+ * 'AbortError'). By design: no logout, and the response must never be replayed under another
+ * identity.
+ */
+export const OCR_SESSION_CHANGED_ERROR = 'ocr-session-changed';
+
+const GATEWAY_STATUSES = new Set([502, 503, 504]);
+
 class OcrNoDataError extends Error {}
+
+/**
+ * Map a caught error to the value stored in `error`. This hook never creates an AbortController
+ * nor passes a `signal` (neither does `copilotRequest`), so an 'AbortError' reaching it can only
+ * be core's stale-session abort. If a caller-owned signal is ever added here, check it BEFORE
+ * this branch so an intentional abort does not read as a session change.
+ */
+function classifyError(err, fallback) {
+  if (err instanceof OcrNoDataError) return OCR_NO_DATA_ERROR;
+  if (err?.name === 'AbortError') return OCR_SESSION_CHANGED_ERROR;
+  if (isNetworkError(err)) return OCR_NETWORK_ERROR;
+  if (GATEWAY_STATUSES.has(err?.status)) return OCR_TIMEOUT_ERROR;
+  return err?.message || fallback;
+}
 
 /**
  * Strip Markdown code fences that some OCR outputs still include around JSON.
@@ -108,7 +146,7 @@ export function useOcrExtraction({
           : null);
       if (!uploadedPath) throw new Error('Upload did not return a file path');
     } catch (err) {
-      setError(err.message || 'Upload failed');
+      setError(classifyError(err, 'Upload failed'));
       setStatus('error');
       throw err;
     }
@@ -136,7 +174,7 @@ export function useOcrExtraction({
       setStatus('done');
       return parsed;
     } catch (err) {
-      setError(err instanceof OcrNoDataError ? OCR_NO_DATA_ERROR : (err.message || 'Extraction failed'));
+      setError(classifyError(err, 'Extraction failed'));
       setStatus('error');
       throw err;
     }

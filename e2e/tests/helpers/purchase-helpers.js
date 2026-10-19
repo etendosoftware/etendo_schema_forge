@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 import { ensureFinancialAccountSetup } from './financial-account-helpers.js';
 import { apiAuthHeaders } from './auth.js';
 import { waitForLoadingIndicatorsGone } from './selectors.js';
+import { t } from './i18n.js';
 
 // ── Credentials ──────────────────────────────────────────────────────────────
 
@@ -966,7 +967,13 @@ export async function selectVendorBP(page, { name } = {}) {
   // let a flaky partnerAddress assertion slip through in
   // purchase-order-to-invoice.integration.spec.js (deterministic failure: the
   // address callout hadn't landed yet when the caller sampled its value).
-  await waitForDerivedFieldValue(page, 'paymentTerms', { timeout: 30_000 });
+  //
+  // paymentTerms is conditional for the same reason warehouse is below: the movement
+  // documents this helper is shared with (goods receipt, goods shipment, the two returns)
+  // carry no payment terms, and `waitForDerivedFieldValue` asserts the field exists.
+  if (await hasHeaderField(page, 'paymentTerms')) {
+    await waitForDerivedFieldValue(page, 'paymentTerms', { timeout: 30_000 });
+  }
   await waitForDerivedFieldValue(page, 'partnerAddress', { timeout: 30_000 });
 
   // And `warehouse`, which is the field that actually GATES the save — and the one this settle
@@ -1018,26 +1025,6 @@ export async function saveDraft(page) {
 }
 
 /**
- * Add a product line using the inline-add row.
- *
- * Prefer `productName` (a `PRODUCT_FIXTURE_*.name` from product-helpers.js,
- * ensured by `ensureProductSetup()`) over `productIndex`. ETP-5079 emptied the
- * onboarding dataset's product list, so on a fresh tenant "the product at index
- * N" is nothing at all; and on a long-lived dev tenant it is whatever leftover
- * data a previous run created, which quietly binds the caller's assertions to
- * an arbitrary record. `productIndex` is kept for callers that genuinely do not
- * care which product they get (e.g. financial-account-cash-close, which only
- * needs *a* priced line to collect).
- *
- * @param {Object} opts
- * @param {string} [opts.productName] - Exact fixture name to search for and pick
- *   in the drawer. Takes precedence over `productIndex`.
- * @param {number} [opts.productIndex=0] - Which product to pick from the drawer
- *   (0-based). Only used when `productName` is not given.
- * @param {string} [opts.quantity] - Optional quantity to set
- * @param {boolean} [opts.isFirst=false] - True if this is the first line (uses empty-state button)
- */
-/**
  * The lines a window has actually PERSISTED — deliberately excluding the open
  * inline-add row.
  *
@@ -1072,30 +1059,189 @@ function savedLineRows(page) {
   );
 }
 
-export async function addProductLine(page, { productName, productIndex = 0, quantity, isFirst = false } = {}) {
-  // Click add-line button — retry the whole click→inline-add-row sequence
-  if (isFirst) {
-    const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
-      .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
+// ── New documents: the creation path ────────────────────────────────────────
 
+/** URL of a brand-new, still unsaved document of `spec`. */
+function newRecordUrl(spec) {
+  return new RegExp(`/${spec}/new(?:[/?#]|$)`);
+}
+
+/** URL of a persisted document of `spec`; capture group 1 is its id. */
+function savedRecordUrl(spec) {
+  return new RegExp(`/${spec}/(?!new(?:[/?#]|$))([A-Za-z0-9]+)(?:[/?#]|$)`);
+}
+
+/**
+ * The two ways a spec can take a NEW document's header to the server before its
+ * first line. Every spec that creates a document names one, so both stay covered:
+ *
+ * - `emptyState` — the way a user does it: fill the header and go straight to an
+ *   action of the empty lines state ("+ Añadir líneas", "Importar desde …"). That
+ *   action saves the header itself (`handleAddLineClick` / `handleImportClick` in
+ *   DetailView.jsx) and moves to `/<spec>/<id>`. No Guardar click.
+ * - `save` — Guardar first (`saveDraft`), then the same action on the saved record.
+ *
+ * Until every integration spec stated its path they all took `save`, which is how a
+ * regression went unnoticed where "+ Añadir líneas" never rendered on an unsaved
+ * sales order, sales invoice, purchase order or quotation: header totals sat in
+ * `requiredHeaderFields`, `/defaults` returned them null, and the add-line guard kept
+ * the button out of the empty state until a manual save filled them.
+ */
+export const CREATION_PATHS = Object.freeze(['emptyState', 'save']);
+
+/**
+ * "+ Añadir líneas" in a document's empty lines state. The generic LinesEmptyState
+ * carries a testid; the per-window empty states (sales/purchase invoice, goods
+ * receipt, goods shipment) render the same button without one, hence the fallback on
+ * its accessible name — read from the locale, and distinct from the "+ Añadir línea"
+ * of a document that already has lines.
+ */
+export function addLinesEmptyStateButton(page) {
+  return page.getByTestId('action-add-lines-empty-state')
+    .or(page.getByRole('button', { name: t('addLines') }))
+    .first();
+}
+
+/**
+ * Leave a brand-new document through an action of its empty lines state along an
+ * explicit creation path (see CREATION_PATHS), and return the id its header was
+ * saved under.
+ *
+ * Call it on `/<spec>/new` once the header is filled. With `via: 'emptyState'` the
+ * action must be offered on the UNSAVED document and must save the header by itself;
+ * with `via: 'save'` it runs after Guardar. What the action opens next (the inline
+ * add row, an import modal) is the caller's to assert.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ spec: string, via: 'emptyState'|'save',
+ *   trigger?: import('@playwright/test').Locator }} opts
+ *   `trigger` defaults to "+ Añadir líneas"; pass an "Importar desde …" button for
+ *   the import paths.
+ * @returns {Promise<string>} the saved document id
+ */
+export async function leaveNewDocumentThroughEmptyLines(page, {
+  spec, via, trigger = addLinesEmptyStateButton(page),
+}) {
+  if (!CREATION_PATHS.includes(via)) {
+    throw new Error(
+      `leaveNewDocumentThroughEmptyLines: via must be one of ${CREATION_PATHS.join(', ')}, `
+      + `got ${JSON.stringify(via)}`,
+    );
+  }
+  await expect(page, `The ${spec} must still be unsaved when its creation path starts`)
+    .toHaveURL(newRecordUrl(spec));
+
+  if (via === 'save') {
+    await saveDraft(page);
+    await expect(page, `The manual save should land on the saved ${spec}`)
+      .toHaveURL(savedRecordUrl(spec), { timeout: 20_000 });
+    await waitForDetailReady(page);
+  }
+
+  await expect(trigger, via === 'emptyState'
+    ? `The empty lines state of an UNSAVED ${spec} must offer this action once the header is `
+      + 'filled — without it the only way to a first line is a manual save'
+    : `The empty lines state of the saved ${spec} must offer this action`,
+  ).toBeVisible({ timeout: 15_000 });
+  await trigger.click();
+
+  if (via === 'emptyState') {
+    await expect(page,
+      `The empty-state action must save the ${spec} header itself and open its record`,
+    ).toHaveURL(savedRecordUrl(spec), { timeout: 20_000 });
+  }
+  return page.url().match(savedRecordUrl(spec))[1];
+}
+
+/**
+ * Take a brand-new document to an open inline-add row for its FIRST line, along an
+ * explicit creation path. For specs that fill the line themselves; the rest use
+ * `createDraftWithFirstLine`.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ spec: string, via: 'emptyState'|'save' }} opts
+ * @returns {Promise<string>} the saved document id
+ */
+export async function openFirstLineRow(page, { spec, via }) {
+  const recordId = await leaveNewDocumentThroughEmptyLines(page, { spec, via });
+
+  // After `emptyState`, DetailView reopens the row itself once it has navigated to the
+  // saved record (route state `openAddLine`), so wait for that first: clicking again
+  // while that effect is pending would toggle the row closed. Re-click only when the
+  // row never came and the empty state is still showing — a click lost to the
+  // re-render that follows the redirect.
+  const inlineRow = page.getByTestId('inline-add-row');
+  const opened = await inlineRow.waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true, () => false);
+  if (!opened) {
     await expect(async () => {
-      const addLinesResponse = page.waitForResponse(
-        (r) => r.url().includes('/sws/neo/') && r.status() < 400,
-        { timeout: 15_000 },
-      );
-      await emptyStateBtn.click({ timeout: 3_000 });
-      await addLinesResponse;
-      await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 30_000 });
-  } else {
-    const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i });
-    await expect(async () => {
-      await addLineBtn.click({ timeout: 3_000 });
-      await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 15_000 });
+      const button = addLinesEmptyStateButton(page);
+      if (!await inlineRow.isVisible() && await button.isVisible()) {
+        await button.click({ timeout: 3_000 });
+      }
+      await expect(inlineRow).toBeVisible({ timeout: 5_000 });
+    }, `The inline-add row of the first ${spec} line should open`).toPass({ timeout: 30_000 });
   }
   await slow(page);
+  return recordId;
+}
 
+/**
+ * Create a brand-new document's FIRST product line along an explicit creation path
+ * (see CREATION_PATHS): the header must be filled and the page still on
+ * `/<spec>/new`. The line options are `addProductLine`'s.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ spec: string, via: 'emptyState'|'save', productName?: string,
+ *   productIndex?: number, quantity?: string }} opts
+ * @returns {Promise<string>} the saved document id
+ */
+export async function createDraftWithFirstLine(page, { spec, via, ...line }) {
+  const recordId = await openFirstLineRow(page, { spec, via });
+  await commitInlineProductLine(page, line);
+  return recordId;
+}
+
+/**
+ * Add a further product line through "+ Añadir línea" on a document that already has
+ * lines. The FIRST line of a new document goes through `createDraftWithFirstLine`,
+ * which makes the creation path explicit.
+ *
+ * Prefer `productName` (a `PRODUCT_FIXTURE_*.name` from product-helpers.js,
+ * ensured by `ensureProductSetup()`) over `productIndex`. ETP-5079 emptied the
+ * onboarding dataset's product list, so on a fresh tenant "the product at index
+ * N" is nothing at all; and on a long-lived dev tenant it is whatever leftover
+ * data a previous run created, which quietly binds the caller's assertions to
+ * an arbitrary record. `productIndex` is kept for callers that genuinely do not
+ * care which product they get.
+ *
+ * @param {Object} opts
+ * @param {string} [opts.productName] - Exact fixture name to search for and pick
+ *   in the drawer. Takes precedence over `productIndex`.
+ * @param {number} [opts.productIndex=0] - Which product to pick from the drawer
+ *   (0-based). Only used when `productName` is not given.
+ * @param {string} [opts.quantity] - Optional quantity to set
+ */
+export async function addProductLine(page, { isFirst, ...line } = {}) {
+  if (isFirst) {
+    throw new Error('addProductLine: add the first line with createDraftWithFirstLine(), '
+      + 'which states the creation path (emptyState or save)');
+  }
+  const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i });
+  await expect(async () => {
+    await addLineBtn.click({ timeout: 3_000 });
+    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 15_000 });
+  await slow(page);
+
+  await commitInlineProductLine(page, line);
+}
+
+/**
+ * Pick a product in the open inline-add row, optionally set its quantity, commit it
+ * with Enter and wait until the line is PERSISTED (see savedLineRows()).
+ */
+async function commitInlineProductLine(page, { productName, productIndex = 0, quantity } = {}) {
   // Click product field WITHIN the inline-add-row — opens ProductSearchDrawer
   // Scope to inline-add-row to avoid clicking the product field of an already-saved line
   const inlineRow = page.getByTestId('inline-add-row');

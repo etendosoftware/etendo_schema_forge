@@ -20,7 +20,7 @@ Any change to:
 ## Window-specific rule
 
 If a change touches `artifacts/<window>/...` or `tools/app-shell/src/windows/custom/<window>/...`, update the matching `docs/generated-custom-windows/<window>.md` file in the same change.
-The CI check `.github/workflows/window-doc-freshness.yml` reviews this diff-based rule through `cli/src/check-window-docs.js` and leaves a warning comment on pull requests when the window doc is missing.
+The CI check `.github/workflows/window-doc-freshness.yml` reviews this diff-based rule through `scripts/check-window-docs.js` and leaves a warning comment on pull requests when the window doc is missing.
 
 ## What must be updated
 

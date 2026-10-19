@@ -27,8 +27,6 @@ const breadcrumb = 'Sales / Sales Invoice';
 // @sf-generated-start summary:header
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'amount' },
 ];
 
 const statusField = 'documentStatus';
@@ -55,7 +53,8 @@ const draftMode = {
   "keepSaveWhenCompletedFields": [
     "accountingDate",
     "project",
-    "costcenter"
+    "costcenter",
+    "aeatsiiErrorRegistral"
   ],
   "editableLineFieldsWhenCompleted": [
     "project",
@@ -65,7 +64,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList', 'accountingDate'];
+const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'currency', 'priceList', 'accountingDate'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines

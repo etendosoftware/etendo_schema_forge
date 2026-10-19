@@ -19,6 +19,8 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
@@ -121,6 +123,14 @@ const defaultProps = {
   apiBaseUrl: '/api',
 };
 
+// NOTE (ETP-5725, reopened QA fix) — deliberately NOT defaulting `_duplicatePeriodPresented` to
+// true here: it also drives `lockNormalOption` (a DIFFERENT ETP-5725-round-1 feature), so a
+// blanket default here would silently change the "Normal" button's disabled state for every
+// OTHER test using this fixture, most of which have nothing to do with the corrective-consistency
+// guard. Tests that specifically need a presented-ordinaria sibling (to exercise the save/
+// present/generate guard's success path) pass `{ _duplicatePeriodPresented: true }` as an
+// explicit override instead — see the "Guardar/Generar/Presentar gated" and the flush/in-flight
+// describe blocks below.
 const SUSTITUTIVA_DECL = (identification = {}, overrides = {}) =>
   makeDecl({ manualData: { identification: { sustitutiva: true, ...identification } }, ...overrides });
 
@@ -180,7 +190,10 @@ describe('FmModel349Page — Tipo segmented control (ETP-5597)', () => {
   });
 
   it('threads the selected Tipo and the identifier into FileGenModal', () => {
-    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    // ETP-5725 (reopened QA fix) — `_duplicatePeriodPresented: true` needed so the new
+    // corrective-consistency pre-check on the Generar button's onClick doesn't block this
+    // (unrelated) test: it's about what gets threaded into the modal, not about that guard.
+    const { container } = render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} />);
     fireEvent.click(sustitutivaBtn());
     fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(genBtn(container));
@@ -250,7 +263,7 @@ describe('FmModel349Page — substitutive banner + identifier (ETP-5597)', () =>
 describe('FmModel349Page — Guardar flushes manualData (ETP-5456)', () => {
   it('makes a real PUT via persistManualData with Tipo + identifier, then updates the list cache', async () => {
     const onManualDataSaved = vi.fn();
-    render(<FmModel349Page decl={makeDecl()} {...defaultProps} onManualDataSaved={onManualDataSaved} />);
+    render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} onManualDataSaved={onManualDataSaved} />);
     fireEvent.click(sustitutivaBtn());
     fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(screen.getByTestId('FmModel349Page__save'));
@@ -273,8 +286,12 @@ describe('FmModel349Page — Guardar flushes manualData (ETP-5456)', () => {
   it('shows an error toast and does not call onManualDataSaved when the PUT fails', async () => {
     persistManualData.mockResolvedValueOnce({ ok: false, error: 'http_500' });
     const onManualDataSaved = vi.fn();
-    render(<FmModel349Page decl={makeDecl()} {...defaultProps} onManualDataSaved={onManualDataSaved} />);
+    render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} onManualDataSaved={onManualDataSaved} />);
+    // ETP-5725 — sustitutiva is already auto-defaulted true by `_duplicatePeriodPresented`, so
+    // clicking an already-active option is a no-op; editing the identifier is what creates a
+    // genuine pending edit (same as the "makes a real PUT" test above).
     fireEvent.click(sustitutivaBtn());
+    fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(screen.getByTestId('FmModel349Page__save'));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.action.save_error'));
@@ -282,8 +299,9 @@ describe('FmModel349Page — Guardar flushes manualData (ETP-5456)', () => {
   });
 
   it('a second Guardar after a successful one issues no further request', async () => {
-    render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} />);
     fireEvent.click(sustitutivaBtn());
+    fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(screen.getByTestId('FmModel349Page__save'));
     await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByTestId('FmModel349Page__save'));
@@ -303,7 +321,7 @@ describe('FmModel349Page — Registrar/Presentar flushes unsaved edits first (ET
   it('persists Tipo + identifier BEFORE the status change and updates the list cache', async () => {
     const onStatusChange = vi.fn().mockResolvedValue({ ok: true });
     const onManualDataSaved = vi.fn();
-    render(<FmModel349Page decl={makeDecl()} {...defaultProps} onStatusChange={onStatusChange} onManualDataSaved={onManualDataSaved} />);
+    render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} onStatusChange={onStatusChange} onManualDataSaved={onManualDataSaved} />);
     makeSubstitutiveAndPresent();
 
     await waitFor(() => expect(onStatusChange).toHaveBeenCalled());
@@ -318,7 +336,7 @@ describe('FmModel349Page — Registrar/Presentar flushes unsaved edits first (ET
   it('aborts the presentation with the save-error toast when the flush fails', async () => {
     persistManualData.mockResolvedValueOnce({ ok: false, error: 'http_500' });
     const onStatusChange = vi.fn().mockResolvedValue({ ok: true });
-    render(<FmModel349Page decl={makeDecl()} {...defaultProps} onStatusChange={onStatusChange} />);
+    render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} onStatusChange={onStatusChange} />);
     makeSubstitutiveAndPresent();
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.action.save_error'));
@@ -328,7 +346,7 @@ describe('FmModel349Page — Registrar/Presentar flushes unsaved edits first (ET
   it('a rejected onStatusChange rolls the status back and shows the present-error toast', async () => {
     const onStatusChange = vi.fn().mockRejectedValue(new Error('network down'));
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    render(<FmModel349Page decl={SUSTITUTIVA_DECL({ formerStatement: '3490000000001' })} {...defaultProps} onStatusChange={onStatusChange} />);
+    render(<FmModel349Page decl={SUSTITUTIVA_DECL({ formerStatement: '3490000000001' }, { _duplicatePeriodPresented: true })} {...defaultProps} onStatusChange={onStatusChange} />);
     fireEvent.click(presentBtn());
     fireEvent.click(screen.getByTestId('PresentModal-confirm'));
 
@@ -341,7 +359,7 @@ describe('FmModel349Page — Registrar/Presentar flushes unsaved edits first (ET
 
   it('makes no extra request when there is nothing unsaved', async () => {
     const onStatusChange = vi.fn().mockResolvedValue({ ok: true });
-    render(<FmModel349Page decl={SUSTITUTIVA_DECL({ formerStatement: '3490000000001' })} {...defaultProps} onStatusChange={onStatusChange} />);
+    render(<FmModel349Page decl={SUSTITUTIVA_DECL({ formerStatement: '3490000000001' }, { _duplicatePeriodPresented: true })} {...defaultProps} onStatusChange={onStatusChange} />);
     fireEvent.click(presentBtn());
     fireEvent.click(screen.getByTestId('PresentModal-confirm'));
 
@@ -353,7 +371,7 @@ describe('FmModel349Page — Registrar/Presentar flushes unsaved edits first (ET
 describe('FmModel349Page — Generar fichero flushes unsaved edits first (ETP-5597)', () => {
   it('persists Tipo + identifier BEFORE generating the file, passing the identifier along', async () => {
     const onManualDataSaved = vi.fn();
-    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} onManualDataSaved={onManualDataSaved} />);
+    const { container } = render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} onManualDataSaved={onManualDataSaved} />);
     fireEvent.click(sustitutivaBtn());
     fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(genBtn(container));
@@ -371,8 +389,11 @@ describe('FmModel349Page — Generar fichero flushes unsaved edits first (ETP-55
 
   it('aborts generation with the save-error toast when the flush fails', async () => {
     persistManualData.mockResolvedValueOnce({ ok: false, error: 'http_500' });
-    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const { container } = render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} />);
+    // ETP-5725 — sustitutiva is already auto-defaulted true by `_duplicatePeriodPresented`;
+    // editing the identifier is what creates a genuine pending edit for this flush to find.
     fireEvent.click(sustitutivaBtn());
+    fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(genBtn(container));
     fireEvent.click(screen.getByTestId('FileGenModal-mock'));
 
@@ -425,7 +446,7 @@ describe('FmModel349Page — in-flight save locks the form (ETP-5597)', () => {
   it('disables Tipo, the identifier, Guardar, Generar and Registrar/Presentar while the save is pending', async () => {
     const pending = deferred();
     persistManualData.mockReturnValueOnce(pending.promise);
-    const { container } = render(<FmModel349Page decl={SUSTITUTIVA_DECL({ formerStatement: '3490000000001' })} {...defaultProps} />);
+    const { container } = render(<FmModel349Page decl={SUSTITUTIVA_DECL({ formerStatement: '3490000000001' }, { _duplicatePeriodPresented: true })} {...defaultProps} />);
     fireEvent.change(formerInput(), { target: { value: '3490000000002' } });
     fireEvent.click(screen.getByTestId('FmModel349Page__save'));
 
@@ -438,7 +459,12 @@ describe('FmModel349Page — in-flight save locks the form (ETP-5597)', () => {
 
     pending.resolve({ ok: true });
     await waitFor(() => expect(screen.getByTestId('FmModel349Page__save').disabled).toBe(false));
-    expect(normalBtn().disabled).toBe(false);
+    // ETP-5725 — `normalBtn` is intentionally NOT asserted re-enabled here: this fixture's
+    // `_duplicatePeriodPresented: true` (added so the save itself clears the corrective/ordinaria
+    // consistency guard) ALSO engages `lockNormalOption` — a genuinely separate, pre-existing
+    // ETP-5725-round-1 feature that keeps "Normal" disabled for as long as a presented ordinaria
+    // sibling exists and Sustitutiva is selected, independent of any in-flight save. See the
+    // dedicated `lockNormalOption` coverage above for that feature's own tests.
     expect(formerInput().disabled).toBe(false);
     expect(presentBtn().disabled).toBe(false);
     expect(genBtn(container).disabled).toBe(false);
@@ -448,7 +474,7 @@ describe('FmModel349Page — in-flight save locks the form (ETP-5597)', () => {
     const pending = deferred();
     persistManualData.mockReturnValueOnce(pending.promise);
     const onStatusChange = vi.fn().mockResolvedValue({ ok: true });
-    render(<FmModel349Page decl={makeDecl()} {...defaultProps} onStatusChange={onStatusChange} />);
+    render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} onStatusChange={onStatusChange} />);
     fireEvent.click(sustitutivaBtn());
     fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(presentBtn());
@@ -466,7 +492,7 @@ describe('FmModel349Page — in-flight save locks the form (ETP-5597)', () => {
   it('a double confirm on Generar fichero 349 triggers only one save and one generation', async () => {
     const pending = deferred();
     persistManualData.mockReturnValueOnce(pending.promise);
-    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const { container } = render(<FmModel349Page decl={makeDecl({ _duplicatePeriodPresented: true })} {...defaultProps} />);
     fireEvent.click(sustitutivaBtn());
     fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
     fireEvent.click(genBtn(container));
@@ -485,7 +511,7 @@ describe('FmModel349Page — in-flight save locks the form (ETP-5597)', () => {
     const pending = deferred();
     persistManualData.mockReturnValueOnce(pending.promise);
     const onManualDataSaved = vi.fn();
-    render(<FmModel349Page decl={SUSTITUTIVA_DECL({ formerStatement: '3490000000001' })} {...defaultProps} onManualDataSaved={onManualDataSaved} />);
+    render(<FmModel349Page decl={SUSTITUTIVA_DECL({ formerStatement: '3490000000001' }, { _duplicatePeriodPresented: true })} {...defaultProps} onManualDataSaved={onManualDataSaved} />);
     fireEvent.change(formerInput(), { target: { value: '3490000000002' } });
     fireEvent.click(screen.getByTestId('FmModel349Page__save'));
     await waitFor(() => expect(persistManualData).toHaveBeenCalledTimes(1));
@@ -582,5 +608,81 @@ describe('FmModel349Page — ETP-5725 auto-default sustitutiva + lockNormalOptio
     // outcome as before ETP-5725, unaffected by the new guard.
     expect(normalBtn().disabled).toBe(true);
     expect(sustitutivaBtn().disabled).toBe(true);
+  });
+});
+
+// ETP-5725 (reopened QA fix) — CRITICAL REGRESSION: the `identChecks` lazy initializer applied
+// the auto-default with NO `decl.status === 'draft'` precondition. Repro: present an ordinaria
+// (sustitutiva never touched/saved, so it reads `undefined`), then present a sibling as
+// Sustitutiva for the same period — OPENING the original, already-presented ordinaria
+// re-triggered the auto-default and showed "Sustitutiva" selected on an already-submitted,
+// correctly-ordinaria record. Confirmed display-only. Fixed by gating the auto-default on
+// `decl.status === 'draft'`, mirroring the identical fix in `FmListPage.jsx`'s
+// `resolveDeclTypeLabel` (Bug 3) and `FmModel303Page.jsx`'s own initializer.
+describe('FmModel349Page — ETP-5725 critical regression: identChecks never auto-defaults on a non-draft declaration', () => {
+  it('renders Normal selected for an already-submitted declaration, even with _duplicatePeriodPresented true and sustitutiva never persisted', () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'submitted', _duplicatePeriodPresented: true })} {...defaultProps} />);
+    expect(normalBtn().getAttribute('aria-checked')).toBe('true');
+    expect(sustitutivaBtn().getAttribute('aria-checked')).toBe('false');
+    expect(banner()).toBeNull();
+  });
+
+  it('still renders Normal selected for a "ready" (not yet submitted, but no longer draft) declaration under the same conditions', () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'ready', _duplicatePeriodPresented: true })} {...defaultProps} />);
+    expect(normalBtn().getAttribute('aria-checked')).toBe('true');
+    expect(sustitutivaBtn().getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('control: a genuine DRAFT still gets the auto-default to Sustitutiva under the same conditions', () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'draft', _duplicatePeriodPresented: true })} {...defaultProps} />);
+    expect(sustitutivaBtn().getAttribute('aria-checked')).toBe('true');
+  });
+});
+
+// ETP-5725 (reopened QA fix) — Bug 1 / mirror rule: "Guardar", "Generar fichero" and "Registrar/
+// Presentar" must be gated by the same corrective/ordinaria consistency rule. Backend is the
+// authoritative gate; these are the UX-sugar frontend checks (`isSustitutivaChecked(identChecks)`
+// combined with `decl._duplicatePeriodPresented` in `FmModel349Page.jsx`).
+describe('FmModel349Page — ETP-5725 Guardar/Generar/Presentar gated by corrective consistency', () => {
+  it('blocks "Guardar" when Sustitutiva is selected with no presented ordinaria sibling at all', () => {
+    render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    fireEvent.click(sustitutivaBtn());
+    fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
+    fireEvent.click(screen.getByTestId('FmModel349Page__save'));
+    expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+    expect(persistManualData).not.toHaveBeenCalled();
+  });
+
+  it('blocks "Generar fichero 349" for the same corrective-without-ordinaria case BEFORE the modal opens', () => {
+    // ETP-5725 (reopened QA fix, UX follow-up) — genBtn's own onClick now mirrors 303's: it
+    // blocks BEFORE opening FileGenModal, not only inside generateNow (the modal's onConfirm).
+    // The modal must never even mount here.
+    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    fireEvent.click(sustitutivaBtn());
+    fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
+    fireEvent.click(genBtn(container));
+    expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+    expect(screen.queryByTestId('FileGenModal-mock')).not.toBeInTheDocument();
+    expect(generate349File).not.toHaveBeenCalled();
+  });
+
+  it('blocks "Registrar/Presentar" for the same corrective-without-ordinaria case BEFORE the modal opens', () => {
+    // ETP-5725 (reopened QA fix, UX follow-up) — `presentBtn`'s own onClick now mirrors 303's:
+    // it blocks BEFORE opening PresentModal, not only inside `presentNow` (the modal's
+    // `onConfirm`). The modal must never even mount here.
+    render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    fireEvent.click(sustitutivaBtn());
+    fireEvent.change(formerInput(), { target: { value: '3490000000001' } });
+    fireEvent.click(presentBtn());
+    expect(toast.error).toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+    expect(screen.queryByTestId('PresentModal-confirm')).not.toBeInTheDocument();
+    expect(persistManualData).not.toHaveBeenCalled();
+  });
+
+  it('allows "Guardar" for a plain Normal declaration with no conflicting sibling', () => {
+    render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('FmModel349Page__save'));
+    expect(toast.error).not.toHaveBeenCalledWith('fm.duplicate_period.requires_ordinaria');
+    expect(toast.error).not.toHaveBeenCalledWith('fm.duplicate_period.ordinaria_exists');
   });
 });

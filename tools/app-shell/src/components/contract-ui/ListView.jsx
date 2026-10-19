@@ -18,6 +18,7 @@ import { ListExportButton } from './ListExportButton.jsx';
 import { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
+import { buildDatePresetFilter } from './datePresetFilter.js';
 import { ListSortPopover } from './ListSortPopover.jsx';
 import { ListProgressBar } from './ListProgressBar.jsx';
 import SelectionToolbar from './SelectionToolbar.jsx';
@@ -435,7 +436,7 @@ function newButtonGroupClass(isSplitNew) {
 
 function newButtonClass(isSplitNew) {
   const focusRing = isSplitNew ? ` ${SPLIT_NEW_FOCUS_RING}` : '';
-  return `group h-10 rounded-none rounded-l-lg gap-2 pl-2 pr-3 text-sm leading-6 font-medium bg-[#121217] text-white hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors [&_svg]:size-5${focusRing}`;
+  return `group h-10 rounded-none rounded-l-lg gap-2 pl-2 pr-3 text-sm leading-6 font-medium bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground transition-colors [&_svg]:size-5${focusRing}`;
 }
 
 async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }) {
@@ -737,10 +738,22 @@ export function ListView({
     return (item) => fns.every(fn => fn(item));
   }, [subsetFilters, activeSubsetIndex, quickFilters, activeFilterIndices, rowFilter]);
 
+  // The window's own default grid. `listViewOptions.defaultDatePreset` seeds the
+  // date column (`dateFilterKey`) from a preset recomputed at mount, unless a URL
+  // deep-link or the window's own `initialColumnFilters` already provides one.
+  // Computed once so the persistence effect compares against a stable default.
+  const [defaultColumnFilters] = useState(() => {
+    const base = initialColumnFilters ?? {};
+    const presetId = listViewOptions?.defaultDatePreset;
+    if (!presetId || !dateFilterKey || initialFiltersFromUrl || base[dateFilterKey]) return base;
+    const presetFilter = buildDatePresetFilter(presetId);
+    return presetFilter ? { ...base, [dateFilterKey]: presetFilter } : base;
+  });
+
   const [columnFilters, setColumnFilters] = useState(() => {
     const saved = restoredListState?.columnFilters;
     if (saved && typeof saved === 'object') return saved;
-    return initialColumnFilters ?? {};
+    return defaultColumnFilters;
   });
   const columnDefs = useMemo(
     () => Object.fromEntries(tableColumns.map(c => [c.key, c])),
@@ -873,7 +886,7 @@ export function ListView({
         // would land on an unfiltered list. Compare against the empty grid instead: the
         // deep-linked view is persisted, so it is what comes back, and the filter the
         // user had before the deep-link is overwritten rather than resurrected.
-        columnFilters: initialFiltersFromUrl ? {} : (initialColumnFilters ?? {}),
+        columnFilters: initialFiltersFromUrl ? {} : defaultColumnFilters,
         advancedFilter: initialFiltersFromUrl ? null : (initialAdvancedFilter ?? null),
         subsetIndex: subsetFilters?.length ? defaultSubsetIndex : null,
         quickFilterIndices: defaultQuickFilterIndices,
@@ -883,7 +896,7 @@ export function ListView({
     );
   }, [
     listStateScope, columnFilters, advancedFilter, activeSubsetIndex, activeFilterIndices,
-    hook.sortColumn, hook.sortDirection, initialColumnFilters, initialAdvancedFilter,
+    hook.sortColumn, hook.sortDirection, defaultColumnFilters, initialAdvancedFilter,
     initialFiltersFromUrl,
     subsetFilters, defaultSubsetIndex, defaultQuickFilterIndices,
     initialSortColumn, initialSortDirection,
@@ -1443,7 +1456,7 @@ export function ListView({
               data-testid="list-toolbar">
               <div
                 ref={toolbarFit.rowRef}
-                className="flex flex-wrap items-center gap-2"
+                className="flex flex-wrap items-start gap-2"
                 data-tabs-placement={toolbarTabsPlacement}
                 data-testid="list-toolbar-main-row">
                 {hasTabs && (
@@ -1613,7 +1626,7 @@ export function ListView({
                           <DropdownMenu data-testid="DropdownMenu__620cbc">
                             <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
                               <Button
-                                className={`h-10 rounded-none rounded-r-lg px-2 bg-[#121217] text-white hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors ${SPLIT_NEW_FOCUS_RING}`}
+                                className={`h-10 rounded-none rounded-r-lg px-2 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground transition-colors ${SPLIT_NEW_FOCUS_RING}`}
                                 aria-label={ui('moreOptions')}
                                 title={ui('moreOptions')}
                                 data-testid="action-new-more">

@@ -1,5 +1,7 @@
 // @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/windows/custom/contacts/index.jsx
+// @covers tools/app-shell/src/hooks/useBulkRowDelete.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -828,39 +830,21 @@ test.describe('Contacts Integration — Full journey', () => {
 
     // Click bulk delete.
     //
-    // The Contacts window renders its OWN bulk-delete button via
-    // `selectionBarRightActions` (tools/app-shell/src/windows/custom/contacts/index.jsx)
-    // and opts out of ListView's generic "Delete selected" toolbar action
-    // (`listViewOptions.hideBulkDelete: true`), so the generic
-    // `bulk-delete-selected` testid is never rendered for this window — the
-    // button itself carries no stable testid, only its icon does
-    // (`Trash2__ef097c`).
-    //
-    // A page-wide "any button containing a trash icon" search (the previous
-    // approach here) is unsafe regardless of sort order: Contacts also
-    // renders a per-row LEGACY delete button with its own Trash2 icon
-    // (`Trash2__eb5261`, see `ContactsTable.jsx` → `DataTable.jsx`'s
-    // `legacyDeleteEnabled`) for every visible row, and those per-row icons
-    // sit earlier in DOM order than the SelectionToolbar (rendered through a
-    // `document.body` portal, appended after the app's own render tree). A
-    // `.first()` match on a broad selector therefore resolves to whichever
-    // row's own single-row delete button happens to be first in the DOM —
-    // NOT the multi-select bulk-delete action — silently deleting an
-    // unrelated row instead of the two rows actually checked above. Under
-    // the old creationDate-desc sort this went unnoticed because the
-    // just-created Contact B always WAS that first row, so the wrong click
-    // still deleted the right record by coincidence; the name-ascending sort
-    // broke that coincidence, surfacing the pre-existing bug.
-    const bulkBtn = page.getByTestId('Trash2__ef097c').locator('..');
+    // Since ETP-5758 the Contacts window uses ListView's generic "Delete
+    // selected" action (`useBulkRowDelete`), so the button carries the stable
+    // `bulk-delete-selected` testid. Never fall back to a page-wide "any
+    // button with a trash icon" search: Contacts also renders a per-row
+    // delete with its own Trash2 icon earlier in DOM order than the
+    // SelectionToolbar (a `document.body` portal), so a broad `.first()`
+    // match would delete an unrelated row instead of the two checked above.
+    const bulkBtn = page.getByTestId('bulk-delete-selected');
     await expect(bulkBtn).toBeVisible({ timeout: 5_000 });
     await bulkBtn.click();
 
     // Confirm bulk delete dialog
-    const dialog = page.getByTestId('confirm-delete-dialog').or(page.getByRole('dialog'));
-    await expect(dialog).toBeVisible({ timeout: 5_000 });
-    const confirmBtn = page.getByTestId('confirm-delete-confirm')
-      .or(dialog.getByRole('button', { name: /delete|eliminar|confirm/i }));
-    await confirmBtn.first().click();
+    const confirmBtn = page.getByTestId('bulk-delete-confirm');
+    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    await confirmBtn.click();
 
     // Verify Contact B disappears from the list
     await expect(

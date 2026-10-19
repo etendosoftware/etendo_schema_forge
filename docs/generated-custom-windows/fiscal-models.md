@@ -917,6 +917,164 @@ genuinely never been saved (`rectificativa` and `sustitutiva` both `undefined` o
 to `false`), the persisted value wins exactly as it did before this fix; the fallback only
 covers the window between opening a new duplicate-period declaration and the first "Guardar".
 
+### Hard corrective/ordinaria consistency + asymmetric reactivation guard (ETP-5725 reopened)
+
+QA found the ETP-5725 auto-select above was only ever a convenience default — nothing enforced
+the actual AEAT business rule. This reopened round adds the real, hard-enforced state machine.
+Five distinct fixes, all under the same ticket/reopen:
+
+**1 — Corrective-without-ordinaria blocked (Bug 1).** A declaration marked `rectificativa`
+(303)/`sustitutiva` (349) can now only be saved, have its file generated, or be presented when a
+genuine ordinaria sibling for the same `(org, model, fiscalYear, period)` has already been
+PRESENTED. Repro this closed: create the FIRST (and only) declaration for a period, manually check
+the corrective box, and try to save/generate/present it — all three are now rejected with a 409
+("Cannot save/present a corrective declaration (rectificativa/sustitutiva) without a presented
+ordinaria declaration for the same period").
+
+**2 — Mirror rule: only one presented ordinaria per period.** The auto-select checkbox can be
+manually unchecked back to "Normal" even when a sibling is already presented; presenting (or
+saving/generating) as ordinaria in that state is now rejected too ("Cannot save/present as
+ordinaria: another ordinaria declaration is already presented for this period").
+
+**Shared backend implementation.** `FiscalDeclCrudHandler#checkCorrectiveConsistency(clientId,
+orgId, model, year, period, excludeId, effectivelyCorrective)` is the single method behind both
+directions — returns a violation message or `null`. Four callers:
+
+- `rejectCorrectiveConsistencyViolation` — the `PUT /fiscal{model}/declarations` guard. Fires
+  whenever `previousStatus` is NOT already in `SUBMITTED_STATUSES`, regardless of whether the PUT
+  body carries a `status` key at all. This is the fix for the half-done original implementation:
+  the PUT body for a plain "Guardar" (`persistEditableFields`/`persistManualData`) never includes
+  `status`, only `manualData` — a guard gated on `body.has("status")` never fires for a save, only
+  for "Registrar/Presentar". Folding save and present into ONE unconditional-on-previousStatus
+  check is what actually closes the "ni guardar ni generar fichero deberían poderse hacer" gap.
+- `AbstractFiscalHandler#guardCorrectiveConsistency(orgId, year, period, model,
+  effectivelyCorrective)` — the `generate` guard, shared by `Fiscal303BoxesHandler` and
+  `Fiscal349BoxesHandler`'s `dispatch`. `generate` carries no declaration id (only
+  `org/year/period`), so it resolves the LATEST declaration via `findLatestDeclaration` to use as
+  the sibling-search exclusion, mirroring `guardNotAlreadySubmitted`'s own pattern. Throws the
+  existing `AlreadySubmittedException` (reused, not a new type) — `runDispatch` already turns it
+  into a clean 409 for both models.
+- `Fiscal303SubmissionSupport#handleSubmit` (303 only — ETP-5725 REVIEW FIX, Blocker B1) — the
+  SAME `guardCorrectiveConsistency` call, added directly inside `handleSubmit`, right after the
+  resubmission/missing-presenter guard and before any certificate check or AEAT call. This is
+  `POST /fiscal303/submit`, the REAL AEAT telematic filing (production and test-mode validation
+  alike) — distinct from both guards above. **This endpoint was missed in the first pass of this
+  fix**, caught in review: neither `checkCorrectiveConsistency` nor `guardCorrectiveConsistency`
+  ran on it at all, so a direct call with a valid `declId` (or any future frontend path reaching
+  `AeatSubmitFlow.jsx` other than `FmModel303Page#handlePresent`'s own pre-flight click-time
+  check) could file a corrective declaration with AEAT with no presented ordinaria, or file a
+  duplicate ordinaria, with the server accepting it. 349 has no equivalent gap — there is no AEAT
+  telematic submit entity for it, only PUT-present and generate, both already gated.
+- `FiscalDeclCrudHandler#handleDeclPost` (CREATE, `POST /fiscal{model}/declarations` — ETP-5725
+  SENTINEL/QA FIX, BUG-1) — gated on the POST's own `status` being in `SUBMITTED_STATUSES`.
+  **Sentinel found the same gap pattern as review Blocker B1, one call site over**: a declaration
+  can be created directly via POST with ANY status, not just `draft`; `rejectCorrectiveConsistencyViolation`
+  (the PUT guard above) deliberately exits early once `previousStatus` is already submitted-family
+  (re-presentation is a different, already-blocked case) — so a row created straight into
+  `submitted`/`submitted_ext`/`submitted_ack` could never have this rule enforced on it afterward
+  by ANY later PUT either. POST does not accept `manualData`/identification at creation time (no
+  `MANUAL_DATA_KEY` handling anywhere in `handleDeclPost`), so `effectivelyCorrective` is always
+  `false` here — the corrective-without-ordinaria direction is structurally unreachable via POST,
+  not merely unchecked. The mirror direction (another ordinaria already presented) is fully
+  reachable, and is exactly what QA demonstrated: a direct POST with `status: "submitted_ack"` for
+  a period that already has a presented ordinaria sibling bypassed the rule entirely. `excludeId`
+  is `null` (the row does not exist yet).
+
+**`effectivelyCorrective` with no persisted row to trust.** Neither `generate` nor `submit` have a
+declaration id guaranteed to carry a flushed save (303's `handleGenerate`/`AeatSubmitFlow.jsx`
+never flush first — unlike 349's `generateNow`, which does), so both read the request's OWN
+params, not a persisted `manualData`. 349 already always sends an unambiguous `substitutive` param
+(`"Y"`/`"N"`, every call — see `generate349File`/`AEAT3492010Report.generateLine1`). **303 did
+not** — its existing `IsComplementary=Y` param is ambiguous: `applyComplementariaParams` in
+`fiscalModelsUtils.js` sets that SAME param for the unrelated legacy "complementaria" AEAT
+checkbox, so reading it server-side would have falsely flagged a plain complementaria declaration
+as corrective. Fixed by adding a new, dedicated `Rectificativa=Y` query param — set directly
+inside the SHARED `applyIdentParams` helper (`fiscalModelsUtils.js`), not duplicated per caller,
+precisely because the first version of this fix set it only inside `generate303File` and missed
+`AeatSubmitFlow.jsx`'s own submit request entirely (the same B1 gap above) — every 303 request
+that can file or preview-generate goes through `applyIdentParams` with the same `identChecks`, so
+centralizing it there is what actually guarantees both callers carry it. Purely additive — no
+existing AEAT-facing param changed.
+
+**Frontend UX gates (sugar only; backend is authoritative).** `FmModel303Page.jsx` computes
+`correctiveWithoutPresentedOrdinaria` / `ordinariaAlreadyPresented` (both derived from
+`identChecks.rectificativa` + `decl._duplicatePeriodPresented` — the same flag the ETP-5725 round-1
+auto-select already set), wired into `handleSave`, `handleGenerate` and both the "Registrar/
+Presentar" button's `onClick` and `handlePresent` (double-check pattern, matching every other
+present-time guard in that file). `FmModel349Page.jsx` mirrors with inline
+`isSustitutivaChecked(identChecks)` checks in `handleSave`, `presentNow` and `generateNow`. Two
+new locale keys, reused across all three actions rather than one per action:
+`fm.duplicate_period.requires_ordinaria` / `fm.duplicate_period.ordinaria_exists` (en/es).
+
+**3 — Asymmetric reactivation guard (Bug 2/4).** The pre-existing "Reactivar declaración" had NO
+sibling awareness at all — reactivating ANY presented declaration always succeeded regardless of
+other declarations for the same period. `FiscalDeclCrudHandler#findReactivationBlockReason(decl,
+declIsCorrective, ...)` now enforces, asymmetrically:
+
+- A **DRAFT sibling** (any type) ALWAYS blocks reactivation of either declaration — reverting the
+  reactivated row to draft too would violate the pre-existing ETP-5272 one-draft-per-period rule.
+  Reason tag `sibling_exists`.
+- A **PRESENTED corrective sibling** blocks reactivation ONLY when the declaration being
+  reactivated is itself NOT corrective (i.e. it's the ordinaria) — the corrective references the
+  ordinaria it corrects ("Identificador declaración anterior"), so pulling the ordinaria back to
+  draft would orphan an already-presented correction. Reason tag `corrective_sibling_presented`.
+- Reactivating the **corrective itself** is NEVER blocked by a presented sibling, including its
+  own presented ordinaria — the ordinaria stays valid as the base declaration underneath it;
+  revising/resubmitting the correction doesn't invalidate what it corrects.
+
+**This rule went through two iterations.** The first version was symmetric — it blocked
+reactivating EITHER declaration whenever ANY sibling existed at all, found wrong by manual testing
+immediately after: reactivating a presented RECTIFICATIVA/SUSTITUTIVA while its ORDINARIA sibling
+was also presented was wrongly rejected. `findReactivationBlockReason` replaced the original
+`hasAnySibling` boolean check with a full scan tracking `draftSiblingExists` and
+`presentedCorrectiveSiblingExists` independently, then applies the three rules above. `decl`'s own
+corrective/ordinaria identity is read via the same `isEffectivelyCorrective(decl, body)` helper
+used by `checkCorrectiveConsistency` above — for a reactivation PUT (`{"status":"draft"}`, no
+`manualData`) this falls back to `decl`'s own persisted `manualData.identification`, correctly
+identifying the TYPE of the row being reactivated, not a sibling's.
+
+**Reason tagging — a plain-text 409, no JSON-body `sendError` overload exists.**
+`servlet.sendError(response, status, message)` only ever produces `{"error":{"message": "...",
+"status": ...}}` (this package has no structured-body overload), so the two reasons above are
+tagged directly into that message text with a stable, regex-parseable marker:
+`"Cannot reactivate [reason=<code>]: ..."`. Frontend: `persistDeclarationStatus`
+(`fiscalModelsUtils.js`) now reads the response body on failure (previously discarded — only the
+bare status code was ever propagated) via the existing `parseServerMessage` helper, then extracts
+`reason` with `/\[reason=([a-z_]+)\]/`. `FmListPage.jsx`'s `handleConfirmReactivate` branches on
+`result.reason` for a specific toast (`fm.list.reactivate_failed_corrective_exists` /
+`fm.list.reactivate_failed_sibling_exists`), falling back to the original generic
+`fm.list.reactivate_failed` when no reason is present (network error, or any future 409 this
+mechanism doesn't tag).
+
+**4 — Display regression: the Bug 3 fix needed a second layer.** ETP-5725's original Bug 3 fix
+(see "Tipo column derivation" above) only patched `FmListPage.jsx`'s `resolveDeclTypeLabel` — its
+"never-saved" fallback now requires `decl.status === 'draft'` before defaulting to
+rectificativa/sustitutiva. The SAME root cause existed, unfixed, in the DETAIL PAGE'S OWN
+`identChecks` lazy initializer (both models — see "Auto-default, both models" above): gated only
+on `persisted.rectificativa/sustitutiva === undefined && _duplicatePeriodPresented`, with no
+`decl.status === 'draft'` precondition. Repro: present an ordinaria whose corrective flag was
+never explicitly toggled (so it reads `undefined`, the normal case for a declaration nobody
+manually touched), then present a sibling as the correction — OPENING the original, already-
+presented ordinaria re-triggered the auto-default and showed the corrective option
+checked/selected on an already-submitted, correctly-ordinaria record. Confirmed display-only via
+code audit (both models' editing surface — 303's identification form `readOnly={isSubmitted}`,
+349's Tipo toggle `disabled={isSubmitted}` — and `persistEditableFields`/`persistIdentChecks` are
+independently gated by `isSubmitted`, so no write path is reachable from the locked view) and
+independently confirmed clean at the DB level via a direct query. Fixed with the identical
+`decl.status === 'draft'` precondition, in both `FmModel303Page.jsx` and `FmModel349Page.jsx`.
+
+**5 — Two UX message improvements (same pattern, applied twice).** Both follow "the generic
+fallback toast was technically correct but uninformative, and the backend already distinguishes
+the cause — surface it":
+
+- `FmListPage.jsx`'s `handleNewDecl` — the POST `/fiscal303/declarations` 409 from the pre-existing
+  ETP-5272 `hasDraftDeclaration` guard is the ONLY cause of a 409 on that endpoint, so the status
+  code alone (no body parsing needed) now selects a specific toast,
+  `fm.list.new_decl_draft_exists` ("Ya existe una declaración en borrador para el periodo
+  seleccionado."), instead of the generic `fm.list.new_decl_failed`. Any other failure (network,
+  500, any other status) keeps the generic fallback.
+- `FmListPage.jsx`'s reactivate flow — see point 3 above (`reason`-tagged toasts).
+
 ### Required-field pre-flight gate (ETP-5187)
 
 `fm303Layouts.js` marks exactly 2 fields `required: true`: `tipo_declaracion` (always visible, in
@@ -3081,8 +3239,8 @@ rules apply to both 303 and 349.
   - The operator "origin" filter empties use the same component, with the filter message as the
     title.
   - **Why no app-wide component is reused.** The app has no shared generic empty-state
-    component: `LinesEmptyState` is specific to adding lines, and `AttachmentsTable`'s empty row
-    is inline markup.
+    component: `LinesEmptyState` is specific to adding lines, and `AttachmentsTable` uses the
+    generic `DataTable` empty state (`emptyState` override, since ETP-5526).
   - **Justificante** keeps the app's own `AttachmentsTab` empty state, which is also an icon plus
     a text. Its wording belongs to the formats work (P13).
 - **Sticky operators column header (P15).**

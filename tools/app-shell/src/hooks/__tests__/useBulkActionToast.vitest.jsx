@@ -21,6 +21,8 @@ vi.mock('@/i18n', () => ({
       processExecutedWithOmitted: '{ok} processed, {omitted} omitted, {failed} failed',
       actionFailed: 'Action failed',
       'backendError.countryIban': 'País necesario en una cuenta IBAN.',
+      // ETP-5710 — the invoice completion guard names the products, not the line numbers.
+      'backendError.invoiceLinesWithoutAmount': 'No se puede completar la factura: las líneas de {products} tienen cantidad y precio pero importe neto 0.',
       // ETP-5316 — the AD_MESSAGE-key route's locale entries.
       'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
       'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
@@ -501,5 +503,31 @@ describe('showBulkActionToast — exported pure helper (ETP-5302)', () => {
     // The other (fallback-path) run's persisted result must survive untouched —
     // this is the exact regression that made mounting the hook here unusable.
     expect(JSON.parse(sessionStorage.getItem('bulkActionResult')).ok).toBe(9);
+  });
+});
+
+// ETP-5710 — completing ONE invoice from the list: the server's refusal names the lines by product
+// and the toast shows it in the UI locale. With several rows selected only the counts show.
+describe('showBulkActionToast — invoice lines without amount (ETP-5710)', () => {
+  const message = 'The invoice cannot be completed: the lines of Agua, Queso have a quantity and a price but a net amount of 0, so the totals would be wrong. Save those lines again so the amount is recalculated, then complete.';
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('translates the single-record failure with the product list', () => {
+    const { result } = renderHook(() => useBulkActionToast());
+    act(() => {
+      result.current.showResult({ ok: 0, failed: [{ documentNo: '10000072', message }] });
+    });
+    expect(toast.error).toHaveBeenCalledWith(
+      'No se puede completar la factura: las líneas de Agua, Queso tienen cantidad y precio pero importe neto 0.',
+    );
+  });
+
+  it('does not surface the per-invoice error when several rows were selected', () => {
+    const { result } = renderHook(() => useBulkActionToast());
+    act(() => {
+      result.current.showResult({ ok: 0, failed: [{ message }, { message }] });
+    });
+    expect(toast.error).toHaveBeenCalledWith('0 processed, 2 failed');
   });
 });

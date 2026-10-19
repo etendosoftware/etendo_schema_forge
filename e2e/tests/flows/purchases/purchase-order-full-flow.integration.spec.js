@@ -3,6 +3,7 @@
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/DocumentTotalsPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
 import { apiAuthHeaders, login, navigateTo } from '../../helpers/auth.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
@@ -12,8 +13,9 @@ import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../../helpers/product-helpers.js';
 import {
-  loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
-  addProductLine, ensureVendorSetup, openDraftRow, openListRow, clickConfirmButton,
+  loadCredentials, slow, waitForDetailReady, selectVendorBP,
+  addProductLine, createDraftWithFirstLine, ensureVendorSetup, openDraftRow, openListRow,
+  clickConfirmButton,
   waitForConfirmResponse, dismissSuccessModal, expectStatusPill, expectAlreadyConfirmed,
   safeReload, readDocumentTotals, verifyTotalsConsistency, parseAmount, waitForLinesSettled,
   waitForDerivedFieldValue,
@@ -349,17 +351,12 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       await selectVendorBP(page);
     });
 
-    await test.step('Save PO as draft', async () => {
-      await saveDraft(page);
-
-      await expect(page,
-        'After saving, URL should include the PO record ID',
-      ).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-      await waitForDetailReady(page);
-    });
-
-    await test.step('Add two product lines', async () => {
-      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+    // No Guardar first: "+ Añadir líneas" saves the header itself, the path a user
+    // takes. The manual-save path is kept by the ALL-negative case below.
+    await test.step('Add two product lines, the first from the empty state (no manual save)', async () => {
+      await createDraftWithFirstLine(page, {
+        spec: 'purchase-order', via: 'emptyState', productName: PRODUCT_FIXTURE_ALPHA.name,
+      });
       await addProductLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '3' });
 
       await expect(page.locator('tbody tr'),
@@ -646,7 +643,7 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     await ensureProductFixtures(page);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 2: Create PO, save as draft
+    // STEP 2: Create PO and fill its header (no manual save — see STEP 3)
     // ═══════════════════════════════════════════════════════════════════════
 
     await navigateTo(page, 'purchase-order');
@@ -658,20 +655,16 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     await slow(page);
 
     await selectVendorBP(page);
-    await saveDraft(page);
-
-    await expect(page,
-      'After saving, URL should include the PO record ID',
-    ).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await waitForDetailReady(page);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 3: Add a baseline positive line, capture totals BEFORE the
-    // negative line is added
+    // STEP 3: Add a baseline positive line straight from the empty state,
+    // which saves the header itself; capture totals BEFORE the negative line
+    // is added
     // ═══════════════════════════════════════════════════════════════════════
 
-    await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+    await createDraftWithFirstLine(page, {
+      spec: 'purchase-order', via: 'emptyState', productName: PRODUCT_FIXTURE_ALPHA.name,
+    });
 
     // [ETP-4567 check #4] Price column header reads "Precio", not the old
     // default AD label ("Precio tarifa" / "Net List Price"). Checked here,
@@ -1213,13 +1206,6 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     await slow(page);
 
     await selectVendorBP(page);
-    await saveDraft(page);
-
-    await expect(page,
-      'After saving, URL should include the PO record ID',
-    ).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await waitForDetailReady(page);
 
     // Two NEGATIVE-quantity lines — every line negative, so the document
     // total itself goes fully negative (unlike the mixed-sign case above).
@@ -1231,7 +1217,12 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     ];
     const expectedSubtotal = LINES.reduce((sum, l) => sum + l.qty * l.product.listPrice, 0);
 
-    await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name, quantity: String(LINES[0].qty) });
+    // Manual "Guardar" before the first line — the creation path this case keeps
+    // covered for the purchase order; the other PO specs go straight from the empty state.
+    await createDraftWithFirstLine(page, {
+      spec: 'purchase-order', via: 'save',
+      productName: PRODUCT_FIXTURE_ALPHA.name, quantity: String(LINES[0].qty),
+    });
     await addProductLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: String(LINES[1].qty) });
 
     await waitForLinesSettled(page, 2, 'PO should have 2 lines, both negative');

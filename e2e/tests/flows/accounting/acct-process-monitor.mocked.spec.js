@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { login, installNonAdminCapabilities } from '../../helpers/auth.js';
 
+// @covers tools/app-shell/src/pages/AcctProcessMonitorPage.jsx
+
 /**
  * Accounting process monitor — Configuración > Accounting Process (ETP-5269, mocked).
  *
@@ -240,8 +242,26 @@ test.describe('Accounting process monitor — page', () => {
       .toBeVisible({ timeout: 20_000 });
 
     await expect(page.locator('body')).not.toContainText(LOG_SENTINEL);
-    // No log column, and no per-row drill-down that could reveal one.
-    await expect(page.locator('[data-testid*="log" i]')).toHaveCount(0);
+    // No log column and no per-row drill-down that could reveal one.
+    //
+    // This used to be `page.locator('[data-testid*="log" i]')`, which is a SUBSTRING match over
+    // the WHOLE page: it also matched the shell chrome's `etendo-ai-logo-collapsed`, every
+    // `LogOut__*` / `*Logout__*` button and every `*Dialog*` testid in the app. It started
+    // failing for that reason alone (received 1 = the collapsed logo), with nothing about the
+    // process log having changed. So: scope to this page's own subtree, and match the WORD
+    // "log", not the three letters.
+    const monitorTestIds = await page
+      .locator('[data-testid="AcctProcessMonitorPage"] [data-testid]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')));
+    // Split on non-letters and on camelCase boundaries, so `__log`, `logCell` and `viewLog` are
+    // caught while `dialog`, `logout` and `Loader2` are not.
+    const logTestIds = monitorTestIds.filter((id) => id
+      .replace(/[^A-Za-z]+/g, ' ')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .split(/\s+/)
+      .some((word) => word === 'log' || word === 'logs'));
+    expect(logTestIds, 'a log surface appeared inside the monitor page').toEqual([]);
     await expect(page.locator('tbody tr button')).toHaveCount(0);
   });
 

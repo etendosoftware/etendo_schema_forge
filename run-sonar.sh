@@ -9,6 +9,7 @@ BASE_REF=""
 CHANGED_ONLY="true"
 ALLOW_DIRTY="false"
 RUN_COVERAGE="false"
+COVERAGE_TARGET="test-all-coverage"
 FAIL_ON_GATE="false"
 COMPARE_COVERAGE="false"
 COMPARE_BRANCH=""
@@ -52,6 +53,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --coverage)
       RUN_COVERAGE="true"
+      shift
+      ;;
+    --coverage-changed)
+      # Coverage from the unit tests the change against --base-ref can affect
+      # (make test-changed-coverage, scripts/select-tests.js), not the whole suite.
+      # The pre-push uses it; the overall figure is then partial, so do not combine
+      # it with --compare-coverage.
+      RUN_COVERAGE="true"
+      COVERAGE_TARGET="test-changed-coverage"
       shift
       ;;
     --fail-on-gate)
@@ -285,7 +295,11 @@ if [[ "$RUN_COVERAGE" == "true" ]]; then
     echo "Install or activate Node 22 before running coverage."
     exit 1
   fi
-  make test-all-coverage
+  if [[ "$COVERAGE_TARGET" == "test-changed-coverage" && -n "$BASE_REF" ]]; then
+    make test-changed-coverage BASE="$BASE_REF"
+  else
+    make test-all-coverage
+  fi
 fi
 
 # ── Step 1: Run scanner ────────────────────────────────────────────

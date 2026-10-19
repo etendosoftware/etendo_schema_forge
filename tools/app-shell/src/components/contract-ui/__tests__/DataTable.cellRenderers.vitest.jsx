@@ -465,8 +465,11 @@ describe('renderDefaultCell', () => {
     // (styled, only opens when genuinely clipped — see components/ui/truncated-text.jsx),
     // so the trigger span no longer carries a `title` attribute; the tooltip's own
     // open/close behavior is covered by truncated-text's own test, not re-tested here.
-    const truncated = container.querySelector('span.truncate');
+    // ETP-5510 — non-first long strings clamp to 2 lines (inline -webkit-line-clamp) instead of 1.
+    const truncated = container.querySelector('span.break-words');
     expect(truncated).toBeTruthy();
+    expect(truncated).toHaveClass('block', 'w-full', 'whitespace-normal');
+    expect(truncated.style.webkitLineClamp).toBe('2');
     expect(truncated).not.toHaveAttribute('title');
     expect(truncated).toHaveTextContent(long);
   });
@@ -487,7 +490,9 @@ describe('renderMultiFieldCell', () => {
     }));
 
     const title = screen.getByText('Widget A');
-    expect(title.className).toBe('text-sm font-semibold text-[hsl(var(--foreground))] leading-5');
+    // ETP-5510 — the title is a 1-line TruncatedText (ellipsis + tooltip when clipped).
+    expect(title).toHaveClass('block', 'w-full', 'truncate', 'text-sm', 'font-semibold', 'leading-5');
+    expect(title.style.webkitLineClamp).toBe('');
     expect(container.querySelector('.flex.items-center.gap-3')).toBeTruthy();
   });
 
@@ -500,8 +505,10 @@ describe('renderMultiFieldCell', () => {
     }));
 
     const chip = screen.getByText('SKU-1');
-    expect(chip.className).toBe(
-      'inline-flex items-center px-2 py-0.5 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit',
+    // ETP-5510 — the pill is the max-w-full wrapper; its label sits in a truncating inner span.
+    expect(chip).toHaveClass('min-w-0', 'truncate');
+    expect(chip.parentElement.className).toBe(
+      'inline-flex max-w-full items-center px-2 py-0.5 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit',
     );
   });
 

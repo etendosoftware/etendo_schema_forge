@@ -1,9 +1,11 @@
+// @covers tools/app-shell/src/windows/custom/financial-account/CashClose/CashCloseSidePanel.jsx
+// @covers artifacts/sales-invoice/custom/InvoiceBottomPanel.jsx
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../../helpers/auth.js';
 import { openSelectorField } from '../../helpers/selectors.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
 import {
-  loadCredentials, slow, waitForDetailReady, saveDraft, addProductLine, ensureVendorSetup,
+  loadCredentials, slow, waitForDetailReady, createDraftWithFirstLine, ensureVendorSetup,
   // Generic despite the name: it picks the first real option of `field-businessPartner`, with no
   // vendor-specific step. Aliased so the call site reads correctly in a sales flow.
   selectVendorBP as selectBusinessPartner,
@@ -255,15 +257,11 @@ test.describe('Cash close (real backend)', () => {
     await pickSelectorOption(page, 'paymentMethod', /efectivo|cash/i,
       'Efectivo should be offered as the invoice payment method');
 
-    await saveDraft(page);
-    await expect(page,
-      'After saving, the URL should include the invoice record id',
-    ).toHaveURL(/\/sales-invoice\/(?!new\b)[a-zA-Z0-9]+/, { timeout: 20_000 });
-    const invoiceId = page.url().match(/\/sales-invoice\/(?!new\b)([a-zA-Z0-9]+)/)?.[1];
-    expect(invoiceId, `could not read the invoice id out of ${page.url()}`).toBeTruthy();
-    await waitForDetailReady(page);
-
-    await addProductLine(page, { isFirst: true, productName: productFixture.name });
+    // No Guardar first: "+ Añadir líneas" saves the invoice header itself, the path a
+    // user takes. Returns the id the header was saved under.
+    const invoiceId = await createDraftWithFirstLine(page, {
+      spec: 'sales-invoice', via: 'emptyState', productName: productFixture.name,
+    });
 
     // Saving a line with Enter leaves a FRESH, empty inline-add row open for rapid entry. Escape
     // closes it, so the confirm below does not run against a dirty row — and so the line count is

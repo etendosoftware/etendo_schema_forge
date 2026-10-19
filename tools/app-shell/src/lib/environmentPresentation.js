@@ -17,13 +17,16 @@ function hasProductiveType(environment) {
  * A demo can originate one productive environment. Once it has (the backend reports
  * `associatedWithProductive`), it is no longer offered as a purchase source: a later purchase
  * creates a clean productive environment (ETP-5548). A productive environment is never a source,
- * including a canceled one whose plan reads "free" (ETP-5047); the backend refuses it too.
+ * including a canceled one whose plan reads "free" (ETP-5047); the backend refuses it too. Neither
+ * is a demo the account was only invited into (`ownedByAccount: false`): it is not the buyer's to
+ * copy (ETP-5743). A backend that predates the field omits it, so only an explicit `false` excludes.
  */
 export function isPurchaseSourceDemo(environment) {
   return Boolean(environment)
     && !isProductiveEnvironment(environment)
     && !hasProductiveType(environment)
-    && environment.associatedWithProductive !== true;
+    && environment.associatedWithProductive !== true
+    && environment.ownedByAccount !== false;
 }
 
 /** A canceled productive environment keeps its "Productive" badge although its plan reads free. */

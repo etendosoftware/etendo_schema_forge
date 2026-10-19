@@ -130,7 +130,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
   - `inline: true` on the image field — keeps the image inside the four-column form grid
   - `autoSaveOnBlur: true` — all header fields (name, description, type, category, UOM, etc.) save automatically on blur, matching the behavior of Contacts, Assets, and Sales Order. The image field is explicitly excluded: image changes require the manual Save button.
   - `labelOverrides` — overrides `M_Product_Category_ID` to "Category"/"Categoría" and `ProductType` to "Type"/"Tipo" using the locale-nested format `{ "en_US": {...}, "es_ES": {...} }`
-  - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX` (no effect since ETP-5601 — the record toolbar is standardized), `tabsBarPaddingX`, `listbarPaddingX`, `tablePaddingX` — layout props for the fixed 320 px sidebar (`w-[320px]`, ETP-5513 — was `w-[30%]`) with left border, 8px horizontal padding throughout
+  - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX` (no effect since ETP-5601 — the record toolbar is standardized), `tabsBarPaddingX`, `tablePaddingX` — layout props for the fixed 320 px sidebar (`w-[320px]`, ETP-5513 — was `w-[30%]`) with left border, 8px horizontal padding throughout
   - `primaryTabsVariant: "pill"` — pill-style primary tab bar
   - `secondaryTabs.accounting` — exposes the GL-accounting tab (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) in the unified secondary tab strip (`tabOrder: 1`, so it renders first, ahead of the `customPanelTabs` entries), using the classic grid+form layout (not `inlineEditable`). `detailEntity` is explicitly `null` (not omitted — an omitted key falls back to auto-selecting the first non-primary entity, which would have picked `price` and produced an unintended extra detail section)
   - `vectorSearch.target: "product"` — opts Product into the global semantic search; windows without this declaration do not participate.
@@ -247,8 +247,10 @@ anymore — the same `type: 'multiField'` column any window can adopt (see
   "multiField" blob).
 
 The two segments are relabeled via `parts[].labels` — *Identifier* / *Identificador* for `searchKey`
-and *Name* / *Nombre* for `name` — so the composite header reads *"Identifier & Name"* /
-*"Identificador & Nombre"* (default `partSeparator` `" & "`) rather than the raw field labels.
+and *Name* / *Nombre* for `name` — so the composite header reads *"Identifier / Name"* /
+*"Identificador / Nombre"* rather than the raw field labels. The list is the hand-built
+`ProductCustomTable.jsx`, which sets `partSeparator: ' / '` on the column (ETP-5510); the
+`multiField` default separator elsewhere stays `" & "`.
 
 **Absorbed fields keep their data.** `searchKey` (subtitle) and `image` (media) no longer render as
 their own standalone columns — they fold into the identity cell — but their per-row data still arrives,
@@ -1536,6 +1538,34 @@ file being read; it is also removed when the file is refused and the error step 
 Every import run reports one `import_completed` telemetry event (counts, timings, batch size and
 concurrency used, mapped columns, foreign keys resolved/created; never row content). See
 `decisions-reference.md` → *Import Limits* → Telemetry.
+
+### ETP-5676 — Server cost per imported row
+
+Measured in production: about 800 ms of server time per imported row (product, two prices, cost).
+Four backend cuts, in `com.etendoerp.go` (`docs/neo-headless.md` §4.3.7):
+
+- **No double price write.** A priced row sends `_skipPricesSeed: [<versions it prices>]` on the
+  product op (`productImportDescriptor.js`). The backend skips the zero-price seed for a direction
+  only when the version **it** would seed (`PriceListVersionResolver`) is in that list, so
+  `ProductPriceHandler` no longer overwrites a row seeded a moment earlier. Every GO price list
+  has one version, and onboarding seeds one default sales and one default purchase list, so the
+  import (`resolvePlv`) and the server pick the same tariff. They can differ only after a user
+  clears **Por defecto** on the Tarifas window: then each falls back to a different "first"
+  direction-matching list, the server's tariff is still seeded at 0 and the imported price lands
+  on the import's choice, exactly as before. The same holds if the selector leaves a list's sales
+  flag null: the import accepts it for sales, the server does not. An unpriced row sends nothing and is seeded as before.
+- **`_onlyReturnIds: true`** on every import `/batch` request (`useWindowImportDialog` wraps
+  `useBatch.runBatch`; OCR does not send it). The backend skips locator-identifier enrichment and
+  the `etgoHasCost` flag on each create. The response is unchanged — the import engine reads only
+  `committed`, `operations[].recordId` and the failure envelope.
+- **`_skipRedundantCallouts: true`** on every import `/batch` request (same wrapper; OCR does not
+  send it): within one batch, `SL_TaxCategory_Org` and `SL_Costing_Currency` are not re-run once
+  they have been seen proposing only values the row already carries. Opt-in on purpose — a batch
+  without it runs every callout — and the backend kill switch `batch-callout-skip-disabled` turns
+  it off for every batch whatever the request asks (com.etendoerp.go `docs/neo-headless.md`
+  §4.3.7 says how to flip it). The generic import hook sends it, so it covers the two windows that
+  have an import today: product and contacts.
+- **Automatic, no client change:** spec/entity/default lookups are answered once per batch.
 
 ## Account selectors — ETP-5681
 

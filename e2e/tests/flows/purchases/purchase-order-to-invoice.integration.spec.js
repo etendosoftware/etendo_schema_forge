@@ -1,15 +1,18 @@
 // @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
+// @covers artifacts/purchase-invoice/custom/PurchaseInvoiceBottomPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../../helpers/auth.js';
 import { ensureOpenPeriod } from '../../helpers/period-helpers.js';
 import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
+import { t } from '../../helpers/i18n.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../../helpers/product-helpers.js';
 import {
-  loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
-  addProductLine, ensureVendorSetup, clickConfirmButton, expectStatusPill,
+  loadCredentials, slow, waitForDetailReady, selectVendorBP,
+  addProductLine, createDraftWithFirstLine, leaveNewDocumentThroughEmptyLines, ensureVendorSetup, clickConfirmButton, expectStatusPill,
   dismissSuccessModal, safeReload, readDocumentTotals, verifyTotalsConsistency,
   derivedFieldLocator, waitForLinesSettled,
 } from '../../helpers/purchase-helpers.js';
@@ -107,22 +110,13 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
       ).toBeVisible({ timeout: 5_000 });
     });
 
-    await test.step('Save PO as draft', async () => {
-      await saveDraft(page);
-
-      await expect(page,
-        'After saving draft, URL should include the PO record ID',
-      ).toHaveURL(/\/purchase-order\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-
-      // Wait for the detail to fully load after save redirect
-      await waitForDetailReady(page);
-
+    // No Guardar first: "+ Añadir líneas" saves the header itself, the path a user takes.
+    await test.step('Add two product lines, the first from the empty state (no manual save)', async () => {
+      await createDraftWithFirstLine(page, {
+        spec: 'purchase-order', via: 'emptyState', productName: PRODUCT_FIXTURE_ALPHA.name,
+      });
       await expectStatusPill(page, /borrador|draft/i,
-        'PO should be in Draft status after saving');
-    });
-
-    await test.step('Add two product lines', async () => {
-      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+        'PO should be in Draft status once the first line has saved its header');
       await addProductLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '3' });
 
       await expect(page.locator('tbody tr'),
@@ -235,51 +229,23 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
       // networkidle or waitForTimeout needed.
     });
 
-    await test.step('Save invoice as draft', async () => {
-      await saveDraft(page);
-
-      // The save may succeed but the frontend redirect from /new to /{id} can be
-      // slow. First give it a generous window to land on the record URL.
-      const saved = await page.waitForURL(
-        /\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/,
-        { timeout: 20_000 },
-      ).then(() => true).catch(() => false);
-
-      // If we're still on /new the save genuinely failed (callout arrived late,
-      // required-field validation). Retry once — selectVendorBP already waited
-      // for callouts, but the form may need another save attempt.
-      if (!saved && page.url().endsWith('/new')) {
-        await saveDraft(page);
-      }
-
-      await expect(page,
-        'After saving draft, URL should include the invoice record ID',
-      ).toHaveURL(/\/purchase-invoice\/(?!new$)[a-zA-Z0-9]+$/, { timeout: 15_000 });
-      await waitForDetailReady(page);
-
+    // No Guardar first: the import button of the empty state saves the invoice header
+    // itself and then opens the modal, the path a user takes.
+    await test.step('Open "Import from purchase order" from the empty state (no manual save)', async () => {
       // Captured so the post-confirmation check can target THIS invoice's row
       // (`row-{id}`) instead of "the first Completed row", which any leftover
       // invoice from an earlier run also satisfies.
-      invoiceId = (page.url().match(/\/purchase-invoice\/([^/?]+)/) || [])[1];
-      expect(invoiceId, 'Should have captured the invoice record id from the URL').toBeTruthy();
+      invoiceId = await leaveNewDocumentThroughEmptyLines(page, {
+        spec: 'purchase-invoice',
+        via: 'emptyState',
+        trigger: page.getByRole('button', { name: t('importFromPurchaseOrder') }),
+      });
 
+      await expect(page.getByTestId('import-lines-search'),
+        'The import modal should open once the invoice header is saved',
+      ).toBeVisible({ timeout: 15_000 });
       await expectStatusPill(page, /borrador|draft/i,
-        'Invoice should be in Draft status after saving');
-
-      await expect(page.getByRole('button', { name: /líneas\s+0|lines\s+0/i }),
-        'Invoice should have 0 lines before importing from PO',
-      ).toBeVisible({ timeout: 5_000 });
-    });
-
-    await test.step('Open "Import from purchase order" modal', async () => {
-      const orderBtn = page.locator('button').filter({ hasText: /importar desde pedido|import from order/i });
-
-      // Retry click→modal sequence
-      const importSearch = page.getByTestId('import-lines-search');
-      await expect(async () => {
-        await orderBtn.click({ timeout: 3_000 });
-        await expect(importSearch).toBeVisible({ timeout: 5_000 });
-      }).toPass({ timeout: 15_000 });
+        'Invoice should be in Draft status once the import has saved its header');
 
       // Verify it is the PO import modal (not the receipt one)
       await expect(page.locator('span').filter({ hasText: /importar desde pedido|import from order/i }),

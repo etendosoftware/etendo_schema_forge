@@ -53,7 +53,8 @@ const draftMode = {
     "orderReference",
     "accountingDate",
     "project",
-    "costcenter"
+    "costcenter",
+    "aeatsiiErrorRegistral"
   ],
   "editableLineFieldsWhenCompleted": [
     "project",
@@ -63,7 +64,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'accountingDate', 'paymentTerms', 'paymentMethod', 'currency'];
+const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'accountingDate', 'paymentTerms', 'paymentMethod', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines

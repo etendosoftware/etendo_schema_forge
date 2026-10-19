@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
+  "version": "0.29.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
-  "updatedAt": "2026-10-05T19:24:13.071Z",
-  "checksum": "bfd80f66609db10e",
+  "updatedAt": "2026-10-15T18:34:50.831Z",
+  "checksum": "6755953a65842bd1",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -547,9 +547,8 @@
             "visibility": "readOnly",
             "required": true,
             "grid": true,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
-            "section": "summary",
             "gridOrder": 6,
             "validation": {
               "required": true,
@@ -566,9 +565,8 @@
             "visibility": "readOnly",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
-            "section": "summary",
             "validation": {
               "required": true,
               "maxLength": 22

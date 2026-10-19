@@ -275,7 +275,6 @@ export default function MovementPage({ windowName, recordId, ...props }) {
       api={api}
       listViewOptions={{"hideStatusFilter":true}}
       dateFilterKey="movementDate"
-      listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
       hideLink

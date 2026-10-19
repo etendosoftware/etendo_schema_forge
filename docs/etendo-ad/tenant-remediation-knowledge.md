@@ -1452,7 +1452,7 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   `UserRoleCompositionService`'s write shape — the SQL-first criterion held.
 - **2026-08-26 — `AD_Role.EM_ETGO_Show_Acct_Fields` (ETP-4520) is READ as a flat stored column,
   never derived via a live join to `AD_Role_Inheritance`.** Confirmed by reading
-  `SFWindowAccessMap#resolveShowAccountingFields`: `SELECT em_etgo_show_acct_fields FROM ad_role
+  `NeoAccountingAccessPolicy#readShowAccountingFieldsFlag`: `SELECT em_etgo_show_acct_fields FROM ad_role
   WHERE ad_role_id = :roleId` — no join at all. So the column is a CACHE of "does this role
   currently inherit from Finance", and whoever last changed a role's `AD_Role_Inheritance` set is
   responsible for keeping it in sync — nothing did that for the ETP-4852 composition path before
