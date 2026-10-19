@@ -1,3 +1,4 @@
+// @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
 // Real-render companion to artifacts/goods-shipment/custom/__tests__/GoodsShipmentActions.test.js
 // (source-reading only, zero executed lines). Mirrors the sibling
 // goods-receipt/__tests__/GoodsReceiptActions.vitest.jsx convention (jsdom
@@ -8,7 +9,7 @@
 //
 // Mocks must come before imports (Vitest hoisting)
 
-const { mockExecute } = vi.hoisted(() => ({ mockExecute: vi.fn() }));
+const { mockExecute, mockNavigate } = vi.hoisted(() => ({ mockExecute: vi.fn(), mockNavigate: vi.fn() }));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -16,7 +17,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
 }));
 
 vi.mock('sonner', () => ({
@@ -39,7 +40,12 @@ vi.mock('@/windows/custom/goods-shipment/useShipmentPdf', () => ({
 }));
 
 vi.mock('@generated/goods-shipment/custom/ReturnWizard', () => ({
-  default: () => <div data-testid="return-wizard" />,
+  default: ({ open, onSuccess }) => (
+    <div data-testid="return-wizard">
+      {open && <button type="button" data-testid="wizard-success" onClick={() => onSuccess({ id: 'rmr-1', documentNo: 'DEV-1' })} />}
+      {open && <button type="button" data-testid="wizard-success-no-id" onClick={() => onSuccess({})} />}
+    </div>
+  ),
 }));
 
 vi.mock('@generated/goods-shipment/custom/GoodsShipmentConfirmModal', () => ({
@@ -59,9 +65,10 @@ vi.mock('@/components/contract-ui/SendDocumentModal', () => ({
 }));
 
 vi.mock('@/components/contract-ui', () => ({
-  ConfirmResultModal: ({ onClose }) => (
-    <div data-testid="confirm-result-modal">
+  ConfirmResultModal: ({ docs, onClose, navigate }) => (
+    <div data-testid="confirm-result-modal" data-doc-type={docs?.[0]?.type} data-route={docs?.[0]?.route}>
       <button data-testid="result-modal-close" onClick={onClose}>Close</button>
+      <button data-testid="result-modal-view" onClick={() => navigate(docs?.[0]?.route)}>View</button>
     </div>
   ),
 }));
@@ -109,6 +116,53 @@ describe('GoodsShipmentActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExecute.mockReset();
+  });
+
+  // Sales mirrors Purchases (GoodsReceiptActions): the created return is announced in
+  // ConfirmResultModal and the user chooses whether to open it — no auto-navigation.
+  describe('sales return result', () => {
+    const returnable = { data: { ...defaultProps.data, canCreateReturn: true } };
+
+    it('announces the return created by the wizard as a devolucionVenta linking to its window, without navigating', () => {
+      renderActions(returnable);
+      fireEvent.click(screen.getByText('createReturn'));
+      fireEvent.click(screen.getByTestId('wizard-success'));
+
+      const result = screen.getByTestId('confirm-result-modal');
+      expect(result).toHaveAttribute('data-doc-type', 'devolucionVenta');
+      expect(result).toHaveAttribute('data-route', '/return-material-receipt/rmr-1');
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('closing the result modal refreshes the shipment; opening the return navigates instead', async () => {
+      vi.useFakeTimers();
+      try {
+        const onRefresh = vi.fn();
+        renderActions({ ...returnable, onRefresh });
+        fireEvent.click(screen.getByText('createReturn'));
+        fireEvent.click(screen.getByTestId('wizard-success'));
+        fireEvent.click(screen.getByTestId('result-modal-close'));
+        act(() => { vi.runAllTimers(); });
+        expect(onRefresh).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByText('createReturn'));
+        fireEvent.click(screen.getByTestId('wizard-success'));
+        fireEvent.click(screen.getByTestId('result-modal-view'));
+        expect(mockNavigate).toHaveBeenCalledWith('/return-material-receipt/rmr-1');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('falls back to onRefresh with no result modal when the created return has no id', () => {
+      const onRefresh = vi.fn();
+      renderActions({ ...returnable, onRefresh });
+      fireEvent.click(screen.getByText('createReturn'));
+      fireEvent.click(screen.getByTestId('wizard-success-no-id'));
+
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+    });
   });
 
   describe('"Create Invoice" button opens CreateInvoiceConfirmModal', () => {

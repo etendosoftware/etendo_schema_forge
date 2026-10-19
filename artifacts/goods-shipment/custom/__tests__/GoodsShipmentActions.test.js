@@ -1,3 +1,4 @@
+// @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -424,10 +425,18 @@ describe('GoodsShipmentActions', () => {
       );
     });
 
-    it('calls onRefresh (not a reload) as the ReturnWizard onSuccess fallback when the created return has no id to navigate to', () => {
+    it('announces the created return in the result modal (no auto-navigation) and calls onRefresh as the no-id fallback', () => {
       assert.match(
         src,
-        /if\s*\(returnData\?\.id\)\s*\{\s*navigate\(`\/return-material-receipt\/\$\{returnData\.id\}`\);\s*\}\s*else\s*\{\s*[\s\S]*?onRefresh\?\.\(\);\s*\}/,
+        /if\s*\(returnData\?\.id\)\s*\{\s*(?:\/\/[^\n]*\n\s*)*setReturnedDoc\(returnData\);\s*\}\s*else\s*\{\s*[\s\S]*?onRefresh\?\.\(\);\s*\}/,
+      );
+      assert.doesNotMatch(src, /navigate\(`\/return-material-receipt\/\$\{returnData\.id\}`\)/);
+    });
+
+    it('calls onRefresh (not a reload) when closing the return-result modal, unless the user navigated away', () => {
+      assert.match(
+        src,
+        /setReturnedDoc\(null\);\s*setTimeout\(\(\) => \{\s*[\s\S]*?if\s*\(!resultNavigatedRef\.current\)\s*onRefresh\?\.\(\);/,
       );
     });
   });

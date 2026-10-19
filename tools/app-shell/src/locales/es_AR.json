@@ -20614,6 +20614,8 @@
     "confirmResultModal.title.devolucionCompra": "Devolución de compra creada",
     "confirmResultModal.title.facturaRectificativaCompra": "Factura rectificativa de compra creada",
     "confirmResultModal.docType.devolucionCompra": "Devolución de compra",
+    "confirmResultModal.title.devolucionVenta": "Devolución de venta creada",
+    "confirmResultModal.docType.devolucionVenta": "Devolución de venta",
     "confirmResultModal.docType.facturaRectificativaCompra": "Factura rectificativa de compra",
     "confirmResultModal.view.devolucion": "Ver devolución",
     "confirmResultModal.closeIcon": "Cerrar ventana",

@@ -224,7 +224,9 @@ close the result modal with a full `window.location.reload()`. `GoodsShipmentAct
 accepts the `onRefresh` prop `DetailView.jsx`'s topbar slot already passes it (`() =>
 hook.fetchById(recordId)`) and calls that instead — in the invoice-result `ConfirmResultModal`'s
 `onClose` (skipped when the user navigated to the new invoice instead) and as the `ReturnWizard`
-`onSuccess` fallback when the created return has no id to navigate to. The **Related Documents**
+`onSuccess` fallback when the created return has no id. Since ETP-5729 a created return with an
+id is announced in a second `ConfirmResultModal` (see the ETP-5729 section) whose `onClose`
+applies the same refresh-unless-navigated rule. The **Related Documents**
 tab (`artifacts/goods-shipment/custom/RelatedDocuments.jsx`) needs no separate refetch: it
 derives its chips straight from `data.linkedOrders` / `linkedInvoices` / `returnReceipts`, so
 refreshing the header via `onRefresh` is sufficient to update it — no manual reload required.
@@ -455,3 +457,21 @@ keeps the dialog open so the user can adjust the lines or cancel.
 
 Manual check: on a shipment that already has a return, Crear Devolución → pick a line → Crear
 Devolución: the dialog closes and a Spanish toast names the shipment's document number.
+
+**After the return is created — result modal, no auto-navigation.** Sales now behaves like
+Purchases (`GoodsReceiptActions.jsx`). `GoodsShipmentActions.jsx` used to navigate straight to
+`/return-material-receipt/<id>` from the `ReturnWizard` `onSuccess` (ETP-4031). It now stores the
+created return (`returnedDoc`) and renders the shared `ConfirmResultModal` with the doc type
+`devolucionVenta` ("Devolución de venta creada" / "Sales return created", card label
+"Devolución de venta", button "Ver devolución"), routed to `/return-material-receipt/<id>`. The
+user chooses: **Ver devolución** navigates to the return; **Cerrar** stays on the shipment and
+calls `onRefresh` so the Documentos section shows the new return chip (ETP-4779 rule, skipped
+when the user navigated). When the action returns no id, no modal is shown and `onRefresh` runs
+directly, as before. `devolucionVenta` is a new `TYPE_CONFIG` entry in
+`tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx`, with
+`confirmResultModal.title.devolucionVenta` / `confirmResultModal.docType.devolucionVenta` in
+`en_US`, `es_ES` and `es_AR`.
+
+Manual check: on a completed shipment, Crear Devolución → pick a line → Crear Devolución: the
+result modal appears; Cerrar keeps you on the shipment with the return in Documentos; Ver
+devolución opens the return receipt.

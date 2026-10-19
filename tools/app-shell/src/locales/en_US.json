@@ -21316,6 +21316,8 @@
     "confirmResultModal.title.devolucionCompra": "Purchase return created",
     "confirmResultModal.title.facturaRectificativaCompra": "Purchase rectificative invoice created",
     "confirmResultModal.docType.devolucionCompra": "Purchase return",
+    "confirmResultModal.title.devolucionVenta": "Sales return created",
+    "confirmResultModal.docType.devolucionVenta": "Sales return",
     "confirmResultModal.docType.facturaRectificativaCompra": "Purchase rectificative invoice",
     "confirmResultModal.view.devolucion": "View return",
     "confirmResultModal.closeIcon": "Close dialog",

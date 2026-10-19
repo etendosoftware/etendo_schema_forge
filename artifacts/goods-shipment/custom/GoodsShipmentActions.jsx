@@ -25,6 +25,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   const [showSend, setShowSend] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [invoiceResult, setInvoiceResult] = useState(null);
+  const [returnedDoc, setReturnedDoc] = useState(null);
   const resultNavigatedRef = useRef(false);
 
   // Quote inputs — mirrors BulkInvoiceFromShipment.jsx's own quote exactly (see that file for
@@ -442,6 +443,23 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         document.body,
       )}
 
+      {returnedDoc && createPortal(
+        <ConfirmResultModal
+          docs={[{ type: 'devolucionVenta', num: returnedDoc.documentNo, documentStatus: returnedDoc.documentStatus, route: `/return-material-receipt/${returnedDoc.id}` }]}
+          navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
+          onClose={() => {
+            setReturnedDoc(null);
+            setTimeout(() => {
+              // ETP-4779 — same partial-refresh rationale as the invoice
+              // confirmation panel above.
+              if (!resultNavigatedRef.current) onRefresh?.();
+              resultNavigatedRef.current = false;
+            }, 0);
+          }}
+        />,
+        document.body,
+      )}
+
       <style>{`@keyframes spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }`}</style>
 
 
@@ -454,7 +472,10 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         onSuccess={(returnData) => {
           setWizardOpen(false);
           if (returnData?.id) {
-            navigate(`/return-material-receipt/${returnData.id}`);
+            // ETP-5729 — same as Purchases (GoodsReceiptActions): announce the
+            // created return in ConfirmResultModal and let the user choose to
+            // open it, instead of navigating away automatically.
+            setReturnedDoc(returnData);
           } else {
             // ETP-4779 — partial refresh (see rationale above) instead of a full
             // page reload when there's no id to navigate to.
