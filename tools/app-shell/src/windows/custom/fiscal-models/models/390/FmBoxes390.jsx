@@ -11,6 +11,7 @@ import {
   ReceiptText,
 } from 'lucide-react';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
 import {
@@ -364,7 +365,7 @@ function StatisticsBlock({ ctx }) {
       {activities.length === 0 ? (
         <p className="fm-390-hint" data-testid="FmBoxes390__noActivities">{ctx.t('fm.m390.statistics.empty')}</p>
       ) : (
-        <table className="fm-390-mini-table" data-testid="FmBoxes390__activities">
+        <table className="fm-dtable fm-dtable--plain fm-390-mini-table" data-testid="FmBoxes390__activities">
           <thead>
             <tr>
               <th>{ctx.t('fm.m390.statistics.activity')}</th>
@@ -406,7 +407,7 @@ function RepresentativeBlock({ ctx }) {
     ) : null;
   } else if ((org.representatives ?? []).length > 0) {
     body = (
-      <table className="fm-390-mini-table" data-testid="FmBoxes390__representatives">
+      <table className="fm-dtable fm-dtable--plain fm-390-mini-table" data-testid="FmBoxes390__representatives">
         <thead>
           <tr>
             <th>{ctx.t('fm.m390.representative.nif')}</th>
@@ -560,15 +561,21 @@ function BlockIndex({ blocks, active, onSelect, t }) {
           </button>
         ))}
       </nav>
-      <select
-        className="fm-390-index-select"
-        value={active}
-        aria-label={t('fm.m390.index')}
-        onChange={e => onSelect(e.target.value)}
-        data-testid="FmBoxes390__indexSelect"
-      >
-        {blocks.map((b, i) => <option key={b.id} value={b.id}>{`${i + 1}. ${t(b.titleKey)}`}</option>)}
-      </select>
+      {/* Below 1200px the index folds into the app Select (no native selects — ETP-5584). */}
+      <div className="fm-390-index-select">
+        <Select value={active} onValueChange={onSelect}>
+          <SelectTrigger aria-label={t('fm.m390.index')} data-testid="FmBoxes390__indexSelect">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {blocks.map((b, i) => (
+              <SelectItem key={b.id} value={b.id} data-testid={`FmBoxes390__indexOption_${b.id}`}>
+                {`${i + 1}. ${t(b.titleKey)}`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </>
   );
 }

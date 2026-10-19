@@ -1562,13 +1562,15 @@
    folds into a select above the content (1280×720 keeps the index). */
 .fm-390-boxes { display: flex; align-items: flex-start; gap: 8px; padding: 0; }
 .fm-390-index {
-  width: 220px; flex-shrink: 0; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px;
+  /* 248px keeps every block name on one line (the 11 items fit under the tabs bar at 1280×720). */
+  width: 248px; flex-shrink: 0; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px;
   position: sticky; top: 49px;
 }
+/* Same item metrics as the 303 Casillas section nav (8px 12px, 14/20, radius 8). */
 .fm-390-index__item {
-  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: none; border-radius: 8px;
-  background: transparent; color: hsl(var(--foreground)); font-size: 14px; line-height: 18px;
-  text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: none; border-radius: 8px;
+  background: transparent; color: hsl(var(--foreground)); font-size: 14px; line-height: 20px;
+  text-align: left; cursor: pointer; transition: background .1s;
 }
 .fm-390-index__item:hover { background: hsl(var(--muted)); }
 .fm-390-index__item--active { background: hsl(var(--muted)); font-weight: 500; }
@@ -1577,13 +1579,9 @@
 @media (max-width: 1200px) {
   .fm-390-boxes { flex-direction: column; }
   .fm-390-index { display: none; }
-  .fm-390-index-select {
-    display: block; margin: 8px 20px 0; height: 36px; padding: 0 10px; font-size: 14px;
-    border: 1px solid hsl(var(--border-control)); border-radius: 8px; background: hsl(var(--card));
-    color: hsl(var(--foreground));
-  }
+  .fm-390-index-select { display: block; margin: 8px 24px 0; max-width: 360px; }
 }
-.fm-390-boxes__content { flex: 1; min-width: 0; padding: 6px 20px 24px; }
+.fm-390-boxes__content { flex: 1; min-width: 0; padding: 6px 24px 24px; }
 .fm-390-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 4px 0 12px; }
 .fm-390-search { display: flex; align-items: center; gap: 8px; }
 .fm-390-search__field {
@@ -1604,16 +1602,20 @@
 .fm-390-legend__swatch--modified { background: hsl(var(--card)); border-color: var(--status-warning-border); color: var(--status-warning-fg); }
 .fm-390-legend__swatch--total { background: hsl(var(--muted)); border-color: hsl(var(--foreground)); }
 .fm-390-design-note { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+/* Same metrics as the 303 duplicate-period warning (8px 14px, radius 8, 13px, 14px icon). */
 .fm-390-warnings {
-  display: flex; gap: 8px; margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; font-size: 13px;
+  display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px; padding: 8px 14px; border-radius: 8px;
+  font-size: 13px; line-height: 18px;
   background: var(--status-warning-bg); border: 1px solid var(--status-warning-border); color: var(--status-warning-fg);
 }
+.fm-390-warnings > svg { flex-shrink: 0; margin-top: 2px; }
 .fm-390-warnings ul { margin: 0; padding-left: 16px; }
 .fm-390-hint { margin: 8px 0; font-size: 13px; line-height: 18px; color: hsl(var(--muted-foreground)); }
 .fm-390-org-link { align-self: flex-start; margin-top: 8px; font-size: 14px; }
-.fm-390-mini-table { width: 100%; max-width: 760px; border-collapse: collapse; font-size: 14px; margin-bottom: 8px; }
-.fm-390-mini-table th { text-align: left; font-weight: 600; padding: 6px 8px; border-bottom: 1px solid hsl(var(--border-subtle)); color: hsl(var(--foreground)); }
-.fm-390-mini-table td { padding: 6px 8px; border-bottom: 1px solid var(--fm-border-1); color: hsl(var(--foreground)); }
+/* In-block tables (IAE activities, representatives, the year's 303s): the 303 `.fm-dtable--plain`
+   look; the header does not stick (it would slide under the sticky tabs bar). */
+.fm-390-mini-table { max-width: 760px; margin-bottom: 8px; }
+.fm-390-mini-table thead { position: static; }
 .fm-390-rate-group { margin-bottom: 4px; }
 .fm-390-fold { display: inline-block; margin: 2px 0 6px; font-size: 13px; }
 .fm-390-cell--input { position: relative; }
@@ -1637,13 +1639,20 @@
 .fm-390-filegen__summary dd { margin: 0; color: hsl(var(--foreground)); font-variant-numeric: tabular-nums; }
 
 /* ── Modelo 390 · Facturas tab (FmSources390.jsx) and "Ver facturas" on a box ── */
+/* "Ver facturas" overlays the right edge of the cell only on hover / keyboard focus, so at rest the
+   value shows whole, like any 303 cell (it used to take 32px for good and truncate the amounts). */
+.fm-390-cell--calc { position: relative; }
 .fm-390-cell__invoices {
-  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px;
-  border: none; border-left: 1px solid hsl(var(--border-subtle)); background: transparent; cursor: pointer;
-  color: hsl(var(--muted-foreground));
+  position: absolute; top: 0; right: 0; bottom: 0; width: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-left: 1px solid hsl(var(--border-subtle)); background: hsl(var(--muted)); cursor: pointer;
+  color: hsl(var(--muted-foreground)); opacity: 0; transition: opacity .1s;
 }
+.fm-390-cell--calc:hover .fm-390-cell__invoices,
+.fm-390-cell__invoices:focus-visible { opacity: 1; }
 .fm-390-cell__invoices:hover { color: hsl(var(--foreground)); background: hsl(var(--card)); }
 .fm-390-cell__invoices:focus-visible { outline: 2px solid hsl(var(--ring, var(--primary))); outline-offset: -2px; }
+@media (hover: none) { .fm-390-cell__invoices { opacity: 1; } }
 .fm-390-sources { display: flex; flex-direction: column; flex: 1; min-height: 0; background: hsl(var(--card)); }
 .fm-390-sources__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 20px 8px; }
 .fm-390-sources__toolbar .fm-btn { display: inline-flex; align-items: center; gap: 6px; }

@@ -49,12 +49,12 @@ export default function Settlements303Table390({ preload, loading, error, year, 
       )}
       {rows.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
-          <table className="fm-390-mini-table">
+          <table className="fm-dtable fm-dtable--plain fm-390-mini-table">
             <thead>
               <tr>
                 <th>{t('fm.m390.preload.col.period')}</th>
                 <th>{t('fm.m390.preload.col.status')}</th>
-                <th style={{ textAlign: 'right' }}>{t('fm.m390.preload.col.result')}</th>
+                <th className="num">{t('fm.m390.preload.col.result')}</th>
                 <th>{t('fm.m390.preload.col.kind')}</th>
                 <th aria-label={t('fm.m390.preload.open')} />
               </tr>
@@ -70,7 +70,7 @@ export default function Settlements303Table390({ preload, loading, error, year, 
                     <FmStatusChip status={r.status} t={t} />
                     {r.source === 'live' && <span style={MUTED}> · {t('fm.m390.preload.source_live')}</span>}
                   </td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }} data-testid={`Settlements303Table390__result_${r.period}`}>
+                  <td className="num" data-testid={`Settlements303Table390__result_${r.period}`}>
                     {r.source === 'error' ? '—' : formatAmount(Number(r.result))}
                   </td>
                   <td>{r.source === 'error' ? t('fm.m390.preload.kind.error') : t(SETTLEMENT_KIND_KEY_390[r.kind] ?? 'fm.m390.preload.kind.zero')}</td>
