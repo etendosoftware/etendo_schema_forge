@@ -1666,9 +1666,6 @@
   height: 36px; padding: 0 8px; max-width: 220px; font-size: 14px; color: hsl(var(--foreground));
   border: 1px solid hsl(var(--border-control)); border-radius: 8px; background: hsl(var(--card));
 }
-.fm-390-sources__chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 20px 10px; max-height: 76px; overflow-y: auto; }
-.fm-390-sources__chips .fm-toolbar__pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
-.fm-390-sources__chip-box { font-weight: 600; }
 .fm-390-sources__table { flex: 1; min-height: 0; }
 .fm-390-sources__table tfoot td { position: sticky; bottom: 0; background: hsl(var(--muted)); font-weight: 700; border-top: 1px solid hsl(var(--border-control)); }
 .fm-390-sources__placeholder { text-align: center; padding: 24px 0 !important; color: hsl(var(--muted-foreground)); }

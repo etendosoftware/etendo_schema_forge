@@ -3597,8 +3597,9 @@ filtered and paged):
   Cuota, Total, Casillas) plus **Impuesto**; Tipo is Venta/Compra (`type: sales|purchase`). With a
   box filter a last column "Importe casilla [nn]" shows each line's contribution to that box (the
   base for a base box, the cuota for a cuota box).
-- **Filters:** box chips (one per invoice box, with its value; click toggles), Casilla, Tipo and
-  Impuesto selects (options from the payload's unfiltered `boxes`/`taxes`), search (document
+- **Filters:** Casilla, Tipo and Impuesto selects (options from the payload's unfiltered
+  `boxes`/`taxes`; each Casilla option carries the box value, e.g. `[06] · 12,60 €`, via
+  `formatAmount` — there is no separate row of box chips), search (document
   number, contact or tax; debounced 300 ms, Enter sends at once), "Limpiar filtros". All filtering
   and paging is done by the backend (25 rows per page).
 - **Totals:** a sticky footer with base/cuota/total of every filtered line (not just the page) and,

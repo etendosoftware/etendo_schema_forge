@@ -1,6 +1,6 @@
 // Modelo 390 — the "Facturas" tab (ETP-5716): the invoice-tax lines behind the invoice boxes
-// (`GET /fiscal390/sources`), with box chips, filters Casilla / Tipo / Impuesto, a search box,
-// CSV export, the totals of what is filtered and pagination.
+// (`GET /fiscal390/sources`), with filters Casilla (each option shows its box value) / Tipo /
+// Impuesto, a search box, CSV export, the totals of what is filtered and pagination.
 //
 // The filter is owned by FmModel390Page.jsx so "Ver facturas" (Casillas tab, incidents) can open
 // the tab already filtered by a box (`sourcesFilterForBox` of sources390.js). Filtering, totals
@@ -25,30 +25,6 @@ const sameCents = (a, b) => {
   const y = parseAmount(b);
   return x != null && y != null && Math.round(x * 100) === Math.round(y * 100);
 };
-
-function BoxChips({ boxes, active, onSelect, t }) {
-  if (boxes.length === 0) return null;
-  return (
-    <div className="fm-390-sources__chips" role="group" aria-label={t('fm.m390.sources.chips')} data-testid="FmSources390__chips">
-      {boxes.map(({ box, amount }) => {
-        const on = active === box;
-        return (
-          <button
-            key={box}
-            type="button"
-            className={`fm-toolbar__pill${on ? ' fm-toolbar__pill--active-dark' : ''}`}
-            aria-pressed={on}
-            onClick={() => onSelect(on ? null : box)}
-            data-testid={`FmSources390__chip_${box}`}
-          >
-            <span className="fm-390-sources__chip-box">[{boxLabel(box)}]</span>
-            {formatAmount(parseAmount(amount))}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function Pager({ page, pages, onPage, t }) {
   if (pages <= 1) return null;
@@ -188,7 +164,9 @@ export default function FmSources390({
           {current.box != null && !boxes.some(b => b.box === current.box) && (
             <option value={current.box}>{`[${boxLabel(current.box)}]`}</option>
           )}
-          {boxes.map(({ box }) => <option key={box} value={box}>{`[${boxLabel(box)}]`}</option>)}
+          {boxes.map(({ box, amount }) => (
+            <option key={box} value={box}>{`[${boxLabel(box)}] · ${formatAmount(parseAmount(amount))}`}</option>
+          ))}
         </select>
         <select
           className="fm-390-sources__select"
@@ -229,8 +207,6 @@ export default function FmSources390({
           {t('fm.m390.sources.export_csv')}
         </button>
       </div>
-
-      <BoxChips boxes={boxes} active={current.box} onSelect={box => set({ box })} t={t} />
 
       {error && (
         <p className="fm-390-inline-error" role="alert" style={{ padding: '0 20px' }} data-testid="FmSources390__error">{error}</p>

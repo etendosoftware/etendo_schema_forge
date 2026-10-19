@@ -21986,7 +21986,6 @@
     "fm.m390.sources.col.tax": "Tax",
     "fm.m390.sources.col.rate": "Rate %",
     "fm.m390.sources.col.box_amount": "Box [{box}] amount",
-    "fm.m390.sources.chips": "Boxes with invoices",
     "fm.m390.sources.clear_filters": "Clear filters",
     "fm.m390.sources.export_csv": "Export CSV",
     "fm.m390.sources.export_error": "The CSV could not be exported",

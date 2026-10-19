@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/FmSources390.jsx
 //
-// ETP-5716 — Modelo 390 Facturas tab: rows of a mocked `GET /fiscal390/sources`, the box chips
-// and the Casilla / Tipo / Impuesto / search filters (sent to the backend), the totals of what is
+// ETP-5716 — Modelo 390 Facturas tab: rows of a mocked `GET /fiscal390/sources`, the Casilla
+// options (each with its box value), the Casilla / Tipo / Impuesto / search filters (sent to the backend), the totals of what is
 // filtered (with a box: the box total and the "matches the box" check), pagination, the CSV
 // export (all filtered rows, cells neutralized by csvField) and the submitted-declaration note.
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -100,12 +100,27 @@ describe('FmSources390 — rows and totals', () => {
 });
 
 describe('FmSources390 — filters', () => {
-  it('a box chip filters by that box; clicking it again clears it', async () => {
+  it('each Casilla option shows its box value; there is no chip row', async () => {
     render(<Harness />);
-    fireEvent.click(await screen.findByTestId('FmSources390__chip_6'));
+    await screen.findByTestId('FmSources390__row_IT1');
+    const labels = [...screen.getByTestId('FmSources390__boxFilter').options].map(o => o.textContent);
+    expect(labels).toEqual(['fm.m390.sources.filter.box_all', '[05] · 200', '[06] · 42', '[99] · 100']);
+    expect(screen.queryByTestId('FmSources390__chips')).toBeNull();
+  });
+
+  it('a box opened from outside the list still gets its own (fallback) option', async () => {
+    render(<Harness initial={sourcesFilterForBox(7)} />);
+    await screen.findByTestId('FmSources390__row_IT1');
+    const select = screen.getByTestId('FmSources390__boxFilter');
+    expect(select.value).toBe('7');
+    expect([...select.options].some(o => o.value === '7' && o.textContent === '[07]')).toBe(true);
+  });
+
+  it('choosing "all boxes" in Casilla clears the box filter', async () => {
+    render(<Harness initial={sourcesFilterForBox(6)} />);
+    await screen.findByTestId('FmSources390__row_IT1');
     await waitFor(() => expect(lastParams().box).toBe('6'));
-    expect(screen.getByTestId('FmSources390__chip_6').getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(screen.getByTestId('FmSources390__chip_6'));
+    fireEvent.change(screen.getByTestId('FmSources390__boxFilter'), { target: { value: '' } });
     await waitFor(() => expect(lastParams().box).toBeUndefined());
   });
 
@@ -169,7 +184,7 @@ describe('FmSources390 — pagination', () => {
     expect(screen.getByTestId('FmSources390__prev').disabled).toBe(true);
     fireEvent.click(screen.getByTestId('FmSources390__next'));
     await waitFor(() => expect(lastParams().page).toBe('2'));
-    fireEvent.click(screen.getByTestId('FmSources390__chip_5'));
+    fireEvent.change(screen.getByTestId('FmSources390__boxFilter'), { target: { value: '5' } });
     await waitFor(() => expect(lastParams()).toMatchObject({ box: '5', page: '1' }));
   });
 
