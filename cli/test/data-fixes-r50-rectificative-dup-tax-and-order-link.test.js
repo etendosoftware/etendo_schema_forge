@@ -18,7 +18,9 @@ import { parseFix, parseFixTimestamp } from '../src/data-fixes/parse-fix.js';
  * Row-level behaviour was checked read-only against the local DB (the fixable sets and their
  * resulting totals/quantities, plus EXPLAIN of every @apply statement); this suite guards the SQL
  * the fix ships: metadata, ordering, tenant scoping, the bug signature shared by @check and
- * @apply, the posted/paid/SIF guards, and that accounting rows are never written.
+ * @apply, the period/cash-flow/paid/SIF guards, the ResetAccounting-equivalent reset of posted
+ * invoices (Fact_Acct deleted, Posted='N', never re-posted) and the RESET list read back by
+ * @report from the run's temp table.
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +34,8 @@ const stripComments = (s) => s.split('\n').filter((line) => !line.trim().startsW
 const normCheck = norm(stripComments(fix.check));
 const normReport = norm(stripComments(fix.report));
 const applyStatements = stripComments(fix.apply).split(';').map(norm).filter(Boolean);
-const [disableStmt, taxStmt, orderStmt, enableStmt] = applyStatements;
+const [dropStmt, disableStmt, taxStmt, orderStmt, enableStmt] = applyStatements;
+const TEMP_TABLE = 'etgo_r50_tax_repaired';
 
 const RECT_SIGNATURE = [
   "i.processed = 'Y'",
@@ -69,8 +72,9 @@ describe('R50 data-fix — header metadata', () => {
 });
 
 describe('R50 data-fix — scope and signature', () => {
-  it('runs two repair statements between the AD trigger switches', () => {
-    assert.equal(applyStatements.length, 4);
+  it('drops the previous temp table, then runs two repair statements between the AD trigger switches', () => {
+    assert.equal(applyStatements.length, 5);
+    assert.equal(dropStmt, `DROP TABLE IF EXISTS ${TEMP_TABLE}`);
     assert.equal(disableStmt, 'SELECT ad_disable_triggers()');
     assert.equal(enableStmt, 'SELECT ad_enable_triggers()');
   });
@@ -79,7 +83,7 @@ describe('R50 data-fix — scope and signature', () => {
     for (const [name, sql] of [['@check', normCheck], ['tax', taxStmt], ['order', orderStmt], ['@report', normReport]]) {
       assert.ok(sql.includes('i.ad_client_id = :client_id'), `${name} misses the tenant filter`);
     }
-    for (const target of ['t', 'psd', 'ps', 'i']) {
+    for (const target of ['t', 'psd', 'ps', 'i', 'fa', 'o', 'pc', 'cfs']) {
       assert.ok(taxStmt.includes(`${target}.ad_client_id = :client_id`), `tax step writes ${target} unscoped`);
     }
     for (const target of ['ol', 'm', 'il']) {
@@ -101,10 +105,17 @@ describe('R50 data-fix — scope and signature', () => {
 });
 
 describe('R50 data-fix — tax repair guards', () => {
-  it('leaves posted, tax-authority-sent and paid invoices alone', () => {
+  it('leaves closed-period, cash-flow-referenced, tax-authority-sent and paid invoices alone', () => {
     for (const guard of [
-      "r.posted <> 'Y'",
       "fa.ad_table_id = '318'",
+      "pc.periodstatus = 'O'",
+      "pc.periodstatus IN ('C', 'P')",
+      'pc.ad_org_id = o.ad_periodcontrolallowed_org_id',
+      'co.ad_org_id = o.ad_calendarowner_org_id',
+      "r.dateacct < p.enddate + INTERVAL '1 day'",
+      'pc.c_period_id = fa.c_period_id AND pc.ad_org_id = o.ad_periodcontrolallowed_org_id AND pc.docbasetype = fa.docbasetype',
+      'NOT EXISTS (SELECT 1 FROM fact_closed fc WHERE fc.c_invoice_id = r.c_invoice_id)',
+      'JOIN fact_acct_cfs cfs ON cfs.fact_acct_ref_id = fa.fact_acct_id',
       "COALESCE(to_jsonb(r) ->> 'em_etvfac_senttoverifac', 'N') <> 'Y'",
       "COALESCE(to_jsonb(r) ->> 'em_aeatsii_issent', 'N') <> 'Y'",
       "COALESCE(to_jsonb(r) ->> 'em_tbai_issent', 'N') <> 'Y'",
@@ -127,12 +138,42 @@ describe('R50 data-fix — tax repair guards', () => {
     assert.ok(taxStmt.includes('psd.fin_payment_detail_id IS NULL'));
   });
 
-  it('never writes accounting, invoice lines or line taxes', () => {
+  it('never writes invoice lines or line taxes, and never inserts accounting', () => {
     const body = stripComments(fix.apply);
-    assert.doesNotMatch(body, /(UPDATE|DELETE FROM|INSERT INTO)\s+fact_acct/i);
+    assert.doesNotMatch(body, /INSERT INTO\s+fact_acct/i);
     assert.doesNotMatch(body, /(UPDATE|DELETE FROM|INSERT INTO)\s+c_invoicelinetax/i);
     assert.doesNotMatch(body, /\btotallines\s*=/i);
-    assert.doesNotMatch(body, /\bposted\s*=\s*'/i);
+  });
+});
+
+describe('R50 data-fix — accounting reset of posted invoices', () => {
+  it('deletes only the facts of posted invoices that passed every guard', () => {
+    assert.ok(taxStmt.includes(
+      "DELETE FROM fact_acct fa USING fixable f WHERE fa.ad_table_id = '318' AND fa.record_id = f.c_invoice_id AND f.is_posted",
+    ));
+    assert.equal((taxStmt.match(/DELETE FROM fact_acct\b/g) || []).length, 1);
+  });
+
+  it('clears DateBalanced on the other facts sharing a Record_ID2, never on the deleted ones', () => {
+    assert.ok(taxStmt.includes('UPDATE fact_acct o SET datebalanced = NULL'));
+    assert.ok(taxStmt.includes('fa.record_id2 = o.record_id2'));
+    assert.ok(taxStmt.includes('own.fact_acct_id = o.fact_acct_id'));
+  });
+
+  it("sets Posted='N' and Processing='N' only on reset invoices and never re-posts", () => {
+    assert.ok(taxStmt.includes("posted = CASE WHEN f.is_posted THEN 'N' ELSE i.posted END"));
+    assert.ok(taxStmt.includes("processing = CASE WHEN f.is_posted THEN 'N' ELSE i.processing END"));
+    // No literal assignment of Posted anywhere (SET posted = '…' / , posted = '…'): only the CASE.
+    assert.doesNotMatch(stripComments(fix.apply), /(SET|,)\s*posted\s*=\s*'/i);
+  });
+
+  it('captures the repaired invoices for @report, which lists the reset ones as RESET', () => {
+    assert.ok(taxStmt.includes(`INTO TEMP TABLE ${TEMP_TABLE} FROM upd_invoice`));
+    assert.ok(normReport.includes(`FROM ${TEMP_TABLE} t WHERE t.is_posted`));
+    assert.ok(normReport.includes("'RESET: "));
+    assert.ok(normReport.includes("'PERIOD_CLOSED: "));
+    assert.ok(normReport.includes("'CASH_FLOW_STATEMENT: "));
+    assert.doesNotMatch(normReport, /POSTED: unpost/);
   });
 });
 

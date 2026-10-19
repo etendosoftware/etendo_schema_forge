@@ -5,7 +5,9 @@
 -- @description: Repair rectificative invoices created from a return document before ETP-5729 —
 --   drop the duplicated C_InvoiceTax row per rate (fixing GrandTotal, outstanding and the payment
 --   plan) and unlink their lines from the original order so its QtyInvoiced is 100% again.
---   Posted, paid or tax-authority-sent documents are never altered: they are listed in @report.
+--   A posted invoice in an open period has its accounting reset (Fact_Acct deleted, Posted='N')
+--   in the same transaction so the background process posts it again; closed-period, paid or
+--   tax-authority-sent documents are never altered: they are listed in @report.
 
 -- Background — the bug (com.etendoerp.go, ETP-5729, commit e4a1a1a26)
 -- --------------------------------------------------------------------------------------------
@@ -64,14 +66,39 @@
 --   'S') recomputes by itself: its ad_scd_* trigger on C_OrderLine watches QtyInvoiced and is
 --   NOT gated by AD_isTriggerEnabled; the deferred refresh runs at COMMIT.
 --
+-- Accounting reset for posted invoices (coordinator decision, 2026-10-16)
+-- --------------------------------------------------------------------------------------------
+-- A posted invoice (Posted='Y' or any Fact_Acct row) already carries the doubled VAT and
+-- receivable/payable in the ledger, so its subledger can only be repaired together with its
+-- accounting. When every guard below holds AND its period is open (PERIOD_CLOSED), the same
+-- transaction does what ResetAccounting.delete (org.openbravo.financial, etendo_core) does for one
+-- record — DELETE its Fact_Acct rows (AD_Table_ID '318' = C_Invoice, Record_ID = the invoice;
+-- FACT_ACCT_CFS rows referencing them through FACT_ACCT_ID cascade), clear DateBalanced on every
+-- OTHER Fact_Acct row of the tenant that shares a Record_ID2 with them (ResetAccounting does the
+-- same, so the counterpart entries are re-balanced on the next posting) and set Posted='N',
+-- Processing='N' — and then repairs the tax. The invoice is NOT re-posted here: the user (Post
+-- action) or the accounting background process posts it again from the repaired data. @report
+-- lists it as RESET so operators know.
+--
 -- Guards — what is NEVER altered automatically (listed in @report instead)
 -- --------------------------------------------------------------------------------------------
 -- Defect 1 is repaired only when ALL of these hold; otherwise the invoice is reported:
---   POSTED       Posted='Y' or Fact_Acct rows exist. The ledger already carries the doubled VAT
---                and receivable/payable; changing the subledger under it would desynchronise
---                accounting. Procedure: unpost the invoice (GO "unpost" action =
---                ResetAccounting, which refuses a closed period), force this fix for the tenant
---                (--fix R50-rectificative-dup-tax-and-order-link --client <id>), post again.
+--   PERIOD_CLOSED  (posted invoices only) The period of the invoice's DateAcct, and the period
+--                of every one of its Fact_Acct rows, must be OPEN for the doc base type: an 'O'
+--                C_PeriodControl row exists and no row of that key is 'C'/'P' ('N' copies are
+--                ignored — onboarded tenants carry a never-opened duplicate per key). The
+--                DateAcct period is looked up in the calendar of the invoice org's calendar
+--                owner (AD_Org.AD_CalendarOwner_Org_ID — the denormalised form of
+--                ResetAccounting.getCalendarId's walk up the parent orgs) with C_CHK_OPEN_PERIOD's
+--                window (StartDate <= DateAcct < EndDate + 1 day) and the invoice C_DocType's
+--                DocBaseType; each Fact_Acct row is checked by its own C_Period_ID and
+--                DocBaseType, as ResetAccounting.validateNoFactsInClosedPeriods does. The control
+--                rows are those of the org's AD_Org.AD_PeriodControlAllowed_Org_ID (what
+--                AD_ORG_GETPERIODCONTROLALLOW returns — it only reads that column, no fallback);
+--                NULL there => no control row matches => treated as closed. Closed period =>
+--                never touched.
+--   CASH_FLOW_STATEMENT (posted only) A FACT_ACCT_CFS row references one of its facts through
+--                FACT_ACCT_REF_ID (that FK has no cascade, so the DELETE would fail).
 --   SIF_SENT     Sent to / registered by a tax authority (Verifactu sent flag or a status other
 --                than 'PE', SII sent, TicketBAI sent). The declared amounts are already doubled
 --                at the AEAT/Hacienda; that needs a fiscal correction (subsanacion), not a
@@ -86,7 +113,7 @@
 --                unambiguously.
 --   CASH_VAT     IsCashVAT='Y' (C_InvoiceTax_CashVAT rows depend on the tax rows).
 --   TAX_REGISTER A duplicated row is referenced by C_TaxRegisterLine (already in a VAT register).
--- Defect 2 is repaired regardless of posting: C_OrderLine_ID plays no part in the invoice's
+-- Defect 2 is repaired regardless of posting or period: C_OrderLine_ID plays no part in the invoice's
 -- Fact_Acct, so unlinking does not change accounting. It is skipped and reported only when the
 -- corrected QtyInvoiced would fall outside [0, QtyOrdered] (product not quantity-variable) —
 -- e.g. the "pending" quantity was invoiced AGAIN after the rectificative; undoing the negative
@@ -101,7 +128,10 @@
 -- GrandTotal on the tax DELETE (C_INVOICETAX_TRG2 would), which is why the totals are adjusted
 -- explicitly. Every statement is ONE statement with data-modifying CTEs, so all guards are
 -- evaluated on the same pre-change snapshot. The non-gated module triggers on C_Invoice
--- (etvfac_*, etblkp_*, etarc_*, ad_scd_*) only copy/derive unrelated columns.
+-- (etvfac_*, etblkp_*, etarc_*, ad_scd_*) only copy/derive unrelated columns. Fact_Acct has no
+-- triggers, and FACT_ACCT_CFS is the only table with a foreign key to it (core
+-- src-db/database/model/tables/FACT_ACCT_CFS.xml: FACT_ACCT_ID cascades, FACT_ACCT_REF_ID does
+-- not — hence the CASH_FLOW_STATEMENT guard).
 --
 -- Fronts
 -- --------------------------------------------------------------------------------------------
@@ -115,10 +145,20 @@
 -- --------------------------------------------------------------------------------------------
 -- Idempotent: a repaired invoice no longer has a duplicated row and a repaired line no longer
 -- has C_OrderLine_ID, so both drop out of every predicate; @check returns 0 rows once nothing is
--- left. @check also matches documents that are only reportable, so a tenant whose documents are
--- all posted still gets an APPLIED ledger row with the @report list in `detail`. Once the
--- operator has unposted them, the runner's watermark will not revisit the tenant on its own —
--- force it with --fix (see POSTED above).
+-- left; a reset invoice re-posted later by the background process carries no duplicated row
+-- either, so the reset never repeats. @check also matches documents that are only reportable,
+-- so a tenant whose documents are all blocked still gets an APPLIED ledger row with the
+-- @report list in `detail`. If a blocking condition is lifted later (e.g. the period is
+-- reopened), the runner's watermark will not revisit the tenant on its own: re-run it with
+-- --fix R50-rectificative-dup-tax-and-order-link --client <id> — no manual unposting is needed.
+--
+-- @report and the RESET list
+-- --------------------------------------------------------------------------------------------
+-- RESET invoices are repaired, so a post-apply recompute cannot tell them apart. Step 1 therefore
+-- captures its own UPDATE ... RETURNING output into a session-scoped TEMP TABLE (the R32
+-- pattern) that @report reads in the same transaction. @apply leads with DROP TABLE IF EXISTS
+-- because a committed temp table survives client.release() and the pooled connection is reused
+-- for the next tenant (R32's ETP-5101 finding B2).
 
 -- @check
 -- Returns >=1 row when the tenant has at least one rectificative with either defect (repairable
@@ -166,10 +206,16 @@ WHERE EXISTS (SELECT 1
 LIMIT 1;
 
 -- @apply
+-- Self-cleaning: a committed temp table survives client.release() (see "@report and the RESET
+-- list" above), so drop the previous tenant's copy before Step 1 recreates it.
+DROP TABLE IF EXISTS etgo_r50_tax_repaired;
+
 SELECT ad_disable_triggers();
 
--- Step 1 — defect 1 (duplicated tax): delete the hand-made rows and take their amount off the
--- header totals and the payment plan, for the invoices that pass every guard.
+-- Step 1 — defect 1 (duplicated tax): for the invoices that pass every guard, reset the
+-- accounting of the posted ones (ResetAccounting for one record), delete the hand-made tax rows
+-- and take their amount off the header totals and the payment plan. The repaired invoices are
+-- captured into etgo_r50_tax_repaired for @report.
 WITH rect AS (
   SELECT i.*
   FROM c_invoice i
@@ -198,20 +244,79 @@ dup_tax AS (
                   AND y.c_tax_id = n.c_tax_id
                   AND y.recalculate = 'Y')
 ),
+facts AS (
+  SELECT fa.fact_acct_id, fa.record_id AS c_invoice_id, fa.ad_org_id, fa.c_period_id,
+         fa.docbasetype, fa.record_id2
+  FROM fact_acct fa
+  JOIN rect r ON r.c_invoice_id = fa.record_id
+  WHERE fa.ad_client_id = :client_id
+    AND fa.ad_table_id = '318'
+),
+posted_inv AS (
+  SELECT r.c_invoice_id
+  FROM rect r
+  WHERE r.posted = 'Y'
+     OR EXISTS (SELECT 1 FROM facts fa WHERE fa.c_invoice_id = r.c_invoice_id)
+),
+dateacct_open AS (
+  SELECT DISTINCT r.c_invoice_id
+  FROM rect r
+  JOIN c_doctype dt ON dt.c_doctype_id = r.c_doctype_id
+  JOIN ad_org o ON o.ad_org_id = r.ad_org_id AND o.ad_client_id = :client_id
+  JOIN ad_org co ON co.ad_org_id = o.ad_calendarowner_org_id
+  JOIN c_year y ON y.c_calendar_id = co.c_calendar_id AND y.ad_client_id = :client_id
+  JOIN c_period p ON p.c_year_id = y.c_year_id AND p.ad_client_id = :client_id
+  WHERE r.dateacct >= p.startdate
+    AND r.dateacct < p.enddate + INTERVAL '1 day'
+    AND EXISTS (SELECT 1 FROM c_periodcontrol pc
+                WHERE pc.ad_client_id = :client_id
+                  AND pc.c_period_id = p.c_period_id
+                  AND pc.ad_org_id = o.ad_periodcontrolallowed_org_id
+                  AND pc.docbasetype = dt.docbasetype
+                  AND pc.periodstatus = 'O')
+    AND NOT EXISTS (SELECT 1 FROM c_periodcontrol pc
+                    WHERE pc.ad_client_id = :client_id
+                      AND pc.c_period_id = p.c_period_id
+                      AND pc.ad_org_id = o.ad_periodcontrolallowed_org_id
+                      AND pc.docbasetype = dt.docbasetype
+                      AND pc.periodstatus IN ('C', 'P'))
+),
+fact_closed AS (
+  SELECT DISTINCT fa.c_invoice_id
+  FROM facts fa
+  LEFT JOIN ad_org o ON o.ad_org_id = fa.ad_org_id
+  WHERE NOT (EXISTS (SELECT 1 FROM c_periodcontrol pc
+                     WHERE pc.ad_client_id = :client_id
+                       AND pc.c_period_id = fa.c_period_id
+                       AND pc.ad_org_id = o.ad_periodcontrolallowed_org_id
+                       AND pc.docbasetype = fa.docbasetype
+                       AND pc.periodstatus = 'O')
+             AND NOT EXISTS (SELECT 1 FROM c_periodcontrol pc
+                             WHERE pc.ad_client_id = :client_id
+                               AND pc.c_period_id = fa.c_period_id
+                               AND pc.ad_org_id = o.ad_periodcontrolallowed_org_id
+                               AND pc.docbasetype = fa.docbasetype
+                               AND pc.periodstatus IN ('C', 'P')))
+),
 fixable AS (
   SELECT r.c_invoice_id,
          r.grandtotal,
          r.outstandingamt,
          r.dueamt,
-         (SELECT SUM(d.taxamt) FROM dup_tax d WHERE d.c_invoice_id = r.c_invoice_id) AS delta
+         (SELECT SUM(d.taxamt) FROM dup_tax d WHERE d.c_invoice_id = r.c_invoice_id) AS delta,
+         EXISTS (SELECT 1 FROM posted_inv pi WHERE pi.c_invoice_id = r.c_invoice_id) AS is_posted
   FROM rect r
   WHERE EXISTS (SELECT 1 FROM dup_tax d WHERE d.c_invoice_id = r.c_invoice_id)
-    -- POSTED
-    AND r.posted <> 'Y'
-    AND NOT EXISTS (SELECT 1 FROM fact_acct fa
-                    WHERE fa.ad_client_id = :client_id
-                      AND fa.ad_table_id = '318'
-                      AND fa.record_id = r.c_invoice_id)
+    -- PERIOD_CLOSED (posted invoices only)
+    AND (NOT EXISTS (SELECT 1 FROM posted_inv pi WHERE pi.c_invoice_id = r.c_invoice_id)
+         OR (EXISTS (SELECT 1 FROM dateacct_open op WHERE op.c_invoice_id = r.c_invoice_id)
+             AND NOT EXISTS (SELECT 1 FROM fact_closed fc WHERE fc.c_invoice_id = r.c_invoice_id)))
+    -- CASH_FLOW_STATEMENT
+    AND NOT EXISTS (SELECT 1
+                    FROM facts fa
+                    JOIN fact_acct_cfs cfs ON cfs.fact_acct_ref_id = fa.fact_acct_id
+                    WHERE fa.c_invoice_id = r.c_invoice_id
+                      AND cfs.ad_client_id = :client_id)
     -- SIF_SENT
     AND COALESCE(to_jsonb(r) ->> 'em_etvfac_senttoverifac', 'N') <> 'Y'
     AND COALESCE(to_jsonb(r) ->> 'em_etvfac_invoice_status', 'PE') = 'PE'
@@ -254,6 +359,34 @@ fixable AS (
                     JOIN c_taxregisterline trl ON trl.c_invoicetax_id = d.c_invoicetax_id
                     WHERE d.c_invoice_id = r.c_invoice_id)
 ),
+-- Accounting reset (posted invoices only) — ResetAccounting.delete for one record: clear
+-- DateBalanced on the tenant's OTHER facts sharing a Record_ID2 with the invoice's facts, then
+-- delete the invoice's facts (FACT_ACCT_CFS rows via FACT_ACCT_ID cascade). Its own facts are
+-- excluded from the DateBalanced update because they are deleted in this same statement.
+unbalance AS (
+  UPDATE fact_acct o
+  SET datebalanced = NULL
+  WHERE o.ad_client_id = :client_id
+    AND o.datebalanced IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM facts own
+                    JOIN fixable f ON f.c_invoice_id = own.c_invoice_id
+                    WHERE f.is_posted
+                      AND own.fact_acct_id = o.fact_acct_id)
+    AND EXISTS (SELECT 1 FROM facts fa
+                JOIN fixable f ON f.c_invoice_id = fa.c_invoice_id
+                WHERE f.is_posted
+                  AND fa.record_id2 = o.record_id2)
+  RETURNING o.fact_acct_id
+),
+del_fact AS (
+  DELETE FROM fact_acct fa
+  USING fixable f
+  WHERE fa.ad_table_id = '318'
+    AND fa.record_id = f.c_invoice_id
+    AND f.is_posted
+    AND fa.ad_client_id = :client_id
+  RETURNING fa.fact_acct_id
+),
 del_tax AS (
   DELETE FROM c_invoicetax t
   USING dup_tax d, fixable f
@@ -284,17 +417,25 @@ upd_schedule AS (
   WHERE ps.c_invoice_id = f.c_invoice_id
     AND ps.ad_client_id = :client_id
   RETURNING ps.fin_payment_schedule_id
+),
+upd_invoice AS (
+  UPDATE c_invoice i
+  SET grandtotal = f.grandtotal - f.delta,
+      outstandingamt = f.outstandingamt - f.delta,
+      dueamt = CASE WHEN f.dueamt <> 0 AND f.dueamt = f.outstandingamt
+                    THEN f.dueamt - f.delta ELSE f.dueamt END,
+      posted = CASE WHEN f.is_posted THEN 'N' ELSE i.posted END,
+      processing = CASE WHEN f.is_posted THEN 'N' ELSE i.processing END,
+      updated = now(),
+      updatedby = '0'
+  FROM fixable f
+  WHERE i.c_invoice_id = f.c_invoice_id
+    AND i.ad_client_id = :client_id
+  RETURNING i.c_invoice_id, i.documentno, i.issotrx, i.grandtotal, f.is_posted
 )
-UPDATE c_invoice i
-SET grandtotal = f.grandtotal - f.delta,
-    outstandingamt = f.outstandingamt - f.delta,
-    dueamt = CASE WHEN f.dueamt <> 0 AND f.dueamt = f.outstandingamt
-                  THEN f.dueamt - f.delta ELSE f.dueamt END,
-    updated = now(),
-    updatedby = '0'
-FROM fixable f
-WHERE i.c_invoice_id = f.c_invoice_id
-  AND i.ad_client_id = :client_id;
+SELECT c_invoice_id, documentno, issotrx, grandtotal, is_posted
+INTO TEMP TABLE etgo_r50_tax_repaired
+FROM upd_invoice;
 
 -- Step 2 — defect 2 (order link): give the returned quantity back to the original order line
 -- and unlink the rectificative line, for the order lines whose corrected QtyInvoiced stays
@@ -381,9 +522,13 @@ WHERE il.c_invoiceline_id = fl.c_invoiceline_id
 SELECT ad_enable_triggers();
 
 -- @report
--- Runs after @apply in the same transaction, so it sees the post-repair state: every row here is
--- a document @apply deliberately left alone, with the reason. Repaired documents no longer match
--- any predicate and never appear.
+-- Runs after @apply in the same transaction, so it sees the post-repair state. Two kinds of rows:
+--   * RESET — a posted invoice this run repaired after deleting its accounting (read back from
+--     etgo_r50_tax_repaired); it is waiting for the accounting background process to post it again.
+--   * every other row is a document @apply deliberately left alone, with the reason. Repaired
+--     documents no longer match any predicate and never appear there.
+-- The posted-invoice guards (facts / posted_inv / dateacct_open / fact_closed) are textually
+-- identical to Step 1's, so the reason given is the one that actually blocked the repair.
 WITH rect AS (
   SELECT i.*
   FROM c_invoice i
@@ -412,6 +557,70 @@ dup_tax AS (
                   AND y.c_tax_id = n.c_tax_id
                   AND y.recalculate = 'Y')
 ),
+facts AS (
+  SELECT fa.fact_acct_id, fa.record_id AS c_invoice_id, fa.ad_org_id, fa.c_period_id,
+         fa.docbasetype, fa.record_id2
+  FROM fact_acct fa
+  JOIN rect r ON r.c_invoice_id = fa.record_id
+  WHERE fa.ad_client_id = :client_id
+    AND fa.ad_table_id = '318'
+),
+posted_inv AS (
+  SELECT r.c_invoice_id
+  FROM rect r
+  WHERE r.posted = 'Y'
+     OR EXISTS (SELECT 1 FROM facts fa WHERE fa.c_invoice_id = r.c_invoice_id)
+),
+dateacct_open AS (
+  SELECT DISTINCT r.c_invoice_id
+  FROM rect r
+  JOIN c_doctype dt ON dt.c_doctype_id = r.c_doctype_id
+  JOIN ad_org o ON o.ad_org_id = r.ad_org_id AND o.ad_client_id = :client_id
+  JOIN ad_org co ON co.ad_org_id = o.ad_calendarowner_org_id
+  JOIN c_year y ON y.c_calendar_id = co.c_calendar_id AND y.ad_client_id = :client_id
+  JOIN c_period p ON p.c_year_id = y.c_year_id AND p.ad_client_id = :client_id
+  WHERE r.dateacct >= p.startdate
+    AND r.dateacct < p.enddate + INTERVAL '1 day'
+    AND EXISTS (SELECT 1 FROM c_periodcontrol pc
+                WHERE pc.ad_client_id = :client_id
+                  AND pc.c_period_id = p.c_period_id
+                  AND pc.ad_org_id = o.ad_periodcontrolallowed_org_id
+                  AND pc.docbasetype = dt.docbasetype
+                  AND pc.periodstatus = 'O')
+    AND NOT EXISTS (SELECT 1 FROM c_periodcontrol pc
+                    WHERE pc.ad_client_id = :client_id
+                      AND pc.c_period_id = p.c_period_id
+                      AND pc.ad_org_id = o.ad_periodcontrolallowed_org_id
+                      AND pc.docbasetype = dt.docbasetype
+                      AND pc.periodstatus IN ('C', 'P'))
+),
+fact_closed AS (
+  SELECT DISTINCT fa.c_invoice_id
+  FROM facts fa
+  LEFT JOIN ad_org o ON o.ad_org_id = fa.ad_org_id
+  WHERE NOT (EXISTS (SELECT 1 FROM c_periodcontrol pc
+                     WHERE pc.ad_client_id = :client_id
+                       AND pc.c_period_id = fa.c_period_id
+                       AND pc.ad_org_id = o.ad_periodcontrolallowed_org_id
+                       AND pc.docbasetype = fa.docbasetype
+                       AND pc.periodstatus = 'O')
+             AND NOT EXISTS (SELECT 1 FROM c_periodcontrol pc
+                             WHERE pc.ad_client_id = :client_id
+                               AND pc.c_period_id = fa.c_period_id
+                               AND pc.ad_org_id = o.ad_periodcontrolallowed_org_id
+                               AND pc.docbasetype = fa.docbasetype
+                               AND pc.periodstatus IN ('C', 'P')))
+),
+tax_reset AS (
+  SELECT t.documentno,
+         t.issotrx,
+         'DUPLICATED_TAX' AS defect,
+         t.grandtotal AS current_total,
+         t.grandtotal AS expected_total,
+         'RESET: repaired after deleting its accounting (Posted=N), the accounting background process posts it again' AS reason
+  FROM etgo_r50_tax_repaired t
+  WHERE t.is_posted
+),
 tax_left AS (
   SELECT r.documentno,
          r.issotrx,
@@ -420,11 +629,16 @@ tax_left AS (
          r.grandtotal - (SELECT SUM(d.taxamt) FROM dup_tax d
                          WHERE d.c_invoice_id = r.c_invoice_id) AS expected_total,
          CASE
-           WHEN r.posted = 'Y'
-                OR EXISTS (SELECT 1 FROM fact_acct fa
-                           WHERE fa.ad_client_id = :client_id AND fa.ad_table_id = '318'
-                             AND fa.record_id = r.c_invoice_id)
-             THEN 'POSTED: unpost, force this fix with --fix, post again'
+           WHEN EXISTS (SELECT 1 FROM posted_inv pi WHERE pi.c_invoice_id = r.c_invoice_id)
+                AND (NOT EXISTS (SELECT 1 FROM dateacct_open op WHERE op.c_invoice_id = r.c_invoice_id)
+                     OR EXISTS (SELECT 1 FROM fact_closed fc WHERE fc.c_invoice_id = r.c_invoice_id))
+             THEN 'PERIOD_CLOSED: posted in a period that is not open, accounting cannot be reset'
+           WHEN EXISTS (SELECT 1
+                        FROM facts fa
+                        JOIN fact_acct_cfs cfs ON cfs.fact_acct_ref_id = fa.fact_acct_id
+                        WHERE fa.c_invoice_id = r.c_invoice_id
+                          AND cfs.ad_client_id = :client_id)
+             THEN 'CASH_FLOW_STATEMENT: its accounting is referenced by a cash flow statement'
            WHEN COALESCE(to_jsonb(r) ->> 'em_etvfac_senttoverifac', 'N') = 'Y'
                 OR COALESCE(to_jsonb(r) ->> 'em_etvfac_invoice_status', 'PE') <> 'PE'
                 OR COALESCE(to_jsonb(r) ->> 'em_aeatsii_issent', 'N') = 'Y'
@@ -478,6 +692,8 @@ order_left AS (
     AND il.qtyinvoiced < 0
     AND il.c_orderline_id = orig.c_orderline_id
 )
+SELECT * FROM tax_reset
+UNION ALL
 SELECT * FROM tax_left
 UNION ALL
 SELECT * FROM order_left

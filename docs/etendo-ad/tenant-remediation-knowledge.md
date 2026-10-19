@@ -3490,3 +3490,21 @@ CUT not bumped). Fix: `20261016T185257Z__R50-rectificative-dup-tax-and-order-lin
   over-invoiced (returned quantity already invoiced again). Tenant
   `DC22B59C30884D9BAFDD7BC5D05027C1` → both invoices POSTED (reported), PV1000002 0 → 1 of 1,
   PC1000006 -1 → 0 of 1. Not executed against any DB.
+
+- **2026-10-19 — R50 now resets posted invoices instead of reporting them (CP-13).** Facts
+  verified in etendo_core sources, reusable by any fix that must "unpost" a document in SQL:
+  - `ResetAccounting.delete` for one record (`src/org/openbravo/financial/ResetAccounting.java`)
+    = clear `Fact_Acct.DateBalanced` on every fact sharing a `Record_ID2` with the record's facts
+    (strUpdateBalanced, ~l.402-413), DELETE the record's `Fact_Acct` rows (~l.440), then
+    `posted='N', processing='N'` on the document (updateTable, ~l.493-499). It refuses when any
+    fact's `C_Period_ID` has no `'O'` `C_PeriodControl` row for (`AD_PeriodControlAllowed_Org_ID`
+    of the fact org, fact `DocBaseType`) — validateNoFactsInClosedPeriods, ~l.351-384.
+  - `AD_ORG_GETPERIODCONTROLALLOW` / `AD_ORG_GETCALENDAROWNER` only READ
+    `AD_Org.AD_PeriodControlAllowed_Org_ID` / `AD_CalendarOwner_Org_ID` — no fallback logic. A
+    NULL there means no period-control row can match (treat as closed).
+  - `C_CHK_OPEN_PERIOD` uses `p_date >= StartDate AND p_date < EndDate+1` and does not filter by
+    calendar (it relies on the period-control org). In plain SQL write `EndDate + INTERVAL '1 day'`.
+  - `FACT_ACCT_CFS` is the only FK to `FACT_ACCT`: `FACT_ACCT_ID` cascades, `FACT_ACCT_REF_ID`
+    does NOT, so a DELETE of referenced facts fails. Guard on it. `Fact_Acct` has no triggers.
+  - Rectificatives already reported as POSTED by the earlier R50 build on a tenant whose ledger
+    row is APPLIED are not revisited by the watermark: re-run with `--fix` once this build ships.
