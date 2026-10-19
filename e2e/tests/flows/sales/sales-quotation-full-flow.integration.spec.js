@@ -17,7 +17,7 @@ import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../../helpers/product-helpers.js';
-import { createDraftWithFirstLine } from '../../helpers/purchase-helpers.js';
+import { createDraftWithFirstLine, findNegativeLineRow } from '../../helpers/purchase-helpers.js';
 
 /**
  * Sales Quotation — Full flow: Presupuesto → Pedido de venta → Albarán →
@@ -152,55 +152,6 @@ async function readDocumentTotals(page) {
     total: parseAmount(totalText),
     _raw: { subtotalText, taxText, totalText },
   };
-}
-
-/**
- * Locate the line row (rendered by the shared InlineLinesPanel —
- * `data-testid="line-row-{id}"`, `data-cell-key="{fieldKey}"` per cell, see
- * tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx) whose
- * `qtyFieldKey` cell holds a negative value, and return a locator pinned to
- * that row's own record id (`page.getByTestId('line-row-<id>')`). The purchase
- * and sales full-flow specs carry identical copies of this helper — keep them
- * in sync.
- *
- * What is guaranteed:
- *   - The row id, the quantity and the product are read from the SAME DOM
- *     snapshot (one `evaluateAll` over every row), so the row returned is the
- *     one whose quantity was negative — a re-render that reorders the table
- *     between two separate reads can no longer pair the negative quantity with
- *     the positive line.
- *   - The scan is retried until a row with a rendered product and a negative
- *     quantity exists, so the detail view's reload flash (0 rows, cells not
- *     rendered yet) does not make it wrongly conclude there is none.
- *   - The returned locator is matched by record id, never by position: a
- *     positional `rows.nth(i)` is re-resolved on every use, so when the lines
- *     list re-orders after the search (right after a line is added the new row
- *     can render below the baseline line, then move above it) the caller's next
- *     read of "row i" lands on the other line — the qty read `-2` at nth(1) and,
- *     11 ms later, `1` at the same nth(1). The id also stays unambiguous when
- *     two lines carry the same product.
- *
- * What is NOT guaranteed: that the row's cells still hold the same values when
- * the caller reads them. Callers must read them with retrying assertions
- * (`toHaveText`, `readSettledCellAmount`), never a one-shot `textContent()`.
- * Reading the cell value (rather than pattern-matching the row's text) avoids
- * false positives from unrelated hyphens in a product name/description.
- */
-async function findNegativeLineRow(page, qtyFieldKey, timeoutMs = 15_000) {
-  const rows = page.locator('[data-testid^="line-row-"]');
-  let negativeRowTestId = null;
-  await expect(async () => {
-    const cells = await rows.evaluateAll((els, key) => els.map((el) => ({
-      testId: el.dataset.testid,
-      qty: el.querySelector(`[data-cell-key="${key}"]`)?.textContent ?? '',
-      product: el.querySelector('[data-cell-key="product"]')?.textContent?.trim() ?? '',
-    })), qtyFieldKey);
-    negativeRowTestId = cells.find((c) => c.product && parseAmount(c.qty) < 0)?.testId ?? null;
-    expect(negativeRowTestId,
-      `No line row with a negative "${qtyFieldKey}" was found (rows: ${JSON.stringify(cells)})`,
-    ).toBeTruthy();
-  }).toPass({ timeout: timeoutMs });
-  return page.getByTestId(negativeRowTestId);
 }
 
 /**
