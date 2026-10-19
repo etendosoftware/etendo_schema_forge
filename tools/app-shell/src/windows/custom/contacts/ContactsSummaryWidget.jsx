@@ -126,26 +126,31 @@ function TrendBadge({ trend, period, ui }) {
   const text = `${number} ${vsLabel}`;
   const capped = rounded > MAX_FULL_PERCENT;
   // StatusTag (core) does not spread extra props, so the testid lives on a wrapper.
+  // ETP-5600 — the chip may shrink to its column (`min-w-0 max-w-full`, no
+  // `shrink-0`): when even its own line is too narrow, the " vs últimos N meses"
+  // suffix truncates with an ellipsis (the capped number box keeps its width) and
+  // the `title` carries the full text. It never paints over the next KPI.
   return (
-    <span className="inline-flex shrink-0" data-testid="StatusTag__22ed51">
+    <span className="inline-flex min-w-0 max-w-full" data-testid="StatusTag__22ed51">
       <StatusTag
         tone={up ? 'success' : 'destructive'}
-        className="h-6 shrink-0 tracking-[-0.005em]"
+        className="h-6 min-w-0 max-w-full overflow-hidden tracking-[-0.005em]"
         label={(
           <>
             <Arrow className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="Arrow__22ed51" />
             {capped ? (
-              <span className="whitespace-nowrap" title={text} data-testid="contacts-trend-text">
-                <span className="relative inline-block align-top tabular-nums" data-testid="contacts-trend-number">
+              <span className="flex min-w-0 items-center whitespace-nowrap" title={text} data-testid="contacts-trend-text">
+                <span className="relative inline-block shrink-0 align-top tabular-nums" data-testid="contacts-trend-number">
                   <span className="invisible" aria-hidden="true" data-testid="contacts-trend-number-cap">
                     {`${sign}${formatGroupedNumber(MAX_FULL_PERCENT)}%`}
                   </span>
                   <span className="absolute inset-0 truncate">{number}</span>
                 </span>
-                {` ${vsLabel}`}
+                {/* nbsp: a leading plain space would collapse at the start of the box. */}
+                <span className="min-w-0 truncate">{`\u00A0${vsLabel}`}</span>
               </span>
             ) : (
-              <span data-testid="contacts-trend-text">{text}</span>
+              <span className="min-w-0 truncate" title={text} data-testid="contacts-trend-text">{text}</span>
             )}
           </>
         )}
@@ -175,10 +180,15 @@ function NoPreviousTrend({ ui }) {
 function KpiBlock({ kpi, period, currencyCode, ui }) {
   const valueColor = kpi.positiveTone ? 'var(--status-success-fg)' : 'hsl(var(--destructive))';
   return (
-    <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1">
-      <span className="text-xs font-normal text-[hsl(var(--muted-foreground))] truncate">{ui(kpi.labelKey)}</span>
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-base font-medium leading-6" style={{ color: valueColor }}>
+    // ETP-5600 — narrow widths (e.g. a 1280px viewport): the amount stays on the first
+    // line and, when amount + chip do not fit side by side, the chip (or the
+    // no-previous text) wraps BELOW it, left-aligned (`flex-wrap`, 2px row gap). Wide
+    // screens are unchanged (8px column gap, one line). `overflow-hidden` on the block
+    // is the last guard: nothing ever paints over the next KPI.
+    <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1 overflow-hidden">
+      <span className="text-xs font-normal text-[hsl(var(--muted-foreground))] truncate max-w-full">{ui(kpi.labelKey)}</span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 max-w-full" data-testid="contacts-kpi-value-row">
+        <span className="text-base font-medium leading-6 whitespace-nowrap max-w-full truncate" style={{ color: valueColor }}>
           {formatCurrency(currencyCode ?? 'USD', kpi.value)}
         </span>
         {kpi.trend == null ? (

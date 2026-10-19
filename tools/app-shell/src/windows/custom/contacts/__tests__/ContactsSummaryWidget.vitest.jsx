@@ -298,13 +298,21 @@ describe('ContactsSummaryWidget', () => {
       expect(cap).toHaveClass('invisible');
       expect(cap).toHaveAttribute('aria-hidden', 'true');
       expect(within(numberBox).getByText(pct)).toHaveClass('absolute', 'inset-0', 'truncate');
-      // The suffix sits outside the truncating box.
+      // The suffix sits outside the number box and truncates on its own.
       expect(numberBox).not.toHaveTextContent('bpVsLast3Months');
+      expect(within(label).getByText('bpVsLast3Months')).toHaveClass('min-w-0', 'truncate');
     } else {
-      expect(label).toHaveTextContent(full);
-      expect(label).not.toHaveAttribute('title');
+      // Below the cap the whole text truncates at the end if its line is too narrow,
+      // so the title carries it too.
+      expect(label).toHaveAttribute('title', full);
+      expect(label).toHaveClass('min-w-0', 'truncate');
       expect(within(label).queryByTestId('contacts-trend-number')).toBeNull();
     }
+    // Never overlap the next KPI: the amount + chip row wraps, the chip may shrink.
+    const row = within(kpiBlock('bpRevenue')).getByTestId('contacts-kpi-value-row');
+    expect(row).toHaveClass('flex-wrap', 'min-w-0', 'max-w-full');
+    expect(chip).toHaveClass('min-w-0', 'max-w-full');
+    expect(chip).not.toHaveClass('shrink-0');
   });
 
   it('opens the chart dialog with focus on the dialog content, not on the close X', async () => {
