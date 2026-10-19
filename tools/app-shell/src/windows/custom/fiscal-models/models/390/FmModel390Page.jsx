@@ -260,6 +260,13 @@ export default function FmModel390Page({
     setActiveTab('boxes');
     setGoToBox(prev => ({ box, nonce: (prev?.nonce ?? 0) + 1 }));
   };
+  // "Ver detalle por trimestre" of the cuadre banner: the Casillas tab, at the year's 303s
+  // (block "Resultado de las liquidaciones", FmBoxes390 `goToBlock`).
+  const [goToBlock, setGoToBlock] = useState(null);
+  const viewSettlements = () => {
+    setActiveTab('boxes');
+    setGoToBlock(prev => ({ id: 'resultado_liquidaciones', nonce: (prev?.nonce ?? 0) + 1 }));
+  };
   const [incidents, setIncidents] = useState(decl.incidents?.items ? decl.incidents : EMPTY_INCIDENTS);
   // Facturas tab badge: the unfiltered line count, known once the tab has loaded it (FmSources390).
   const [sourcesCount, setSourcesCount] = useState(null);
@@ -347,7 +354,6 @@ export default function FmModel390Page({
     : null;
   const resultColors = resolveResultColors(resultKind);
   const resultLabel = resultKind ? t(RESULT_LABEL_KEY_390[resultKind]) : t('fm.m303.summary.result_sub');
-  const showResultHint = resultKind === 'positive' || resultKind === 'negative';
   // Cuadre of the result on screen with the year's 303s (Reconciliation390).
   const reconciliation = payload?.boxes ? reconcile390(summary.result, preload) : null;
 
@@ -793,7 +799,7 @@ export default function FmModel390Page({
             badgeBg="hsl(var(--muted))"
             badgeColor="hsl(var(--muted-foreground))" />
           {/* Resultado — [86], or [94] when filing to several administrations. The "cuadre con
-              los 303" line (Reconciliation390) goes right under the cards. */}
+              los 303" banner (Reconciliation390) goes right under the cards. */}
           <KpiWidget
             icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__fm390kpi" />}
             iconColor="hsl(var(--foreground))"
@@ -804,24 +810,14 @@ export default function FmModel390Page({
             badgeBg={resultColors.badgeBg}
             badgeColor={resultColors.badgeColor} />
         </div>
-        {/* One compact row under the cards (the 303 has none): the cuadre with the 303s and the
-            note that the 390 result is informative. */}
-        {(hasBoxes || showResultHint) && (
-          <div className="fm-390-kpi-notes" data-testid="FmModel390Page__kpiNotes">
-            {hasBoxes && (
-              <Reconciliation390
-                reconciliation={reconciliation}
-                preload={preload}
-                loading={preloadLoading}
-                year={decl.year}
-                t={t} />
-            )}
-            {showResultHint && (
-              <p className="fm-390-result-hint" data-testid="FmModel390Page__resultHint">
-                {t('fm.m390.result.informative_hint')}
-              </p>
-            )}
-          </div>
+        {/* The cuadre with the year's 303s: a full-width banner between the cards and the tabs. */}
+        {hasBoxes && (
+          <Reconciliation390
+            reconciliation={reconciliation}
+            preload={preload}
+            year={decl.year}
+            onViewDetail={viewSettlements}
+            t={t} />
         )}
 
         <div className="fm-tabs-sticky">
@@ -867,6 +863,7 @@ export default function FmModel390Page({
                 onClearTerritory={handleClearTerritory}
                 onEditOrganization={() => navigate('/organization')}
                 goToBox={goToBox}
+                goToBlock={goToBlock}
                 nameWarnings={nameWarnings}
                 invoiceBoxes={payload.invoiceBoxes}
                 onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}

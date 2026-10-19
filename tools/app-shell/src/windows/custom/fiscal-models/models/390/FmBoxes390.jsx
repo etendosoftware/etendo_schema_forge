@@ -655,13 +655,16 @@ function BlockIndex({ blocks, active, onSelect, t }) {
  * @param {object}   [props.goToBox]         `{ box, nonce }` — opens the block of that box and
  *                                           highlights it ("Ir a la casilla" of an incident); a new
  *                                           nonce repeats the jump to the same box
+ * @param {object}   [props.goToBlock]       `{ id, nonce }` — opens that block and scrolls to / highlights its
+ *                                           `blockExtras` node ("Ver detalle por trimestre" of the cuadre
+ *                                           banner → the year's 303s); a new nonce repeats the jump
  * @param {Array}    [props.nameWarnings]    `[{ field, limit, label? }]` — the identity texts the
  *                                           file will cut (the NAME_TRUNCATED incidents)
  */
 export default function FmBoxes390({
   layout, boxes, inputs, preloaded, identification, orgIdentity, warnings, year, readOnly,
   onInputChange, onRestore, onFlagChange, onClearTerritory, onEditOrganization, t, bcpLocale = 'es-ES',
-  invoiceBoxes, onViewInvoices, blockExtras, goToBox, nameWarnings,
+  invoiceBoxes, onViewInvoices, blockExtras, goToBox, goToBlock, nameWarnings,
 }) {
   const [activeId, setActiveId] = useState(layout[0]?.id);
   const [highlightBox, setHighlightBox] = useState(null);
@@ -689,6 +692,21 @@ export default function FmBoxes390({
     setActiveId(hit.blockId);
     setHighlightBox(hit.box);
   }, [goToBox?.box, goToBox?.nonce]);
+
+  // "Ver detalle por trimestre" (cuadre banner): open the block and point at its extra content.
+  const [highlightExtra, setHighlightExtra] = useState(null);
+  const extraRef = useRef(null);
+  useEffect(() => {
+    if (goToBlock?.id == null || !layout.some(b => b.id === goToBlock.id)) return;
+    setActiveId(goToBlock.id);
+    setHighlightExtra(goToBlock.id);
+  }, [goToBlock?.id, goToBlock?.nonce]);
+  useEffect(() => {
+    if (highlightExtra == null) return undefined;
+    (extraRef.current ?? contentRef.current)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    const timer = setTimeout(() => setHighlightExtra(null), 2500);
+    return () => clearTimeout(timer);
+  }, [highlightExtra, activeId]);
 
   const onSearch = (query) => {
     const hit = findBox(query, index, t);
@@ -740,7 +758,15 @@ export default function FmBoxes390({
             {t(block.titleKey)}
           </div>
           <BlockBody key={block.id} block={block} boxes={boxes ?? {}} ctx={ctx} />
-          {blockExtras?.[block.id] ?? null}
+          {blockExtras?.[block.id] != null && (
+            <div
+              ref={extraRef}
+              className={`fm-390-block-extra${highlightExtra === block.id ? ' fm-390-block-extra--highlight' : ''}`}
+              data-testid={`FmBoxes390__extra_${block.id}`}
+            >
+              {blockExtras[block.id]}
+            </div>
+          )}
         </section>
         <div className="fm-390-pager">
           <button

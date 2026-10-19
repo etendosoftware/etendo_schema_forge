@@ -522,7 +522,8 @@ describe('FmModel390Page — classic consistency checks (ETP-5716 verification a
     const kpi = () => document.querySelector('.test-kpi390[data-label="fm.m390.kpi.result"]').textContent;
     expect(kpi()).toContain('fm.m390.result.positive');
     expect(kpi()).not.toContain('fm.result.I');
-    expect(screen.getByTestId('FmModel390Page__resultHint').textContent).toContain('fm.m390.result.informative_hint');
+    // The "informative" note now lives in the cuadre banner (only when there are 303s to compare).
+    expect(screen.queryByTestId('FmModel390Page__resultHint')).toBeNull();
     unmount();
     const negative = { ...PAYLOAD, boxes: { ...PAYLOAD.boxes, 86: '-20.00', 84: '-20.00', 65: '-20.00' } };
     render(<FmModel390Page decl={makeDecl({ _precomputed: negative })} {...props()} />);
@@ -702,21 +703,42 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     fetchPreload390.mockResolvedValue({ ...PRELOAD, expectedResult: '359.50', missingPeriods: [] });
     const { unmount } = render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
     await waitFor(() => expect(screen.getByTestId('Reconciliation390__ok')).toBeTruthy());
+    expect(screen.getByTestId('Reconciliation390__ok').textContent).toContain('fm.m390.reconcile.ok_title');
+    expect(screen.getByTestId('Reconciliation390__ok').textContent).toContain('fm.m390.reconcile.ok_sub');
+    expect(screen.getByTestId('Reconciliation390').className).toContain('fm-390-reconcile--ok');
     expect(screen.queryByTestId('Reconciliation390__missing')).toBeNull();
+    // A full-width banner between the KPI cards and the tabs.
+    const banner = screen.getByTestId('Reconciliation390');
+    const tabs = screen.getByRole('tablist');
+    expect(banner.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('FmBoxes390').contains(banner)).toBe(false);
     unmount();
 
     fetchPreload390.mockResolvedValue({ ...PRELOAD, expectedResult: '300.00' });
     render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
     await waitFor(() => expect(screen.getByTestId('Reconciliation390__difference')).toBeTruthy());
+    expect(screen.getByTestId('Reconciliation390__difference').textContent).toContain('fm.m390.reconcile.difference_title');
     expect(screen.getByTestId('Reconciliation390__difference').textContent).toContain('fm.m390.reconcile.difference');
+    expect(screen.getByTestId('Reconciliation390').className).toContain('fm-390-reconcile--warn');
     expect(screen.getByTestId('Reconciliation390__missing')).toBeTruthy();
     // non-blocking: Generar stays enabled
     expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(false);
   });
 
+  it('"Ver detalle por trimestre" opens the block of the year\'s 303s and highlights the table', async () => {
+    fetchPreload390.mockResolvedValue({ ...PRELOAD, expectedResult: '359.50', missingPeriods: [] });
+    render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
+    fireEvent.click(await screen.findByTestId('Reconciliation390__viewDetail'));
+    expect(screen.getByTestId('FmBoxes390__block_resultado_liquidaciones')).toBeTruthy();
+    const extra = screen.getByTestId('FmBoxes390__extra_resultado_liquidaciones');
+    expect(extra.className).toContain('fm-390-block-extra--highlight');
+    await waitFor(() => expect(extra.querySelector('[data-testid="Settlements303Table390__row_T1"]')).toBeTruthy());
+  });
+
   it('without 303s of the year there is nothing to reconcile and nothing is preloaded', async () => {
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
-    await waitFor(() => expect(screen.getByTestId('Reconciliation390__no303')).toBeTruthy());
+    await waitFor(() => expect(fetchPreload390).toHaveBeenCalled());
+    expect(screen.queryByTestId('Reconciliation390')).toBeNull();
     fireEvent.click(screen.getByTestId('FmModel390Page__save'));
     await waitFor(() => expect(persistManualData).toHaveBeenCalled());
     expect(savedManualData().aeatPreloaded).toBeUndefined();

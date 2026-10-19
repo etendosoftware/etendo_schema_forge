@@ -3482,9 +3482,9 @@ The invoices (Facturas) tab, the preload from the 303s with the cuadre, the pres
   "Resultado cero" / "Sin resultado"), neutral colours (`resultKind390` in `fm390Layouts.js`, NOT the
   shared `deriveResultKind`). AEAT writes [86]/[94] "con el signo que corresponda" and classic only
   signs them; the payment, offset or refund was settled by the last 303, repeated in [97]/[98].
-  One compact row under the cards (`.fm-390-kpi-notes`, the 303 has none) holds the "cuadre con los
-  303" (`Reconciliation390`, see "Preload from the 303s and cuadre") and that muted note
-  (`fm.m390.result.informative_hint`), side by side. Cards go 2×2 below 1100 px (`.fm-390-kpis`).
+  Between the cards and the tabs, a full-width banner with the "cuadre con los 303"
+  (`Reconciliation390`, see "Preload from the 303s and cuadre"); its subtitle carries that
+  "informative" note. Cards go 2×2 below 1100 px (`.fm-390-kpis`).
 - **Tabs:** Casillas, Facturas (`FmSources390.jsx`, see below; its badge is the unfiltered line
   count, known once the tab has loaded it — `onCountChange`; no badge on a presented declaration),
   Incidencias (`Incidents390Tab.jsx`,
@@ -3683,18 +3683,28 @@ files to several administrations.
   the territory note, the non-blocking "Faltan Modelos 303 de <año> (…)" (same key as the
   Nueva declaración notice, `fm.m390.new_decl.missing_303`) and the preload warnings (draft 303s,
   unknown [110] carry, refund without monthly register, compute failed, last period missing).
-- **Cuadre** (`Reconciliation390`, under the cards): `reconcile390(result on screen, preload)` —
-  the result shown on the Resultado card ([86], or [94] in territory mode) against
-  `expectedResult` = [95] − [96] − [97] − [98] − [662] of the 303s. "Cuadra con los 303 (X)"
-  within `RECONCILIATION_TOLERANCE_390` (1,00 €, named constant — the business rule is pending
-  confirmation); beyond it an amber, non-blocking "Diferencia con los 303: ±D (según los 303: X;
-  tolerancia 1,00 €)"; "Sin Modelos 303 de <año> con los que cuadrar" when there are none. The
-  missing-303 notice is repeated there. Neither blocks Generar nor Presentar. Why these boxes:
-  backend doc, "Cuadre".
+- **Cuadre** (`Reconciliation390`, a full-width banner between the KPI cards and the tabs, same
+  20px gutter and 8px radius as the cards — `.fm-390-reconcile*`): `reconcile390(result on screen,
+  preload)` — the result shown on the Resultado card ([86], or [94] in territory mode) against
+  `expectedResult` = [95] − [96] − [97] − [98] − [662] of the 303s.
+  - Within `RECONCILIATION_TOLERANCE_390` (1,00 €, named constant — the business rule is pending
+    confirmation): green banner (status-success tokens) with a round check, "El resultado coincide
+    con la suma de tus Modelos 303" and the muted "Es informativo: el ingreso o la devolución ya se
+    gestionaron en el último 303 (casillas 97 y 98)." (`Reconciliation390__ok`).
+  - Beyond it: amber, non-blocking banner (status-warning tokens, alert icon), "El resultado no
+    coincide con la suma de tus Modelos 303" and "Diferencia con los 303: ±D (según los 303: X;
+    tolerancia 1,00 €)" (`Reconciliation390__difference`).
+  - Both: the missing-303 notice as a second subtitle line when periods are missing, and the
+    outlined pill "Ver detalle por trimestre →" (`Reconciliation390__viewDetail`), which opens the
+    Casillas tab at block 9 and scrolls to / highlights the year's 303s for 2.5 s (`FmBoxes390`
+    `goToBlock` → `FmBoxes390__extra_<blockId>`, `.fm-390-block-extra--highlight`).
+  - Nothing is rendered when there is nothing to reconcile (no 303 of the year, not computed yet,
+    preload loading). Neither state blocks Generar nor Presentar. Why these boxes: backend doc,
+    "Cuadre".
 - **Incidents:** the backend raises the same two findings as the warnings `MISSING_303` and
   `DIFF_303` (from the stored inputs, `Fiscal390PreloadAggregator.reconcile`); the page does not
   compute them (`preloadIncidents390` is the same comparison on the live screen, kept for the
-  cuadre line).
+  cuadre banner).
 
 ### Save flow
 
