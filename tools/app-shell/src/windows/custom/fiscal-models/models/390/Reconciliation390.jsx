@@ -54,7 +54,7 @@ export default function Reconciliation390({ reconciliation, preload, loading, ye
   }
   if (!line && !missing) return null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 20px 8px', background: 'hsl(var(--card))', flexShrink: 0 }} data-testid="Reconciliation390">
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 16px' }} data-testid="Reconciliation390">
       {line}
       {missing && (
         <p style={{ ...LINE, color: 'var(--status-warning-fg)' }} role="status" data-testid="Reconciliation390__missing">

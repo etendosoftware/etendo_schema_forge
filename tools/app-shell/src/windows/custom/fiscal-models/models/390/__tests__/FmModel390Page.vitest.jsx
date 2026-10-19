@@ -155,6 +155,8 @@ beforeEach(() => {
 
 const goToBlock = (id) => fireEvent.click(screen.getByTestId(`FmBoxes390__index_${id}`));
 const kpiValue = (label) => document.querySelector(`.test-kpi390[data-label="${label}"] .test-kpi390-value`)?.textContent;
+/** Generar is blocked by a rule incident: its Download icon is red (the button stays clickable). */
+const waitForBlocked = () => waitFor(() => expect(screen.getByTestId('Download__generate390').style.color).toBe('hsl(var(--destructive))'));
 const kpiBadge = (label) => document.querySelector(`.test-kpi390[data-label="${label}"] .test-kpi390-badge`)?.textContent;
 
 function typeInput(key, value) {
@@ -478,11 +480,17 @@ describe('FmModel390Page — Generar fichero / Presentar save first', () => {
     expect(persistManualData).not.toHaveBeenCalled();
   });
 
-  it('blocking incidents disable Generar and Presentar', async () => {
+  it('blocking incidents: Generar and Presentar say why in a toast and open nothing (303 pattern)', async () => {
     fetchDeclarationIncidents.mockResolvedValue({ blocking: 1, warning: 0, items: [{ severity: 'block' }] });
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
-    await waitFor(() => expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true));
-    expect(screen.getByTestId('FmModel390Page__present').disabled).toBe(true);
+    await waitForBlocked();
+    fireEvent.click(screen.getByTestId('FmModel390Page__generate'));
+    expect(toast.error).toHaveBeenCalledWith('fm.m390.blocked_by_incidents');
+    expect(screen.queryByTestId('FileGenModal390-confirm')).toBeNull();
+    toast.error.mockClear();
+    fireEvent.click(screen.getByTestId('FmModel390Page__present'));
+    expect(toast.error).toHaveBeenCalledWith('fm.m390.blocked_by_incidents');
+    expect(screen.queryByTestId('PresentModal-confirm')).toBeNull();
   });
 });
 
@@ -655,7 +663,7 @@ describe('FmModel390Page — incidents (ETP-5716)', () => {
     expect(kpiBadge('fm.tab.incidents')).toBe('fm.kpi.incidents_sub');
     expect(fetchDeclarationIncidents).not.toHaveBeenCalled();
     // the AEAT warning is listed, but only the rule incidents gate Generar / Presentar
-    expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true);
+    await waitForBlocked();
   });
 
   it('a presented declaration keeps its frozen incidents: nothing is recomputed', async () => {
@@ -669,7 +677,7 @@ describe('FmModel390Page — incidents (ETP-5716)', () => {
     fetchDeclarationIncidents.mockResolvedValue(INCIDENTS);
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true));
+    await waitForBlocked();
   });
 
   it('every successful save recomputes them', async () => {
@@ -690,7 +698,7 @@ describe('FmModel390Page — incidents (ETP-5716)', () => {
   it('the tab is the shared table: blocking first, origin, text and an AEAT answer as it came', async () => {
     validate390.mockResolvedValue(INCIDENTS);
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
-    await waitFor(() => expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true));
+    await waitForBlocked();
     openIncidents();
     const rows = screen.getByTestId('Incidents390Tab').querySelectorAll('tbody tr');
     expect(rows).toHaveLength(4);
@@ -710,7 +718,7 @@ describe('FmModel390Page — incidents (ETP-5716)', () => {
   it('"Ir a la casilla" opens the Casillas tab at that box', async () => {
     validate390.mockResolvedValue(INCIDENTS);
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
-    await waitFor(() => expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true));
+    await waitForBlocked();
     openIncidents();
     fireEvent.click(screen.getByTestId('Incidents390Tab__action_box'));
     await waitFor(() => expect(screen.getByTestId('FmBoxes390__block_territorio')).toBeTruthy());
@@ -719,7 +727,7 @@ describe('FmModel390Page — incidents (ETP-5716)', () => {
   it('"Editar en Organización" and the invoice list save first, then navigate', async () => {
     validate390.mockResolvedValue(INCIDENTS);
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
-    await waitFor(() => expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(true));
+    await waitForBlocked();
     openIncidents();
     await act(async () => { fireEvent.click(screen.getByTestId('Incidents390Tab__action_organization')); });
     expect(navigateMock).toHaveBeenCalledWith('/organization#org-section-iae');

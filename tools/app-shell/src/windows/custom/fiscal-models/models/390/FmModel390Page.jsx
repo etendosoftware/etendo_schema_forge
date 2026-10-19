@@ -712,15 +712,23 @@ export default function FmModel390Page({
                   : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__compute390" />}
                 {computing ? t('fm.action.computing') : t('fm.action.compute')}
               </FmDetailButton>
+              {/* Like the 303: a blocked Generar / Presentar stays clickable and says why in a
+                  toast (openGenerate / openPresent); the Download icon turns red while blocked. */}
               <FmDetailButton
                 onClick={openGenerate}
-                disabled={busy || !hasBoxes || ruleBlocking > 0}
+                disabled={busy || !hasBoxes}
                 title={blockedTitle}
                 data-testid="FmModel390Page__generate"
               >
                 {generating
                   ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__generate390" />
-                  : <Download size={16} strokeWidth={1.75} data-testid="Download__generate390" />}
+                  : (
+                    <Download
+                      size={16}
+                      strokeWidth={1.75}
+                      style={{ color: ruleBlocking > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
+                      data-testid="Download__generate390" />
+                  )}
                 {t('fm.action.gen390')}
               </FmDetailButton>
               <FmDetailButton onClick={handleSave} disabled={busy} aria-label={t('fm.action.save')} data-testid="FmModel390Page__save">
@@ -732,7 +740,7 @@ export default function FmModel390Page({
               <FmDetailButton
                 primary
                 onClick={openPresent}
-                disabled={busy || !hasBoxes || ruleBlocking > 0}
+                disabled={busy || !hasBoxes}
                 title={blockedTitle}
                 data-testid="FmModel390Page__present"
               >
@@ -794,18 +802,24 @@ export default function FmModel390Page({
             badgeBg={resultColors.badgeBg}
             badgeColor={resultColors.badgeColor} />
         </div>
-        {hasBoxes && (
-          <Reconciliation390
-            reconciliation={reconciliation}
-            preload={preload}
-            loading={preloadLoading}
-            year={decl.year}
-            t={t} />
-        )}
-        {showResultHint && (
-          <p className="fm-390-hint fm-390-result-hint" data-testid="FmModel390Page__resultHint">
-            {t('fm.m390.result.informative_hint')}
-          </p>
+        {/* One compact row under the cards (the 303 has none): the cuadre with the 303s and the
+            note that the 390 result is informative. */}
+        {(hasBoxes || showResultHint) && (
+          <div className="fm-390-kpi-notes" data-testid="FmModel390Page__kpiNotes">
+            {hasBoxes && (
+              <Reconciliation390
+                reconciliation={reconciliation}
+                preload={preload}
+                loading={preloadLoading}
+                year={decl.year}
+                t={t} />
+            )}
+            {showResultHint && (
+              <p className="fm-390-result-hint" data-testid="FmModel390Page__resultHint">
+                {t('fm.m390.result.informative_hint')}
+              </p>
+            )}
+          </div>
         )}
 
         <div className="fm-tabs-sticky">

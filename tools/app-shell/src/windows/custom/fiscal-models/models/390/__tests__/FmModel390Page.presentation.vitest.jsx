@@ -261,10 +261,13 @@ describe('FmModel390Page — Presentar', () => {
     expect(ruleBlockingCount({ blocking: 2 })).toBe(2);
   });
 
-  it('blocking incidents: Presentar is disabled and never opens the picker', async () => {
+  it('blocking incidents: Presentar shows the reason and never opens the picker', async () => {
     fetchDeclarationIncidents.mockResolvedValue({ blocking: 1, warning: 0, items: [{ severity: 'block' }] });
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
-    await waitFor(() => expect(screen.getByTestId('FmModel390Page__present').disabled).toBe(true));
+    // blocked once the Generar icon turns red (the buttons stay clickable, like the 303)
+    await waitFor(() => expect(screen.getByTestId('Download__generate390').style.color).toBe('hsl(var(--destructive))'));
+    fireEvent.click(screen.getByTestId('FmModel390Page__present'));
+    expect(toast.error).toHaveBeenCalledWith('fm.m390.blocked_by_incidents');
     expect(presentProps.current).toBeNull();
   });
 });
