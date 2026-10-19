@@ -1,5 +1,7 @@
 // @covers artifacts/goods-receipt/custom/GoodsReceiptBottomPanel.jsx
 // @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
+// @covers artifacts/goods-receipt/custom/ConfirmGoodsReceiptModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmInOutModal.jsx
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import { login, navigateTo } from '../../helpers/auth.js';
@@ -178,9 +180,11 @@ async function fillGoodsReceiptLine(page, { searchKey, quantity } = {}) {
     option,
     `Product search should return the receipt's product ("${searchKey}")`,
   ).toBeVisible({ timeout: 10_000 });
-  // Start listening for callout (price/quantity fill) BEFORE clicking the product
+  // Start listening for callout (price/quantity fill) BEFORE clicking the product.
+  // Matched on `/callout`, not any NEO response: the quantity sample below is only a
+  // Bug 2 proof once the callout that could inject the stock has landed (ETP-5769).
   const productCalloutResponse = page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
+    (resp) => resp.url().includes('/sws/neo/') && resp.url().includes('/callout') && resp.status() < 400,
     { timeout: 15_000 },
   );
   await option.click();
