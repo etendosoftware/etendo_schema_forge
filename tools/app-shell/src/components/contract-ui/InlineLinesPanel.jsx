@@ -281,6 +281,38 @@ export function computeBodyScrollClassName({ reserveShadowRoom, hasHorizontalOve
   return 'overflow-x-auto pb-4 -mb-4 pointer-events-none [&>*]:pointer-events-auto';
 }
 
+/** Right spacer appended to the header and to every line (the Figma right margin). */
+const LINE_RIGHT_SPACER_PX = 48;
+
+/**
+ * ETP-5600 (QA pass 2) — the full width, in px, of one line's flex track: the sum of
+ * every fixed slot (chevron, checkbox, action slot, 48px right spacer) and every
+ * column's flex basis. Every column is `flex-shrink: 0` with `min-width: 0`, so this
+ * is exactly the width the cells take when they overflow the scroll box — the
+ * box's `scrollWidth`.
+ *
+ * A line row is a block-level flex container, so without it the row is only as wide
+ * as the scroll box while its cells overflow it: the row's background, `border-b`
+ * and hover/edit Shadows/lg stopped at the visible width measured from the row start,
+ * and scrolled to the right the lift looked cut in half (the trailing columns and the
+ * action strip had none). Used as the row's `minWidth`: with room to spare the row
+ * still fills the box (grow columns share the surplus exactly as the header does,
+ * whose own track has the same widths), and with overflow it spans the whole track.
+ * The sticky action strip is unaffected: its containing block just becomes the full
+ * row, so it still pins to the visible right edge.
+ */
+export function computeLineTrackWidthPx({ visibleColumns, hasDimensionsPanel, reserveActionSlot }) {
+  const basisPx = (visibleColumns ?? []).reduce((sum, col, idx) => {
+    const basis = Number.parseFloat(String(columnFlex(col, idx)).trim().split(/\s+/).pop());
+    return sum + (Number.isFinite(basis) ? basis : 0);
+  }, 0);
+  return (hasDimensionsPanel ? CHEVRON_COLUMN_WIDTH : 0)
+    + CHECKBOX_COLUMN_WIDTH
+    + basisPx
+    + (reserveActionSlot ? ACTION_SLOT_WIDTH_PX : 0)
+    + LINE_RIGHT_SPACER_PX;
+}
+
 /**
  * ETP-5600 — whether `ref`'s box scrolls horizontally (`scrollWidth` beyond
  * `clientWidth`, 1px slack for subpixel rounding). Re-measured on every resize
@@ -519,7 +551,7 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
         );
       })}
       {reserveActionSlot && <div style={{ flex: `0 0 ${ACTION_SLOT_WIDTH_PX}px` }} aria-hidden="true" />}
-      <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+      <div style={{ width: LINE_RIGHT_SPACER_PX, flexShrink: 0 }} aria-hidden="true" />
     </div>
   );
 }
@@ -1380,6 +1412,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // the box: no add-row host (`lineFormActive`) and no balance-footer row (its
   // render below is gated by the same two values). See computeBodyScrollClassName.
   const reserveShadowRoom = !isDocumentReadOnly && !lineFormActive && !balanceFooter && selectableRows.length > 0;
+  // ETP-5600 — every line spans its whole track, not just the scroll box's visible
+  // width, so its background, border and lift cover the overflowing cells too.
+  const lineTrackWidthPx = useMemo(
+    () => computeLineTrackWidthPx({ visibleColumns, hasDimensionsPanel, reserveActionSlot }),
+    [visibleColumns, hasDimensionsPanel, reserveActionSlot],
+  );
   const bodyHasHorizontalOverflow = useHorizontalOverflow(bodyScrollRef, reserveShadowRoom, visibleColumns, selectableRows.length);
 
   // Prune deleted IDs from the selection Set — keeps the master checkbox in sync
@@ -1639,7 +1677,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           )}
           {/* Right spacer — mirrors the Figma right margin without adding padding
               to the root (which would clip the row border-b lines). */}
-          <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ width: LINE_RIGHT_SPACER_PX, flexShrink: 0 }} aria-hidden="true" />
         </div>
       </div>
       {/* Body rows — ETP-5133: scoped horizontal scroll so a wide column set
@@ -1679,7 +1717,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           <div
             data-testid={`line-row-${row.id}`}
             className={computeRowClassName({ isHighlighted, isEditing, hasRowClick: Boolean(onRowClick), isSelected, isReadOnly: isDocumentReadOnly })}
-            style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
+            style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, minWidth: lineTrackWidthPx, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
             onKeyDown={makeRowKeyHandler(isEditing, handleCancelEdit, handleConfirmEdit)}
@@ -1748,7 +1786,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                   .map(action => ({ ...action, onClick: () => action.onClick(row) })),
               ],
             })}
-            <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+            <div style={{ width: LINE_RIGHT_SPACER_PX, flexShrink: 0 }} aria-hidden="true" />
           </div>
           {/* ETP-4529 — full-width dimensions sub-row, directly below the expanded
               data row. Mirrors AmortizationLinesTable's expand `<tr>` structure:
