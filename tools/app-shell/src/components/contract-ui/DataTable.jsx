@@ -3065,6 +3065,11 @@ function renderFooterRow({
  *      per-amount-column footer-totals row, regardless of showFooterTotals. Set when a caller
  *      renders a specialized, grid-aligned totals row elsewhere (e.g. InlineLinesPanel's
  *      balanceFooter row) so the two do not stack (ETP-5210).
+ *  - hideDataRows: boolean — also suppresses the generic per-amount-column footer-totals row,
+ *      regardless of showFooterTotals. A data-hidden instance only hosts the add-row form (e.g.
+ *      the companion of InlineLinesPanel in inlineEditable LinesTable), so there are no visible
+ *      rows to total; without this it summed every amount column of the spread lines under the
+ *      add-row (ETP-5771).
  */
 export function DataTable({
   entity,
@@ -3695,7 +3700,7 @@ export function DataTable({
             )}
           </TableBody>
           {renderFooterRow({
-            totals, showFooterTotals: showFooterTotals && !balanceFooter, selectable, visibleColumns, filteredData,
+            totals, showFooterTotals: showFooterTotals && !balanceFooter && !hideDataRows, selectable, visibleColumns, filteredData,
             hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
             hasDimensionsPanel, sessionCurrency,
           })}

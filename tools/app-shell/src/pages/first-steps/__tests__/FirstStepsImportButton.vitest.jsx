@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/first-steps/FirstStepsImportButton.jsx
 /**
  * ETP-5371 — what base URL the First Steps checklist drives a window's import with.
  *
@@ -13,12 +14,13 @@
  * error here, only two wrong requests two layers away.
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const H = vi.hoisted(() => ({
   useWindowImportDialog: vi.fn(() => ({})),
   loadImportConfig: vi.fn(),
+  dialogProps: null,
 }));
 
 vi.mock('@/components/contract-ui/useWindowImportDialog.js', () => ({
@@ -34,7 +36,10 @@ vi.mock('@etendosoftware/app-shell-core/auth', () => ({
 }));
 
 vi.mock('@etendosoftware/app-shell-core/components/import/ImportDialog.jsx', () => ({
-  ImportDialog: () => <div data-testid="import-dialog" />,
+  ImportDialog: (props) => {
+    H.dialogProps = props;
+    return <div data-testid="import-dialog" />;
+  },
 }));
 
 // Imported after the `vi.mock` calls above only in source order — Vitest hoists them, so the
@@ -55,7 +60,7 @@ function passedApiBaseUrl() {
 }
 
 beforeEach(() => {
-  H.useWindowImportDialog.mockClear();
+  H.useWindowImportDialog.mockClear().mockImplementation(() => ({}));
   H.loadImportConfig.mockResolvedValue({ enabled: true, entity: 'product' });
 });
 
@@ -120,5 +125,24 @@ describe('FirstStepsImportButton — import base URL', () => {
     renderButton('product');
 
     await waitFor(() => expect(screen.getByTestId('first-steps-import-load-products')).toBeEnabled());
+  });
+});
+
+// ETP-5676 — the checklist runs the same import as the list view, so it must post through the
+// hook's ids-only poster (guarded in ListView.importLabels.vitest.jsx), never a poster of its own.
+describe('FirstStepsImportButton — batch poster', () => {
+  it('hands ImportDialog the postBatch from useWindowImportDialog untouched', async () => {
+    const postBatch = vi.fn();
+    H.useWindowImportDialog.mockImplementation(() => ({ postBatch }));
+    H.dialogProps = null;
+    setPathname('/');
+
+    renderButton('product');
+    const button = screen.getByTestId('first-steps-import-load-products');
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+
+    await screen.findByTestId('import-dialog');
+    expect(H.dialogProps.postBatch).toBe(postBatch);
   });
 });

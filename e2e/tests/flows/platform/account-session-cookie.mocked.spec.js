@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, declareCookieSession } from '../helpers/auth.js';
+import { login, declareCookieSession } from '../../helpers/auth.js';
 
 /**
  * Account settings writes under the COOKIE session scheme (ETP-5455, test plan M-03).

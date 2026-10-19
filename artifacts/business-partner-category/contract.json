@@ -1,8 +1,8 @@
 {
   "version": "0.4.0",
   "generatedAt": "2026-07-01T17:11:14.893Z",
-  "updatedAt": "2026-10-09T15:04:44.625Z",
-  "checksum": "3bac0afbeb1c4d02",
+  "updatedAt": "2026-10-15T18:58:29.600Z",
+  "checksum": "949bc65168395b52",
   "frontendContract": {
     "window": {
       "id": "192",
@@ -12,6 +12,7 @@
       "hidePrint": true,
       "hideLink": true,
       "detailEntity": "accounting",
+      "detailVisibleWhenCapability": "showAccountingFields",
       "noHeaderBorder": true,
       "toolbarBorderBottom": true,
       "whiteFormBackground": true,
@@ -574,6 +575,7 @@
       "hidePrint": true,
       "hideLink": true,
       "detailEntity": "accounting",
+      "detailVisibleWhenCapability": "showAccountingFields",
       "noHeaderBorder": true,
       "toolbarBorderBottom": true,
       "whiteFormBackground": true,

@@ -36,7 +36,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:sequence
 
 // @sf-generated-start requiredHeaderFields:sequence
-const requiredHeaderFields = ['name', 'nextAssignedNumber', 'startingNo'];
+const requiredHeaderFields = ['nextAssignedNumber', 'startingNo'];
 // @sf-generated-end requiredHeaderFields:sequence
 
 
