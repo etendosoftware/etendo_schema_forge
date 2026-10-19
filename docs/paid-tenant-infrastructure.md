@@ -93,7 +93,10 @@ Two consequences follow, and neither is hypothetical:
    purchase starts with a blank name so the current environment is not mistaken for the target.
    A demo-origin purchase can select an exact source environment; the request carries its
    `demoClientId`, not a name-based lookup. The backend validates that this ID is a demo owned by
-   the account. Productive-origin requests discard any demo selection. A demo originates at most
+   the account — its flagged owner, not a member invited into it (ETP-5743): `/environments`
+   reports an invited demo with `ownedByAccount: false`, the picker hides it, and a purchase made
+   from inside it is a clean productive environment. Productive-origin requests discard any demo
+   selection. A demo originates at most
    one productive environment: once it has, `/environments` reports it with
    `associatedWithProductive: true`, the picker hides it, and a purchase made from it is a clean
    productive environment with no source or data transfer (ETP-5548).

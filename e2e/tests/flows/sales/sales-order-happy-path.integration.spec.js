@@ -1,5 +1,7 @@
 // @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -8,6 +10,7 @@ import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../../helpers/product-helpers.js';
 import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { createDraftWithFirstLine } from '../../helpers/purchase-helpers.js';
 
 /**
  * Sales Order + Invoice — Full happy-path integration E2E.
@@ -16,13 +19,13 @@ import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
  *   1. Login with onboarding credentials
  *   2. Navigate to /sales-order, verify list view
  *   3. Create a new order — fill BP, verify autocomplete
- *   4. Add a line — select product, verify price/tax
- *   5. Save as draft
- *   6. Confirm the order — check "Crear factura" in the confirm modal
- *   7. Open the generated invoice from the confirm result modal
- *   8. Verify order is Completed
- *   9. Verify invoice has lines from the order
- *  10. Verify the invoice arrived ALREADY Completed (ETP-5381: an invoice
+ *   4. Add the first line straight from the empty state, which saves the header
+ *      (no manual "Guardar"), then a second line
+ *   5. Confirm the order — check "Crear factura" in the confirm modal
+ *   6. Open the generated invoice from the confirm result modal
+ *   7. Verify order is Completed
+ *   8. Verify invoice has lines from the order
+ *   9. Verify the invoice arrived ALREADY Completed (ETP-5381: an invoice
  *      generated from another document is created and confirmed in one step,
  *      so there is no draft stage and no Confirmar action on it)
  *
@@ -138,86 +141,13 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await slow(page);
     });
 
-    await test.step('Save as draft', async () => {
-      const saveBtn = page.getByTestId('action-save-draft')
-        .or(page.getByRole('button', { name: /guardar|save/i }));
-      const savePromise = expectSaveResponse(page);
-      await saveBtn.click();
-      await savePromise;
-      await slow(page);
-
-      // URL should include record ID
-      await expect(page).toHaveURL(/\/sales-order\/[a-zA-Z0-9]+/, { timeout: 20_000 });
-
-      // Wait for the detail to fully load after save redirect
-      await waitForDetailReady(page);
-
-      await slow(page);
-    });
-
-    await test.step('Add first line — select product', async () => {
-      await waitForDetailReady(page);
-
-      // Click "+ Añadir líneas" — wait for the button to appear first (the lines
-      // panel may still be loading after the draft save redirect), then retry the
-      // click→response→render sequence if the inline-add-row doesn't appear.
-      const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
-        .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
-      await expect(emptyStateBtn).toBeVisible({ timeout: 15_000 });
-
-      await expect(async () => {
-        await emptyStateBtn.click({ timeout: 5_000 });
-        await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 10_000 });
-      }).toPass({ timeout: 30_000 });
-      await slow(page);
-
-      // Click product field — opens ProductSearchDrawer (retry if click doesn't register)
-      const productField = page.getByTestId('inline-add-field-product');
-      const searchDrawer = page.getByTestId('product-search-drawer');
-
-      await expect(async () => {
-        await productField.click({ timeout: 3_000 });
-        await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
-      }).toPass({ timeout: 15_000 });
-      await slow(page);
-
-      // Search for the first fixture product — wait for filtered results to appear
-      const searchInput = page.getByTestId('product-search-input');
-      await searchInput.fill(PRODUCT_FIXTURE_ALPHA.name);
-
-      const productOption = page.locator('[data-testid^="product-search-option-"]')
-        .filter({ hasText: PRODUCT_FIXTURE_ALPHA.name }).first();
-      await expect(productOption).toBeVisible({ timeout: 15_000 });
-
-      // Retry click if the product element detaches mid-click (the drawer
-      // re-renders its list when waterfall fetches complete — see purchase-helpers.js).
-      let productCalloutResponse;
-      await expect(async () => {
-        productCalloutResponse = page.waitForResponse(
-          (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
-          { timeout: 30_000 },
-        );
-        await productOption.click({ timeout: 3_000 });
-      }).toPass({ timeout: 15_000 });
-      await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
-      await productCalloutResponse;
-      await slow(page);
-
-      // Submit the line (qty=1 default)
-      const lineAddPromise = expectSaveResponse(page);
-      await page.keyboard.press('Enter');
-      await lineAddPromise;
-      await slow(page);
-
-      // Verify line appeared AND fully rendered (prevents race with second line add)
-      await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 10_000 });
-
-      // Wait for the saved line to render with the product name in the lines list
-      await expect(page.getByText(PRODUCT_FIXTURE_ALPHA.name).first()).toBeVisible({ timeout: 15_000 });
-
-      // Wait for any inline-add-row to disappear (save fully committed to table)
-      await expect(page.getByTestId('inline-add-row')).toBeHidden({ timeout: 15_000 })
-        .catch(() => {}); // OK if already gone
+    // No Guardar first: the first line goes straight from the empty state, which saves
+    // the header itself — the path a user takes. The manual-save path is kept by
+    // sales-order-return-rectificativa.integration.spec.js.
+    await test.step('Add first line from the empty state (no manual save)', async () => {
+      await createDraftWithFirstLine(page, {
+        spec: 'sales-order', via: 'emptyState', productName: PRODUCT_FIXTURE_ALPHA.name,
+      });
     });
 
     await test.step('Add second line — different product, quantity 3', async () => {
