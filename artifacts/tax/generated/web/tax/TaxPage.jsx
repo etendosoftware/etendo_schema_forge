@@ -45,7 +45,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:tax
 
 // @sf-generated-start requiredHeaderFields:tax
-const requiredHeaderFields = ['name', 'validFrom', 'taxCategory', 'rate', 'applicableTo', 'docTaxAmount', 'baseAmount'];
+const requiredHeaderFields = [];
 // @sf-generated-end requiredHeaderFields:tax
 
 // @sf-generated-start addLineFields:accounting
@@ -194,7 +194,6 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         hideMoreMenu
         noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Tax", config: {} } }]}
-        requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 1}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
