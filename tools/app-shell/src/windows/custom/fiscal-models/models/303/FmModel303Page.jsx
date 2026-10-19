@@ -393,7 +393,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // already saved this declaration at least once) always wins over the auto-default.
   const [identChecks, setIdentChecks] = useState(() => {
     const persisted = decl.manualData?.identification ?? decl.identification ?? {};
-    if (persisted.rectificativa === undefined && Boolean(decl._duplicatePeriodPresented)) {
+    // ETP-5725 (reopened QA fix, critical regression) — same root cause as the Bug 3 fix already
+    // applied to FmListPage.jsx's `resolveDeclTypeLabel`: `persisted.rectificativa === undefined`
+    // is NOT the same thing as "this declaration was never saved" — a genuinely persisted,
+    // presented ordinaria that was never explicitly toggled ALSO has `rectificativa === undefined`
+    // in its persisted identification. Without the `decl.status === 'draft'` gate, OPENING that
+    // ordinaria after a sibling becomes presented re-triggered this auto-default and showed
+    // "Autoliquidación rectificativa" checked on an already-submitted, correctly-ordinaria
+    // record — confirmed display-only. Only a `draft` declaration can legitimately be in the
+    // "never decided yet" state this auto-default exists for; once a row leaves draft its
+    // persisted identification is authoritative and must be rendered as-is.
+    if (decl.status === 'draft' && persisted.rectificativa === undefined
+        && Boolean(decl._duplicatePeriodPresented)) {
       return { ...persisted, rectificativa: true };
     }
     return persisted;
@@ -894,38 +905,61 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submittedSnapshot]);
 
-  async function handleGenerate({ filename } = {}) {
+  // ETP-5725 (Sonar javascript:S3776) — `handleGenerate`'s own pre-flight chain, extracted so
+  // the function body keeps a single `if (blockReason) { blockReason(); return; }` instead of
+  // the 6 early-return `if`s that pushed its cognitive complexity past the limit. Same checks,
+  // same order, same messages as before — this only changes how the control flow is organized,
+  // not what is checked or what the user sees. Returns either `null` (nothing blocks) or a
+  // zero-arg function that fires the exact toast the removed inline check used to fire.
+  function getGenerateBlockReason() {
     // ETP-5438 — the button that opens FileGenModal303 is itself hidden once submitted, so
     // this is a belt-and-braces second check (same double-check pattern already used below
     // for missingRequiredFields), not the primary gate. The real defense-in-depth against a
     // direct/malformed API call is server-side, in Fiscal303BoxesHandler#dispatch.
     if (isSubmitted) {
-      toast.error(t('fm.validation.already_submitted') ?? 'Esta declaración ya ha sido presentada.');
-      return;
+      return () => toast.error(t('fm.validation.already_submitted') ?? 'Esta declaración ya ha sido presentada.');
     }
     // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above). Must run before
     // any other guard/state change below: an unset `tipo_declaracion` (or, when visible, a blank
     // `bank_iban`) must never reach the backend, which used to silently default a missing
     // declaration type to "N" instead of rejecting it.
     if (missingRequiredFields.length > 0) {
-      missingRequiredFieldsToast(
+      return () => missingRequiredFieldsToast(
         'fm.validation.missing_required_generate',
         "Completá {fields} antes de generar el fichero.",
       );
-      return;
     }
     if (invalidSelectedOptions.length > 0) {
-      invalidSelectedOptionsToast();
-      return;
+      return () => invalidSelectedOptionsToast();
     }
     // ETP-5456 — an autocalculated box out of the AEAT record-length range must block file
     // generation outright: the file cannot be written with a rounded/truncated stand-in for the
     // real computed amount. See `outOfRangeBoxes`'s own doc comment above.
     if (outOfRangeBoxes.length > 0) {
-      outOfRangeToast(
+      return () => outOfRangeToast(
         'fm.validation.out_of_range_generate',
         'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de generar el fichero.',
       );
+    }
+    // ETP-5725 (reopened QA fix) — "Generar fichero 303" produces the literal AEAT submission
+    // artifact (what the user uploads to the AEAT portal), not a preview, so it must be gated by
+    // the same corrective/ordinaria consistency rule as "Registrar/Presentar". Server-side is
+    // the authoritative gate (Fiscal303BoxesHandler#dispatch); this only gives earlier feedback.
+    if (correctiveWithoutPresentedOrdinaria) {
+      return () => toast.error(t('fm.duplicate_period.requires_ordinaria')
+        ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+    }
+    if (ordinariaAlreadyPresented) {
+      return () => toast.error(t('fm.duplicate_period.ordinaria_exists')
+        ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+    }
+    return null;
+  }
+
+  async function handleGenerate({ filename } = {}) {
+    const blockReason = getGenerateBlockReason();
+    if (blockReason) {
+      blockReason();
       return;
     }
     setGenerating(true);
@@ -1087,6 +1121,22 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
       );
       return;
     }
+    // ETP-5725 (reopened QA fix) — "Guardar" PERSISTS `manualData.identification`, so it must be
+    // gated by the same corrective/ordinaria consistency rule as "Registrar/Presentar" and
+    // "Generar fichero" — nothing previously stopped a brand-new, never-presented declaration
+    // from being SAVED with "Autoliquidación rectificativa" checked. Server-side is the
+    // authoritative gate (FiscalDeclCrudHandler#checkCorrectiveConsistency, now run on every PUT,
+    // not just a status-transitioning one); this only gives earlier feedback.
+    if (correctiveWithoutPresentedOrdinaria) {
+      toast.error(t('fm.duplicate_period.requires_ordinaria')
+        ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+      return;
+    }
+    if (ordinariaAlreadyPresented) {
+      toast.error(t('fm.duplicate_period.ordinaria_exists')
+        ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+      return;
+    }
     const { ok } = await persistEditableFields();
     if (ok) {
       // ETP-5456 — same rationale as `handleComputeClick` above: an explicit save can persist a
@@ -1145,30 +1195,54 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // than proceeding and losing the edit permanently — the pending-edit flag stays set
   // (`persistEditableFields` only clears it on success), so the user can retry via "Guardar"
   // or by clicking "Registrar/Presentar" again.
-  async function handlePresent({ status: newStatus, acuseFile }) {
+  // ETP-5725 (Sonar javascript:S3776) — `handlePresent`'s own pre-flight chain, extracted for
+  // the same reason as `getGenerateBlockReason` above: collapses 5 early-return `if`s into one
+  // `if (blockReason) { blockReason(); return; }` at the top of `handlePresent`, with identical
+  // checks, order and messages (which differ from `getGenerateBlockReason`'s own wording in a
+  // few places — "Guardar/Generar/Presentar" vs. "Presentar" — kept verbatim, not unified).
+  function getPresentBlockReason() {
     // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above), covering all
     // paths this function can take — including 'aeat_telematic' below, which only opens the
     // AeatSubmitFlow but must not even get that far with an unset declaration type.
     if (missingRequiredFields.length > 0) {
-      missingRequiredFieldsToast(
+      return () => missingRequiredFieldsToast(
         'fm.validation.missing_required_present',
         "Completá {fields} antes de marcar la declaración como presentada.",
       );
-      return;
     }
     if (invalidSelectedOptions.length > 0) {
-      invalidSelectedOptionsToast();
-      return;
+      return () => invalidSelectedOptionsToast();
     }
     // ETP-5456 — an autocalculated box out of the AEAT record-length range must block "Registrar/
     // Presentar" outright, same reasoning as handleGenerate above: there is no correct way to
     // round/truncate the real computed amount into range, so the declaration cannot legally be
     // marked presented in this state.
     if (outOfRangeBoxes.length > 0) {
-      outOfRangeToast(
+      return () => outOfRangeToast(
         'fm.validation.out_of_range_present',
         'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de marcar la declaración como presentada.',
       );
+    }
+    // ETP-5725 (reopened QA fix, Bug 1) — same UX gate as the "Registrar/Presentar" button's own
+    // onClick above, re-checked here (this function is the modal's actual confirm path) per this
+    // file's existing double-check convention for present-time guards.
+    if (correctiveWithoutPresentedOrdinaria) {
+      return () => toast.error(t('fm.duplicate_period.requires_ordinaria')
+        ?? 'No se puede presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+    }
+    // ETP-5725 (reopened QA fix) — mirror of the check above: "Solo puede haber una ordinaria
+    // por periodo".
+    if (ordinariaAlreadyPresented) {
+      return () => toast.error(t('fm.duplicate_period.ordinaria_exists')
+        ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva.');
+    }
+    return null;
+  }
+
+  async function handlePresent({ status: newStatus, acuseFile }) {
+    const blockReason = getPresentBlockReason();
+    if (blockReason) {
+      blockReason();
       return;
     }
     // ETP-4975 / ETP-5432 pt.10 follow-up (real bug, found via live retest, not a race
@@ -1269,6 +1343,29 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // auto-checked here) before the declaration can be marked "Presentado". Cleared once submitted:
   // there is nothing left to gate on a declaration that already went through.
   const requiresRectificativa = Boolean(decl._hasDuplicatePeriod) && !identChecks.rectificativa && !isSubmitted;
+
+  // ETP-5725 (reopened QA fix, Bug 1) — UX-only mirror of the authoritative backend guard
+  // (`FiscalDeclCrudHandler#checkCorrectiveConsistency`): "Autoliquidación
+  // rectificativa" checked with NO presented sibling for this period at all means there is
+  // nothing for this declaration to correct — AEAT requires a genuine ordinaria to already be
+  // on file first. `decl._duplicatePeriodPresented` (set by FmListPage.jsx) is true only when a
+  // SIBLING is already in the submitted family; since a corrective can only reach that family
+  // itself once an ordinaria sibling already has (this same guard, applied to that earlier
+  // submission), "some sibling is presented" is an adequate frontend proxy for "a presented
+  // ordinaria exists" — the backend re-derives the exact rule from scratch regardless of what
+  // this check lets through.
+  const correctiveWithoutPresentedOrdinaria = Boolean(identChecks.rectificativa)
+    && !Boolean(decl._duplicatePeriodPresented) && !isSubmitted;
+
+  // ETP-5725 (reopened QA fix) — mirror of `correctiveWithoutPresentedOrdinaria` above: "Solo
+  // puede haber una ordinaria por periodo". The UI auto-defaults "Autoliquidación rectificativa"
+  // to checked when a presented sibling exists, but the user can manually uncheck it back to
+  // "Normal" and try to present anyway — this is the UX-only mirror of the authoritative backend
+  // guard (`FiscalDeclCrudHandler#checkCorrectiveConsistency`). Same
+  // `decl._duplicatePeriodPresented` proxy as above ("some sibling is presented" standing in for
+  // "a presented ordinaria exists") — the backend re-derives the exact rule regardless.
+  const ordinariaAlreadyPresented = !Boolean(identChecks.rectificativa)
+    && Boolean(decl._duplicatePeriodPresented) && !isSubmitted;
 
   // ETP-5187 — generic required-field gate: `getMissingRequiredFields` reads the SAME
   // `field.required` flags fm303Layouts.js declares for `identificacion`/`datos_bancarios`
@@ -1534,6 +1631,21 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                     );
                     return;
                   }
+                  // ETP-5725 (reopened QA fix, UX follow-up) — same gate `handleGenerate` itself
+                  // enforces (see its own comment); checked here too so the "Generar fichero 303"
+                  // modal never even opens on an invalid corrective/ordinaria state. This button
+                  // was found to be the one place this check was missing at the pre-flight level
+                  // — "Registrar/Presentar" already had it (see that button's own onClick).
+                  if (correctiveWithoutPresentedOrdinaria) {
+                    toast.error(t('fm.duplicate_period.requires_ordinaria')
+                      ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+                    return;
+                  }
+                  if (ordinariaAlreadyPresented) {
+                    toast.error(t('fm.duplicate_period.ordinaria_exists')
+                      ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+                    return;
+                  }
                   setShowFilegen(true);
                 }}
                 disabled={generating}
@@ -1593,6 +1705,20 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                   }
                   if (requiresRectificativa) {
                     toast.error(t('fm.duplicate_period.warning') ?? 'Ya existe otra declaración para el mismo período. Marca "Autoliquidación rectificativa" antes de presentar esta declaración.');
+                    return;
+                  }
+                  // ETP-5725 (reopened QA fix, Bug 1) — UX gate, same rule enforced
+                  // authoritatively server-side.
+                  if (correctiveWithoutPresentedOrdinaria) {
+                    toast.error(t('fm.duplicate_period.requires_ordinaria')
+                      ?? 'No se puede presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+                    return;
+                  }
+                  // ETP-5725 (reopened QA fix) — mirror of the check above: "Solo puede haber
+                  // una ordinaria por periodo".
+                  if (ordinariaAlreadyPresented) {
+                    toast.error(t('fm.duplicate_period.ordinaria_exists')
+                      ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva.');
                     return;
                   }
                   setShowPresent(true);
