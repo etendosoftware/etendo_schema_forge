@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Goods Shipment",
+    "agentPrompt": "#REF#agent-prompts/goods-shipment/spec.md",
     "salesTheme": true,
     "notesField": "description",
     "relatedDocuments": true,

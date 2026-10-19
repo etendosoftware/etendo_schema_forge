@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Goods Receipt",
+    "agentPrompt": "#REF#agent-prompts/goods-receipt/spec.md",
     "menuActions": [
       {
         "key": "post",
