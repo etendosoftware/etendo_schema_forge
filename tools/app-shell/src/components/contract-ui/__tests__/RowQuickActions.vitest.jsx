@@ -50,6 +50,8 @@ vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
   ...(await importOriginal()),
   IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
   IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
+  IconicCopyIcon: (props) => <svg data-icon="iconic-copy" {...props} />,
+  IconicMailIcon: (props) => <svg data-icon="iconic-mail" {...props} />,
 }));
 
 import RowQuickActions from '../RowQuickActions.jsx';
@@ -186,29 +188,33 @@ describe('RowQuickActions', () => {
   });
 
   // Figma "Sticky Acciones": >=100px band (never narrower than its cell), padding 0 12px,
-  // buttons flush right with no gap, the transparent -> row-hover gradient, no border/shadow.
+  // buttons flush right with a 2px gap, the transparent -> row-hover gradient, no border/shadow.
   it('renders the actions band with the Figma Sticky Acciones geometry and gradient', () => {
     setup();
     const tokens = screen.getByTestId('row-quick-actions').className.split(/\s+/);
     expect(tokens).toEqual(expect.arrayContaining([
-      'absolute', 'right-0', 'min-w-[max(100%,100px)]', 'px-3', 'justify-end', 'gap-0',
+      'absolute', 'right-0', 'min-w-[max(100%,100px)]', 'px-3', 'justify-end', 'gap-0.5',
       'bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)]',
     ]));
-    expect(tokens).not.toContain('gap-0.5');
+    expect(tokens).not.toContain('gap-0');
     expect(tokens.some((t) => /(^|:)(border|shadow)(-|$)/.test(t))).toBe(false);
   });
 
   it('calls onClone when Clone is clicked', async () => {
     const user = userEvent.setup();
     const { onClone } = setup();
-    await user.click(screen.getByTestId('row-quick-action-clone'));
+    const btn = screen.getByTestId('row-quick-action-clone');
+    expect(within(btn).getByTestId('Copy__ec6673')).toHaveAttribute('data-icon', 'iconic-copy');
+    await user.click(btn);
     expect(onClone).toHaveBeenCalledTimes(1);
   });
 
   it('calls onEmail when Email is clicked (with documentPreview)', async () => {
     const user = userEvent.setup();
     const { onEmail } = setup({ documentPreview: true });
-    await user.click(screen.getByTestId('row-quick-action-email'));
+    const btn = screen.getByTestId('row-quick-action-email');
+    expect(within(btn).getByTestId('Mail__ec6673')).toHaveAttribute('data-icon', 'iconic-mail');
+    await user.click(btn);
     expect(onEmail).toHaveBeenCalledTimes(1);
   });
 

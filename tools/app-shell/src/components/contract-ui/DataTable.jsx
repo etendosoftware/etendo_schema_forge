@@ -34,11 +34,11 @@ import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 // from its own className (`px-3` container, `h-8 w-8` buttons) — used below to
 // size the reserved column to the buttons THIS window's `rowQuickActions` will
 // actually render, not a fixed worst-case. ETP-5600 (Figma "Sticky Acciones"):
-// the canonical buttons sit with NO gap; a custom `render` keeps the former 2px
-// allowance, since its own markup (e.g. AccountRowActions) still spaces them.
+// 2px between buttons (`gap-0.5`, ROW_STICKY_ACTIONS), so four buttons make the
+// Figma 158px band (4 x 32 + 3 x 2 + 24). A custom `render` (e.g.
+// AccountRowActions) spaces its own buttons by the same 2px.
 const QUICK_ACTIONS_BUTTON_PX = 32;
-const QUICK_ACTIONS_GAP_PX = 0;
-const QUICK_ACTIONS_CUSTOM_RENDER_GAP_PX = 2;
+const QUICK_ACTIONS_GAP_PX = 2;
 const QUICK_ACTIONS_CONTAINER_PADDING_PX = 24; // px-3 on both sides
 
 // ETP-5268 — counts the canonical buttons RowQuickActions will render for
@@ -92,11 +92,8 @@ function quickActionsReservedWidthPx(rowQuickActions) {
   if (Number.isFinite(explicitWidth) && explicitWidth > 0) return explicitWidth;
   const count = estimateQuickActionsButtonCount(rowQuickActions);
   if (count <= 0) return 0;
-  const gapPx = typeof rowQuickActions?.render === 'function'
-    ? QUICK_ACTIONS_CUSTOM_RENDER_GAP_PX
-    : QUICK_ACTIONS_GAP_PX;
   return count * QUICK_ACTIONS_BUTTON_PX
-    + Math.max(count - 1, 0) * gapPx
+    + Math.max(count - 1, 0) * QUICK_ACTIONS_GAP_PX
     + QUICK_ACTIONS_CONTAINER_PADDING_PX;
 }
 
@@ -1758,7 +1755,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         touchedFieldsRef, invalidFields, specName,
       }))}
       {/* Skip action cells in inlineEditable add-row mode — actions belong to
-          InlineLinesPanel's 160px slot, not to separate columns here. */}
+          InlineLinesPanel's 158px slot, not to separate columns here. */}
       {!ilpTrailing && (hoverRowActions ? (
         <>
           <TableCell className="w-10" data-testid="TableCell__eb5261" />
@@ -2140,7 +2137,7 @@ function getRowClassName({
 
 // Sums the pixel widths reserved in the fixed-layout <colgroup> for the
 // selection checkbox column and every row-action slot (hover actions, legacy
-// delete/clone, quick actions), mirroring the 40px/48px/160px slots rendered
+// delete/clone, quick actions), mirroring the 40px/48px/158px slots rendered
 // by InlineLinesPanel and the row-action cells in the table body. Extracted
 // from a single chained sum of ternaries so each conditional slot keeps its
 // own branch instead of adding flat complexity to the caller.
@@ -2246,7 +2243,7 @@ export function renderLinesColgroup({
           : <col key={col.key} style={{ width: growColumnWidth(basis, fixedColsTotalPx, growCount, measured) }} />;
       })}
       {/* In inlineEditable add-row mode (ilpTrailing), all row actions live
-          inside InlineLinesPanel's 160px action slot — never add separate
+          inside InlineLinesPanel's 158px action slot — never add separate
           action cols here or the flex columns shrink by 40px. */}
       {!ilpTrailing && hoverRowActions && <col style={{ width: 40 }} />}
       {!ilpTrailing && hoverRowActions && onDeleteRow && <col style={{ width: 40 }} />}

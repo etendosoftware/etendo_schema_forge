@@ -334,9 +334,10 @@ function useHorizontalOverflow(ref, enabled, columns, rowCount) {
  * rowVisuals.js that RowQuickActions uses, so a list row and a document line show
  * identical buttons. Edit is the Iconic edit (its testid stays `Pencil__3b7ec2`),
  * Delete the Iconic trash. The pill behind them stays off
- * (`QUICK_ACTIONS_USE_PILL`). `gap-0.5` keeps four 32px buttons (Add dimensions
- * + a caller action + Edit + Delete) plus the band's 12px padding inside the
- * 160px `ACTION_SLOT_WIDTH_PX` slot, and they fit the 40px (`h-10`) line row.
+ * (`QUICK_ACTIONS_USE_PILL`). `gap-0.5` (2px, the list band's gap) makes four 32px
+ * buttons (Add dimensions + a caller action + Edit + Delete) plus the band's 12px
+ * padding exactly the 158px `ACTION_SLOT_WIDTH_PX` slot (the Figma band width), and
+ * they fit the 40px (`h-10`) line row.
  *
  * ETP-5600 (QA pass 2) — the strip always has its own slot after the last
  * column (an editable table always reserves it, see `resolveTrailingColumn`),
@@ -517,7 +518,7 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
           </div>
         );
       })}
-      {reserveActionSlot && <div style={{ flex: '0 0 160px' }} aria-hidden="true" />}
+      {reserveActionSlot && <div style={{ flex: `0 0 ${ACTION_SLOT_WIDTH_PX}px` }} aria-hidden="true" />}
       <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
     </div>
   );
@@ -1321,7 +1322,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     )),
     [columns, hiddenColumns]
   );
-  // Whether the row reserves the 160px action slot after its last column. Until
+  // Whether the row reserves the 158px action slot after its last column. Until
   // ETP-5600 the LAST column, when an `amount`, disappeared on hover to make room
   // for the strip instead (monetary tables: sales-quotation, etc.); since then that
   // swap survives only as a layout rule for READ-ONLY tables (see below), where a
@@ -1629,7 +1630,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
               {resolveColumnLabel(col, locale, t)}
             </div>
           ))}
-          {/* Reserve the same 160 px slot the action strip will occupy so the
+          {/* Reserve the same 158px slot the action strip will occupy so the
               header columns align with the body rows even when hovering — and
               so DataTable's add-row colgroup (same predicate, see
               `@/lib/linesActionSlot.js`) lines its inputs up with these headers. */}

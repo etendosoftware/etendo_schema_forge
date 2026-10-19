@@ -31,8 +31,13 @@
  * DIFFERENTLY under a stub is exactly the bug this file exists to prevent.
  */
 
-/** Width, in px, of the action strip appended at the end of a lines row. */
-export const ACTION_SLOT_WIDTH_PX = 160;
+/**
+ * Width, in px, of the action strip appended at the end of a lines row. ETP-5600 —
+ * the Figma "Sticky Acciones" band: four 32px buttons, 2px apart, padding 0 12px
+ * (4 x 32 + 3 x 2 + 24 = 158), the most a line shows (Add dimensions + a caller
+ * action + Edit + Delete). It was 160 before, 2px of slack with no design source.
+ */
+export const ACTION_SLOT_WIDTH_PX = 158;
 
 /**
  * The trailing column that absorbs the action slot, or `null` when the row must

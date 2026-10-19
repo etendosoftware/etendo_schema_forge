@@ -381,7 +381,7 @@ describe('InlineLinesPanel', () => {
   });
 
   // The line action buttons are the list quick actions' Figma Icon Button sm: 32x32
-  // round, a #828FA3 neutral icon with the #121217 @ 5% hover overlay, and a
+  // round, a #828FA3 neutral icon (`--sf-icon-outline-secondary`) with the #121217 @ 5% hover overlay, and a
   // destructive delete that tints to the light destructive background on hover.
   describe('Figma action buttons in the line hover strip', () => {
     async function hoverRow(id) {
@@ -390,7 +390,7 @@ describe('InlineLinesPanel', () => {
       return row;
     }
 
-    const NEUTRAL_TOKENS = ['h-8', 'w-8', 'rounded-full', 'text-[#828FA3]', 'hover:bg-[rgba(18,18,23,0.05)]'];
+    const NEUTRAL_TOKENS = ['h-8', 'w-8', 'rounded-full', 'text-[hsl(var(--sf-icon-outline-secondary))]', 'hover:bg-[rgba(18,18,23,0.05)]'];
     const DESTRUCTIVE_TOKENS = [
       'h-8', 'w-8', 'rounded-full',
       'text-[var(--status-destructive-fg)]', 'hover:bg-[var(--status-destructive-bg)]', 'disabled:opacity-50',
@@ -423,7 +423,7 @@ describe('InlineLinesPanel', () => {
       const row = await hoverRow('L1');
       const del = within(row).getByRole('button', { name: 'deleteRowTooltip' });
       expect(del).toHaveClass(...DESTRUCTIVE_TOKENS);
-      expect(del).not.toHaveClass('text-[#828FA3]');
+      expect(del).not.toHaveClass('text-[hsl(var(--sf-icon-outline-secondary))]');
       const icon = within(del).getByTestId('IconicTrashIcon__3b7ec2');
       expect(icon).toHaveAttribute('data-icon', 'iconic-trash');
       expect(icon).toHaveClass('h-5', 'w-5');

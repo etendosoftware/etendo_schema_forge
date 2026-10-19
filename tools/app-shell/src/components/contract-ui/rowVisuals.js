@@ -27,12 +27,14 @@ export const ROW_LIFT_HOVER_NO_BORDERS = 'hover:border-transparent [&:has(+tr:ho
  * Figma "Sticky Acciones" (Fila Contactos / State=Hover): the hover band that holds a
  * list row's quick actions, pinned to the right of its cell. At least 100px wide and
  * never narrower than the cell, so it masks the whole reserved column while the cell
- * floats over data; padding 0 12px, buttons flush right with no gap; background the
+ * floats over data; padding 0 12px, buttons flush right with a 2px gap (four buttons
+ * make the Figma 158px band: 4 x 32 + 3 x 2 + 24 — the width follows the buttons a
+ * window actually shows, never a fixed 158px that would mask more data than needed); background the
  * Figma gradient from transparent to the row's hovered colour at 10.58%
  * (`--row-hover-bg`, set per row state by DataTable) — no border, no shadow. Hidden at
  * rest, shown on row hover, keyboard focus, or while its kebab menu is open.
  */
-export const ROW_STICKY_ACTIONS = 'absolute right-0 inset-y-0 h-full min-w-[max(100%,100px)] flex flex-row items-center justify-end gap-0 px-3 z-10 bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)] opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100';
+export const ROW_STICKY_ACTIONS = 'absolute right-0 inset-y-0 h-full min-w-[max(100%,100px)] flex flex-row items-center justify-end gap-0.5 px-3 z-10 bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)] opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100';
 
 /**
  * The same "Sticky Acciones" band for a document line (`InlineLinesPanel`), whose rows
@@ -48,8 +50,9 @@ export const ROW_STICKY_ACTIONS = 'absolute right-0 inset-y-0 h-full min-w-[max(
  * - `LINE_STICKY_ACTIONS_BAND` — the buttons' band inside it: buttons flush right,
  *   padding 0 12px, at least 100px wide, the very gradient of `ROW_STICKY_ACTIONS`
  *   (ending on the line's `--row-hover-bg`), so a column it floats over fades out
- *   behind an opaque background instead of showing through the icons. 2px gap (the
- *   lines strip's own spacing) so four buttons still fit the 160px slot.
+ *   behind an opaque background instead of showing through the icons. 2px gap, as the
+ *   list band, so four buttons are exactly the Figma 158px band and fill the 158px
+ *   `ACTION_SLOT_WIDTH_PX` slot.
  */
 export const LINE_STICKY_ACTIONS_SLOT = 'sticky right-0 z-10 flex items-stretch justify-end pointer-events-none';
 export const LINE_STICKY_ACTIONS_BAND = 'pointer-events-auto flex items-center justify-end gap-0.5 min-w-[100px] px-3 bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)]';
@@ -68,10 +71,11 @@ export const ROW_CHECKED_BG = 'bg-[hsl(var(--field-hover))] hover:bg-[hsl(var(--
  * off, `QUICK_ACTIONS_USE_PILL`). Size the icon inside with `h-5 w-5`.
  *
  * Neutral (edit, duplicate, email, kebab, extra line actions): #828FA3 icon in every
- * state, hover adds the #121217 @ 5% overlay; focus-visible paints a white fill with the
+ * state — the exact Figma `icon/outline/secondary` token `--sf-icon-outline-secondary`
+ * (index.css; lighter in dark mode), hover adds the #121217 @ 5% overlay; focus-visible paints a white fill with the
  * two-ring halo (2px white gap + 4px #121217).
  */
-export const ROW_ACTION_BUTTON_NEUTRAL = 'h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors duration-200 ease-in focus-visible:outline-none focus-visible:bg-card text-[#828FA3] hover:bg-[rgba(18,18,23,0.05)] focus-visible:shadow-[0_0_0_2px_#FFFFFF,0_0_0_4px_#121217]';
+export const ROW_ACTION_BUTTON_NEUTRAL = 'h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors duration-200 ease-in focus-visible:outline-none focus-visible:bg-card text-[hsl(var(--sf-icon-outline-secondary))] hover:bg-[rgba(18,18,23,0.05)] focus-visible:shadow-[0_0_0_2px_#FFFFFF,0_0_0_4px_#121217]';
 
 /**
  * Destructive (delete): #D50B3E icon (`--status-destructive-fg`, pair it with

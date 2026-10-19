@@ -286,20 +286,20 @@ describe.each([
 });
 
 describe('the reserved action slot itself (ETP-5245)', () => {
-  it('reserves 160px in the add-row whenever the header does — Producto > Costo', () => {
+  it('reserves the 158px action slot in the add-row whenever the header does — Producto > Costo', () => {
     const { headerLayout, addRowLayout } = layoutsFor(COSTING_COLUMNS);
-    // checkbox 40 + amount basis 172 + action slot 160 + right spacer 48.
-    expect(headerLayout.fixedPx).toBe(420);
-    expect(addRowLayout.calcFixedPx).toBe(420);
+    // checkbox 40 + amount basis 172 + action slot 158 + right spacer 48.
+    expect(headerLayout.fixedPx).toBe(418);
+    expect(addRowLayout.calcFixedPx).toBe(418);
     // The two date columns keep their own 130px basis and split what is left.
     expect(addRowLayout.growBases).toEqual([130, 130]);
   });
 
   it('reserves the slot too when the amount column is last, on an editable table (ETP-5600)', () => {
     const { headerLayout, addRowLayout } = layoutsFor(TRAILING_AMOUNT_COLUMNS);
-    // checkbox 40 + quantity 152 + amount 172 + action slot 160 + right spacer 48.
-    expect(headerLayout.fixedPx).toBe(572);
-    expect(addRowLayout.calcFixedPx).toBe(572);
+    // checkbox 40 + quantity 152 + amount 172 + action slot 158 + right spacer 48.
+    expect(headerLayout.fixedPx).toBe(570);
+    expect(addRowLayout.calcFixedPx).toBe(570);
   });
 });
 

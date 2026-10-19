@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { Copy, Mail, MoreVertical, Loader2 } from 'lucide-react';
-import { IconicEditIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
+import { MoreVertical, Loader2 } from 'lucide-react';
+// ETP-5600 — Figma "Sticky Acciones": edit, copy, mail and trash are the Iconic set on
+// the 20x20 frame (core custom-icons), so the band never mixes icon families.
+import { IconicCopyIcon, IconicEditIcon, IconicMailIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
@@ -400,7 +402,7 @@ export default function RowQuickActions({
           title={ui('quickAction.clone')}
           data-testid="row-quick-action-clone"
         >
-          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Copy className="h-5 w-5" data-testid="Copy__ec6673" />}
+          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicCopyIcon className="h-5 w-5" data-testid="Copy__ec6673" />}
         </button>
       )}
       {/* Email — gated by sendDocument.enabled (default true for eligible
@@ -416,7 +418,7 @@ export default function RowQuickActions({
           title={ui('quickAction.email')}
           data-testid="row-quick-action-email"
         >
-          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Mail className="h-5 w-5" data-testid="Mail__ec6673" />}
+          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <IconicMailIcon className="h-5 w-5" data-testid="Mail__ec6673" />}
         </button>
       )}
       {/* More — popover with menuActions[] */}

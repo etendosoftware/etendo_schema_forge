@@ -191,7 +191,7 @@ describe('InlineLinesPanel — hover action strip vs. a non-trailing amount colu
     const strip = within(row).getByTestId('line-actions');
     expect(strip.className).toContain('sticky');
     expect(strip.className).toContain('right-0');
-    expect(strip.getAttribute('style')).toContain('0 0 160px');
+    expect(strip.getAttribute('style')).toContain('0 0 158px');
   });
 
   it('pins the strip only while its actions show', () => {
