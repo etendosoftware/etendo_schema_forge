@@ -175,12 +175,13 @@ describe('FmModel390Page — skeleton', () => {
     expect(screen.getByTestId('FmModel390Page__incidentsCount').textContent).toBe('0');
   });
 
-  it('renders the index of the 11 blocks, the legend and the design-year note', () => {
+  it('renders the index of the 11 blocks, without origin legend or design-year note', () => {
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     const index = screen.getByTestId('FmBoxes390__index');
     expect(index.querySelectorAll('button')).toHaveLength(11);
-    expect(screen.getByTestId('FmBoxes390__legend').textContent).toContain('fm.m390.origin.modified');
-    expect(screen.getByTestId('FmBoxes390__designNote').textContent).toContain('fm.m390.design_fallback');
+    // The payload is a fallback design (taxReport.fallback), yet the toolbar shows no note.
+    expect(screen.queryByTestId('FmBoxes390__legend')).toBeNull();
+    expect(screen.queryByTestId('FmBoxes390__designNote')).toBeNull();
     expect(screen.getByTestId('FmBoxes390__warnings').textContent).toContain('fm.m390.warning.unsupported_rate');
   });
 
@@ -244,6 +245,37 @@ describe('FmModel390Page — skeleton', () => {
     fireEvent.change(search, { target: { value: '99999' } });
     fireEvent.keyDown(search, { key: 'Enter' });
     expect(screen.getByTestId('FmBoxes390__searchMiss')).toBeTruthy();
+  });
+
+  it('"Buscar casilla" unfolds a "Sin operaciones" group to reveal and highlight the box', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    goToBlock('iva_devengado');
+    expect(screen.queryByTestId('FmBoxes390__box_21')).toBeNull();
+    const search = screen.getByTestId('FmBoxes390__search');
+    fireEvent.change(search, { target: { value: '21' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByTestId('FmBoxes390__box_21').className).toContain('fm-390-cell--highlight');
+    // The group stays unfolded (not only while highlighted).
+    expect(screen.getByTestId('FmBoxes390__fold_adq_intra_bienes').textContent).toBe('fm.m390.fold.hide');
+  });
+
+  it('"Buscar casilla" from another block opens the block and its folded group', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    const search = screen.getByTestId('FmBoxes390__search');
+    fireEvent.change(search, { target: { value: '[23]' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByTestId('FmBoxes390__block_iva_devengado')).toBeTruthy();
+    expect(screen.getByTestId('FmBoxes390__box_23').className).toContain('fm-390-cell--highlight');
+  });
+
+  it('"Buscar casilla" opens the territory toggle to reveal a box behind it', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    goToBlock('territorio');
+    expect(screen.queryByTestId('FmBoxes390__box_92')).toBeNull();
+    const search = screen.getByTestId('FmBoxes390__search');
+    fireEvent.change(search, { target: { value: '92' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(screen.getByTestId('FmBoxes390__box_92').className).toContain('fm-390-cell--highlight');
   });
 
   it('computes on mount when the list handed no payload', async () => {

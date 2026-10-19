@@ -1,13 +1,14 @@
-// Modelo 390 — the "Casillas" tab (ETP-5716): block index, box search, origin legend and the
-// blocks of fm390Layouts.js. Presentational: values, inputs and every change come from
-// FmModel390Page.jsx.
+// Modelo 390 — the "Casillas" tab (ETP-5716): block index, box search and the blocks of
+// fm390Layouts.js. Presentational: values, inputs and every change come from FmModel390Page.jsx.
+// The box search (and "Ir a la casilla") reveals a box hidden in a folded "Sin operaciones" group
+// or behind the territory toggle before scrolling to it and highlighting it.
 //
 // Visual pattern: the Modelo 303 boxes (`.fm-aeat-*` classes of fiscal-models.css) — concept on
 // the left with a dotted leader, one cell per column with the box number on its left; calculated
 // cells grey and read-only, manual cells white with a pencil, totals in bold.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  TrendingUp, TrendingDown, Pencil, RotateCcw, Search, ChevronLeft, ChevronRight, Info, TriangleAlert,
+  TrendingUp, TrendingDown, Pencil, RotateCcw, Search, ChevronLeft, ChevronRight, TriangleAlert,
   ReceiptText,
 } from 'lucide-react';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
@@ -204,7 +205,12 @@ function RateGroup({ group, boxes, ctx, columns }) {
   });
   const active = group.rates.filter(hasAmount);
   const empty = group.rates.filter(rt => !hasAmount(rt));
-  const shown = expanded ? group.rates : active;
+  // A searched box in a folded rate unfolds the group: at once in this render (so the page can
+  // scroll to it) and for good once the highlight fades.
+  const holdsHighlight = ctx.highlightBox != null
+    && empty.some(rt => rt.cells.some(c => cellBox(c) === ctx.highlightBox));
+  useEffect(() => { if (holdsHighlight) setExpanded(true); }, [holdsHighlight]);
+  const shown = expanded || holdsHighlight ? group.rates : active;
   return (
     <div className="fm-390-rate-group" data-testid={`FmBoxes390__group_${group.id}`}>
       <div className="fm-aeat-subheading">{ctx.t(group.labelKey)}</div>
@@ -457,7 +463,10 @@ function BoxesBlock({ block, boxes, ctx }) {
   const hasTerritoryValues = TERRITORY_PERCENT_INPUTS.some(k => parseAmount(ctx.inputs?.[k]) != null)
     || parseAmount(ctx.inputs?.[INPUT.COMMON_TERRITORY_COMPENSATION]) != null;
   const [open, setOpen] = useState(!block.toggle || hasTerritoryValues);
-  const visible = !block.toggle || open || hasTerritoryValues;
+  // A searched box behind the territory toggle opens it (showing it writes no input).
+  const revealHighlight = Boolean(block.toggle && ctx.highlightInBlock);
+  useEffect(() => { if (revealHighlight) setOpen(true); }, [revealHighlight]);
+  const visible = !block.toggle || open || hasTerritoryValues || revealHighlight;
   const percentSum = territoryPercentSum(ctx.inputs);
   const showSumError = block.toggle && isTerritoryMode(ctx.inputs) && Math.abs(percentSum - 100) > 0.001;
 
@@ -509,18 +518,7 @@ function BlockBody({ block, boxes, ctx }) {
   }
 }
 
-// ── Legend, search, index ────────────────────────────────────────────────────
-
-function OriginLegend({ t }) {
-  return (
-    <div className="fm-390-legend" data-testid="FmBoxes390__legend">
-      <span className="fm-390-legend__item"><span className="fm-390-legend__swatch fm-390-legend__swatch--calc" />{t('fm.m390.origin.calc')}</span>
-      <span className="fm-390-legend__item"><span className="fm-390-legend__swatch fm-390-legend__swatch--manual"><Pencil size={10} strokeWidth={1.5} data-testid="Pencil__legend" /></span>{t('fm.m390.origin.manual')}</span>
-      <span className="fm-390-legend__item"><span className="fm-390-legend__swatch fm-390-legend__swatch--modified"><RotateCcw size={10} strokeWidth={1.5} data-testid="RotateCcw__legend" /></span>{t('fm.m390.origin.modified')}</span>
-      <span className="fm-390-legend__item"><span className="fm-390-legend__swatch fm-390-legend__swatch--total" />{t('fm.m390.origin.total')}</span>
-    </div>
-  );
-}
+// ── Search, index ────────────────────────────────────────────────────
 
 function BoxSearch({ onSearch, notFound, t }) {
   const [query, setQuery] = useState('');
@@ -589,7 +587,6 @@ function BlockIndex({ blocks, active, onSelect, t }) {
  * @param {object}   [props.preloaded]     `manualData.aeatPreloaded` (origin "Modificado" + restore)
  * @param {object}   [props.identification] header "Tipo" control state (Devengo block)
  * @param {object}   [props.orgIdentity]   organization data (useOrg390Identity)
- * @param {object}   [props.taxReport]     `taxReport` of the boxes payload (design-year note)
  * @param {Array}    [props.warnings]      `warnings` of the boxes payload
  * @param {boolean}  [props.readOnly]
  * @param {Function} props.onInputChange   (key, rawValue, spec) => void
@@ -608,7 +605,7 @@ function BlockIndex({ blocks, active, onSelect, t }) {
  *                                           file will cut (the NAME_TRUNCATED incidents)
  */
 export default function FmBoxes390({
-  layout, boxes, inputs, preloaded, identification, orgIdentity, taxReport, warnings, year, readOnly,
+  layout, boxes, inputs, preloaded, identification, orgIdentity, warnings, year, readOnly,
   onInputChange, onRestore, onFlagChange, onClearTerritory, onEditOrganization, t, bcpLocale = 'es-ES',
   invoiceBoxes, onViewInvoices, blockExtras, goToBox, nameWarnings,
 }) {
@@ -654,8 +651,9 @@ export default function FmBoxes390({
 
   // Cross-input checks (DEVOLVER_12 with [97], [98] with [96]/[97]) — shown inline in their block.
   const messages = readOnly ? [] : inputMessages390(inputs);
+  const highlightInBlock = highlightBox != null && index.some(e => e.box === highlightBox && e.blockId === block.id);
   const ctx = {
-    t, bcpLocale, inputs, preloaded, identification, orgIdentity, year, readOnly, highlightBox, messages,
+    t, bcpLocale, inputs, preloaded, identification, orgIdentity, year, readOnly, highlightBox, highlightInBlock, messages,
     nameWarnings: nameWarnings ?? [],
     onInputChange, onRestore, onFlagChange, onClearTerritory, onEditOrganization,
     invoiceBoxes: invoiceBoxSet, onViewInvoices,
@@ -667,14 +665,7 @@ export default function FmBoxes390({
       <div className="fm-390-boxes__content" ref={contentRef}>
         <div className="fm-390-toolbar">
           <BoxSearch onSearch={onSearch} notFound={notFound} t={t} />
-          <OriginLegend t={t} />
         </div>
-        {taxReport?.fallback && (
-          <p className="fm-390-design-note" title={t('fm.m390.design_fallback_hint', { year, layoutYear: taxReport.layoutYear })} data-testid="FmBoxes390__designNote">
-            <Info size={14} strokeWidth={1.75} data-testid="Info__fm390" />
-            {t('fm.m390.design_fallback', { layoutYear: taxReport.layoutYear })}
-          </p>
-        )}
         {Array.isArray(warnings) && warnings.length > 0 && (
           <div className="fm-390-warnings" role="status" data-testid="FmBoxes390__warnings">
             <TriangleAlert size={14} strokeWidth={1.75} data-testid="TriangleAlert__fm390" />

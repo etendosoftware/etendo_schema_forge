@@ -1597,17 +1597,6 @@
 }
 .fm-390-search__field input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 14px; color: hsl(var(--foreground)); }
 .fm-390-search__miss { font-size: 12px; color: hsl(var(--muted-foreground)); }
-.fm-390-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12px; color: hsl(var(--muted-foreground)); }
-.fm-390-legend__item { display: inline-flex; align-items: center; gap: 6px; }
-.fm-390-legend__swatch {
-  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 14px;
-  border-radius: 4px; border: 1px solid hsl(var(--border-control)); color: hsl(var(--text-disabled));
-}
-.fm-390-legend__swatch--calc { background: hsl(var(--muted)); }
-.fm-390-legend__swatch--manual { background: hsl(var(--card)); }
-.fm-390-legend__swatch--modified { background: hsl(var(--card)); border-color: var(--status-warning-border); color: var(--status-warning-fg); }
-.fm-390-legend__swatch--total { background: hsl(var(--muted)); border-color: hsl(var(--foreground)); }
-.fm-390-design-note { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 12px; color: hsl(var(--muted-foreground)); }
 /* Same metrics as the 303 duplicate-period warning (8px 14px, radius 8, 13px, 14px icon). */
 .fm-390-warnings {
   display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px; padding: 8px 14px; border-radius: 8px;
@@ -1662,6 +1651,7 @@
 .fm-390-sources { display: flex; flex-direction: column; flex: 1; min-height: 0; background: hsl(var(--card)); }
 .fm-390-sources__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 20px 8px; }
 .fm-390-sources__toolbar .fm-btn { display: inline-flex; align-items: center; gap: 6px; }
+.fm-390-sources__box-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .fm-390-sources__select {
   height: 36px; padding: 0 8px; max-width: 220px; font-size: 14px; color: hsl(var(--foreground));
   border: 1px solid hsl(var(--border-control)); border-radius: 8px; background: hsl(var(--card));

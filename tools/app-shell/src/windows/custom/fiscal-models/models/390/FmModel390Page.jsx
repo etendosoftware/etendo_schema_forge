@@ -858,7 +858,6 @@ export default function FmModel390Page({
                 preloaded={preloaded}
                 identification={identification}
                 orgIdentity={orgIdentity}
-                taxReport={payload.taxReport}
                 warnings={payload.warnings}
                 year={decl.year}
                 readOnly={isSubmitted}

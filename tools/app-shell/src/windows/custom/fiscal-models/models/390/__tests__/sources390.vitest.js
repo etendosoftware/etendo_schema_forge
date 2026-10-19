@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   SOURCES_PAGE_SIZE, emptySourcesFilter, sourcesFilterForBox, hasSourcesFilter, sourcesQueryParams,
-  pageCount, boxLabel, sourceBoxes, rowBoxAmount, sourceTypeLabel, buildSources390Csv,
+  pageCount, boxLabel, rowBoxAmount, sourceTypeLabel, buildSources390Csv,
   sourcesCsvFileName,
 } from '../sources390.js';
 
@@ -65,10 +65,6 @@ describe('paging and boxes', () => {
   it('boxLabel pads to two digits', () => {
     expect(boxLabel(5)).toBe('05');
     expect(boxLabel(108)).toBe('108');
-  });
-  it('sourceBoxes sorts the payload boxes numerically', () => {
-    expect(sourceBoxes({ 99: '1.00', 5: '2.00', 33: '3.00' }).map(b => b.box)).toEqual([5, 33, 99]);
-    expect(sourceBoxes(undefined)).toEqual([]);
   });
   it('rowBoxAmount reads the contribution of a row to a box', () => {
     expect(rowBoxAmount(ROW, 6)).toBe('210.00');

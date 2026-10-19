@@ -3565,14 +3565,21 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
   `nameWarningsFromIncidents390`) and in the Incidencias tab; Generar is not blocked.
 - **Box search:** "Buscar casilla" + Enter — a number (`86`, `[86]`, `086`) or a concept fragment
   (accent/case-insensitive) — opens the block, scrolls to the cell, focuses it if editable and
-  highlights it for 2.5 s; "No se encontró la casilla" otherwise.
-- **Origin legend:** Calculado, Manual o precargado, Modificado, Total. "Modificado" (amber border +
+  highlights it for 2.5 s; "No se encontró la casilla" otherwise. A box that is not on screen is
+  revealed first: a rate folded behind "Sin operaciones (N tipos) · Mostrar" unfolds its group
+  (and the group stays unfolded once the highlight fades — e.g. [21] in "Adquisiciones
+  intracomunitarias de bienes" with no operations), and a box of the territory block opens the
+  "Tributo a varias Administraciones" toggle (only shown; no input is written). "Ir a la casilla"
+  of an incident goes through the same path.
+- **Box origin styling** (no legend in the toolbar): calculated cells grey,
+  manual or preloaded inputs white with a pencil, totals in bold; "Modificado" (amber border +
   ↺ "Restaurar valor calculado") applies to an input whose value differs from
   `manualData.aeatPreloaded[key]` (the value the 303 preload put in); an input with no preloaded
   value reads "Manual o precargado". Restaurar puts the preloaded value back (a preloaded zero
   empties the input — `restorePreloaded390`).
-- **Design year note:** when `taxReport.fallback` is true (e.g. 2026 computed with the classic
-  `AEAT390_2025_Y`), a muted "Diseño de registro 2025" with an explanatory tooltip.
+- **No design-year note:** `taxReport.fallback` / `layoutYear` stay in the boxes payload (the
+  layout is picked from `layoutYear`), but the toolbar no longer shows a "Diseño de registro
+  <year>" note.
 - **Backend warnings** (`UNSUPPORTED_RATE`, `NO_BOX`) are listed in an amber note above the block
   (they make the classic file fail or differ) and are also incidents: `UNSUPPORTED_RATE` blocking,
   `NO_BOX` a warning.
@@ -3597,11 +3604,13 @@ filtered and paged):
   Cuota, Total, Casillas) plus **Impuesto**; Tipo is Venta/Compra (`type: sales|purchase`). With a
   box filter a last column "Importe casilla [nn]" shows each line's contribution to that box (the
   base for a base box, the cuota for a cuota box).
-- **Filters:** Casilla, Tipo and Impuesto selects (options from the payload's unfiltered
-  `boxes`/`taxes`; each Casilla option carries the box value, e.g. `[06] · 12,60 €`, via
-  `formatAmount` — there is no separate row of box chips), search (document
-  number, contact or tax; debounced 300 ms, Enter sends at once), "Limpiar filtros". All filtering
+- **Filters:** Tipo and Impuesto selects (Impuesto options from the payload's unfiltered
+  `taxes`), search (document number, contact or tax; debounced 300 ms, Enter sends at once), "Limpiar filtros". All filtering
   and paging is done by the backend (25 rows per page).
+- **Box filter:** there is no Casilla select nor box chips. The only way in is "Ver facturas" (a
+  box of the Casillas tab, or an incident's `sources` action). While it is set, the toolbar shows a
+  removable tag "Casilla [nn] ×" (`fm.m390.sources.box_tag`, `FmSources390__boxTag`) that clears
+  only the box (Tipo / Impuesto / search stay); "Limpiar filtros" clears everything.
 - **Totals:** a sticky footer with base/cuota/total of every filtered line (not just the page) and,
   with a box filter, the box total plus a "Cuadra con la casilla [nn]" check against the box value
   (amber "No cuadra" otherwise — should never happen).
@@ -4445,7 +4454,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `models/303/AeatSubmitFlow.jsx` | AEAT electronic submission flow (ETP-4456) — confirm/submit/result, `POST /fiscal303/submit`; model adapters since ETP-5716 (390: `POST /fiscal390/submit`) |
 | `models/349/FmModel349Page.jsx` | Modelo 349 detail — incl. `DeclarationTypeControl` / `SubstitutiveBanner` (ETP-5597) |
 | `models/390/FmModel390Page.jsx` | Modelo 390 detail (ETP-5716) — header, Tipo Normal/Sustitutiva, KPIs, save/compute/generate/register flows |
-| `models/390/FmBoxes390.jsx` | Modelo 390 "Casillas" tab — block index, box search, origin legend, blocks |
+| `models/390/FmBoxes390.jsx` | Modelo 390 "Casillas" tab — block index, box search (reveals folded boxes), blocks |
 | `models/390/fm390Layouts.js` | Modelo 390 declarative layout (11 blocks), search index, `deriveInputBoxes`, `buildManualData390` |
 | `models/390/fm390Api.js` | `/fiscal390/boxes`, `/modified`, `/generate`, `/sources`, `/preload`, `/validate` requests |
 | `models/390/incidents390.js` | Modelo 390 incidents (ETP-5716) — grouping, translated text by code, actions |

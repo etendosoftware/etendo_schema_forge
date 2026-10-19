@@ -1,13 +1,14 @@
 // Modelo 390 — the "Facturas" tab (ETP-5716): the invoice-tax lines behind the invoice boxes
-// (`GET /fiscal390/sources`), with filters Casilla (each option shows its box value) / Tipo /
-// Impuesto, a search box, CSV export, the totals of what is filtered and pagination.
+// (`GET /fiscal390/sources`), with filters Tipo / Impuesto, a search box, the removable box tag,
+// CSV export, the totals of what is filtered and pagination.
 //
 // The filter is owned by FmModel390Page.jsx so "Ver facturas" (Casillas tab, incidents) can open
-// the tab already filtered by a box (`sourcesFilterForBox` of sources390.js). Filtering, totals
+// the tab already filtered by a box — the only way to set the box filter; the tab only shows it
+// as a removable "Casilla [nn] ×" tag (`sourcesFilterForBox` of sources390.js). Filtering, totals
 // and paging happen on the backend: with a box filter, `totals.box` is the sum of every row's
 // contribution to that box, which equals the box value.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Loader2, ReceiptText, Search, CircleCheck, TriangleAlert, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Download, Loader2, ReceiptText, Search, CircleCheck, TriangleAlert, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { EmptyState } from '../../FmCommon.jsx';
@@ -16,7 +17,7 @@ import { fetchSources390 } from './fm390Api.js';
 import { parseAmount } from './fm390Layouts.js';
 import {
   SOURCES_PAGE_SIZE, SOURCE_TYPES, boxLabel, buildSources390Csv, hasSourcesFilter, pageCount,
-  rowBoxAmount, sourceBoxes, sourceTypeLabel, sourcesCsvFileName, sourcesQueryParams, emptySourcesFilter,
+  rowBoxAmount, sourceTypeLabel, sourcesCsvFileName, sourcesQueryParams, emptySourcesFilter,
 } from './sources390.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -102,7 +103,6 @@ export default function FmSources390({
     return () => { cancelled = true; };
   }, [decl.id, decl.year, filterKey, page, refreshKey, isSubmitted, apiBaseUrl, token]);
 
-  const boxes = useMemo(() => sourceBoxes(data?.boxes), [data?.boxes]);
   const taxes = data?.taxes ?? [];
   const rows = data?.rows ?? [];
   const count = Number(data?.count) || 0;
@@ -153,21 +153,19 @@ export default function FmSources390({
             data-testid="FmSources390__search"
           />
         </div>
-        <select
-          className="fm-390-sources__select"
-          value={current.box ?? ''}
-          aria-label={t('fm.m390.sources.filter.box')}
-          onChange={e => set({ box: e.target.value === '' ? null : Number(e.target.value) })}
-          data-testid="FmSources390__boxFilter"
-        >
-          <option value="">{t('fm.m390.sources.filter.box_all')}</option>
-          {current.box != null && !boxes.some(b => b.box === current.box) && (
-            <option value={current.box}>{`[${boxLabel(current.box)}]`}</option>
-          )}
-          {boxes.map(({ box, amount }) => (
-            <option key={box} value={box}>{`[${boxLabel(box)}] · ${formatAmount(parseAmount(amount))}`}</option>
-          ))}
-        </select>
+        {current.box != null && (
+          <button
+            type="button"
+            className="fm-toolbar__pill fm-toolbar__pill--active-dark fm-390-sources__box-tag"
+            onClick={() => set({ box: null })}
+            title={t('fm.m390.sources.box_tag_clear', { box: boxLabel(current.box) })}
+            aria-label={t('fm.m390.sources.box_tag_clear', { box: boxLabel(current.box) })}
+            data-testid="FmSources390__boxTag"
+          >
+            {t('fm.m390.sources.box_tag', { box: boxLabel(current.box) })}
+            <X size={12} strokeWidth={2} data-testid="X__fmSources390BoxTag" />
+          </button>
+        )}
         <select
           className="fm-390-sources__select"
           value={current.type ?? ''}

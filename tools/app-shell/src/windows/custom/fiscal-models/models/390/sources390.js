@@ -58,14 +58,6 @@ export function boxLabel(box) {
   return String(box).padStart(2, '0');
 }
 
-/** The boxes of the payload (`{ "<box>": "<amount>" }`) as `[{ box, amount }]`, ascending. */
-export function sourceBoxes(boxes) {
-  return Object.entries(boxes ?? {})
-    .map(([box, amount]) => ({ box: Number(box), amount }))
-    .filter(e => Number.isInteger(e.box))
-    .sort((a, b) => a.box - b.box);
-}
-
 /** The amount a row contributes to `box` (its `boxAmounts`), or `null`. */
 export function rowBoxAmount(row, box) {
   if (box == null) return null;

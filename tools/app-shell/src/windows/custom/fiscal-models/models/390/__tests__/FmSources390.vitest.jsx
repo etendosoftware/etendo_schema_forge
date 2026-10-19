@@ -1,7 +1,7 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/FmSources390.jsx
 //
-// ETP-5716 — Modelo 390 Facturas tab: rows of a mocked `GET /fiscal390/sources`, the Casilla
-// options (each with its box value), the Casilla / Tipo / Impuesto / search filters (sent to the backend), the totals of what is
+// ETP-5716 — Modelo 390 Facturas tab: rows of a mocked `GET /fiscal390/sources`, the box tag
+// (the box filter only comes from "Ver facturas"; no Casilla select), the Tipo / Impuesto / search filters (sent to the backend), the totals of what is
 // filtered (with a box: the box total and the "matches the box" check), pagination, the CSV
 // export (all filtered rows, cells neutralized by csvField) and the submitted-declaration note.
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -100,34 +100,31 @@ describe('FmSources390 — rows and totals', () => {
 });
 
 describe('FmSources390 — filters', () => {
-  it('each Casilla option shows its box value; there is no chip row', async () => {
+  it('has no Casilla select and no box tag without a box filter', async () => {
     render(<Harness />);
     await screen.findByTestId('FmSources390__row_IT1');
-    const labels = [...screen.getByTestId('FmSources390__boxFilter').options].map(o => o.textContent);
-    expect(labels).toEqual(['fm.m390.sources.filter.box_all', '[05] · 200', '[06] · 42', '[99] · 100']);
+    expect(screen.queryByTestId('FmSources390__boxFilter')).toBeNull();
     expect(screen.queryByTestId('FmSources390__chips')).toBeNull();
+    expect(screen.queryByTestId('FmSources390__boxTag')).toBeNull();
   });
 
-  it('a box opened from outside the list still gets its own (fallback) option', async () => {
-    render(<Harness initial={sourcesFilterForBox(7)} />);
-    await screen.findByTestId('FmSources390__row_IT1');
-    const select = screen.getByTestId('FmSources390__boxFilter');
-    expect(select.value).toBe('7');
-    expect([...select.options].some(o => o.value === '7' && o.textContent === '[07]')).toBe(true);
+  it('a box filter shows a removable "Casilla [nn]" tag that clears only the box', async () => {
+    const onChange = vi.fn();
+    render(<Harness initial={{ box: 21, type: 'sales', tax: 'S21', q: '' }} onChange={onChange} />);
+    const tag = await screen.findByTestId('FmSources390__boxTag');
+    expect(tag.textContent).toContain('fm.m390.sources.box_tag:{"box":"21"}');
+    expect(tag.getAttribute('aria-label')).toBe('fm.m390.sources.box_tag_clear:{"box":"21"}');
+    await waitFor(() => expect(lastParams().box).toBe('21'));
+    fireEvent.click(tag);
+    expect(onChange).toHaveBeenLastCalledWith({ box: null, type: 'sales', tax: 'S21', q: '' });
+    await waitFor(() => expect(lastParams()).toMatchObject({ type: 'sales', tax: 'S21' }));
+    expect(lastParams().box).toBeUndefined();
+    expect(screen.queryByTestId('FmSources390__boxTag')).toBeNull();
   });
 
-  it('choosing "all boxes" in Casilla clears the box filter', async () => {
-    render(<Harness initial={sourcesFilterForBox(6)} />);
+  it('Tipo and Impuesto selects are sent to the backend, keeping the box filter', async () => {
+    render(<Harness initial={sourcesFilterForBox(99)} />);
     await screen.findByTestId('FmSources390__row_IT1');
-    await waitFor(() => expect(lastParams().box).toBe('6'));
-    fireEvent.change(screen.getByTestId('FmSources390__boxFilter'), { target: { value: '' } });
-    await waitFor(() => expect(lastParams().box).toBeUndefined());
-  });
-
-  it('Casilla, Tipo and Impuesto selects are sent to the backend', async () => {
-    render(<Harness />);
-    await screen.findByTestId('FmSources390__row_IT1');
-    fireEvent.change(screen.getByTestId('FmSources390__boxFilter'), { target: { value: '99' } });
     await waitFor(() => expect(lastParams().box).toBe('99'));
     fireEvent.change(screen.getByTestId('FmSources390__typeFilter'), { target: { value: 'purchase' } });
     await waitFor(() => expect(lastParams().type).toBe('purchase'));
@@ -184,8 +181,8 @@ describe('FmSources390 — pagination', () => {
     expect(screen.getByTestId('FmSources390__prev').disabled).toBe(true);
     fireEvent.click(screen.getByTestId('FmSources390__next'));
     await waitFor(() => expect(lastParams().page).toBe('2'));
-    fireEvent.change(screen.getByTestId('FmSources390__boxFilter'), { target: { value: '5' } });
-    await waitFor(() => expect(lastParams()).toMatchObject({ box: '5', page: '1' }));
+    fireEvent.change(screen.getByTestId('FmSources390__typeFilter'), { target: { value: 'sales' } });
+    await waitFor(() => expect(lastParams()).toMatchObject({ type: 'sales', page: '1' }));
   });
 
   it('has no pager for a single page', async () => {
