@@ -76,6 +76,7 @@ function Pager({ page, pages, onPage, t }) {
  */
 export default function FmSources390({
   decl, token, apiBaseUrl, filter, onFilterChange, isSubmitted = false, refreshKey, t, bcpLocale = 'es-ES',
+  onCountChange,
 }) {
   const current = filter ?? emptySourcesFilter();
   const [page, setPage] = useState(1);
@@ -114,7 +115,12 @@ export default function FmSources390({
     setLoading(true);
     setError(null);
     fetchSources390(decl, { token, apiBaseUrl, params: sourcesQueryParams(current, { page }) })
-      .then(res => { if (!cancelled) setData(res); })
+      .then(res => {
+        if (cancelled) return;
+        setData(res);
+        // The unfiltered count is the tab badge (like the 303 "Facturas N").
+        if (!hasSourcesFilter(current) && res?.count != null) onCountChange?.(Number(res.count) || 0);
+      })
       .catch(err => { if (!cancelled) setError(err?.serverMessage || t('fm.m390.sources.load_error')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

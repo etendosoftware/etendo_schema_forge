@@ -38,8 +38,10 @@ export default function SubmissionCard390({ submission, t, bcpLocale }) {
   return (
     <section
       style={{
-        margin: '0 20px 12px', padding: '12px 16px', borderRadius: 12,
+        // Same card chrome as the KPI cards below it (radius 8, subtle border, xs shadow).
+        margin: '12px 20px 0', padding: '12px 16px', borderRadius: 8,
         border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))',
+        boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
       }}
       aria-label={t('fm.m390.submission.title')}
       data-testid="SubmissionCard390"

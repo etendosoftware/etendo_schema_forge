@@ -261,6 +261,8 @@ export default function FmModel390Page({
     setGoToBox(prev => ({ box, nonce: (prev?.nonce ?? 0) + 1 }));
   };
   const [incidents, setIncidents] = useState(decl.incidents?.items ? decl.incidents : EMPTY_INCIDENTS);
+  // Facturas tab badge: the unfiltered line count, known once the tab has loaded it (FmSources390).
+  const [sourcesCount, setSourcesCount] = useState(null);
   // Edits since the last successful save — a ref so a handler can read it synchronously.
   const dirtyRef = useRef(false);
   const lastSavedManualData = useRef(decl.manualData ?? {});
@@ -639,7 +641,7 @@ export default function FmModel390Page({
 
   const tabs = [
     { id: 'boxes', label: t('fm.tab.boxes'), icon: <ClipboardCheck size={16} strokeWidth={1.75} data-testid="ClipboardCheck__fm390" /> },
-    { id: 'sources', label: t('fm.tab.sources'), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__fm390tab" /> },
+    { id: 'sources', label: t('fm.tab.sources'), badge: isSubmitted ? null : tabCount(sourcesCount), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__fm390tab" /> },
     { id: 'incidents', label: t('fm.tab.incidents'), ...incidentsTabBadge(blocking, warning), icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__fm390tab" /> },
     { id: 'receipt', label: t('fm.tab.receipt'), badge: tabCount(receiptCount), icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__fm390" /> },
   ];
@@ -885,6 +887,7 @@ export default function FmModel390Page({
               onFilterChange={setSourcesFilter}
               isSubmitted={isSubmitted}
               refreshKey={payload}
+              onCountChange={setSourcesCount}
               t={t}
               bcpLocale={bcpLocale} />
           </div>
