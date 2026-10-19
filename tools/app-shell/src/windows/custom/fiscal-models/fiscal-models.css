@@ -1651,7 +1651,7 @@
 .fm-390-cell--highlight { box-shadow: 0 0 0 2px hsl(var(--primary)); }
 .fm-390-cell--input:focus-within { box-shadow: 0 0 0 2px hsl(var(--ring, var(--primary)) / .5); }
 .fm-390-territory-toggle { border-bottom: none; padding-top: 0; }
-.fm-390-pager { display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; border-top: 1px solid hsl(var(--border-subtle)); }
+.fm-390-pager { display: flex; justify-content: space-between; gap: 8px; padding-top: 8px; }
 .fm-390-pager .fm-btn { display: inline-flex; align-items: center; gap: 4px; }
 .fm-390-filegen__label { display: block; font-size: 14px; color: hsl(var(--foreground)); margin-bottom: 6px; }
 .fm-390-filegen__input {
