@@ -18589,7 +18589,7 @@
     "invoicePdfTitle": "Factura de venta",
     "invoicePdfDocumentNo": "Nº de factura",
     "invoicePdfCurrency": "Moneda:",
-    "invoicePdfTaxId": "CIF:",
+    "invoicePdfTaxId": "NIF:",
     "invoicePdfPage": "Página",
     "invoicePdfCustomerSection": "Datos del cliente",
     "invoicePdfInvoiceSection": "Datos de la factura",
