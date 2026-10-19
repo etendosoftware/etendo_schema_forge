@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
+  "version": "0.29.0",
   "generatedAt": "2026-06-26T16:40:04.731Z",
   "updatedAt": "2026-07-22T10:47:48.949Z",
-  "contractChecksum": "bfd80f66609db10e",
+  "contractChecksum": "6755953a65842bd1",
   "apiPrediction": {
     "specName": "sales-quotation",
     "baseUrl": "/sws/neo/sales-quotation",

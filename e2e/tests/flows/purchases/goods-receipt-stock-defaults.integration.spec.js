@@ -1,8 +1,10 @@
+// @covers artifacts/goods-receipt/custom/GoodsReceiptBottomPanel.jsx
+// @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import { login, navigateTo } from '../../helpers/auth.js';
 import {
-  loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
+  loadCredentials, slow, waitForDetailReady, selectVendorBP, openFirstLineRow,
   expectSaveResponse, reselectComboOption,
 } from '../../helpers/purchase-helpers.js';
 
@@ -122,17 +124,18 @@ async function createUniqueProduct(page, { searchKey, name }) {
 }
 
 /**
- * Create a new goods receipt, set the Contacto (business partner), and save
- * it as a draft. Warehouse (Almacén) is deliberately left untouched — the
- * ticket's manual verification showed it comes pre-filled with a
- * default-flagged locator's warehouse, and the goal is to prove that
- * whatever default the running environment resolves works end to end (not
- * to hardcode a specific warehouse name).
+ * Open a new goods receipt, set the Contacto (business partner) and take it to the
+ * inline-add row of its first line along the given creation path (`emptyState` or
+ * `save`, see CREATION_PATHS in purchase-helpers.js). Warehouse (Almacén) is
+ * deliberately left untouched — the ticket's manual verification showed it comes
+ * pre-filled with a default-flagged locator's warehouse, and the goal is to prove
+ * that whatever default the running environment resolves works end to end (not to
+ * hardcode a specific warehouse name). `selectVendorBP` asserts that default
+ * actually landed before the header is saved.
  *
- * Returns the created receipt's record id, so the caller can assert it was
- * actually extracted (same rationale as `createUniqueProduct()`).
+ * Returns the created receipt's record id (asserted by `openFirstLineRow`).
  */
-async function createDraftGoodsReceipt(page) {
+async function openGoodsReceiptFirstLine(page, { via }) {
   await navigateTo(page, 'goods-receipt');
   await expect(page.getByTestId('action-new')).toBeVisible({ timeout: 15_000 });
   await slow(page);
@@ -142,39 +145,11 @@ async function createDraftGoodsReceipt(page) {
   await slow(page);
 
   await selectVendorBP(page);
-  await saveDraft(page);
-
-  let created = await page
-    .waitForURL(/\/goods-receipt\/(?!new$)[a-zA-Z0-9]+$/, { timeout: 8_000 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (!created) {
-    // Defensive fallback — see createUniqueProduct()'s comment above for the
-    // same rationale, applied here to Warehouse (the only other required
-    // header field besides Business Partner; Movement Date already defaults
-    // to the current date per the contract).
-    await reselectComboOption(page, 'warehouse');
-    await saveDraft(page);
-    created = await page
-      .waitForURL(/\/goods-receipt\/(?!new$)[a-zA-Z0-9]+$/, { timeout: 15_000 })
-      .then(() => true)
-      .catch(() => false);
-  }
-
-  expect(
-    created,
-    `Goods receipt should be saved as draft (URL should include /goods-receipt/<id>). Current URL: ${page.url()}`,
-  ).toBe(true);
-
-  await waitForDetailReady(page);
-  await slow(page);
-
-  return extractRecordId(page, 'goods-receipt');
+  return openFirstLineRow(page, { spec: 'goods-receipt', via });
 }
 
 /**
- * Add a goods-receipt line via the inline-add row, searching for the given
+ * Fill the open inline-add row of a goods receipt, searching for the given
  * product by its unique search key (so the SAME product is reused across
  * both receipts created in this test, never a random one).
  *
@@ -183,24 +158,7 @@ async function createDraftGoodsReceipt(page) {
  * point ETP-4671's Bug 2 regression is about — BEFORE any explicit quantity
  * is applied by the caller.
  */
-async function addGoodsReceiptLine(page, { isFirst = false, searchKey, quantity } = {}) {
-  if (isFirst) {
-    const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
-      .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
-
-    await expect(async () => {
-      await emptyStateBtn.click({ timeout: 3_000 });
-      await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 15_000 });
-  } else {
-    const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i }).first();
-    await expect(async () => {
-      await addLineBtn.click({ timeout: 3_000 });
-      await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 15_000 });
-  }
-  await slow(page);
-
+async function fillGoodsReceiptLine(page, { searchKey, quantity } = {}) {
   const productField = page.getByTestId('inline-add-field-product');
   const searchDrawer = page.getByTestId('product-search-drawer');
 
@@ -404,10 +362,10 @@ test.describe('Goods Receipt — Stock defaults (ETP-4671, integration)', () => 
     });
 
     await test.step('First goods receipt — confirms with zero prior stock (Bug 1)', async () => {
-      const firstReceiptId = await createDraftGoodsReceipt(page);
-      expect(firstReceiptId, `First receipt id extracted from the URL should be a real, non-empty id (got ${JSON.stringify(firstReceiptId)}, current URL: ${page.url()})`).toBeTruthy();
-
-      await addGoodsReceiptLine(page, { isFirst: true, searchKey, quantity: 10 });
+      // Manual "Guardar" before the first line; the second receipt goes straight
+      // from the empty state, so both creation paths are covered on this window.
+      await openGoodsReceiptFirstLine(page, { via: 'save' });
+      await fillGoodsReceiptLine(page, { searchKey, quantity: 10 });
 
       await expectLineCount(page, 1);
 
@@ -416,11 +374,10 @@ test.describe('Goods Receipt — Stock defaults (ETP-4671, integration)', () => 
 
     let qtyValueAfterProductSelect;
     await test.step('Second goods receipt — verify quantity defaults to 1 (Bug 2)', async () => {
-      const secondReceiptId = await createDraftGoodsReceipt(page);
-      expect(secondReceiptId, `Second receipt id extracted from the URL should be a real, non-empty id (got ${JSON.stringify(secondReceiptId)}, current URL: ${page.url()})`).toBeTruthy();
+      // No Guardar: "+ Añadir líneas" saves the header itself, the path a user takes.
+      await openGoodsReceiptFirstLine(page, { via: 'emptyState' });
 
-      const result = await addGoodsReceiptLine(page, {
-        isFirst: true,
+      const result = await fillGoodsReceiptLine(page, {
         searchKey,
         quantity: null, // do NOT touch it — this is the core regression assertion
       });

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/copilot/ocr/useOcrFlow.jsx
 /**
  * End-to-end flow coverage for useOcrFlow.
  *
@@ -1232,6 +1233,22 @@ describe('useOcrFlow — full flow', () => {
         linesFailed: 0,
         unresolved: [],
       }));
+    });
+
+    // ETP-5676 — `_onlyReturnIds` is the import's opt-in; the OCR flow keeps the plain
+    // `{ operations }` body, so runBatch is called with the operations and no options.
+    it('posts the batch without asking for ids only', async () => {
+      const user = userEvent.setup();
+      H.runBatch.mockResolvedValue({ committed: true, operations: [{ id: 'inv', recordId: 'INV-9' }] });
+
+      render(<Harness docTypeId="purchase-invoice" token="tok" apiBaseUrl="/api" />);
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.runBatch).toHaveBeenCalledTimes(1));
+      const args = H.runBatch.mock.calls[0];
+      expect(args).toHaveLength(1);
+      expect(Array.isArray(args[0])).toBe(true);
     });
 
     it('omits contactsBase when no apiBaseUrl is configured', async () => {
