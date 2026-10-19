@@ -20944,6 +20944,7 @@
     "backendError.invoiceSiiSentReferenceLocked": "Esta factura de compra ya se ha enviado al SII, por lo que no se puede modificar el número de factura del proveedor.",
     "backendError.invoiceReactivateFiscalRectified": "No se puede reactivar esta factura: ya ha sido aceptada por {fiscalSystem} y está rectificada por: {rectificativas}.",
     "backendError.documentAlreadyPosted": "Este documento ya está contabilizado. Actualízalo para ver su estado actual.",
+    "backendError.glJournalPeriodMismatch": "El período del asiento ({period}) no contiene su fecha contable ({accountingDate}). Cambia el período o la fecha y vuelve a completarlo.",
     "backendError.cashCloseNoConcept": "Esta cuenta no tiene configurada una cuenta contable para las diferencias. Configúrala en Editar cuenta antes de confirmar un cierre que no cuadra.",
     "backendError.cashCloseDateInFuture": "La fecha del cierre no puede ser futura.",
     "backendError.cashCloseDateBeforeLastClose": "La fecha del cierre no puede ser anterior al último cierre confirmado ({date}).",
