@@ -141,12 +141,19 @@ describe('RepresentantesLegalesSection — grid', () => {
     expect(await screen.findByTestId('RepresentantesLegalesSection__empty')).toBeInTheDocument();
   });
 
-  it('warns (non-blocking) when a legal entity has no active representative', async () => {
+  it('flags the 390 blocker (PAR012) when a legal entity has no active representative', async () => {
     mockFetch([{ id: 'r10', lineNo: 10, taxID: 'A', active: false }]);
     render(<Harness />);
     expect(await screen.findByTestId('RepresentantesLegalesSection__noActiveHint')).toHaveTextContent('orgRepLegalEntityHint');
-    // The add button stays available: the hint never blocks.
+    // The grid stays editable: adding a representative is how the blocker is resolved.
     expect(within(screen.getByTestId('RepresentantesLegalesSection__root')).getByTestId('action-add-line')).toBeInTheDocument();
+  });
+
+  it('flags the 390 blocker when no representative the 390 reads carries a NIF', async () => {
+    mockFetch([{ id: 'r10', lineNo: 10, taxID: '  ' }]);
+    render(<Harness />);
+    await screen.findByTestId('RepresentantesLegalesSection__row-r10');
+    expect(screen.getByTestId('RepresentantesLegalesSection__noActiveHint')).toBeInTheDocument();
   });
 
   it('does not warn once there is an active representative', async () => {

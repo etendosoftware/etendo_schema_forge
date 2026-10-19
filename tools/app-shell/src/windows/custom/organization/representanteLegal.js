@@ -155,6 +155,18 @@ export function activeRepresentatives(rows) {
   return (Array.isArray(rows) ? rows : []).filter(isActiveRepresentative);
 }
 
+/**
+ * Whether a legal entity satisfies AEAT PAR012: among the representatives the Modelo 390 reads
+ * (the first {@link MODELO_390_REPRESENTATIVE_LIMIT} active rows, `rows` already ordered by line)
+ * at least one carries a NIF. Mirrors `Fiscal390IncidentRules.NO_LEGAL_REPRESENTATIVE`, which
+ * blocks generating and submitting the 390 when this is `false`.
+ */
+export function hasDeclarableRepresentative(rows) {
+  return activeRepresentatives(rows)
+    .slice(0, MODELO_390_REPRESENTATIVE_LIMIT)
+    .some(r => String(r?.taxID ?? '').trim() !== '');
+}
+
 /** `null` for a blank value (never `''`), the trimmed text otherwise. */
 export function blankToNull(value) {
   const text = String(value ?? '').trim();

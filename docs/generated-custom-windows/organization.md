@@ -315,9 +315,13 @@ A sixth `SectionRow` in `OrganizationPage.jsx`, **"Representante legal / Modelo 
     generator does NOT filter inactive rows (`AEAT390ReportDao`), so with an inactive row among the
     first 3 by line the file can carry a representative the grid does not mark. The 390 page's
     read-only "Representante" block lists what Classic reads (first 3 by line, inactive included).
-  - **No active representative:** a non-blocking amber hint (`orgRepLegalEntityHint`, "Las personas
-    jurídicas deben indicar al menos un representante legal en el Modelo 390") — AEAT requires one,
-    Classic generates the file anyway with blank representative positions.
+  - **No representative with a NIF:** an amber hint (`orgRepLegalEntityHint`, "Las personas
+    jurídicas deben indicar al menos un representante legal con NIF: sin él no se puede generar ni
+    presentar el Modelo 390") when none of the first 3 active rows by line has a `taxID`
+    (`hasDeclarableRepresentative`). It mirrors the **blocking** 390 incident
+    `NO_LEGAL_REPRESENTATIVE`: the AEAT rejects a legal entity's 390 with no representative NIF
+    (`PAR012`), so the 390 page disables Generar / Presentar until one is added here. Classic still
+    generates the file with blank representative positions; the grid itself is never locked.
   - The representative `taxID` is stored normalized (`normalizeTaxId`, in
     `buildRepresentativePayload`), for the same reason as the natural-person NIF above.
 - **Add / edit** open a form card below the table (not an inline row: six fields, one a date picker,
@@ -534,7 +538,8 @@ All of the above are now covered by automated tests — the "pending Tester" gap
     saves, and after a reload the NIF shows `12345678Z`. Clear Segundo apellido and Save: in the DB
     `EM_AEAT390_SURNAME2` is `NULL`, not `''`.
 17. **Legal representatives (ETP-5716).** With "Persona física" off and no representatives, an amber
-    hint says legal entities must declare at least one (it does not block anything). Add a
+    hint says legal entities must declare at least one with a NIF, and the 390 of the organization
+    shows the blocking `NO_LEGAL_REPRESENTATIVE` incident (Generar / Presentar disabled). Add a
     representative with NIF `12.345.678-Z`: the grid shows `12345678Z`. With a row deactivated in
     Classic, confirm it gets no "390" marker and the marker moves to the next active row.
 18. **IAE cap (ETP-5716).** With 1 main + 5 other activities, "Añadir actividad del IAE" is disabled

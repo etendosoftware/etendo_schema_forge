@@ -3746,6 +3746,10 @@ what the backend stored.
   incidents (`generate390File` → `{ error: 'blocking_incidents' }`: toast
   `fm.m390.blocked_by_incidents`, recompute, Incidencias tab opened) and `POST /fiscal390/submit`
   its `BLOCKING_INCIDENTS` failure.
+- **Legal representative (AEAT PAR012):** a legal entity whose representatives the file carries
+  (first 3 active by line) have no NIF raises the **blocking** `NO_LEGAL_REPRESENTATIVE` ("Editar
+  en Organización" → `org-section-390`): the AEAT rejects such a declaration, so Generar /
+  Presentar are disabled until one is added. A natural person is unaffected.
 - **Card:** "Incidencias" shows **N bloqueantes · N advertencias** (destructive / warning colour when
   non-zero) and opens the tab.
 - **Tab** (`Incidents390Tab`): two groups, **Bloqueantes** ("Resuélvelas antes de generar el

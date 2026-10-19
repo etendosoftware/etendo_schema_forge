@@ -15,6 +15,7 @@ import {
   REPRESENTATIVE_MAX_LENGTH,
   activeRepresentatives,
   buildRepresentativePayload,
+  hasDeclarableRepresentative,
   isActiveRepresentative,
   getRepresentativeErrors,
   representativeFullName,
@@ -281,9 +282,10 @@ export default function RepresentantesLegalesSection({ apiBaseUrl, orgId }) {
         <Info size={13} className="mt-0.5 shrink-0" data-testid="Info__orgRepLimitHint" />
         <span>{ui('orgRepLimitHint', { limit: MODELO_390_REPRESENTATIVE_LIMIT })}</span>
       </p>
-      {/* Non-blocking: AEAT asks legal entities for at least one legal representative in the 390;
-          Classic generates the file anyway (blank representative positions). */}
-      {!loading && activeRows.length === 0 && (
+      {/* Blocking for the 390: the AEAT rejects a legal entity's declaration with no representative
+          NIF (PAR012), so Fiscal390IncidentRules.NO_LEGAL_REPRESENTATIVE blocks generate/submit.
+          The grid itself stays editable — this is where the user fixes it. */}
+      {!loading && !hasDeclarableRepresentative(rows) && (
         <p
           role="status"
           className="flex items-start gap-1.5 text-xs leading-[18px] text-[var(--status-warning-fg)]"
