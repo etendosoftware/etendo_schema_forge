@@ -2,9 +2,9 @@
 // @covers tools/app-shell/src/windows/custom/contacts/ContactsPeriodButton.jsx
 /**
  * ContactsSummaryWidget — the three KPI blocks (net balance, revenue, expenses) and their
- * variation chips follow the selected period: amounts and the per-block `trend` come from the
- * period-aware bp-stats entries (`revenue` / `expenses`, `?months=3|6`); the net-balance chip is
- * derived client-side from the current/previous values of both blocks.
+ * variation chips follow the selected period: amounts come from the period-aware bp-stats
+ * entries (`revenue` / `expenses`, `?months=3|6`); every chip is derived client-side from the
+ * raw current/previous values and rounded once (the backend `trend` is pre-rounded and ignored).
  *
  * Requests go through `useApiFetch` (docs/request-policy.md) — mocked here, never `fetch`.
  * The Iconic arrows are stubbed on top of the real custom-icons module so the chip's arrow
@@ -194,17 +194,18 @@ describe('ContactsSummaryWidget', () => {
     expect(screen.queryByText('USD:999')).not.toBeInTheDocument();
   });
 
-  // Arrow follows the sign; colour follows good/bad for the KPI (expenses are good when down).
+  // Arrow AND colour follow the sign, for every KPI — expenses included (QA pass 2):
+  // positive % green, negative % red.
   it.each([
-    ['3M — everything improves', '3M', {
+    ['3M — expenses down is red', '3M', {
       bpNetBalance: { text: '+120% bpVsLast3Months', direction: 'up', tone: 'success' },
       bpRevenue: { text: '+50% bpVsLast3Months', direction: 'up', tone: 'success' },
-      bpExpenses: { text: `${MINUS}20% bpVsLast3Months`, direction: 'down', tone: 'success' },
+      bpExpenses: { text: `${MINUS}20% bpVsLast3Months`, direction: 'down', tone: 'destructive' },
     }],
-    ['6M — everything worsens', '6M', {
+    ['6M — expenses up is green', '6M', {
       bpNetBalance: { text: `${MINUS}67% bpVsLast6Months`, direction: 'down', tone: 'destructive' },
       bpRevenue: { text: `${MINUS}20% bpVsLast6Months`, direction: 'down', tone: 'destructive' },
-      bpExpenses: { text: '+50% bpVsLast6Months', direction: 'up', tone: 'destructive' },
+      bpExpenses: { text: '+50% bpVsLast6Months', direction: 'up', tone: 'success' },
     }],
   ])('renders a chip per KPI for the selected period: %s', async (_name, period, expected) => {
     const user = userEvent.setup();
@@ -216,6 +217,19 @@ describe('ContactsSummaryWidget', () => {
       expect(within(kpiBlock('bpNetBalance')).getByText('USD:200')).toBeInTheDocument();
     }
     for (const [labelKey, chip] of Object.entries(expected)) expectChip(labelKey, chip);
+  });
+
+  // The % is rounded ONCE from the raw ratio, half away from zero: the backend `trend` is
+  // already rounded to one decimal (−54.545 → −54.5), and rounding that again gave −54%.
+  it.each([
+    ['−54.545% with a pre-rounded backend trend of −54.5', 500, 1100, -54.5, `${MINUS}55%`, 'down', 'destructive'],
+    ['exactly −54.5% rounds away from zero', 91, 200, -54.5, `${MINUS}55%`, 'down', 'destructive'],
+    ['exactly +54.5% rounds away from zero', 309, 200, 54.5, '+55%', 'up', 'success'],
+  ])('rounds a block variation once from its raw values: %s', async (_name, value, previousValue, trend, pct, direction, tone) => {
+    serve({ stats3: [block('revenue', value, previousValue, trend), block('expenses', 0, 0, 0, false)] });
+    renderWidget();
+    await waitFor(() => expect(chipOf('bpRevenue')).not.toBeNull());
+    expectChip('bpRevenue', { text: `${pct} bpVsLast3Months`, direction, tone });
   });
 
   it.each([

@@ -23,14 +23,31 @@ function finiteOr(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-// ETP-5600: the variation of a period block comes from bp-stats (`months`-aware):
-// current window = last N calendar months, previous = the N months before. It is
-// shown only when the backend reports a previous window (`hasPrevious`) and the
-// trend is a finite number — never a "0%" / "∞" placeholder.
+// ETP-5600: the variation of a period block compares the two windows bp-stats
+// returns (`months`-aware): `value` = last N calendar months, `previousValue` = the
+// N months before. It is computed HERE from those raw amounts, not read from the
+// backend's `trend`, which bp-stats already rounds to one decimal — rounding that
+// again turned −54.545% into −54.5 and then into −54% (QA pass 2). The ratio is
+// rounded exactly once, by roundPercent. Shown only when the backend reports a
+// previous window (`hasPrevious`) and the ratio is finite — never "0%" / "∞".
 function blockTrend(block) {
   if (!block?.hasPrevious) return null;
-  const t = Number(block.trend);
+  const cur = Number(block.value);
+  const prev = Number(block.previousValue);
+  if (!Number.isFinite(cur) || !Number.isFinite(prev) || prev === 0) return null;
+  const t = ((cur - prev) / Math.abs(prev)) * 100;
   return Number.isFinite(t) ? t : null;
+}
+
+/**
+ * The single rounding of a variation: to a whole percent, half away from zero and
+ * symmetric for negatives (−54.5 → −55, 54.5 → 55), unlike `Math.round`, which
+ * rounds −54.5 up to −54. The 1e-9 only absorbs binary floating-point noise in the
+ * raw ratio (54.5 computed as 54.49999999999999); it never moves a real value.
+ */
+function roundPercent(value) {
+  const rounded = Math.round(Math.abs(value) + 1e-9);
+  return value < 0 ? -rounded : rounded;
 }
 
 // Net balance variation, computed client-side from the two blocks:
@@ -47,8 +64,7 @@ function netTrend(revenue, expenses) {
 }
 
 // Amounts are the selected period's totals (bp-stats `revenue` / `expenses`,
-// net of VAT), so they follow the period selector. `goodWhenUp` drives the chip
-// colour: a rise is good for revenue and net balance, bad for expenses.
+// net of VAT), so they follow the period selector.
 function buildKpis(stats) {
   const revenue = findKpi(stats, 'revenue');
   const expenses = findKpi(stats, 'expenses');
@@ -57,11 +73,11 @@ function buildKpis(stats) {
   const netVal = revVal - expVal;
   return [
     { key: 'netBalance', labelKey: 'bpNetBalance', value: netVal,
-      trend: netTrend(revenue, expenses), positiveTone: netVal >= 0, goodWhenUp: true },
+      trend: netTrend(revenue, expenses), positiveTone: netVal >= 0 },
     { key: 'income', labelKey: 'bpRevenue', value: revVal,
-      trend: blockTrend(revenue), positiveTone: true, goodWhenUp: true },
+      trend: blockTrend(revenue), positiveTone: true },
     { key: 'expenses', labelKey: 'bpExpenses', value: expVal,
-      trend: blockTrend(expenses), positiveTone: false, goodWhenUp: false },
+      trend: blockTrend(expenses), positiveTone: false },
   ];
 }
 
@@ -73,26 +89,27 @@ const TREND_ICONS = { up: IconicArrowUpIcon, down: IconicArrowDownIcon };
 
 /**
  * Variation chip (Figma "Badge sm", pill, no border): 24px high, 4px/8px padding,
- * gap 0, 16px icon then Inter 400 12/16 text. The ARROW follows the real
- * direction of the change; the COLOUR follows whether that change is good or
- * bad for the KPI (`goodWhenUp`), via the shared StatusTag success/destructive
- * tones (#EEFBF4/#17663A, #FEF0F4/#D50B3E). A change that rounds to 0% is hidden
- * like a missing one: a "0%" chip carries no information (ETP-5600).
+ * gap 0, 16px icon then Inter 400 12/16 text. Both the ARROW and the COLOUR
+ * follow the SIGN of the change, for every KPI including Expenses (ETP-5600 QA
+ * pass 2): a positive % is green, a negative % red, via the shared StatusTag
+ * success/destructive tones (#EEFBF4/#17663A, #FEF0F4/#D50B3E). The value is
+ * rounded once (roundPercent); a change that rounds to 0% is hidden like a
+ * missing one: a "0%" chip carries no information.
  */
-function TrendBadge({ trend, goodWhenUp, period, ui }) {
+function TrendBadge({ trend, period, ui }) {
   if (trend == null) return null;
-  const rounded = Math.abs(Math.round(trend));
-  if (rounded === 0) return null;
-  const up = trend > 0;
+  const percent = roundPercent(trend);
+  if (percent === 0) return null;
+  const up = percent > 0;
+  const rounded = Math.abs(percent);
   const sign = up ? '+' : '\u2212';
   const vsLabel = period === '6M' ? ui('bpVsLast6Months') : ui('bpVsLast3Months');
   const Arrow = up ? TREND_ICONS.up : TREND_ICONS.down;
-  const good = up === goodWhenUp;
   // StatusTag (core) does not spread extra props, so the testid lives on a wrapper.
   return (
     <span className="inline-flex shrink-0" data-testid="StatusTag__22ed51">
       <StatusTag
-        tone={good ? 'success' : 'destructive'}
+        tone={up ? 'success' : 'destructive'}
         className="h-6 shrink-0 tracking-[-0.005em]"
         label={(
           <>
@@ -116,7 +133,6 @@ function KpiBlock({ kpi, period, currencyCode, ui }) {
         </span>
         <TrendBadge
           trend={kpi.trend}
-          goodWhenUp={kpi.goodWhenUp}
           period={period}
           ui={ui}
           data-testid="TrendBadge__22ed51" />
