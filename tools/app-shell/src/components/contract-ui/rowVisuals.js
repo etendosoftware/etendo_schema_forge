@@ -14,12 +14,25 @@ export const ROW_LIFT_SHADOW = 'hover:shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05)
 export const ROW_LIFT_SHADOW_STATIC = 'shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05),0_10px_15px_-3px_rgba(18,18,23,0.08)]';
 
 /**
- * The 1px line a lifted TABLE row redraws on its own cells. In a collapsed-border
- * table the lifted row paints over the previous row's `border-b`; an inset top
- * shadow on each `<td>` sits above every cell background and puts it back.
- * Table rows only — a flex row does not overlap its neighbour's border.
+ * Figma "Fila / State=Hover" has NO borders: a lifted TABLE row hides both lines that
+ * touch it — its own `border-b` and the previous row's `border-b` (its top line in a
+ * collapsed-border table), reached through `:has(+ tr:hover)`. Resting rows keep their
+ * separators. Table rows only. (ETP-5600 QA pass 2: replaces the former inset top
+ * separator, which stacked on the previous row's border and drew a double line that
+ * thinned out under the opaque quick-actions band.)
  */
-export const ROW_LIFT_TOP_SEPARATOR = '[&:hover>td]:shadow-[inset_0_1px_0_hsl(var(--border-subtle))]';
+export const ROW_LIFT_HOVER_NO_BORDERS = 'hover:border-transparent [&:has(+tr:hover)]:border-transparent';
+
+/**
+ * Figma "Sticky Acciones" (Fila Contactos / State=Hover): the hover band that holds a
+ * list row's quick actions, pinned to the right of its cell. At least 100px wide and
+ * never narrower than the cell, so it masks the whole reserved column while the cell
+ * floats over data; padding 0 12px, buttons flush right with no gap; background the
+ * Figma gradient from transparent to the row's hovered colour at 10.58%
+ * (`--row-hover-bg`, set per row state by DataTable) — no border, no shadow. Hidden at
+ * rest, shown on row hover, keyboard focus, or while its kebab menu is open.
+ */
+export const ROW_STICKY_ACTIONS = 'absolute right-0 inset-y-0 h-full min-w-[max(100%,100px)] flex flex-row items-center justify-end gap-0 px-3 z-10 bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)] opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100';
 
 /**
  * Figma "Fila / Selected": #F5F7F9 (`--field-hover`, the exact design value). Hover

@@ -4,8 +4,8 @@
  * DataTable — row hover style and the row selection colours (getRowClassName) plus the
  * scroll wrapper's room for the lifted row's shadow.
  *
- * Contract: a clickable row LIFTS on hover by default (opaque white + Shadows/lg + the
- * redrawn top separator, no colour transition). `'elevated'` (the former name) and any
+ * Contract: a clickable row LIFTS on hover by default (opaque white + Shadows/lg, no
+ * borders — its own line and the previous row's line hidden —, no colour transition). `'elevated'` (the former name) and any
  * unknown value lift too; `'tint'` is the only opt-out. A non-clickable row never lifts.
  * Every row sets `--row-hover-bg` to its own hovered background so the quick-actions fade
  * ends on it. Assertions read the RENDERED <tr> (after TableRow's own base classes are
@@ -63,7 +63,8 @@ const DATA = [{ id: 'r1', name: 'BBVA' }, { id: 'r2', name: 'Caja' }];
 const LIFT = [
   'relative', 'transition-none', 'hover:z-10',
   'hover:shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05),0_10px_15px_-3px_rgba(18,18,23,0.08)]',
-  '[&:hover>td]:shadow-[inset_0_1px_0_hsl(var(--border-subtle))]',
+  // Figma hover row has no borders: its own line and the previous row's line go transparent.
+  'hover:border-transparent', '[&:has(+tr:hover)]:border-transparent',
 ];
 const LIFT_REST = ['hover:bg-card', '[--row-hover-bg:hsl(var(--card))]'];
 const CHECKED = [

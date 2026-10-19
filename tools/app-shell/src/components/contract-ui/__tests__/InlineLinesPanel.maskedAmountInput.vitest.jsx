@@ -25,6 +25,7 @@ import { createRef } from 'react';
 vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
   ...(await importOriginal()),
   IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
 }));
 
 vi.mock('sonner', () => ({

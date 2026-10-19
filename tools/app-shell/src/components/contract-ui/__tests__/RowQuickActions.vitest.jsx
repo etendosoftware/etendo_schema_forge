@@ -44,11 +44,12 @@ vi.mock('sonner', () => ({
 vi.mock('@/hooks/useCapabilitiesSafe.js', async () =>
   (await import('@/test/capabilitiesSafeMock.js')).capabilitiesSafeMock());
 
-// Stub the Iconic trash on top of the real custom-icons module: makes the rendered icon
-// observable and keeps the file independent of the core version that ships it.
+// Stub the Iconic trash and edit icons on top of the real custom-icons module: makes the
+// rendered icons observable and keeps the file independent of the core version that ships them.
 vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
   ...(await importOriginal()),
   IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
 }));
 
 import RowQuickActions from '../RowQuickActions.jsx';
@@ -174,12 +175,27 @@ describe('RowQuickActions', () => {
     expect(screen.getByText('Action C')).toBeTruthy();
   });
 
-  it('calls onEdit when Edit is clicked', async () => {
+  it('renders Edit with the Iconic edit icon (stable testid) and calls onEdit', async () => {
     const user = userEvent.setup();
     const { onEdit } = setup();
-    await user.click(screen.getByTestId('row-quick-action-edit'));
+    const btn = screen.getByTestId('row-quick-action-edit');
+    expect(within(btn).getByTestId('Pencil__ec6673')).toHaveAttribute('data-icon', 'iconic-edit');
+    await user.click(btn);
     expect(onEdit).toHaveBeenCalledTimes(1);
     expect(onEdit).toHaveBeenCalledWith(DRAFT_ROW);
+  });
+
+  // Figma "Sticky Acciones": >=100px band (never narrower than its cell), padding 0 12px,
+  // buttons flush right with no gap, the transparent -> row-hover gradient, no border/shadow.
+  it('renders the actions band with the Figma Sticky Acciones geometry and gradient', () => {
+    setup();
+    const tokens = screen.getByTestId('row-quick-actions').className.split(/\s+/);
+    expect(tokens).toEqual(expect.arrayContaining([
+      'absolute', 'right-0', 'min-w-[max(100%,100px)]', 'px-3', 'justify-end', 'gap-0',
+      'bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)]',
+    ]));
+    expect(tokens).not.toContain('gap-0.5');
+    expect(tokens.some((t) => /(^|:)(border|shadow)(-|$)/.test(t))).toBe(false);
   });
 
   it('calls onClone when Clone is clicked', async () => {

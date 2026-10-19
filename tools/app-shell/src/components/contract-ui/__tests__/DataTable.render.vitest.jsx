@@ -291,17 +291,31 @@ describe('DataTable — render coverage', () => {
       expect(screen.getByTestId('rqa-rq1')).toBeInTheDocument();
     });
 
-    // The sticky quick-actions cell fades into the row's own hovered background
-    // (`--row-hover-bg`, set per row state), falling back to the card colour — not to a
-    // hardcoded slate literal that only matched the old translucent tint. The fade ends at
-    // 12px (the cell's left padding) so the band under the buttons is opaque and the column
-    // the cell floats over never shows through them (Figma "Sticky Acciones").
-    it('fades the quick-actions cell into the row hover background, with a card fallback', () => {
+    // ETP-5600 (Figma "Sticky Acciones") — with the canonical RowQuickActions the sticky
+    // cell paints nothing: the band inside it carries the gradient (ROW_STICKY_ACTIONS) and
+    // may reach left of the cell, so the cell is overflow-visible. A cell gradient left a
+    // vertical seam at its left edge. A custom `render` has no such band, so its cell keeps
+    // fading into the row's own hovered background (`--row-hover-bg`, card fallback) — never
+    // a hardcoded slate literal.
+    const fade = 'bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]';
+
+    it('leaves the canonical quick-actions cell unpainted and lets its band overflow', () => {
       const cols = [{ key: 'n', label: 'N', type: 'string' }];
       const rows = [{ id: 'rq1', n: 'a' }];
       render(<DataTable columns={cols} data={rows} rowQuickActions={{ enabled: true, onEdit: vi.fn() }} selectable={false} />);
-      const cell = screen.getByTestId('rqa-rq1').closest('td');
-      const fade = 'bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]';
+      const classes = screen.getByTestId('rqa-rq1').closest('td').className.split(/\s+/);
+
+      expect(classes).toEqual(expect.arrayContaining(['group-hover/row:sticky', 'overflow-visible']));
+      expect(classes).not.toContain(`group-hover/row:${fade}`);
+      expect(classes).not.toContain(`has-[[data-state=open]]:${fade}`);
+    });
+
+    it('fades a custom-render quick-actions cell into the row hover background, with a card fallback', () => {
+      const cols = [{ key: 'n', label: 'N', type: 'string' }];
+      const rows = [{ id: 'rq1', n: 'a' }];
+      const renderActions = (row) => <span data-testid={`custom-qa-${row.id}`} />;
+      render(<DataTable columns={cols} data={rows} rowQuickActions={{ enabled: true, render: renderActions }} selectable={false} />);
+      const cell = screen.getByTestId('custom-qa-rq1').closest('td');
 
       expect(cell.className.split(/\s+/)).toEqual(expect.arrayContaining([
         `group-hover/row:${fade}`,

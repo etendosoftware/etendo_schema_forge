@@ -8,8 +8,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Layers, Pencil, Search } from 'lucide-react';
-import { IconicTrashIcon } from '@/components/ui/custom-icons';
+import { Layers, Search } from 'lucide-react';
+import { IconicEditIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -309,7 +309,7 @@ function useHorizontalOverflow(ref, enabled, columns, rowCount) {
  * Sonar's threshold.
  *
  * ETP-4610 — `extraActions` is a generic extension slot: any number of extra
- * icon buttons can be rendered ahead of the built-in Pencil/Trash pair. Each
+ * icon buttons can be rendered ahead of the built-in Edit/Trash pair. Each
  * entry is `{ key, icon: LucideIcon, tooltip, onClick, testId? }` — the same
  * shape InlineLinesPanel's own `rowActions` prop accepts (see below), so a
  * caller-provided action and an internally-computed one (e.g. the
@@ -328,7 +328,8 @@ function useHorizontalOverflow(ref, enabled, columns, rowCount) {
  * ETP-5600 — the buttons are the list quick actions' Figma Icon Button sm (32x32,
  * Round, Tertiary, 20px icon): the same `ROW_ACTION_BUTTON_*` classes from
  * rowVisuals.js that RowQuickActions uses, so a list row and a document line show
- * identical buttons. Delete is the Iconic trash. The pill behind them stays off
+ * identical buttons. Edit is the Iconic edit (its testid stays `Pencil__3b7ec2`),
+ * Delete the Iconic trash. The pill behind them stays off
  * (`QUICK_ACTIONS_USE_PILL`). `gap-0.5` (RowQuickActions' gap) keeps four 32px
  * buttons (Add dimensions + a caller action + Edit + Delete) inside the 160px
  * `ACTION_SLOT_WIDTH_PX` slot, and they fit the 40px (`h-10`) line row.
@@ -369,7 +370,7 @@ function renderRowActionStrip({
             onClick={onEdit}
             className={isEditing ? `${ROW_ACTION_BUTTON_NEUTRAL} ${ROW_ACTION_BUTTON_ACTIVE}` : ROW_ACTION_BUTTON_NEUTRAL}
           >
-            <Pencil className="h-5 w-5" data-testid="Pencil__3b7ec2" />
+            <IconicEditIcon className="h-5 w-5" data-testid="Pencil__3b7ec2" />
           </button>
           {canDelete && (
             <button

@@ -11,11 +11,12 @@ import React, { createRef } from 'react';
 
 // --- Mocks (one block, no spreading across files) ---
 
-// The line delete button renders the Iconic trash from the core custom-icons barrel;
-// the published core may predate it, so stub it while keeping every other icon real.
+// The line edit/delete buttons render the Iconic edit/trash from the core custom-icons
+// barrel; the published core may predate them, so stub them while keeping every other icon real.
 vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
   ...(await importOriginal()),
   IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+  IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
 }));
 
 vi.mock('sonner', () => ({
@@ -363,6 +364,8 @@ describe('InlineLinesPanel', () => {
     const actions = within(row).getByTestId('line-actions');
     // Edit (pencil) must still render — only delete is gated.
     expect(within(actions).queryByTestId('Pencil__3b7ec2')).toBeInTheDocument();
+    // ETP-5600 — the edit glyph is the Figma Iconic edit; the testid stays stable.
+    expect(within(actions).getByTestId('Pencil__3b7ec2')).toHaveAttribute('data-icon', 'iconic-edit');
     expect(within(actions).queryByTestId('IconicTrashIcon__3b7ec2')).toBeNull();
     expect(within(actions).queryByRole('button', { name: /delete/i })).toBeNull();
   });

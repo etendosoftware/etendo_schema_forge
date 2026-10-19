@@ -31,11 +31,14 @@ import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericField
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 
 // ETP-5268 — pixel geometry of one canonical RowQuickActions button, mirrored
-// from its own className (`h-10 px-3` container, `gap-0.5` between `h-8 w-8`
-// buttons) — used below to size the reserved column to the buttons THIS
-// window's `rowQuickActions` will actually render, not a fixed worst-case.
+// from its own className (`px-3` container, `h-8 w-8` buttons) — used below to
+// size the reserved column to the buttons THIS window's `rowQuickActions` will
+// actually render, not a fixed worst-case. ETP-5600 (Figma "Sticky Acciones"):
+// the canonical buttons sit with NO gap; a custom `render` keeps the former 2px
+// allowance, since its own markup (e.g. AccountRowActions) still spaces them.
 const QUICK_ACTIONS_BUTTON_PX = 32;
-const QUICK_ACTIONS_GAP_PX = 2;
+const QUICK_ACTIONS_GAP_PX = 0;
+const QUICK_ACTIONS_CUSTOM_RENDER_GAP_PX = 2;
 const QUICK_ACTIONS_CONTAINER_PADDING_PX = 24; // px-3 on both sides
 
 // ETP-5268 — counts the canonical buttons RowQuickActions will render for
@@ -89,8 +92,11 @@ function quickActionsReservedWidthPx(rowQuickActions) {
   if (Number.isFinite(explicitWidth) && explicitWidth > 0) return explicitWidth;
   const count = estimateQuickActionsButtonCount(rowQuickActions);
   if (count <= 0) return 0;
+  const gapPx = typeof rowQuickActions?.render === 'function'
+    ? QUICK_ACTIONS_CUSTOM_RENDER_GAP_PX
+    : QUICK_ACTIONS_GAP_PX;
   return count * QUICK_ACTIONS_BUTTON_PX
-    + Math.max(count - 1, 0) * QUICK_ACTIONS_GAP_PX
+    + Math.max(count - 1, 0) * gapPx
     + QUICK_ACTIONS_CONTAINER_PADDING_PX;
 }
 
@@ -151,7 +157,7 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 // the exact math) while staying solid enough to mask real data underneath
 // while floating. (ETP-5600: solid under the buttons in the row hover colour,
 // with a fade across the cell's left padding — see the class list below.)
-function quickActionsColumnClassName(extraClassName) {
+function quickActionsColumnClassName(extraClassName, { paintsOwnBand = false } = {}) {
   // `relative` (not `sticky`) is the resting state — gives RowQuickActions'
   // `position: absolute` pill a containing block scoped to this cell either
   // way. `right-0`/`z-10` are harmless no-ops while merely `relative` (no
@@ -171,7 +177,16 @@ function quickActionsColumnClassName(extraClassName) {
     // `has-[[data-state=open]]` keeps the cell sticky while a row kebab menu is open: the
     // portaled menu takes the pointer, the row loses `group-hover/row`, and without this the
     // cell falls back to its in-flow spot at the table's end and Radix re-anchors the menu there.
-    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]',
+    'relative right-0 z-10 group-hover/row:sticky has-[[data-state=open]]:sticky',
+    // ETP-5600 (QA pass 2) — with the canonical RowQuickActions the CELL paints nothing:
+    // the band inside it (ROW_STICKY_ACTIONS, the Figma "Sticky Acciones" layer) carries
+    // the gradient, is at least 100px wide and may reach a few px left of the cell into
+    // the column it floats over, hence `overflow-visible`. A cell gradient left a visible
+    // vertical seam at the cell's left edge. A custom `rowQuickActions.render` brings no
+    // such band, so its cell keeps painting the fade itself (below).
+    paintsOwnBand
+      ? 'overflow-visible'
+      : 'group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)] has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]',
     // ETP-5600 — Figma "Fila Contactos / State=Hover", layer "Sticky Acciones": a white
     // linear gradient (0% -> 100% opacity) whose fade lives in the cell's 12px left padding
     // (RowQuickActions' `px-3`, QUICK_ACTIONS_CONTAINER_PADDING_PX) and is OPAQUE from there
@@ -569,7 +584,7 @@ import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
 import { LOOKUP_DRAWERS } from './lookupDrawers.js';
-import { ROW_LIFT_SHADOW, ROW_LIFT_TOP_SEPARATOR, ROW_CHECKED_BG } from './rowVisuals.js';
+import { ROW_LIFT_SHADOW, ROW_LIFT_HOVER_NO_BORDERS, ROW_CHECKED_BG } from './rowVisuals.js';
 
 import { apiFetch } from '@/auth/api.js';
 /**
@@ -2059,7 +2074,7 @@ function isQuickActionsEnabled(rowQuickActions) {
 }
 
 // ETP-5600 — the shared row visuals (Shadows/lg, the checked colour, the lifted row's
-// top separator) live in rowVisuals.js, shared with InlineLinesPanel's line rows.
+// hover border reset) live in rowVisuals.js, shared with InlineLinesPanel's line rows.
 // The two below are DataTable-only.
 const ROW_ACTIVE_BG = 'bg-primary/10 hover:bg-primary/10 [--row-hover-bg:color-mix(in_srgb,hsl(var(--primary))_10%,hsl(var(--card)))]';
 // The composited `bg-muted/50` tint, for a row that tints on hover: a clickable row under
@@ -2084,10 +2099,9 @@ function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelect
  *   - `lift` (default, ETP-5600 — Figma "Fila"): transparent at rest; on hover an
  *     opaque white background plus Shadows/lg, raised with `z-10` so the shadow falls
  *     over the row below. Instant — no colour transition (a fading background made the
- *     chips inside the row flash). The lifted row paints above the table's collapsed
- *     border, which hid the line ABOVE it (the previous row's `border-b`); each of its
- *     cells redraws that line as a 1px inset top shadow, which sits above every cell
- *     background (the checkbox cell and the sticky quick-actions gradient included).
+ *     chips inside the row flash). Figma's hover row has NO borders: the hovered row's
+ *     own `border-b` and the previous row's `border-b` (its top line) turn transparent
+ *     while hovered (ROW_LIFT_HOVER_NO_BORDERS); resting rows keep their separators.
  *     `elevated` is the former name of this style and stays an alias.
  *   - `tint`: the pre-ETP-5600 translucent `bg-muted/50` wash, kept as an explicit
  *     opt-out for a grid where a raised white row would read wrong.
@@ -2107,7 +2121,7 @@ function getRowClassName({
   let hoverClass = '';
   if (liftRow && !isSelectedLine) {
     hoverClass = [
-      'hover:z-10', ROW_LIFT_SHADOW, ROW_LIFT_TOP_SEPARATOR,
+      'hover:z-10', ROW_LIFT_SHADOW, ROW_LIFT_HOVER_NO_BORDERS,
       selectionClass ? '' : 'hover:bg-card [--row-hover-bg:hsl(var(--card))]',
     ].filter(Boolean).join(' ');
   } else if (!isSelectedLine && !selectionClass) {
@@ -2908,7 +2922,9 @@ function TableDataRow({
         // that read the same window-level `rowQuickActions` config on
         // every row, on every render, for an identical result each time.
         (<TableCell
-          className={quickActionsColumnClassName('px-2')}
+          className={quickActionsColumnClassName('px-2', {
+            paintsOwnBand: typeof rowQuickActions.render !== 'function',
+          })}
           style={quickActionsColumnStyle(quickActionsColWidthPx)}
           onClick={(e) => e.stopPropagation()}
           data-testid="TableCell__eb5261">
