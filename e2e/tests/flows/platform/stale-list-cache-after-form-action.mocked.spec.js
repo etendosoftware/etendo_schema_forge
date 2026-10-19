@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth.js';
+import { login } from '../../helpers/auth.js';
 
 /**
  * Stale grid after a form action — regression (mocked). ETP-5378.

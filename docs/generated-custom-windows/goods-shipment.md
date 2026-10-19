@@ -455,6 +455,16 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 
 **Manual verification:** open a draft shipment; confirm `Unidad` sits between Cant. movida and Cant. pedido; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
 
+## Return from the shipment (`createReturn`) — ETP-5711
+
+`createReturn` is now declared to MCP by `GoodsShipmentHeaderHandler.actionContracts()` (after `createDraftInvoice`).
+Same contract as `createPurchaseReturn` on the goods receipt: optional `lines: [{lineId, returnQuantity}]` and
+`reason`; omit `lines` to return everything still returnable; the return (`return-material-receipt`) is always left in
+draft and the 201 lists its lines with their `sourceLineId`. The old 409 "A return already exists for shipment" is gone
+(it blocked a second partial return); the cap is *returnable = shipped − what non-voided returns, drafts included,
+already hold*, refused with 422 `returnQuantityExceedsAvailable` / `nothingLeftToReturn`. See
+`return-material-receipt.md` and neo-headless.md §4.12.32.
+
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

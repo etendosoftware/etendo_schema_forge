@@ -119,6 +119,7 @@ matches and puts each into one group:
 | **Best matches** (`relevantSearchResults` → "Best matches" / "Coincidencias principales") | `score ≥ max(0.72, best − 0.08)` and `score ≥ cutoff`, where `cutoff = max(floor, mean − stddev)` | `vectorSearchRanking.js:37-48, 52` |
 | **Other matches** (`relatedSearchResults` → "Other matches" / "Otras coincidencias") | `score ≥ 0.55`. Not rendered when the result set is *concentrated* (half or more scores ≥ 0.72 and coefficient of variation ≤ 0.12) | `vectorSearchRanking.js:39-40, 53`; `CommandPalette.jsx:567` |
 | Discarded | Everything else | — |
+| **Noise** (all groups empty → "No results found") | No match has a text match, there are at least 3 candidates and `best − median(score) < 0.06` (`FLAT_DISTRIBUTION_MARGIN`). The index always returns its nearest neighbours, so gibberish ("zzzz") yields a plateau (≈ 0.78–0.80) that no fixed floor can tell from a real query, whose best result stands out (e.g. 0.86 vs 0.74). Never applied when a text match exists or with fewer than 3 candidates | `vectorSearchRanking.js` (`flat`); `CommandPalette.jsx` (`hasVisibleVectorMatches` drives the empty state) |
 
 Consequence: "Text matches" is a **filter over the semantic top 10**, not a text search. A record
 whose text matches exactly but which the vector search did not return does not appear anywhere.

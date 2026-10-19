@@ -12,8 +12,6 @@ const fields = [
   { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', label: 'Payment Method', section: 'principal', reference: 'Paymentmethod', inputMode: 'selector', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', label: 'Payment Terms', required: true, section: 'principal', reference: 'PaymentTerm', inputMode: 'selector', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'rejectReason', column: 'C_Reject_Reason_ID', type: 'selector', label: 'Reject Reason', readOnly: true, section: 'principal', reference: 'Reject_Reason', inputMode: 'selector', displayLogic: (record) => record.documentStatus === 'CJ', readOnlyLogic: (record) => record['documentStatus'] === 'CJ' || record['documentStatus'] === 'CA' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'number', label: 'Total Gross Amount', required: true, readOnly: true, section: 'summary' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'number', label: 'Total Net Amount', required: true, readOnly: true, section: 'summary' },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'collapsed', maxLength: 255, readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
 ];
 // @sf-generated-end fields:quotation

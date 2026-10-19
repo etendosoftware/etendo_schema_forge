@@ -1540,6 +1540,34 @@ Every import run reports one `import_completed` telemetry event (counts, timings
 concurrency used, mapped columns, foreign keys resolved/created; never row content). See
 `decisions-reference.md` → *Import Limits* → Telemetry.
 
+### ETP-5676 — Server cost per imported row
+
+Measured in production: about 800 ms of server time per imported row (product, two prices, cost).
+Four backend cuts, in `com.etendoerp.go` (`docs/neo-headless.md` §4.3.7):
+
+- **No double price write.** A priced row sends `_skipPricesSeed: [<versions it prices>]` on the
+  product op (`productImportDescriptor.js`). The backend skips the zero-price seed for a direction
+  only when the version **it** would seed (`PriceListVersionResolver`) is in that list, so
+  `ProductPriceHandler` no longer overwrites a row seeded a moment earlier. Every GO price list
+  has one version, and onboarding seeds one default sales and one default purchase list, so the
+  import (`resolvePlv`) and the server pick the same tariff. They can differ only after a user
+  clears **Por defecto** on the Tarifas window: then each falls back to a different "first"
+  direction-matching list, the server's tariff is still seeded at 0 and the imported price lands
+  on the import's choice, exactly as before. The same holds if the selector leaves a list's sales
+  flag null: the import accepts it for sales, the server does not. An unpriced row sends nothing and is seeded as before.
+- **`_onlyReturnIds: true`** on every import `/batch` request (`useWindowImportDialog` wraps
+  `useBatch.runBatch`; OCR does not send it). The backend skips locator-identifier enrichment and
+  the `etgoHasCost` flag on each create. The response is unchanged — the import engine reads only
+  `committed`, `operations[].recordId` and the failure envelope.
+- **`_skipRedundantCallouts: true`** on every import `/batch` request (same wrapper; OCR does not
+  send it): within one batch, `SL_TaxCategory_Org` and `SL_Costing_Currency` are not re-run once
+  they have been seen proposing only values the row already carries. Opt-in on purpose — a batch
+  without it runs every callout — and the backend kill switch `batch-callout-skip-disabled` turns
+  it off for every batch whatever the request asks (com.etendoerp.go `docs/neo-headless.md`
+  §4.3.7 says how to flip it). The generic import hook sends it, so it covers the two windows that
+  have an import today: product and contacts.
+- **Automatic, no client change:** spec/entity/default lookups are answered once per batch.
+
 ## Account selectors — ETP-5681
 
 Every account field of the **Contabilidad** tab (`fixedAsset`, `productExpense`, `productRevenue`, `productCOGS`, `invoicePriceVariance`) declares `"lookup": true` +

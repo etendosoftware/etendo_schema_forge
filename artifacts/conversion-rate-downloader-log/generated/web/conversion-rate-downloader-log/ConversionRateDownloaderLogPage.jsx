@@ -41,7 +41,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:conversionRateDownloaderLog
 
 // @sf-generated-start requiredHeaderFields:conversionRateDownloaderLog
-const requiredHeaderFields = ['active'];
+const requiredHeaderFields = [];
 // @sf-generated-end requiredHeaderFields:conversionRateDownloaderLog
 
 
@@ -112,7 +112,6 @@ export default function ConversionRateDownloaderLogPage({ windowName, recordId, 
         breadcrumb={breadcrumb}
       api={api}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "SMFCR_Sync_Log", config: {} } }]}
-        requiredHeaderFields={requiredHeaderFields}
         {...props} window={effectiveWindow}
       />
       </>
