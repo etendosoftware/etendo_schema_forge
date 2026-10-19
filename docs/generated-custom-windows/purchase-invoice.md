@@ -2542,3 +2542,16 @@ through the shared `tools/app-shell/src/windows/custom/shared/BadgeAmount.jsx`: 
 `max-w-[8.5rem]`, enough for 7 integer digits plus decimals and the symbol ("1.234.567,00 €").
 Longer values still ellipsise with the full amount in a tooltip. The list-column badges in the
 header tables keep their fixed width on purpose (row-to-row alignment) and were not changed.
+
+**Narrow topbars.** At ~1280px wide the chip used to overflow the topbar (the "€" fell off-screen
+and "A favor" wrapped onto two lines) because nothing in the flex chain could shrink: DetailView's
+right-hand action group (`flex items-center gap-2`) → chip → amount were all at their content
+width. Now the action group in `tools/app-shell/src/components/contract-ui/DetailView.jsx` carries
+`min-w-0`, the chip carries `BADGE_CHIP_FIT_CLASS` (`min-w-0 shrink-[999] whitespace-nowrap`,
+exported by `BadgeAmount.jsx`) and the amount is `min-w-0 shrink`. When room runs out the chip
+absorbs the overflow before the fixed-size icon buttons, the label stays on one line and the
+amount ellipsises (full value in the tooltip); with room it still sizes to content. The
+`DetailView` `min-w-0` only changes a toolbar whose actions already overflowed (they were clipped
+by the card's `overflow-hidden`). **Verify:** at 1280x720 open a completed credit with a large
+balance (e.g. "2.420.100,10 €"): the chip ends inside the card, the amount shows "2…" with the
+full value on hover, no horizontal scroll.

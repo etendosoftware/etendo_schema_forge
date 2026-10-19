@@ -2774,8 +2774,8 @@ export function DetailView({
             })()}
           </div>
 
-            <div className="flex items-center gap-2">
-              {/* Send / Print document — uses DocumentPrintDrawer.
+            <div className="flex items-center gap-2 min-w-0">
+              {/* min-w-0 (ETP-5729): lets a shrinkable slot chip absorb overflow instead of clipping. Send / Print document — uses DocumentPrintDrawer.
                   Icon unified with RowQuickActions (envelope/Mail) so the same
                   "send document" affordance looks identical in detail and list views. */}
               {documentPreview && !isNew && recordId && (

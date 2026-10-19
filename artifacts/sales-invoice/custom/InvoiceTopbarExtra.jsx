@@ -7,7 +7,7 @@ import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import BadgeAmount from '@/windows/custom/shared/BadgeAmount.jsx';
+import BadgeAmount, { BADGE_CHIP_FIT_CLASS } from '@/windows/custom/shared/BadgeAmount.jsx';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -240,7 +240,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           type="button"
           data-testid="payment-status-badge"
           onClick={() => setShowPaymentsModal(true)}
-          className="inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10"
+          className={`inline-flex items-center gap-2 text-sm leading-6 font-medium hover:opacity-80 cursor-pointer h-10 ${BADGE_CHIP_FIT_CLASS}`}
           style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', border: '1px solid var(--status-info-border)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />

@@ -14,7 +14,14 @@ import { cn } from '@/lib/utils';
  * Topbar chips only. List-column badges keep their fixed width on purpose: there the box keeps
  * the amounts aligned row to row.
  */
-export const BADGE_AMOUNT_CLASS = 'w-auto max-w-[8.5rem] shrink-0 text-left tabular-nums';
+// Sizes to its content up to 8.5rem. min-w-0 + shrink let the amount give up width when the
+// topbar runs out of room (TruncatedText then ellipsizes and shows the full value in a tooltip).
+export const BADGE_AMOUNT_CLASS = 'w-auto max-w-[8.5rem] min-w-0 shrink text-left tabular-nums';
+
+// Classes for the chip that wraps a BadgeAmount in a topbar (ETP-5729 CP-14). min-w-0 lets the
+// chip shrink below its content; the high shrink weight makes it absorb the topbar's overflow
+// before the neighbouring fixed-size buttons do; nowrap keeps the label on one line.
+export const BADGE_CHIP_FIT_CLASS = 'min-w-0 shrink-[999] whitespace-nowrap';
 
 export default function BadgeAmount({ text, className, 'data-testid': testId }) {
   return (

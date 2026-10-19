@@ -18,4 +18,15 @@ describe('BadgeAmount', () => {
     expect(classes.some((c) => /^w-\[\d+px\]$/.test(c))).toBe(false);
     expect(classes).toContain('font-semibold');
   });
+
+  // CP-14 follow-up — at ~1280px the chip overflowed the topbar ("€" off-screen) because nothing
+  // in the chain could shrink. The amount must be allowed to shrink (min-w-0, no shrink-0) so
+  // TruncatedText ellipsizes it.
+  it('lets the amount shrink below its content instead of pushing the chip out of the topbar', () => {
+    render(<BadgeAmount text="2.420.100,10 €" data-testid="amount" />);
+    const classes = screen.getByTestId('amount').className.split(/\s+/);
+    expect(classes).toContain('min-w-0');
+    expect(classes).toContain('shrink');
+    expect(classes).not.toContain('shrink-0');
+  });
 });

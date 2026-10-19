@@ -2,7 +2,7 @@ import { useState } from 'react';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
-import BadgeAmount from '@/windows/custom/shared/BadgeAmount.jsx';
+import BadgeAmount, { BADGE_CHIP_FIT_CLASS } from '@/windows/custom/shared/BadgeAmount.jsx';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import FollowUpDocumentButton from '@/components/follow-up-documents/FollowUpDocumentButton.jsx';
@@ -78,7 +78,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
           // content up to a max width; the tooltip only opens when it genuinely truncates.
           return (
             <span
-              className="inline-flex items-center gap-2 text-sm leading-6 font-medium h-10"
+              className={`inline-flex items-center gap-2 text-sm leading-6 font-medium h-10 ${BADGE_CHIP_FIT_CLASS}`}
               style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', color: 'var(--status-info-fg)', cursor: 'pointer' }}
               data-testid="payment-status-badge"
               onClick={handleBadgeClick}
