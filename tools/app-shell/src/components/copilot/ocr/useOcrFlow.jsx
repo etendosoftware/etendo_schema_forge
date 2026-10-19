@@ -12,6 +12,7 @@ import ProductResolverPopup from './ProductResolverPopup';
 import OcrReviewModal from './OcrReviewModal';
 import OcrLinesReviewModal from './OcrLinesReviewModal';
 import { deriveContactsApiBase } from './contactApi';
+import { BACK, isBack } from './ocrFlowSignals';
 import { CREATE_COMPONENTS, PRE_RESOLVERS } from './strategies';
 
 /* eslint-disable react/prop-types */
@@ -159,6 +160,16 @@ function hasLinesToReview(docType, payload) {
   return Boolean(docType?.lineColumns?.length) && Array.isArray(payload?.line_items) && payload.line_items.length > 0;
 }
 
+// ETP-5654 — the parts of the reviewed header the line resolution depends on (vendor location
+// and invoice date feed `buildTaxContext`). Same key = the lines the user already edited are
+// still valid; a different key = recompute them from the OCR payload.
+export function headerDependencyKey(reviewed, payload) {
+  return JSON.stringify([
+    reviewed?.vendor?.bpId ?? reviewed?.vendor?.id ?? null,
+    toIsoDate(reviewed?.invoiceDate ?? payload?.invoice_date) ?? null,
+  ]);
+}
+
 export function useOcrFlow({
   docTypeId,
   token,
@@ -181,23 +192,36 @@ export function useOcrFlow({
   const [reviewPreResolved, setReviewPreResolved] = useState({});
   const [reviewResolving, setReviewResolving] = useState(false);
   const [reviewReceiverAbsent, setReviewReceiverAbsent] = useState(false);
+  const [reviewInitialState, setReviewInitialState] = useState(null);
   const resolveRef = useRef(null);
 
   const [linesOpen, setLinesOpen] = useState(false);
   const [linesPayload, setLinesPayload] = useState([]);
+  const [linesInitialRows, setLinesInitialRows] = useState(null);
   const linesResolveRef = useRef(null);
+
+  // ETP-5654 — what each step last held, so going back and forward again restores the user's
+  // edits. Reset at the start of every run. Written whenever a step is left (continue or back).
+  const stepStateRef = useRef({ header: null, lines: null, products: null });
 
   const [pendingPopup, setPendingPopup] = useState(null);
 
+  // Resolves with the picks map, `null` (cancel) or BACK (the user stepped back to the lines).
   const askUserForProducts = useCallback(({ unmatched, selectorUrl, productSpecUrl }) => new Promise((resolve) => {
-    const close = (value) => { setPendingPopup(null); resolve(value); };
+    const close = (value) => {
+      setPendingPopup(null);
+      resolve(value);
+    };
     setPendingPopup(
       <ProductResolverPopup
         unmatched={unmatched}
         selectorUrl={selectorUrl}
         productSpecUrl={productSpecUrl}
         token={token}
+        initialSelections={stepStateRef.current.products}
+        onStateChange={(selections) => { stepStateRef.current.products = selections; }}
         onSubmit={(picks) => close(picks)}
+        onBack={() => close(BACK)}
         onCancel={() => close(null)}
         data-testid="ProductResolverPopup__ebdfaa" />
     );
@@ -208,6 +232,7 @@ export function useOcrFlow({
     setReviewExtracted(null);
     setReviewPreResolved({});
     setReviewResolving(false);
+    setReviewInitialState(null);
     const fn = resolveRef.current;
     resolveRef.current = null;
     if (fn) fn(value);
@@ -216,19 +241,34 @@ export function useOcrFlow({
   const closeLines = (value) => {
     setLinesOpen(false);
     setLinesPayload([]);
+    setLinesInitialRows(null);
     const fn = linesResolveRef.current;
     linesResolveRef.current = null;
     if (fn) fn(value);
   };
 
-  const askUserToReviewLines = useCallback((lines) => new Promise((resolve) => {
+  // Resolves with the reviewed rows, `null` (cancel) or BACK. `initialRows` restores earlier edits.
+  const askUserToReviewLines = useCallback((lines, initialRows = null) => new Promise((resolve) => {
     linesResolveRef.current = resolve;
     setLinesPayload(Array.isArray(lines) ? lines : []);
+    setLinesInitialRows(initialRows);
     setLinesOpen(true);
   }), []);
 
-  const askUserToReview = useCallback((extracted, { receiverTaxIdAbsent = false } = {}) => new Promise((resolve) => {
+  // Resolves with the reviewed header or `null` (cancel); it is the first step, so never BACK.
+  // `initialState` is the modal state of an earlier visit: it already holds the resolved vendor,
+  // so the pre-resolvers are not run again.
+  const askUserToReview = useCallback((extracted, { receiverTaxIdAbsent = false, initialState = null } = {}) => new Promise((resolve) => {
     resolveRef.current = resolve;
+    if (initialState) {
+      setReviewExtracted(extracted);
+      setReviewReceiverAbsent(receiverTaxIdAbsent);
+      setReviewPreResolved({});
+      setReviewResolving(false);
+      setReviewInitialState(initialState);
+      setReviewOpen(true);
+      return;
+    }
     // Resolve pre-resolvers BEFORE opening the modal so the initial render
     // already shows the matched vendor with its toggle on. OcrReviewModal seeds
     // its row state from `preResolved` in a useState initializer that only
@@ -275,32 +315,67 @@ export function useOcrFlow({
           setResult({ committed: false, error: blocked.error });
           return;
         }
-        const reviewed = await askUserToReview(payload, { receiverTaxIdAbsent: outcome?.notice === 'receiverTaxIdAbsent' });
-        if (!reviewed) {
-          markCancelled();
-          return;
-        }
-        const taxContext = hasLinesToReview(docType, payload)
-          ? await buildTaxContext(reviewed, payload, { token, apiBaseUrl })
-          : null;
-        const extractedLines = hasLinesToReview(docType, payload)
-          ? await resolveLines(docType.lineColumns, payload.line_items, { token, apiBaseUrl, taxContext })
-          : [];
+        // ETP-5654 — the steps run as a small state machine so BACK can re-enter the previous
+        // step that was actually shown (lines only exist when there are lines to review).
+        stepStateRef.current = { header: null, lines: null, products: null };
+        const withLines = hasLinesToReview(docType, payload);
+        const receiverTaxIdAbsent = outcome?.notice === 'receiverTaxIdAbsent';
+        let reviewed = null;
         let reviewedLines = null;
-        if (extractedLines.length > 0) {
-          reviewedLines = await askUserToReviewLines(extractedLines);
-          if (!reviewedLines) {
-            markCancelled();
-            return;
+        let lineBase = null; // { key, lines }: resolved lines and the header key they were built for
+        let built = null;
+        let step = 'header';
+        while (step !== 'done') {
+          if (step === 'header') {
+            reviewed = await askUserToReview(payload, { receiverTaxIdAbsent, initialState: stepStateRef.current.header });
+            if (!reviewed) {
+              markCancelled();
+              return;
+            }
+            step = withLines ? 'lines' : 'build';
+          } else if (step === 'lines') {
+            // Recompute rule: reuse the user's edited lines while the header inputs of the
+            // resolution (vendor, invoice date) are unchanged; otherwise rebuild them from the
+            // OCR payload and drop the stale line edits.
+            const key = headerDependencyKey(reviewed, payload);
+            if (lineBase?.key !== key) {
+              const taxContext = await buildTaxContext(reviewed, payload, { token, apiBaseUrl });
+              lineBase = {
+                key,
+                lines: await resolveLines(docType.lineColumns, payload.line_items, { token, apiBaseUrl, taxContext }),
+              };
+              stepStateRef.current.lines = null;
+            }
+            reviewedLines = null;
+            if (lineBase.lines.length > 0) {
+              const answer = await askUserToReviewLines(lineBase.lines, stepStateRef.current.lines);
+              if (isBack(answer)) {
+                step = 'header';
+                continue;
+              }
+              if (!answer) {
+                markCancelled();
+                return;
+              }
+              reviewedLines = answer;
+            }
+            step = 'build';
+          } else {
+            built = await buildBatch(payload, {
+              token,
+              apiBaseUrl,
+              askUserForProducts,
+              reviewedHeader: reviewed,
+              reviewedLines,
+            });
+            if (built?.back) {
+              // The product popup was backed out of: nothing was sent; previous shown step.
+              step = lineBase?.lines?.length > 0 ? 'lines' : 'header';
+              continue;
+            }
+            step = 'done';
           }
         }
-        const built = await buildBatch(payload, {
-          token,
-          apiBaseUrl,
-          askUserForProducts,
-          reviewedHeader: reviewed,
-          reviewedLines,
-        });
         if (!built || built.cancelled) {
           markCancelled();
           return;
@@ -368,9 +443,12 @@ export function useOcrFlow({
       <OcrLinesReviewModal
         columns={docType.lineColumns}
         lines={linesPayload}
+        initialRows={linesInitialRows}
         token={token}
         apiBaseUrl={apiBaseUrl}
+        onStateChange={(rows) => { stepStateRef.current.lines = rows; }}
         onSubmit={(value) => closeLines(value)}
+        onBack={() => closeLines(BACK)}
         onCancel={() => closeLines(null)}
         data-testid="OcrLinesReviewModal__ebdfaa" />
     );
@@ -383,6 +461,8 @@ export function useOcrFlow({
         preResolved={reviewPreResolved}
         resolving={reviewResolving}
         receiverTaxIdAbsent={reviewReceiverAbsent}
+        initialState={reviewInitialState}
+        onStateChange={(state) => { stepStateRef.current.header = state; }}
         contactsBase={contactsBase}
         apiBaseUrl={apiBaseUrl}
         token={token}

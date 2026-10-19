@@ -1,4 +1,5 @@
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
+import { isBack } from '../ocrFlowSignals.js';
 import { buildSearchUrl, deriveSelectorUrl, deriveSpecBase, readSearchRows } from '../ocrQuery.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
@@ -197,7 +198,7 @@ async function runProductSimSearch({ token, lines }) {
     token,
     entityName: 'Product',
     items: productHints,
-    minSimPercent: 30,
+    minSimPercent: 50,
     // More than one so an ambiguous exact-name match (two products with the same name)
     // is detectable; the best candidate is still the first one.
     qtyResults: PRODUCT_SIM_QTY_RESULTS,
@@ -387,6 +388,8 @@ async function resolveProductsForLines({ lines, productMatches, askUserForProduc
     ? deriveSelectorUrl(apiBaseUrl, 'purchase-invoice', 'intrastat', 'M_Product_ID')
     : null;
   const picks = await askUserForProducts({ unmatched: needsUserPick, selectorUrl, productSpecUrl });
+  // ETP-5654 — BACK is a navigation signal, not a cancel: nothing was decided or sent.
+  if (isBack(picks)) return { back: true };
   if (picks === null) return { cancelled: true };
   for (const [idxStr, productId] of Object.entries(picks || {})) {
     if (productId) productByIdx[Number(idxStr)] = productId;
@@ -483,6 +486,7 @@ export async function buildPurchaseInvoiceBatch(extracted, ctx) {
     askUserForProducts,
     apiBaseUrl,
   });
+  if (productResolution.back) return { back: true };
   if (productResolution.cancelled) return { cancelled: true };
   const { productByIdx } = productResolution;
 

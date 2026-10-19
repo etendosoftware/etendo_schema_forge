@@ -25,6 +25,9 @@ const H = vi.hoisted(() => ({
   reviewSubmitValue: { vendor: 'reviewed-vendor' },
   linesSubmitValue: [{ description: 'reviewed-line' }],
   popupSubmitValue: [{ picked: 'p1' }],
+  reviewState: { vendor: { enabled: true } },
+  linesState: [{ description: 'edited-line' }],
+  popupState: { 0: { id: 'p1' } },
   apiFetch: vi.fn(),
   toastError: vi.fn(),
   toastWarning: vi.fn(),
@@ -88,9 +91,10 @@ vi.mock('../OcrReviewModal', () => ({
         <span data-testid="review-resolving">{String(props.resolving)}</span>
         <span data-testid="review-pre-resolved">{JSON.stringify(props.preResolved)}</span>
         <span data-testid="review-contacts-base">{String(props.contactsBase)}</span>
-        <button type="button" data-testid="review-submit" onClick={() => props.onSubmit(H.reviewSubmitValue)}>
+        <button type="button" data-testid="review-submit" onClick={() => { props.onStateChange?.(H.reviewState); props.onSubmit(H.reviewSubmitValue); }}>
           submit
         </button>
+        <span data-testid="review-initial-state">{JSON.stringify(props.initialState)}</span>
         <button type="button" data-testid="review-cancel" onClick={() => props.onCancel()}>
           cancel
         </button>
@@ -105,8 +109,12 @@ vi.mock('../OcrLinesReviewModal', () => ({
     return (
       <div data-testid="lines-modal">
         <span data-testid="lines-payload">{JSON.stringify(props.lines)}</span>
-        <button type="button" data-testid="lines-submit" onClick={() => props.onSubmit(H.linesSubmitValue)}>
+        <span data-testid="lines-initial-rows">{JSON.stringify(props.initialRows)}</span>
+        <button type="button" data-testid="lines-submit" onClick={() => { props.onStateChange?.(H.linesState); props.onSubmit(H.linesSubmitValue); }}>
           submit
+        </button>
+        <button type="button" data-testid="lines-back" onClick={() => { props.onStateChange?.(H.linesState); props.onBack(); }}>
+          back
         </button>
         <button type="button" data-testid="lines-cancel" onClick={() => props.onCancel()}>
           cancel
@@ -122,8 +130,12 @@ vi.mock('../ProductResolverPopup', () => ({
     return (
       <div data-testid="popup">
         <span data-testid="popup-unmatched">{JSON.stringify(props.unmatched)}</span>
+        <span data-testid="popup-initial">{JSON.stringify(props.initialSelections)}</span>
         <button type="button" data-testid="popup-submit" onClick={() => props.onSubmit(H.popupSubmitValue)}>
           submit
+        </button>
+        <button type="button" data-testid="popup-back" onClick={() => { props.onStateChange?.(H.popupState); props.onBack(); }}>
+          back
         </button>
         <button type="button" data-testid="popup-cancel" onClick={() => props.onCancel()}>
           cancel
@@ -134,6 +146,8 @@ vi.mock('../ProductResolverPopup', () => ({
 }));
 
 import { useOcrFlow } from '../useOcrFlow.jsx';
+import { BACK } from '../ocrFlowSignals.js';
+
 
 const EVENT = 'ocr:test-event';
 
@@ -185,6 +199,9 @@ describe('useOcrFlow — full flow', () => {
     H.reviewSubmitValue = { vendor: 'reviewed-vendor' };
     H.linesSubmitValue = [{ description: 'reviewed-line' }];
     H.popupSubmitValue = [{ picked: 'p1' }];
+    H.reviewState = { vendor: { enabled: true } };
+    H.linesState = [{ description: 'edited-line' }];
+    H.popupState = { 0: { id: 'p1' } };
     for (const key of Object.keys(H.preResolvers)) delete H.preResolvers[key];
     H.showResult.mockReset();
     H.toastError.mockReset();
@@ -565,6 +582,130 @@ describe('useOcrFlow — full flow', () => {
 
       await waitFor(() => expect(readResult()).toEqual({ committed: false, cancelled: true }));
       expect(H.runBatch).not.toHaveBeenCalled();
+    });
+  });
+
+  // ETP-5654 — back navigation: BACK is distinct from cancel and restores earlier edits.
+  describe('back navigation', () => {
+    const taxDocType = () => docType({
+      lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' }],
+    });
+    const PAYLOAD = { line_items: [{ description: 'A', tax_label: 'iva' }] };
+
+    beforeEach(() => {
+      H.preResolvers.findDefaultTax = vi.fn(async () => ({ id: 'T1', label: 'IVA 21%', rate: 21 }));
+      H.docType = taxDocType();
+      H.reviewSubmitValue = { vendor: { bpId: 'bp-1' }, invoiceDate: '2026-01-01' };
+    });
+
+    it('lines back reopens the header with its previous state, without cancelling or re-resolving', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+
+      await screen.findByTestId('review-modal');
+      expect(screen.getByTestId('review-initial-state')).toHaveTextContent(JSON.stringify(H.reviewState));
+      expect(screen.getByTestId('review-resolving')).toHaveTextContent('false');
+      expect(readResult()).toBeNull();
+      expect(H.buildBatch).not.toHaveBeenCalled();
+    });
+
+    it('reuses the edited lines when the header inputs are unchanged', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent(JSON.stringify(H.linesState));
+      expect(H.findBpLocation).toHaveBeenCalledTimes(1);
+      expect(H.preResolvers.findDefaultTax).toHaveBeenCalledTimes(1);
+    });
+
+    it('recomputes the lines and drops the stale edits when the vendor or date changed', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      H.reviewSubmitValue = { vendor: { bpId: 'bp-2' }, invoiceDate: '2026-01-01' };
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent('null');
+      expect(H.findBpLocation).toHaveBeenCalledTimes(2);
+      expect(H.preResolvers.findDefaultTax).toHaveBeenCalledTimes(2);
+    });
+
+    it('a descriptor back returns to the lines with the edits restored and builds once more', async () => {
+      const user = userEvent.setup();
+      H.buildBatch.mockResolvedValueOnce({ back: true });
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(1));
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent(JSON.stringify(H.linesState));
+      expect(H.runBatch).not.toHaveBeenCalled();
+      expect(readResult()).toBeNull();
+
+      await user.click(screen.getByTestId('lines-submit'));
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(H.runBatch).toHaveBeenCalled());
+    });
+
+    it('a descriptor back goes straight to the header when no lines step was shown', async () => {
+      const user = userEvent.setup();
+      H.docType = docType();
+      H.buildBatch.mockResolvedValueOnce({ back: true });
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(1));
+      await screen.findByTestId('review-modal');
+      expect(screen.getByTestId('review-initial-state')).toHaveTextContent(JSON.stringify(H.reviewState));
+      expect(H.runBatch).not.toHaveBeenCalled();
+    });
+
+    it('the product popup receives the selections of an earlier visit and back keeps them', async () => {
+      const user = userEvent.setup();
+      let calls = 0;
+      H.buildBatch.mockImplementation(async (_payload, ctx) => {
+        calls += 1;
+        const picks = await ctx.askUserForProducts({ unmatched: [{ idx: 0, description: 'A' }] });
+        return picks === BACK ? { back: true } : { ops: [{ id: 'inv' }], unmatched: [] };
+      });
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+      await user.click(await screen.findByTestId('popup-back'));
+
+      await screen.findByTestId('lines-modal');
+      await user.click(screen.getByTestId('lines-submit'));
+      await screen.findByTestId('popup');
+      expect(calls).toBe(2);
+      expect(screen.getByTestId('popup-initial')).toHaveTextContent(JSON.stringify(H.popupState));
+      expect(readResult()).toBeNull();
+    });
+
+    it('cancel after going back still marks the run cancelled', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      await user.click(await screen.findByTestId('review-cancel'));
+
+      await waitFor(() => expect(readResult()).toEqual({ committed: false, cancelled: true }));
+      expect(H.showResult).not.toHaveBeenCalled();
     });
   });
 
