@@ -905,52 +905,61 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submittedSnapshot]);
 
-  async function handleGenerate({ filename } = {}) {
+  // ETP-5725 (Sonar javascript:S3776) — `handleGenerate`'s own pre-flight chain, extracted so
+  // the function body keeps a single `if (blockReason) { blockReason(); return; }` instead of
+  // the 6 early-return `if`s that pushed its cognitive complexity past the limit. Same checks,
+  // same order, same messages as before — this only changes how the control flow is organized,
+  // not what is checked or what the user sees. Returns either `null` (nothing blocks) or a
+  // zero-arg function that fires the exact toast the removed inline check used to fire.
+  function getGenerateBlockReason() {
     // ETP-5438 — the button that opens FileGenModal303 is itself hidden once submitted, so
     // this is a belt-and-braces second check (same double-check pattern already used below
     // for missingRequiredFields), not the primary gate. The real defense-in-depth against a
     // direct/malformed API call is server-side, in Fiscal303BoxesHandler#dispatch.
     if (isSubmitted) {
-      toast.error(t('fm.validation.already_submitted') ?? 'Esta declaración ya ha sido presentada.');
-      return;
+      return () => toast.error(t('fm.validation.already_submitted') ?? 'Esta declaración ya ha sido presentada.');
     }
     // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above). Must run before
     // any other guard/state change below: an unset `tipo_declaracion` (or, when visible, a blank
     // `bank_iban`) must never reach the backend, which used to silently default a missing
     // declaration type to "N" instead of rejecting it.
     if (missingRequiredFields.length > 0) {
-      missingRequiredFieldsToast(
+      return () => missingRequiredFieldsToast(
         'fm.validation.missing_required_generate',
         "Completá {fields} antes de generar el fichero.",
       );
-      return;
     }
     if (invalidSelectedOptions.length > 0) {
-      invalidSelectedOptionsToast();
-      return;
+      return () => invalidSelectedOptionsToast();
     }
     // ETP-5456 — an autocalculated box out of the AEAT record-length range must block file
     // generation outright: the file cannot be written with a rounded/truncated stand-in for the
     // real computed amount. See `outOfRangeBoxes`'s own doc comment above.
     if (outOfRangeBoxes.length > 0) {
-      outOfRangeToast(
+      return () => outOfRangeToast(
         'fm.validation.out_of_range_generate',
         'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de generar el fichero.',
       );
-      return;
     }
     // ETP-5725 (reopened QA fix) — "Generar fichero 303" produces the literal AEAT submission
     // artifact (what the user uploads to the AEAT portal), not a preview, so it must be gated by
     // the same corrective/ordinaria consistency rule as "Registrar/Presentar". Server-side is
     // the authoritative gate (Fiscal303BoxesHandler#dispatch); this only gives earlier feedback.
     if (correctiveWithoutPresentedOrdinaria) {
-      toast.error(t('fm.duplicate_period.requires_ordinaria')
+      return () => toast.error(t('fm.duplicate_period.requires_ordinaria')
         ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
-      return;
     }
     if (ordinariaAlreadyPresented) {
-      toast.error(t('fm.duplicate_period.ordinaria_exists')
+      return () => toast.error(t('fm.duplicate_period.ordinaria_exists')
         ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+    }
+    return null;
+  }
+
+  async function handleGenerate({ filename } = {}) {
+    const blockReason = getGenerateBlockReason();
+    if (blockReason) {
+      blockReason();
       return;
     }
     setGenerating(true);
@@ -1186,45 +1195,54 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // than proceeding and losing the edit permanently — the pending-edit flag stays set
   // (`persistEditableFields` only clears it on success), so the user can retry via "Guardar"
   // or by clicking "Registrar/Presentar" again.
-  async function handlePresent({ status: newStatus, acuseFile }) {
+  // ETP-5725 (Sonar javascript:S3776) — `handlePresent`'s own pre-flight chain, extracted for
+  // the same reason as `getGenerateBlockReason` above: collapses 5 early-return `if`s into one
+  // `if (blockReason) { blockReason(); return; }` at the top of `handlePresent`, with identical
+  // checks, order and messages (which differ from `getGenerateBlockReason`'s own wording in a
+  // few places — "Guardar/Generar/Presentar" vs. "Presentar" — kept verbatim, not unified).
+  function getPresentBlockReason() {
     // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above), covering all
     // paths this function can take — including 'aeat_telematic' below, which only opens the
     // AeatSubmitFlow but must not even get that far with an unset declaration type.
     if (missingRequiredFields.length > 0) {
-      missingRequiredFieldsToast(
+      return () => missingRequiredFieldsToast(
         'fm.validation.missing_required_present',
         "Completá {fields} antes de marcar la declaración como presentada.",
       );
-      return;
     }
     if (invalidSelectedOptions.length > 0) {
-      invalidSelectedOptionsToast();
-      return;
+      return () => invalidSelectedOptionsToast();
     }
     // ETP-5456 — an autocalculated box out of the AEAT record-length range must block "Registrar/
     // Presentar" outright, same reasoning as handleGenerate above: there is no correct way to
     // round/truncate the real computed amount into range, so the declaration cannot legally be
     // marked presented in this state.
     if (outOfRangeBoxes.length > 0) {
-      outOfRangeToast(
+      return () => outOfRangeToast(
         'fm.validation.out_of_range_present',
         'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de marcar la declaración como presentada.',
       );
-      return;
     }
     // ETP-5725 (reopened QA fix, Bug 1) — same UX gate as the "Registrar/Presentar" button's own
     // onClick above, re-checked here (this function is the modal's actual confirm path) per this
     // file's existing double-check convention for present-time guards.
     if (correctiveWithoutPresentedOrdinaria) {
-      toast.error(t('fm.duplicate_period.requires_ordinaria')
+      return () => toast.error(t('fm.duplicate_period.requires_ordinaria')
         ?? 'No se puede presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
-      return;
     }
     // ETP-5725 (reopened QA fix) — mirror of the check above: "Solo puede haber una ordinaria
     // por periodo".
     if (ordinariaAlreadyPresented) {
-      toast.error(t('fm.duplicate_period.ordinaria_exists')
+      return () => toast.error(t('fm.duplicate_period.ordinaria_exists')
         ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva.');
+    }
+    return null;
+  }
+
+  async function handlePresent({ status: newStatus, acuseFile }) {
+    const blockReason = getPresentBlockReason();
+    if (blockReason) {
+      blockReason();
       return;
     }
     // ETP-4975 / ETP-5432 pt.10 follow-up (real bug, found via live retest, not a race
