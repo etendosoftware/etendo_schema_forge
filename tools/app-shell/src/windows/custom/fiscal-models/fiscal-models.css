@@ -1546,24 +1546,11 @@
 /* Detail page */
 .fm-390-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 12px 20px; background: hsl(var(--card)); flex-shrink: 0; }
 @media (max-width: 1100px) { .fm-390-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-/* The cuadre with the year's 303s (Reconciliation390): a full-width banner between the KPI cards
-   and the tabs, same gutter (20px) and radius (8px) as the cards; green when it matches, amber
-   (non-blocking) when it does not. */
-.fm-390-reconcile-row { padding: 0 20px 12px; background: hsl(var(--card)); flex-shrink: 0; }
-.fm-390-reconcile {
-  display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px;
-  border: 1px solid var(--status-success-border); background: var(--status-success-bg);
-}
-.fm-390-reconcile--warn { border-color: var(--status-warning-border); background: var(--status-warning-bg); }
-.fm-390-reconcile__icon {
-  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-  width: 32px; height: 32px; border-radius: 50%; background: var(--status-success-fg); color: hsl(var(--card));
-}
-.fm-390-reconcile--warn .fm-390-reconcile__icon { background: var(--status-warning-fg); }
-.fm-390-reconcile__text { flex: 1; min-width: 0; }
-.fm-390-reconcile__title { font: 600 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); }
-.fm-390-reconcile__sub { font: 400 13px/18px var(--fm-font-sans, system-ui); color: hsl(var(--muted-foreground)); }
-.fm-390-reconcile__btn { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 6px 14px; }
+/* The cuadre with the year's 303s (Reconciliation390): the shared rich `.fm-banner` (success /
+   warn), full width between the KPI cards and the tabs with the cards' 20px gutter. */
+.fm-390-reconcile-row { padding: 0 20px 4px; background: hsl(var(--card)); flex-shrink: 0; }
+.fm-390-reconcile__missing { display: block; margin-top: 2px; }
+.fm-390-reconcile__btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; }
 /* The extra content of a block (the year's 303s) while "Ver detalle por trimestre" points at it. */
 .fm-390-block-extra { border-radius: 8px; transition: box-shadow .3s; }
 .fm-390-block-extra--highlight { box-shadow: 0 0 0 2px hsl(var(--primary)); }

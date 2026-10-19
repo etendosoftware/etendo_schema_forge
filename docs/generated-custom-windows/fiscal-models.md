@@ -3683,19 +3683,21 @@ files to several administrations.
   the territory note, the non-blocking "Faltan Modelos 303 de <año> (…)" (same key as the
   Nueva declaración notice, `fm.m390.new_decl.missing_303`) and the preload warnings (draft 303s,
   unknown [110] carry, refund without monthly register, compute failed, last period missing).
-- **Cuadre** (`Reconciliation390`, a full-width banner between the KPI cards and the tabs, same
-  20px gutter and 8px radius as the cards — `.fm-390-reconcile*`): `reconcile390(result on screen,
+- **Cuadre** (`Reconciliation390`, a full-width banner between the KPI cards and the tabs, with
+  the cards' 20px gutter — the shared rich `Banner` of `FmCommon.jsx`, no colours of its own):
+  `reconcile390(result on screen,
   preload)` — the result shown on the Resultado card ([86], or [94] in territory mode) against
   `expectedResult` = [95] − [96] − [97] − [98] − [662] of the 303s.
   - Within `RECONCILIATION_TOLERANCE_390` (1,00 €, named constant — the business rule is pending
-    confirmation): green banner (status-success tokens) with a round check, "El resultado coincide
+    confirmation): `Banner tone="success"` with `CircleCheck`, "El resultado coincide
     con la suma de tus Modelos 303" and the muted "Es informativo: el ingreso o la devolución ya se
     gestionaron en el último 303 (casillas 97 y 98)." (`Reconciliation390__ok`).
-  - Beyond it: amber, non-blocking banner (status-warning tokens, alert icon), "El resultado no
+  - Beyond it: non-blocking `Banner tone="warn"` with `TriangleAlert`, "El resultado no
     coincide con la suma de tus Modelos 303" and "Diferencia con los 303: ±D (según los 303: X;
     tolerancia 1,00 €)" (`Reconciliation390__difference`).
   - Both: the missing-303 notice as a second subtitle line when periods are missing, and the
-    outlined pill "Ver detalle por trimestre →" (`Reconciliation390__viewDetail`), which opens the
+    outlined pill "Ver detalle por trimestre →" in the banner's `actions` slot
+    (`Reconciliation390__viewDetail`), which opens the
     Casillas tab at block 9 and scrolls to / highlights the year's 303s for 2.5 s (`FmBoxes390`
     `goToBlock` → `FmBoxes390__extra_<blockId>`, `.fm-390-block-extra--highlight`).
   - Nothing is rendered when there is nothing to reconcile (no 303 of the year, not computed yet,

@@ -61,7 +61,9 @@ vi.mock('../useOrg390Identity.js', () => ({
     ...orgIdentityMock,
   }),
 }));
-vi.mock('../../../FmCommon.jsx', () => ({
+vi.mock('../../../FmCommon.jsx', async (importOriginal) => ({
+  // The real shared banner (the cuadre with the 303s renders through it).
+  Banner: (await importOriginal()).Banner,
   KpiWidget: ({ value, label, badge }) => React.createElement(
     'div', { className: 'test-kpi390', 'data-label': label },
     React.createElement('span', { className: 'test-kpi390-value' }, value),
@@ -704,8 +706,8 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     const { unmount } = render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
     await waitFor(() => expect(screen.getByTestId('Reconciliation390__ok')).toBeTruthy());
     expect(screen.getByTestId('Reconciliation390__ok').textContent).toContain('fm.m390.reconcile.ok_title');
-    expect(screen.getByTestId('Reconciliation390__ok').textContent).toContain('fm.m390.reconcile.ok_sub');
-    expect(screen.getByTestId('Reconciliation390').className).toContain('fm-390-reconcile--ok');
+    expect(screen.getByTestId('Reconciliation390').querySelector('.fm-banner__sub').textContent).toContain('fm.m390.reconcile.ok_sub');
+    expect(screen.getByTestId('Reconciliation390').querySelector('.fm-banner--rich.fm-banner--success')).toBeTruthy();
     expect(screen.queryByTestId('Reconciliation390__missing')).toBeNull();
     // A full-width banner between the KPI cards and the tabs.
     const banner = screen.getByTestId('Reconciliation390');
@@ -718,8 +720,8 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     render(<FmModel390Page decl={makeDecl({ manualData: { aeatPreloaded: {} } })} {...props()} />);
     await waitFor(() => expect(screen.getByTestId('Reconciliation390__difference')).toBeTruthy());
     expect(screen.getByTestId('Reconciliation390__difference').textContent).toContain('fm.m390.reconcile.difference_title');
-    expect(screen.getByTestId('Reconciliation390__difference').textContent).toContain('fm.m390.reconcile.difference');
-    expect(screen.getByTestId('Reconciliation390').className).toContain('fm-390-reconcile--warn');
+    expect(screen.getByTestId('Reconciliation390').querySelector('.fm-banner__sub').textContent).toContain('fm.m390.reconcile.difference');
+    expect(screen.getByTestId('Reconciliation390').querySelector('.fm-banner--rich.fm-banner--warn')).toBeTruthy();
     expect(screen.getByTestId('Reconciliation390__missing')).toBeTruthy();
     // non-blocking: Generar stays enabled
     expect(screen.getByTestId('FmModel390Page__generate').disabled).toBe(false);
