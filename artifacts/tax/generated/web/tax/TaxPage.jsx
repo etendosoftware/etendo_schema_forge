@@ -6,7 +6,7 @@ import TaxTable from './TaxTable';
 import TaxForm from './TaxForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
-import TaxSifField from '@/windows/custom/shared/TaxSifField';
+import TaxSifField from '../../../custom/TaxSifField';
 import { AttachmentsTab } from '@/components/attachments';
 import catalogs from './mockCatalogs';
 
@@ -64,8 +64,8 @@ const addLineFields = {
 // @sf-generated-end addLineFields:accounting
 
 export const api = {
-  "specName": "tax-rate",
-  "baseUrl": "/sws/neo/tax-rate",
+  "specName": "tax",
+  "baseUrl": "/sws/neo/tax",
   "crud": {
     "tax": {
       "get": true,
@@ -74,8 +74,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": false,
-      "listUrl": "/sws/neo/tax-rate/tax",
-      "detailUrl": "/sws/neo/tax-rate/tax/{id}",
+      "listUrl": "/sws/neo/tax/tax",
+      "detailUrl": "/sws/neo/tax/tax/{id}",
       "supportedFilters": [
         "name",
         "applicableTo"
@@ -88,8 +88,8 @@ export const api = {
       "put": true,
       "patch": true,
       "delete": false,
-      "listUrl": "/sws/neo/tax-rate/accounting",
-      "detailUrl": "/sws/neo/tax-rate/accounting/{id}",
+      "listUrl": "/sws/neo/tax/accounting",
+      "detailUrl": "/sws/neo/tax/accounting/{id}",
       "supportedFilters": []
     }
   },
@@ -100,7 +100,7 @@ export const api = {
       "column": "C_TaxCategory_ID",
       "reference": "TaxCategory",
       "inputMode": "selector",
-      "url": "/sws/neo/tax-rate/tax/selectors/taxCategory"
+      "url": "/sws/neo/tax/tax/selectors/taxCategory"
     },
     {
       "entity": "accounting",
@@ -108,7 +108,7 @@ export const api = {
       "column": "T_Due_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
-      "url": "/sws/neo/tax-rate/accounting/selectors/taxDue"
+      "url": "/sws/neo/tax/accounting/selectors/taxDue"
     },
     {
       "entity": "accounting",
@@ -116,7 +116,7 @@ export const api = {
       "column": "T_Credit_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
-      "url": "/sws/neo/tax-rate/accounting/selectors/taxCredit"
+      "url": "/sws/neo/tax/accounting/selectors/taxCredit"
     }
   ],
   "actions": [],
