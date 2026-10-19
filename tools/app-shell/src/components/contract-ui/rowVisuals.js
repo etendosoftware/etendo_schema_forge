@@ -35,6 +35,26 @@ export const ROW_LIFT_HOVER_NO_BORDERS = 'hover:border-transparent [&:has(+tr:ho
 export const ROW_STICKY_ACTIONS = 'absolute right-0 inset-y-0 h-full min-w-[max(100%,100px)] flex flex-row items-center justify-end gap-0 px-3 z-10 bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)] opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100';
 
 /**
+ * The same "Sticky Acciones" band for a document line (`InlineLinesPanel`), whose rows
+ * are flex `<div>`s that scroll horizontally inside the lines body box (ETP-5600 QA
+ * pass 2). Two layers, because a line has no `<td>` to pin:
+ *
+ * - `LINE_STICKY_ACTIONS_SLOT` — the line's reserved action slot (`ACTION_SLOT_WIDTH_PX`,
+ *   in flow, so it never covers the last column when scrolled to the end), made
+ *   `sticky right-0` while its actions show, so with horizontal overflow it stays on
+ *   the VISIBLE right edge of the scroll box instead of being cut off past it. It
+ *   paints nothing itself and is click-through: the data under its empty left part
+ *   stays visible and clickable.
+ * - `LINE_STICKY_ACTIONS_BAND` — the buttons' band inside it: buttons flush right,
+ *   padding 0 12px, at least 100px wide, the very gradient of `ROW_STICKY_ACTIONS`
+ *   (ending on the line's `--row-hover-bg`), so a column it floats over fades out
+ *   behind an opaque background instead of showing through the icons. 2px gap (the
+ *   lines strip's own spacing) so four buttons still fit the 160px slot.
+ */
+export const LINE_STICKY_ACTIONS_SLOT = 'sticky right-0 z-10 flex items-stretch justify-end pointer-events-none';
+export const LINE_STICKY_ACTIONS_BAND = 'pointer-events-auto flex items-center justify-end gap-0.5 min-w-[100px] px-3 bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)]';
+
+/**
  * Figma "Fila / Selected": #F5F7F9 (`--field-hover`, the exact design value). Hover
  * keeps it (selection wins over hover), and `--row-hover-bg` lets DataTable's
  * quick-actions fade end on it.

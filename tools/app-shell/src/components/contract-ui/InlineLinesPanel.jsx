@@ -46,6 +46,8 @@ import {
   ROW_ACTION_BUTTON_NEUTRAL,
   ROW_ACTION_BUTTON_DESTRUCTIVE,
   ROW_ACTION_BUTTON_ACTIVE,
+  LINE_STICKY_ACTIONS_SLOT,
+  LINE_STICKY_ACTIONS_BAND,
 } from './rowVisuals.js';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
@@ -232,7 +234,9 @@ function computeRowClassName({ isHighlighted, isEditing, hasRowClick, isSelected
   if (isSelected) {
     backgroundClass = ROW_CHECKED_BG;
   } else if (isHighlighted) {
-    backgroundClass = 'bg-muted/40';
+    // `--row-hover-bg` (ETP-5600): the composited tint, so the sticky action band's
+    // gradient (LINE_STICKY_ACTIONS_BAND) ends on the row's real colour, not white.
+    backgroundClass = 'bg-muted/40 [--row-hover-bg:color-mix(in_srgb,hsl(var(--muted))_40%,hsl(var(--card)))]';
   } else {
     backgroundClass = 'bg-card';
   }
@@ -330,26 +334,36 @@ function useHorizontalOverflow(ref, enabled, columns, rowCount) {
  * rowVisuals.js that RowQuickActions uses, so a list row and a document line show
  * identical buttons. Edit is the Iconic edit (its testid stays `Pencil__3b7ec2`),
  * Delete the Iconic trash. The pill behind them stays off
- * (`QUICK_ACTIONS_USE_PILL`). `gap-0.5` (RowQuickActions' gap) keeps four 32px
- * buttons (Add dimensions + a caller action + Edit + Delete) inside the 160px
- * `ACTION_SLOT_WIDTH_PX` slot, and they fit the 40px (`h-10`) line row.
+ * (`QUICK_ACTIONS_USE_PILL`). `gap-0.5` keeps four 32px buttons (Add dimensions
+ * + a caller action + Edit + Delete) plus the band's 12px padding inside the
+ * 160px `ACTION_SLOT_WIDTH_PX` slot, and they fit the 40px (`h-10`) line row.
+ *
+ * ETP-5600 (QA pass 2) — the strip always has its own slot after the last
+ * column (an editable table always reserves it, see `resolveTrailingColumn`),
+ * so scrolled to the end it never covers data. While the actions show, the slot
+ * turns `sticky right-0` (`LINE_STICKY_ACTIONS_SLOT`) and pins to the VISIBLE
+ * right edge of the horizontal scroll box — with overflow the buttons used to
+ * sit past that edge, cut off. The buttons sit in the list's "Sticky Acciones"
+ * band (`LINE_STICKY_ACTIONS_BAND`, the gradient ending on the line's
+ * `--row-hover-bg`), so whatever column it floats over fades out behind an
+ * opaque background; the rest of the slot is transparent and click-through.
  * The edit button of the line being edited keeps the hover overlay at rest
  * (`ROW_ACTION_BUTTON_ACTIVE`): the row is lifted too, but the button is what the
  * user pressed, so the cue stays on it — the same overlay hover shows, so it reads
  * as "this button is engaged" without a new colour.
  */
 function renderRowActionStrip({
-  showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui, onEdit, onDelete, canDelete = true, extraActions = [],
+  showActions, reserveActionSlot, isEditing, isDeleting, ui, onEdit, onDelete, canDelete = true, extraActions = [],
 }) {
   if (!showActions && !reserveActionSlot) return null;
   return (
     <div
-      className="flex items-center justify-end gap-2 pr-1"
-      style={{ flex: actionStripFlex }}
+      className={showActions ? LINE_STICKY_ACTIONS_SLOT : 'flex'}
+      style={{ flex: `0 0 ${ACTION_SLOT_WIDTH_PX}px` }}
       data-testid="line-actions"
     >
       {showActions && (
-        <div className={`flex items-center gap-0.5 h-10 px-2 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
+        <div className={`${LINE_STICKY_ACTIONS_BAND} ${QUICK_ACTIONS_PILL_CLASS}`.trim()}>
           {extraActions.map(({ key, icon: Icon, tooltip, onClick, testId }) => (
             <button
               key={key}
@@ -548,16 +562,13 @@ function computeLineCellStyle({ editable, isNumeric, noTruncate, col, idx }) {
 }
 
 function renderLineCell({
-  col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
+  col, idx, row, isEditing, isDocumentReadOnly,
   visibleColumns, hasRowClick,
   entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
   locale, t, ui, onCommit, onCellClick, cellBadges,
 }) {
-  const isTrailing = col === trailingColumn;
-  // The trailing column is hidden when the action strip is showing,
-  // so the icons can take its space. Other amount columns stay visible.
-  if (isTrailing && showActions) return null;
-
+  // ETP-5600 — no cell is ever hidden for the action strip any more: an editable
+  // table reserves its own slot, and a read-only one never shows the strip.
   const isNumeric = NUMERIC_TYPES.has(col.type);
   const editable = isEditing && isCellEditable(col);
   const noTruncate = col.noTruncate === true;
@@ -1310,14 +1321,13 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     )),
     [columns, hiddenColumns]
   );
-  // The LAST column disappears on hover to make room for the action strip — its
-  // width matches the strip so the swap is invisible. This only applies to monetary
-  // tables (sales-quotation, etc.), where that last column is an `amount`.
-  // For tabs without a trailing amount column (Cuenta Bancaria, Persona, and every
-  // tab whose amount sits mid-row) we instead ALWAYS reserve the 160px slot, so
-  // values don't reflow when hovering.
+  // Whether the row reserves the 160px action slot after its last column. Until
+  // ETP-5600 the LAST column, when an `amount`, disappeared on hover to make room
+  // for the strip instead (monetary tables: sales-quotation, etc.); since then that
+  // swap survives only as a layout rule for READ-ONLY tables (see below), where a
+  // trailing amount still takes the slot's place.
   //
-  // ETP-5245 — this deliberately checks ONLY the last visible column. It used to
+  // ETP-5245 — the trailing rule deliberately checks ONLY the last visible column. It used to
   // scan backwards for the last column *of type amount* anywhere in the row, but
   // the action strip is always appended at the END of the flex row: suppressing a
   // cell that isn't the last one deletes a slot from the middle/start, so every
@@ -1331,12 +1341,16 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // The predicate itself lives in `@/lib/linesActionSlot.js` because DataTable's
   // add-row companion table must reserve the very same slot — see that module's
   // header for why the two renderers may never answer this question apart.
-  const trailingColumn = useMemo(() => resolveTrailingColumn(visibleColumns), [visibleColumns]);
-  const reserveActionSlot = trailingColumn == null;
-  // Action strip must be the same width as the trailing column it replaces on hover.
-  const actionStripFlex = trailingColumn
-    ? columnFlex(trailingColumn, visibleColumns.indexOf(trailingColumn))
-    : `0 0 ${ACTION_SLOT_WIDTH_PX}px`;
+  //
+  // ETP-5600 (QA pass 2) — an editable (draft) table now ALWAYS reserves the
+  // slot: the strip is sticky to the visible right edge of the scroll box and
+  // needs room of its own past the last column, so the trailing amount is no
+  // longer hidden on hover. A read-only table never shows the strip and keeps
+  // the former rule, so completed documents keep their layout.
+  const reserveActionSlot = useMemo(
+    () => resolveTrailingColumn(visibleColumns, { editable: !isDocumentReadOnly }) == null,
+    [visibleColumns, isDocumentReadOnly],
+  );
 
   // ETP-4529 — at most one column may declare `type: 'dimensionsPanel'` (see
   // artifacts/{window}/generated/web/{window}/LinesTable.jsx for a caller
@@ -1696,7 +1710,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             </div>
             {/* Cells */}
             {visibleColumns.map((col, idx) => renderLineCell({
-              col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
+              col, idx, row, isEditing, isDocumentReadOnly,
               visibleColumns, hasRowClick: Boolean(onRowClick),
               entity, token, apiBaseUrl, selectorContext, invalidCell, focusColIdx,
               locale, t, ui, onCommit: commitField, onCellClick: handleCellClick, cellBadges,
@@ -1716,7 +1730,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 next to the row's own Edit action and read as a duplicate
                 button (see docs/feedback.md). */}
             {renderRowActionStrip({
-              showActions, reserveActionSlot, actionStripFlex, isEditing, isDeleting, ui,
+              showActions, reserveActionSlot, isEditing, isDeleting, ui,
               onEdit: () => handleEditClick(row),
               onDelete: () => handleDeleteClick(row),
               canDelete,

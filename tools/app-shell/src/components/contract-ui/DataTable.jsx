@@ -3400,7 +3400,10 @@ export function DataTable({
   // the new-line form while InlineLinesPanel owns the existing rows. InlineLinesPanel
   // always appends a 48px right spacer, plus an ACTION_SLOT_WIDTH_PX action slot when
   // no column can be swapped for the hover action strip. Mirror those here so flexible
-  // columns grow to the same width in both.
+  // columns grow to the same width in both. ETP-5600 — an editable lines table always
+  // reserves that slot (the strip is sticky and needs room past the last column), and
+  // this add-row only mounts on an editable table, hence `reservesActionSlot`'s
+  // default `editable: true`.
   //
   // ETP-5245 — this MUST be `reservesActionSlot()`, the same predicate
   // InlineLinesPanel uses, not a local "is there any amount column?" guess: the panel
