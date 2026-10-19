@@ -1568,8 +1568,8 @@
    folds into a select above the content (1280×720 keeps the index). */
 .fm-390-boxes { display: flex; align-items: flex-start; gap: 8px; padding: 0; }
 .fm-390-index {
-  /* 248px keeps every block name on one line (the 11 items fit under the tabs bar at 1280×720). */
-  width: 248px; flex-shrink: 0; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px;
+  /* 280px keeps every block name on one line, active (500) included (the 11 items fit under the tabs bar at 1280×720). */
+  width: 280px; flex-shrink: 0; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px;
   position: sticky; top: 49px;
 }
 /* Same item metrics as the 303 Casillas section nav (8px 12px, 14/20, radius 8). */
