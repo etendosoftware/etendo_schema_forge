@@ -52,6 +52,7 @@ vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
   IconicEditIcon: (props) => <svg data-icon="iconic-edit" {...props} />,
   IconicCopyIcon: (props) => <svg data-icon="iconic-copy" {...props} />,
   IconicMailIcon: (props) => <svg data-icon="iconic-mail" {...props} />,
+  IconicDotsVerticalIcon: (props) => <svg data-icon="iconic-dots-vertical" {...props} />,
 }));
 
 import RowQuickActions from '../RowQuickActions.jsx';
@@ -170,7 +171,7 @@ describe('RowQuickActions', () => {
     ];
     setup({ menuActions });
     const more = screen.getByTestId('row-quick-action-more');
-    expect(more).toBeTruthy();
+    expect(within(more).getByTestId('MoreVertical__ec6673')).toHaveAttribute('data-icon', 'iconic-dots-vertical');
     await user.click(more);
     expect(screen.getByText('Action A')).toBeTruthy();
     expect(screen.queryByText('Action B')).toBeNull();

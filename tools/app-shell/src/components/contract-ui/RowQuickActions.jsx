@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { MoreVertical, Loader2 } from 'lucide-react';
-// ETP-5600 — Figma "Sticky Acciones": edit, copy, mail and trash are the Iconic set on
+import { Loader2 } from 'lucide-react';
+// ETP-5600 — Figma "Sticky Acciones": edit, copy, mail, kebab and trash are the Iconic set on
 // the 20x20 frame (core custom-icons), so the band never mixes icon families.
-import { IconicCopyIcon, IconicEditIcon, IconicMailIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
+import { IconicCopyIcon, IconicDotsVerticalIcon, IconicEditIcon, IconicMailIcon, IconicTrashIcon } from '@/components/ui/custom-icons';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
@@ -432,7 +432,7 @@ export default function RowQuickActions({
             title={ui('quickAction.more')}
             data-testid="row-quick-action-more"
           >
-            <MoreVertical className="h-5 w-5" data-testid="MoreVertical__ec6673" />
+            <IconicDotsVerticalIcon className="h-5 w-5" data-testid="MoreVertical__ec6673" />
           </button>
           {showMenu && menuPos && createPortal(
             <>
