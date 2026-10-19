@@ -200,14 +200,14 @@
         "grandTotalAmount": {
           "visibility": "readOnly",
           "defaultExpr": "0",
+          "form": false,
           "grid": true,
-          "gridOrder": 5,
-          "section": "summary"
+          "gridOrder": 5
         },
         "summedLineAmount": {
           "visibility": "readOnly",
           "defaultExpr": "0",
-          "section": "summary"
+          "form": false
         },
         "priceIncludesTax": {
           "visibility": "readOnly",

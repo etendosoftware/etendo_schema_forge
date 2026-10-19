@@ -325,15 +325,15 @@
         "grandTotalAmount": {
           "visibility": "readOnly",
           "defaultExpr": "0",
+          "form": false,
           "grid": true,
           "gridOrder": 6,
-          "section": "summary",
           "businessCritical": true
         },
         "summedLineAmount": {
           "visibility": "readOnly",
           "defaultExpr": "0",
-          "section": "summary"
+          "form": false
         },
         "outstandingAmount": {
           "visibility": "readOnly",

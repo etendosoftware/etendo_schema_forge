@@ -1,9 +1,10 @@
 // @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
 import { navigateTo } from '../../helpers/auth.js';
 import {
-  waitForDetailReady, expectSaveResponse, waitForConfirmResponse, slow,
+  waitForDetailReady, waitForConfirmResponse, slow, createDraftWithFirstLine,
 } from '../../helpers/purchase-helpers.js';
 import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../../helpers/inventory-helpers.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
@@ -74,7 +75,7 @@ const WAREHOUSE = DEFAULT_WAREHOUSE_NAME;
  * @param {string} windowSlug e.g. "sales-order" or "sales-quotation"
  */
 async function createDraftWithLine(page, windowSlug) {
-  await test.step(`Create a draft ${windowSlug} with a customer`, async () => {
+  await test.step(`Fill a new ${windowSlug} header with a customer`, async () => {
     await navigateTo(page, windowSlug);
     const newButton = page.getByTestId('action-new');
     await expect(newButton).toBeVisible({ timeout: 20_000 });
@@ -101,59 +102,13 @@ async function createDraftWithLine(page, windowSlug) {
       await expect(chipOrValue).toBeVisible({ timeout: 3_000 });
       await expect(chipOrValue).not.toHaveText(/buscar|search|seleccionar|select/i, { timeout: 1_000 });
     }).toPass({ timeout: 30_000 });
-
-    const saveBtn = page.getByTestId('action-save-draft')
-      .or(page.getByRole('button', { name: /guardar|save/i }));
-    const savePromise = expectSaveResponse(page);
-    await saveBtn.click();
-    await savePromise;
-
-    await expect(page).toHaveURL(new RegExp(`/${windowSlug}/[a-zA-Z0-9]+`), { timeout: 20_000 });
-    await waitForDetailReady(page);
-    await slow(page);
   });
 
-  await test.step('Add a product line', async () => {
-    const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
-      .or(page.getByRole('button', { name: /añadir líneas|add lines/i }).first());
-    await expect(emptyStateBtn).toBeVisible({ timeout: 15_000 });
-    await expect(async () => {
-      await emptyStateBtn.click({ timeout: 5_000 });
-      await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 10_000 });
-    }).toPass({ timeout: 30_000 });
-
-    const productField = page.getByTestId('inline-add-field-product');
-    const searchDrawer = page.getByTestId('product-search-drawer');
-    await expect(async () => {
-      await productField.click({ timeout: 3_000 });
-      await expect(searchDrawer).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 15_000 });
-
-    await page.getByTestId('product-search-input').fill(PRODUCT);
-    const productOption = page.locator('[data-testid^="product-search-option-"]')
-      .filter({ hasText: new RegExp(PRODUCT, 'i') }).first();
-    await expect(productOption).toBeVisible({ timeout: 15_000 });
-
-    // Retry the click: the drawer re-renders its list when waterfall fetches
-    // complete, which can detach the option mid-click (see purchase-helpers.js).
-    let productCallout;
-    await expect(async () => {
-      productCallout = page.waitForResponse(
-        (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
-        { timeout: 30_000 },
-      );
-      await productOption.click({ timeout: 3_000 });
-    }).toPass({ timeout: 15_000 });
-    await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
-    await productCallout;
-
-    const lineAdded = expectSaveResponse(page);
-    await page.keyboard.press('Enter');
-    await lineAdded;
-
-    await expect(page.getByText(PRODUCT).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId('inline-add-row')).toBeHidden({ timeout: 15_000 }).catch(() => {});
-    await slow(page);
+  // No Guardar first: "+ Añadir líneas" saves the header itself — the path a user
+  // takes. The manual-save path is kept by sales-order-return-rectificativa and the
+  // ALL-negative case of sales-quotation-full-flow.
+  await test.step('Add a product line from the empty state (no manual save)', async () => {
+    await createDraftWithFirstLine(page, { spec: windowSlug, via: 'emptyState', productName: PRODUCT });
   });
 }
 

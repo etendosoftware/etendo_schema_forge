@@ -1,8 +1,8 @@
 {
-  "version": "0.53.0",
+  "version": "0.54.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-09-28T12:18:04.690Z",
-  "checksum": "526461b2ff26637d",
+  "updatedAt": "2026-10-15T18:34:49.855Z",
+  "checksum": "dbc729d0ce1ed363",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -558,9 +558,8 @@
             "visibility": "readOnly",
             "required": true,
             "grid": true,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
-            "section": "summary",
             "gridOrder": 5,
             "validation": {
               "required": true,
@@ -577,9 +576,8 @@
             "visibility": "readOnly",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
-            "section": "summary",
             "validation": {
               "required": true,
               "maxLength": 22
