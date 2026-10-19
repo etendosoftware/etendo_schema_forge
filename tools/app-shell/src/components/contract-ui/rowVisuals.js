@@ -24,17 +24,26 @@ export const ROW_LIFT_SHADOW_STATIC = 'shadow-[0_4px_6px_-2px_rgba(18,18,23,0.05
 export const ROW_LIFT_HOVER_NO_BORDERS = 'hover:border-transparent [&:has(+tr:hover)]:border-transparent';
 
 /**
+ * Minimum width (px) of the list "Sticky Acciones" band. ETP-5600 (review W1): it is a
+ * LAYOUT floor, not a visual one — DataTable reserves at least this much for the
+ * canonical quick-actions column (`quickActionsReservedWidthPx`), and the band is
+ * exactly its cell (`min-w-full`), so with 1–2 buttons the band never reaches past its
+ * cell into the last data column.
+ */
+export const QUICK_ACTIONS_MIN_BAND_PX = 100;
+
+/**
  * Figma "Sticky Acciones" (Fila Contactos / State=Hover): the hover band that holds a
- * list row's quick actions, pinned to the right of its cell. At least 100px wide and
- * never narrower than the cell, so it masks the whole reserved column while the cell
- * floats over data; padding 0 12px, buttons flush right with a 2px gap (four buttons
+ * list row's quick actions, pinned to the right of its cell. As wide as its cell, which
+ * DataTable reserves at no less than `QUICK_ACTIONS_MIN_BAND_PX` (100px), so it masks the
+ * whole reserved column while the cell floats over data and never overflows it; padding 0 12px, buttons flush right with a 2px gap (four buttons
  * make the Figma 158px band: 4 x 32 + 3 x 2 + 24 — the width follows the buttons a
  * window actually shows, never a fixed 158px that would mask more data than needed); background the
  * Figma gradient from transparent to the row's hovered colour at 10.58%
  * (`--row-hover-bg`, set per row state by DataTable) — no border, no shadow. Hidden at
  * rest, shown on row hover, keyboard focus, or while its kebab menu is open.
  */
-export const ROW_STICKY_ACTIONS = 'absolute right-0 inset-y-0 h-full min-w-[max(100%,100px)] flex flex-row items-center justify-end gap-0.5 px-3 z-10 bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)] opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100';
+export const ROW_STICKY_ACTIONS = 'absolute right-0 inset-y-0 h-full min-w-full flex flex-row items-center justify-end gap-0.5 px-3 z-10 bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)] opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100';
 
 /**
  * The same "Sticky Acciones" band for a document line (`InlineLinesPanel`), whose rows
@@ -48,7 +57,7 @@ export const ROW_STICKY_ACTIONS = 'absolute right-0 inset-y-0 h-full min-w-[max(
  *   paints nothing itself and is click-through: the data under its empty left part
  *   stays visible and clickable.
  * - `LINE_STICKY_ACTIONS_BAND` — the buttons' band inside it: buttons flush right,
- *   padding 0 12px, at least 100px wide, the very gradient of `ROW_STICKY_ACTIONS`
+ *   padding 0 12px, at least 100px wide (inside its own 158px slot), the very gradient of `ROW_STICKY_ACTIONS`
  *   (ending on the line's `--row-hover-bg`), so a column it floats over fades out
  *   behind an opaque background instead of showing through the icons. 2px gap, as the
  *   list band, so four buttons are exactly the Figma 158px band and fill the 158px

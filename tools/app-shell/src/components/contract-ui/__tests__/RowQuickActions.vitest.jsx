@@ -188,13 +188,13 @@ describe('RowQuickActions', () => {
     expect(onEdit).toHaveBeenCalledWith(DRAFT_ROW);
   });
 
-  // Figma "Sticky Acciones": >=100px band (never narrower than its cell), padding 0 12px,
+  // Figma "Sticky Acciones": the band is exactly its cell (DataTable reserves >= 100px), padding 0 12px,
   // buttons flush right with a 2px gap, the transparent -> row-hover gradient, no border/shadow.
   it('renders the actions band with the Figma Sticky Acciones geometry and gradient', () => {
     setup();
     const tokens = screen.getByTestId('row-quick-actions').className.split(/\s+/);
     expect(tokens).toEqual(expect.arrayContaining([
-      'absolute', 'right-0', 'min-w-[max(100%,100px)]', 'px-3', 'justify-end', 'gap-0.5',
+      'absolute', 'right-0', 'min-w-full', 'px-3', 'justify-end', 'gap-0.5',
       'bg-[linear-gradient(90deg,rgba(255,255,255,0)_0%,var(--row-hover-bg,hsl(var(--card)))_10.58%)]',
     ]));
     expect(tokens).not.toContain('gap-0');

@@ -369,8 +369,9 @@ export default function RowQuickActions({
       //
       // ETP-5600 (QA pass 2) — this div IS the Figma "Sticky Acciones" layer and
       // carries the masking background again, now as the Figma gradient
-      // (transparent -> `--row-hover-bg` at 10.58%), at least 100px wide and never
-      // narrower than its cell (ROW_STICKY_ACTIONS in rowVisuals.js). The `<td>`
+      // (transparent -> `--row-hover-bg` at 10.58%), exactly as wide as its cell, which
+      // DataTable reserves at no less than QUICK_ACTIONS_MIN_BAND_PX (ROW_STICKY_ACTIONS
+      // in rowVisuals.js), so it never reaches past the cell. The `<td>`
       // paints nothing: its own gradient left a visible seam at the cell's left
       // edge. Same colour end as before, so the gutter and the icons still match.
       className={ROW_STICKY_ACTIONS}

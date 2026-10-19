@@ -92,9 +92,16 @@ function quickActionsReservedWidthPx(rowQuickActions) {
   if (Number.isFinite(explicitWidth) && explicitWidth > 0) return explicitWidth;
   const count = estimateQuickActionsButtonCount(rowQuickActions);
   if (count <= 0) return 0;
-  return count * QUICK_ACTIONS_BUTTON_PX
+  const buttonsPx = count * QUICK_ACTIONS_BUTTON_PX
     + Math.max(count - 1, 0) * QUICK_ACTIONS_GAP_PX
     + QUICK_ACTIONS_CONTAINER_PADDING_PX;
+  // ETP-5600 (review W1) — the canonical band (ROW_STICKY_ACTIONS) is at least
+  // QUICK_ACTIONS_MIN_BAND_PX wide and exactly its cell, so the cell reserves that floor:
+  // with 1–2 buttons (56px / 90px) the band used to overflow the cell and cover the last
+  // data column on hover. A custom `render` brings no band, so it keeps its own width.
+  return typeof rowQuickActions?.render === 'function'
+    ? buttonsPx
+    : Math.max(buttonsPx, QUICK_ACTIONS_MIN_BAND_PX);
 }
 
 // ETP-5268 — the quick-actions column is ALWAYS rendered at its own full
@@ -177,12 +184,13 @@ function quickActionsColumnClassName(extraClassName, { paintsOwnBand = false } =
     'relative right-0 z-10 group-hover/row:sticky has-[[data-state=open]]:sticky',
     // ETP-5600 (QA pass 2) — with the canonical RowQuickActions the CELL paints nothing:
     // the band inside it (ROW_STICKY_ACTIONS, the Figma "Sticky Acciones" layer) carries
-    // the gradient, is at least 100px wide and may reach a few px left of the cell into
-    // the column it floats over, hence `overflow-visible`. A cell gradient left a visible
-    // vertical seam at the cell's left edge. A custom `rowQuickActions.render` brings no
-    // such band, so its cell keeps painting the fade itself (below).
+    // the gradient. A cell gradient left a visible vertical seam at the cell's left edge.
+    // Review W1: the band is exactly the cell (`min-w-full`) and the cell reserves at least
+    // QUICK_ACTIONS_MIN_BAND_PX, so nothing reaches past the cell and the TableCell base
+    // `overflow-hidden` stays. A custom `rowQuickActions.render` brings no such band, so its
+    // cell keeps painting the fade itself (below).
     paintsOwnBand
-      ? 'overflow-visible'
+      ? ''
       : 'group-hover/row:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)] has-[[data-state=open]]:bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]',
     // ETP-5600 — Figma "Fila Contactos / State=Hover", layer "Sticky Acciones": a white
     // linear gradient (0% -> 100% opacity) whose fade lives in the cell's 12px left padding
@@ -581,7 +589,7 @@ import { PillToggle } from '@/components/PillToggle';
 import RowQuickActions from './RowQuickActions.jsx';
 import { trackSearchResultSelected } from '@/lib/productUsageTelemetry.js';
 import { LOOKUP_DRAWERS } from './lookupDrawers.js';
-import { ROW_LIFT_SHADOW, ROW_LIFT_HOVER_NO_BORDERS, ROW_CHECKED_BG } from './rowVisuals.js';
+import { ROW_LIFT_SHADOW, ROW_LIFT_HOVER_NO_BORDERS, ROW_CHECKED_BG, QUICK_ACTIONS_MIN_BAND_PX } from './rowVisuals.js';
 
 import { apiFetch } from '@/auth/api.js';
 /**
@@ -3406,7 +3414,7 @@ export function DataTable({
   // InlineLinesPanel uses, not a local "is there any amount column?" guess: the panel
   // only ever swaps the LAST column, so a tab whose amount sits earlier (Producto >
   // Costo: `cost`, `startingDate`, `endingDate`) reserves the slot there while this
-  // table did not — handing those 160px to `growColumnWidth()`'s grow columns and
+  // table did not — handing those 158px to `growColumnWidth()`'s grow columns and
   // pushing every add-row input right of its header.
   const ilpReservesActionSlot = hideHeader && linesLayout === 'inlineEditable'
     && reservesActionSlot(visibleColumns);

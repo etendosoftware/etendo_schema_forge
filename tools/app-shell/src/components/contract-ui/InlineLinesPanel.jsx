@@ -217,8 +217,9 @@ function makeRowClickHandler(onRowClick, row) {
  * instant (`transition-none` — no fade), no border change, `hover:relative
  * hover:z-20` so the shadow spills onto the rows below instead of being covered
  * by them. Unlike a `<tr>`, a flex row never overlaps the row above, so the
- * previous row's `border-b` (this row's top separator) stays visible on hover
- * without DataTable's ROW_LIFT_TOP_SEPARATOR redraw. A read-only (completed)
+ * previous row's `border-b` (this row's top separator) and its own stay visible on
+ * hover: document lines keep both separators, whereas DataTable's list rows drop
+ * them (ROW_LIFT_HOVER_NO_BORDERS). A read-only (completed)
  * document's lines do not lift: Figma shows no hover there.
  *
  * `isEditing` keeps the row lifted with the same Shadows/lg and a z-index, on top

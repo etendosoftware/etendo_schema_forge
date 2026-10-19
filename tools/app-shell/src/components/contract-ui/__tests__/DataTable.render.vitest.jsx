@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
+// @covers tools/app-shell/src/components/contract-ui/rowVisuals.js
 /**
  * DataTable render coverage tests.
  *
@@ -75,6 +76,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { DataTable } from '../DataTable.jsx';
+import { QUICK_ACTIONS_MIN_BAND_PX } from '../rowVisuals.js';
 
 // --- Fixtures ---
 
@@ -293,21 +295,37 @@ describe('DataTable — render coverage', () => {
 
     // ETP-5600 (Figma "Sticky Acciones") — with the canonical RowQuickActions the sticky
     // cell paints nothing: the band inside it carries the gradient (ROW_STICKY_ACTIONS) and
-    // may reach left of the cell, so the cell is overflow-visible. A cell gradient left a
+    // is exactly the cell (review W1), so the cell keeps its overflow clip. A cell gradient left a
     // vertical seam at its left edge. A custom `render` has no such band, so its cell keeps
     // fading into the row's own hovered background (`--row-hover-bg`, card fallback) — never
     // a hardcoded slate literal.
     const fade = 'bg-[linear-gradient(to_right,transparent,var(--row-hover-bg,hsl(var(--card)))_12px)]';
 
-    it('leaves the canonical quick-actions cell unpainted and lets its band overflow', () => {
+    it('leaves the canonical quick-actions cell unpainted, with no overflow escape', () => {
       const cols = [{ key: 'n', label: 'N', type: 'string' }];
       const rows = [{ id: 'rq1', n: 'a' }];
       render(<DataTable columns={cols} data={rows} rowQuickActions={{ enabled: true, onEdit: vi.fn() }} selectable={false} />);
       const classes = screen.getByTestId('rqa-rq1').closest('td').className.split(/\s+/);
 
-      expect(classes).toEqual(expect.arrayContaining(['group-hover/row:sticky', 'overflow-visible']));
+      expect(classes).toEqual(expect.arrayContaining(['group-hover/row:sticky']));
+      expect(classes).not.toContain('overflow-visible');
       expect(classes).not.toContain(`group-hover/row:${fade}`);
       expect(classes).not.toContain(`has-[[data-state=open]]:${fade}`);
+    });
+
+    // ETP-5600 (review W1) — the Sticky Acciones band is at least QUICK_ACTIONS_MIN_BAND_PX
+    // wide. The reserved column must be too, or with 1–2 buttons (56px / 90px) the opaque band
+    // overflowed its cell and covered the last data column on hover (the ETP-5268 invariant).
+    it.each([
+      ['one button (Edit)', { onEdit: vi.fn(), hideDeleteButton: true }],
+      ['two buttons (Edit + Delete)', { onEdit: vi.fn() }],
+    ])('reserves at least the band width with %s', (_label, config) => {
+      const cols = [{ key: 'n', label: 'N', type: 'string' }];
+      const rows = [{ id: 'rq1', n: 'a' }];
+      render(<DataTable columns={cols} data={rows} rowQuickActions={{ enabled: true, ...config }} selectable={false} />);
+      const cell = screen.getByTestId('rqa-rq1').closest('td');
+
+      expect(parseFloat(cell.style.width)).toBeGreaterThanOrEqual(QUICK_ACTIONS_MIN_BAND_PX);
     });
 
     it('fades a custom-render quick-actions cell into the row hover background, with a card fallback', () => {
