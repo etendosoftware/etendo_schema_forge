@@ -272,7 +272,9 @@ describe('ContactsSummaryWidget', () => {
   });
 
   // Digit cap (QA pass 2): up to |9.999| % the grouped value shows in full; from |10.000| %
-  // the text is capped to the 4-digit width with an ellipsis and the full value is the title.
+  // only the number is cut, inside a box sized by an invisible copy of the cap ("±9.999%"),
+  // with the suffix kept whole and the full value as the title. jsdom has no layout, so the
+  // structure is asserted, not the width.
   it.each([
     ['9.999% shows in full with the thousands separator', 10099, 100, '+9.999%', false, 'up', 'success'],
     ['10.000% is capped, full value in the tooltip', 10100, 100, '+10.000%', true, 'up', 'success'],
@@ -281,16 +283,27 @@ describe('ContactsSummaryWidget', () => {
     serve({ stats3: [block('revenue', value, previousValue, 0), block('expenses', 0, 0, 0, false)] });
     renderWidget();
     await waitFor(() => expect(chipOf('bpRevenue')).not.toBeNull());
-    const text = `${pct} bpVsLast3Months`;
-    expectChip('bpRevenue', { text, direction, tone });
-    const label = within(chipOf('bpRevenue')).getByTestId('contacts-trend-text');
+    const chip = chipOf('bpRevenue');
+    const full = `${pct} bpVsLast3Months`;
+    expect(within(chip).getByTestId('Arrow__22ed51')).toHaveAttribute('data-direction', direction);
+    expect(chip.querySelector('.status-tag')).toHaveClass(`status-tag--${tone}`);
+    const label = within(chip).getByTestId('contacts-trend-text');
+    expect(label).toHaveTextContent(full);
     if (capped) {
-      expect(label).toHaveAttribute('title', text);
-      expect(label).toHaveClass('truncate');
-      expect(label.style.maxWidth).toBe(`${`${pct.startsWith(MINUS) ? MINUS : '+'}9.999% bpVsLast3Months`.length}ch`);
+      expect(label).toHaveAttribute('title', full);
+      const numberBox = within(label).getByTestId('contacts-trend-number');
+      expect(numberBox).toHaveClass('relative', 'inline-block', 'tabular-nums');
+      const cap = within(numberBox).getByTestId('contacts-trend-number-cap');
+      expect(cap).toHaveTextContent(`${pct.startsWith(MINUS) ? MINUS : '+'}9.999%`);
+      expect(cap).toHaveClass('invisible');
+      expect(cap).toHaveAttribute('aria-hidden', 'true');
+      expect(within(numberBox).getByText(pct)).toHaveClass('absolute', 'inset-0', 'truncate');
+      // The suffix sits outside the truncating box.
+      expect(numberBox).not.toHaveTextContent('bpVsLast3Months');
     } else {
+      expect(label).toHaveTextContent(full);
       expect(label).not.toHaveAttribute('title');
-      expect(label).not.toHaveClass('truncate');
+      expect(within(label).queryByTestId('contacts-trend-number')).toBeNull();
     }
   });
 

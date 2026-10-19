@@ -90,9 +90,17 @@ const TREND_ICONS = { up: IconicArrowUpIcon, down: IconicArrowDownIcon };
 /**
  * ETP-5600 (QA pass 2) — the largest variation shown in full: up to |9.999| % the
  * rounded value is printed whole (grouped with the instance thousands separator,
- * `formatGroupedNumber`). From |10.000| % up the chip keeps the width the 4-digit
- * cap would take and the text ends in an ellipsis; the full value is in the
- * tooltip (`title`, as the other contacts components do).
+ * `formatGroupedNumber`). From |10.000| % up only the NUMBER is cut with an
+ * ellipsis, inside a box exactly as wide as the rendered cap ("−9.999%" with the
+ * configured separator); the "vs últimos N meses" suffix stays whole and the full
+ * value is in the tooltip (`title`, as the other contacts components do).
+ *
+ * The box is sized by the browser, not estimated: an invisible in-flow copy of the
+ * cap string gives it its width (same font, inherited), and the real number sits
+ * on top of it, `absolute inset-0 truncate`. `tabular-nums` on both makes every
+ * digit equally wide, so any 4-digit value fits exactly and a 5-digit one always
+ * overflows. (A `ch` max-width did not work: most glyphs are narrower than "0", so
+ * the cap was wider than the real text and nothing was ever cut.)
  */
 const MAX_FULL_PERCENT = 9999;
 
@@ -114,13 +122,9 @@ function TrendBadge({ trend, period, ui }) {
   const sign = up ? '+' : '\u2212';
   const vsLabel = period === '6M' ? ui('bpVsLast6Months') : ui('bpVsLast3Months');
   const Arrow = up ? TREND_ICONS.up : TREND_ICONS.down;
-  const text = `${sign}${formatGroupedNumber(rounded)}% ${vsLabel}`;
+  const number = `${sign}${formatGroupedNumber(rounded)}%`;
+  const text = `${number} ${vsLabel}`;
   const capped = rounded > MAX_FULL_PERCENT;
-  // `ch` cap = the length of the same text at the 4-digit maximum, so the chip never
-  // grows past the width a |9.999| % chip takes.
-  const capStyle = capped
-    ? { maxWidth: `${`${sign}${formatGroupedNumber(MAX_FULL_PERCENT)}% ${vsLabel}`.length}ch` }
-    : undefined;
   // StatusTag (core) does not spread extra props, so the testid lives on a wrapper.
   return (
     <span className="inline-flex shrink-0" data-testid="StatusTag__22ed51">
@@ -130,14 +134,19 @@ function TrendBadge({ trend, period, ui }) {
         label={(
           <>
             <Arrow className="h-4 w-4 shrink-0" aria-hidden="true" data-testid="Arrow__22ed51" />
-            <span
-              className={capped ? 'block min-w-0 truncate' : undefined}
-              style={capStyle}
-              title={capped ? text : undefined}
-              data-testid="contacts-trend-text"
-            >
-              {text}
-            </span>
+            {capped ? (
+              <span className="whitespace-nowrap" title={text} data-testid="contacts-trend-text">
+                <span className="relative inline-block align-top tabular-nums" data-testid="contacts-trend-number">
+                  <span className="invisible" aria-hidden="true" data-testid="contacts-trend-number-cap">
+                    {`${sign}${formatGroupedNumber(MAX_FULL_PERCENT)}%`}
+                  </span>
+                  <span className="absolute inset-0 truncate">{number}</span>
+                </span>
+                {` ${vsLabel}`}
+              </span>
+            ) : (
+              <span data-testid="contacts-trend-text">{text}</span>
+            )}
           </>
         )}
         data-testid="StatusTag__22ed51" />
