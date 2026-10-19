@@ -15,7 +15,8 @@
 //   GET {neo}/session                                              → organization.taxId / name
 //   GET {neo}/organization/organization/<orgId>                     → socialName / name
 //   GET {neo}/organization/information/<orgId>                      → aeat390Isperson, aeat390Rep*
-//   GET {neo}/organization/actividadesDelIae?parentId=<orgId>       → IAE activities
+//   GET {neo}/organization/actividadesDelIae?parentId=<orgId>       → IAE activities (+ the raw
+//       epigraph / code fields through `_extraProperties`, IAE_EXTRA_PROPERTIES)
 //   GET {neo}/organization/representanteLegal?parentId=<orgId>      → legal representatives
 import { useEffect, useState } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -60,7 +61,18 @@ async function readJson(res) {
 
 const rowsOf = (json) => (Array.isArray(json?.response?.data) ? json.response.data : []);
 
-// The IAE selectors come back as identifiers only, composed from the AD identifier columns:
+/**
+ * The raw IAE fields the "Datos estadísticos" block needs, asked through the datasource's
+ * `_extraProperties` (NEO allowlists what a GET requests this way, neo-headless.md §4.3.5). They
+ * come back flat: `epgrafeIAE$epigraph`, `epgrafeIAE$description`, `epiaeCode$code`,
+ * `epiaeCode$description`.
+ */
+export const IAE_EXTRA_PROPERTIES = 'epgrafeIAE.epigraph,epgrafeIAE.description,epiaeCode.code,epiaeCode.description';
+
+const rawOrNull = (v) => (v == null ? null : String(v).trim());
+
+// Fallback when the raw fields are absent (an older backend): the IAE selectors as identifiers,
+// composed from the AD identifier columns:
 // EPIAE_Epigraph = "Key - Epigraph - Description" ("1 - 6732 - OTROS CAFES Y BARES"),
 // EPIAE_Code = "Code - Description" ("A03 - Resto de actividades…"). A description may itself
 // contain " - ", so only the leading parts are split off.
@@ -87,8 +99,12 @@ export function toActivities(rows) {
       || (Number(a?.lineNo) || 0) - (Number(b?.lineNo) || 0))
     .map(r => {
       const isDefault = isEtendoTrue(r?.default);
-      const [, epigraph, description] = splitIdentifier(r['epgrafeIAE$_identifier'], 2);
-      const [code, codeDescription] = splitIdentifier(r['epiaeCode$_identifier'], 1);
+      const [, parsedEpigraph, parsedDescription] = splitIdentifier(r['epgrafeIAE$_identifier'], 2);
+      const [parsedCode, parsedCodeDescription] = splitIdentifier(r['epiaeCode$_identifier'], 1);
+      const epigraph = rawOrNull(r['epgrafeIAE$epigraph']) ?? parsedEpigraph;
+      const description = rawOrNull(r['epgrafeIAE$description']) ?? parsedDescription;
+      const code = rawOrNull(r['epiaeCode$code']) ?? parsedCode;
+      const codeDescription = rawOrNull(r['epiaeCode$description']) ?? parsedCodeDescription;
       return {
         id: r.id,
         description,
@@ -127,7 +143,7 @@ export default function useOrg390Identity({ apiBaseUrl, orgId }) {
         get('/session'),
         orgId ? get(`/organization/organization/${encodeURIComponent(orgId)}`) : null,
         orgId ? get(`/organization/information/${encodeURIComponent(orgId)}`) : null,
-        orgId ? get(`/organization/actividadesDelIae?parentId=${encodeURIComponent(orgId)}&_limit=100`) : null,
+        orgId ? get(`/organization/actividadesDelIae?parentId=${encodeURIComponent(orgId)}&_limit=100&_extraProperties=${encodeURIComponent(IAE_EXTRA_PROPERTIES)}`) : null,
         orgId ? get(`/organization/representanteLegal?parentId=${encodeURIComponent(orgId)}&_limit=100&_sortBy=lineNo`) : null,
       ]);
       if (cancelled) return;

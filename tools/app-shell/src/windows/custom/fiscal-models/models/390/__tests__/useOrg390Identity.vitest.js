@@ -57,6 +57,15 @@ describe('toActivities — "Datos estadísticos" A/B/C columns', () => {
     expect(a).toMatchObject({ description: 'GANADO - BOVINO', epigraph: '012', code: '', codeDescription: '' });
   });
 
+  it('prefers the raw epigraph / code fields (_extraProperties) over the identifiers', () => {
+    const [a] = toActivities([row({
+      'epgrafeIAE$_identifier': 'broken', 'epiaeCode$_identifier': 'broken',
+      'epgrafeIAE$epigraph': '6732', 'epgrafeIAE$description': 'CAFES - BARES',
+      'epiaeCode$code': 'A03', 'epiaeCode$description': 'Resto',
+    })]);
+    expect(a).toMatchObject({ description: 'CAFES - BARES', epigraph: '673.2', code: 'A03', codeDescription: 'Resto' });
+  });
+
   it('orders main first, then the others by line, ranked 1…n as classic writes them', () => {
     const list = toActivities([
       row({ id: 'o2', lineNo: 30 }),
