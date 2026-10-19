@@ -694,6 +694,18 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
 
+## Return to vendor from the receipt (`createPurchaseReturn`) — ETP-5711
+
+`createPurchaseReturn` is now declared to MCP by `GoodsReceiptHeaderHandler.actionContracts()` (after
+`createPurchaseInvoice`). Body, both optional: `lines: [{lineId, returnQuantity}]` and `reason` (kept as the
+return's description). **Omit `lines` to return everything still returnable**; with `lines`, exactly those (a line
+listed twice counts both; a `lineId` that is not on the receipt is a 422 `returnLineNotInDocument`). The receipt must
+be completed (422 `sourceNotCompleted`). The return is **always left in draft**; the 201 answers `{id, documentNo,
+documentStatus, lines:[{id, product, productName, returnedQuantity, originalQuantity, sourceLineId}]}` so the linkage
+can be reported. More than is returnable is a 422 `returnQuantityExceedsAvailable` and nothing is created; nothing
+left at all is 422 `nothingLeftToReturn`. The SPA wizard sends explicit lines and is unchanged; a second partial return
+now works. Cap rule and error shape: `return-to-vendor-shipment.md` and neo-headless.md §4.12.32.
+
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.

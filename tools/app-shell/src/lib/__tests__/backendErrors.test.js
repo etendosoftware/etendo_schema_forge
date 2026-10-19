@@ -2130,6 +2130,88 @@ describe('translateBackendError — invoice lines without amount (ETP-5710)', ()
   });
 });
 
+// ReturnableQuantity.java / ReturnFromDocumentSupport.java (com.etendoerp.go — ETP-5711). The
+// over-return refusal names the product and both quantities; the product is free text, so it is
+// located by the fixed delimiters.
+describe('translateBackendError — over-return refusals (ETP-5711)', () => {
+  const es = fakeUiTranslator({
+    'backendError.returnQuantityExceeds': 'No se pueden devolver {requested} de {product}: solo quedan {available} por devolver de esta línea ({total} en el documento de origen).',
+    'backendError.returnNothingLeftOnLine': 'No se pueden devolver {requested} de {product}: no queda nada por devolver de esta línea ({total} en el documento de origen).',
+    'backendError.returnNothingLeft': 'No queda nada por devolver de este documento: todas las líneas ya se han devuelto.',
+    'backendError.returnLineRequiresImport': 'Las líneas de una devolución no se pueden crear directamente.',
+    'backendError.returnLineNotInDocument': 'La línea {lineId} no es una línea de este documento.',
+    'backendError.returnReasonTooLong': 'El motivo es demasiado largo: máximo {max} caracteres (tiene {length}).',
+  });
+
+  it('translates the direct-creation refusal of both directions to the same key', () => {
+    const expected = 'Las líneas de una devolución no se pueden crear directamente.';
+    assert.equal(
+      translateBackendError('Return lines cannot be created directly. Add them to the return with importReceiptLines, or create the whole return from the source document with createPurchaseReturn.', es),
+      expected,
+    );
+    assert.equal(
+      translateBackendError('Return lines cannot be created directly. Add them to the return with importShipmentLines, or create the whole return from the source document with createReturn.', es),
+      expected,
+    );
+  });
+
+  it('translates "line is not a line of this document" keeping the id', () => {
+    assert.equal(
+      translateBackendError('Line 4F2A is not a line of this document.', es),
+      'La línea 4F2A no es una línea de este documento.',
+    );
+    assert.equal(translateBackendError('Line  is not a line of this document.', es), 'Line  is not a line of this document.');
+  });
+
+  it('translates the over-long reason keeping both numbers', () => {
+    assert.equal(
+      translateBackendError('The reason is too long: it can have at most 255 characters (it has 300).', es),
+      'El motivo es demasiado largo: máximo 255 caracteres (tiene 300).',
+    );
+    const odd = 'The reason is too long: it can have at most (it has 3).';
+    assert.equal(translateBackendError(odd, es), odd);
+  });
+
+  it('translates the over-return with product and quantities', () => {
+    assert.equal(
+      translateBackendError('Cannot return 5 of Agua: only 4 can still be returned from this line (10 on the source document).', es),
+      'No se pueden devolver 5 de Agua: solo quedan 4 por devolver de esta línea (10 en el documento de origen).',
+    );
+  });
+
+  it('keeps a product name that itself contains " of " and ": only "', () => {
+    assert.equal(
+      translateBackendError('Cannot return 2 of Box of 6: only 1 can still be returned from this line (3 on the source document).', es),
+      'No se pueden devolver 2 de Box of 6: solo quedan 1 por devolver de esta línea (3 en el documento de origen).',
+    );
+  });
+
+  it('translates the nothing-left variants', () => {
+    assert.equal(
+      translateBackendError('Cannot return 1 of Agua: nothing is left to return from this line (10 on the source document).', es),
+      'No se pueden devolver 1 de Agua: no queda nada por devolver de esta línea (10 en el documento de origen).',
+    );
+    assert.equal(
+      translateBackendError('Nothing is left to return from this document: every line has already been returned.', es),
+      'No queda nada por devolver de este documento: todas las líneas ya se han devuelto.',
+    );
+  });
+
+  it('leaves an unrelated "Cannot return" message untouched', () => {
+    const other = 'Cannot return anything today.';
+    assert.equal(translateBackendError(other, es), other);
+  });
+
+  it('has the keys in en_US, es_ES and es_AR', () => {
+    for (const loc of ['en_US', 'es_ES', 'es_AR']) {
+      const flat = readFileSync(new URL(`../../locales/${loc}.json`, import.meta.url), 'utf8');
+      for (const k of ['returnQuantityExceeds', 'returnNothingLeftOnLine', 'returnNothingLeft', 'returnSourceNotCompleted', 'returnLineRequiresImport', 'returnLineNotInDocument', 'returnReasonTooLong']) {
+        assert.ok(flat.includes(`"backendError.${k}"`), `${loc} is missing ${k}`);
+      }
+    }
+  });
+});
+
 // AmortizationConfirmGuard.java (com.etendoerp.go — ETP-5414). Simple exact-match
 // BACKEND_ERROR_MAP entries, same shape as the "duplicate email" block above — no dynamic
 // value, so no fakeUiTranslator/regex match needed. Three of the four reuse the SAME key
