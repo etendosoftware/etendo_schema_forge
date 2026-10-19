@@ -27,8 +27,6 @@ const breadcrumb = 'Sales / Sales Invoice';
 // @sf-generated-start summary:header
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'amount' },
 ];
 
 const statusField = 'documentStatus';

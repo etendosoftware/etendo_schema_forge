@@ -21,8 +21,6 @@ const breadcrumb = 'Sales / Sales Quotation';
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'rejectReason', column: 'C_Reject_Reason_ID', type: 'selector' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'amount' },
 ];
 
 const statusField = 'documentStatus';
