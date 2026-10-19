@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth.js';
+import { login } from '../../helpers/auth.js';
 
 /**
  * `/account` with an expired session (ETP-5455, test plan M-04).

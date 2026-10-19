@@ -705,7 +705,7 @@
         "e2e": [
           {
             "root": "frontend",
-            "path": "e2e/tests/flows/first-steps-demo-data-transfer.mocked.spec.js",
+            "path": "e2e/tests/flows/platform/first-steps-demo-data-transfer.mocked.spec.js",
             "note": "Covers RUNNING progress, FAILED retry, and row absence with the flag off."
           }
         ]
