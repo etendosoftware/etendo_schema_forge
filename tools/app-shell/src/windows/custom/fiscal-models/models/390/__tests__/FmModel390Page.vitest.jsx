@@ -51,7 +51,11 @@ const orgIdentityMock = vi.hoisted(() => ({}));
 vi.mock('../useOrg390Identity.js', () => ({
   default: () => ({
     loaded: true, nif: 'B12345678', name: 'Acme SL',
-    activities: [{ id: 'a1', activity: 'Comercio', type: 'A', code: '651.1', isDefault: true }],
+    activities: [
+      { id: 'a1', description: 'OTROS CAFES Y BARES', code: 'A03', codeDescription: 'Resto de actividades', epigraph: '673.2', typeLabel: '1 - Empresariales', isDefault: true, rank: 0 },
+      { id: 'a2', description: 'COMERCIO MENOR', code: 'A04', codeDescription: '', epigraph: '651.1', typeLabel: '', isDefault: false, rank: 1 },
+      { id: 'a3', description: 'SEXTA', code: 'A01', codeDescription: '', epigraph: '012', typeLabel: '', isDefault: false, rank: 6 },
+    ],
     isPerson: false, personRepresentative: null,
     representatives: [{ id: 'r1', nif: '12345678Z', name: 'Ana Pérez', powerDate: '2024-03-05', notary: 'Notaría 1' }],
   }),
@@ -180,7 +184,18 @@ describe('FmModel390Page — skeleton', () => {
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     expect(screen.getByTestId('FmBoxes390__nif').textContent).toContain('B12345678');
     goToBlock('datos_estadisticos');
-    expect(screen.getByTestId('FmBoxes390__activities').textContent).toContain('651.1');
+    const table = screen.getByTestId('FmBoxes390__activities');
+    expect([...table.querySelectorAll('th')].map(th => th.textContent)).toEqual([
+      'fm.m390.statistics.activity', 'fm.m390.statistics.code', 'fm.m390.statistics.epigraph', 'fm.m390.statistics.main',
+    ]);
+    const cells = screen.getAllByTestId('FmBoxes390__activityRow').map(tr => [...tr.querySelectorAll('td')]);
+    expect(cells[0][0].textContent).toBe('OTROS CAFES Y BARES');
+    expect(cells[0][1].textContent).toContain('A03');
+    expect(cells[0][1].getAttribute('title')).toBe('Resto de actividades');
+    expect(cells[0][2].textContent).toBe('673.2');
+    expect(cells[0][3].textContent).toBe('fm.m390.statistics.main_yes');
+    expect(cells[1][3].textContent).toBe('fm.m390.statistics.other');
+    expect(cells[2][3].textContent).toBe('fm.m390.statistics.not_declared');
     goToBlock('representante');
     expect(screen.getByTestId('FmBoxes390__representatives').textContent).toContain('Ana Pérez');
     expect(screen.getByTestId('FmBoxes390__editOrganization')).toBeTruthy();

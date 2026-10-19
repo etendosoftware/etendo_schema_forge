@@ -11,6 +11,7 @@ import {
   parseAmount, isTerritoryMode, territoryPercentSum, inputOrigin, substitutiveFlags,
   buildManualData390, blockRows, cellBox, INPUT,
   resultKind390, sanitizeAeatInputs390, conflictingInput390, inputMessages390, isRectificationByQuotas,
+  formatIaeEpigraph390,
 } from '../fm390Layouts.js';
 import { annualDeadline390 } from '../deadline390.js';
 import { missing303Periods } from '../newDeclWarning390.js';
@@ -265,5 +266,14 @@ describe('classic consistency of the manual inputs', () => {
     const devolver = blockRows(block).flatMap(r => r.cells).filter(c => c?.input?.startsWith('DEVOLVER_'));
     expect(devolver).toHaveLength(12);
     expect(devolver.every(c => c.monthlyReturnOnly)).toBe(true);
+  });
+});
+
+describe('formatIaeEpigraph390 — epigraph as the AEAT form shows it', () => {
+  it('dots a 4-digit epigraph before its last digit and leaves the rest as they are', () => {
+    expect(formatIaeEpigraph390('6732')).toBe('673.2');
+    expect(formatIaeEpigraph390('012')).toBe('012');
+    expect(formatIaeEpigraph390(' 99 ')).toBe('99');
+    expect(formatIaeEpigraph390(null)).toBe('');
   });
 });

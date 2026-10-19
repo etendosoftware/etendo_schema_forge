@@ -23,6 +23,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import {
   sortByLineNo, isEtendoTrue, MODELO_390_REPRESENTATIVE_LIMIT,
 } from '@/windows/custom/organization/representanteLegal.js';
+import { formatIaeEpigraph390 } from './fm390Layouts.js';
 
 export const EMPTY_ORG_IDENTITY = Object.freeze({
   loaded: false,
@@ -59,18 +60,46 @@ async function readJson(res) {
 
 const rowsOf = (json) => (Array.isArray(json?.response?.data) ? json.response.data : []);
 
-/** IAE row → what the "Datos estadísticos" block lists. Principal first, then by line. */
+// The IAE selectors come back as identifiers only, composed from the AD identifier columns:
+// EPIAE_Epigraph = "Key - Epigraph - Description" ("1 - 6732 - OTROS CAFES Y BARES"),
+// EPIAE_Code = "Code - Description" ("A03 - Resto de actividades…"). A description may itself
+// contain " - ", so only the leading parts are split off.
+const IDENTIFIER_SEPARATOR = ' - ';
+
+function splitIdentifier(identifier, leading) {
+  const parts = String(identifier ?? '').split(IDENTIFIER_SEPARATOR);
+  const head = parts.slice(0, leading).map(v => v.trim());
+  while (head.length < leading) head.push('');
+  return [...head, parts.slice(leading).join(IDENTIFIER_SEPARATOR).trim()];
+}
+
+/**
+ * IAE row → what the "Datos estadísticos" block lists, matching the form's columns per activity:
+ * A (`description`, the epigraph description), B (`code` + `codeDescription`) and C (`epigraph`,
+ * AEAT format). Order is the one classic writes (AEAT390Utility.getEpigraphOrgInfo): the main
+ * activity first, then the others by line; `rank` is 0 for the main one and 1…n for the others.
+ * `typeLabel` (the IAE key, "Actividades empresariales sujetas al IAE") is not a form column.
+ */
 export function toActivities(rows) {
+  let otherRank = 0;
   return [...rows]
     .sort((a, b) => Number(isEtendoTrue(b?.default)) - Number(isEtendoTrue(a?.default))
       || (Number(a?.lineNo) || 0) - (Number(b?.lineNo) || 0))
-    .map(r => ({
-      id: r.id,
-      activity: r['epgrafeIAE$_identifier'] ?? '',
-      type: r['epiaeType$_identifier'] ?? '',
-      code: r['epiaeCode$_identifier'] ?? '',
-      isDefault: isEtendoTrue(r?.default),
-    }));
+    .map(r => {
+      const isDefault = isEtendoTrue(r?.default);
+      const [, epigraph, description] = splitIdentifier(r['epgrafeIAE$_identifier'], 2);
+      const [code, codeDescription] = splitIdentifier(r['epiaeCode$_identifier'], 1);
+      return {
+        id: r.id,
+        description,
+        code,
+        codeDescription,
+        epigraph: formatIaeEpigraph390(epigraph),
+        typeLabel: r['epiaeType$_identifier'] ?? '',
+        isDefault,
+        rank: isDefault ? 0 : ++otherRank,
+      };
+    });
 }
 
 /** Legal representative row → `{ id, nif, name, powerDate, notary }` (first 3 by line). */

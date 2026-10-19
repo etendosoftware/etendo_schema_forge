@@ -16,7 +16,7 @@ import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
 import {
   INPUT, FLAG, TERRITORY_PERCENT_INPUTS, cellInput, cellBox, buildBoxIndex, findBox, parseAmount,
   inputOrigin, isTerritoryMode, territoryPercentSum, isSubstitutive, isMonthlyReturn, isConcurso,
-  inputMessages390,
+  inputMessages390, MODELO_390_OTHER_ACTIVITY_LIMIT,
 } from './fm390Layouts.js';
 
 const BLOCK_ICON = {
@@ -347,6 +347,16 @@ function DevengoBlock({ ctx }) {
   );
 }
 
+/**
+ * "Principal" column: the main activity, then the others in the order the file writes them
+ * (1ª…5ª). One past the file's limit is listed but not declared (TOO_MANY_IAE incident).
+ */
+function activityRankLabel(activity, t) {
+  if (activity.isDefault) return t('fm.m390.statistics.main_yes');
+  if (activity.rank > MODELO_390_OTHER_ACTIVITY_LIMIT) return t('fm.m390.statistics.not_declared');
+  return t('fm.m390.statistics.other', { n: activity.rank });
+}
+
 function StatisticsBlock({ ctx }) {
   const activities = ctx.orgIdentity?.activities ?? [];
   return (
@@ -358,18 +368,21 @@ function StatisticsBlock({ ctx }) {
           <thead>
             <tr>
               <th>{ctx.t('fm.m390.statistics.activity')}</th>
-              <th>{ctx.t('fm.m390.statistics.key')}</th>
+              <th>{ctx.t('fm.m390.statistics.code')}</th>
               <th>{ctx.t('fm.m390.statistics.epigraph')}</th>
               <th>{ctx.t('fm.m390.statistics.main')}</th>
             </tr>
           </thead>
           <tbody>
             {activities.map(a => (
-              <tr key={a.id ?? `${a.activity}-${a.code}`}>
-                <td>{a.activity || '—'}</td>
-                <td>{a.type || '—'}</td>
-                <td>{a.code || '—'}</td>
-                <td>{a.isDefault ? ctx.t('fm.m390.statistics.main_yes') : ''}</td>
+              <tr key={a.id ?? `${a.epigraph}-${a.code}`} data-testid="FmBoxes390__activityRow">
+                <td>{a.description || '—'}</td>
+                <td title={a.codeDescription || undefined}>
+                  {a.code || '—'}
+                  {a.codeDescription ? <span className="fm-390-hint"> {a.codeDescription}</span> : null}
+                </td>
+                <td title={a.typeLabel || undefined}>{a.epigraph || '—'}</td>
+                <td>{activityRankLabel(a, ctx.t)}</td>
               </tr>
             ))}
           </tbody>

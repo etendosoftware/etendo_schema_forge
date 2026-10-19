@@ -637,3 +637,15 @@ export function buildManualData390(previous, identification, aeatInputs, aeatPre
   if (aeatPreloaded != null) out.aeatPreloaded = { ...aeatPreloaded };
   return out;
 }
+
+/** Other IAE activities the file carries after the main one (classic writes up to 5, by line). */
+export const MODELO_390_OTHER_ACTIVITY_LIMIT = 5;
+
+/**
+ * IAE epigraph as the AEAT form shows it: the file writes the bare digits ("6732"), the form a
+ * dot before the last digit of a 4-digit epigraph ("673.2"). Shorter ones (groups) stay as they are.
+ */
+export function formatIaeEpigraph390(epigraph) {
+  const raw = String(epigraph ?? '').trim();
+  return /^\d{4}$/.test(raw) ? `${raw.slice(0, 3)}.${raw.slice(3)}` : raw;
+}
