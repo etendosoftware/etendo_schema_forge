@@ -22,6 +22,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A8 | Accounting | `P_InvoicePriceVariance_Acct` NULL at all three levels that feed it (`C_ACCTSCHEMA_DEFAULT`, `M_Product_Category_Acct`, `M_Product_Acct`) — a match whose invoiced price differs from its receipt cost fails to post with a misleadingly BP/BP-Group-flavored "Account could not be found.", even though the only account genuinely missing is this one and it has nothing to do with the business partner | Both fronts closed: preventive step in `OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` (runs before the existing product/category copy-down inserts, so a new tenant's products/categories inherit a real account instead of propagating NULL); corrective data-fix (`R34`) backfills all three levels for already-onboarded tenants, each from that SAME row's own `P_Expense_Acct` | ETP-5075 |
 | A8b | Accounting | Product decision, made after A8/ETP-5075 shipped: the fleet-wide standard Invoice Price Variance account is a dedicated GL account (`99904000`), not each tenant's own `P_Expense_Acct` — A8's resolution was a reasonable unblocker but not the intended long-term value | Three fronts: preventive rewrites `backfillInvoicePriceVarianceDefault`'s SQL (same method/file as A8, no new step) to resolve `99904000`'s own NATURAL `C_ValidCombination` first (scoped through `C_AcctSchema_Element`/`elementtype='AC'`, filtered on all ~11 dimension columns being NULL), falling back to A8's `P_Expense_Acct`-derived value only when `99904000` doesn't resolve for that tenant's chart; a NEW dataset-baseline layer (Layer 0) bakes the same `99904000` combination directly into the bundled `C_ACCTSCHEMA_DEFAULT.xml` so a fresh tenant is correct from the dataset-import step itself, not merely by the time the Java step later runs; corrective is a NEW file, `R35`, which corrects any row R34 already touched (still `NULL` or still equal to R34's `P_Expense_Acct` value) to `99904000`'s resolved combination — R34 itself stays byte-identical, un-edited, and remains the sole source for a chart that genuinely lacks `99904000` | ETP-5222 |
 | A9 | Accounting | `FIN_Financial_Account_Acct.FIN_IN_CLEAR_ACCT` / `FIN_OUT_CLEAR_ACCT` ("Cleared payment account" IN/OUT) born pre-filled with the ledger asset account (`57200000`) instead of empty — a non-null cleared account is what makes `DocFINReconciliation` post a reconciliation, so reconciliations generated unwanted entries in Sumas y Saldos / Libro Mayor. NOT a missing-row gap (A2c) or a missing-account gap (A7): the row and the account both exist, the *value* is wrong | Both fronts closed: preventive in `OnboardingAccountingWiringService#FIN_FINANCIAL_ACCOUNT_ACCT_SQL` (stops selecting the two columns) + `FinancialAccountAccountingDefaultsSupport` (actively clears them after core's trigger seeds them, for the live create path); corrective data-fix (`R34`) blanks them on already-onboarded tenants, skipping accounts with posted reconciliations. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R34`'s `@check` returns 0 rows for it | ETP-5207 |
+| A10 | Accounting | Manual journals created before ETP-5682 carry **another tenant's** GLJ document type: numbered from the foreign sequence, so the tenant's own GLJ sequence fell behind and its next journal can hit `gl_journal_docno`; posted ones also carry the foreign doctype **and GL category** in `Fact_Acct` (posting copies both from the doctype) | Both fronts closed: preventive is ETP-5682 (client-scoped `simple-g-l-journal` `documentType.defaultExpr` + `NeoDefaultTenantGuard`); corrective data-fix (`R50-gl-journal-foreign-doctype`) advances the own GLJ sequences, repoints `Fact_Acct` (doctype + category) and the journal. CUT NOT bumped — not an onboarding gap: the bad rows come from a runtime default, not from provisioning | ETP-5719 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -1170,6 +1171,49 @@ scope change the corrected version only reaches the leftover rows through a targ
 `make data-fixes FIX=R34-fin-account-cleared-payment-accounts` (add `DRY_RUN=1` first). Anywhere
 `R34` was applied under the earlier, narrower scope, that targeted re-run is required to finish the
 job.
+
+### A10 — Manual journals on another tenant's document type (ETP-5719, 2026-10-19)
+
+**Symptom:** the next manual journal of a tenant fails with "ya existe un documento con este
+identificador" (`gl_journal_docno`, unique per org + period + number), and reports by GL category
+show entries under another tenant's category.
+
+**Root cause:** before ETP-5682 the `GL_Journal.C_DocType_ID` default had no `AD_Client_ID` filter
+(`docs/etendo-ad/unscoped-sql-defaults.md`), so a journal could be stored with another tenant's GLJ
+document type. `DocumentNoHandlerLegacy` numbered it from the foreign sequence, so the tenant's own
+GLJ sequence never moved past the numbers it already uses. Posting (`AcctServer`) copies
+`C_DocType_ID` **and** `GL_Category_ID` from the document type into every `Fact_Acct` row, so a
+posted journal also carries the foreign category there (`GL_Journal.GL_Category_ID` itself is the
+tenant's own).
+
+**Preventive front:** ETP-5682 (client-scoped `defaultExpr` on `simple-g-l-journal` +
+`NeoDefaultTenantGuard`). No journal created after its deploy used a foreign doctype in prod.
+
+**Corrective fix:** `20261019T141632Z__R50-gl-journal-foreign-doctype.sql`, three statements in
+this order:
+1. advance every own active GLJ sequence to `MAX(numeric documentno) + 1` (tenant-wide,
+   forward-only; foreign tenants' sequences are never rewound);
+2. repoint `Fact_Acct` (`AD_Table_ID = '224'`) of the affected journals: doctype and GL category;
+3. repoint `GL_Journal.C_DocType_ID` (last, because it erases the marker step 2 joins on).
+
+The target doctype mirrors the ETP-5682 `defaultExpr` order (`IsDefault DESC`, then the closest
+org), so a repointed journal lands where a new one in that org would. Amounts are untouched, so no
+unpost/repost, and no trigger reacts to these columns. A tenant with no own active GLJ doctype is
+left untouched and listed by the `@report`. Regression guard:
+`cli/test/data-fixes-r50-gl-journal-foreign-doctype.test.js`.
+
+**Running it in prod:** use the normal chain run (preceded by `--dry-run`), never `--fix R50…`
+without `--client`: a targeted run records R50 as processed and moves the tenant's watermark past
+any older fix it has not run yet. Do not create a test journal in a customer tenant to prove it;
+check that every own GLJ sequence is above the tenant's highest journal number instead.
+
+**Status:** written 2026-10-19. Verified on the local dev DB: R50 `WOULD_APPLY` on exactly the 4
+affected tenants (127 `SKIPPED_NOT_NEEDED`); applied, every journal and its 2 posted facts on the
+own doctype and category, sequences above the highest number; a re-run is `SKIPPED_NOT_NEEDED`.
+Prod scope on 2026-10-19: 17 journals in 11 tenants, 13 posted (32 fact rows).
+
+**Not in scope:** RTV shipments (`M_InOut`) with another tenant's `MMR` doctype — a separate live
+leak in `CreatePurchaseReturnHandler`, ETP-5801.
 
 ---
 

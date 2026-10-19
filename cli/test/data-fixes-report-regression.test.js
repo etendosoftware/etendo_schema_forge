@@ -1,3 +1,4 @@
+// @covers cli/src/data-fixes/parse-fix.js
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readdir, readFile } from 'node:fs/promises';
@@ -173,6 +174,7 @@ const FIXES_WITH_REPORT = new Set([
   // currency. The @report lists a partner the chain could not resolve (a client with no base
   // currency) and is empty on every clean run.
   '20261015T184242Z__R49-bpartner-currency-from-org',
+  '20261019T141632Z__R50-gl-journal-foreign-doctype',
 ]);
 
 async function loadCatalogFiles() {
