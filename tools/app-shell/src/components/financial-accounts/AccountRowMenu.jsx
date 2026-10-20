@@ -113,7 +113,7 @@ function AccountRowMenuWriteItems({
                 account={account}
                 ui={ui}
                 onBankConnectionAction={onBankConnectionAction}
-              />
+                data-testid="StaleReconnectMenuItem__ffaf9f" />
               <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
               <DropdownMenuItem
                 onClick={() => onBankConnectionAction?.('disconnect', account)}
