@@ -1,8 +1,8 @@
 {
-  "version": "0.38.0",
+  "version": "0.39.0",
   "generatedAt": "2026-07-30T22:14:36.474Z",
-  "updatedAt": "2026-10-19T22:50:56.608Z",
-  "contractChecksum": "b4950abb6a21f900",
+  "updatedAt": "2026-10-20T12:10:51.490Z",
+  "contractChecksum": "f4d7fd671c5c88d0",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",
@@ -564,10 +564,12 @@
     },
     "labelOverrides": {
       "en_US": {
-        "EM_ETGO_Currency_ID": "Currency"
+        "EM_ETGO_Currency_ID": "Currency",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "EM_ETGO_Currency_ID": "Moneda"
+        "EM_ETGO_Currency_ID": "Moneda",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -848,5 +850,5 @@
     "dangerousOperations": [],
     "agentPrompt": "Goods receipts (purchase side): goods received from a vendor. Entity `goodsReceipt` is the header, `goodsReceiptLine` the lines. Two ways to put purchase-order lines on a receipt. FAST PATH, a whole order in one step: etendo_action `createGoodsReceipt` on the completed purchase order (spec purchase-order, entity header) creates a DRAFT receipt with every pending line. FILLING A DRAFT RECEIPT, which also lets one receipt take lines from several orders of the same vendor, in this order: (1) create the header with etendo_create on `goodsReceipt` (businessPartner and the rest are defaulted; etendo_schema with view:\"create\" is the authority on what a create needs); (2) etendo_action `availableOrders` on the receipt id lists the vendor's completed purchase orders, in the receipt's currency, that still have quantity to receive; (3) `availableOrderLines` with {orderId} lists that order's pending lines, each with its pendingQuantity; (4) `importOrderLines` on the receipt id with {orderId} imports everything still pending, or with {orderId, lines:[{sourceLineId, quantity}]} exactly those lines (repeat for each order); (5) confirm the receipt with the DocAction button (action documentAction, docAction CO). The receipt must be a draft and the order completed, of the same vendor and currency. What is pending already subtracts what any draft receipt holds, this one included: asking for more answers 422 importQuantityExceedsPending (naming the product, the requested and the pending quantity) and adds nothing, and the order's delivered quantity only moves when the receipt is completed. The receipt is linked to the order when every line it holds comes from that one order. The classic Create Lines From button is redirected to importOrderLines. To send goods back to the vendor use createPurchaseReturn. Reading a receipt: documentAction on the record is the next default action of the document (what its Process button would run); \"--\" means none, the document is in a final state. invoiceStatus is the percentage of the receipt already invoiced (0 nothing, 100 all, a partial in between) and returnStatus the percentage already returned; linkedInvoices, linkedReturns and linkedOrders list the documents tied to the receipt (each with id, documentNo and documentStatus). They are returned on a single-record etendo_get (invoiceStatus on lists too). What can be done NOW: before offering an action on a receipt call etendo_schema with view:\"actions\" and id = the receipt id; each action carries availableNow (true or false) and, when false, unavailableReason, and documentAction carries availableValuesNow. Unavailable actions stay listed so you can explain why to the user. This is advice, not a lock: the server still validates every call. A completed receipt cannot be reactivated or voided through MCP (documentAction offers CO only, to complete a draft): correct it with createPurchaseReturn. Posting a just-completed document (action post) can answer 409 costNotCalculated with retryAfterSeconds 30: Etendo calculates cost in the background about every 30 seconds, nothing was posted, so wait and repeat the same post. If it answers costCalculationStalled instead (retryable false, no retryAfterSeconds), costing is stuck, not slow: do not retry, tell the user an administrator must check the Costing Background process and the transactions waiting for cost. Book and unbook the document with the post and unpost actions (they appear in the actions view with availableNow); the AD Posted button is hidden and must not be used. post applies to a completed document that is not posted, unpost to a completed one that is. etendo_schema with view:\"actions\" returns each action's parameters."
   },
-  "checksum": "31efd791570ecaed"
+  "checksum": "28a9183505632686"
 }

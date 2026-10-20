@@ -111,7 +111,8 @@
         "PriceList": "Precio",
         "Foreign_Amount": "Importe en Moneda Objetivo",
         "em_etgo_tbai_status": "Estado Batuz",
-        "DocumentNo": "N° interno"
+        "DocumentNo": "N° interno",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "POReference": "Document No.",
@@ -121,10 +122,12 @@
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount",
         "em_etgo_tbai_status": "Batuz Status",
-        "DocumentNo": "Internal No."
+        "DocumentNo": "Internal No.",
+        "C_UOM_ID": "Unit"
       },
       "es_AR": {
-        "OutstandingAmt": "Saldo pendiente"
+        "OutstandingAmt": "Saldo pendiente",
+        "C_UOM_ID": "Unidad"
       }
     },
     "secondaryTabs": {
@@ -671,7 +674,11 @@
           "min": false
         },
         "uOM": {
-          "visibility": "system"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 4,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "unitPrice": {
           "grid": false,
@@ -683,7 +690,7 @@
           "form": true,
           "inputMode": "number",
           "order": 4,
-          "gridOrder": 4,
+          "gridOrder": 5,
           "section": "principal",
           "columnType": "amount",
           "min": false
@@ -694,7 +701,7 @@
           "form": true,
           "inputMode": "number",
           "order": 5,
-          "gridOrder": 5,
+          "gridOrder": 6,
           "section": "principal",
           "derivation": null,
           "readOnlyLogic": "@Processed@='Y'",
@@ -710,7 +717,7 @@
         "tax": {
           "grid": true,
           "order": 6,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "section": "principal",
           "inputMode": "selector",
           "readOnlyLogic": null,
@@ -775,7 +782,7 @@
         "grossAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": true,
           "section": "principal",
           "displayLogic": null

@@ -223,6 +223,14 @@ export const api = {
           }
         ]
       }
+    },
+    {
+      "entity": "quotationLine",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-quotation/quotationLine/selectors/uOM"
     }
   ],
   "actions": [
@@ -430,12 +438,14 @@ export const api = {
       "C_BPartner_ID": "Contacto",
       "C_Reject_Reason_ID": "Razón de rechazo",
       "DateOrdered": "Fecha de presupuesto",
-      "PriceList": "Precio"
+      "PriceList": "Precio",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",
       "C_Reject_Reason_ID": "Reject Reason",
-      "DateOrdered": "Quotation Date"
+      "DateOrdered": "Quotation Date",
+      "C_UOM_ID": "Unit"
     }
   }
 };

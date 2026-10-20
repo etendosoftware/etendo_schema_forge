@@ -95,7 +95,7 @@ Mirrors the existing `cli/src/migrations/` pattern (runner + ledger + scope flag
 2. Run `@check` (bound to `:client_id`) → 0 rows ⇒ record `SKIPPED_NOT_NEEDED` (this advances the watermark too), never run `@apply`.
 3. ≥1 row ⇒ run `@apply` **atomically with the ledger write** (see below). On success the `APPLIED` row advances the watermark; `MANUALLY_FIXED` (via `--mark-fixed`) likewise.
 
-**Accepted trade-off of the strict watermark:** a fix authored with a timestamp *below* the current watermark but merged *later* (two branches authored same-day, merged out of order) will **not** be applied — it sits below the watermark and is never revisited. This was a deliberate decision (chosen over fix-id-presence gating) for a simpler, faster resume. Authors must therefore date a new fix with a timestamp **after** the latest already-shipped fix.
+**Accepted trade-off of the strict watermark:** a fix authored with a timestamp *below* the current watermark but merged *later* (two branches authored same-day, merged out of order) will **not** be applied — it sits below the watermark and is never revisited. This was a deliberate decision (chosen over fix-id-presence gating) for a simpler, faster resume. Authors must therefore date a new fix with a timestamp **after** the latest already-shipped fix. An **equal** timestamp is skipped too (`<=`), and a branch that lands after newer fixes merged must be re-dated before merge (ETP-5046's R37). `cli/test/data-fixes-catalog-ordering.test.js` rejects shared timestamp prefixes; see `cli/src/data-fixes/sql/README.md` "Choosing the timestamp".
 
 **Fail-fast per tenant (MANDATORY).** Fixes are chronological and may depend on prior ones, so on a `FAILED` fix the runner **halts that tenant's chain** — every later fix for that tenant is left un-run (no `SKIPPED`, no `APPLIED`; the next run resumes from the failed fix once it's fixed). The scope of the halt is **per tenant**: a failure for tenant A does NOT stop the runner from processing tenant B (tenants are independent). This is Flyway's "migration N fails ⇒ N+1 never runs" semantics, applied per tenant. The run's exit code is non-zero if any tenant halted.
 
@@ -151,6 +151,19 @@ wrong file. `--fix <retired-id>` refuses outright, and retired fixes are exclude
 `--list-clients`'s pending-candidates filter. Worked example:
 `R16-tenant-roles-and-webhook-access` (superseded by ETP-4852's system-level templates, retired by
 ETP-4877). Full detail: `docs/etendo-ad/onboarding-and-datafixes-map.md` §3 item 6.
+
+### Opt-in fixes (`-- @optIn: true`, ETP-5046)
+For an environment-level switch rather than a correction every tenant needs on deploy. A full run
+skips an opt-in fix like a retired one (no `@check`, no `@apply`, no ledger row), and its ledger
+rows never move the watermark (`computeWatermark` ignores them). It runs only via
+`--fix <id>` (`make data-fixes FIX=<id>`, dry-run included), and only for a tenant with no
+non-retired, non-opt-in chain fix dated at or before it still unprocessed (`optInChainGate`; newer
+fixes, FAILED or not, do not block); a tenant behind it is reported `BLOCKED_CHAIN_BEHIND` (apart
+from FAILED in the summary), gets no ledger row and makes the run exit non-zero. An opt-in fix must
+carry a timestamp prefix. `--mark-fixed` resolves a short `@id` to the full `fix_id`. `--list-clients` shows
+opt-in fixes in an `OPT-IN` column, never as `PENDING`. A retired fix stays un-forceable. Worked
+example: `R37-tenant-subscription-backfill`. Full detail:
+`docs/etendo-ad/onboarding-and-datafixes-map.md` §3 item 7.
 </data_fixes_framework>
 
 <the_gaps>

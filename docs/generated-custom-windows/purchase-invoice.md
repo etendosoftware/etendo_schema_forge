@@ -1866,25 +1866,24 @@ Tests: `ocr/__tests__/hasExtractedData.test.js`, `useOcrExtraction.vitest.jsx`,
 
 ## OCR reader — product matching never assigns a partial match silently
 
-Line products are looked up with `simSearch` (Product, `minSimPercent: 30`, `qtyResults: 3`).
+Line products are looked up with `simSearch` (Product, `minSimPercent: 50`, `qtyResults: 3`; raised from 30 in ETP-5654 to cut low-similarity noise from the suggestions).
 `classifyProductMatch` (`ocr/ingest/purchaseInvoiceDescriptor.js`) decides per line:
 
 - **Exactly one candidate whose name equals the line description** (trim, case-insensitive) →
   assigned automatically.
 - **Any other candidate** (partial similarity, or two products with the same exact name) → the
-  line goes to the "Asociar productos" popup with the best candidate **preselected** in the
-  product selector. The user can change it, search, create a product, or skip the line with the
-  small "Skip line" button below the selector (`ocr-product-skip-{idx}`, shown only while a product
-  is selected);
-  Continue returns the preselected id unless changed. A **non-dismissible warning banner**
-  (`ocrProductAutoMatchedWarning`) is shown at the top of the popup whenever any row was
-  preselected, and the generic "couldn't auto-match" hint is shown only when at least one row has
-  no suggestion.
+  line goes to the "Asociar productos" popup, where the best candidate is only **suggested**
+  (ETP-5654): the row starts undecided and the suggestion shows as a one-click chip below the
+  selector (`ocr-product-suggestion-{idx}`, "Suggested: <name>"). Nothing is selected until the user
+  accepts the chip, picks another product, creates one, or skips the line. A **non-dismissible
+  warning banner** (`ocrProductAutoMatchedWarning`) is shown at the top of the popup whenever any
+  row carries a suggestion, and the generic "couldn't auto-match" hint is shown only when at least
+  one row has no suggestion.
 - **No candidates** → popup without a suggestion, as before.
 
 Example: product "Mantenimiento Web" exists, the invoice line reads "Servicio de desarrollo y
-mantenimiento web" → the popup preselects it under the warning banner; nothing reaches the
-invoice without passing through that review step.
+mantenimiento web" → the popup offers it as a chip under the warning banner and keeps Continue
+disabled; nothing reaches the invoice without an explicit decision on that line.
 
 Tests: `ocr/ingest/__tests__/purchaseInvoiceDescriptor.vitest.jsx`,
 `ocr/__tests__/ProductResolverPopup.vitest.jsx`.
@@ -2015,15 +2014,16 @@ Each unmatched line is in one of three states, kept per row in `ProductResolverP
 
 | State | How a row gets there | Submitted as |
 |-------|----------------------|--------------|
-| Undecided | Default for a line **without** a suggestion | (blocks Continue) |
-| Product | Created through the "New product" modal, picked from the dropdown, or arrived with a suggestion | the product id |
+| Undecided | Default for every line, **including** one with a suggestion (the suggestion is only a chip) | (blocks Continue) |
+| Product | Created through the "New product" modal, picked from the dropdown, or the suggestion chip was accepted | the product id |
 | Skipped | The user explicitly chose "Skip line" | `null` |
 
 - An undecided row shows "+ Create product" instead of "Skip line". Clicking that label opens the
   "New product" modal; nothing opens or is created automatically. The chevron next to it opens the
   dropdown (search an existing product, "+ Create product", "Skip line").
 - **Continue is disabled while any row is undecided**, and a short helper
-  (`ocrProductResolverIncomplete`) explains why. Rows that arrive with a suggestion count as decided.
+  (`ocrProductResolverIncomplete`) explains why. A row with a suggestion is still undecided until
+  the chip is accepted.
 - Skipping is always explicit (dropdown entry, or the ghost skip button on a row that has a
   product). A skipped row can still go back to creating or picking a product.
 - The `onSubmit` contract is unchanged: `{ [idx]: productId | null }`, where `null` means skipped.
@@ -2058,7 +2058,7 @@ zeros are kept.
 | Status | Condition | Result |
 |---|---|---|
 | `match` | ids equal after normalization | continue |
-| `mismatch` | receiver id present and different | **blocked**: error toast with both ids, flow stops |
+| `mismatch` | receiver id present and different | **blocked**: inline error in the upload panel (no toast), flow stops |
 | `absent` | no receiver id (null, blank or the "?" placeholder) | continue, no session call, no toast; the "Datos detectados" modal shows a non-blocking amber notice (`ocrReceiverTaxIdAbsent`, prop `receiverTaxIdAbsent`) that never affects "Continuar" |
 | `same-as-issuer` | receiver id equals the issuer id (`issuer.tax_id_raw` or `tax_id`) | continue (OCR confusion) |
 | `no-org-tax-id` | organization has no tax id | continue + warning toast |
@@ -2067,15 +2067,18 @@ zeros are kept.
 Out of scope: a legal-entity child organization without its own `AD_OrgInfo.TaxID` is treated as
 `no-org-tax-id` (no inheritance from the parent).
 
-Messages use `toast` from sonner directly (`ocrReceiverTaxIdMismatch`, `ocrOrgTaxIdMissing`,
+The warnings use `toast` from sonner directly (`ocrOrgTaxIdMissing`,
 `ocrReceiverTaxIdUnverified`), not `useBulkActionToast().showResult`, which reads `failed[0].message`
 while this flow passes `{ reason }` (pre-existing, not changed here).
 
-The mismatch error (`ocrReceiverTaxIdMismatch`) is a **persistent** toast: `duration: Infinity`,
-`closeButton: true` and the stable id `ocr-receiver-tax-id-mismatch`, so it stays until the user
-closes it and a second wrong invoice replaces it instead of stacking. Each validation run dismisses
-that id before comparing, so a correct invoice never leaves a stale error on screen. The two
-warnings (`ocrOrgTaxIdMissing`, `ocrReceiverTaxIdUnverified`) stay transient with default options.
+The mismatch error (`ocrReceiverTaxIdMismatch`) is **not** a toast: it blocks the flow and is shown
+**inline** in the "Subir Factura" panel, below the "Extraer y completar" button, with the same red
+text and alert icon as the extraction errors and no retry button. `useOcrFlow` stores it in
+`result.blocked` (a field distinct from `result.error`, which carries failures that already toast
+via `showResult`) and `OcrInlineUploader` renders only that field. The message goes away when it
+stops being true: a new extraction starts, the file is removed, or another file is picked
+(`useOcrFlow` returns `clearResult` and the uploader calls it in those places). The two warnings
+(`ocrOrgTaxIdMissing`, `ocrReceiverTaxIdUnverified`) stay transient toasts with default options.
 
 Tests: `src/components/copilot/ocr/__tests__/receiverTaxIdCheck.test.js`,
 `useOcrFlow.flow.vitest.jsx`, `buildOcrSchema.test.js`.
@@ -2687,6 +2690,47 @@ warning. The review modal ("Datos detectados en la factura") now looks for it.
 - **Warn only.** Continue stays enabled. A failed lookup (network, non-OK, unreadable answer)
   shows nothing and does not block.
 
+## OCR reader — step flow and Back button — ETP-5654
+
+The OCR upload runs as up to three review steps. `useOcrFlow` drives them as a small state machine
+(`header` -> `lines` -> `build`) instead of a straight-line script:
+
+1. **Datos detectados en la factura** (`OcrReviewModal`). First step: no Back button.
+2. **Líneas detectadas en la factura** (`OcrLinesReviewModal`). Only when the invoice has lines.
+   Back returns to step 1.
+3. **Asociar productos** (`ProductResolverPopup`). Only when some line has no automatic product
+   match; it is opened from inside `buildPurchaseInvoiceBatch` through `askUserForProducts`.
+   Back returns to step 2 (or to step 1 when no lines step was shown).
+
+Back always goes to the previous step that was actually shown. The label is the generic `back`
+i18n key (Back / Atrás); test ids: `ocr-lines-back`, `Button__b3ae11_back`.
+
+**Back signal.** `ocrFlowSignals.js` exports the symbol `BACK`. Each step resolves with its value
+(continue), `null` (cancel) or `BACK`. Cancel is unchanged: it marks the run cancelled, with no
+toast. Back never marks anything. When the popup is backed out of, `askUserForProducts` resolves
+`BACK` and `buildPurchaseInvoiceBatch` returns `{ back: true }` (distinct from `{ cancelled: true }`),
+before any op is built or sent; the flow then re-enters the previous step.
+
+**State is preserved.** Each modal reports its current state through an optional `onStateChange`
+callback right before `onSubmit`/`onBack`; the flow keeps it for the run and passes it back as
+`initialState` (header toggles/values), `initialRows` (line edits, tax included) or
+`initialSelections` (product picks) when the step is shown again. Returning to the header does not
+re-run the vendor pre-resolvers: the restored state already holds the resolved vendor.
+
+**Recompute rule.** The lines depend on the reviewed header: the vendor's location and the invoice
+date feed the default-tax lookup. Moving forward from the header again compares
+`headerDependencyKey(reviewed)` (vendor id + ISO invoice date) with the one the lines were built
+for. Same key: the user's edited rows are reused as they are. Different key: lines are rebuilt from
+the OCR payload and the stale line edits are dropped (their taxes may no longer apply). Product
+picks are keyed by line index and survive either way; a pick whose line is no longer unmatched is
+ignored.
+
+**Irreversible side effects.** Going back never undoes anything. A product created from the
+popup is already saved, and a contact created from the header modal is already saved; both come
+back as ordinary selected values (the product as a selected pick, the contact as the vendor in the
+restored header state), so they are never created a second time. Nothing else is written before
+the final batch, so a Back before "Create" leaves no other trace.
+
 ## Related documents — form and list preview share one definition — ETP-5539
 
 The form's Related Documents tab (`tools/app-shell/src/windows/custom/purchase-invoice/RelatedDocuments.jsx`,
@@ -2796,3 +2840,17 @@ Agents (MCP) no longer have to learn what a purchase invoice allows from refusal
 - Refusals keyed 20501 ("Documento ya procesado") carry a hint about reactivation and the actions view.
 
 Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.35.
+
+## Unit column in the lines grid (ETP-5696)
+
+The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. facturada**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
+
+- **Declaration (`decisions.json`, entity `lines`, field `uOM`):** `visibility: "readOnly"`, `grid: true`, `gridOrder: 4 (price, discount, tax and gross amount moved to 5–8)`, `gridReadOnly: true`, `display: "tag"` — it was `system` (hidden). With the document-attachments side panel open the last column (gross amount) sits at the edge and the grid scrolls horizontally. The column is the real AD column `C_UOM_ID`, not a synthetic one. `window.labelOverrides` carries `C_UOM_ID` → `Unidad` (es_ES, es_AR) / `Unit` (en_US), because the AD label is the untranslated "UOM".
+- **Where the value comes from:** the unit of the line's product. In the add row the pill appears as soon as the product is chosen: this window's line callout answers `uOM` with an empty object, so the unit is taken from the selected item's `_aux` (`_UOM`, serialised as `UOM(<id>) (name: <name>)`) by `lib/auxReference.js`; the backend then stores the same unit on save.
+- **Width:** a `display: "tag"` column is fixed at 144px and never grows (`lib/linesColumnWidth.js`), so the space goes to Product/Description; `columnWidth` in `decisions.json` overrides the pixel value.
+- **Read-only:** the unit cannot be edited in the line (inline edit or add row); it only changes when the line's product changes.
+- **Not part of this change:** no sorting or filtering was added — the inline lines grid offers neither for any column.
+- **Generic mechanism:** `display: "tag"` (`DataTable.cellRenderers.jsx` `renderNeutralTagCell`, `InlineLinesPanel` `ReadCell`, `DataTable` `renderDerivedAddCell`), the add-row fill from the selector's `_aux` (`lib/auxReference.js`) and the fixed width are documented in `docs/decisions-reference.md` (`display`).
+- **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
+
+**Manual verification:** open a draft purchase invoice; confirm `Unidad` sits after Cant. facturada; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.

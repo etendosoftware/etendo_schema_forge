@@ -1,5 +1,7 @@
 // @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 // @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/DocumentTotalsPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 // @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
@@ -16,7 +18,7 @@ import {
   clickConfirmButton,
   waitForConfirmResponse, dismissSuccessModal, expectStatusPill, expectAlreadyConfirmed,
   safeReload, readDocumentTotals, verifyTotalsConsistency, parseAmount, waitForLinesSettled,
-  waitForDerivedFieldValue,
+  waitForDerivedFieldValue, findNegativeLineRow,
 } from '../../helpers/purchase-helpers.js';
 
 /**
@@ -45,47 +47,6 @@ import {
 
 const onboardingCreds = loadCredentials();
 const RUN_INTEGRATION = process.env.E2E_SALES_INTEGRATION === '1';
-
-/**
- * Locate the line row (rendered by the shared InlineLinesPanel —
- * `data-testid="line-row-{id}"`, `data-cell-key="{fieldKey}"` per cell, see
- * tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx) whose
- * `qtyFieldKey` cell holds a negative value, and return a locator bound to
- * that row's PRODUCT. The purchase and sales full-flow specs carry identical
- * copies of this helper — keep them in sync.
- *
- * What is guaranteed:
- *   - The quantity and the product are read from the SAME DOM snapshot (one
- *     `evaluateAll` over every row), so the product returned is the one whose
- *     quantity was negative — a re-render that reorders the table between two
- *     separate reads can no longer pair the negative quantity with the
- *     positive line's product.
- *   - The scan is retried, so the detail view's reload flash (0 rows, cells
- *     not rendered yet) does not make it wrongly conclude there is none.
- *   - The returned locator is matched by product, not by position, so it
- *     keeps pointing at that line however the table reorders afterwards.
- *
- * What is NOT guaranteed: that the row's cells still hold the same values when
- * the caller reads them. Callers must read them with retrying assertions
- * (`toHaveText`, `readSettledCellAmount`), never a one-shot `textContent()`.
- * Reading the cell value (rather than pattern-matching the row's text) avoids
- * false positives from unrelated hyphens in a product name/description.
- */
-async function findNegativeLineRow(page, qtyFieldKey) {
-  const rows = page.locator('[data-testid^="line-row-"]');
-  let productName = null;
-  await expect(async () => {
-    const cells = await rows.evaluateAll((els, key) => els.map((el) => ({
-      qty: el.querySelector(`[data-cell-key="${key}"]`)?.textContent ?? '',
-      product: el.querySelector('[data-cell-key="product"]')?.textContent?.trim() ?? '',
-    })), qtyFieldKey);
-    productName = cells.find((c) => c.product && parseAmount(c.qty) < 0)?.product ?? null;
-    expect(productName,
-      `No line row with a negative "${qtyFieldKey}" was found (rows: ${JSON.stringify(cells)})`,
-    ).toBeTruthy();
-  }).toPass({ timeout: 15_000 });
-  return rows.filter({ has: page.locator('[data-cell-key="product"]', { hasText: productName }) });
-}
 
 /**
  * Locate the line row whose product cell names `productName`. Rows are matched

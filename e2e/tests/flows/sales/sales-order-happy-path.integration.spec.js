@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 // @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
@@ -10,6 +11,7 @@ import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../../helpers/product-helpers.js';
 import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import { createDraftWithFirstLine } from '../../helpers/purchase-helpers.js';
 
 /**
@@ -51,9 +53,10 @@ async function slow(page) {
 
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 20_000 });
-  // Wait for any loading indicator to disappear (covers late-appearing spinners)
-  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
-    .catch(() => {}); // OK if spinner never appeared
+  // Wait for EVERY loading indicator to disappear (covers late-appearing spinners
+  // and panels that load concurrently). Passes at once when none is shown; a
+  // still-visible indicator after the budget is tolerated, as before.
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
 }
 
 function expectSaveResponse(page) {
