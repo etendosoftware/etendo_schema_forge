@@ -721,23 +721,30 @@ export default function FmModel390Page({
         year={decl.year}
         onOpen={onOpenDeclaration ? handleOpen303 : undefined}
         t={t}
-        bcpLocale={bcpLocale} />
+        bcpLocale={bcpLocale}
+        data-testid="Settlements303Table390__74d2aa" />
     ),
   };
 
   return (
     <div className="fm-page fm-page--detail" data-testid="FmModel390Page">
-      <FmDetailHeader>
+      <FmDetailHeader data-testid="FmDetailHeader__74d2aa">
         <FmDetailActionBar
           left={(
             <>
               <FmDetailButton onClick={onBack} data-testid="FmModel390Page__cancel">{t('fm.action.cancel')}</FmDetailButton>
-              <FmStatusChip status={status} submissionMethod={submissionMethod} t={t} variant="detail" />
+              <FmStatusChip
+                status={status}
+                submissionMethod={submissionMethod}
+                t={t}
+                variant="detail"
+                data-testid="FmStatusChip__74d2aa" />
               <DeclarationTypeControl
                 identification={identification}
                 onChange={handleIdentificationChange}
                 disabled={isSubmitted || busy}
-                t={t} />
+                t={t}
+                data-testid="DeclarationTypeControl__74d2aa" />
             </>
           )}
           right={isSubmitted ? (
@@ -790,18 +797,24 @@ export default function FmModel390Page({
                 {t('fm.action.submit')}
               </FmDetailButton>
             </>
-          )} />
+          )}
+          data-testid="FmDetailActionBar__74d2aa" />
       </FmDetailHeader>
 
       <div className="fm-page--freeflow fm-detail-scroll">
-        {isSubmitted && <SubmissionCard390 submission={submission} t={t} bcpLocale={bcpLocale} />}
+        {isSubmitted && <SubmissionCard390
+          submission={submission}
+          t={t}
+          bcpLocale={bcpLocale}
+          data-testid="SubmissionCard390__74d2aa" />}
         <SubstitutiveBanner
           identification={identification}
           concurso={isConcurso(aeatInputs)}
           onChange={handleIdentificationChange}
           disabled={isSubmitted || busy}
           showError={showIdError || String(identification?.formerStatement ?? '').length > 0}
-          t={t} />
+          t={t}
+          data-testid="SubstitutiveBanner__74d2aa" />
 
         <div className="fm-390-kpis">
           {/* Incidencias — the 303 card: total + severity badge; a click opens the tab. */}
@@ -815,7 +828,8 @@ export default function FmModel390Page({
             value={<span data-testid="FmModel390Page__incidentsCount">{String(blocking + warning)}</span>}
             badge={incidentVariants.badge}
             badgeBg={incidentVariants.badgeBg}
-            badgeColor={incidentVariants.badgeColor} />
+            badgeColor={incidentVariants.badgeColor}
+            data-testid="KpiWidget__74d2aa" />
           <KpiWidget
             icon={<TrendingUp size={20} strokeWidth={1.75} data-testid="TrendingUp__fm390kpi" />}
             iconColor="hsl(var(--foreground))"
@@ -823,7 +837,8 @@ export default function FmModel390Page({
             value={formatAmount(summary.accrued)}
             badge={t('fm.m303.summary.accrued_sub')}
             badgeBg="hsl(var(--muted))"
-            badgeColor="hsl(var(--muted-foreground))" />
+            badgeColor="hsl(var(--muted-foreground))"
+            data-testid="KpiWidget__74d2aa" />
           <KpiWidget
             icon={<TrendingDown size={20} strokeWidth={1.75} data-testid="TrendingDown__fm390kpi" />}
             iconColor="hsl(var(--foreground))"
@@ -831,7 +846,8 @@ export default function FmModel390Page({
             value={formatAmount(summary.deductible)}
             badge={t('fm.m303.summary.deductible_sub')}
             badgeBg="hsl(var(--muted))"
-            badgeColor="hsl(var(--muted-foreground))" />
+            badgeColor="hsl(var(--muted-foreground))"
+            data-testid="KpiWidget__74d2aa" />
           {/* Resultado — [86], or [94] when filing to several administrations. The "cuadre con
               los 303" banner (Reconciliation390) goes right under the cards. */}
           <KpiWidget
@@ -842,7 +858,8 @@ export default function FmModel390Page({
             valueColor={resultColors.valueColor}
             badge={resultLabel}
             badgeBg={resultColors.badgeBg}
-            badgeColor={resultColors.badgeColor} />
+            badgeColor={resultColors.badgeColor}
+            data-testid="KpiWidget__74d2aa" />
         </div>
         {/* The cuadre with the year's 303s: a full-width banner between the cards and the tabs. */}
         {hasBoxes && (
@@ -851,11 +868,16 @@ export default function FmModel390Page({
             preload={preload}
             year={decl.year}
             onViewDetail={viewSettlements}
-            t={t} />
+            t={t}
+            data-testid="Reconciliation390__74d2aa" />
         )}
 
         <div className="fm-tabs-sticky">
-          <Tabs tabs={tabs} active={activeTab} onSelect={setActiveTab} />
+          <Tabs
+            tabs={tabs}
+            active={activeTab}
+            onSelect={setActiveTab}
+            data-testid="Tabs__74d2aa" />
         </div>
 
         {activeTab === 'boxes' && (
@@ -922,10 +944,11 @@ export default function FmModel390Page({
                 nameWarnings={nameWarnings}
                 invoiceBoxes={payload.invoiceBoxes}
                 onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}
-              onViewSettlements={viewSettlements}
+                onViewSettlements={viewSettlements}
                 blockExtras={blockExtras}
                 t={t}
-                bcpLocale={bcpLocale} />
+                bcpLocale={bcpLocale}
+                data-testid="FmBoxes390__74d2aa" />
             )}
           </div>
         )}
@@ -941,7 +964,8 @@ export default function FmModel390Page({
               refreshKey={payload}
               onCountChange={setSourcesCount}
               t={t}
-              bcpLocale={bcpLocale} />
+              bcpLocale={bcpLocale}
+              data-testid="FmSources390__74d2aa" />
           </div>
         )}
         {activeTab === 'incidents' && (
@@ -952,7 +976,8 @@ export default function FmModel390Page({
               onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}
               onViewSettlements={viewSettlements}
               onNavigate={handleNavigateAway}
-              t={t} />
+              t={t}
+              data-testid="Incidents390Tab__74d2aa" />
           </div>
         )}
         {activeTab === 'receipt' && (
@@ -965,7 +990,8 @@ export default function FmModel390Page({
               apiBaseUrl={apiBaseUrl}
               isActive
               config={RECEIPT_ATTACHMENT_CONFIG}
-              readOnly={status !== 'draft'} />
+              readOnly={status !== 'draft'}
+              data-testid="AttachmentsTab__74d2aa" />
           </div>
         )}
       </div>
@@ -978,14 +1004,16 @@ export default function FmModel390Page({
           resultLabel={resultLabel}
           onConfirm={handleGenerate}
           onClose={() => setShowFilegen(false)}
-          t={t} />
+          t={t}
+          data-testid="FileGenModal390__74d2aa" />
       )}
       {showPresent && (
         <PresentModal
           decl={decl}
           onConfirm={handlePresentPath}
           onClose={() => setShowPresent(false)}
-          showAeatPath />
+          showAeatPath
+          data-testid="PresentModal__74d2aa" />
       )}
       {showAeatFlow && (
         <AeatSubmitFlow
@@ -999,7 +1027,8 @@ export default function FmModel390Page({
           onResult={handleTelematicResult}
           onAttached={() => listReceipts?.()}
           onIncidentsChanged={() => setIncidentsVersion(v => v + 1)}
-          onClose={() => setShowAeatFlow(false)} />
+          onClose={() => setShowAeatFlow(false)}
+          data-testid="AeatSubmitFlow__74d2aa" />
       )}
     </div>
   );

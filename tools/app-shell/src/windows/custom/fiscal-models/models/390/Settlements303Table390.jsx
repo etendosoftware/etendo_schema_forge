@@ -80,7 +80,7 @@ export default function Settlements303Table390({ preload, loading, error, year, 
                     {r.superseded > 0 && <span style={MUTED}> · {t('fm.m390.preload.superseded', { count: r.superseded })}</span>}
                   </td>
                   <td>
-                    <FmStatusChip status={r.status} t={t} />
+                    <FmStatusChip status={r.status} t={t} data-testid="FmStatusChip__6104a6" />
                     {r.source === 'live' && <span style={MUTED}> · {t('fm.m390.preload.source_live')}</span>}
                   </td>
                   <td className="num" data-testid={`Settlements303Table390__result_${r.period}`}>

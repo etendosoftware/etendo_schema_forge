@@ -72,9 +72,9 @@ function CalcCell({ box, value, highlighted, ctx }) {
       data-testid={`FmBoxes390__box_${box}`}
       data-origin="calc"
     >
-      <BoxNumber box={box} />
+      <BoxNumber box={box} data-testid="BoxNumber__94e446" />
       <span className="fm-aeat-cell__value">{value != null ? formatAmount(value) : ''}</span>
-      <ViewInvoicesLink box={box} ctx={ctx} />
+      <ViewInvoicesLink box={box} ctx={ctx} data-testid="ViewInvoicesLink__94e446" />
     </div>
   );
 }
@@ -133,7 +133,7 @@ function InputCell({ spec, inputs, preloaded, onInputChange, onRestore, readOnly
       data-testid={`FmBoxes390__input_${key}`}
       data-origin={origin}
     >
-      <BoxNumber box={spec.box} />
+      <BoxNumber box={spec.box} data-testid="BoxNumber__94e446" />
       {editing && !locked ? (
         // The canonical MaskedAmountInput, as in the 303 cell (ETP-5597): instance separators,
         // grouping on amounts and off on percentages, the CLEAN value ("12.5") reported through
@@ -211,10 +211,17 @@ function Cell({ cell, boxes, ctx, ariaLabel }) {
         highlighted={highlighted}
         ariaLabel={ariaLabel}
         t={ctx.t}
-      />
+        data-testid="InputCell__94e446" />
     );
   }
-  return <CalcCell box={box} value={boxes[box] ?? null} highlighted={highlighted} ctx={ctx} />;
+  return (
+    <CalcCell
+      box={box}
+      value={boxes[box] ?? null}
+      highlighted={highlighted}
+      ctx={ctx}
+      data-testid="CalcCell__94e446" />
+  );
 }
 
 function BoxRow({ row, boxes, ctx, label, displayLabel, columns }) {
@@ -234,7 +241,8 @@ function BoxRow({ row, boxes, ctx, label, displayLabel, columns }) {
           cell={cell}
           boxes={boxes}
           ctx={ctx}
-          ariaLabel={columns?.length > 1 ? `${text} · ${ctx.t(columns[i])}` : text} />
+          ariaLabel={columns?.length > 1 ? `${text} · ${ctx.t(columns[i])}` : text}
+          data-testid="Cell__94e446" />
       ))}
     </div>
   );
@@ -269,7 +277,7 @@ function RateGroup({ group, boxes, ctx, columns }) {
           label={`${ctx.t(group.labelKey)} · ${ctx.t('fm.m390.rate', { rate: formatRate(rate.rate, ctx.bcpLocale) })}`}
           displayLabel={ctx.t('fm.m390.rate', { rate: formatRate(rate.rate, ctx.bcpLocale) })}
           columns={columns}
-        />
+          data-testid="BoxRow__94e446" />
       ))}
       {empty.length > 0 && (
         <button
@@ -283,7 +291,12 @@ function RateGroup({ group, boxes, ctx, columns }) {
             : ctx.t('fm.m390.fold.show', { count: empty.length })}
         </button>
       )}
-      {group.total && <BoxRow row={group.total} boxes={boxes} ctx={ctx} columns={columns} />}
+      {group.total && <BoxRow
+        row={group.total}
+        boxes={boxes}
+        ctx={ctx}
+        columns={columns}
+        data-testid="BoxRow__94e446" />}
     </div>
   );
 }
@@ -387,17 +400,42 @@ function IdentityBlock({ ctx }) {
         subtitle={ctx.t('fm.m390.org_card.synced')}
         ctx={ctx}
         testId="FmBoxes390__taxpayerCard"
-      >
+        data-testid="OrgSyncedCard__94e446">
         <div className="fm-390-org-fields">
-          <OrgField label={ctx.t('fm.ident.nif')} value={org?.nif} mono testId="FmBoxes390__nif" />
-          <OrgField label={ctx.t('fm.ident.nombre')} value={org?.name} testId="FmBoxes390__name" />
+          <OrgField
+            label={ctx.t('fm.ident.nif')}
+            value={org?.nif}
+            mono
+            testId="FmBoxes390__nif"
+            data-testid="OrgField__94e446" />
+          <OrgField
+            label={ctx.t('fm.ident.nombre')}
+            value={org?.name}
+            testId="FmBoxes390__name"
+            data-testid="OrgField__94e446" />
         </div>
-        <NameTruncationWarnings ctx={ctx} fields={TAXPAYER_NAME_FIELDS} testId="FmBoxes390__nameTruncated" />
+        <NameTruncationWarnings
+          ctx={ctx}
+          fields={TAXPAYER_NAME_FIELDS}
+          testId="FmBoxes390__nameTruncated"
+          data-testid="NameTruncationWarnings__94e446" />
       </OrgSyncedCard>
-      <FlagCheckbox flag={FLAG.MONTHLY_RETURN} labelKey="fm.m390.flag.monthly_return" ctx={ctx} />
-      <FlagCheckbox flag={FLAG.CONCURSO} labelKey="fm.m390.flag.concurso" ctx={ctx} />
+      <FlagCheckbox
+        flag={FLAG.MONTHLY_RETURN}
+        labelKey="fm.m390.flag.monthly_return"
+        ctx={ctx}
+        data-testid="FlagCheckbox__94e446" />
+      <FlagCheckbox
+        flag={FLAG.CONCURSO}
+        labelKey="fm.m390.flag.concurso"
+        ctx={ctx}
+        data-testid="FlagCheckbox__94e446" />
       {isFlagOn(ctx.inputs, FLAG.CONCURSO) && (
-        <FlagCheckbox flag={FLAG.CONCURSO_LAST_PERIOD} labelKey="fm.m390.flag.concurso_last_period" ctx={ctx} />
+        <FlagCheckbox
+          flag={FLAG.CONCURSO_LAST_PERIOD}
+          labelKey="fm.m390.flag.concurso_last_period"
+          ctx={ctx}
+          data-testid="FlagCheckbox__94e446" />
       )}
     </div>
   );
@@ -409,22 +447,29 @@ function DevengoBlock({ ctx }) {
   return (
     <div className="fm-aeat-ident">
       <div className="fm-aeat-ident-fields">
-        <ReadOnlyField label={ctx.t('fm.m390.devengo.exercise')} value={String(ctx.year ?? '')} testId="FmBoxes390__exercise" />
+        <ReadOnlyField
+          label={ctx.t('fm.m390.devengo.exercise')}
+          value={String(ctx.year ?? '')}
+          testId="FmBoxes390__exercise"
+          data-testid="ReadOnlyField__94e446" />
         <ReadOnlyField
           label={ctx.t('fm.m349.type.label')}
           value={substitutive ? ctx.t('fm.m349.type.substitutive') : ctx.t('fm.m349.type.normal')}
-          testId="FmBoxes390__declType" />
+          testId="FmBoxes390__declType"
+          data-testid="ReadOnlyField__94e446" />
         {substitutive && (
           <ReadOnlyField
             label={ctx.t('fm.m349.substitutive_banner.former_statement')}
             value={ident.formerStatement}
-            testId="FmBoxes390__formerStatement" />
+            testId="FmBoxes390__formerStatement"
+            data-testid="ReadOnlyField__94e446" />
         )}
         {substitutive && isConcurso(ctx.inputs) && (
           <ReadOnlyField
             label={ctx.t('fm.m390.substitutive.by_quotas')}
             value={ident.rectificacionCuotas ? ctx.t('fm.m390.yes') : ctx.t('fm.m390.no')}
-            testId="FmBoxes390__byQuotas" />
+            testId="FmBoxes390__byQuotas"
+            data-testid="ReadOnlyField__94e446" />
         )}
       </div>
       <p className="fm-390-hint">{ctx.t('fm.m390.devengo.hint')}</p>
@@ -460,7 +505,7 @@ function StatisticsBlock({ ctx }) {
         subtitle={syncedCount(ctx.t, 'fm.m390.org_card.activities', activities.length)}
         ctx={ctx}
         testId="FmBoxes390__activitiesCard"
-      >
+        data-testid="OrgSyncedCard__94e446">
         {activities.length === 0 ? (
           <p className="fm-390-hint" data-testid="FmBoxes390__noActivities">{ctx.t('fm.m390.statistics.empty')}</p>
         ) : (
@@ -482,14 +527,18 @@ function StatisticsBlock({ ctx }) {
                     {a.codeDescription ? <span className="fm-390-org-table__muted"> {a.codeDescription}</span> : null}
                   </td>
                   <td className="fm-390-mono strong" title={a.typeLabel || undefined}>{a.epigraph || '—'}</td>
-                  <td className="num"><ActivityRank activity={a} t={ctx.t} /></td>
+                  <td className="num"><ActivityRank activity={a} t={ctx.t} data-testid="ActivityRank__94e446" /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </OrgSyncedCard>
-      <FlagCheckbox flag={FLAG.THIRD_PARTY_DECLARATION} labelKey="fm.m390.flag.third_party" ctx={ctx} />
+      <FlagCheckbox
+        flag={FLAG.THIRD_PARTY_DECLARATION}
+        labelKey="fm.m390.flag.third_party"
+        ctx={ctx}
+        data-testid="FlagCheckbox__94e446" />
     </div>
   );
 }
@@ -510,7 +559,7 @@ function RepresentativeBlock({ ctx }) {
         subtitle={syncedCount(ctx.t, 'fm.m390.org_card.representatives', rows.length)}
         ctx={ctx}
         testId="FmBoxes390__representativesCard"
-      >
+        data-testid="OrgSyncedCard__94e446">
         {rows.length === 0 ? (
           <p className="fm-390-hint" data-testid="FmBoxes390__noRepresentative">{ctx.t('fm.m390.representative.empty')}</p>
         ) : (
@@ -535,7 +584,11 @@ function RepresentativeBlock({ ctx }) {
             </tbody>
           </table>
         )}
-        <NameTruncationWarnings ctx={ctx} fields={REPRESENTATIVE_NAME_FIELDS} testId="FmBoxes390__repNameTruncated" />
+        <NameTruncationWarnings
+          ctx={ctx}
+          fields={REPRESENTATIVE_NAME_FIELDS}
+          testId="FmBoxes390__repNameTruncated"
+          data-testid="NameTruncationWarnings__94e446" />
       </OrgSyncedCard>
     </div>
   );
@@ -575,7 +628,11 @@ function BoxesBlock({ block, boxes, ctx }) {
 
   return (
     <>
-      {block.toggle && <TerritoryToggle open={visible} onToggle={toggle} ctx={ctx} />}
+      {block.toggle && <TerritoryToggle
+        open={visible}
+        onToggle={toggle}
+        ctx={ctx}
+        data-testid="TerritoryToggle__94e446" />}
       {block.noteKey && <p className="fm-390-hint">{ctx.t(block.noteKey)}</p>}
       {visible && (
         <>
@@ -584,8 +641,20 @@ function BoxesBlock({ block, boxes, ctx }) {
             {block.columns.map(k => <span key={k} className="fm-aeat-col-headers__cell">{ctx.t(k)}</span>)}
           </div>
           {block.items.map(item => (item.type === 'rates'
-            ? <RateGroup key={item.id} group={item} boxes={boxes} ctx={ctx} columns={block.columns} />
-            : <BoxRow key={item.id} row={item} boxes={boxes} ctx={ctx} columns={block.columns} />))}
+            ? <RateGroup
+            key={item.id}
+            group={item}
+            boxes={boxes}
+            ctx={ctx}
+            columns={block.columns}
+            data-testid="RateGroup__94e446" />
+            : <BoxRow
+            key={item.id}
+            row={item}
+            boxes={boxes}
+            ctx={ctx}
+            columns={block.columns}
+            data-testid="BoxRow__94e446" />))}
           {(showSumError || blockMessages.length > 0) && (
             <div className="fm-390-notices">
               {showSumError && (
@@ -614,11 +683,11 @@ function BoxesBlock({ block, boxes, ctx }) {
 
 function BlockBody({ block, boxes, ctx }) {
   switch (block.kind) {
-    case 'identity': return <IdentityBlock ctx={ctx} />;
-    case 'devengo': return <DevengoBlock ctx={ctx} />;
-    case 'statistics': return <StatisticsBlock ctx={ctx} />;
-    case 'representative': return <RepresentativeBlock ctx={ctx} />;
-    default: return <BoxesBlock block={block} boxes={boxes} ctx={ctx} />;
+    case 'identity': return <IdentityBlock ctx={ctx} data-testid="IdentityBlock__94e446" />;
+    case 'devengo': return <DevengoBlock ctx={ctx} data-testid="DevengoBlock__94e446" />;
+    case 'statistics': return <StatisticsBlock ctx={ctx} data-testid="StatisticsBlock__94e446" />;
+    case 'representative': return <RepresentativeBlock ctx={ctx} data-testid="RepresentativeBlock__94e446" />;
+    default: return <BoxesBlock block={block} boxes={boxes} ctx={ctx} data-testid="BoxesBlock__94e446" />;
   }
 }
 
@@ -665,11 +734,11 @@ function BlockIndex({ blocks, active, onSelect, t }) {
       </nav>
       {/* Below 1200px the index folds into the app Select (no native selects — ETP-5584). */}
       <div className="fm-390-index-select">
-        <Select value={active} onValueChange={onSelect}>
+        <Select value={active} onValueChange={onSelect} data-testid="Select__94e446">
           <SelectTrigger aria-label={t('fm.m390.index')} data-testid="FmBoxes390__indexSelect">
-            <SelectValue />
+            <SelectValue data-testid="SelectValue__94e446" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent data-testid="SelectContent__94e446">
             {blocks.map((b, i) => (
               <SelectItem key={b.id} value={b.id} data-testid={`FmBoxes390__indexOption_${b.id}`}>
                 {`${i + 1}. ${t(b.titleKey)}`}
@@ -784,10 +853,19 @@ export default function FmBoxes390({
 
   return (
     <div className="fm-390-boxes" data-testid="FmBoxes390">
-      <BlockIndex blocks={layout} active={block.id} onSelect={select} t={t} />
+      <BlockIndex
+        blocks={layout}
+        active={block.id}
+        onSelect={select}
+        t={t}
+        data-testid="BlockIndex__94e446" />
       <div className="fm-390-boxes__content" ref={contentRef}>
         <div className="fm-390-toolbar">
-          <BoxSearch onSearch={onSearch} notFound={notFound} t={t} />
+          <BoxSearch
+            onSearch={onSearch}
+            notFound={notFound}
+            t={t}
+            data-testid="BoxSearch__94e446" />
         </div>
         {Array.isArray(warnings) && warnings.length > 0 && (
           <div className="fm-390-notices" data-testid="FmBoxes390__warnings">
@@ -805,7 +883,12 @@ export default function FmBoxes390({
             {block.icon && <span className="fm-aeat-section__icon">{BLOCK_ICON[block.icon]}</span>}
             {t(block.titleKey)}
           </div>
-          <BlockBody key={block.id} block={block} boxes={boxes ?? {}} ctx={ctx} />
+          <BlockBody
+            key={block.id}
+            block={block}
+            boxes={boxes ?? {}}
+            ctx={ctx}
+            data-testid="BlockBody__94e446" />
           {blockExtras?.[block.id] != null && (
             <div
               ref={extraRef}

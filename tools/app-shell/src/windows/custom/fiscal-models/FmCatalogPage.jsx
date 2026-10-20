@@ -184,7 +184,8 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
                       t={t}
                       sinceLabel={siiSinceLabel}
                       onCancel={() => setSiiPendingId(null)}
-                      onConfirm={() => { setSiiPendingId(null); applyToggle(model.id); }} />
+                      onConfirm={() => { setSiiPendingId(null); applyToggle(model.id); }}
+                      data-testid="SiiActivationWarning__4ee693" />
                   )}
                   <div className="fm-catalog-card__actions" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     {isLocked ? (

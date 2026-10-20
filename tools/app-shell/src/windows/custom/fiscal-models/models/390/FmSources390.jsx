@@ -300,7 +300,12 @@ export default function FmSources390({
       )}
       <div className="fm-390-sources__footer">
         <span className="fm-toolbar__space" />
-        <Pager page={page} pages={pages} onPage={setPage} t={t} />
+        <Pager
+          page={page}
+          pages={pages}
+          onPage={setPage}
+          t={t}
+          data-testid="Pager__5cf6b8" />
       </div>
     </div>
   );

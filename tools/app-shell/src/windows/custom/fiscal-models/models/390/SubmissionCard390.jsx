@@ -54,10 +54,26 @@ export default function SubmissionCard390({ submission, t, bcpLocale }) {
         </span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-        <Row label={t('fm.m390.submission.date')} value={presentationDateLabel(submission, bcpLocale)} testId="SubmissionCard390__date" />
-        <Row label={t('fm.m390.submission.justificante')} value={submission?.justificante} testId="SubmissionCard390__justificante" />
-        <Row label={t('fm.m390.submission.csv')} value={submission?.csv} testId="SubmissionCard390__csv" />
-        <Row label={t('fm.m390.submission.user')} value={submission?.user} testId="SubmissionCard390__user" />
+        <Row
+          label={t('fm.m390.submission.date')}
+          value={presentationDateLabel(submission, bcpLocale)}
+          testId="SubmissionCard390__date"
+          data-testid="Row__88bad2" />
+        <Row
+          label={t('fm.m390.submission.justificante')}
+          value={submission?.justificante}
+          testId="SubmissionCard390__justificante"
+          data-testid="Row__88bad2" />
+        <Row
+          label={t('fm.m390.submission.csv')}
+          value={submission?.csv}
+          testId="SubmissionCard390__csv"
+          data-testid="Row__88bad2" />
+        <Row
+          label={t('fm.m390.submission.user')}
+          value={submission?.user}
+          testId="SubmissionCard390__user"
+          data-testid="Row__88bad2" />
       </div>
     </section>
   );

@@ -56,7 +56,11 @@ export default function Incidents390Tab({ incidents, onGoToBox, onViewInvoices, 
   const handlers = { onGoToBox, onViewInvoices, onViewSettlements, onNavigate };
   const renderAction = (item) => {
     const actions = availableActions(item, handlers);
-    return actions.length > 0 ? <ActionButtons actions={actions} handlers={handlers} t={t} /> : null;
+    return actions.length > 0 ? <ActionButtons
+      actions={actions}
+      handlers={handlers}
+      t={t}
+      data-testid="ActionButtons__383a9b" /> : null;
   };
   return (
     <div className="fm-390-incidents" data-testid="Incidents390Tab">
@@ -67,7 +71,8 @@ export default function Incidents390Tab({ incidents, onGoToBox, onViewInvoices, 
         t={t}
         getMessage={(item) => incidentText390(item, t)}
         getOrigin={(item) => incidentOrigin390(item, t)}
-        renderAction={renderAction} />
+        renderAction={renderAction}
+        data-testid="IncidentsTab__383a9b" />
     </div>
   );
 }

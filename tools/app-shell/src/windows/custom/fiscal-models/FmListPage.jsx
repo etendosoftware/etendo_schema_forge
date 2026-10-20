@@ -870,7 +870,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   const openDeclarationById = useCallback(async (id) => {
     if (!id) return;
     const known = decls.find(d => d.id === id);
-    const decl = known ?? await fetchDeclaration(id, { token, apiBaseUrl });
+    const decl = known ?? (await fetchDeclaration(id, { token, apiBaseUrl }));
     if (decl) onSelect?.(known ? decl : normDecl(decl, bcpLocale));
   }, [decls, token, apiBaseUrl, onSelect, bcpLocale]);
 
