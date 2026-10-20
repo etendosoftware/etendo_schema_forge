@@ -3584,7 +3584,9 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
   title). Amounts with `formatAmount`, percentages with `formatPercent`; stored normalised
   (`"40.50"`); a negative [85]/[93] or a percentage outside 0–99 (`TERRITORY_PERCENT_MAX`) is
   refused with a toast. As in the 303, a number input takes no non-numeric text (the page's
-  "invalid number" toast stays as a guard).
+  "invalid number" toast stays as a guard). A value the browser cannot parse ("1.234,56", "12,5"
+  in some locales — `validity.badInput`, read as '') is dropped on commit instead of clearing the
+  stored value, in the 390 and the 303 cell alike (review W3).
 - **Classic consistency checks (ETP-5716 verification against Classic).** The classic generator
   rejects some input combinations at "Generar" with a raw error; the page prevents them first:
 

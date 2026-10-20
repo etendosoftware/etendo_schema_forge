@@ -157,3 +157,31 @@ describe('FmBoxes303 — percent cells are exempt from the amount hard-stop (ETP
     expect(input.value).toBe('150.999');
   });
 });
+
+// ETP-5716 (review W3) — a value the browser's number input cannot parse ("1.234,56", "12,5" in
+// some locales) reads as '' with validity.badInput: committing it must not delete the stored value.
+describe('FmBoxes303 — unparseable number input (badInput)', () => {
+  it('drops the edit on blur instead of clearing the box', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303 year={2026} period="T2" boxes={{ 77: 100 }} sectionIds={['resultado_final']} onBoxChange={onBoxChange} />
+    );
+    const input = openEditor(container, 77);
+    fireEvent.change(input, { target: { value: '' } });
+    Object.defineProperty(input, 'validity', { value: { badInput: true } });
+    fireEvent.blur(input);
+    expect(onBoxChange).not.toHaveBeenCalled();
+  });
+
+  it('still commits a parseable value (and a deliberate clear)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303 year={2026} period="T2" boxes={{ 77: 100 }} sectionIds={['resultado_final']} onBoxChange={onBoxChange} />
+    );
+    const input = openEditor(container, 77);
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(77, '');
+  });
+});
+

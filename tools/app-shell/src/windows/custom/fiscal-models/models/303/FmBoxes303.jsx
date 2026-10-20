@@ -145,8 +145,11 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   // wiping a previously saved value on a pure no-op edit. The draft is always cleared after a
   // commit attempt (whether it fired or not) so the NEXT edit session for this box starts clean
   // too — see startEditingCell/clearPendingValue above.
-  const commitCellEdit = (boxNum, isPercent = false) => {
-    if (Object.prototype.hasOwnProperty.call(pendingValues, boxNum)) {
+  const commitCellEdit = (boxNum, isPercent = false, badInput = false) => {
+    // ETP-5716 (review W3) — a number input the browser cannot parse ("1.234,56", "12,5" in some
+    // locales) reports value '' with `validity.badInput`: committing it would silently delete
+    // the stored value, so the edit is dropped and the previous value stays.
+    if (!badInput && Object.prototype.hasOwnProperty.call(pendingValues, boxNum)) {
       const raw = pendingValues[boxNum];
       onBoxChange?.(boxNum, isPercent ? clampPercentValue(raw) : raw);
     }
@@ -185,8 +188,8 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
           if (!isPercent && (exceedsTypedIntegerDigits(boxNum, next) || exceedsTypedDecimalDigits(next))) return;
           setPendingValues(prev => ({ ...prev, [boxNum]: next }));
         }}
-        onBlur={() => commitCellEdit(boxNum, isPercent)}
-        onKeyDown={e => { if (e.key === 'Enter') { commitCellEdit(boxNum, isPercent); e.target.blur(); } if (e.key === 'Escape') { clearPendingValue(boxNum); setEditingCell(null); } }}
+        onBlur={e => commitCellEdit(boxNum, isPercent, Boolean(e.target.validity?.badInput))}
+        onKeyDown={e => { if (e.key === 'Enter') { commitCellEdit(boxNum, isPercent, Boolean(e.target.validity?.badInput)); e.target.blur(); } if (e.key === 'Escape') { clearPendingValue(boxNum); setEditingCell(null); } }}
         autoFocus
         disabled={readOnly}
         max={isPercent ? 100 : undefined}

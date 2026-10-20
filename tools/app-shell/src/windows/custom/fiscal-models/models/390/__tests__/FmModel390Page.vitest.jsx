@@ -414,6 +414,20 @@ describe('FmModel390Page — manual inputs', () => {
     expect(persistManualData.mock.calls[0][1].aeatInputs.LIQANUAL_VAT_IMPORT).toBe('12.00');
   });
 
+  // Review W3: an unparseable number (validity.badInput, the browser reads it as '') must not
+  // delete the stored value.
+  it('an unparseable number does not clear the box', () => {
+    const manualData = { aeatInputs: { LIQANUAL_VAT_IMPORT: '5.00' } };
+    render(<FmModel390Page decl={makeDecl({ manualData })} {...props()} />);
+    goToBlock('resultado_liquidacion');
+    fireEvent.click(screen.getByTestId('FmBoxes390__edit_LIQANUAL_VAT_IMPORT'));
+    const field = screen.getByTestId('FmBoxes390__inputField_LIQANUAL_VAT_IMPORT');
+    fireEvent.change(field, { target: { value: '' } });
+    Object.defineProperty(field, 'validity', { value: { badInput: true } });
+    fireEvent.blur(field);
+    expect(shownValue('LIQANUAL_VAT_IMPORT')).toBe('5');
+  });
+
   it('rejects a negative compensation [85]', () => {
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     goToBlock('resultado_liquidacion');

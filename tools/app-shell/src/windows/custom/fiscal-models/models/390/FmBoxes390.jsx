@@ -107,8 +107,11 @@ function InputCell({ spec, inputs, preloaded, onInputChange, onRestore, readOnly
     setDraft(undefined);
     setEditing(true);
   };
-  const commit = () => {
-    if (!cancelled.current && draft !== undefined) onInputChange?.(key, draft, spec);
+  // `badInput` (review W3): a number the browser cannot parse ("1.234,56", "12,5" in some
+  // locales) reads as '' — committing it would silently delete the stored value, so the edit is
+  // dropped (as in the 303 cell).
+  const commit = (badInput = false) => {
+    if (!cancelled.current && !badInput && draft !== undefined) onInputChange?.(key, draft, spec);
     cancelled.current = false;
     setDraft(undefined);
     setEditing(false);
@@ -137,7 +140,7 @@ function InputCell({ spec, inputs, preloaded, onInputChange, onRestore, readOnly
           aria-label={label}
           value={draft ?? (n != null ? String(n) : '')}
           onChange={e => setDraft(e.target.value)}
-          onBlur={commit}
+          onBlur={e => commit(Boolean(e.target.validity?.badInput))}
           onKeyDown={e => {
             if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
             if (e.key === 'Escape') cancel(e.currentTarget);
