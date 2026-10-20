@@ -3572,12 +3572,19 @@ Out of scope and not shown (the backend may still return them): criterio de caja
 equivalencia, régimen simplificado, REAGYP, bienes usados, agencias de viajes, grupo de entidades,
 prorrata. A layout for another design year plugs in through `getLayout390(layoutYear)`.
 
-- **Cells:** calculated = grey, read-only; manual = white `<input>` with a pencil (always an input, so
-  Tab walks only the editable fields; the stored value is shown formatted, the raw text while
-  editing; Enter/blur commit, Esc reverts); totals in bold with the formula. Amounts with
-  `formatAmount`, percentages with `formatPercent`. Inputs accept a decimal comma and are stored
-  normalised (`"40.50"`); a non-number, a negative [85]/[93] or a percentage outside 0–99
-  (`TERRITORY_PERCENT_MAX`) is refused with a toast.
+- **Cells:** calculated = grey, read-only; totals in bold with the formula. **Manual cells behave
+  exactly as the 303's editable boxes** (ETP-5716, `InputCell` mirrors `FmBoxes303`
+  `renderBoxCell` / `renderCellInput`): the value is shown formatted with a pencil button
+  (`FmBoxes390__edit_<key>`, reached with Tab, Enter / Space or a click opens it); the editor is a
+  number input, autofocused, starting from the stored value; blur or Enter commits, Escape
+  discards, an editor closed without typing commits nothing. Nothing is saved on commit: the
+  change waits for Guardar / Calcular / Generar / Presentar, as the 303's overrides do (no
+  autosave). Kept from the 390: the origin styles (calculado / manual / modificado) and ↺
+  Restaurar beside the pencil, percent cells, and locked cells (no pencil, with the reason as
+  title). Amounts with `formatAmount`, percentages with `formatPercent`; stored normalised
+  (`"40.50"`); a negative [85]/[93] or a percentage outside 0–99 (`TERRITORY_PERCENT_MAX`) is
+  refused with a toast. As in the 303, a number input takes no non-numeric text (the page's
+  "invalid number" toast stays as a guard).
 - **Classic consistency checks (ETP-5716 verification against Classic).** The classic generator
   rejects some input combinations at "Generar" with a raw error; the page prevents them first:
 
@@ -3618,7 +3625,7 @@ prorrata. A layout for another design year plugs in through `getLayout390(layout
   Identificación / Representante ("La razón social se recortará a 37 caracteres en el fichero.",
   `nameWarningsFromIncidents390`) and in the Incidencias tab; Generar is not blocked.
 - **Box search:** "Buscar casilla" + Enter — a number (`86`, `[86]`, `086`) or a concept fragment
-  (accent/case-insensitive) — opens the block, scrolls to the cell, focuses it if editable and
+  (accent/case-insensitive) — opens the block, scrolls to the cell, focuses its pencil if editable and
   highlights it for 2.5 s; "No se encontró la casilla" otherwise. A box that is not on screen is
   revealed first: a rate folded behind "Sin operaciones (N tipos) · Mostrar" unfolds its group
   (and the group stays unfolded once the highlight fades — e.g. [21] in "Adquisiciones

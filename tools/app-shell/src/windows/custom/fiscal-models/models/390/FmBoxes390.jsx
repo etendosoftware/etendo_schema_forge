@@ -78,24 +78,46 @@ function CalcCell({ box, value, highlighted, ctx }) {
   );
 }
 
-// A manual input cell. Always an <input> (not pencil-to-edit), so Tab walks only the editable
-// fields and the box search can focus it: the stored value is shown formatted while the cell is
-// not focused, the raw text while it is being edited. Committed on blur / Enter, reverted on Esc.
+// A manual input cell — the SAME behaviour as the 303's editable box (FmBoxes303 renderBoxCell /
+// renderCellInput, ETP-5716): the value is shown formatted with a pencil button; clicking the
+// pencil (or Enter / Space on it, it is a button reached with Tab) opens the inline editor — a
+// number input, autofocused, starting from the stored value. The edit is committed on blur or
+// Enter, discarded on Escape, and an untouched editor commits nothing. Nothing is saved here:
+// the page keeps the change until Guardar / Calcular / Generar / Presentar, as the 303 does with
+// its overrides. 390 specifics kept: the origin styles (calculated / manual / modified), ↺
+// "Restaurar" to the preloaded value, percent inputs and the locked state.
 function InputCell({ spec, inputs, preloaded, onInputChange, onRestore, readOnly, disabled, disabledTitle, highlighted, ariaLabel, t }) {
   const key = spec.input;
   const stored = inputs?.[key];
-  const [draft, setDraft] = useState(null);
+  const [editing, setEditing] = useState(false);
+  // `undefined` = nothing typed this edit session (commits nothing, like the 303's pendingValues).
+  const [draft, setDraft] = useState(undefined);
+  const cancelled = useRef(false);
   const origin = inputOrigin(key, inputs, preloaded);
   const n = parseAmount(stored);
   let shown = '';
   if (n != null) shown = spec.percent ? `${formatPercent(n)} %` : formatAmount(n);
   const locked = readOnly || disabled;
+  const label = spec.box != null ? `[${spec.box}] ${ariaLabel ?? ''}`.trim() : (ariaLabel ?? key);
 
+  useEffect(() => { if (locked) setEditing(false); }, [locked]);
+
+  const start = () => {
+    cancelled.current = false;
+    setDraft(undefined);
+    setEditing(true);
+  };
   const commit = () => {
-    if (draft == null) return;
-    const next = draft;
-    setDraft(null);
-    onInputChange?.(key, next, spec);
+    if (!cancelled.current && draft !== undefined) onInputChange?.(key, draft, spec);
+    cancelled.current = false;
+    setDraft(undefined);
+    setEditing(false);
+  };
+  const cancel = (input) => {
+    cancelled.current = true;
+    setDraft(undefined);
+    input?.blur();
+    setEditing(false);
   };
 
   return (
@@ -107,35 +129,52 @@ function InputCell({ spec, inputs, preloaded, onInputChange, onRestore, readOnly
       data-origin={origin}
     >
       <BoxNumber box={spec.box} />
-      <input
-        className="fm-aeat-cell__input fm-390-cell__input"
-        type="text"
-        inputMode="decimal"
-        aria-label={spec.box != null ? `[${spec.box}] ${ariaLabel ?? ''}`.trim() : (ariaLabel ?? key)}
-        value={draft ?? shown}
-        disabled={locked}
-        onFocus={() => setDraft(stored ?? '')}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={e => {
-          if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
-          if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
-        }}
-        data-testid={`FmBoxes390__inputField_${key}`}
-      />
-      {!locked && origin === 'modified' && (
-        <button
-          type="button"
-          className="fm-aeat-cell__edit-btn"
-          title={t('fm.m390.origin.restore')}
-          aria-label={t('fm.m390.origin.restore')}
-          onClick={() => onRestore?.(key)}
-          data-testid={`FmBoxes390__restore_${key}`}
-        >
-          <RotateCcw size={12} strokeWidth={1.5} data-testid="RotateCcw__fm390" />
-        </button>
+      {editing && !locked ? (
+        <input
+          className="fm-aeat-cell__input fm-390-cell__input"
+          type="number"
+          step="any"
+          aria-label={label}
+          value={draft ?? (n != null ? String(n) : '')}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+            if (e.key === 'Escape') cancel(e.currentTarget);
+          }}
+          autoFocus
+          min={spec.percent || spec.nonNegative ? 0 : undefined}
+          max={spec.percent ? 100 : undefined}
+          data-testid={`FmBoxes390__inputField_${key}`}
+        />
+      ) : (
+        <>
+          <span className="fm-aeat-cell__value fm-390-cell__input" data-testid={`FmBoxes390__value_${key}`}>{shown}</span>
+          {!locked && origin === 'modified' && (
+            <button
+              type="button"
+              className="fm-aeat-cell__edit-btn"
+              title={t('fm.m390.origin.restore')}
+              aria-label={t('fm.m390.origin.restore')}
+              onClick={() => onRestore?.(key)}
+              data-testid={`FmBoxes390__restore_${key}`}
+            >
+              <RotateCcw size={12} strokeWidth={1.5} data-testid="RotateCcw__fm390" />
+            </button>
+          )}
+          {!locked && (
+            <button
+              type="button"
+              className="fm-aeat-cell__edit-btn"
+              aria-label={label}
+              onClick={start}
+              data-testid={`FmBoxes390__edit_${key}`}
+            >
+              <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__fm390" />
+            </button>
+          )}
+        </>
       )}
-      {!locked && <span className="fm-390-cell__pencil" aria-hidden="true"><Pencil size={12} strokeWidth={1.5} data-testid="Pencil__fm390" /></span>}
     </div>
   );
 }
@@ -684,7 +723,8 @@ export default function FmBoxes390({
     if (highlightBox == null) return undefined;
     const el = document.getElementById(boxDomId(highlightBox));
     el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-    el?.querySelector?.('input:not([disabled])')?.focus?.();
+    // Focus the cell's pencil (the 303-style editor opens from it), when it is editable.
+    el?.querySelector?.('.fm-aeat-cell__edit-btn:last-of-type, input:not([disabled])')?.focus?.();
     const timer = setTimeout(() => setHighlightBox(null), 2500);
     return () => clearTimeout(timer);
   }, [highlightBox, activeId]);

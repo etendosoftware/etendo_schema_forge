@@ -1654,8 +1654,6 @@
 .fm-390-fold { display: inline-block; margin: 2px 0 6px; font-size: 13px; }
 .fm-390-cell--input { position: relative; }
 .fm-390-cell__input { line-height: 40px; }
-.fm-390-cell__input:disabled { color: hsl(var(--foreground)); cursor: default; }
-.fm-390-cell__pencil { display: flex; align-items: center; padding-right: 8px; color: hsl(var(--text-disabled)); flex-shrink: 0; }
 .fm-390-cell--modified { border-color: var(--status-warning-border); }
 .fm-390-cell--locked { background: hsl(var(--muted)); }
 .fm-390-cell--highlight { box-shadow: 0 0 0 2px hsl(var(--primary)); }

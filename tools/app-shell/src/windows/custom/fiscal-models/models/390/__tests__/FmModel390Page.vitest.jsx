@@ -159,12 +159,15 @@ const kpiValue = (label) => document.querySelector(`.test-kpi390[data-label="${l
 const waitForBlocked = () => waitFor(() => expect(screen.getByTestId('Download__generate390').style.color).toBe('hsl(var(--destructive))'));
 const kpiBadge = (label) => document.querySelector(`.test-kpi390[data-label="${label}"] .test-kpi390-badge`)?.textContent;
 
+// The 303-style editor (ETP-5716): the pencil opens the input, blur commits.
 function typeInput(key, value) {
+  fireEvent.click(screen.getByTestId(`FmBoxes390__edit_${key}`));
   const field = screen.getByTestId(`FmBoxes390__inputField_${key}`);
-  fireEvent.focus(field);
   fireEvent.change(field, { target: { value } });
   fireEvent.blur(field);
 }
+const shownValue = (key) => screen.getByTestId(`FmBoxes390__value_${key}`).textContent;
+const isEditable = (key) => screen.queryByTestId(`FmBoxes390__edit_${key}`) != null;
 
 describe('FmModel390Page — skeleton', () => {
   it('renders the 4 cards from the boxes: [47], [64], [86]', () => {
@@ -362,7 +365,7 @@ describe('FmModel390Page — manual inputs', () => {
     const p = props();
     render(<FmModel390Page decl={makeDecl()} {...p} />);
     goToBlock('resultado_liquidacion');
-    typeInput('LIQANUAL_VAT_LAW_REGULARIZATION', '40,5');
+    typeInput('LIQANUAL_VAT_LAW_REGULARIZATION', '40.5');
     expect(screen.getByTestId('FmBoxes390__box_84').textContent).toContain('400.5');
     expect(screen.getByTestId('FmBoxes390__box_86').textContent).toContain('400.5');
     expect(kpiValue('fm.m390.kpi.result')).toBe('400.5');
@@ -378,11 +381,42 @@ describe('FmModel390Page — manual inputs', () => {
     await waitFor(() => expect(p.onManualDataSaved).toHaveBeenCalledWith('decl-390', manualData));
   });
 
-  it('rejects a non-numeric amount and a negative compensation [85]', () => {
+  // The 303-style editor is a number input (as the 303's), so a non-numeric text cannot be typed;
+  // the page still refuses a negative compensation.
+  // ETP-5716 — the 390 editable box behaves as the 303's: pencil → editor; blur / Enter commit,
+  // Escape cancels, an untouched editor commits nothing; the change waits for Guardar.
+  it('a box opens its editor from the pencil; Enter commits, Escape cancels, nothing is saved until Guardar', async () => {
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     goToBlock('resultado_liquidacion');
-    typeInput('LIQANUAL_VAT_IMPORT', 'abc');
-    expect(toast.error).toHaveBeenCalledWith('fm.m390.input.invalid_number');
+    expect(screen.queryByTestId('FmBoxes390__inputField_LIQANUAL_VAT_IMPORT')).toBeNull();
+    // Escape: discarded
+    fireEvent.click(screen.getByTestId('FmBoxes390__edit_LIQANUAL_VAT_IMPORT'));
+    const field = screen.getByTestId('FmBoxes390__inputField_LIQANUAL_VAT_IMPORT');
+    expect(document.activeElement).toBe(field);
+    fireEvent.change(field, { target: { value: '7' } });
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(screen.queryByTestId('FmBoxes390__inputField_LIQANUAL_VAT_IMPORT')).toBeNull();
+    expect(shownValue('LIQANUAL_VAT_IMPORT')).toBe('');
+    // untouched: blur commits nothing
+    fireEvent.click(screen.getByTestId('FmBoxes390__edit_LIQANUAL_VAT_IMPORT'));
+    fireEvent.blur(screen.getByTestId('FmBoxes390__inputField_LIQANUAL_VAT_IMPORT'));
+    expect(shownValue('LIQANUAL_VAT_IMPORT')).toBe('');
+    // Enter: committed (blur), shown formatted
+    fireEvent.click(screen.getByTestId('FmBoxes390__edit_LIQANUAL_VAT_IMPORT'));
+    const again = screen.getByTestId('FmBoxes390__inputField_LIQANUAL_VAT_IMPORT');
+    fireEvent.change(again, { target: { value: '12' } });
+    fireEvent.keyDown(again, { key: 'Enter' });
+    fireEvent.blur(again);
+    expect(shownValue('LIQANUAL_VAT_IMPORT')).toBe('12');
+    expect(persistManualData).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('FmModel390Page__save'));
+    await waitFor(() => expect(persistManualData).toHaveBeenCalledTimes(1));
+    expect(persistManualData.mock.calls[0][1].aeatInputs.LIQANUAL_VAT_IMPORT).toBe('12.00');
+  });
+
+  it('rejects a negative compensation [85]', () => {
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    goToBlock('resultado_liquidacion');
     typeInput('LIQANUAL_COMPENSATION', '-5');
     expect(toast.error).toHaveBeenCalledWith('fm.m390.input.negative');
     expect(screen.getByTestId('FmBoxes390__box_86').textContent).toContain('360');
@@ -481,9 +515,9 @@ describe('FmModel390Page — classic consistency checks (ETP-5716 verification a
     fireEvent.click(screen.getByTestId('FmBoxes390__territoryToggle'));
     typeInput('COMMON_TERRITORY', '100');
     expect(toast.error).toHaveBeenCalledWith('fm.m390.input.percent_range');
-    expect(screen.getByTestId('FmBoxes390__inputField_COMMON_TERRITORY').value).toBe('');
+    expect(shownValue('COMMON_TERRITORY')).toBe('');
     typeInput('COMMON_TERRITORY', '99');
-    expect(screen.getByTestId('FmBoxes390__inputField_COMMON_TERRITORY').value).not.toBe('');
+    expect(shownValue('COMMON_TERRITORY')).not.toBe('');
   });
 
   it('turning territory mode on clears [85] from the saved inputs, not just the cell', async () => {
@@ -506,18 +540,18 @@ describe('FmModel390Page — classic consistency checks (ETP-5716 verification a
     goToBlock('resultado_liquidacion');
     typeInput('LIQANUAL_COMPENSATION', '50');
     expect(toast.error).toHaveBeenCalledWith('fm.m390.input.compensation_conflict');
-    expect(screen.getByTestId('FmBoxes390__inputField_LIQANUAL_COMPENSATION').value).toBe('');
+    expect(shownValue('LIQANUAL_COMPENSATION')).toBe('');
   });
 
   it('DEVOLVER cells are disabled unless ISMONTHLYRETURN, and cleared when it is turned off', async () => {
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     goToBlock('resultado_liquidaciones');
-    expect(screen.getByTestId('FmBoxes390__inputField_DEVOLVER_01').disabled).toBe(true);
-    expect(screen.getByTestId('FmBoxes390__inputField_INGRESAR_01').disabled).toBe(false);
+    expect(isEditable('DEVOLVER_01')).toBe(false);
+    expect(isEditable('INGRESAR_01')).toBe(true);
     goToBlock('identificacion');
     fireEvent.click(screen.getByTestId('FmBoxes390__flag_ISMONTHLYRETURN'));
     goToBlock('resultado_liquidaciones');
-    expect(screen.getByTestId('FmBoxes390__inputField_DEVOLVER_01').disabled).toBe(false);
+    expect(isEditable('DEVOLVER_01')).toBe(true);
     typeInput('DEVOLVER_03', '25');
     goToBlock('identificacion');
     fireEvent.click(screen.getByTestId('FmBoxes390__flag_ISMONTHLYRETURN'));
@@ -618,7 +652,7 @@ describe('FmModel390Page — presented declaration', () => {
     expect(screen.getByTestId('FmModel390Page__type_normal').disabled).toBe(true);
     expect(kpiValue('fm.m390.kpi.result')).toBe('999');
     goToBlock('resultado_liquidacion');
-    expect(screen.getByTestId('FmBoxes390__inputField_LIQANUAL_VAT_IMPORT').disabled).toBe(true);
+    expect(isEditable('LIQANUAL_VAT_IMPORT')).toBe(false);
     await act(async () => {});
     expect(fetchBoxes390).not.toHaveBeenCalled();
   });
@@ -706,7 +740,7 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     render(<FmModel390Page decl={makeDecl({ manualData })} {...props()} />);
     await waitFor(() => expect(fetchPreload390).toHaveBeenCalledTimes(1));
     goToBlock('resultado_liquidaciones');
-    expect(screen.getByTestId('FmBoxes390__inputField_INGRESAR_12').value).toBe('60');
+    expect(shownValue('INGRESAR_12')).toBe('60');
 
     await act(async () => { fireEvent.click(screen.getByTestId('FmModel390Page__compute')); });
     await waitFor(() => expect(persistManualData).toHaveBeenCalled());
