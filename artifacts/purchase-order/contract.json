@@ -1,8 +1,8 @@
 {
-  "version": "0.54.0",
+  "version": "0.55.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-10-15T18:34:49.855Z",
-  "checksum": "dbc729d0ce1ed363",
+  "updatedAt": "2026-10-19T17:33:12.522Z",
+  "checksum": "afc2854a0daa5bee",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -48,7 +48,8 @@
           "InvoiceStatus": "Estado de facturación",
           "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
           "EM_ETGO_Invoice_Status": "Estado de facturación",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -56,7 +57,8 @@
           "DeliveryStatusPurchase": "Reception Status",
           "InvoiceStatus": "Invoicing Status",
           "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
-          "EM_ETGO_Invoice_Status": "Invoicing Status"
+          "EM_ETGO_Invoice_Status": "Invoicing Status",
+          "C_UOM_ID": "Unit"
         }
       },
       "dateFilterKey": "orderDate",
@@ -1476,7 +1478,7 @@
             "sourceRequired": true,
             "columnType": "amount",
             "section": "principal",
-            "gridOrder": 4,
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -1507,7 +1509,7 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 5,
+            "gridOrder": 6,
             "min": 0,
             "max": 100,
             "validation": {
@@ -1544,7 +1546,7 @@
               "lineNetAmount"
             ],
             "section": "principal",
-            "gridOrder": 6,
+            "gridOrder": 7,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -1586,7 +1588,7 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 7,
+            "gridOrder": 8,
             "validation": {
               "maxLength": 2
             },
@@ -1660,10 +1662,13 @@
             "tsType": "string",
             "visibility": "readOnly",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": false,
             "sourceRequired": true,
             "reference": "UOM",
+            "display": "tag",
+            "gridOrder": 4,
+            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -2803,7 +2808,8 @@
           "InvoiceStatus": "Estado de facturación",
           "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
           "EM_ETGO_Invoice_Status": "Estado de facturación",
-          "PriceList": "Precio"
+          "PriceList": "Precio",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
@@ -2811,7 +2817,8 @@
           "DeliveryStatusPurchase": "Reception Status",
           "InvoiceStatus": "Invoicing Status",
           "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
-          "EM_ETGO_Invoice_Status": "Invoicing Status"
+          "EM_ETGO_Invoice_Status": "Invoicing Status",
+          "C_UOM_ID": "Unit"
         }
       },
       "dateFilterKey": "orderDate",
@@ -5703,7 +5710,8 @@
         "InvoiceStatus": "Estado de facturación",
         "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
         "EM_ETGO_Invoice_Status": "Estado de facturación",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
@@ -5711,7 +5719,8 @@
         "DeliveryStatusPurchase": "Reception Status",
         "InvoiceStatus": "Invoicing Status",
         "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
-        "EM_ETGO_Invoice_Status": "Invoicing Status"
+        "EM_ETGO_Invoice_Status": "Invoicing Status",
+        "C_UOM_ID": "Unit"
       }
     }
   },

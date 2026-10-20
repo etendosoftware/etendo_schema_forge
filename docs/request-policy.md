@@ -273,8 +273,22 @@ blocked-access screen.
 - The caller still gets its response, unread and unchanged — handle the 402 as before, or not at all.
 - The transport only ever **sets** a block. A 200 from another endpoint proves nothing (the account
   API stays reachable while ERP access is blocked); only a successful `/sws/neo/windowaccessmap`
-  clears it.
+  clears it. A 401, a 500, a 402 without a blocking decision or a network failure on that call
+  leaves the block in place (ETP-5047), and logging out through `useLogout` forgets it. The
+  automatic logouts inside the core `AuthContext` (an ambient 401 from a plain-module `apiFetch`, a
+  failed session restore, a logout broadcast from another tab) do not go through `useLogout`; a
+  block is also tied to the client it was recorded for, and `fetchWindowAccess` forgets it as soon
+  as the access map is requested for another client (or for a session that names none), so the
+  next login never inherits the previous company's blocked screen.
 - A 402 that arrives after the session changed identity (an environment switch) is not recorded.
+- Since ETP-5047 every refusing surface (NEO, MCP, the `/sws/go` tenant-session endpoints) answers
+  the one body of `EnvironmentAccessGuard.Denial.errorBody` (com.etendoerp.go):
+  `{ "error": { "message": "Environment access is not available: <DECISION>", "status": 402,
+  "code": "ENVIRONMENT_ACCESS_DENIED", "decision": "<DECISION>" } }`. The `message` text is
+  unchanged, so the transport keeps parsing it (from `error.message`, or from a plain-string
+  `error` an older backend may still send); `fetchWindowAccess()` reads `error.decision` first
+  through `readEnvironmentAccessDecision` (`@/lib/environmentAccessGate.js`) and falls back to the
+  message.
 - Before this, the block was detected only from `windowaccessmap`. A tab already open when the
   trial expired showed empty lists and an empty dashboard indefinitely — the silent refresh stops
   at `/sws/neo/refreshtoken`'s 402 and never reaches `windowaccessmap`.

@@ -66,6 +66,7 @@ import {
   renderDefaultCell,
   renderEnumCell,
   renderMultiFieldCell,
+  renderNeutralTagCell,
   renderPercentCell,
   renderSignedDeltaCell,
   renderStatusCell,
@@ -565,5 +566,36 @@ describe('renderMultiFieldCell', () => {
     expect(box).toBeTruthy();
     expect(screen.getByTestId('box-icon')).toBeInTheDocument();
     expect(box.querySelector('img')).toBeNull();
+  });
+});
+
+describe('renderNeutralTagCell / display: tag', () => {
+  it.each(['Unit', 'Completed', 'Cancelled', 'Draft'])('renders %s as a neutral pill whatever the text', (value) => {
+    renderCell(renderNeutralTagCell(value));
+    const tag = screen.getByTestId('status-tag');
+    expect(tag).toHaveTextContent(value);
+    expect(tag).toHaveAttribute('data-tone', 'neutral');
+  });
+
+  it.each([null, undefined, ''])('renders nothing for %p', (value) => {
+    const { container } = renderCell(renderNeutralTagCell(value));
+    expect(screen.queryByTestId('status-tag')).toBeNull();
+    expect(container.querySelector('[data-testid="cell"]')).toBeEmptyDOMElement();
+  });
+
+  it('renderDefaultCell with col.display "tag" routes the display value to the neutral pill', () => {
+    renderCell(renderDefaultCell({ ...baseContext, col: { key: 'uOM', display: 'tag' }, display: 'Completed' }));
+    expect(screen.getByTestId('status-tag')).toHaveAttribute('data-tone', 'neutral');
+  });
+
+  it('renderDefaultCell with col.display "tag" and an empty display renders no pill', () => {
+    renderCell(renderDefaultCell({ ...baseContext, col: { key: 'uOM', display: 'tag' }, display: '' }));
+    expect(screen.queryByTestId('status-tag')).toBeNull();
+  });
+
+  it('renderDefaultCell without display "tag" is unchanged (plain text, no pill)', () => {
+    renderCell(renderDefaultCell({ ...baseContext, display: 'Unit' }));
+    expect(screen.queryByTestId('status-tag')).toBeNull();
+    expect(screen.getByTestId('cell')).toHaveTextContent('Unit');
   });
 });

@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "updatedAt": "2026-10-09T12:19:29.348Z",
-  "contractChecksum": "b242f9f8fddd500d",
+  "updatedAt": "2026-10-16T15:28:49.374Z",
+  "contractChecksum": "e9d0d3bedbf8f819",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -397,6 +397,14 @@
         "reference": "GLAccount",
         "inputMode": "search",
         "url": "/sws/neo/purchase-invoice/lines/selectors/account"
+      },
+      {
+        "entity": "lines",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/purchase-invoice/lines/selectors/uOM"
       },
       {
         "entity": "lines",
@@ -1375,7 +1383,8 @@
         "PriceList": "Precio",
         "Foreign_Amount": "Importe en Moneda Objetivo",
         "em_etgo_tbai_status": "Estado Batuz",
-        "DocumentNo": "N° interno"
+        "DocumentNo": "N° interno",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "POReference": "Document No.",
@@ -1385,10 +1394,12 @@
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount",
         "em_etgo_tbai_status": "Batuz Status",
-        "DocumentNo": "Internal No."
+        "DocumentNo": "Internal No.",
+        "C_UOM_ID": "Unit"
       },
       "es_AR": {
-        "OutstandingAmt": "Saldo pendiente"
+        "OutstandingAmt": "Saldo pendiente",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -1632,6 +1643,10 @@
           },
           "operativeQuantity": {
             "readOnlyLogic": "@Processed@='Y'"
+          },
+          "uOM": {
+            "readOnly": true,
+            "readOnlyLogic": "@Processed@='Y' | (@UomManagement@='Y' & @Financial_Invoice_Line@='N')"
           },
           "unitPrice": {
             "required": true,
@@ -2258,5 +2273,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "ee305e33cec0b86c"
+  "checksum": "8e7ff1b2f46c89f4"
 }

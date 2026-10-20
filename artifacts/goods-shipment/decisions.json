@@ -59,10 +59,12 @@
     },
     "labelOverrides": {
       "en_US": {
-        "EM_ETGO_Currency_ID": "Currency"
+        "EM_ETGO_Currency_ID": "Currency",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "EM_ETGO_Currency_ID": "Moneda"
+        "EM_ETGO_Currency_ID": "Moneda",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -295,24 +297,31 @@
           "required": true,
           "inputMode": "search",
           "section": "principal",
-          "seq": 10
+          "seq": 10,
+          "gridOrder": 1
         },
         "movementQuantity": {
           "grid": true,
           "required": true,
           "inputMode": "number",
           "section": "principal",
-          "seq": 20
+          "seq": 20,
+          "gridOrder": 2
         },
         "uOM": {
-          "visibility": "system"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 3,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "orderQuantity": {
           "visibility": "readOnly",
           "grid": true,
           "gridReadOnly": true,
           "section": "principal",
-          "seq": 30
+          "seq": 30,
+          "gridOrder": 4
         },
         "storageBin": {
           "visibility": "system",

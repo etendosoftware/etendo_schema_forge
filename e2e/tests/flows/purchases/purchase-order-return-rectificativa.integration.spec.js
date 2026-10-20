@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 // @covers artifacts/purchase-order/custom/PurchaseOrderActions.jsx
 // @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
@@ -5,6 +6,7 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../../helpers/auth.js';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
+import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
 import {
   loadCredentials, slow, waitForDetailReady, selectVendorBP,
@@ -147,8 +149,7 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await expect(rectLines,
         'The saved line should render in the InlineLinesPanel grid',
       ).toHaveCount(1, { timeout: 45_000 });
-      await page.getByText(/cargando|loading/i)
-        .waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+      await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
       await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
       await expect(rectLines,
         'Line count should still read 1 after related panels finish loading',

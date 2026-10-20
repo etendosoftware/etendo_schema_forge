@@ -354,7 +354,7 @@ the contract for agents. See `docs/decisions-reference.md`.
 - `decisions.json` → `header.fields.documentType.defaultExpr`: the same query scoped to `AD_Client_ID = @#AD_Client_ID@`, active rows only, ordered by `IsDefault DESC` then org distance. Verified live: two journals created back-to-back get `1000000` and `1000001` on the tenant's own document type.
 - `com.etendoerp.go` `NeoDefaultTenantGuard` (generic, every window): an `@SQL=` default of a foreign-key column never resolves to another tenant's row. See `neo-headless.md` (defaults section).
 
-**Existing data** (journals already stored with a foreign document type, posted ones carrying it into `Fact_Acct`) is a separate data-fix, not part of this change: ETP-5719.
+**Existing data** (journals already stored with a foreign document type, posted ones carrying it and the foreign GL category into `Fact_Acct`) is repaired by the corrective data-fix `R50-gl-journal-foreign-doctype` (ETP-5719): it also advances the tenant's own GLJ sequence past the numbers already used, so its next journal does not collide. See `docs/etendo-ad/onboarding-gaps.md`, gap A10.
 
 **List title.** The list page used the AD window name (`"Simple G/L Journal"`), translated as "Asientos Manuales Simplificados", while the menu and breadcrumb read "Asientos Manuales". The `"Simple G/L Journal"` locale label (`windows` + `menus`, en_US/es_ES/es_AR) now reads "Manual Journals" / "Asientos Manuales". The URL and spec name stay `simple-g-l-journal` (a rename to `manual-journals` is tracked separately in ETP-5720). Guarded by `tools/app-shell/src/locales/__tests__/window-list-titles.vitest.js`.
 

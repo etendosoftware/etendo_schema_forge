@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ensureFinancialAccountSetup } from './financial-account-helpers.js';
 import { apiAuthHeaders } from './auth.js';
+import { waitForLoadingIndicatorsGone } from './selectors.js';
 import { t } from './i18n.js';
 
 // ── Credentials ──────────────────────────────────────────────────────────────
@@ -38,9 +39,10 @@ export async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view'),
     'Detail view should be visible — page may not have loaded correctly',
   ).toBeVisible({ timeout: 20_000 });
-  // Wait for any loading indicator to disappear (covers late-appearing spinners)
-  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
-    .catch(() => {}); // OK if spinner never appeared
+  // Wait for EVERY loading indicator to disappear (covers late-appearing spinners
+  // and panels that load concurrently). Passes at once when none is shown; a
+  // still-visible indicator after the budget is tolerated, as before.
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
 }
 
 /**
@@ -169,15 +171,13 @@ export async function waitForLinesSettled(page, count, message) {
   // otherwise a slow initial load (a fresh navigation, or a reload) eats into
   // the same budget as the count check itself, and the two failures (still
   // loading vs. genuinely wrong count) become indistinguishable in the error.
-  await page.getByText(/cargando|loading/i).first()
-    .waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
 
   await expect(linesBtn,
     message || `Lines count should reach ${count}`,
   ).toBeVisible({ timeout: 30_000 });
 
-  const spinner = page.getByText(/cargando|loading/i);
-  await spinner.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+  await waitForLoadingIndicatorsGone(page, { timeout: 15_000 }).catch(() => {});
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
   await expect(linesBtn,
@@ -1668,6 +1668,54 @@ export function parseAmount(text) {
     cleaned = cleaned.replaceAll('.', '').replace(',', '.');
   }
   return Number.parseFloat(cleaned) || 0;
+}
+
+/**
+ * Locate the line row (rendered by the shared InlineLinesPanel —
+ * `data-testid="line-row-{id}"`, `data-cell-key="{fieldKey}"` per cell, see
+ * tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx) whose
+ * `qtyFieldKey` cell holds a negative value, and return a locator pinned to
+ * that row's own record id (`page.getByTestId('line-row-<id>')`). Shared by the
+ * purchase and sales full-flow specs.
+ *
+ * What is guaranteed:
+ *   - The row id, the quantity and the product are read from the SAME DOM
+ *     snapshot (one `evaluateAll` over every row), so the row returned is the
+ *     one whose quantity was negative — a re-render that reorders the table
+ *     between two separate reads can no longer pair the negative quantity with
+ *     the positive line.
+ *   - The scan is retried until a row with a rendered product and a negative
+ *     quantity exists, so the detail view's reload flash (0 rows, cells not
+ *     rendered yet) does not make it wrongly conclude there is none.
+ *   - The returned locator is matched by record id, never by position: a
+ *     positional `rows.nth(i)` is re-resolved on every use, so when the lines
+ *     list re-orders after the search (right after a line is added the new row
+ *     can render below the baseline line, then move above it) the caller's next
+ *     read of "row i" lands on the other line — the qty read `-2` at nth(1) and,
+ *     11 ms later, `1` at the same nth(1). The id also stays unambiguous when
+ *     two lines carry the same product.
+ *
+ * What is NOT guaranteed: that the row's cells still hold the same values when
+ * the caller reads them. Callers must read them with retrying assertions
+ * (`toHaveText`, `readSettledCellAmount`), never a one-shot `textContent()`.
+ * Reading the cell value (rather than pattern-matching the row's text) avoids
+ * false positives from unrelated hyphens in a product name/description.
+ */
+export async function findNegativeLineRow(page, qtyFieldKey, timeoutMs = 15_000) {
+  const rows = page.locator('[data-testid^="line-row-"]');
+  let negativeRowTestId = null;
+  await expect(async () => {
+    const cells = await rows.evaluateAll((els, key) => els.map((el) => ({
+      testId: el.dataset.testid,
+      qty: el.querySelector(`[data-cell-key="${key}"]`)?.textContent ?? '',
+      product: el.querySelector('[data-cell-key="product"]')?.textContent?.trim() ?? '',
+    })), qtyFieldKey);
+    negativeRowTestId = cells.find((c) => c.product && parseAmount(c.qty) < 0)?.testId ?? null;
+    expect(negativeRowTestId,
+      `No line row with a negative "${qtyFieldKey}" was found (rows: ${JSON.stringify(cells)})`,
+    ).toBeTruthy();
+  }).toPass({ timeout: timeoutMs });
+  return page.getByTestId(negativeRowTestId);
 }
 
 /**
