@@ -29,6 +29,28 @@ export function isPurchaseSourceDemo(environment) {
     && environment.ownedByAccount !== false;
 }
 
+/**
+ * ETP-5742 — a productive environment whose subscription was canceled (`subscriptionStatus`
+ * "EXPIRED"), as opposed to one blocked by an unpaid invoice ("PAST_DUE" past its grace). Both are
+ * blocked as `SUBSCRIPTION_REQUIRED`, but only this one is fixed by re-subscribing; an unpaid
+ * invoice is fixed in the payment portal. The plan is not asked: it reads "free" when the canceled
+ * subscription is a closed row and "productive" when it is the older preference projection.
+ */
+export function isCanceledSubscription(environment) {
+  return Boolean(environment)
+    && (hasProductiveType(environment) || isProductiveEnvironment(environment))
+    && environment.subscriptionStatus === 'EXPIRED';
+}
+
+/**
+ * ETP-5742 — whether this account may re-subscribe the environment: it is canceled and the account
+ * owns it. An invited member is told to ask the owner instead. Only an explicit
+ * `ownedByAccount: true` qualifies; the backend checks ownership again and refuses anyone else.
+ */
+export function canReactivateSubscription(environment) {
+  return isCanceledSubscription(environment) && environment.ownedByAccount === true;
+}
+
 /** A canceled productive environment keeps its "Productive" badge although its plan reads free. */
 export function environmentPlanLabelKey(environment) {
   return isProductiveEnvironment(environment) || hasProductiveType(environment)

@@ -46,6 +46,12 @@ import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js
 import { periodRecoveryFor, setPeriodRecovery } from '@/lib/periodNotAvailable.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { NEO_BASE } from '@/lib/neoWebhookClient.js';
+import { detectBaseUrl } from '@/components/copilot/copilotApi.js';
+import { canReactivateSubscription, isCanceledSubscription } from '@/lib/environmentPresentation.js';
+import {
+  ReactivateSubscriptionButton,
+  ReactivationPendingNotice,
+} from '@/components/access/SubscriptionReactivation.jsx';
 
 /**
  * ETP-5144 — the engine's `onFinish`, bound to the flow list so the handler can
@@ -245,6 +251,22 @@ const BLOCKED_ACCESS_CONTENT = {
   },
 };
 
+// ETP-5742 — a SUBSCRIPTION_REQUIRED environment whose subscription was CANCELED, not left unpaid:
+// the portal behind "Manage subscription" has nothing to fix there, so the owner re-subscribes the
+// environment instead (ReactivateSubscriptionButton) and an invited member is told to ask the owner.
+const CANCELED_SUBSCRIPTION_CONTENT = {
+  titleKey: 'blockedAccessSubscriptionCanceledTitle',
+  ownerMessageKey: 'blockedAccessSubscriptionCanceledMessage',
+  memberMessageKey: 'blockedAccessSubscriptionCanceledMemberMessage',
+};
+
+/** The paid re-subscription the provider sent the browser back with, if any. */
+function returningReactivationRequestId(searchParams) {
+  return searchParams.get('reactivation') === 'success'
+    ? searchParams.get('requestId') || null
+    : null;
+}
+
 // ETP-5443 follow-up — both routes resolve through the account's own platform token
 // (SubscriptionSection.jsx / UpgradePage.jsx), independent of the blocked tenant NEO
 // session, and are literally where this screen's own CTA sends the user. They must stay
@@ -269,13 +291,28 @@ function BlockedAccessScreen({ decision }) {
   const ui = useUI();
   const logout = useLogout();
   const navigate = useNavigate();
-  const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch();
+  const {
+    environments, loading: environmentsLoading, switchTo, switching, currentClientId,
+  } = useEnvironmentSwitch();
   const companies = [...new Map(
     environments.filter((env) => env.clientId).map((env) => [env.clientId, env])
   ).values()];
   const companyName = companies.find((env) => env.clientId === currentClientId)?.clientName
     || ui('yourCompany');
   const canSwitch = companies.some((env) => env.clientId !== currentClientId);
+  // ETP-5742 — a re-subscription paid in this visit (a second click after paying) or the one the
+  // provider sent the browser back with: either way the screen waits for it to apply.
+  const [searchParams] = useSearchParams();
+  const [paidReactivationId, setPaidReactivationId] = useState(null);
+  const subscriptionBlocked = decision === 'SUBSCRIPTION_REQUIRED';
+  const pendingReactivationId = subscriptionBlocked
+    ? paidReactivationId || returningReactivationRequestId(searchParams)
+    : null;
+  const currentEnvironment = companies.find((env) => env.clientId === currentClientId);
+  const canceled = subscriptionBlocked && isCanceledSubscription(currentEnvironment);
+  // Whether the subscription was canceled or left unpaid is only known once the environment list
+  // has arrived; until then the screen shows neither story, rather than the wrong one first.
+  const awaitingEnvironment = subscriptionBlocked && environmentsLoading;
 
   // AppLayoutAccessGate only renders this for a decision BLOCKED_ACCESS_CONTENT knows
   // about (see isBlockingAccessDecision in lib/environmentAccessGate.js) — this is a
@@ -283,27 +320,56 @@ function BlockedAccessScreen({ decision }) {
   // learned yet.
   const content = BLOCKED_ACCESS_CONTENT[decision];
   if (!content) return null;
+  const owner = canReactivateSubscription(currentEnvironment);
+  const titleKey = canceled ? CANCELED_SUBSCRIPTION_CONTENT.titleKey : content.titleKey;
+  let messageKey = content.messageKey;
+  if (canceled) {
+    messageKey = owner
+      ? CANCELED_SUBSCRIPTION_CONTENT.ownerMessageKey
+      : CANCELED_SUBSCRIPTION_CONTENT.memberMessageKey;
+  }
 
   return (
     <div
       className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
       data-testid="BlockedAccessScreen__488148"
     >
-      <p className="text-base font-medium text-foreground" data-testid="blocked-access-title">
-        {ui(content.titleKey)}
-      </p>
-      <p className="max-w-md text-sm text-muted-foreground" data-testid="blocked-access-message">
-        {ui(content.messageKey)}
-      </p>
-
-      <Button
-        type="button"
-        className="mt-4"
-        onClick={() => navigate(content.ctaPath)}
-        data-testid="blocked-access-cta"
-      >
-        {ui(content.ctaKey)}
-      </Button>
+      {pendingReactivationId && (
+        <ReactivationPendingNotice
+          apiBaseUrl={detectBaseUrl()}
+          requestId={pendingReactivationId}
+          data-testid="ReactivationPendingNotice__488148" />
+      )}
+      {!pendingReactivationId && awaitingEnvironment && (
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground"
+          data-testid="blocked-access-loading" />
+      )}
+      {!pendingReactivationId && !awaitingEnvironment && (
+        <>
+          <p className="text-base font-medium text-foreground" data-testid="blocked-access-title">
+            {ui(titleKey)}
+          </p>
+          <p className="max-w-md text-sm text-muted-foreground" data-testid="blocked-access-message">
+            {ui(messageKey)}
+          </p>
+          {canceled && owner && (
+            <ReactivateSubscriptionButton
+              apiBaseUrl={detectBaseUrl()}
+              onPaid={setPaidReactivationId}
+              data-testid="ReactivateSubscriptionButton__488148" />
+          )}
+          {!canceled && (
+            <Button
+              type="button"
+              className="mt-4"
+              onClick={() => navigate(content.ctaPath)}
+              data-testid="blocked-access-cta"
+            >
+              {ui(content.ctaKey)}
+            </Button>
+          )}
+        </>
+      )}
 
       {/* Same rationale as NoAccessScreen's own switcher: a blocked TENANT session does not
           mean a blocked ACCOUNT — the account may own other, unaffected environments. */}
