@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { X } from 'lucide-react';
+import { TriangleAlert, X } from 'lucide-react';
 import { ConfigDrawer } from './FmOverlays.jsx';
 import { showIaeActivityReminder } from './fiscalModelsUtils.js';
 import { listModels, getModel } from './modelRegistry.js';
@@ -22,7 +22,14 @@ const ANY_SII_WARNING = CATALOG.some(m => m.siiWarningOnActivate);
 function SiiActivationWarning({ sinceLabel, onCancel, onConfirm, t }) {
   return (
     <div className="fm-banner fm-banner--warning fm-catalog-sii-warning" role="alertdialog" aria-live="polite" data-testid="FmCatalogPage__siiWarning">
-      <span>{sinceLabel ? t('fm.catalog.sii_warning_since', { date: sinceLabel }) : t('fm.catalog.sii_warning')}</span>
+      <div className="fm-catalog-sii-warning__msg">
+        <TriangleAlert size={16} strokeWidth={1.75} className="fm-catalog-sii-warning__icon" data-testid="TriangleAlert__fmCatalogSii" />
+        <span>
+          <strong>{sinceLabel ? t('fm.catalog.sii_warning_since_title', { date: sinceLabel }) : t('fm.catalog.sii_warning_title')}</strong>
+          {' '}
+          {sinceLabel ? t('fm.catalog.sii_warning_since_body', { date: sinceLabel }) : t('fm.catalog.sii_warning_body')}
+        </span>
+      </div>
       <div className="fm-catalog-sii-warning__actions">
         <button type="button" className="fm-btn fm-btn--cancel-pill" onClick={onCancel} data-testid="FmCatalogPage__siiCancel">
           {t('fm.action.cancel')}
@@ -156,7 +163,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels, token, api
               return (
                 <div
                   key={model.id}
-                  className={`fm-catalog-card${isActive && !isLocked ? ' fm-catalog-card--active' : ''}${isLocked ? ' fm-catalog-card--locked' : ''}`}
+                  className={`fm-catalog-card${isActive && !isLocked ? ' fm-catalog-card--active' : ''}${isLocked ? ' fm-catalog-card--locked' : ''}${siiPendingId === model.id ? ' fm-catalog-card--attention' : ''}`}
                 >
                   <span className={`fm-catalog-card__badge fm-catalog-card__badge--${badgeVariant}`}>
                     {model.id}

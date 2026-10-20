@@ -29,12 +29,13 @@ export function missing303Periods(decls, year) {
 }
 
 /**
- * Registry hook (`newDeclWarning`): `{ key, params }` of the notice to show for `year`, or `null`.
+ * Registry hook (`newDeclWarning`): `{ key, bodyKey, params }` of the notice to show for `year` (bold
+ * lead + rest), or `null`.
  * Monthly periods are shown without the leading zero ("10, 11"), quarters as-is ("T4").
  */
 export function newDeclWarning390(decls, year) {
   const missing = missing303Periods(decls, year);
   if (missing.length === 0) return null;
   const periods = missing.map(p => (/^\d{2}$/.test(p) ? String(Number(p)) : p)).join(', ');
-  return { key: 'fm.m390.new_decl.missing_303', params: { year, periods } };
+  return { key: 'fm.m390.new_decl.missing_303_lead', bodyKey: 'fm.m390.new_decl.missing_303_body', params: { year, periods } };
 }

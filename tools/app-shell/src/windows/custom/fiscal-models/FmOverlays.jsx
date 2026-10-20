@@ -647,6 +647,12 @@ export function defaultNewDeclYear(options, currentYear = new Date().getFullYear
   return options.includes(currentYear) ? currentYear : options[0];
 }
 
+/** `t(key)`, or `null` when the dictionary has no such key (`useUI` answers the key itself). */
+export function optionalLabel(t, key) {
+  const value = t(key);
+  return value && value !== key ? value : null;
+}
+
 // NewDeclModal — "Nueva declaración". `existingDeclarations` is optional (defaults
 // to none, matching every pre-existing caller/test): when provided (FmListPage
 // passes its `decls` array), periods that already have a declaration for the
@@ -674,7 +680,9 @@ export function defaultNewDeclYear(options, currentYear = new Date().getFullYear
 //     year shows an inline notice with "Abrir declaración" (`onOpenExisting(decl)`) and disables
 //     "Crear declaración" (the backend would answer 409 DUPLICATE_ORDINARY anyway);
 //   - the entry's `newDeclWarning(existingDeclarations, year)` notice (390: missing 303s), amber,
-//     never blocking;
+//     never blocking: `key` is the bold lead, the optional `bodyKey` the rest (same `params`);
+//   - an annual-only model shows an "Anual" pill + "no frequency or period" hint under Año;
+//   - the model trigger shows the catalog description (`fm.catalog.<id>.desc`) when it exists;
 //   - the entry's `selectableYears()` years in the Año dropdown (390: 2026 and 2025), else the
 //     shared SELECTABLE_YEARS.
 export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclarations, onOpenExisting }) {
@@ -758,6 +766,7 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
   }
 
   const selectedModelName = t(`fm.catalog.${model}.name`) ?? model;
+  const selectedModelDesc = optionalLabel(t, `fm.catalog.${model}.desc`);
 
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
@@ -790,7 +799,12 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
               onClick={() => setModelMenuOpen(o => !o)}
             >
               <span className={`fm-model-badge fm-model-badge--${model}`}>{model}</span>
-              <span className="fm-newdecl-model-trigger__name">{selectedModelName}</span>
+              <span className="fm-newdecl-model-trigger__text">
+                <span className="fm-newdecl-model-trigger__name">{selectedModelName}</span>
+                {selectedModelDesc && (
+                  <span className="fm-newdecl-model-trigger__desc" data-testid="NewDeclModal__modelDesc">{selectedModelDesc}</span>
+                )}
+              </span>
               <ChevronDown size={16} strokeWidth={1.75} className="fm-newdecl-model-trigger__chevron" data-testid="ChevronDown__cda0bb" />
             </button>
             {modelMenuOpen && canCreate && (
@@ -832,6 +846,12 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                   onSelect={(y) => { setYear(y); setYearMenuOpen(false); }}
                   onClose={() => setYearMenuOpen(false)}
                   data-testid="YearSelectMenu__cda0bb" />
+              )}
+              {annualOnly && (
+                <div className="fm-newdecl-annual-hint" data-testid="NewDeclModal__annualHint">
+                  <span className="fm-catalog-card__pill">{t('fm.catalog.periodicity.annual')}</span>
+                  <span>{t('fm.new_decl.annual_hint', { model })}</span>
+                </div>
               )}
             </div>
             {!annualOnly && (
@@ -922,7 +942,8 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
 
           {existingOrdinary && (
             <div className="fm-banner fm-banner--warning fm-newdecl-notice" role="alert" data-testid="NewDeclModal__duplicateOrdinary">
-              <span>{t('fm.new_decl.duplicate_ordinary', { model, year })}</span>
+              <TriangleAlert size={16} strokeWidth={1.75} className="fm-newdecl-notice__icon" data-testid="TriangleAlert__newDeclDuplicate" />
+              <strong className="fm-newdecl-notice__text">{t('fm.new_decl.duplicate_ordinary', { model, year })}</strong>
               {onOpenExisting && (
                 <button
                   type="button"
@@ -937,7 +958,11 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
           )}
           {!existingOrdinary && modelWarning && (
             <div className="fm-banner fm-banner--warning fm-newdecl-notice" role="status" data-testid="NewDeclModal__modelWarning">
-              {t(modelWarning.key, modelWarning.params)}
+              <TriangleAlert size={16} strokeWidth={1.75} className="fm-newdecl-notice__icon" data-testid="TriangleAlert__newDeclWarning" />
+              <span className="fm-newdecl-notice__text">
+                <strong>{t(modelWarning.key, modelWarning.params)}</strong>
+                {modelWarning.bodyKey && <>{' '}{t(modelWarning.bodyKey, modelWarning.params)}</>}
+              </span>
             </div>
           )}
         </div>

@@ -106,7 +106,9 @@ describe('modelRegistry — entries', () => {
       { model: '303', year: 2026, period: 'T3' }, { model: '303', year: 2025, period: 'T4' },
       { model: '349', year: 2026, period: 'T4' },
     ];
-    expect(warn(quarterly, 2026)).toEqual({ key: 'fm.m390.new_decl.missing_303', params: { year: 2026, periods: 'T4' } });
+    expect(warn(quarterly, 2026)).toEqual({
+      key: 'fm.m390.new_decl.missing_303_lead', bodyKey: 'fm.m390.new_decl.missing_303_body', params: { year: 2026, periods: 'T4' },
+    });
     expect(warn([...quarterly, { model: '303', year: 2026, period: 'T4' }], 2026)).toBeNull();
     // A monthly filer: every month is expected, shown without the leading zero.
     const monthly = ['01', '02', '03', '04', '05', '06', '07', '08', '09'].map(p => ({ model: '303', year: 2026, period: p }));

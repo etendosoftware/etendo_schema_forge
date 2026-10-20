@@ -38,7 +38,7 @@ vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
 // SPA navigation itself, so a plain stub is enough — mirrors FmModel303Page.vitest.jsx's own mock.
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
-import { PresentModal, FileGenModal, NewDeclModal, newDeclYearOptions, defaultNewDeclYear } from '../FmOverlays.jsx';
+import { PresentModal, FileGenModal, NewDeclModal, newDeclYearOptions, defaultNewDeclYear, optionalLabel } from '../FmOverlays.jsx';
 import { toast } from 'sonner';
 import { RECEIPT_ATTACHMENT_CONFIG } from '../fiscalModelsUtils.js';
 import { SELECTABLE_YEARS } from '../models/303/fm303Layouts';
@@ -1474,14 +1474,34 @@ describe('NewDeclModal — annual model (390)', () => {
     const { container } = render(
       <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={only390} existingDeclarations={decls} />,
     );
-    expect(screen.getByTestId('NewDeclModal__modelWarning').textContent).toBe('fm.m390.new_decl.missing_303');
+    const warning = screen.getByTestId('NewDeclModal__modelWarning');
+    // Bold lead + normal rest.
+    expect(warning.querySelector('strong').textContent).toBe('fm.m390.new_decl.missing_303_lead');
+    expect(warning.textContent).toBe('fm.m390.new_decl.missing_303_lead fm.m390.new_decl.missing_303_body');
     expect(getCreateBtn(container).disabled).toBe(false);
+  });
+
+  it('shows the "Anual" pill and the no-frequency hint under Año for an annual-only model', () => {
+    render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={only390} />);
+    const hint = screen.getByTestId('NewDeclModal__annualHint');
+    expect(hint.querySelector('.fm-catalog-card__pill').textContent).toBe('fm.catalog.periodicity.annual');
+    expect(hint.textContent).toContain('fm.new_decl.annual_hint');
+  });
+
+  it('the duplicate-ordinary notice leads in bold', () => {
+    render(
+      <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={only390}
+        existingDeclarations={[{ id: 'd', model: '390', year: YEAR, period: '0A', status: 'draft', type: 'ord' }]} />,
+    );
+    expect(screen.getByTestId('NewDeclModal__duplicateOrdinary').querySelector('strong').textContent)
+      .toBe('fm.new_decl.duplicate_ordinary');
   });
 
   it('shows no annual notice for 303', () => {
     render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': true }} existingDeclarations={[]} />);
     expect(screen.queryByTestId('NewDeclModal__modelWarning')).toBeNull();
     expect(screen.queryByTestId('NewDeclModal__duplicateOrdinary')).toBeNull();
+    expect(screen.queryByTestId('NewDeclModal__annualHint')).toBeNull();
   });
   // The 390 registry hook `selectableYears`: the previous exercise is still creatable.
   it('offers 2026 and 2025 (most recent first), the current year pre-selected, and creates a 2025', () => {
@@ -1527,6 +1547,19 @@ describe('NewDeclModal — annual model (390)', () => {
     fireEvent.click(getYearOption(container, 2026));
     fireEvent.click(getCreateBtn(container));
     expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ model: '303', year: 2026 }));
+  });
+});
+
+describe('optionalLabel (model description under the trigger)', () => {
+  it('returns the translation, or null when the dictionary has no such key', () => {
+    const t = (k) => ({ 'fm.catalog.390.desc': 'Resumen anual' }[k] ?? k);
+    expect(optionalLabel(t, 'fm.catalog.390.desc')).toBe('Resumen anual');
+    expect(optionalLabel(t, 'fm.catalog.999.desc')).toBeNull();
+  });
+  it('the trigger shows no description line when the key is not translated', () => {
+    // `useUI` is the identity here, so every key counts as missing.
+    render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '390': true }} />);
+    expect(screen.queryByTestId('NewDeclModal__modelDesc')).toBeNull();
   });
 });
 

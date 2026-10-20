@@ -15,6 +15,7 @@ vi.mock('@/i18n', () => ({
 vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('lucide-react', () => ({
   X: () => null,
+  TriangleAlert: () => null,
   Check: () => null,
   Star: () => null,
 }));

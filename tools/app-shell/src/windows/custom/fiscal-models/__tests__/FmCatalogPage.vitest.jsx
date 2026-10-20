@@ -11,6 +11,7 @@ vi.mock('@/i18n', () => ({
 vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('lucide-react', () => ({
   X: () => null,
+  TriangleAlert: () => null,
   Check: () => null,
   Star: () => null,
 }));
@@ -364,11 +365,18 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} onSave={onSave} />);
     fireEvent.click(switchOf(container, '390'));
     await screen.findByTestId('FmCatalogPage__siiWarning');
-    expect(screen.getByTestId('FmCatalogPage__siiWarning').textContent).toContain('fm.catalog.sii_warning');
+    const warning = screen.getByTestId('FmCatalogPage__siiWarning');
+    // Bold first sentence, then the rest; the 390 card is highlighted while it is open.
+    expect(warning.querySelector('strong').textContent).toBe('fm.catalog.sii_warning_title');
+    expect(warning.textContent).toContain('fm.catalog.sii_warning_body');
+    const card390 = () => Array.from(container.querySelectorAll('.fm-catalog-card'))
+      .find(c => c.querySelector('.fm-catalog-card__badge')?.textContent === '390');
+    expect(card390().className).toContain('fm-catalog-card--attention');
     expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('false');
 
     fireEvent.click(screen.getByTestId('FmCatalogPage__siiConfirm'));
     expect(screen.queryByTestId('FmCatalogPage__siiWarning')).toBeNull();
+    expect(card390().className).not.toContain('fm-catalog-card--attention');
     expect(switchOf(container, '390').getAttribute('aria-checked')).toBe('true');
     fireEvent.click(container.querySelector('.fm-catalog-header__back'));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ '390': true }));
@@ -381,8 +389,9 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     fireEvent.click(switchOf(container, '390'));
     const warning = await screen.findByTestId('FmCatalogPage__siiWarning');
-    expect(warning.textContent).toContain('fm.catalog.sii_warning_since');
-    expect(warning.textContent).toContain(`15/09/${year}`);
+    expect(warning.querySelector('strong').textContent).toContain('fm.catalog.sii_warning_since_title');
+    expect(warning.querySelector('strong').textContent).toContain(`15/09/${year}`);
+    expect(warning.textContent).toContain('fm.catalog.sii_warning_since_body');
   });
 
   it('organization in the SII since a previous year (or since 1 January): the plain warning', async () => {
@@ -391,7 +400,7 @@ describe('FmCatalogPage — SII warning when activating the 390', () => {
     const { container } = render(<FmCatalogPage {...defaultProps} />);
     fireEvent.click(switchOf(container, '390'));
     const warning = await screen.findByTestId('FmCatalogPage__siiWarning');
-    expect(warning.textContent).toBe('fm.catalog.sii_warningfm.action.cancelfm.catalog.activate');
+    expect(warning.textContent).toBe('fm.catalog.sii_warning_title fm.catalog.sii_warning_bodyfm.action.cancelfm.catalog.activate');
   });
 
   it('organization in the SII: "Cancelar" leaves it inactive', async () => {

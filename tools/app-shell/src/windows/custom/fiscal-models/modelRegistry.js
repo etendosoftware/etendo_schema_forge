@@ -33,7 +33,7 @@
 //                               organization is in the SII (entities in the SII are exempt).
 //   singleOrdinaryPerYear       Only one ordinary declaration per exercise (the backend answers a
 //                               second one with 409 DUPLICATE_ORDINARY); the modal pre-checks it.
-//   newDeclWarning              (existingDecls, year) => { key, params } | null — non-blocking
+//   newDeclWarning              (existingDecls, year) => { key, bodyKey?, params } | null — non-blocking
 //                               notice of "Nueva declaración" for this model, or `null` (no hook).
 //   selectableYears             () => number[] — the exercises "Nueva declaración" offers for this
 //                               model, or `null` to use the shared `SELECTABLE_YEARS` (fm303Layouts).
