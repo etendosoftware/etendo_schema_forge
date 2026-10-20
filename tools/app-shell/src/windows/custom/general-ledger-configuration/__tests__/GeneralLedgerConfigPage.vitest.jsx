@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/general-ledger-configuration/GeneralLedgerConfigPage.jsx
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────

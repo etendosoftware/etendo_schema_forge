@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/general-ledger-configuration/useGeneralLedgerConfig.js
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
