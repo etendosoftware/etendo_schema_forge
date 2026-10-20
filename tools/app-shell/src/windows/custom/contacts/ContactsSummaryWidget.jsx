@@ -163,14 +163,16 @@ function TrendBadge({ trend, period, ui }) {
  * ETP-5600 (QA pass 2) — no previous period to compare with (bp-stats `hasPrevious`
  * false, or a missing/zero previous value): neutral muted text instead of a chip,
  * mirroring the dashboard's FinancialSummaryCard (`financial-summary-no-trend`):
- * the chip's box (24px, 4px/8px padding, 12/16), muted foreground, no pill, no arrow,
- * ellipsis when it does not fit.
+ * the chip's height (24px, 4px vertical padding, 12/16), muted foreground, no pill,
+ * no arrow, ellipsis when it does not fit. No horizontal padding: with no pill
+ * background the chip's 8px would read as an indent when the text wraps below the
+ * amount; beside the amount, the row's `gap-x-2` already provides the 8px.
  */
 function NoPreviousTrend({ ui }) {
   return (
     <span
       data-testid="contacts-summary-no-trend"
-      className="flex items-center h-6 px-2 py-1 max-w-full min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-xs leading-4 font-normal text-[hsl(var(--muted-foreground))]"
+      className="flex items-center h-6 py-1 max-w-full min-w-0 overflow-hidden whitespace-nowrap text-ellipsis text-xs leading-4 font-normal text-[hsl(var(--muted-foreground))]"
     >
       {ui('financialSummaryNoPrevious')}
     </span>
