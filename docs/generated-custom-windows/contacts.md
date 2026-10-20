@@ -1499,6 +1499,14 @@ within its 30 s stale time.
 behavior itself is covered generically in `hooks/__tests__/useBulkRowDelete.vitest.jsx`. The
 E2E bulk-delete step in `e2e/tests/flows/contacts/contacts-integration.spec.js` now drives the
 generic `bulk-delete-selected` / `bulk-delete-confirm` testids.
+
+**In-progress state (ETP-5758, QA follow-up).** While the batch runs, the generic dialog's
+destructive button shows a spinner and *"Eliminando…"*, the description switches to
+*"Eliminando {count} registro(s). Esto puede tardar unos segundos."*, Cancel is disabled and the
+dialog carries `aria-busy`. This lives in the shared `DeleteConfirmDialog`, which every bulk delete
+in the app now goes through (`useBulkRowDelete` became a thin wrapper over `useBatchDeleteDialog`),
+so Contacts needs no window code for it — see `docs/ui-customization.md` §9c.
+
 ## ETP-5515 — Bottom tabs: "Más" menu with a dynamic slot
 
 At 1280x720 the six bottom tabs (Persona, Cuenta bancaria, Dirección, Contabilidad cliente,
@@ -1517,3 +1525,14 @@ with and without the sidebar variants.
 At narrower widths (browser zoom, side panel open) fewer than 4 tabs may fit; the strip then moves
 the extra tabs into "Más" and never overlaps the side panel. Manual check: zoom the browser in
 until a tab would not fit and confirm "Más" count grows and nothing overlaps.
+
+## ETP-5795 — "+ New Contact" on the Contacts overview points to /contacts
+
+The default action of the Contacts overview page (`artifacts/contacts/aggregate-contract.json`,
+`actions[0]`, label "+ New Contact") used to route to `/business-partner`. That path is the
+hidden raw Business Partner window, which is no longer reachable through URL routing (it is
+redirected through the menu, see `RedirectWindow`), so the button now routes to `/contacts`, the
+window this guide describes.
+
+Manual verification: open the Contacts overview, click "+ New Contact" and confirm the app lands
+on the Contacts window (`/contacts`), not on a Business Partner page or a redirect.

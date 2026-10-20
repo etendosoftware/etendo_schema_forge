@@ -47,9 +47,18 @@
       }
     ],
     "labelOverrides": {
-      "en_US": { "M_Locator_ID": "Warehouse" },
-      "es_ES": { "M_Locator_ID": "Almacén" },
-      "es_AR": { "M_Locator_ID": "Almacén" }
+      "en_US": {
+        "M_Locator_ID": "Warehouse",
+        "C_UOM_ID": "Unit"
+      },
+      "es_ES": {
+        "M_Locator_ID": "Almacén",
+        "C_UOM_ID": "Unidad"
+      },
+      "es_AR": {
+        "M_Locator_ID": "Almacén",
+        "C_UOM_ID": "Unidad"
+      }
     }
   },
   "entities": {
@@ -155,22 +164,32 @@
             {
               "from": "_aux._LOC",
               "to": "storageBin",
-              "labelFrom": ["warehouse", "warehouse$_identifier", "storageBin"]
+              "labelFrom": [
+                "warehouse",
+                "warehouse$_identifier",
+                "storageBin"
+              ]
             }
-          ]
+          ],
+          "gridOrder": 1
         },
         "movementQuantity": {
           "grid": true,
           "columnWidth": 160,
-          "min": 1
+          "min": 1,
+          "gridOrder": 2
         },
         "uOM": {
           "visibility": "readOnly",
-          "grid": true
+          "grid": true,
+          "gridOrder": 3,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "storageBin": {
           "grid": true,
-          "label": "Warehouse"
+          "label": "Warehouse",
+          "gridOrder": 4
         },
         "description": {
           "section": "other"

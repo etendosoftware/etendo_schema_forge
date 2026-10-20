@@ -11,6 +11,7 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 - Create and review journal headers with a focused 6-field form, in order: Accounting Date, Period, Description, Currency (read-only), Opening, and Multi-Ledger. (Document Date is hidden — see below.)
 - **Single date:** the form exposes only **Accounting Date** ("Fecha"). Document Date is hidden (`system`); `GlJournalHeaderHandler` mirrors `accountingDate` into `documentDate` on every CRUD write (ETP-5611), so both DB columns always carry the date the user chose.
 - **Reactivate** a completed, not-yet-posted journal back to Draft (ETP-5611).
+- Get a translated refusal when completing a journal whose **Period** does not contain its **Accounting Date**: the backend returns `ETGO_GLJournalPeriodMismatch` with `messageParams {period, accountingDate}`, mapped to `backendError.glJournalPeriodMismatch` (ETP-5669). The journal stays in Draft.
 - **Post** only a completed journal, and **Delete** only a draft one (ETP-5611). There is no Print action.
 - Start from an empty lines state ("Sin líneas todavía") that offers "+ Añadir líneas" once the header is saved (ETP-5611).
 - Add one or more journal lines under a header, each with an account, a debit amount, and a credit amount. **Lines no longer carry their own Description field** (ETP-5210, revised scope — see "Line description column removed" below); the journal's header `Description` remains the single place to annotate the entry.
@@ -353,7 +354,7 @@ the contract for agents. See `docs/decisions-reference.md`.
 - `decisions.json` → `header.fields.documentType.defaultExpr`: the same query scoped to `AD_Client_ID = @#AD_Client_ID@`, active rows only, ordered by `IsDefault DESC` then org distance. Verified live: two journals created back-to-back get `1000000` and `1000001` on the tenant's own document type.
 - `com.etendoerp.go` `NeoDefaultTenantGuard` (generic, every window): an `@SQL=` default of a foreign-key column never resolves to another tenant's row. See `neo-headless.md` (defaults section).
 
-**Existing data** (journals already stored with a foreign document type, posted ones carrying it into `Fact_Acct`) is a separate data-fix, not part of this change: ETP-5719.
+**Existing data** (journals already stored with a foreign document type, posted ones carrying it and the foreign GL category into `Fact_Acct`) is repaired by the corrective data-fix `R50-gl-journal-foreign-doctype` (ETP-5719): it also advances the tenant's own GLJ sequence past the numbers already used, so its next journal does not collide. See `docs/etendo-ad/onboarding-gaps.md`, gap A10.
 
 **List title.** The list page used the AD window name (`"Simple G/L Journal"`), translated as "Asientos Manuales Simplificados", while the menu and breadcrumb read "Asientos Manuales". The `"Simple G/L Journal"` locale label (`windows` + `menus`, en_US/es_ES/es_AR) now reads "Manual Journals" / "Asientos Manuales". The URL and spec name stay `simple-g-l-journal` (a rename to `manual-journals` is tracked separately in ETP-5720). Guarded by `tools/app-shell/src/locales/__tests__/window-list-titles.vitest.js`.
 

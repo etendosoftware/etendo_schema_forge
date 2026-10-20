@@ -60,6 +60,9 @@ vi.mock('@/lib/flags/useFeatureFlag.js', () => ({
   useFeatureFlag: () => false,
   useNumberFlag: () => flagValue.batchSize,
 }));
+// ETP-5676: the batch poster the hook wraps; its body is guarded in useBatch.vitest.jsx.
+const runBatchMock = vi.hoisted(() => vi.fn(async () => ({ committed: true, operations: [] })));
+vi.mock('../../copilot/ocr/ingest/useBatch.js', () => ({ useBatch: () => ({ runBatch: runBatchMock }) }));
 vi.mock('@etendosoftware/app-shell-core/components/import/ImportDialog.jsx', () => ({
   ImportDialog: (props) => {
     captured.props = props;
@@ -184,3 +187,21 @@ describe('ListView — onImportFinished emits import_completed', () => {
   });
 });
 
+
+// ETP-5676 — the import engine reads only `committed`, each op's `recordId` and the failure
+// envelope, so the poster it is handed always asks the backend for ids only.
+describe('ListView — import postBatch asks for ids only', () => {
+  it('hands ImportDialog a poster that forwards the operations with both batch options', async () => {
+    flagValue.batchSize = 0;
+    runBatchMock.mockClear();
+    const { postBatch } = openImport();
+    const ops = [{ id: 'product', spec: 'product', entity: 'product', body: {} }];
+    const response = { committed: true, operations: [{ id: 'product', recordId: 'P-1', ok: true }] };
+    runBatchMock.mockResolvedValueOnce(response);
+
+    await expect(postBatch(ops)).resolves.toBe(response);
+
+    expect(runBatchMock).toHaveBeenCalledTimes(1);
+    expect(runBatchMock).toHaveBeenCalledWith(ops, { onlyReturnIds: true, skipRedundantCallouts: true });
+  });
+});

@@ -51,7 +51,7 @@ vi.mock('../useOcrExtraction', () => ({
 }));
 
 vi.mock('../useOcrFlow', () => ({
-  useOcrFlow: () => ({ result: null, loading: false, pendingModal: null }),
+  useOcrFlow: () => ({ result: null, loading: false, pendingModal: null, clearResult: () => {} }),
 }));
 
 // The stub renders `toolbarExtra`, where UploadedFileViewer mounts the PDF's "Más" menu.

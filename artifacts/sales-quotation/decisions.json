@@ -19,12 +19,14 @@
         "C_BPartner_ID": "Contacto",
         "C_Reject_Reason_ID": "Razón de rechazo",
         "DateOrdered": "Fecha de presupuesto",
-        "PriceList": "Precio"
+        "PriceList": "Precio",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
         "C_Reject_Reason_ID": "Reject Reason",
-        "DateOrdered": "Quotation Date"
+        "DateOrdered": "Quotation Date",
+        "C_UOM_ID": "Unit"
       }
     },
     "menuActions": [
@@ -178,13 +180,13 @@
         },
         "summedLineAmount": {
           "visibility": "readOnly",
-          "section": "summary"
+          "form": false
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
+          "form": false,
           "grid": true,
-          "gridOrder": 6,
-          "section": "summary"
+          "gridOrder": 6
         },
         "documentStatus": {
           "visibility": "readOnly",
@@ -336,7 +338,11 @@
           "min": false
         },
         "uOM": {
-          "visibility": "system"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 4,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "unitPrice": {
           "grid": false,
@@ -346,7 +352,7 @@
           "grid": true,
           "inputMode": "number",
           "order": 5,
-          "gridOrder": 5,
+          "gridOrder": 6,
           "min": 0,
           "max": 100
         },
@@ -359,7 +365,7 @@
           "form": true,
           "inputMode": "selector",
           "order": 6,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "forceCalloutFields": [
             "lineGrossAmount",
             "grossUnitPrice",
@@ -435,7 +441,7 @@
           "form": true,
           "section": "principal",
           "order": 7,
-          "gridOrder": 7
+          "gridOrder": 8
         },
         "editLineNetAmount": {
           "visibility": "discarded"
@@ -457,7 +463,7 @@
           "form": true,
           "inputMode": "number",
           "order": 4,
-          "gridOrder": 4,
+          "gridOrder": 5,
           "columnType": "amount",
           "min": false
         },

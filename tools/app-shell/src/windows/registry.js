@@ -60,8 +60,6 @@ const windowLoaders = {
   'conversion-rates': () => import('@generated/conversion-rates/generated/web/conversion-rates/index.jsx'),
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
   'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
-  'open-close-period-control': () => import('@/windows/custom/open-close-period-control-redirect/index.jsx'),
-  'fiscal-calendar': () => import('@/windows/custom/fiscal-calendar-redirect/index.jsx'),
   'end-year-close': () => import('@generated/end-year-close/generated/web/end-year-close/index.jsx'),
 };
 
@@ -350,9 +348,27 @@ export function buildWindowMap() {
         || (() => import('./PlaceholderWindow.jsx')),
     };
   };
+  // ETP-5795 — a `hidden: true` item is not reachable by URL: the sidebar strips it, and so
+  // does the router unless the item says otherwise. `redirect` keeps a retired window's old
+  // links working; `routeOnly` keeps a window that is only reached through an in-app link
+  // (overview page buttons, row actions) registered while it stays out of the sidebar.
+  const registerRedirect = (item) => {
+    map[item.name] = {
+      name: item.name,
+      label: item.label,
+      contract: null,
+      loader: () => import('./RedirectWindow.jsx').then(
+        (mod) => ({ default: mod.makeRedirectWindow(item.redirect) }),
+      ),
+    };
+  };
 
   for (const group of menuConfig.menu) {
-    for (const item of group.items) register(item);
+    for (const item of group.items) {
+      if (!(group.hidden || item.hidden)) register(item);
+      else if (item.redirect) registerRedirect(item);
+      else if (item.routeOnly) register(item);
+    }
   }
   for (const app of APP_CATALOG) {
     for (const entry of app.menuEntries) {

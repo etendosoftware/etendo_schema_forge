@@ -1,27 +1,26 @@
+// @covers tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx
 // @covers artifacts/goods-shipment/custom/ReturnWizard.jsx
+// @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 import { t } from '../../helpers/i18n.js';
 
 /**
- * Goods Shipment — Return Wizard (mocked) — ETP-4031
+ * Goods Shipment — Create Return wizard (mocked).
  *
- * Validates ReturnWizard step 2 quality:
- *   - "Crear Devolución" button gating (isCompleted && canCreateReturn)
- *   - Wizard dialog opens with Spanish title
- *   - Step 1: lines load, "Siguiente" enabled when lines have qty > 0
- *   - Step 2: document card shows correct translated strings,
- *             no credit-note card (was removed), confirm button in Spanish
+ * The wizard is a single step: pick lines and quantities, then "Crear Devolución" posts
+ * createReturn directly (no confirmation step, no prices). On success the sales return is
+ * announced in ConfirmResultModal (type devolucionVenta, draft badge, "Ver devolución" opens
+ * /return-material-receipt/<id>) instead of navigating away. The over-return refusal
+ * (com.etendoerp.go ReturnableQuantity: 422, error.code returnQuantityExceedsAvailable) closes the
+ * wizard and shows the translated backend message.
  *
  * No backend required — all API calls are intercepted after login() (LIFO order).
+ * Copy is read from the locale JSON through t(), never hardcoded.
  *
  * Route isolation: "goodsShipmentLine" URLs must NOT be captured by the
  * "goodsShipment" handler. We use URL predicate functions.
  */
-
-// ---------------------------------------------------------------------------
-// Shared mock data helpers
-// ---------------------------------------------------------------------------
 
 function makeShipment(overrides) {
   return {
@@ -114,146 +113,120 @@ async function installGoodsShipmentMock(page, records) {
 // Return Wizard spec
 // ---------------------------------------------------------------------------
 
-test.describe('Goods Shipment — Return Wizard step 2 quality (no credit note, translated strings)', () => {
-  test('opens wizard, advances to step 2, asserts Spanish content and no credit note', async ({ page }) => {
-    // 1. Completed shipment with canCreateReturn=true (backend-computed field, shows "Crear Devolución" button)
-    const shipment = makeShipment({
-      id: 'gs-return-001',
-      documentNo: 'GS-RETURN-001',
-      documentStatus: 'CO',
-      'documentStatus$_identifier': 'Completado',
-      processed: true,
-      returnReceipts: [],
-      canCreateReturn: true,
+const SHIPMENT_ID = 'gs-return-001';
+
+const RETURNABLE_LINES = [
+  { id: 'line-001', 'product$_identifier': 'Producto A', movementQuantity: 5, product: 'prod-001' },
+  { id: 'line-002', 'product$_identifier': 'Producto B', movementQuantity: 3, product: 'prod-002' },
+];
+
+/**
+ * Logs in, installs the shipment + returnable-lines mocks and a createReturn mock answering
+ * `createReturn` ({ status, body }). Returns the list the posted createReturn bodies land in.
+ */
+async function openShipmentWithReturnMock(page, createReturn) {
+  const posted = [];
+  await login(page);
+  await installGoodsShipmentMock(page, [
+    makeShipment({ id: SHIPMENT_ID, documentNo: 'GS-RETURN-001', canCreateReturn: true }),
+  ]);
+
+  await page.route(
+    (url) => url.href.includes('/sws/neo/return-material-receipt/returnMaterialReceipt/_/action/availableShipmentLines'),
+    async (route) => {
+      if (route.request().method() !== 'POST') { route.fallback(); return; }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: RETURNABLE_LINES, totalRows: RETURNABLE_LINES.length } }),
+      });
+    }
+  );
+
+  await page.route(
+    (url) => url.href.includes(`/goodsShipment/${SHIPMENT_ID}/action/createReturn`),
+    async (route) => {
+      posted.push(route.request().postDataJSON());
+      await route.fulfill({
+        status: createReturn.status,
+        contentType: 'application/json',
+        body: JSON.stringify(createReturn.body),
+      });
+    }
+  );
+
+  await page.goto(`/goods-shipment/${SHIPMENT_ID}`);
+  await page.getByTestId('action-cancel').waitFor({ state: 'visible', timeout: 15_000 });
+  return posted;
+}
+
+async function openWizard(page) {
+  await page.getByRole('button', { name: t('createReturn') }).click();
+  const wizard = page.getByRole('dialog', { name: t('createReturnFromShipment') });
+  await expect(wizard).toBeVisible({ timeout: 8_000 });
+  await expect(wizard.getByText('Producto A')).toBeVisible({ timeout: 10_000 });
+  await expect(wizard.getByText('Producto B')).toBeVisible();
+  return wizard;
+}
+
+test.describe('Goods Shipment — Create Return wizard (one step)', () => {
+  test('creates the return in one step and announces the draft return in the result modal', async ({ page }) => {
+    const posted = await openShipmentWithReturnMock(page, {
+      status: 200,
+      body: { response: { data: { id: 'ret-001', documentNo: 'RET-0001' } } },
     });
+    const wizard = await openWizard(page);
 
-    await login(page);
-    await installGoodsShipmentMock(page, [shipment]);
+    // One step: no wizard navigation left.
+    await expect(wizard.getByRole('button', { name: t('next') })).toHaveCount(0);
+    await expect(wizard.getByRole('button', { name: t('back') })).toHaveCount(0);
 
-    // 2. Mock the action endpoint the wizard uses to fetch available return lines.
-    //    ETP-4299 changed the fetch from GET goodsShipmentLine to POST availableShipmentLines.
-    //    Registered AFTER installGoodsShipmentMock → takes LIFO priority.
-    await page.route(
-      (url) => url.href.includes('/sws/neo/return-material-receipt/returnMaterialReceipt/_/action/availableShipmentLines'),
-      async (route) => {
-        if (route.request().method() === 'POST') {
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              response: {
-                data: [
-                  {
-                    id: 'line-001',
-                    'product$_identifier': 'Producto A',
-                    movementQuantity: 5,
-                    product: 'prod-001',
-                  },
-                  {
-                    id: 'line-002',
-                    'product$_identifier': 'Producto B',
-                    movementQuantity: 3,
-                    product: 'prod-002',
-                  },
-                ],
-                totalRows: 2,
-              },
-            }),
-          });
-          return;
-        }
-        route.fallback();
-      }
-    );
+    const qtyA = wizard.getByTestId('CreateReturnWizard__qtyInput').first();
+    await qtyA.fill('2');
+    await qtyA.press('Tab');
 
-    // 3. Mock createReturn POST (for when wizard submits at step 2)
-    //    URL pattern used by ReturnWizard: ${apiBaseUrl}/goodsShipment/${shipmentData.id}/action/createReturn
-    await page.route(
-      (url) =>
-        url.href.includes('/goodsShipment/gs-return-001/action/createReturn'),
-      async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            response: { data: { id: 'ret-001' } },
-          }),
-        });
-      }
-    );
+    await wizard.getByRole('button', { name: t('createReturn') }).click();
 
-    // 4. Navigate to the shipment detail
-    await page.goto('/goods-shipment/gs-return-001');
-    await page.getByTestId('action-cancel').waitFor({ state: 'visible', timeout: 15_000 });
+    await expect(wizard).toBeHidden({ timeout: 8_000 });
+    expect(posted).toHaveLength(1);
+    expect(posted[0].lines).toEqual([
+      { lineId: 'line-001', returnQuantity: 2 },
+      { lineId: 'line-002', returnQuantity: 3 },
+    ]);
 
-    // 5. "Crear Devolución" button is visible (isCompleted && !hasReturn)
-    const createReturnBtn = page.getByRole('button', { name: 'Crear Devolución' });
-    await expect(createReturnBtn).toBeVisible({ timeout: 10_000 });
+    const result = page.getByTestId('confirm-result-dialog');
+    await expect(result).toBeVisible({ timeout: 8_000 });
+    await expect(result.getByTestId('confirm-result-title')).toHaveText(t('confirmResultModal.title.devolucionVenta'));
+    const card = result.getByTestId('confirm-result-card-0');
+    await expect(card).toHaveAttribute('data-doc-type', 'devolucionVenta');
+    await expect(card).toHaveAttribute('data-doc-status', 'DR');
+    await expect(card).toContainText(t('confirmResultModal.status.draft'));
+    await expect(card).toContainText(t('confirmResultModal.docNumber', { number: 'RET-0001' }));
+    // Still on the shipment: the return is announced, not opened automatically.
+    await expect(page).toHaveURL(new RegExp(`/goods-shipment/${SHIPMENT_ID}`));
 
-    // 6. Click "Crear Devolución"
-    await createReturnBtn.click();
+    await result.getByTestId('action-confirm-result-view').click();
+    await expect(page).toHaveURL(/\/return-material-receipt\/ret-001/, { timeout: 8_000 });
+  });
 
-    // 7. Dialog opens with the translated title (createReturnFromShipment)
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible({ timeout: 8_000 });
-    await expect(
-      dialog.getByRole('heading', { name: t('createReturnFromShipment') })
-    ).toBeVisible({ timeout: 5_000 });
+  test('a 422 over-return refusal closes the wizard and shows the translated message', async ({ page }) => {
+    const messageParams = { requested: '5', product: 'Producto A', available: '2', total: '5' };
+    await openShipmentWithReturnMock(page, {
+      status: 422,
+      body: {
+        error: {
+          status: 422,
+          code: 'returnQuantityExceedsAvailable',
+          message: 'Cannot return 5 of Producto A: only 2 can still be returned from this line (5 on the source document).',
+        },
+      },
+    });
+    const wizard = await openWizard(page);
 
-    // 8. Step indicator is visible (StepIndicator renders dots + text like "1 de 2")
-    //    The component renders: ui('stepOf').replace('{step}', 1).replace('{total}', 2)
-    //    In es_ES this renders as "1 de 2"
-    await expect(dialog.getByText(/1 de 2/)).toBeVisible({ timeout: 5_000 });
+    await wizard.getByRole('button', { name: t('createReturn') }).click();
 
-    // 9. Wait for lines to load (fetched when wizardOpen becomes true)
-    //    Lines appear in the table — assert "Producto A" and "Producto B" are visible
-    await expect(dialog.getByText('Producto A')).toBeVisible({ timeout: 10_000 });
-    await expect(dialog.getByText('Producto B')).toBeVisible({ timeout: 5_000 });
-
-    // 10. "Siguiente" button is enabled
-    //    canProceed = selectedLines.length > 0 && selectedLines.every(l => quantities[l.id] > 0)
-    //    Both lines are selected by default and have movementQuantity > 0
-    const nextBtn = dialog.getByRole('button', { name: 'Siguiente' });
-    await expect(nextBtn).toBeVisible({ timeout: 5_000 });
-    await expect(nextBtn).toBeEnabled({ timeout: 5_000 });
-
-    // 11. Click "Siguiente" to advance to step 2
-    await nextBtn.click();
-
-    // 12. Step 2: "Se crearán los siguientes documentos:" visible
-    await expect(
-      dialog.getByText('Se crearán los siguientes documentos:')
-    ).toBeVisible({ timeout: 5_000 });
-
-    // 13. "Recepción de Devolución" card visible
-    await expect(dialog.getByText('Recepción de Devolución')).toBeVisible({ timeout: 5_000 });
-
-    // 14. Card subtitle: "Movimiento de stock de vuelta al almacén"
-    await expect(
-      dialog.getByText('Movimiento de stock de vuelta al almacén')
-    ).toBeVisible({ timeout: 5_000 });
-
-    // 15. NO credit-note card — the word "nota" or "crédito" must not appear
-    await expect(dialog.getByText(/nota de crédito/i)).toHaveCount(0);
-    await expect(dialog.getByText(/credit note/i)).toHaveCount(0);
-    await expect(dialog.getByText(/nota crédito/i)).toHaveCount(0);
-
-    // 16. Confirm button text is "Crear Devolución" in Spanish — NOT English "Confirm return"
-    //    The footer in step 2 renders: loading ? ui('creating') : ui('createReturn')
-    //    ui('createReturn') = "Crear Devolución"
-    const confirmBtn = dialog.getByRole('button', { name: 'Crear Devolución' });
-    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
-
-    // 17. "Confirm return" text must have count 0 — no English leakage
-    await expect(page.getByText('Confirm return', { exact: true })).toHaveCount(0);
-
-    // 18. "Creating..." text must have count 0 — translated to "Creando..."
-    await expect(page.getByText('Creating...', { exact: true })).toHaveCount(0);
-
-    // 19. "Atrás" button visible in footer (step 2 back button)
-    await expect(dialog.getByRole('button', { name: 'Atrás' })).toBeVisible({ timeout: 5_000 });
-
-    // 20. Step 2 indicator shows "2 de 2"
-    await expect(dialog.getByText(/2 de 2/)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(t('backendError.returnQuantityExceeds', messageParams))).toBeVisible({ timeout: 8_000 });
+    await expect(wizard).toBeHidden();
+    await expect(page.getByTestId('confirm-result-modal')).toHaveCount(0);
   });
 });

@@ -75,32 +75,22 @@ describe('LOOKUP_CREATE_TARGETS.product', () => {
     expect(typeof LOOKUP_CREATE_TARGETS.product.loadLabels).toBe('function');
   });
 
-  it('renders the form with the same column count and tab variant as the window', () => {
-    const target = LOOKUP_CREATE_TARGETS.product;
-    expect(target.cols).toBe(3);
-    expect(target.tabsVariant).toBe('pill');
+  it('renders the form with the same column count as the window', () => {
+    expect(LOOKUP_CREATE_TARGETS.product.cols).toBe(3);
   });
 
-  it('gives every tab a key, a label and the EntityForm section it renders', () => {
-    // Tab key and form section are separate concepts — the modal indexes `activeTab` by KEY
-    // and passes `section` to the embedded form.
-    for (const tab of LOOKUP_CREATE_TARGETS.product.tabs) {
-      expect(typeof tab.key).toBe('string');
-      expect(typeof tab.label).toBe('string');
-      expect(['principal', 'other']).toContain(tab.section);
-    }
-    expect(LOOKUP_CREATE_TARGETS.product.tabs.map(t => t.section)).toEqual(['principal', 'other']);
-  });
-
-  it('keeps the `other` tab, which is the only home of the required taxCategory', () => {
-    expect(LOOKUP_CREATE_TARGETS.product.tabs.some(t => t.section === 'other')).toBe(true);
+  it('declares no tabs: the unified sheet has one panel and taxCategory lives in `principal` (ETP-5696)', () => {
+    // The modal falls back to its default single `principal` panel. `taxCategory` is required and
+    // used to be the reason an `other` tab had to exist; it is now a `principal` field.
+    expect(LOOKUP_CREATE_TARGETS.product.tabs).toBeUndefined();
+    expect(LOOKUP_CREATE_TARGETS.product.tabsVariant).toBeUndefined();
   });
 });
 
 /**
  * Drift guards.
  *
- * `labelOverrides` and `tabs` are hand-COPIES of `window.labelOverrides` / `window.primaryTabs`
+ * `labelOverrides` is a hand-COPY of `window.labelOverrides`
  * in `artifacts/product/decisions.json`. The copy is deliberate — importing `ProductPage.jsx`
  * to read them would drag DetailView, ListView, the sidebar, the price bar and the gallery
  * into every document bundle — but a copy drifts silently, and the symptom (the popup saying
@@ -117,16 +107,13 @@ describe('registry copies stay in sync with artifacts/product/decisions.json', (
     expect(LOOKUP_CREATE_TARGETS.product.labelOverrides).toEqual(windowDecisions.labelOverrides);
   });
 
-  it('tabs mirror window.primaryTabs key-for-key and label-for-label', () => {
-    // `section` is the modal's own addition and `panel` is the window's — compare the two
-    // properties both sides genuinely share.
-    const registry = LOOKUP_CREATE_TARGETS.product.tabs.map(({ key, label }) => ({ key, label }));
-    const decisions = windowDecisions.primaryTabs.map(({ key, label }) => ({ key, label }));
-    expect(registry).toEqual(decisions);
-  });
-
-  it('tabsVariant matches window.primaryTabsVariant', () => {
-    expect(LOOKUP_CREATE_TARGETS.product.tabsVariant).toBe(windowDecisions.primaryTabsVariant);
+  it('declares no tabs while the window has no primaryTabs (ETP-5696 unified sheet)', () => {
+    // The popup mirrors the window: a window with a single unified sheet has no `primaryTabs`,
+    // so the registry entry must not declare `tabs`/`tabsVariant` either (RecordCreateModal then
+    // renders one `principal` panel and no tab strip).
+    expect(windowDecisions.primaryTabs).toBeUndefined();
+    expect(LOOKUP_CREATE_TARGETS.product.tabs).toBeUndefined();
+    expect(LOOKUP_CREATE_TARGETS.product.tabsVariant).toBeUndefined();
   });
 });
 
@@ -340,7 +327,7 @@ describe('resolveLookupCreateTarget', () => {
     expect(target.loadLabels).toBe(LOOKUP_CREATE_TARGETS.product.loadLabels);
     expect(target.labelOverrides).toBe(LOOKUP_CREATE_TARGETS.product.labelOverrides);
     expect(target.tabs).toBe(LOOKUP_CREATE_TARGETS.product.tabs);
-    expect(target.tabsVariant).toBe('pill');
+    expect(target.tabsVariant).toBe(LOOKUP_CREATE_TARGETS.product.tabsVariant);
     expect(target.cols).toBe(3);
   });
 

@@ -5,7 +5,7 @@ import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { useCurrency } from '@/hooks/useCurrency';
 import { extractErrorMessage } from '@/hooks/useEntity';
-import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
+import { useBatchDeleteDialog } from '@/hooks/useBatchDeleteDialog.jsx';
 import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
 import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
@@ -48,7 +48,6 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [barVisible, setBarVisible] = useState(false);
   const [barClosing, setBarClosing] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (selectedRows.size > 0) {
@@ -115,26 +114,30 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   // onSuccess contract as AmortizationLinesTable.bulkDelete: all succeeded
   // -> clear selection; partial -> keep only the failed ids selected; all
   // failed -> leave selection untouched and skip the refetch.
-  const handleDeleteSelected = useCallback(async () => {
-    if (!apiBaseUrl || selectedRows.size === 0) return;
-    setDeleting(true);
-    try {
-      const ids = [...selectedRows];
-      const { succeeded, failed } = await runBatchDelete(ids, (id) =>
-        apiFetch(`/amortizationLine/${id}`, { method: 'DELETE' }).then(async (res) => {
-          if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
-          return id;
-        }),
-      );
-      toastBatchDeleteOutcome(ui, { succeeded, failed, total: ids.length });
+  //
+  // ETP-5758 — goes through the generic `useBatchDeleteDialog`: the trash button
+  // now asks for confirmation (it deleted straight away before), and the dialog
+  // stays open and locked until the batch settles. The refused DELETE carries
+  // its 4xx status so a one-line refusal toasts the backend's own reason.
+  const { requestBatchDelete, batchDeleteDialog, deleting } = useBatchDeleteDialog({
+    deleteOneFn: (id) =>
+      apiFetch(`/amortizationLine/${id}`, { method: 'DELETE' }).then(async (res) => {
+        if (!res.ok) {
+          throw Object.assign(new Error(await extractErrorMessage(res, ui)), { status: res.status });
+        }
+        return id;
+      }),
+    onOutcome: (succeeded, failed) => {
       if (succeeded.length > 0) {
         setSelectedRows(new Set(failed));
         fetchLines();
       }
-    } finally {
-      setDeleting(false);
-    }
-  }, [apiFetch, selectedRows, fetchLines, ui]);
+    },
+  });
+  const handleDeleteSelected = useCallback(() => {
+    if (!apiBaseUrl || selectedRows.size === 0) return;
+    requestBatchDelete([...selectedRows]);
+  }, [apiBaseUrl, selectedRows, requestBatchDelete]);
 
   useEffect(() => {
     fetchLines();
@@ -309,6 +312,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
           <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__34159c" />
         </button>
       </SelectionToolbar>
+      {batchDeleteDialog}
     </div>
   );
 }

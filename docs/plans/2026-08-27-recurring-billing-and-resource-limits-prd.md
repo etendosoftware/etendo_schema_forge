@@ -253,6 +253,44 @@ Only the last tier is development, and it is additive rather than a modification
 
 ## 9. Lifecycle, enforcement and reconciliation
 
+> **As delivered (ETP-5443, ETP-5046, ETP-5047) — read this before the original text below, which
+> is kept as written.** The vocabulary and three decisions changed on the way:
+>
+> - **Access vocabulary: `CURRENT` / `PAST_DUE` / `EXPIRED` plus a grace period**, not "`past_due`
+>   keeps access". The row stores Stripe's words (`active` / `past_due` / `canceled`); the access
+>   policy (`EnvironmentAccessPolicy`) maps them to `CURRENT` / `PAST_DUE` / `EXPIRED`. `PAST_DUE`
+>   keeps access only for `etendo.go.billing.grace.days` (default 15) after the end of the period
+>   the customer already paid for, then answers HTTP 402 `SUBSCRIPTION_REQUIRED`. `EXPIRED` is
+>   402 at once. A demo past its trial is 402 `DEMO_TRIAL_EXPIRED`.
+> - **Enforcement is per request, not only at environment login.** Every tenant request is
+>   checked (ETP-5443 NEO; ETP-5047 MCP, the `JwtAuthUtils` servlets and the legacy
+>   `GET /sws/go/login`), through one class, `EnvironmentAccessGuard`. So the "already-issued NEO
+>   JWTs keep working until they expire" window below does not exist for this module's entry
+>   points: a blocked tenant's next request is refused. The one remaining window is Copilot
+>   (`/sws/copilot/*`, another module), where an Etendo JWT minted before the block keeps working
+>   until it expires — stated, with the proposed fixes, in `com.etendoerp.go`
+>   `docs/open-and-notable-topics.md` §3.10. Entering the environment is deliberately *not* refused (decided
+>   2026-09-25), so the blocked customer reaches the pay path; the billing and portal endpoints
+>   never refuse.
+> - **Enforcement ships enabled, with a kill switch** (ETP-5047, decided by Martin 2026-09-25), not
+>   "ships disabled": the backend-only flag `environment-access-enforcement-off` stops the refusal
+>   only when it resolves to `true` (locally `true`/`Y`/`yes`/`1`), per tenant or globally, and
+>   logs what it would have refused.
+> - The 402 carries `error.code = ENVIRONMENT_ACCESS_DENIED` and `error.decision`; the period is
+>   advanced by `invoice.paid` (not `invoice.payment_succeeded`); `charge.dispute.created` is an
+>   alert only, as specified. A cancellation closes the subscription row and a later purchase opens
+>   a new one (ETP-5047).
+>
+> What is delivered where: ETP-5443 — the four lifecycle webhooks, the grace rule, out-of-order
+> protection, NEO enforcement, the portal and `/upgrade` staying reachable. ETP-5046 — the state
+> on the `ETGO_SUBSCRIPTION` row. ETP-5047 — correlation to the open row, close on cancel and
+> re-subscription, the shared guard at MCP, the `JwtAuthUtils` servlets and `/login`, the
+> structured 402, the kill switch, the dispute alert, the invoice period in the billing-event
+> ledger, and on the row the grace anchor in its own column (`GRACE_ANCHOR`), Stripe's billing
+> period in `CURRENT_PERIOD_START/END` and the event watermark (`LAST_EVENT_AT`)
+> (open-and-notable-topics §3.7, §5.5 in `com.etendoerp.go`). **Not yet delivered:** quota
+> enforcement (ETP-5051), reconciliation (ETP-5048).
+
 ### 9.1 Subscription states
 
 `active`, `past_due`, `canceled`. Stripe Smart Retries own recovery; Etendo records outcomes. No dunning logic of our own.
@@ -395,7 +433,7 @@ Two consequences bind every task in §14:
 | **ETP-5045** | Create a checkout session, pay with the test card, and **restart Tomcat before returning from Stripe**. Today the payment is lost and the flow dead-ends; after this task the flow completes. Then `stripe events resend` the same event and confirm the Billing events window shows one `applied` and one `duplicate`. Needs nothing else from the block, and is the exact regression that costs money. |
 | **ETP-5050** | Run the recompute over a past month and compare the Usage window against a hand-written count query for a few tenants. Then add a catalog row with an HQL restriction from the Classic window, re-run, and confirm the new resource is counted. Writes only to its own table, so it is safe to run in a real environment on day one. |
 | **ETP-5046** | Create and price a plan from the Classic window, add a quota row, assign it to a tenant, and confirm the environment payload reports the plan and status. Verify a currently-productive tenant still reads productive after the backfill, and that re-running it creates nothing. |
-| **ETP-5047** | With the kill switch **off**: cancel the subscription in the Stripe dashboard, confirm the Subscriptions window shows `canceled` and that environment login still works. Then flip the switch **on** and confirm login is denied with the right code. The switch is what makes this testable in a real environment without risking a lockout. |
+| **ETP-5047** | *As delivered, the switch's polarity is inverted:* `environment-access-enforcement-off` is an OFF switch, enforcement is on by default, and "environment login" is not refused (the tenant's requests are). The delivered checks are `docs/stripe-local-testing.md` SF-STRIPE-LOCAL-14, -21…-26. *Original text:* With the kill switch **off**: cancel the subscription in the Stripe dashboard, confirm the Subscriptions window shows `canceled` and that environment login still works. Then flip the switch **on** and confirm login is denied with the right code. The switch is what makes this testable in a real environment without risking a lockout. |
 | **ETP-5048** | Reproduce the orphan on purpose: pay with `stripe listen` stopped, confirm nothing was provisioned, then run reconciliation from the menu and confirm the tenant is created and the repair is visible in the Classic window. |
 | **ETP-5051** | First confirm that with no quota rows nothing changed at all. Then add one quota row in `warn`, exceed it, see the warning; switch the same row to `block` and confirm the denial; switch to `off` and confirm it stops — all without a deploy or a restart. That sequence *is* the configuration-not-development claim, demonstrated live. |
 | **ETP-5053** | Upgrade a tenant mid-period and assert the billing date did not move — that is the one to watch. Then schedule a downgrade, confirm it shows as pending, upgrade over it, and confirm the pending change was cleared. |
@@ -412,7 +450,7 @@ What the document actually pins down is the list below. As long as none of these
 | No card data and no full provider payloads in any table or log | PCI posture; also §12 |
 | The webhook signature verifier stays as it is | Correct today; a rewrite has no upside and real downside |
 | The paywall keeps its decision-versus-plan separation | ETP-4966 shipped charged accounts into demo environments precisely by inferring one from the other |
-| The amount charged has one source of truth; the displayed price is derived from the provider Price, never typed, and no fallback price exists | A fallback price is a price nobody reviewed, chosen exactly when configuration is missing |
+| The amount charged has one source of truth; the displayed price is derived from the provider Price, never typed, and no fallback price exists | A fallback price is a price nobody reviewed, chosen exactly when configuration is missing. *Amended by ETP-5046:* the pre-existing configured price survives as a transitional **legacy price fallback**, active only while no plan carries a provider price, quoted from Stripe and retired automatically by the first priced plan — see `com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §6 |
 | Tenant and period scoping is applied outside any configurable query fragment, and the fragment is always parenthesized | A fragment able to escape it would mis-bill every customer at once |
 | Configurable fragments are System-authored only, never tenant-editable | Reuses the `AD_TAB.whereclause` trust boundary; widening it is a different feature |
 | Absence of a quota row means unlimited; the limit mechanism ships inert | No default value may silently cap a resource at zero |

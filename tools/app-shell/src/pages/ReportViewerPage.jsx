@@ -170,7 +170,9 @@ function ReportCard({ report, onRun }) {
       <ReportCardPreview reportId={report.id} data-testid="ReportCardPreview__3c998a" />
       <div className="flex flex-col items-stretch gap-1 p-3">
         <div className="flex items-center gap-2">
-          <h3 className="text-base font-medium text-foreground min-w-0 truncate">{reportTitle}</h3>
+          <h3 className="text-base font-medium text-foreground min-w-0 flex-1">
+            <TruncatedText text={reportTitle} data-testid="ReportCard__title" />
+          </h3>
         </div>
         <div className="flex gap-2 flex-wrap pt-1">
           {/* 'html' is filtered out here only — it's still a real entry in
