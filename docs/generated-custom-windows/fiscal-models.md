@@ -3459,9 +3459,12 @@ The invoices (Facturas) tab, the preload from the 303s with the cuadre, the pres
 - **Action bar** (same chrome as 303/349): left Cancelar, status chip and **Tipo: Normal | Sustitutiva**;
   right **Calcular**, **Generar fichero 390**, **Guardar** and **Registrar/Presentar** (primary). Once
   presented, the right group is only **Crear declaración sustitutiva**. Like the 303, a blocked
-  Generar or Registrar/Presentar stays clickable: with blocking RULE incidents a click shows the toast
+  Generar stays clickable: with blocking RULE incidents a click shows the toast
   `fm.m390.blocked_by_incidents` and opens nothing, and the Generar download icon is red (see
-  "Incidents"). Both are disabled only while nothing is computed or the page is busy.
+  "Incidents"). Registrar/Presentar always opens the picker: there, the AEAT path is refused with
+  the same toast, while **manual registration is deliberately ungated: the declaration was filed
+  outside Etendo** ("Con / Sin acuse de recibo" always register, as in the 303). Both buttons are
+  disabled only while nothing is computed or the page is busy.
 - **Registrar/Presentar** opens the shared `PresentModal` exactly as the 303: the AEAT path and,
   as its left column, **Con acuse de recibo** (`submitted_ack`, the acuse PDF picked in the modal)
   / **Sin acuse de recibo** (`submitted`) — see "Presentation" below.
@@ -3866,9 +3869,11 @@ what the backend stored.
   (rule + AEAT ones). A presented declaration's incidents are frozen: the page only reads them
   (`GET /fiscal390/incidents`), and the backend refuses to recompute them. When `validate` fails
   the page falls back to the stored incidents.
-- **Gate:** Generar / Presentar refuse to open while a blocking RULE incident exists
-  (`ruleBlockingCount`; `AEAT-…` rows never gate): like the 303 gates, the buttons stay clickable,
-  a click shows the toast `fm.m390.blocked_by_incidents`, and the Generar icon is red. The backend enforces the same server-side with
+- **Gate:** Generar and the AEAT telematic filing are refused while a blocking RULE incident
+  exists (`ruleBlockingCount`; `AEAT-…` rows never gate): like the 303 gates, the buttons stay
+  clickable, a click shows the toast `fm.m390.blocked_by_incidents`, and the Generar icon is red.
+  **Manual registration ("Con / Sin acuse de recibo") is deliberately ungated: the declaration was
+  filed outside Etendo** (review W1, user decision; the 303 does not gate it either). The backend enforces the same server-side with
   a fresh evaluation: `GET /fiscal390/generate` answers `409 BLOCKING_INCIDENTS` with the
   incidents (`generate390File` → `{ error: 'blocking_incidents' }`: toast
   `fm.m390.blocked_by_incidents`, recompute, Incidencias tab opened) and `POST /fiscal390/submit`

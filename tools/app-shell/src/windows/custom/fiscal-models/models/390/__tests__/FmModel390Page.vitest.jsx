@@ -643,7 +643,7 @@ describe('FmModel390Page — Generar fichero / Presentar save first', () => {
     expect(persistManualData).not.toHaveBeenCalled();
   });
 
-  it('blocking incidents: Generar and Presentar say why in a toast and open nothing (303 pattern)', async () => {
+  it('blocking incidents: Generar says why in a toast and opens nothing; Presentar still opens (manual registration is ungated)', async () => {
     fetchDeclarationIncidents.mockResolvedValue({ blocking: 1, warning: 0, items: [{ severity: 'block' }] });
     render(<FmModel390Page decl={makeDecl()} {...props()} />);
     await waitForBlocked();
@@ -652,8 +652,8 @@ describe('FmModel390Page — Generar fichero / Presentar save first', () => {
     expect(screen.queryByTestId('FileGenModal390-confirm')).toBeNull();
     toast.error.mockClear();
     fireEvent.click(screen.getByTestId('FmModel390Page__present'));
-    expect(toast.error).toHaveBeenCalledWith('fm.m390.blocked_by_incidents');
-    expect(screen.queryByTestId('PresentModal-confirm')).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.getByTestId('PresentModal-confirm')).toBeTruthy();
   });
 });
 

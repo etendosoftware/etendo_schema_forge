@@ -263,14 +263,30 @@ describe('FmModel390Page — Presentar', () => {
     expect(ruleBlockingCount({ blocking: 2 })).toBe(2);
   });
 
-  it('blocking incidents: Presentar shows the reason and never opens the picker', async () => {
+  // User decision (review W1): the manual registration is deliberately ungated — the
+  // declaration was filed outside Etendo — as in the 303; the AEAT path stays blocked.
+  it('blocking incidents: Con / Sin acuse still register; the AEAT path is refused', async () => {
     fetchDeclarationIncidents.mockResolvedValue({ blocking: 1, warning: 0, items: [{ severity: 'block' }] });
-    render(<FmModel390Page decl={makeDecl()} {...props()} />);
-    // blocked once the Generar icon turns red (the buttons stay clickable, like the 303)
+    const p = props();
+    render(<FmModel390Page decl={makeDecl()} {...p} />);
     await waitFor(() => expect(screen.getByTestId('Download__generate390').style.color).toBe('hsl(var(--destructive))'));
     fireEvent.click(screen.getByTestId('FmModel390Page__present'));
+    expect(presentProps.current).not.toBeNull();
+    fireEvent.click(screen.getByTestId('PresentModal-aeat'));
     expect(toast.error).toHaveBeenCalledWith('fm.m390.blocked_by_incidents');
-    expect(presentProps.current).toBeNull();
+    expect(flowProps.current).toBeNull();
+    fireEvent.click(screen.getByTestId('PresentModal-noAck'));
+    await waitFor(() => expect(p.onStatusChange).toHaveBeenCalledWith('decl-390', 'submitted', 'manual_no_receipt'));
+  });
+
+  it('blocking incidents: "Con acuse" registers too', async () => {
+    fetchDeclarationIncidents.mockResolvedValue({ blocking: 1, warning: 0, items: [{ severity: 'block' }] });
+    const p = props();
+    render(<FmModel390Page decl={makeDecl()} {...p} />);
+    await waitFor(() => expect(screen.getByTestId('Download__generate390').style.color).toBe('hsl(var(--destructive))'));
+    fireEvent.click(screen.getByTestId('FmModel390Page__present'));
+    fireEvent.click(screen.getByTestId('PresentModal-ack'));
+    await waitFor(() => expect(p.onStatusChange).toHaveBeenCalledWith('decl-390', 'submitted_ack', 'manual_ack'));
   });
 });
 

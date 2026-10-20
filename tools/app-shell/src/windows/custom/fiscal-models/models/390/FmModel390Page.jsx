@@ -31,8 +31,10 @@
 // /fiscal390/validate` recomputes them from the STORED inputs — on opening a draft and after
 // every successful save (Guardar, Calcular, the saves before Generar / Presentar) — and answers
 // every incident of the declaration. The Incidencias tab (Incidents390Tab) and card split them
-// into Bloqueantes and Advertencias; Generar / Presentar are disabled while a blocking RULE
-// incident exists (ruleBlockingCount) and the backend refuses them too (409 BLOCKING_INCIDENTS).
+// into Bloqueantes and Advertencias; Generar and the AEAT telematic filing are refused while a
+// blocking RULE incident exists (ruleBlockingCount) and the backend refuses them too (409
+// BLOCKING_INCIDENTS). The manual registration ("Con / Sin acuse de recibo") is deliberately
+// ungated, as in the 303: the declaration was filed outside Etendo and must always be recordable.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -560,11 +562,9 @@ export default function FmModel390Page({
     }
   }
 
+  // The picker always opens: the manual registration is ungated (filed outside Etendo); only
+  // the AEAT path is refused below while a blocking rule holds.
   function openPresent() {
-    if (ruleBlocking > 0) {
-      toast.error(t('fm.m390.blocked_by_incidents'));
-      return;
-    }
     if (!guardSubstituteIdentifier()) return;
     setShowPresent(true);
   }
@@ -579,6 +579,10 @@ export default function FmModel390Page({
       return;
     }
     if (path !== 'aeat_telematic') return;
+    if (ruleBlocking > 0) {
+      toast.error(t('fm.m390.blocked_by_incidents'));
+      return;
+    }
     setPresenting(true);
     try {
       const saved = await persistIfDirty();
@@ -780,7 +784,6 @@ export default function FmModel390Page({
                 primary
                 onClick={openPresent}
                 disabled={busy || !hasBoxes}
-                title={blockedTitle}
                 data-testid="FmModel390Page__present"
               >
                 <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__present390" />
