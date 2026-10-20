@@ -66,7 +66,7 @@ vi.mock('@/components/contract-ui/SendDocumentModal', () => ({
 
 vi.mock('@/components/contract-ui', () => ({
   ConfirmResultModal: ({ docs, onClose, navigate }) => (
-    <div data-testid="confirm-result-modal" data-doc-type={docs?.[0]?.type} data-route={docs?.[0]?.route}>
+    <div data-testid="confirm-result-modal" data-doc-type={docs?.[0]?.type} data-doc-status={docs?.[0]?.documentStatus} data-route={docs?.[0]?.route}>
       <button data-testid="result-modal-close" onClick={onClose}>Close</button>
       <button data-testid="result-modal-view" onClick={() => navigate(docs?.[0]?.route)}>View</button>
     </div>
@@ -130,6 +130,8 @@ describe('GoodsShipmentActions', () => {
 
       const result = screen.getByTestId('confirm-result-modal');
       expect(result).toHaveAttribute('data-doc-type', 'devolucionVenta');
+      // createReturn sends no documentStatus; the return is always created in draft.
+      expect(result).toHaveAttribute('data-doc-status', 'DR');
       expect(result).toHaveAttribute('data-route', '/return-material-receipt/rmr-1');
       expect(mockNavigate).not.toHaveBeenCalled();
     });

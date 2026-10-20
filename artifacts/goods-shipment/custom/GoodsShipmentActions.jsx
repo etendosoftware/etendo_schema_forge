@@ -445,7 +445,9 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
 
       {returnedDoc && createPortal(
         <ConfirmResultModal
-          docs={[{ type: 'devolucionVenta', num: returnedDoc.documentNo, documentStatus: returnedDoc.documentStatus, route: `/return-material-receipt/${returnedDoc.id}` }]}
+          // createReturn answers only { id, documentNo } and always creates the return in
+          // draft, so the status is stated here instead of read from a field it never sends.
+          docs={[{ type: 'devolucionVenta', num: returnedDoc.documentNo, documentStatus: 'DR', route: `/return-material-receipt/${returnedDoc.id}` }]}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
           onClose={() => {
             setReturnedDoc(null);

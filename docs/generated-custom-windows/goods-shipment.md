@@ -458,7 +458,8 @@ available, shipped, sourceLineId }`; `backendErrors.js` maps it to
 `backendError.returnQtyExceedsShipped` ("No se pueden devolver {requested} de {product}: de lo
 enviado ({shipped}) solo quedan {available} por devolver, contando también las devoluciones en
 borrador." / "Cannot return {requested} of {product}: of the {shipped} shipped, only {available}
-can still be returned, counting draft returns too."). `createReturn` also refuses a request with
+can still be returned, counting draft returns too."; es_AR carries the same text — es_AR does
+**not** fall back to es_ES, a missing key there renders the backend English). `createReturn` also refuses a request with
 no line of the shipment (400 "No valid lines to return") before creating the header, so a refused
 request never leaves an empty return. On a 409 the dialog **closes** and the toast shows the
 message — its quantities were stale, and reopening it reloads what is still returnable. Any other
@@ -472,6 +473,14 @@ dialog closes with the Spanish over-return toast and no new return is created. (
 return, edit a line's quantity above what remains → the save is refused with the same message.
 (5) Void a return → its quantity becomes returnable again.
 
+**Locale keys retired with step 2.** `followingDocumentsWillBeCreated`, `stockMovementToWarehouse`,
+`purchaseReturnReceipt` and `returnStockToVendor` had no reader left anywhere in the repo
+(`artifacts/`, `e2e/`, `tools/`) and were removed from `en_US.json`, `es_ES.json` and
+`es_AR.json`. `stepOf`, `back`, `next`, `amount`, `total`, `delivered` and `returnReceipt` stay:
+other components still read them, and `stepOf` is still referenced by the stale mocked spec
+`e2e/tests/flows/sales/goods-shipment-return-wizard.mocked.spec.js`, which still drives the
+removed step 2 and has to be rewritten for the one-step dialog.
+
 **After the return is created — result modal, no auto-navigation.** Sales now behaves like
 Purchases (`GoodsReceiptActions.jsx`). `GoodsShipmentActions.jsx` used to navigate straight to
 `/return-material-receipt/<id>` from the `ReturnWizard` `onSuccess` (ETP-4031). It now stores the
@@ -481,7 +490,8 @@ created return (`returnedDoc`) and renders the shared `ConfirmResultModal` with 
 user chooses: **Ver devolución** navigates to the return; **Cerrar** stays on the shipment and
 calls `onRefresh` so the Documentos section shows the new return chip (ETP-4779 rule, skipped
 when the user navigated). When the action returns no id, no modal is shown and `onRefresh` runs
-directly, as before. `devolucionVenta` is a new `TYPE_CONFIG` entry in
+directly, as before. The modal's `documentStatus` is the literal `'DR'`: `createReturn` answers only
+`{ id, documentNo }` and always creates the return in draft. `devolucionVenta` is a new `TYPE_CONFIG` entry in
 `tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx`, with
 `confirmResultModal.title.devolucionVenta` / `confirmResultModal.docType.devolucionVenta` in
 `en_US`, `es_ES` and `es_AR`.
