@@ -3450,3 +3450,28 @@ describe('translateBackendError — G/L journal period mismatch (ETP-5669)', () 
     assert.notEqual(translateBackendError(prose, es, options), es('backendError.periodNotAvailable'));
   });
 });
+
+// ── ETP-5693: posting-account refusals on accounting fields, translated by identity ──
+describe('translateBackendError — posting-account refusals (ETP-5693)', () => {
+  const es = localeTranslator('es_ES');
+  const en = localeTranslator('en_US');
+  const cases = [
+    ['ETGO_AccountIsSummary', 'backendError.accountIsSummary'],
+    ['ETGO_AccountIsInactive', 'backendError.accountIsInactive'],
+    ['ETGO_AccountWrongLedger', 'backendError.accountWrongLedger'],
+    ['ETGO_LedgerNotUpdatable', 'backendError.ledgerNotUpdatable'],
+  ];
+
+  for (const [key, label] of cases) {
+    it(`${key} becomes the generic sentence of the UI locale`, () => {
+      const prose = 'warehouseDifferences: the account 4300 - Customers is not valid here.';
+      const esText = translateBackendError(prose, es, { messageKeys: [key] });
+      const enText = translateBackendError(prose, en, { messageKeys: [key] });
+      assert.equal(esText, es(label));
+      assert.equal(enText, en(label));
+      assert.notEqual(esText, label, 'the es_ES key must exist');
+      assert.notEqual(enText, label, 'the en_US key must exist');
+      assert.notEqual(esText, enText);
+    });
+  }
+});

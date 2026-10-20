@@ -2,7 +2,8 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  // One real entry, so a key-routed backend refusal resolves (an untranslated key reads as missing).
+  useUI: () => (key) => ({ 'backendError.accountIsSummary': 'Cuenta de nivel' }[key] ?? key),
 }));
 
 vi.mock('@/auth/AuthContext.jsx', () => ({
@@ -56,6 +57,8 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }));
 
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+
 vi.mock('lucide-react', () => ({
   Check: (props) => <svg data-testid="icon-check" {...props} />,
 }));
@@ -63,6 +66,7 @@ vi.mock('lucide-react', () => ({
 import GeneralLedgerConfigPage from '../GeneralLedgerConfigPage.jsx';
 import { useGeneralLedgerConfig } from '../useGeneralLedgerConfig.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { toast } from 'sonner';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function makeHook(overrides = {}) {
@@ -227,5 +231,31 @@ describe('GeneralLedgerConfigPage — validation blocks save', () => {
     expect(save).not.toHaveBeenCalled();
     const defaults = await screen.findByTestId('defaults-tab');
     expect(JSON.parse(defaults.getAttribute('data-errors'))).toHaveProperty('bankAsset');
+  });
+});
+
+describe('GeneralLedgerConfigPage — save failure (ETP-5693)', () => {
+  function rejectedSave(message, body) {
+    const err = new Error(message);
+    err.body = body;
+    return vi.fn().mockRejectedValue(err);
+  }
+
+  it('shows the backend refusal translated by its messageKey', async () => {
+    const save = rejectedSave('bankAsset: the account 1000 - Assets is a summary account.', {
+      error: { message: 'x', messageKeys: ['ETGO_AccountIsSummary'] },
+    });
+    vi.mocked(useGeneralLedgerConfig).mockReturnValue(makeHook({ save }));
+    renderPage();
+    fireEvent.click(screen.getByTestId('glc-save'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Cuenta de nivel'));
+  });
+
+  it('shows the backend message when the refusal carries no known key', async () => {
+    const save = rejectedSave('Accounting combination not found: abc', { error: { message: 'x' } });
+    vi.mocked(useGeneralLedgerConfig).mockReturnValue(makeHook({ save }));
+    renderPage();
+    fireEvent.click(screen.getByTestId('glc-save'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Accounting combination not found: abc'));
   });
 });
