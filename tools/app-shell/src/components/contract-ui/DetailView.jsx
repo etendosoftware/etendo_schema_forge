@@ -105,9 +105,9 @@ export {
  * Extracted from inline JSX to avoid the nested-ternary anti-pattern Sonar
  * S3358 was flagging inside the className templates.
  */
-function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
+function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null, sidebarPaddingOverride = null) {
   const isInline = linesLayout === 'inlineEditable';
-  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
+  if (hasSidebar) return sidebarPaddingOverride ?? ((isInline || compact) ? 'px-2 pb-2' : 'pr-2');
   if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
   return isInline ? '' : (paddingXOverride ?? 'px-6');
 }
@@ -131,14 +131,14 @@ export function getTabStripBleedClassName({
   sidebarContent,
   sidebarAboveTabsOnly,
   compactSidebarPadding,
-  formScrollPaddingX = null,
+  formScrollPaddingX = null, sidebarFormScrollPaddingX = null,
 } = {}) {
   const padding = detailContentPadding(
     linesLayout,
     !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)),
     'content',
     compactSidebarPadding,
-    formScrollPaddingX,
+    formScrollPaddingX, sidebarFormScrollPaddingX,
   );
   return padding
       .split(/\s+/)
@@ -724,12 +724,12 @@ export function getDetailContentContainerClassName({
   compactSidebarPadding,
   primaryTabs,
   activePrimaryTab,
-  formScrollPaddingX = null,
+  formScrollPaddingX = null, sidebarFormScrollPaddingX = null,
   contentOverflow = 'auto',
 } = {}) {
   const defaultOverflowCls = contentOverflow === 'hidden' ? 'overflow-hidden' : 'overflow-auto pb-2';
   const overflowCls = linesLayout === 'inlineEditable' ? 'flex flex-col overflow-y-auto' : defaultOverflowCls;
-  return `flex-1 min-h-0 min-w-0 ${overflowCls} ${detailContentPadding(linesLayout, !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)), 'content', compactSidebarPadding, formScrollPaddingX)}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`;
+  return `flex-1 min-h-0 min-w-0 ${overflowCls} ${detailContentPadding(linesLayout, !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)), 'content', compactSidebarPadding, formScrollPaddingX, sidebarFormScrollPaddingX)}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`;
 }
 
 export function getLinesTabsSectionClassName(linesLayout) {
@@ -1036,7 +1036,7 @@ export function DetailView({
   linesLayout = 'inlineEditable',
   autoSaveOnBlur = false,
   tabsBarPaddingX = 'px-6',
-  formScrollPaddingX = null,
+  formScrollPaddingX = null, sidebarFormScrollPaddingX = null,
   contentOverflow = 'auto',
   formCardPadding = 'p-6',
   primaryTabsVariant = 'default',
@@ -3021,12 +3021,12 @@ export function DetailView({
             {isCustomPrimaryTabActive(primaryTabs, activePrimaryTab) ? (() => {
               const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
               return activeTab?.Panel ? (
-                <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel', compactSidebarPadding, formScrollPaddingX)}`}>
+                <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel', compactSidebarPadding, formScrollPaddingX, sidebarFormScrollPaddingX)}`}>
                   <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} onLocalChange={hook.handleChange} onPersisted={hook.applyPersistedFields} />
                 </div>
               ) : null;
             })() : null}
-            <div className={getDetailContentContainerClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, primaryTabs, activePrimaryTab, formScrollPaddingX, contentOverflow })}>
+            <div className={getDetailContentContainerClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, primaryTabs, activePrimaryTab, formScrollPaddingX, sidebarFormScrollPaddingX, contentOverflow })}>
               {resolveHeaderContent(headerContent, data, { calloutResult, blockingCondition: hook.blockingCondition, completionSignal: hook.completionSignal, recordId: data?.id || recordId })}
               {(() => {
                 const slotProps = {
@@ -3208,7 +3208,7 @@ export function DetailView({
                       className={getLinesTabsSectionClassName(linesLayout)}
                       onMouseDown={autoSaveOnBlur && linesLayout === 'inlineEditable' ? () => handleFieldBlurRef.current?.() : undefined}
                     >
-                      <div className={`flex items-center justify-between border-b border-border/50 ${getTabStripBleedClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, formScrollPaddingX })} ${(getInlineEditableShrinkClassName(linesLayout))}`}>
+                      <div className={`flex items-center justify-between border-b border-border/50 ${getTabStripBleedClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, formScrollPaddingX, sidebarFormScrollPaddingX })} ${(getInlineEditableShrinkClassName(linesLayout))}`}>
                         <DetailTabStrip
                           tabs={tabs}
                           activeIndex={activeTab}
