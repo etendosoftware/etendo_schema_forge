@@ -3488,6 +3488,7 @@ describe('extractBackendErrorCode (ETP-5782)', () => {
   it('returns undefined for a body without a code or with a prose error', () => {
     assert.equal(extractBackendErrorCode({ error: { message: 'x' } }), undefined);
     assert.equal(extractBackendErrorCode({ error: 'Something went wrong.' }), undefined);
+    assert.equal(extractBackendErrorCode({ error: 'conflict' }), undefined);
     assert.equal(extractBackendErrorCode(null), undefined);
   });
   it('translates service_unavailable by code and leaves an unknown code untouched', () => {

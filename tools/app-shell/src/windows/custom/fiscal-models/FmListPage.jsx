@@ -870,6 +870,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       })
         .then(r => r.ok ? r.json() : parseBackendError(r).then(e => Promise.reject({ status: r.status, code: e.code })))
         .then(created => setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]))
+        // The rejection above is an object `{status, code}`, not a bare status number.
         .catch(({ status, code } = {}) => {
           // ETP-5272 — this used to silently swallow the backend's error (a 409 when a draft
           // already exists for the period, or any other failure), leaving the user staring at a

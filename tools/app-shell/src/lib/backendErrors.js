@@ -1337,11 +1337,18 @@ function extractFirstResponseErrorsMessage(data) {
  * @param {object|null|undefined} payload parsed JSON error body
  * @returns {string|undefined} the code, e.g. `duplicate_key`, `stale_record`
  */
+const FLAT_ERROR_CODES = new Set([
+  'stale_record', 'duplicate_key', 'record_in_use', 'retryable_conflict', 'unknown_reference',
+  'invalid_value', 'missing_required_value', 'business_rule', 'forbidden', 'service_unavailable',
+  'server_error', 'read_only_field',
+]);
+
 export function extractBackendErrorCode(payload) {
   const nested = payload?.error?.code;
   if (typeof nested === 'string' && nested) return nested;
   const flat = payload?.error;
-  if (typeof flat === 'string' && /^[a-z]+(_[a-z]+)*$/.test(flat)) return flat;
+  // Flat shape: allow-list only, so an arbitrary snake_case string (e.g. "conflict") is not a code.
+  if (typeof flat === 'string' && FLAT_ERROR_CODES.has(flat)) return flat;
   return undefined;
 }
 
@@ -1349,6 +1356,8 @@ export function extractBackendErrorCode(payload) {
 // failure code, with the i18n key that renders each. Only the EXACT generic text is replaced:
 // a specific, already-translated explanation under the same code (a business_rule, a record_in_use
 // raised by a trigger) is kept verbatim.
+// These sentences mirror the NeoErrorClassifier MSG_* constants in com.etendoerp.go; changing one
+// side silently disables the translation (it falls back to the server text).
 const GENERIC_CODE_MESSAGES = {
   unknown_reference: ['A referenced record does not exist or is not accessible.', 'backendError.unknownReference'],
   record_in_use: ['This record cannot be deleted because other records use it.', 'backendError.recordInUse'],
