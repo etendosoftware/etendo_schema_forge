@@ -122,7 +122,12 @@ afterEach(() => {
 });
 
 describe('FmListPage — handleNewDecl surfaces backend errors (ETP-5272)', () => {
-  it('shows an error toast and does not add a row when the backend rejects with 409 (duplicate draft)', async () => {
+  // ETP-5725 (reopened QA fix) — the generic fallback below used to fire for EVERY failure,
+  // including this one well-known cause. `handler.get(status)` from the POST's rejected promise
+  // is the ONLY source of a 409 on this endpoint (FiscalDeclCrudHandler#hasDraftDeclaration), so
+  // this assertion was updated from `fm.list.new_decl_failed` to the new, specific
+  // `fm.list.new_decl_draft_exists` toast — see FmListPage.jsx's `handleNewDecl` `.catch`.
+  it('shows the specific "draft already exists" toast and does not add a row on a 409', async () => {
     globalThis.fetch = mockFetch({ postStatus: 409 });
     const { container } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
     await waitForCatalogLoad();
@@ -131,7 +136,8 @@ describe('FmListPage — handleNewDecl surfaces backend errors (ETP-5272)', () =
     fireEvent.click(screen.getByTestId('new-decl-confirm'));
 
     const { toast } = await import('sonner');
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.list.new_decl_failed'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.list.new_decl_draft_exists'));
+    expect(toast.error).not.toHaveBeenCalledWith('fm.list.new_decl_failed');
     expect(container.querySelectorAll('tbody tr').length).toBe(0);
   });
 
@@ -145,6 +151,9 @@ describe('FmListPage — handleNewDecl surfaces backend errors (ETP-5272)', () =
 
     const { toast } = await import('sonner');
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.list.new_decl_failed'));
+    // ETP-5725 (reopened QA fix) — the specific 409 toast must stay specific to 409: a 500
+    // keeps the generic fallback.
+    expect(toast.error).not.toHaveBeenCalledWith('fm.list.new_decl_draft_exists');
   });
 
   it('does not toast and adds the created row when the backend succeeds', async () => {

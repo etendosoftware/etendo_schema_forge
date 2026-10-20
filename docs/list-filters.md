@@ -129,11 +129,11 @@ Automatic filters rendered by `ListFilterBar` based on the *types* of the column
 | Column type | Control | Options |
 |-------------|---------|---------|
 | `status` | Status dropdown | `All` + every status code declared in `enumLabels` (or the global `statuses` dictionary). Single-select. |
-| `date` (first date column) | Date range dropdown | `Any time`, `Today`, `Last 7 days`, `Last 30 days`, `Last 12 months` (default), `This year`. |
+| `date` (first date column) | Date range dropdown | `Any time`, `Today`, `Last 7 days`, `Last 30 days`, `Last 12 months`, `All time`. No preset is applied by default (a window may opt in, see below). |
 
 - Source: auto-discovered from the table's columns array (`columns.find(c => c.type === 'status' | 'date')`).
 - Behavior: dropdown menus with a check-mark next to the active option.
-- Default: the first `date` column applies `Last 12 months` on first render; the status dropdown starts at `All`.
+- Default: no date filter on first render and the status dropdown starts at `All`. A window opts into a starting date range with `window.listViewOptions.defaultDatePreset` (e.g. `payment-in`/`payment-out` open on `Last 30 days`; ETP-5778). That default is the window's "declared default" in the persistence rules below: a saved snapshot wins over it, an explicit `All time` is saved and honoured, and a URL deep-link skips it.
 - All selections write into the shared `columnFilters` state, so they compose with AND against the backend.
 - **Option order is fixed, not alphabetical** (ETP-4696, extended by ETP-4913): the status options are sorted with `compareStatusCodes` / `STATUS_ORDER` from `lib/statusBadge.js`, so the list follows the document flow (Temporary → Draft → In process → Awaiting → Completed → Re-opened → Closed → Voided → Unknown) and never changes between openings. The advanced filter's value dropdown for the same column sorts with the identical comparator — see [`decisions-reference.md`](decisions-reference.md) §"Option order in the two status dropdowns" for why the sort is gated to `type: 'status'` columns only.
 

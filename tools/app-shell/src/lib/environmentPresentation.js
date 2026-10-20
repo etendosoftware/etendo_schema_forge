@@ -5,18 +5,57 @@ export function isProductiveEnvironment(environment) {
 }
 
 /**
+ * ETP-5047 — the backend's lifecycle type says productive. Not the same as the plan: a canceled
+ * subscription makes `plan` read "free" while `environmentType` stays "PRODUCTIVE". An environment
+ * the backend reports no type for (it predates the lifecycle metadata) is not productive here.
+ */
+function hasProductiveType(environment) {
+  return String(environment?.environmentType || '').trim().toUpperCase() === 'PRODUCTIVE';
+}
+
+/**
  * A demo can originate one productive environment. Once it has (the backend reports
  * `associatedWithProductive`), it is no longer offered as a purchase source: a later purchase
- * creates a clean productive environment (ETP-5548).
+ * creates a clean productive environment (ETP-5548). A productive environment is never a source,
+ * including a canceled one whose plan reads "free" (ETP-5047); the backend refuses it too. Neither
+ * is a demo the account was only invited into (`ownedByAccount: false`): it is not the buyer's to
+ * copy (ETP-5743). A backend that predates the field omits it, so only an explicit `false` excludes.
  */
 export function isPurchaseSourceDemo(environment) {
   return Boolean(environment)
     && !isProductiveEnvironment(environment)
-    && environment.associatedWithProductive !== true;
+    && !hasProductiveType(environment)
+    && environment.associatedWithProductive !== true
+    && environment.ownedByAccount !== false;
 }
 
+/**
+ * ETP-5742 — a productive environment whose subscription was canceled (`subscriptionStatus`
+ * "EXPIRED"), as opposed to one blocked by an unpaid invoice ("PAST_DUE" past its grace). Both are
+ * blocked as `SUBSCRIPTION_REQUIRED`, but only this one is fixed by re-subscribing; an unpaid
+ * invoice is fixed in the payment portal. The plan is not asked: it reads "free" when the canceled
+ * subscription is a closed row and "productive" when it is the older preference projection.
+ */
+export function isCanceledSubscription(environment) {
+  return Boolean(environment)
+    && (hasProductiveType(environment) || isProductiveEnvironment(environment))
+    && environment.subscriptionStatus === 'EXPIRED';
+}
+
+/**
+ * ETP-5742 — whether this account may re-subscribe the environment: it is canceled and the account
+ * owns it. An invited member is told to ask the owner instead. Only an explicit
+ * `ownedByAccount: true` qualifies; the backend checks ownership again and refuses anyone else.
+ */
+export function canReactivateSubscription(environment) {
+  return isCanceledSubscription(environment) && environment.ownedByAccount === true;
+}
+
+/** A canceled productive environment keeps its "Productive" badge although its plan reads free. */
 export function environmentPlanLabelKey(environment) {
-  return isProductiveEnvironment(environment) ? 'environmentProductive' : 'environmentDemo';
+  return isProductiveEnvironment(environment) || hasProductiveType(environment)
+    ? 'environmentProductive'
+    : 'environmentDemo';
 }
 
 /** Returns the trial status label only when the backend supplied lifecycle metadata. */

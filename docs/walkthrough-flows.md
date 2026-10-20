@@ -698,9 +698,11 @@ Interpolation uses `useUI`'s `{name}` convention — e.g.
 3. **Check *when* each target exists, not only *whether*.** A selector that is
    present on the finished screen can be absent at the point your step reaches
    it. Sales Order's *Add line* is the worked example: `canShowAddLineArea`
-   gates it on `requiredHeaderFields`, which includes the server-computed
-   totals, so the button simply does not render until the header has been
-   saved — hence the explicit `save-header` step before `add-line`. A step
+   gates it on `requiredHeaderFields`, so the button does not render until
+   every required header field the user can fill (business partner, address,
+   price list, …) holds a value — a step targeting `add-line` must come after
+   the steps that fill them. (Server-computed readOnly fields such as the
+   totals are excluded from that list since ETP-5676.) A step
    that waits for a target an earlier step was supposed to create fails as
    "target not found", which reads like a broken selector and is not.
 4. Add the locale keys to `en_US.json`, `es_ES.json` **and** `es_AR.json`.

@@ -45,6 +45,9 @@
       }
     },
     "dateFilterKey": "paymentDate",
+    "listViewOptions": {
+      "defaultDatePreset": "last30"
+    },
     "hideCreate": true,
     "hideFormCard": true,
     "hidePrint": true,

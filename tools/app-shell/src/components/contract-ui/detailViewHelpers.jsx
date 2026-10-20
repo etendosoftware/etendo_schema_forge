@@ -14,7 +14,7 @@ import {formatCurrency} from '@/lib/formatCurrency.js';
 import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
 import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
-import {deleteSelectedChildRows, runBatchDelete, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
+import {buildChildRowDeleteFn} from '@/lib/batchDelete.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 import { resolveOnSelectMappings } from './DataTable.jsx';
@@ -960,8 +960,7 @@ export function getDeleteChildButtonLabel(deletingChildren, ui) {
 export function renderDetailBulkActionBar({
   visible, closing, linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows,
   detailProcesses, ui, executingDetailProcess, setDetailParamDialogProcess, executeDetailProcessImpl,
-  detailProcessDeps, tMenu, deletingChildren, setDeletingChildren, confirmDelete, apiBaseUrl, token,
-  hook, selectedLine, setSelectedLine, setSelectedChildRows,
+  detailProcessDeps, tMenu, deletingChildren, onBulkDelete, setSelectedChildRows,
 }) {
   return (
     <SelectionToolbar
@@ -996,25 +995,9 @@ export function renderDetailBulkActionBar({
             disabled={deletingChildren}
             title={getDeleteChildButtonLabel(deletingChildren, ui)}
             aria-label={getDeleteChildButtonLabel(deletingChildren, ui)}
-            onClick={async () => {
-              if (!(await confirmDelete())) return;
-              setDeletingChildren(true);
-              try {
-                const {succeeded, failed} = await deleteSelectedChildRows({
-                  selectedChildRows, api, detailEntity, apiBaseUrl, token,
-                });
-                for (const row of succeeded) {
-                  hook.handleDeleteChild(row.id);
-                  if (selectedLine?.id === row.id) setSelectedLine(null);
-                }
-                setSelectedChildRows([]);
-                toastBatchDeleteOutcome(ui, {succeeded, failed, total: selectedChildRows.length});
-              } catch (err) {
-                toast.error(err.message || ui('networkError'));
-              } finally {
-                setDeletingChildren(false);
-              }
-            }}
+            // ETP-5758 — opens DetailView's shared bulk-delete dialog (useBatchDeleteDialog), which
+            // stays open and locked until the batch settles and owns the outcome toast.
+            onClick={onBulkDelete}
             className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             data-testid="detail-bulk-delete-button"
           >
@@ -1268,8 +1251,17 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   ));
 }
 
-export function getSecondaryTabEntityKey(secondaryTabs, index) {
-  return (secondaryTabs[index]?.isFormTab || secondaryTabs[index]?.Panel) ? null : (secondaryTabs[index]?.key ?? null);
+// ETP-5648: a capability-hidden tab gets no entity key, so its hook never fetches it.
+export function getSecondaryTabEntityKey(secondaryTabs, index, capabilities) {
+  const tab = secondaryTabs[index];
+  if (tab?.isFormTab || tab?.Panel || !isCapabilityVisible(capabilities, tab?.visibleWhenCapability)) return null;
+  return tab?.key ?? null;
+}
+
+// ETP-5648: `window.detailVisibleWhenCapability` drops the detail (lines) tab entirely for a
+// role without the capability: no tab, no children fetch, no evaluate-display, no callouts.
+export function gateDetailTab(detailEntity, DetailTable, capabilityKey, capabilities) {
+  return isCapabilityVisible(capabilities, capabilityKey) ? [detailEntity, DetailTable] : [null, null];
 }
 
 // ETP-5205: `readOnly` here is DetailView's `windowReadOnly` (static decisions.json
@@ -2184,7 +2176,7 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
  * @param {object} deps.secondaryHooks - per-tab child entity hooks
  * @param {Function} deps.ui - i18n label resolver
  * @param {Function} deps.extractErrorMessage - response error extractor
- * @param {Function} deps.confirmDelete - delete confirmation prompt
+ * @param {Function} deps.requestBatchDelete - `useBatchDeleteDialog`'s request fn (bulk delete)
  * @param {object} deps.secondaryInlineLinesRefs - refs to inline line tables
  * @param {object} deps.selectedSecondaryLine - currently open secondary line
  * @param {object} deps.secondaryLineEdits - pending edits for the open line
@@ -2194,17 +2186,16 @@ export function getSecondaryRowUpdateHandler(st, linesLayout, ctx) {
  * @param {Function} deps.setSelectedSecondaryLine
  * @param {Function} deps.setSecondaryLineEdits
  * @param {Function} deps.setSecondaryLineEditColumns
- * @param {Function} deps.setSecondaryDeleting
  * @param {Function} deps.setSecondarySelectedRows
  * @returns {{onAdd: Function, onSaveLine: Function, onDelete: Function}}
  */
 export function buildSecondaryLineHandlers(deps) {
   const {
     st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
-    extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
+    extractErrorMessage, requestBatchDelete, secondaryInlineLinesRefs,
     selectedSecondaryLine, secondaryLineEdits, secondarySelectedRows,
     setAddingSecondaryLine, setSavingSecondaryLine, setSelectedSecondaryLine,
-    setSecondaryLineEdits, setSecondaryLineEditColumns, setSecondaryDeleting,
+    setSecondaryLineEdits, setSecondaryLineEditColumns,
     setSecondarySelectedRows,
   } = deps;
 
@@ -2254,44 +2245,26 @@ export function buildSecondaryLineHandlers(deps) {
     }
   };
 
-  const onDelete = async () => {
-    if (!(await confirmDelete())) return;
-    setSecondaryDeleting(prev => ({...prev, [st.key]: true}));
+  // ETP-5758 — opens the shared bulk-delete dialog instead of awaiting a confirm prompt and
+  // running the batch after it had closed: the dialog now stays open and locked (spinner,
+  // "Eliminando…") until every DELETE settles. Outcome handling is unchanged — succeeded rows
+  // leave the cache, the side panel closes if it showed one of them, the whole selection is
+  // cleared, and the single outcome toast (fired by the hook) names a one-row refusal's reason.
+  const onDelete = () => {
     const rows = secondarySelectedRows[st.key] ?? [];
-    try {
-      // ETP-4656 — shared triage (Promise.allSettled + succeeded/failed partition)
-      // and single-toast-per-outcome selection, same helpers ListView/Financial
-      // Accounts/Movements/Statements bulk delete already use (see batchDelete.js).
-      // Replaces the old two-independent-if (`recordsDeleted` + `recordsCouldNotBeDeleted`)
-      // stacked-toast pattern this function predates.
-      const { succeeded, failed, errors } = await runBatchDelete(rows, (row) => {
-        const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
-            || `${apiBaseUrl}/${st.key}/${row.id}`;
-        return apiFetch(childUrl, {
-          method: 'DELETE',
-          token, baseUrl: '',
-        }).then(async res => { // reason + 4xx status travel for the toast (as useBulkRowDelete)
-          if (!res.ok) throw Object.assign(new Error(await extractErrorMessage(res)), { status: res.status });
-          return row;
-        });
-      });
-
-      for (const row of succeeded) {
-        secondaryHooks[stIdx]?.handleDeleteChild?.(row.id);
-        if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === row.id) {
-          setSelectedSecondaryLine(null);
+    return requestBatchDelete(rows, {
+      deleteOneFn: buildChildRowDeleteFn({ api, entityKey: st.key, apiBaseUrl, token, extractErrorMessage }),
+      onOutcome: (succeeded) => {
+        for (const row of succeeded) {
+          secondaryHooks[stIdx]?.handleDeleteChild?.(row.id);
+          if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === row.id) {
+            setSelectedSecondaryLine(null);
+          }
         }
-      }
-
-      secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
-      setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
-
-      toastBatchDeleteOutcome(ui, { succeeded, failed, errors, total: rows.length });
-    } catch (err) {
-      toast.error(err.message || ui('networkError'));
-    } finally {
-      setSecondaryDeleting(prev => ({...prev, [st.key]: false}));
-    }
+        secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
+        setSecondarySelectedRows(prev => ({...prev, [st.key]: []}));
+      },
+    });
   };
 
   return { onAdd, onSaveLine, onDelete };
