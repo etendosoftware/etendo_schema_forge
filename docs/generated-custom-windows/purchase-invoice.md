@@ -2841,3 +2841,11 @@ The lines grid shows the **unit of measure** of every line in a new read-only co
 - **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
 
 **Manual verification:** open a draft purchase invoice; confirm `Unidad` sits after Cant. facturada; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## "A favor" topbar chip shows the whole amount — ETP-5729
+
+QA CP-14 applied here too: `PurchaseInvoiceTopbar.jsx` now renders the "A favor" balance through the
+shared `BadgeAmount` (with the chip class `BADGE_CHIP_FIT_CLASS`), so a large credit balance is no longer
+cut at "1.452,0…" and, on a narrow ~1280px topbar, the chip shrinks inside the card instead of pushing
+the "€" off-screen. The component, the flex-chain fix in `DetailView.jsx` and the manual check are
+described once in [`sales-invoice.md` — A favor topbar chip, ETP-5729](sales-invoice.md#a-favor-topbar-chip-shows-the-whole-amount--etp-5729).

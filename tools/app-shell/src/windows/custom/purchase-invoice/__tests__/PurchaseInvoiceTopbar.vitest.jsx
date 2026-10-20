@@ -161,7 +161,12 @@ describe('PurchaseInvoiceTopbar', () => {
         data={{ ...CREDIT_DATA, 'transactionDocument$_identifier': 'Factura Rectificativa (compras)' }}
       />,
     );
-    expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+    // ETP-5729 CP-14: the chip must shrink inside a crowded topbar (min-w-0 + a shrink weight
+    // above its fixed-size neighbours) and never wrap the "A favor" label onto two lines.
+    const chip = screen.getByText('cpFavorBadge').closest('[data-testid="payment-status-badge"]');
+    const classes = chip.className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(['min-w-0', 'whitespace-nowrap']));
+    expect(classes.some((c) => /^shrink-\[\d+\]$/.test(c))).toBe(true);
   });
 
   // ETP-4841: apInvoiceSubtype used to select the credit branch. It no longer

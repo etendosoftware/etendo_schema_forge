@@ -66,7 +66,7 @@ The MCP publishes `documentAction` and `cloneRecord` for this window (declared b
 
 ## Gap assessment
 
-- **Resolved by ETP-5429** — the return workflow is fully backed by stable observed behavior: `createReturn` (called from the now-shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx`, wrapped by `ReturnWizard.jsx`) creates a real `return-material-receipt` document end-to-end, verified live including amount-column pricing (sourced from the linked sales order via a `fetchPrices` call) and a genuine backend 409 conflict ("A return already exists for shipment: ...") when a second return is attempted on an already-returned shipment. The related-documents tab also correctly surfaces the created return receipt back on the source shipment (`RelatedDocuments.jsx`'s `returnReceipts` chip, confirmed populated by the backend). No longer a gap.
+- **Resolved by ETP-5429** — the return workflow is fully backed by stable observed behavior: `createReturn` (called from the now-shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx`, wrapped by `ReturnWizard.jsx`) creates a real `return-material-receipt` document end-to-end, and, since ETP-5729, a second return of the same shipment allowed for the quantity that remains, with a translated 409 only when the request exceeds it (see the ETP-5729 section below). The amount-column pricing of the old step 2 was removed in ETP-5729. The related-documents tab also correctly surfaces the created return receipt back on the source shipment (`RelatedDocuments.jsx`'s `returnReceipts` chip, confirmed populated by the backend). No longer a gap.
 - Batch invoice creation posts to the same `createDraftInvoice` endpoint as the single-shipment flow and, since ETP-5381, produces a confirmed invoice rather than a draft. Current evidence only proves source shape and endpoint usage, not a browser-tested logistics scenario. It should be treated as supported-by-code with limited automated proof.
 - The documented shipment-to-invoice relationship is order-centric: the related-documents tab resolves invoices through the linked sales order, not by directly querying invoices from the shipment id. If the business expects shipment-specific invoice traceability independent of the order link, that remains an open ambiguity.
 - **Resolved (2026-09):** the top-bar single-shipment gate (`GoodsShipmentActions.jsx`) already used `invoiceStatus >= 100`. The bulk selection-bar gate (`BulkInvoiceFromShipment.jsx`) used to check `r.completelyInvoiced !== true` instead — a no-op, since `completelyInvoiced` (`Iscompletelyinvoiced`) is renamed to `invoiced` with `grid: false, form: false` in `decisions.json` and never reaches a grid row at all. Fixed to `parseFloat(r.invoiceStatus ?? 0) < 100`, the same field and same threshold the single-record gate already used — the two are now consistent.
@@ -105,7 +105,7 @@ The MCP publishes `documentAction` and `cloneRecord` for this window (declared b
 - `artifacts/goods-shipment/custom/GoodsShipmentActions.jsx` implements single-shipment invoice creation (confirmed on creation since ETP-5381), shipment return launch, shipment sending, existing-draft warning, and quantity-based invoice preview.
 - `artifacts/goods-shipment/custom/BulkInvoiceFromShipment.jsx` implements the toolbar button, the invoiceable/same-BP/same-currency guards, and the pending-units total (summed via one `pendingInvoiceLines` call per selected shipment); it opens the shared `CreateInvoiceConfirmModal` (imported from `@/components/contract-ui/CreateInvoiceConfirmModal`, not a bespoke modal) and shows the result through the shared `ConfirmResultModal` (`docs.type: 'facturaVenta'`, route `/sales-invoice/{id}`), which already badges confirmed-vs-draft off `documentStatus` (ETP-5381) — the component itself no longer hand-rolls a result toast.
 - `artifacts/goods-shipment/custom/RelatedDocuments.jsx` (a thin wrapper over the shared `SALES_RELATED_DOCS['goods-shipment']` definition since ETP-5527) resolves the linked sales order, sales invoices, AND return receipts (`data.returnReceipts`, rendered via `docChipProps({ type: 'return-material-receipt', ... })`) — confirmed live (ETP-5429): creating a return from a shipment makes it appear back on that shipment's Documentos section immediately.
-- `artifacts/goods-shipment/custom/ReturnWizard.jsx` is now a thin wrapper around the shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx` (ETP-5429, unifying it with `PurchaseReturnWizard.jsx` on goods-receipt) — `createReturn` is a confirmed-working live action, not a pending dependency.
+- `artifacts/goods-shipment/custom/ReturnWizard.jsx` is now a thin wrapper around the shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx` (ETP-5429, unifying it with `PurchaseReturnWizard.jsx` on goods-receipt) — `createReturn` is a confirmed-working live action, not a pending dependency. Since ETP-5729 the wrapper passes only the title/reference keys and the action URL: no `fetchPrices`, no `showAmountColumn`.
 - `artifacts/goods-shipment/custom/__tests__/BulkInvoiceFromShipment.test.js` provides source-shape coverage for the bulk invoice component: invoiceable-row filtering (`invoiceStatus`, not the dead `completelyInvoiced` field), same-BP/same-currency guards, that it opens `CreateInvoiceConfirmModal` (not a bespoke modal) with a computed `cardAmountLabel`/`pendingQtyTotal`/`onPriceListChange`, the `createDraftInvoice` POST body shape (`shipmentIds` + `priceListId`, no per-line `lines`), that it uses `useApiFetch` (never a bare `fetch`), and that it ends with `clearSelection()` → `refresh()` from the result modal's `onClose`. A dedicated `quote — real price per line, not an estimate` block asserts: it fetches shipment lines and `pendingInvoiceLines` (both needed for the quote, not just the subtitle), the order-line price fetch (`sales-order/lines/{id}`) is **not** keyed on `selectedPriceListId`, the Tarifa-price fetch filters to lines with no linked order line, the `price = detail.salesOrderLine ? orderLinePrices[…] : tariffPrices[…]` precedence, and that the total is formatted with `formatCurrency`. `CreateInvoiceConfirmModal.vitest.jsx` covers the new `onPriceListChange` prop itself (fires on initial resolve, fires again on user change, safe no-op when omitted).
 - `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-complete component (CO only, via `buildInOutActions`) mounted in the list selection bar for goods shipments with `labelKey="process"` so the button renders as "Procesar" / "Process"; the single `CO` entry in its dropdown renders as "Confirmar" / "Confirm" (`labelKey: 'confirm'`).
 - **ETP-5302 — selection-bar button renamed to "Procesar", dropdown option renamed to "Confirmar"**: the floating selection-bar button is now mounted with `labelKey="process"` ("Procesar" / "Process") — the `confirmBulk` key it used before was deleted from `en_US.json`, `es_ES.json` and `es_AR.json`. In the same move, `BulkDocumentAction`'s `CO` entry (in both `buildInOutActions` and the default `buildActions`) switched from `labelKey: 'book'` to `labelKey: 'confirm'`, so the dropdown option that completes the document now reads "Confirmar" / "Confirm". The `RE` entry keeps `labelKey: 'reactivate'`. Labels only — the dialog, the per-row `Promise.allSettled` loop, the `documentAction=CO` call and the result toast are untouched. The second selection-bar button added by ETP-5209 (`labelKey="post"`, "Contabilizar") is unaffected.
@@ -229,8 +229,10 @@ Generating a Sales Invoice from `GoodsShipmentActions.jsx` (the `topbarRight` co
 close the result modal with a full `window.location.reload()`. `GoodsShipmentActions` now
 accepts the `onRefresh` prop `DetailView.jsx`'s topbar slot already passes it (`() =>
 hook.fetchById(recordId)`) and calls that instead — in the invoice-result `ConfirmResultModal`'s
-`onClose` (skipped when the user navigated to the new invoice instead) and as the `ReturnWizard`
-`onSuccess` fallback when the created return has no id to navigate to. The **Related Documents**
+`onClose` (skipped when the user navigated to the new invoice instead). For returns, since
+ETP-5729 the refresh runs in the `ReturnWizard` `onSuccess` itself, as soon as the return exists,
+and the return-result `ConfirmResultModal` (see the ETP-5729 section) no longer refreshes on
+close. The **Related Documents**
 tab (`artifacts/goods-shipment/custom/RelatedDocuments.jsx`) needs no separate refetch: it
 derives its chips straight from `data.linkedOrders` / `linkedInvoices` / `returnReceipts`, so
 refreshing the header via `onRefresh` is sufficient to update it — no manual reload required.
@@ -504,3 +506,99 @@ Discovery and edge cases of the goods shipment import (ETP-5713 review):
 - `headerLinked` / `salesOrder` report the truth: if the header already links sales order X and the lines come only from sales order Y, the answer is `headerLinked:false, salesOrder:X` and the link is not changed.
 - A goods shipment or sales order of another client answers 404 exactly like a missing one.
 - The source lines are locked with `FOR NO KEY UPDATE` (ascending ids), then the order lines are refreshed before the pending is read.
+
+## Create return — single step and repeat returns by quantity — ETP-5729
+
+**One step (QA CP-15).** The shared `CreateReturnWizard.jsx` used to have a read-only step 2
+(the "Return receipt" document card plus an amount per line). That amount was priced by
+`ReturnWizard.jsx`'s `fetchPrices` from the linked sales order **per product**
+(`priceMap[ol.product]`), so an order with the same product on two lines at different prices
+(4 × 300 € and 2 × 150 €) showed 150 + 150 instead of 300 + 150. The step was removed: the
+"Crear Devolución" button now sits on the lines screen and creates the return directly. Nothing
+the action needs was lost — the request body was always built only from step 1 (selected
+`lineId`s, `returnQuantity`, `reason`). Prices matter only on the credit note, which is priced by
+the backend per line. `fetchPrices`, `showAmountColumn`, `docTypeLabelKey` and
+`docTypeDescriptionKey` are gone from the wizard API. **The wizard is shared with goods-receipt
+(`PurchaseReturnWizard.jsx`), so the purchase return dialog lost its step 2 too.**
+
+**Second return from the same shipment (QA CP-12) — allowed, capped by quantity.** The server
+side is ETP-5711 (see *Return from the shipment (`createReturn`) — ETP-5711* above and
+`return-material-receipt.md`): the "a return already exists" 409 is gone and every return path is
+capped at *returnable = shipped − what non-voided returns, drafts included, already hold*, refused
+with 422 `returnQuantityExceedsAvailable` / `nothingLeftToReturn` and translated by the SPA
+(`backendError.returnQuantityExceeds`, `backendError.returnNothingLeftOnLine`,
+`backendError.returnNothingLeft`). What ETP-5729 adds is the wizard's reaction: on one of those two
+refusals the dialog **closes** and the toast shows the translated message — its quantities were
+stale (another return, a draft one included, took them since it loaded), and reopening it reloads
+what is still returnable (`STALE_RETURN_ERROR_CODES` in `CreateReturnWizard.jsx`, read from
+`error.code`). Any other error keeps the dialog open so the user can adjust the lines or cancel.
+
+Manual checks: (1) return 2 of 5 from a completed shipment and leave the return in draft → Crear
+Devolución again offers 3; return 3 → created. (2) With returns covering all 5 (a draft one
+included) the Crear Devolución button is hidden (`canCreateReturn = false`). (3) Open the wizard,
+then in another tab create a return for the remaining quantity, then confirm the first wizard →
+dialog closes with the Spanish over-return toast and no new return is created. (4) On the draft
+return, edit a line's quantity above what remains → the save is refused with the same message.
+(5) Void a return → its quantity becomes returnable again.
+
+**Locale keys retired with step 2.** `followingDocumentsWillBeCreated`, `stockMovementToWarehouse`,
+`purchaseReturnReceipt` and `returnStockToVendor` had no reader left anywhere in the repo
+(`artifacts/`, `e2e/`, `tools/`) and were removed from `en_US.json`, `es_ES.json` and
+`es_AR.json`, and so was `stepOf` once the mocked spec
+`e2e/tests/flows/sales/goods-shipment-return-wizard.mocked.spec.js` was rewritten for the
+one-step dialog (it was its last reader; the core keeps its own copy in its generated locale).
+`back`, `next`, `amount`, `total`, `delivered` and `returnReceipt` stay: other components still
+read them.
+
+**After the return is created — result modal, no auto-navigation.** Sales now behaves like
+Purchases (`GoodsReceiptActions.jsx`). `GoodsShipmentActions.jsx` used to navigate straight to
+`/return-material-receipt/<id>` from the `ReturnWizard` `onSuccess` (ETP-4031). It now stores the
+created return (`returnedDoc`) and renders the shared `ConfirmResultModal` with the doc type
+`devolucionVenta` ("Devolución de venta creada" / "Sales return created", card label
+"Devolución de venta", button "Ver devolución"), routed to `/return-material-receipt/<id>`. The
+user chooses: **Ver devolución** navigates to the return; **Cerrar** stays on the shipment.
+`onRefresh` runs in the wizard `onSuccess`, before the modal is shown, whichever of the two the
+user picks (see *Stale shipment after a return* below). When the action returns no id, no modal
+is shown; the refresh is the same. The modal's `documentStatus` is the literal `'DR'`: `createReturn` answers only
+`{ id, documentNo }` and always creates the return in draft. `devolucionVenta` is a new `TYPE_CONFIG` entry in
+`tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx`, with
+`confirmResultModal.title.devolucionVenta` / `confirmResultModal.docType.devolucionVenta` in
+`en_US`, `es_ES` and `es_AR`.
+
+Manual check: on a completed shipment, Crear Devolución → pick a line → Crear Devolución: the
+result modal appears; Cerrar keeps you on the shipment with the return in Documentos; Ver
+devolución opens the return receipt.
+
+### Stale shipment after a return — ETP-5729 follow-up
+
+Two reports, one cause: the shipment record is served from the shared client-side record cache
+(`useEntity` → app-shell-core `queryCache`, `recordStaleTime` 30 s; a non-forced `fetchById` on
+arrival reuses a fresh entry), and nothing marked it stale.
+
+- **After creating a return** the shipment was refreshed only when the result modal was closed
+  with **Cerrar**, and never when the user chose **Ver devolución** (`resultNavigatedRef` skipped
+  it). Coming back within 30 s showed the pre-return shipment: «Crear devolución» visible
+  (`canCreateReturn` still `true`) over a wizard with nothing left to return. Now
+  `GoodsShipmentActions.jsx` calls `onRefresh` (entity-cache invalidation + forced refetch) in the
+  wizard `onSuccess`, so the cache holds the post-return shipment whatever the user does next.
+  The record stays on screen while it reloads (DetailView only blanks out when it has no record).
+- **After deleting (or editing, completing) a return** in `return-material-receipt`, going back
+  to the shipment still listed the deleted return in Documentos and kept «Crear devolución»
+  hidden. `tools/app-shell/src/lib/crossSpecCacheInvalidation.js` now maps
+  `return-material-receipt → goods-shipment` in `WRITE_INVALIDATES_SPECS`, so every successful
+  write to a return marks the cached shipment stale and the next arrival refetches it.
+- **Wizard lines.** Opening the wizard now clears the previous opening's lines and passes
+  `linesLoading` to `CreateReturnWizard.jsx` until `availableShipmentLines` answers: the dialog
+  shows *Cargando...* meanwhile, and *No queda nada por devolver de este documento...*
+  (`backendError.returnNothingLeft`, reused) when the answer is empty, instead of an empty table.
+  A caller that does not pass `linesLoading` (Purchases today) keeps the previous rendering.
+- **Column label.** The wizard's quantity column read «Entregado» (`delivered`), but its value is
+  `movementQuantity` from `availableShipmentLines` / `availableReceiptLines`: shipped minus what
+  non-voided returns (drafts included) already hold. It now reads «Disponible para devolver» /
+  "Available to return" (`availableToReturn`, new in `en_US`, `es_ES`, `es_AR`). Shared with
+  goods-receipt. `delivered` stays in the locales.
+
+Manual check: shipment with 1 line of 4 → return 2 → **Ver devolución** → back: the button is
+still there and the wizard offers 2. Return the other 2 → the button disappears without a
+reload. Delete one of the draft returns → back to the shipment: the return is gone from
+Documentos and the button is back.
