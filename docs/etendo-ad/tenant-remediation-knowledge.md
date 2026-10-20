@@ -1452,7 +1452,7 @@ that permanently retires R16 at the runner level. Full field-verified findings b
   `UserRoleCompositionService`'s write shape — the SQL-first criterion held.
 - **2026-08-26 — `AD_Role.EM_ETGO_Show_Acct_Fields` (ETP-4520) is READ as a flat stored column,
   never derived via a live join to `AD_Role_Inheritance`.** Confirmed by reading
-  `SFWindowAccessMap#resolveShowAccountingFields`: `SELECT em_etgo_show_acct_fields FROM ad_role
+  `NeoAccountingAccessPolicy#readShowAccountingFieldsFlag`: `SELECT em_etgo_show_acct_fields FROM ad_role
   WHERE ad_role_id = :roleId` — no join at all. So the column is a CACHE of "does this role
   currently inherit from Finance", and whoever last changed a role's `AD_Role_Inheritance` set is
   responsible for keeping it in sync — nothing did that for the ETP-4852 composition path before
@@ -3567,3 +3567,135 @@ restart — but it argues for running this fix close to a restart.
   subscription-backfill` wrote a ledger row under the SHORT id, which matches no catalog `fixId`, so
   the watermark and `--list-clients` ignored it (OPT-IN stayed 0/1). Now resolved to the full
   `fix_id` exactly like `--fix`, and an unknown id is rejected.
+- **2026-10-19 — Table name is `c_taxcategory` (no underscore before "category"), NOT `c_tax_category`.**
+  `FinancialMgmtTaxCategory` (AD entity) maps to `C_TaxCategory` (AD_Table 252), confirmed via
+  `information_schema.tables` — a first guess at `c_tax_category` returns "relation does not exist".
+  Sibling tables: `c_taxcategory_trl` (348), `c_bp_taxcategory` (800193). **Apply:** always verify
+  the exact table name via `ad_table`/`information_schema` before writing SQL for a `FinancialMgmt*`
+  entity; don't infer it by inserting underscores at every word boundary.
+- **2026-10-19 — `C_TaxCategory` is AccessLevel 7 ("All"), so a System-owned row (`ad_client_id='0'`)
+  is a legitimate, standard shape for shared fiscal reference data** — same pattern as O1's
+  `AEATSII_CAUSE_EXEMPTION` (R40). Module `com.etendoerp.go.localization.es.data`
+  ("Etendo Go - Spanish Fiscal Taxes Data") ships its `FinancialMgmtTaxCategory`/`FinancialMgmtTaxRate`
+  catalog entirely at `ad_client_id='0'` via `referencedata/standard/Spanish_Fiscal_Taxes_Go.xml` (a
+  **standard** reference-data file, imported once at module install/update — confirmed NOT reapplied
+  to an already-provisioned instance by `update.database` on its own, same "referencedata not
+  reapplied" pattern as H1/N6). **Apply:** when a gap's anchor row is already `ad_client_id='0'` in
+  live DB, don't force a per-tenant `.sql` shape — use the System-pseudo-tenant convention
+  (`sql/README.md` § "Fixes that target the System pseudo-tenant") and run it once via
+  `--fix <id> --client 0`.
+- **2026-10-19 — `com.etendoerp.go.localization.es.data` is a SEPARATE git repo**
+  (`etendosoftware/com.etendoerp.go.localization.es.data`, sibling checkout at
+  `{etendo_root}/modules/com.etendoerp.go.localization.es.data`), **not part of `com.etendoerp.go`**,
+  even though both ship under the `com.etendoerp.go*` namespace and a task may describe the fix as
+  "in com.etendoerp.go". Its default branch is `main` (not `develop`), and `main` was ahead of
+  `develop` at the time of checking (carried 3 unmerged `ETP-4944` commits touching this exact XML
+  file). **Apply:** before editing Spanish-fiscal reference data, `find` for the actual module
+  directory — don't assume it lives inside the `com.etendoerp.go` worktree a task names.
+- **2026-10-19 — Prior art before editing `Spanish_Fiscal_Taxes_Go.xml`: read `git log` on the file
+  first.** ETP-4944 (Sep 2026, commits `6ac024c`/`5ba6bf3` reverted then redone as `613005a`→`34f86b4`)
+  already cleaned up the Spanish tax-RATE catalog and specifically kept the "IVA Normal - Standard"
+  `FinancialMgmtTaxRate` (id `867FFFAC82CC44069FE6497E4C5C6348`) **inactive-but-undeleted** because a
+  live invoice already referenced it ("Keep IVA Normal, live invoice reference found", commit
+  `0e27a0f`) — it never touched the TAX CATEGORY itself. ETP-5802's gap (the category
+  `828E8E40DD3C4FA6A4F531569D26A6AF`, "OLD IVA Normal", left `active='Y'` with a stale `es_ES`
+  translation) is the piece ETP-4944 left behind. **Apply:** confirms deactivate-don't-delete is the
+  established convention for this file — never delete a `FinancialMgmtTax*` row, only flip `active`.
+
+## ETP-5729 — R50: rectificatives from a return document with duplicated tax and an order link (2026-10-16)
+
+Corrective-only (code bug, not an onboarding gap; preventive = com.etendoerp.go commit `e4a1a1a26`;
+CUT not bumped). Fix: `20261016T185257Z__R50-rectificative-dup-tax-and-order-link.sql`.
+
+- **2026-10-16 — `C_InvoiceTax.Recalculate` tells a trigger-made row from a hand-made one.** The
+  core chain (`C_INVOICELINE_TRG2` → `C_INVOICELINETAX_TRG`) only ever creates/increments rows with
+  `Recalculate='Y'`, one per (invoice, `C_Tax_ID`). A row with `Recalculate='N'` is "manual":
+  `C_INVOICETAX_TRG2` adds its `TaxAmt` straight to `C_Invoice.GrandTotal` on INSERT and takes it
+  off on DELETE. A `Y` + `N` pair for the same tax on one invoice is never produced by the core — it
+  is the exact signature of the removed `CreateDraftInvoiceHandler#recalculateTotals`. On the local
+  DB every affected document had `N` and `Y` rows with identical base/tax and `Line=10`.
+  **Apply:** detect duplicated tax by that pair, never by amounts or document numbers.
+- **2026-10-16 — Processed invoices refuse every tax-row and line-link edit**:
+  `C_INVTAX_CHK_RESTRICTIONS_TRG` raises `@20501@` on any INSERT/DELETE of `C_InvoiceTax` when
+  `Processed='Y'`, `C_INVOICETAX_TRG` also when `Posted='Y'`, and `C_INVLINE_CHK_RESTRICTIONS_TRG`
+  on a `C_OrderLine_ID` change. All are gated by `AD_isTriggerEnabled()`, so a repair runs inside
+  `ad_disable_triggers()`/`ad_enable_triggers()` (transaction-local `set_config`). With triggers
+  off, `C_INVOICETAX_TRG2` does not adjust `GrandTotal` either — adjust it explicitly.
+  `C_ORDLINE_CHK_RESTRICTIONS_TRG` allows a `QtyInvoiced`-only change on a processed order, raising
+  only when |QtyInvoiced| > |QtyOrdered| on a sales order.
+- **2026-10-16 — Not gated by `AD_isTriggerEnabled()`: the `ad_scd_*` stored-computed-column
+  triggers and the module triggers on `C_Invoice`** (`etvfac_*`, `etblkp_*`, `etarc_vsrc_*`,
+  `aeatsii_deletion_*`, `tbai_deletion_*`). The `C_OrderLine` scd trigger behind
+  `C_Order.EM_ETGO_Invoice_Status` (the "% invoiced" chip = `ROUND(SUM|QtyInvoiced| /
+  SUM|QtyOrdered| * 100)`, `ETGO_GET_ORDER_INVOICE_STATUS`) watches `QtyInvoiced` and queues a
+  deferred refresh run at COMMIT. **Apply:** fixing `C_OrderLine.QtyInvoiced` in SQL refreshes the
+  chip by itself, even with AD triggers disabled — no explicit recompute needed.
+- **2026-10-16 — Where `C_INVOICE_POST` touches the order for an invoice line with
+  `C_OrderLine_ID`:** sales — the SO branch adds `QtyInvoiced` to `C_OrderLine.QtyInvoiced`, sets
+  `DateInvoiced`, and inserts `M_MatchSO`; purchase — the early `IsSOTrx='N'` loop adds it to
+  `C_OrderLine.QtyInvoiced` (and `DateInvoiced`), the MatchInv-PO loop inserts `M_MatchPO`. Both
+  match rows carry `M_InOutLine_ID = NULL`, so `M_MATCHSO_TRG`/`M_MATCHPO_TRG` (pending-storage
+  updates) are no-ops for them and they are safe to delete. Undoing a wrong link =
+  `QtyInvoiced -= line qty`, delete those match rows, null the line's `C_OrderLine_ID`.
+- **2026-10-16 — Return documents and rectificatives, as stored by GO.** The return
+  `M_InOut` uses a `C_DocType` with `IsReturn='Y'` (`MMS` sales / `MMR` purchase), but its
+  `MovementType` is not a reliable discriminator (`C-` / `V+` observed on returns). Each return
+  line points at the original shipment line via `M_InOutLine.Canceled_InOutLine_ID` and has NO
+  `C_OrderLine_ID` itself; the rectificative is tied to the invoice it rectifies by
+  `C_Invoice_Reverse` (`C_Invoice_ID` = the rectificative) and has no header `C_Order_ID`.
+- **2026-10-16 — Reading a module's `EM_` column without a hard dependency:**
+  `COALESCE(to_jsonb(r) ->> 'em_etvfac_senttoverifac', 'N')` on a row/CTE alias evaluates to the
+  default when the module (and column) is not installed, instead of failing the whole fix. Used by
+  R50 for the Verifactu (`com.etendoerp.verifactu`), SII (`org.openbravo.module.sii`) and
+  TicketBAI flags, which `com.etendoerp.go` does not all declare as dependencies.
+- **2026-10-16 — Posted documents are reported, not re-accounted.** On the local DB nearly every
+  affected rectificative was `Posted='Y'` with `Fact_Acct` carrying the doubled VAT and
+  receivable/payable (e.g. 12.00 + 5.04 VAT = 17.04 instead of 2.52 / 14.52). R50 repairs the
+  subledger only for unposted documents; posted ones go to `@report` with the procedure: GO
+  `unpost` action (`DocumentPostingService#unpost` → `ResetAccounting`, refuses a closed period)
+  → `--fix R50-rectificative-dup-tax-and-order-link --client <id>` → post again. The order unlink
+  is applied even to posted invoices: `C_OrderLine_ID` plays no part in the invoice's `Fact_Acct`.
+- **2026-10-16 — Local DB read-only simulation:** tenant `802509E12436405C86BA1FD5B1DF508C` →
+  tax repair for `REC-1000005` (posted `E`, -2.14 → -1.82), 5 order lines back to 100%
+  (e.g. 3 → 4 of 4), `REC-1000000…04` reported as POSTED, order `1000008` reported as
+  over-invoiced (returned quantity already invoiced again). Tenant
+  `DC22B59C30884D9BAFDD7BC5D05027C1` → both invoices POSTED (reported), PV1000002 0 → 1 of 1,
+  PC1000006 -1 → 0 of 1. Not executed against any DB.
+
+- **2026-10-19 — R50 now resets posted invoices instead of reporting them (CP-13).** Facts
+  verified in etendo_core sources, reusable by any fix that must "unpost" a document in SQL:
+  - `ResetAccounting.delete` for one record (`src/org/openbravo/financial/ResetAccounting.java`)
+    = clear `Fact_Acct.DateBalanced` on every fact sharing a `Record_ID2` with the record's facts
+    (strUpdateBalanced, ~l.402-413), DELETE the record's `Fact_Acct` rows (~l.440), then
+    `posted='N', processing='N'` on the document (updateTable, ~l.493-499). It refuses when any
+    fact's `C_Period_ID` has no `'O'` `C_PeriodControl` row for (`AD_PeriodControlAllowed_Org_ID`
+    of the fact org, fact `DocBaseType`) — validateNoFactsInClosedPeriods, ~l.351-384.
+  - `AD_ORG_GETPERIODCONTROLALLOW` / `AD_ORG_GETCALENDAROWNER` only READ
+    `AD_Org.AD_PeriodControlAllowed_Org_ID` / `AD_CalendarOwner_Org_ID` — no fallback logic. A
+    NULL there means no period-control row can match (treat as closed).
+  - `C_CHK_OPEN_PERIOD` uses `p_date >= StartDate AND p_date < EndDate+1` and does not filter by
+    calendar (it relies on the period-control org). In plain SQL write `EndDate + INTERVAL '1 day'`.
+  - `FACT_ACCT_CFS` is the only FK to `FACT_ACCT`: `FACT_ACCT_ID` cascades, `FACT_ACCT_REF_ID`
+    does NOT, so a DELETE of referenced facts fails. Guard on it. `Fact_Acct` has no triggers.
+  - Rectificatives already reported as POSTED by the earlier R50 build on a tenant whose ledger
+    row is APPLIED are not revisited by the watermark: re-run with `--fix` once this build ships.
+- **2026-10-20 — Never DELETE a posted M_MatchPO in a data-fix (R50 POSTED_MATCH guard).** Core
+  `C_INVOICE_POST` reactivation (~l.1074-1090) counts `Fact_Acct` rows whose `AD_Table_ID` is
+  M_MatchPO's (`'473'`, looked up by `UPPER(TABLENAME)`) and refuses with `@PostedMatchPO@`
+  before deleting the invoice's M_MatchPO rows; M_MatchSO (`AD_Table_ID`
+  `'1D1EE32EF6354DE7B4654C8D0CC78BE1'`) is deleted unconditionally on the SO branch. Both tables
+  carry a `Posted` column. Locally (2026-10-20) every row is `Posted='N'`, no `Fact_Acct` row
+  exists for either table and `C_AcctSchema_Table` has both inactive — but prod accounting
+  setups may differ. **Apply:** a fix that deletes match rows guards on `Posted <> 'N' OR EXISTS
+  Fact_Acct` for both tables and excludes the WHOLE document (never half of its lines), reporting
+  it under its own reason.
+- **2026-10-20 — Editing an APPLIED fix in place: what the runner actually does (verified in
+  `run.js`).** No checksum is computed or stored (column NULL for all 213 R50 rows), so no
+  warning/mismatch is ever raised. Every tenant with an R50 row (`APPLIED` or
+  `SKIPPED_NOT_NEEDED`) has a watermark >= the fix timestamp, so a normal run skips the edited
+  file silently; only `--fix` re-evaluates it, and the no-downgrade upsert keeps an `APPLIED` row
+  even when the re-check returns `SKIPPED_NOT_NEEDED`. An environment that never ran the fix
+  (prod) just runs the edited body. So an in-place edit is safe for the ledger only when it is
+  stricter than (or equal to) the version already applied — a guard that would have blocked a
+  row the old version already repaired cannot undo it. `--dry-run` never executes `@apply`/`@report`
+  (only `@check`): validate an edited `@apply` in a `BEGIN … ROLLBACK` session instead.

@@ -2,7 +2,7 @@
 // @covers tools/app-shell/src/lib/observability/killSwitch.js
 // @covers tools/app-shell/src/lib/observability/core.js
 import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth.js';
+import { login } from '../../helpers/auth.js';
 
 /**
  * Telemetry egress (ETP-4578): what the browser sends to the telemetry providers' hosts.

@@ -190,6 +190,10 @@ describe('FmModel303Page — handleIdentChange syncs box111 immediately (ETP-543
       _precomputed: null, boxes: [{ num: 68, value: 5 }, { num: 70, value: 20 }],
       sources: [], history: [],
       manualData: { identification: { tipo_declaracion: 'N', rectificativa: false } },
+      // ETP-5725 (reopened QA fix) — "Guardar" is now gated by the corrective-consistency
+      // guard too: checking rectificativa needs a presented ordinaria sibling to save at all.
+      // This test is about box111's sync timing, not that guard, so a sibling is assumed.
+      _duplicatePeriodPresented: true,
     };
     render(<FmModel303Page decl={decl} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
 

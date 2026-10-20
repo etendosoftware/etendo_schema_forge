@@ -1,8 +1,8 @@
 {
-  "version": "0.39.0",
+  "version": "0.40.0",
   "generatedAt": "2026-07-29T14:51:09.380Z",
-  "updatedAt": "2026-10-14T13:04:20.490Z",
-  "checksum": "2e0df0826fbbf27e",
+  "updatedAt": "2026-10-15T19:36:08.726Z",
+  "checksum": "a0049898586eb0f6",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -45,10 +45,12 @@
       "summaryFields": [],
       "labelOverrides": {
         "en_US": {
-          "Processed": "Status"
+          "Processed": "Status",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
-          "Processed": "Estado"
+          "Processed": "Estado",
+          "C_UOM_ID": "Unidad"
         }
       },
       "listViewOptions": {
@@ -569,7 +571,7 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 4,
+            "gridOrder": 3,
             "grow": true,
             "columnWidth": 192,
             "validation": {
@@ -597,8 +599,8 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
-            "gridOrder": 2,
-            "grow": true,
+            "display": "tag",
+            "gridOrder": 4,
             "gridReadOnly": true,
             "validation": {
               "required": true,
@@ -617,7 +619,7 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
-            "gridOrder": 3,
+            "gridOrder": 2,
             "grow": true,
             "columnWidth": 192,
             "gridReadOnly": true,
@@ -749,10 +751,12 @@
       "summaryFields": [],
       "labelOverrides": {
         "en_US": {
-          "Processed": "Status"
+          "Processed": "Status",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
-          "Processed": "Estado"
+          "Processed": "Estado",
+          "C_UOM_ID": "Unidad"
         }
       },
       "listViewOptions": {
@@ -1414,10 +1418,12 @@
     },
     "labelOverrides": {
       "en_US": {
-        "Processed": "Status"
+        "Processed": "Status",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "Processed": "Estado"
+        "Processed": "Estado",
+        "C_UOM_ID": "Unidad"
       }
     }
   },

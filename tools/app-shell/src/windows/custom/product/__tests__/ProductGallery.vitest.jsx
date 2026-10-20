@@ -19,7 +19,7 @@ vi.mock('../ProductListCells', () => ({
   BoxIcon: (props) => <svg data-testid="BoxIcon__a29533" {...props} />,
 }));
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProductGallery from '../ProductGallery.jsx';
 import { useNeoImage } from '@/hooks/useNeoImage';
@@ -145,6 +145,43 @@ describe('ProductGallery', () => {
       const longName = 'Extra virgin olive oil from the Sierra de Cazorla cooperative, 5 litre tin';
       render(<ProductGallery data={[{ id: 'long', name: longName }]} onNavigate={vi.fn()} />);
       expect(screen.getByText(longName)).toHaveClass('truncate');
+    });
+  });
+
+  // ETP-5516 (QA): truncated card texts reveal the full string in a tooltip, only when clipped.
+  // jsdom does no layout, so each test stamps the scrollWidth/clientWidth pair TruncatedText reads.
+  describe('truncated text tooltip (ETP-5516)', () => {
+    const setMetrics = (el, scrollWidth, clientWidth) => {
+      Object.defineProperty(el, 'scrollWidth', { configurable: true, value: scrollWidth });
+      Object.defineProperty(el, 'clientWidth', { configurable: true, value: clientWidth });
+    };
+    const ROW = {
+      id: 'tip',
+      name: 'Power Bank Cargador Portatil 20000mah',
+      searchKey: 'PB-20000-PORTATIL-NEGRO',
+      'productCategory$_identifier': 'Accesorios de telefonia movil y portatiles',
+    };
+
+    it.each([
+      ['name', 'ProductCard__name', ROW.name],
+      ['search key', 'ProductCard__searchKey', ROW.searchKey],
+      ['category', 'ProductCard__category', ROW['productCategory$_identifier']],
+    ])('shows the full %s in a tooltip when it is clipped', (_label, testId, full) => {
+      render(<ProductGallery data={[ROW]} onNavigate={vi.fn()} />);
+      setMetrics(screen.getByTestId(testId), 640, 160);
+
+      fireEvent.focus(screen.getByTestId(testId));
+
+      expect(screen.getByTestId(`${testId}-tooltip`)).toHaveTextContent(full);
+    });
+
+    it('stays silent when the texts fit', () => {
+      render(<ProductGallery data={[ROW]} onNavigate={vi.fn()} />);
+      for (const testId of ['ProductCard__name', 'ProductCard__searchKey', 'ProductCard__category']) {
+        setMetrics(screen.getByTestId(testId), 80, 160);
+        fireEvent.focus(screen.getByTestId(testId));
+        expect(screen.queryByTestId(`${testId}-tooltip`)).toBeNull();
+      }
     });
   });
 });

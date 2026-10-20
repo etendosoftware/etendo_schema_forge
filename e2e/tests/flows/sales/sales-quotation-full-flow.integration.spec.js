@@ -5,6 +5,7 @@
 // @covers artifacts/sales-quotation/custom/SendToEvaluationModal.jsx
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 // @covers tools/app-shell/src/components/contract-ui/DocumentTotalsPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -16,6 +17,7 @@ import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../../helpers/product-helpers.js';
+import { createDraftWithFirstLine, findNegativeLineRow } from '../../helpers/purchase-helpers.js';
 
 /**
  * Sales Quotation — Full flow: Presupuesto → Pedido de venta → Albarán →
@@ -28,8 +30,9 @@ import {
  * quotation/order/invoice windows.
  *
  * Flow:
- *   1. Login, create a quotation, save as draft
- *   2. Add a baseline (positive) line, then a NEGATIVE-quantity line
+ *   1. Login, create a quotation and fill its header
+ *   2. Add a baseline (positive) line straight from the empty state (which
+ *      saves the header), then a NEGATIVE-quantity line
  *      (positive price via the product callout) — models a return/credit
  *      adjustment on an otherwise regular quotation
  *   3. Confirm (DR → UE) via SendToEvaluationModal
@@ -152,55 +155,6 @@ async function readDocumentTotals(page) {
 }
 
 /**
- * Locate the line row (rendered by the shared InlineLinesPanel —
- * `data-testid="line-row-{id}"`, `data-cell-key="{fieldKey}"` per cell, see
- * tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx) whose
- * `qtyFieldKey` cell holds a negative value, and return a locator pinned to
- * that row's own record id (`page.getByTestId('line-row-<id>')`). The purchase
- * and sales full-flow specs carry identical copies of this helper — keep them
- * in sync.
- *
- * What is guaranteed:
- *   - The row id, the quantity and the product are read from the SAME DOM
- *     snapshot (one `evaluateAll` over every row), so the row returned is the
- *     one whose quantity was negative — a re-render that reorders the table
- *     between two separate reads can no longer pair the negative quantity with
- *     the positive line.
- *   - The scan is retried until a row with a rendered product and a negative
- *     quantity exists, so the detail view's reload flash (0 rows, cells not
- *     rendered yet) does not make it wrongly conclude there is none.
- *   - The returned locator is matched by record id, never by position: a
- *     positional `rows.nth(i)` is re-resolved on every use, so when the lines
- *     list re-orders after the search (right after a line is added the new row
- *     can render below the baseline line, then move above it) the caller's next
- *     read of "row i" lands on the other line — the qty read `-2` at nth(1) and,
- *     11 ms later, `1` at the same nth(1). The id also stays unambiguous when
- *     two lines carry the same product.
- *
- * What is NOT guaranteed: that the row's cells still hold the same values when
- * the caller reads them. Callers must read them with retrying assertions
- * (`toHaveText`, `readSettledCellAmount`), never a one-shot `textContent()`.
- * Reading the cell value (rather than pattern-matching the row's text) avoids
- * false positives from unrelated hyphens in a product name/description.
- */
-async function findNegativeLineRow(page, qtyFieldKey, timeoutMs = 15_000) {
-  const rows = page.locator('[data-testid^="line-row-"]');
-  let negativeRowTestId = null;
-  await expect(async () => {
-    const cells = await rows.evaluateAll((els, key) => els.map((el) => ({
-      testId: el.dataset.testid,
-      qty: el.querySelector(`[data-cell-key="${key}"]`)?.textContent ?? '',
-      product: el.querySelector('[data-cell-key="product"]')?.textContent?.trim() ?? '',
-    })), qtyFieldKey);
-    negativeRowTestId = cells.find((c) => c.product && parseAmount(c.qty) < 0)?.testId ?? null;
-    expect(negativeRowTestId,
-      `No line row with a negative "${qtyFieldKey}" was found (rows: ${JSON.stringify(cells)})`,
-    ).toBeTruthy();
-  }).toPass({ timeout: timeoutMs });
-  return page.getByTestId(negativeRowTestId);
-}
-
-/**
  * Read a line-row cell's amount, first waiting for it to render a settled
  * (non-blank, digit-bearing) value. Guards against a transient race right
  * after a line is added/converted — a callout (product/qty) can resolve
@@ -260,19 +214,10 @@ async function waitForLinesSettled(page, count, message) {
  * test's assertions to whatever leftover data a previous run created.
  * `productIndex` is kept only so the signature stays backward compatible.
  */
-async function addLine(page, { productName, productIndex = 0, quantity, isFirst = false } = {}) {
-  if (isFirst) {
-    let emptyStateBtn = page.getByTestId('action-add-lines-empty-state');
-    if (!await emptyStateBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      emptyStateBtn = page.getByRole('button', { name: /añadir líneas|add lines/i }).first();
-    }
-    await expect(emptyStateBtn).toBeVisible({ timeout: 10_000 });
-    await emptyStateBtn.click();
-  } else {
-    const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i });
-    await expect(addLineBtn).toBeVisible({ timeout: 10_000 });
-    await addLineBtn.click();
-  }
+async function addLine(page, { productName, productIndex = 0, quantity } = {}) {
+  const addLineBtn = page.getByRole('button', { name: /añadir línea|add line/i });
+  await expect(addLineBtn).toBeVisible({ timeout: 10_000 });
+  await addLineBtn.click();
   await slow(page);
 
   const inlineAddRow = page.getByTestId('inline-add-row');
@@ -495,7 +440,7 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await ensureProductFixtures(page);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 2: Create a quotation, select a Business Partner, save as draft
+    // STEP 2: Create a quotation and select a Business Partner
     // ═══════════════════════════════════════════════════════════════════════
 
     await navigateTo(page, 'sales-quotation');
@@ -525,30 +470,15 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await slow(page);
 
-    const saveDraftBtn = page.getByTestId('action-save-draft');
-    if (await saveDraftBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      const savePromise = expectSaveResponse(page);
-      await saveDraftBtn.click();
-      await savePromise;
-    } else {
-      const guardarBtn = page.getByRole('button', { name: /guardar|save/i });
-      const savePromise = expectSaveResponse(page);
-      await guardarBtn.click();
-      await savePromise;
-    }
-    await slow(page);
-
-    await expect(page).toHaveURL(/\/sales-quotation\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await expect(page.getByTestId('document-status-pill')).toBeVisible({ timeout: 10_000 });
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await waitForDetailReady(page);
-
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 3: Add a baseline positive line, capture totals BEFORE the
-    // negative line is added
+    // STEP 3: Add a baseline positive line straight from the empty state,
+    // which saves the header itself (no manual save); capture totals BEFORE
+    // the negative line is added
     // ═══════════════════════════════════════════════════════════════════════
 
-    await addLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+    await createDraftWithFirstLine(page, {
+      spec: 'sales-quotation', via: 'emptyState', productName: PRODUCT_FIXTURE_ALPHA.name,
+    });
 
     // [ETP-4567 check #4] Price column header reads "Precio", not the old
     // default AD label ("Precio tarifa" / "Net List Price"). Checked here,
@@ -1011,7 +941,7 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     const expectedSubtotal = LINES.reduce((sum, l) => sum + l.qty * l.product.listPrice, 0);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // Login, create a quotation, save as draft
+    // Login, create a quotation and fill its header (saved with Guardar below)
     // ═══════════════════════════════════════════════════════════════════════
 
     await login(page, { user, password });
@@ -1042,28 +972,6 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await selectCustomerWithAddress(page);
     await slow(page);
 
-    // Wait for the save button to become enabled (the customer callout has
-    // filled the address) instead of for "any" NEO response.
-    const saveDraftBtn = page.getByTestId('action-save-draft');
-    const headerSaveBtn = await saveDraftBtn.isVisible({ timeout: 3_000 }).catch(() => false)
-      ? saveDraftBtn
-      : page.getByRole('button', { name: /guardar|save/i });
-    await expect(headerSaveBtn,
-      'Save should become enabled once the customer callout fills the address',
-    ).toBeEnabled({ timeout: 15_000 });
-    const headerSave = page.waitForResponse(
-      (resp) => resp.request().method() === 'POST'
-        && /\/sws\/neo\/sales-quotation\/quotation(\?|$)/.test(resp.url()),
-      { timeout: 20_000 },
-    );
-    await headerSaveBtn.click();
-    expect((await headerSave).status(), 'Quotation header save should succeed').toBeLessThan(400);
-    await slow(page);
-
-    await expect(page).toHaveURL(/\/sales-quotation\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-    await expect(page.getByTestId('document-status-pill')).toBeVisible({ timeout: 10_000 });
-    await waitForDetailReady(page);
-
     // ═══════════════════════════════════════════════════════════════════════
     // Two NEGATIVE-quantity lines
     // ═══════════════════════════════════════════════════════════════════════
@@ -1073,7 +981,13 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     // the lines table is its quantity edited inline to the negative value, so the
     // frontend sends a PATCH on the existing line instead of a POST with the
     // negative quantity.
-    await addLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name, quantity: '0' });
+    //
+    // Manual "Guardar" before the first line — the creation path this case keeps
+    // covered for the quotation; the other quotation specs go straight from the
+    // empty state.
+    await createDraftWithFirstLine(page, {
+      spec: 'sales-quotation', via: 'save', productName: PRODUCT_FIXTURE_ALPHA.name, quantity: '0',
+    });
     await addLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '0' });
 
     await waitForLinesSettled(page, 2, 'Quotation should have 2 saved lines (quantity 0) before the edit');
