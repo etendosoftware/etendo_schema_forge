@@ -44,9 +44,11 @@
   --fm-model-349-bg:     #F4F1FD;
   --fm-model-349-fg:     #4316CA;
   --fm-model-349-border: #C6B6F7;
-  --fm-model-390-bg:     #ECFDF5;
-  --fm-model-390-fg:     #047857;
-  --fm-model-390-border: #A7F3D0;
+  /* 390: the design-system tag "pink" (app-shell-core tag-tokens.js VARIANT_STYLES.pink, as the
+     303/349 values are its "blue"/"purple"); the border is derived from the same pair. */
+  --fm-model-390-bg:     #FDDDF8;
+  --fm-model-390-fg:     #A5088C;
+  --fm-model-390-border: color-mix(in srgb, var(--fm-model-390-fg) 30%, var(--fm-model-390-bg));
   --fm-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --fm-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
   --fm-bg-page:   hsl(var(--card));
@@ -770,6 +772,7 @@
   color: var(--fm-fg-2); margin-bottom: 6px;
 }
 .fm-newdecl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fm-newdecl-row--single { grid-template-columns: 1fr; }
 .fm-newdecl-field__label-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
 .fm-newdecl-field__label-hint { font: 400 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); }
 

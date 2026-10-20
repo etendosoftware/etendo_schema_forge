@@ -3443,7 +3443,8 @@ The invoices (Facturas) tab, the preload from the 303s with the cuadre, the pres
 | Surface | 390 behaviour | Driven by |
 |---|---|---|
 | Catalog | Card "390" with the single chip "Anual"; SII warning on activation (see "Model catalog") | `periodicities: ['annual']`, `siiWarningOnActivate` |
-| Nueva declaración | Year only (no Frecuencia / Período): under Año a grey "Anual" pill + "El Modelo 390 no tiene frecuencia ni periodo: se declara el ejercicio completo." (`fm.new_decl.annual_hint`); footer "Se creará como Modelo 390 · Anual <año>" (`fm.new_decl.preview_annual`); period sent is `'0A'` | `isAnnualOnlyModel` (`fiscalPeriods.js`) |
+| Model tag (catalog card, Nueva declaración trigger/menu, list rows, detail header chip) | **Pink** — the design-system tag palette (`app-shell-core` `tag-tokens.js` `VARIANT_STYLES.pink`: `#FDDDF8` / `#A5088C`), as the 303 is its `blue` and the 349 its `purple`; `--fm-model-390-*` in `fiscal-models.css` (the border mixes the pair). Like the 303/349 tags it is a fixed brand pair, the same in dark mode. Guarded by `fiscal-models.css.keyColors.test.js` | `badgeVariant: '390'` |
+| Nueva declaración | Subtitle "Elige el modelo y el ejercicio que quieres declarar." (`fm.new_decl.subtitle_annual`; the others keep the "período" one). Year only (no Frecuencia / Período), the Año field full width (`.fm-newdecl-row--single`): under Año a grey "Anual" pill + "El Modelo 390 no tiene frecuencia ni periodo: se declara el ejercicio completo." (`fm.new_decl.annual_hint`); footer "Se creará como Modelo 390 · Anual <año>" (`fm.new_decl.preview_annual`); period sent is `'0A'` | `isAnnualOnlyModel` (`fiscalPeriods.js`) |
 | Nueva declaración | An ordinary 390 of the selected year already in the list → inline notice "Ya existe el Modelo 390 de <año>" + **Abrir declaración** (`onOpenExisting`) and "Crear declaración" disabled. A substitute (`type: 'com'`) does not block | `singleOrdinaryPerYear` |
 | Nueva declaración | Amber, non-blocking notice with a `TriangleAlert`: bold "Faltan Modelos 303 de <año> (T4)." (`fm.m390.new_decl.missing_303_lead`, the hook's `key`) + "El 390 se calculará igualmente, pero el resultado podría no cuadrar." (`…_body`, the hook's optional `bodyKey`) when 303s of the year are not in the list. The duplicate-ordinary notice has the same icon with its sentence in bold. Quarterly filer by default (T1-T4); once the year has a monthly 303, every month 01-12 is expected; any status counts | `newDeclWarning` → `newDeclWarning390.js` |
 | Nueva declaración | Año offers **2026 and 2025** (most recent first; the current year pre-selected): the previous exercise's 390 is filed in January of the next one. 2025 is the exact `AEAT390_2025_Y` design (no layout fallback); the one-ordinary check and the missing-303 notice follow the selected year. 303/349 keep the shared `SELECTABLE_YEARS`; switching to a model that does not offer the selected year resets it to that model's default | `selectableYears` → `selectableYears390.js` |
@@ -4308,7 +4309,7 @@ The catalog drawer lists the tax forms the tenant can enable/disable — no lock
 |-------|------|-------------------|--------------|
 | `303` | Modelo 303 - Autoliquidación IVA | Trimestral + Mensual | Autoliquidación del IVA |
 | `349` | Modelo 349 — Operaciones intracomunitarias | Mensual + Trimestral | Declaración informativa de operaciones con empresas de la Unión Europea |
-| `390` | Modelo 390 — Resumen anual de IVA | Anual | Declaración resumen anual de las autoliquidaciones de IVA del ejercicio (ETP-5716) |
+| `390` | Modelo 390 - Resumen anual de IVA | Anual | Declaración resumen anual de las autoliquidaciones de IVA del ejercicio (ETP-5716) |
 
 ### SII warning when activating the 390 (ETP-5716)
 

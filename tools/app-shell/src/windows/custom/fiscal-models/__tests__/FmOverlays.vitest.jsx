@@ -1474,6 +1474,25 @@ describe('NewDeclModal — annual model (390)', () => {
     expect(getCreateBtn(container).disabled).toBe(false);
   });
 
+  it('an annual-only model: "ejercicio" subtitle and a full-width Año row; others keep the default', () => {
+    const { unmount } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={only390} />);
+    expect(screen.getByTestId('NewDeclModal__subtitle').textContent).toBe('fm.new_decl.subtitle_annual');
+    expect(screen.getByTestId('NewDeclModal__yearRow').className).toContain('fm-newdecl-row--single');
+    expect(screen.getByTestId('NewDeclModal__yearRow').contains(screen.getByTestId('NewDeclModal__annualHint'))).toBe(true);
+    unmount();
+    render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': true }} />);
+    expect(screen.getByTestId('NewDeclModal__subtitle').textContent).toBe('fm.new_decl.subtitle');
+    expect(screen.getByTestId('NewDeclModal__yearRow').className).not.toContain('fm-newdecl-row--single');
+  });
+
+  it('names the 390 with a hyphen like the 303, in every locale', async () => {
+    for (const loc of ['es_ES', 'en_US', 'es_AR']) {
+      const dict = (await import(`@/locales/${loc}.json`)).default;
+      expect(dict.genericLabels['fm.catalog.390.name'], loc).toMatch(/^(Modelo|Form) 390 - /);
+      expect(dict.genericLabels['fm.new_decl.subtitle_annual'], loc).toBeTruthy();
+    }
+  });
+
   it('shows the "Anual" pill and the no-frequency hint under Año for an annual-only model', () => {
     render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={only390} />);
     const hint = screen.getByTestId('NewDeclModal__annualHint');

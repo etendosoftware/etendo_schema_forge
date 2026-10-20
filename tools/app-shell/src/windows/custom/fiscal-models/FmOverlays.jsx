@@ -773,7 +773,9 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
         <div className="fm-config-modal__header">
           <div className="fm-config-modal__titles">
             <div className="fm-config-modal__title">{t('fm.new_decl.title')}</div>
-            <div className="fm-config-modal__sub">{t('fm.new_decl.subtitle')}</div>
+            <div className="fm-config-modal__sub" data-testid="NewDeclModal__subtitle">
+              {t(annualOnly ? 'fm.new_decl.subtitle_annual' : 'fm.new_decl.subtitle')}
+            </div>
           </div>
           <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
         </div>
@@ -823,7 +825,9 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
           </div>
 
           {/* Año / Frecuencia */}
-          <div className="fm-newdecl-row">
+          {/* An annual-only model has no Frecuencia: Año takes the whole row, and the "Anual" note
+              below it too. */}
+          <div className={`fm-newdecl-row${annualOnly ? ' fm-newdecl-row--single' : ''}`} data-testid="NewDeclModal__yearRow">
             <div className="fm-newdecl-field" style={{ position: 'relative' }}>
               <label className="fm-newdecl-label">{t('fm.new_decl.year')}</label>
               <button
