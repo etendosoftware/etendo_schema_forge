@@ -22022,6 +22022,7 @@
     "fm.aeat.warnings.title": "Advertencias",
     "fm.action.continue": "Continuar",
     "fm.aeat.error.blockingIncidents": "La declaración tiene incidencias bloqueantes. Resuélvelas antes de presentarla.",
+    "fm.aeat.submit_hint.conformity": "Marca la declaración de conformidad para enviar",
     "fm.aeat.error.incompleteFiscalYear": "El ejercicio no tiene creados todos sus periodos en el calendario fiscal. Créalos antes de presentar la declaración.",
     "fm.present.conformity": "Declaro que los datos de esta declaración son conformes",
     "fm.m390.present.path.register": "Registrar como presentada",

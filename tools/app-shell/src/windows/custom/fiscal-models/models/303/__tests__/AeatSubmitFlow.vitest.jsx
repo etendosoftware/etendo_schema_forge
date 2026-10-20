@@ -931,8 +931,21 @@ describe('AeatSubmitFlow — model adapters (ETP-5716)', () => {
     expect(screen.getByText('fm.m349.type.substitutive')).toBeInTheDocument();
     const submit = screen.getByTestId('AeatSubmitFlow__submit');
     expect(submit).toBeDisabled();
+    // Looks disabled (no `--active`) and says what is missing.
+    expect(submit.className).not.toContain('fm-btn--save-pill--active');
+    expect(submit.getAttribute('title')).toBe('fm.aeat.submit_hint.conformity');
     fireEvent.click(screen.getByTestId('AeatSubmitFlow__conformity'));
     expect(submit).not.toBeDisabled();
+    expect(submit.className).toContain('fm-btn--save-pill--active');
+    expect(submit.getAttribute('title')).toBeNull();
+  });
+
+  it('303: the enabled submit button keeps the active look and has no hint', () => {
+    renderFlow();
+    const submit = screen.getByTestId('AeatSubmitFlow__submit');
+    expect(submit).not.toBeDisabled();
+    expect(submit.className).toContain('fm-btn--save-pill--active');
+    expect(submit.getAttribute('title')).toBeNull();
   });
 
   it('390: posts to /fiscal390/submit with year, period and id only, and reports the result', async () => {

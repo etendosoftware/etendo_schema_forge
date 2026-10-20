@@ -329,6 +329,10 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
   // for it (390); the submit button stays disabled until it is checked.
   const [conform, setConform] = useState(false);
   const conformityMissing = !!adapter.requireConformity && !conform;
+  // "Enviar a la AEAT" looks disabled whenever it is (the `--active` modifier only when enabled,
+  // as NewDeclModal's Crear), and its title says what is missing.
+  const submitDisabled = submitting || conformityMissing;
+  const submitHint = conformityMissing ? t('fm.aeat.submit_hint.conformity') : null;
 
   // Single source of truth for "the NRC must be filled": drives BOTH the required asterisk
   // on the field and the pre-flight guard in handleSubmit. Keeping them on one expression is
@@ -683,8 +687,9 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
           </button>
           {step === 'confirm' && (
             <button
-              className="fm-btn fm-btn--save-pill fm-btn--save-pill--active"
-              disabled={submitting || conformityMissing}
+              className={`fm-btn fm-btn--save-pill${submitDisabled ? '' : ' fm-btn--save-pill--active'}`}
+              disabled={submitDisabled}
+              title={submitHint || undefined}
               onClick={handleSubmit}
               data-testid="AeatSubmitFlow__submit"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}

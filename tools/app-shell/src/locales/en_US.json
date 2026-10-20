@@ -22353,6 +22353,7 @@
     "fm.m390.incomplete_year.all": "The fiscal year {year} does not have its periods in the fiscal calendar (all months are missing). Create them before calculating Form 390.",
     "fm.m390.incomplete_year.go_to_calendar": "Go to Fiscal calendar",
     "fm.aeat.error.blockingIncidents": "The declaration has blocking incidents. Resolve them before submitting it.",
+    "fm.aeat.submit_hint.conformity": "Tick the declaration of conformity to submit",
     "fm.aeat.error.incompleteFiscalYear": "The fiscal year does not have all its periods in the fiscal calendar. Create them before submitting the declaration.",
     "fm.present.conformity": "I declare that the data in this declaration is correct",
     "fm.m390.present.path.register": "Register as submitted",

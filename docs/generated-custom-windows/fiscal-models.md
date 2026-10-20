@@ -3922,7 +3922,11 @@ backend text** for it (that text names the organization id):
 `requireConformity`. The default `AEAT_SUBMIT_303` holds exactly the logic the flow always had
 inline (IAE / IBAN / NRC pre-flight guards, identification + box-override params, `303_*` file
 names, no conformity check), so the 303 page passes nothing and is unchanged. A new optional
-`onResult(data)` callback receives every structured response. `PresentModal` likewise takes an
+`onResult(data)` callback receives every structured response. **"Enviar a la AEAT"** looks
+disabled whenever it is (`submitDisabled`: submitting, or the conformity check unticked — the
+`fm-btn--save-pill--active` modifier only when enabled, as "Crear declaración") and its `title`
+says what is missing (`fm.aeat.submit_hint.conformity`, "Marca la declaración de conformidad para
+enviar"); same component and look for the 303. `PresentModal` likewise takes an
 optional `registerPaths` (default: the 303/349 "con / sin acuse" paths); a path with
 `continues: true` confirms with "Continuar".
 
