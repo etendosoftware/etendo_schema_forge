@@ -14,6 +14,7 @@ function availableActions(item, handlers) {
   return incidentActions390(item).filter((a) => {
     if (a.kind === 'box') return Boolean(handlers.onGoToBox);
     if (a.kind === 'sources') return Boolean(handlers.onViewInvoices);
+    if (a.kind === 'settlements') return Boolean(handlers.onViewSettlements);
     return Boolean(handlers.onNavigate);
   });
 }
@@ -22,6 +23,7 @@ function ActionButtons({ actions, handlers, t }) {
   const run = (a) => {
     if (a.kind === 'box') handlers.onGoToBox(a.box);
     else if (a.kind === 'sources') handlers.onViewInvoices(a.box);
+    else if (a.kind === 'settlements') handlers.onViewSettlements();
     else handlers.onNavigate(a.path);
   };
   return (
@@ -46,11 +48,12 @@ function ActionButtons({ actions, handlers, t }) {
  * @param {object}   props.incidents        `{ blocking, warning, items }` of the declaration
  * @param {Function} [props.onGoToBox]      (box) => void — "Ir a la casilla"
  * @param {Function} [props.onViewInvoices] (box) => void — "Ver facturas" (Facturas tab filtered)
+ * @param {Function} [props.onViewSettlements] () => void — "Ver detalle por trimestre" (the year's 303s)
  * @param {Function} [props.onNavigate]     (path) => void — Organization / invoice lists
  */
-export default function Incidents390Tab({ incidents, onGoToBox, onViewInvoices, onNavigate, t }) {
+export default function Incidents390Tab({ incidents, onGoToBox, onViewInvoices, onViewSettlements, onNavigate, t }) {
   const normalized = normalizeIncidents390(incidents);
-  const handlers = { onGoToBox, onViewInvoices, onNavigate };
+  const handlers = { onGoToBox, onViewInvoices, onViewSettlements, onNavigate };
   const renderAction = (item) => {
     const actions = availableActions(item, handlers);
     return actions.length > 0 ? <ActionButtons actions={actions} handlers={handlers} t={t} /> : null;

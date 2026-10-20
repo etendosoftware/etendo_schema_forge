@@ -54,7 +54,7 @@ export function groupIncidents390(items) {
 /** Params of an incident formatted for its text (amounts, percentages, the truncated field). */
 function displayParams(item, t) {
   const p = { ...(item?.params ?? {}) };
-  ['difference', 'expected', 'result', 'tolerance'].forEach((k) => {
+  ['difference', 'expected', 'result', 'tolerance', 'block9'].forEach((k) => {
     if (p[k] != null) p[k] = formatAmount(parseAmount(p[k]) ?? 0);
   });
   if (p.rate != null && p.rate !== '') p.rate = formatPercent(parseAmount(p.rate));
@@ -87,6 +87,7 @@ export function incidentText390(item, t) {
  *   organization → "Editar en Organización"  `{ path: '/organization#<anchor>' }`
  *   invoices     → "Ver facturas de venta" / "de compra" `{ path }` (one per non-empty side)
  *   fiscalCalendar → "Ir a Calendario fiscal" `{ path: FISCAL_CALENDAR_ROUTE }`
+ *   settlements  → "Ver detalle por trimestre" (block 9 and the year's 303s, where Calcular preloads)
  */
 export function incidentActions390(item) {
   const a = item?.action;
@@ -99,6 +100,8 @@ export function incidentActions390(item) {
       return Number.isInteger(box) && box > 0 ? [{ id: 'sources', kind: 'sources', box, labelKey: 'fm.m390.incidents.view_invoices' }] : [];
     case 'organization':
       return [{ id: 'organization', kind: 'navigate', path: organizationPath(a.section), labelKey: 'fm.m390.edit_in_organization' }];
+    case 'settlements':
+      return [{ id: 'settlements', kind: 'settlements', labelKey: 'fm.m390.reconcile.view_detail' }];
     case 'fiscalCalendar':
       return [{ id: 'fiscalCalendar', kind: 'navigate', path: FISCAL_CALENDAR_ROUTE, labelKey: GO_TO_FISCAL_CALENDAR_KEY }];
     case 'invoices': {

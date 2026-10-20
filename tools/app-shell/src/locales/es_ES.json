@@ -22461,6 +22461,8 @@
     "fm.m390.incident.UNPOSTED_INVOICES": "{count} facturas del ejercicio están sin contabilizar y no se incluyen en el 390 ({documents}).",
     "fm.m390.incident.MISSING_303": "Faltan Modelos 303 del ejercicio: {periods}.",
     "fm.m390.incident.DIFF_303": "El resultado difiere de los 303 en {difference} (según los 303: {expected}; tolerancia {tolerance}).",
+    "fm.m390.incident.BLOCK9_NOT_PRELOADED": "El apartado 9 (resultado de las liquidaciones) está vacío aunque el ejercicio tiene Modelos 303: pulsa Calcular para precargar los 303. La AEAT rechaza la declaración si no coincide con la casilla [{box}] (PAR016).",
+    "fm.m390.incident.BLOCK9_MISMATCH": "El apartado 9 (resultado de las liquidaciones, {block9}) no coincide con la casilla [{box}] ({result}): diferencia {difference}. La AEAT rechaza la declaración (PAR016). Pulsa Calcular para precargar los 303 o revisa el apartado 9.",
     "fm.m390.incident.INACTIVE_TAX_WITH_OPERATIONS": "El impuesto inactivo {tax} tiene {invoices} facturas contabilizadas en el ejercicio que no se incluyen en el 390.",
     "fm.m390.incident.NO_LEGAL_REPRESENTATIVE": "La organización es persona jurídica y no tiene ningún representante legal con NIF: la AEAT rechaza la declaración (PAR012).",
     "fm.m390.incident.NAME_TRUNCATED": "{field} se recortará a {limit} caracteres en el fichero.",

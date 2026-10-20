@@ -3692,8 +3692,10 @@ prior-year credits applied (Σ[78], oldest first against the first 303's [110]) 
 territory mode); in-year credits never applied → [662]; last 303 [65]/[89]–[92] → [87]–[91] when it
 files to several administrations.
 
-- **When it applies:** on opening a draft whose `manualData.aeatPreloaded` is absent (never
-  preloaded; nothing happens while the year has no 303) and on every **Calcular**, which re-reads
+- **When it applies:** on opening a draft whose `manualData.aeatPreloaded` is absent or empty
+  (never preloaded — `hasPreloadedValues`; an empty `{}` is what a save records while the year had
+  no 303 yet, so it does not count; nothing happens while the year has no 303) and on every
+  **Calcular**, which re-reads
   the 303s first, applies them and then computes the boxes with the result. Never on a presented
   declaration (the 303 table and the cuadre are still shown).
 - **Only unmodified inputs** (`applyPreload390` / `isUnmodified`): an input takes the new value when
@@ -3706,6 +3708,16 @@ files to several administrations.
   identification, aeatInputs, aeatPreloaded)`); a preload applied on opening marks the page
   dirty and goes out with the next Guardar / Calcular / Generar / Presentar. Reloading keeps the
   manual values and the origin marks (acceptance criterion).
+- **Server-side too (ETP-5716, AEAT PAR016):** the backend applies the same rule to everything it
+  computes — the boxes (screen and the list's auto-compute), the file, the submission and the
+  incidents — so the 390 never depends on the user having pressed Calcular or saved, as the 303 /
+  349 compute from live data (`aeat-390-endpoints.md`, "Server-side 303 preload"). Precedent: a
+  draft saved before the 303s existed kept an empty block 9, and the AEAT rejected the filing with
+  PAR016 (block 9 ≠ [86]/[94]).
+- **Safety net:** block 9 of the stored inputs that does not add up to [86] / [94] is the blocking
+  incident `BLOCK9_MISMATCH`, and an empty block 9 while the year has 303s is `BLOCK9_NOT_PRELOADED`
+  ("pulsa Calcular para precargar los 303"); both offer **Ver detalle por trimestre** (block 9 and
+  the year's 303s, `onViewSettlements`) and stop Generar / Presentar before the AEAT does.
 - **303 table** (`Settlements303Table390`, under block 9 through the `blockExtras` slot of
   `FmBoxes390`): period, status chip, result [71], result type (A ingresar / A compensar / A
   devolver / Sin resultado), "calculado ahora" for a draft computed live, "sustituye a N" when a

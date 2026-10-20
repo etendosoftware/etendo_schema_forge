@@ -72,7 +72,7 @@ import { fetchBoxes390, generate390File, validate390 } from './fm390Api.js';
 import Incidents390Tab from './Incidents390Tab.jsx';
 import { nameWarningsFromIncidents390, normalizeIncidents390 } from './incidents390.js';
 import usePreload390 from './usePreload390.js';
-import { applyPreload390, reconcile390, restorePreloaded390 } from './preload390.js';
+import { applyPreload390, hasPreloadedValues, reconcile390, restorePreloaded390 } from './preload390.js';
 import Reconciliation390 from './Reconciliation390.jsx';
 import { InfoBanner } from '@/components/InfoBanner.jsx';
 import {
@@ -323,12 +323,15 @@ export default function FmModel390Page({
     compute(undefined);
   }, [decl.id]);
 
-  // Mount: the year's 303s (table + cuadre). A draft never preloaded before takes their values
-  // at once (only into inputs still empty — `applyPreload390`); it is saved with the next save.
+  // Mount: the year's 303s (table + cuadre). A draft never preloaded before — no
+  // `aeatPreloaded`, or an empty one recorded while the year had no 303 yet (ETP-5716) — shows
+  // their values at once (only into inputs still empty — `applyPreload390`); it is saved with the
+  // next save. The backend applies the same preload to everything it computes (boxes, file,
+  // submission, incidents), so nothing depends on that save (AEAT PAR016).
   useEffect(() => {
     if (!apiBaseUrl) return;
     loadPreload(isMonthlyReturn(aeatInputsRef.current)).then(res => {
-      if (!res || isSubmitted || preloadedRef.current != null) return;
+      if (!res || isSubmitted || hasPreloadedValues(preloadedRef.current)) return;
       if (!Array.isArray(res.declarations) || res.declarations.length === 0) return;
       applyFreshPreload(res);
     });
@@ -911,6 +914,7 @@ export default function FmModel390Page({
                 nameWarnings={nameWarnings}
                 invoiceBoxes={payload.invoiceBoxes}
                 onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}
+              onViewSettlements={viewSettlements}
                 blockExtras={blockExtras}
                 t={t}
                 bcpLocale={bcpLocale} />
@@ -938,6 +942,7 @@ export default function FmModel390Page({
               incidents={incidents}
               onGoToBox={goToBoxOfIncident}
               onViewInvoices={isSubmitted ? undefined : viewInvoicesForBox}
+              onViewSettlements={viewSettlements}
               onNavigate={handleNavigateAway}
               t={t} />
           </div>

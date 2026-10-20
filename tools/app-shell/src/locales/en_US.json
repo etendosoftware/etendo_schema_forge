@@ -22225,6 +22225,8 @@
     "fm.m390.incident.UNPOSTED_INVOICES": "{count} invoices of the exercise are not posted and are left out of the 390 ({documents}).",
     "fm.m390.incident.MISSING_303": "Modelo 303 declarations of the exercise are missing: {periods}.",
     "fm.m390.incident.DIFF_303": "The result differs from the 303s by {difference} (per the 303s: {expected}; tolerance {tolerance}).",
+    "fm.m390.incident.BLOCK9_NOT_PRELOADED": "Section 9 (results of the periodic returns) is empty although the fiscal year has Form 303 returns: press Calculate to preload them. The AEAT rejects the declaration when it does not match box [{box}] (PAR016).",
+    "fm.m390.incident.BLOCK9_MISMATCH": "Section 9 (results of the periodic returns, {block9}) does not match box [{box}] ({result}): difference {difference}. The AEAT rejects the declaration (PAR016). Press Calculate to preload the 303 returns or review section 9.",
     "fm.m390.incident.INACTIVE_TAX_WITH_OPERATIONS": "The inactive tax {tax} has {invoices} posted invoices in the exercise that are left out of the 390.",
     "fm.m390.incident.NO_LEGAL_REPRESENTATIVE": "The organization is a legal entity with no legal representative carrying a NIF: the AEAT rejects the declaration (PAR012).",
     "fm.m390.incident.NAME_TRUNCATED": "{field} will be cut to {limit} characters in the file.",

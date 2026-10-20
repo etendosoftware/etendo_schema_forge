@@ -33,7 +33,7 @@ const RULE_CODES = [
   'COMPENSATION_WITH_TERRITORY', 'COMPENSATION_BOTH', 'REFUND_WITHOUT_MONTHLY_REGISTER',
   'LAST_PERIOD_REFUND_CONFLICT', 'NO_LEGAL_REPRESENTATIVE', 'UNPOSTED_INVOICES', 'MISSING_303',
   'DIFF_303', 'INACTIVE_TAX_WITH_OPERATIONS', 'NAME_TRUNCATED',
-  'BOX98_WITH_96_97', 'NO_BOX',
+  'BOX98_WITH_96_97', 'NO_BOX', 'BLOCK9_NOT_PRELOADED', 'BLOCK9_MISMATCH',
 ];
 const ACTION_KEYS = [
   'fm.m390.incidents.go_to_box', 'fm.m390.incidents.view_invoices',
@@ -216,6 +216,18 @@ describe('fm390Api — incidents requests', () => {
     const err = await fetchBoxes390(decl, opts).catch(e => e);
     expect(err).toMatchObject({ status: 422, code: 'INCOMPLETE_FISCAL_YEAR', year: 2025, missingPeriods: [1, 2] });
     expect(incompleteFiscalYearOf(err)).toEqual({ year: 2025, missingPeriods: [1, 2] });
+  });
+});
+
+describe('block 9 incidents (AEAT PAR016, ETP-5716)', () => {
+  it('format their amounts and offer "Ver detalle por trimestre"', () => {
+    const item = { origin: 'BLOCK9_MISMATCH', severity: 'block', params: { difference: '-2.00', block9: '502.00', result: '500.00', tolerance: '1.00', box: 86 }, action: { type: 'settlements' } };
+    const text = incidentText390(item, t);
+    expect(text).toContain('fm.m390.incident.BLOCK9_MISMATCH');
+    // block9 is formatted as an amount like difference / result (never the raw "502.00").
+    expect(text).not.toContain('"block9":"502.00"');
+    expect(text).toMatch(/"block9":"502/);
+    expect(incidentActions390(item)).toEqual([{ id: 'settlements', kind: 'settlements', labelKey: 'fm.m390.reconcile.view_detail' }]);
   });
 });
 

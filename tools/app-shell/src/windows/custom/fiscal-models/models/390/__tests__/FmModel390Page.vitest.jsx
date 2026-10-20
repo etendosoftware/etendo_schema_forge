@@ -682,6 +682,22 @@ describe('FmModel390Page — preload from the 303s and cuadre (ETP-5716)', () =>
     expect(md.aeatPreloaded).toEqual(PRELOAD.inputs);
   });
 
+  // ETP-5716 (AEAT PAR016 repro): the draft was saved while the year had no 303 — `aeatPreloaded`
+  // is `{}` — and the 303s were submitted afterwards. An empty preload is not "preloaded":
+  // opening it takes the 303s; Calcular saves them.
+  it('a draft saved with an empty aeatPreloaded takes the 303s on opening and Calcular saves them', async () => {
+    fetchPreload390.mockResolvedValue(PRELOAD);
+    const manualData = { identification: {}, aeatInputs: { ISSUPPLEMENTARY: 'N', ISRECTIFICATION: 'N' }, aeatPreloaded: {} };
+    render(<FmModel390Page decl={makeDecl({ manualData })} {...props()} />);
+    goToBlock('resultado_liquidaciones');
+    await waitFor(() => expect(screen.getByTestId('FmBoxes390__input_INGRESAR_03').getAttribute('data-origin')).toBe('preloaded'));
+    await act(async () => { fireEvent.click(screen.getByTestId('FmModel390Page__compute')); });
+    await waitFor(() => expect(persistManualData).toHaveBeenCalled());
+    const md = savedManualData();
+    expect(md.aeatInputs).toMatchObject({ INGRESAR_03: '300.00', INGRESAR_12: '60.00', ISSUPPLEMENTARY: 'N' });
+    expect(md.aeatPreloaded).toEqual(PRELOAD.inputs);
+  });
+
   it('opening an already preloaded draft does not re-apply; Calcular applies only the unmodified inputs', async () => {
     const manualData = {
       aeatInputs: { INGRESAR_03: '350.00', INGRESAR_12: '60.00' },

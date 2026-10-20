@@ -61,6 +61,15 @@ export function applyPreload390(inputs, previous, preloadInputs) {
   return { inputs: sanitizeAeatInputs390(next), preloaded, applied };
 }
 
+/**
+ * True when `aeatPreloaded` holds at least one value. An empty object — recorded by a save while
+ * the year had no 303 yet — does NOT count as preloaded: the draft must still take the 303s once
+ * they exist (ETP-5716: otherwise its stored block 9 stays empty and the AEAT rejects it, PAR016).
+ */
+export function hasPreloadedValues(preloaded) {
+  return preloaded != null && typeof preloaded === 'object' && Object.keys(preloaded).length > 0;
+}
+
 /** "Restaurar": the input back to its preloaded value (a preloaded zero clears it). */
 export function restorePreloaded390(inputs, preloaded, key) {
   if (!preloaded || !Object.hasOwn(preloaded, key)) return inputs;
