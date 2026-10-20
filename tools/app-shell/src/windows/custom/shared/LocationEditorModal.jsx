@@ -71,10 +71,17 @@ function composeAddressLines(streetName, buildingNumber, buildingName) {
 }
 
 /**
- * Whether a loaded record is a "legacy" address (ETP-5806): it has free-text Address1/Address2
- * but none of the 3 structured fields were ever filled in. Only meaningful in EDIT mode — a
- * brand-new address always starts with every structured field empty, which is not "legacy", just
- * unfilled yet, and `rowId` being set is exactly what tells the two apart.
+ * Whether a record has free-text Address1/Address2 but none of the 3 structured fields filled in.
+ *
+ * Two callers, same test (ETP-5806, widened by ETP-5654 round 2):
+ *   - EDIT mode: an EXISTING record loaded from the backend — "legacy" in the sense that it
+ *     predates the structured fields and was never migrated.
+ *   - CREATE mode: the seed patch applied by `applyInitialSeed` (e.g. OCR'd vendor address). A
+ *     seed never carries the 3 structured fields (see `pickSeedText`), so this is true exactly
+ *     when the seed carried free-text `address` — i.e. "unstructured", not "legacy", but the same
+ *     banner applies: the user must still fill Street/Number to be able to save.
+ *   A brand-new, UNSEEDED address has every field empty and must NOT trigger this — empty is not
+ *   unstructured, just unfilled yet.
  */
 function isLegacyAddressRecord(loaded) {
     const hasStructured = Boolean(loaded.streetName || loaded.buildingNumber || loaded.buildingName);
@@ -207,13 +214,17 @@ function seedCountryName(initialValues) {
  *
  * Like `applyDefaultCountryOption` it writes the unsaved-changes baseline by the same delta
  * as the form — a prefill is not a user edit, so the ETP-5022 guard must stay quiet.
+ *
+ * @returns the applied patch (so the caller can decide whether it counts as "unstructured" —
+ *          see `isLegacyAddressRecord` below, ETP-5654 round 2), or `null` when nothing was seeded.
  */
 function applyInitialSeed({initialValues, rowId, setForm, baselineRef}) {
-    if (rowId) return;
+    if (rowId) return null;
     const patch = pickSeedText(initialValues);
-    if (Object.keys(patch).length === 0) return;
+    if (Object.keys(patch).length === 0) return null;
     setForm(prev => ({...prev, ...patch}));
     baselineRef.current = {...(baselineRef.current || EMPTY_FORM), ...patch};
+    return patch;
 }
 
 /**
@@ -597,7 +608,13 @@ export default function LocationEditorModal({
         baselineRef.current = EMPTY_FORM;
         setAttemptedSave(false);
         setIsLegacyAddress(false);
-        applyInitialSeed({initialValues, rowId: bplLinkId, setForm, baselineRef});
+        const seedPatch = applyInitialSeed({initialValues, rowId: bplLinkId, setForm, baselineRef});
+        // ETP-5654 round 2 — a CREATE seeded with OCR free text (address) but no structured
+        // breakdown shows the same banner an EDIT of a legacy record does (see
+        // `isLegacyAddressRecord`'s updated doc comment above).
+        if (seedPatch) {
+            setIsLegacyAddress(isLegacyAddressRecord(seedPatch));
+        }
         setRegions([]);
         setRegionSelectorBase('');
         setRegionOffset(0);
@@ -1248,15 +1265,24 @@ export default function LocationEditorModal({
 
                             {/* ETP-5806 — Address Line 1/2 are no longer user-editable: they are
                                 computed from Street/Number/Building Name (same algorithm the
-                                backend applies on save) and shown here read-only as a preview. */}
+                                backend applies on save) and shown here read-only as a preview.
+                                Both rows are ALWAYS visible (Primera línea / Segunda línea), each
+                                with its own sub-label, "—" when empty — matching the design's
+                                "alta vacía" state. Do not collapse this back into one line. */}
                             <div>
                                 <div style={FIELD_LABEL}>{ui('resultingAddressLabel')}</div>
                                 <div
                                     data-testid="location-resulting-address-preview"
-                                    style={{ ...INPUT, display: 'flex', flexDirection: 'column', justifyContent: 'center', height: 'auto', minHeight: 40, background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', gap: 2, paddingTop: 8, paddingBottom: 8 }}
+                                    style={{ ...INPUT, display: 'flex', flexDirection: 'column', justifyContent: 'center', height: 'auto', minHeight: 40, background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', gap: 6, paddingTop: 8, paddingBottom: 8 }}
                                 >
-                                    <span>{composedAddress.address1 || '—'}</span>
-                                    {composedAddress.address2 && <span>{composedAddress.address2}</span>}
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <span style={{ fontSize: 12, minWidth: 100, flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}>{ui('addressLine1Label')}</span>
+                                        <span data-testid="location-resulting-address1">{composedAddress.address1 || '—'}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <span style={{ fontSize: 12, minWidth: 100, flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}>{ui('addressLine2Label')}</span>
+                                        <span data-testid="location-resulting-address2">{composedAddress.address2 || '—'}</span>
+                                    </div>
                                 </div>
                             </div>
 

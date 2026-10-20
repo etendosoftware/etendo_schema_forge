@@ -20476,6 +20476,8 @@
     "buildingNumberLabel": "Número",
     "buildingNameLabel": "Nombre del edificio",
     "resultingAddressLabel": "Dirección resultante",
+    "addressLine1Label": "Primera línea",
+    "addressLine2Label": "Segunda línea",
     "legacyAddressWarning": "Esta dirección no tiene los datos desglosados. Complete Calle y Número para poder guardarla.",
     "legacyAddressOldTextLabel": "Dirección actual (referencia)",
     "shippingAddressLabel": "Envíos",
