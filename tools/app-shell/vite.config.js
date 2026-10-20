@@ -151,8 +151,9 @@ function mcpWellKnownPlugin() {
  * so the topbar guide launcher never appeared under `make dev` (LOCAL_CORE serves the core from
  * outside node_modules, unstamped everywhere, and was unaffected). Every served module outside
  * node_modules, plus the core itself, gets its unstamped core imports stamped, so every importer
- * asks for the same URL (missing the app's own shims left the dashboard stuck on a null currency). A redirect does
- * not work: the browser keys modules by the requested URL. Builds bundle each file once.
+ * asks for the same URL (missing the app's own shims left the dashboard stuck on a null currency).
+ * A redirect does not work: the browser keys modules by the requested URL. Builds bundle each file
+ * once.
  */
 function singleCoreInstancePlugin() {
   const CORE_SRC = '/@etendosoftware/app-shell-core/src/';
@@ -173,7 +174,8 @@ function singleCoreInstancePlugin() {
         const chunks = [];
         const { write, end } = res;
         // Public files and proxied (possibly streamed) responses are not JS modules: pass them through.
-        const passThrough = () => res.headersSent || !/javascript/.test(res.getHeader('Content-Type') ?? '');
+        const passThrough = () => res.headersSent || res.getHeader('Content-Encoding')
+          || !/javascript/.test(res.getHeader('Content-Type') ?? '');
         const restore = () => { res.write = write; res.end = end; };
         res.write = (chunk, ...rest) => {
           if (passThrough()) { restore(); return res.write(chunk, ...rest); }
@@ -183,7 +185,7 @@ function singleCoreInstancePlugin() {
         res.end = (chunk, ...rest) => {
           restore();
           if (passThrough()) return res.end(chunk, ...rest);
-          if (chunk) chunks.push(Buffer.from(chunk));
+          if (chunk && typeof chunk !== 'function') chunks.push(Buffer.from(chunk));
           const body = Buffer.concat(chunks).toString('utf8')
             .replace(UNSTAMPED_CORE_IMPORT, `$1$2?v=${hash}$1`);
           res.removeHeader('Content-Length');
