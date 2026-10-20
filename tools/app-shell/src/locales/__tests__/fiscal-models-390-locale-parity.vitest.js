@@ -23,7 +23,7 @@ describe('Modelo 390 / Organization identity — locale parity', () => {
     expect(keys.length).toBeGreaterThan(150);
     expect(keys).toEqual(expect.arrayContaining([
       'fm.m390.result.positive', 'org390RepPairRequired', 'orgRepLegalEntityHint', 'orgIaeCapHint',
-      'fm.catalog.sii_warning_since', 'fm.present.conformity', 'fm.aeat.error.blockingIncidents',
+      'fm.catalog.sii_warning_since_title', 'fm.catalog.sii_warning_since_body', 'fm.present.conformity', 'fm.aeat.error.blockingIncidents',
       'fm.m390.submission.title', 'fm.m390.substitute.action',
     ]));
   });
