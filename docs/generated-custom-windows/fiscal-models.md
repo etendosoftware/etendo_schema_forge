@@ -3711,7 +3711,8 @@ files to several administrations.
   the 303s first, applies them and then computes the boxes with the result. Never on a presented
   declaration (the 303 table and the cuadre are still shown).
 - **Only unmodified inputs** (`applyPreload390` / `isUnmodified`): an input takes the new value when
-  it still equals the previously preloaded one (or, never preloaded, is empty/zero). A value the
+  it is absent / blank or still equals the previously preloaded one; an explicit value — a zero
+  included — with no preloaded entry is the user's edit (same rule as the backend). A value the
   user changed is kept and shows "Modificado" against the new preloaded value. A preloaded zero
   empties the input. A key the 303s no longer determine (e.g. the last 303 was deleted) keeps its
   input and leaves `aeatPreloaded`. The on-screen `ISMONTHLYRETURN` is sent (`monthlyReturn`),

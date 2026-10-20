@@ -16,13 +16,17 @@ const cents = (v) => Math.round((parseAmount(v) ?? 0) * 100);
 const isBlank = (v) => v == null || String(v).trim() === '';
 
 /**
- * True when the user has not changed `key`: its value still equals the previously preloaded one
- * (`previous[key]`, zero and empty being the same), or — never preloaded — it is still empty/zero.
+ * True when the user has not changed `key`: it is absent / blank, or its value still equals the
+ * previously preloaded one (`previous[key]`). An input set explicitly — a zero included — with no
+ * preloaded entry is the user's edit (same rule as the backend `Fiscal390PreloadAggregator
+ * .applyPreload`, review N2). A preloaded value the user cleared is kept cleared only when the
+ * preload recorded it (`previous[key]` non-zero).
  */
 export function isUnmodified(key, inputs, previous) {
   const current = inputs?.[key];
-  if (previous && Object.hasOwn(previous, key)) return cents(current) === cents(previous[key]);
-  return isBlank(current) || cents(current) === 0;
+  const wasPreloaded = Boolean(previous && Object.hasOwn(previous, key));
+  if (isBlank(current)) return !wasPreloaded || cents(previous[key]) === 0;
+  return wasPreloaded && cents(current) === cents(previous[key]);
 }
 
 /**

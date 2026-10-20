@@ -17,9 +17,10 @@ describe('isUnmodified', () => {
     expect(isUnmodified('K', {}, { K: '0.00' })).toBe(true);
     expect(isUnmodified('K', {}, { K: '50' })).toBe(false); // cleared by the user
   });
-  it('without a previous preload, only an empty or zero input is unmodified', () => {
+  it('without a previous preload, only an absent / blank input is unmodified (an explicit zero is an edit)', () => {
     expect(isUnmodified('K', {}, null)).toBe(true);
-    expect(isUnmodified('K', { K: '0' }, {})).toBe(true);
+    expect(isUnmodified('K', { K: '' }, {})).toBe(true);
+    expect(isUnmodified('K', { K: '0' }, {})).toBe(false);
     expect(isUnmodified('K', { K: '5' }, {})).toBe(false);
   });
 });
