@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx
 // @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 // @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
@@ -252,11 +253,8 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       await expect(returnDialog.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
       await slow(page);
 
-      const nextBtn = returnDialog.getByRole('button', { name: 'Siguiente', exact: true });
-      await expect(nextBtn).toBeEnabled({ timeout: 10_000 });
-      await nextBtn.click();
-      await slow(page);
-
+      // One-step wizard: lines, quantities and reason share the single screen, so
+      // "Crear Devolución" submits directly once the pre-selected lines enable it.
       const returnConfirmPromise = page.waitForResponse(
         (resp) =>
           resp.url().includes('/action/createReturn') &&
@@ -265,7 +263,7 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
         { timeout: 20_000 },
       );
       const createReturnConfirmBtn = returnDialog.getByRole('button', { name: 'Crear Devolución', exact: true });
-      await expect(createReturnConfirmBtn).toBeVisible({ timeout: 10_000 });
+      await expect(createReturnConfirmBtn).toBeEnabled({ timeout: 10_000 });
       await createReturnConfirmBtn.click();
       await returnConfirmPromise;
       await slow(page);
