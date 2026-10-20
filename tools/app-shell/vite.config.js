@@ -140,6 +140,52 @@ function mcpWellKnownPlugin() {
   };
 }
 
+/**
+ * Dev server only: one module instance per published app-shell-core source file.
+ *
+ * The package is served as raw source (`optimizeDeps.exclude`, see below), and Vite stamps those
+ * URLs with the deps hash (`?v=`). A relative import from a core `.jsx` file comes back WITHOUT
+ * the stamp, while `index.js` imports the same file WITH it, so the browser instantiates the file
+ * twice. For a context module that is fatal: `WalkthroughLauncher.jsx` imports
+ * `./WalkthroughProvider.jsx` unstamped, reads a context no provider fills, and renders nothing,
+ * so the topbar guide launcher never appeared under `make dev` (LOCAL_CORE serves the core from
+ * outside node_modules, unstamped everywhere, and was unaffected). The served core modules get
+ * their unstamped core imports stamped, so every importer asks for the same URL. A redirect does
+ * not work: the browser keys modules by the requested URL. Builds bundle each file once.
+ */
+function singleCoreInstancePlugin() {
+  const CORE_SRC = '/@etendosoftware/app-shell-core/src/';
+  const UNSTAMPED_CORE_IMPORT =
+    /(["'])(\/@fs\/[^"'?]*\/@etendosoftware\/app-shell-core\/src\/[^"'?]+\.jsx?)\1/g;
+  return {
+    name: 'single-app-shell-core-instance',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const hash = server.environments?.client?.depsOptimizer?.metadata?.browserHash;
+        if (!hash || !req.url.includes(CORE_SRC)) {
+          next();
+          return;
+        }
+        const chunks = [];
+        const { write, end } = res;
+        res.write = (chunk) => { chunks.push(Buffer.from(chunk)); return true; };
+        res.end = (chunk, ...rest) => {
+          if (chunk) chunks.push(Buffer.from(chunk));
+          const body = Buffer.concat(chunks).toString('utf8')
+            .replace(UNSTAMPED_CORE_IMPORT, `$1$2?v=${hash}$1`);
+          res.removeHeader('Content-Length');
+          res.removeHeader('Etag');
+          res.write = write;
+          res.end = end;
+          return res.end(body, ...rest);
+        };
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   // Target Etendo instance for dev proxy. Override via ETENDO_URL in .env.local
@@ -235,6 +281,7 @@ export default defineConfig(({ mode }) => {
   },
   plugins: [
     react(),
+    singleCoreInstancePlugin(),
     sliceLabelsPlugin(),
     schemaApiPlugin(),
     reportApiPlugin({ etendoUrl: ETENDO_URL, jsreportUrl: JSREPORT_URL }),

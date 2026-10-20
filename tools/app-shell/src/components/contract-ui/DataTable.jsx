@@ -13,13 +13,14 @@ import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
-import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
+import { columnMinWidthPx, columnFlex, isLineGridColumn, withImplicitGrowColumn, listTableMinWidthPx } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
 import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
-import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
+import { CELL_RENDERERS, renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
+import { tagColumnsFromAux } from '@/lib/auxReference.js';
 import { resolveFkNavigation } from './fkNavigation.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
@@ -1148,7 +1149,9 @@ function renderDerivedAddCell(col, values) {
   const displayVal = formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived, isNumericDerived);
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className={`text-muted-foreground text-sm${getNumericCellAlignClass(isNumericDerived)}`}>
-      {displayOrDash(displayVal)}
+      {/* ETP-5696 — `display: 'tag'` keeps the grey pill while the line is still being added;
+          no value yet keeps the usual dash. */}
+      {col.display === 'tag' && displayVal ? renderNeutralTagCell(displayVal) : displayOrDash(displayVal)}
     </TableCell>
   );
 }
@@ -1675,6 +1678,11 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         snapshot[key + suffix] = auxVal;
         handleChange(key + suffix, auxVal);
       }
+      // ETP-5696 — fill grey-pill columns (the line's unit) from the selected item's `_aux`.
+      for (const [tagKey, tagVal] of Object.entries(tagColumnsFromAux(columns, selectedItem._aux))) {
+        snapshot[tagKey] = tagVal;
+        handleChange(tagKey, tagVal);
+      }
     }
     // Also fire top-level display fields from selectedItem (mirrors EntityForm behavior).
     // Skips structural/object fields; fires e.g. product_uOM = "Unit" for identifier resolution.
@@ -1699,7 +1707,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         pendingCalloutsRef.current = pendingCalloutsRef.current.filter(p => p !== calloutPromise);
       });
     }
-  }, [handleChange, onFieldChange, values, fieldMap, convertOptimisticPrice]);
+  }, [handleChange, onFieldChange, values, fieldMap, convertOptimisticPrice, columns]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -2019,8 +2027,14 @@ function oneIfTrue(bool) {
 // container, now absorbed by one intentional column instead of stretching
 // all of them. Must stay in sync with StickyHeaderRow's own inline table
 // style just below (see its comment).
-export function getTableContainerStyle() {
-  return { tableLayout: 'fixed', width: '100%' };
+//
+// ETP-5510 — `minWidthPx` (plain list only, see listTableMinWidthPx) is the matching floor:
+// the table never gets narrower than its columns' minimums, so the `grow` column can no
+// longer collapse to 0px and the scroll container scrolls horizontally instead of squeezing.
+export function getTableContainerStyle(minWidthPx) {
+  return minWidthPx
+    ? { tableLayout: 'fixed', width: '100%', minWidth: `${minWidthPx}px` }
+    : { tableLayout: 'fixed', width: '100%' };
 }
 
 function renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled) {
@@ -2091,6 +2105,16 @@ function isLiftHover(rowHoverStyle) {
   return rowHoverStyle !== 'tint';
 }
 
+/**
+ * Whether a row raises on hover. Under `lift` only a clickable row does; `lift-always`
+ * (ETP-5526) lifts every row, for a grid whose rows have no click target of their own but
+ * expose hover actions (the attachments table), so it still reads like every other list.
+ */
+function rowLifts(rowHoverStyle, clickable) {
+  if (rowHoverStyle === 'lift-always') return true;
+  return Boolean(clickable) && isLiftHover(rowHoverStyle);
+}
+
 function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine }) {
   // Inline-lines focus keeps its own look: a muted fill plus the focus ring.
   if (isSelectedLine) return 'bg-muted ring-1 ring-focus-ring hover:bg-muted [--row-hover-bg:hsl(var(--muted))]';
@@ -2110,6 +2134,8 @@ function rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelect
  *     `elevated` is the former name of this style and stays an alias.
  *   - `tint`: the pre-ETP-5600 translucent `bg-muted/50` wash, kept as an explicit
  *     opt-out for a grid where a raised white row would read wrong.
+ *   - `lift-always` (ETP-5526): the `lift` look on EVERY row, clickable or not — for a
+ *     grid with hover actions but no row click (attachments). The cursor stays default.
  * Selection always wins over hover: a checked / active row keeps its selection colour
  * when hovered. Under `lift` it still gets the shadow, so the pointer feedback stays
  * the same on every clickable row. Every row also sets `--row-hover-bg` to its own
@@ -2120,8 +2146,9 @@ function getRowClassName({
   rowHoverStyle = 'lift',
 }) {
   const clickable = onRowClick || onNavigate;
-  // Only a clickable row lifts; a non-clickable row renders as it did before ETP-5600.
-  const liftRow = clickable && isLiftHover(rowHoverStyle);
+  // Only a clickable row lifts (non-clickable rows render as before ETP-5600), unless
+  // the caller opted into `lift-always`.
+  const liftRow = rowLifts(rowHoverStyle, clickable);
   const selectionClass = rowSelectionClass({ isChecked, selectedRowBg, selectedId, row, isSelectedLine });
   let hoverClass = '';
   if (liftRow && !isSelectedLine) {
@@ -2342,7 +2369,7 @@ function renderMainColgroup({
  */
 function renderHeaderSection({
   useOwnStickyHeader, headerRowContent, horizontalScrollElRef, horizontalScrollAttachSeq,
-  hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
+  listMinWidthPx, hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
   fixedColsTotalPx, growCount, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
   onCloneRow, quickActionsEnabled, ilpReservesActionSlot, quickActionsColWidthPx,
   // ETP-5133 follow-up (BUG-1, pass 2) — see renderLinesColgroup/growColumnWidth.
@@ -2354,6 +2381,7 @@ function renderHeaderSection({
         <StickyHeaderRow
           elRef={horizontalScrollElRef}
           attachSeq={horizontalScrollAttachSeq}
+          minWidthPx={listMinWidthPx}
           data-testid="StickyHeaderRow__eb5261">
           <TableHeader data-testid="TableHeader__eb5261">{headerRowContent}</TableHeader>
         </StickyHeaderRow>
@@ -2385,7 +2413,7 @@ function renderHeaderSection({
   };
 }
 
-function StickyHeaderRow({ elRef, attachSeq, children }) {
+function StickyHeaderRow({ elRef, attachSeq, minWidthPx, children }) {
   const tableRef = useRef(null);
 
   useEffect(() => {
@@ -2416,7 +2444,7 @@ function StickyHeaderRow({ elRef, attachSeq, children }) {
           different total than the body, drifting the two apart column by
           column. See getTableContainerStyle()'s own comment for the full
           mechanism. */}
-      <table ref={tableRef} style={{ tableLayout: 'fixed', width: '100%', willChange: 'transform' }}>
+      <table ref={tableRef} style={{ ...getTableContainerStyle(minWidthPx), willChange: 'transform' }}>
         {children}
       </table>
     </div>
@@ -2466,7 +2494,7 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
           return (
             <span key={part.key} className="inline-flex items-center">
               {partIdx > 0 && (
-                <span className="mx-0.5 font-normal text-text-primary/40 select-none">{separator}</span>
+                <span className="mx-0.5 font-normal text-text-primary select-none">{separator}</span>
               )}
               {partSortable ? (
                 <button
@@ -3062,6 +3090,11 @@ function renderFooterRow({
  *      per-amount-column footer-totals row, regardless of showFooterTotals. Set when a caller
  *      renders a specialized, grid-aligned totals row elsewhere (e.g. InlineLinesPanel's
  *      balanceFooter row) so the two do not stack (ETP-5210).
+ *  - hideDataRows: boolean — also suppresses the generic per-amount-column footer-totals row,
+ *      regardless of showFooterTotals. A data-hidden instance only hosts the add-row form (e.g.
+ *      the companion of InlineLinesPanel in inlineEditable LinesTable), so there are no visible
+ *      rows to total; without this it summed every amount column of the spread lines under the
+ *      add-row (ETP-5771).
  */
 export function DataTable({
   entity,
@@ -3291,8 +3324,11 @@ export function DataTable({
     // hold (e.g. `posted` on sales-invoice/purchase-invoice, restricted to
     // "showAccountingFields"). Absent visibleWhenCapability ⇒ always kept.
     base = base.filter(col => isCapabilityVisible(capabilities, col.visibleWhenCapability));
-    return base;
-  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities]);
+    // ETP-5510 — plain list only (the lines/add-row modes size from columnFlex and must stay
+    // aligned with InlineLinesPanel): guarantee one width-less column to absorb leftover
+    // space so the fixed-width slots (selection checkbox = 40px) are never stretched.
+    return hideHeader || linesLayout === 'inlineEditable' ? base : withImplicitGrowColumn(base);
+  }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities, hideHeader, linesLayout]);
 
   // Columns that feed the footer total. `amount` is a FORMATTING type (decimals,
   // separators, symbol, right alignment, numeric filter) — it does not by itself
@@ -3514,6 +3550,14 @@ export function DataTable({
   // (add-row-only) and inlineEditable (already sticky via a bounded flex box
   // elsewhere) are unaffected — both keep the header exactly where it was.
   const useOwnStickyHeader = !hideHeader && linesLayout !== 'inlineEditable';
+  // ETP-5510 — floor of the plain list's table width (fixed slots + every column's minimum).
+  const listMinWidthPx = useOwnStickyHeader
+    ? listTableMinWidthPx(visibleColumns, computeActionColsWidthPx({
+      selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
+      onCloneRow, quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
+      quickActionsColWidthPx,
+    }))
+    : undefined;
   const headerRowContent = (
     <TableRow className="border-b border-border/40" data-testid="TableRow__eb5261">
       {/* ETP-4735 — mirrors the leading chevron cell added to InlineAddRow/TableDataRow
@@ -3549,7 +3593,7 @@ export function DataTable({
 
   const { stickyHeader, colgroup: tableColgroup, inlineHeader } = renderHeaderSection({
     useOwnStickyHeader, headerRowContent, horizontalScrollElRef, horizontalScrollAttachSeq,
-    hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
+    listMinWidthPx, hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
     fixedColsTotalPx, growCount, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
     onCloneRow, quickActionsEnabled, ilpReservesActionSlot, quickActionsColWidthPx,
     hostWidthPx, growBasisTotalPx,
@@ -3574,8 +3618,8 @@ export function DataTable({
         table.jsx: `<div className="relative w-full overflow-auto">`, this div's direct
         child — the same one `[&>div]` reaches below for the scrollbar): it sizes itself
         to exactly the `<table>`'s content height with zero slack. `[&>div]:pb-6` pads
-        that inner box so the shadow has room. Only when rows can be clicked (no lift
-        otherwise), and not for `inlineEditable`, whose wrapper is `overflow-visible`.
+        that inner box so the shadow has room. Only when rows lift (clickable rows, or
+        `lift-always`), and not for `inlineEditable`, whose wrapper is `overflow-visible`.
 
         ETP-5600 — that room must not read as a 24px gap under the last row (Figma ends a
         list at its last row / totals row, and a tab grid runs straight into its add-line
@@ -3621,12 +3665,12 @@ export function DataTable({
             // above this thumb once scrolled into view ("al final se ven
             // 2") — the `[&>div]` combinator reaches into that child instead.
             : 'overflow-x-auto overflow-y-visible [&>div]:[scrollbar-width:none] [&>div::-webkit-scrollbar]:hidden',
-          linesLayout !== 'inlineEditable' && isLiftHover(rowHoverStyle) && (onRowClick || onNavigate)
+          linesLayout !== 'inlineEditable' && rowLifts(rowHoverStyle, onRowClick || onNavigate)
             ? '!-mb-6 [&>div]:pb-6 [&>div]:pointer-events-none [&>div>table]:pointer-events-auto'
             : '',
         ].filter(Boolean).join(' ')}
       >
-        <Table style={getTableContainerStyle()} data-testid="Table__eb5261">
+        <Table style={getTableContainerStyle(listMinWidthPx)} data-testid="Table__eb5261">
           {/* When hideHeader is true (add-row-only mode), or the header just moved out to
               StickyHeaderRow above, a <colgroup> drives column widths instead of the (now
               absent-from-this-table, or hidden) header row's own cell widths. */}
@@ -3684,7 +3728,7 @@ export function DataTable({
             )}
           </TableBody>
           {renderFooterRow({
-            totals, showFooterTotals: showFooterTotals && !balanceFooter, selectable, visibleColumns, filteredData,
+            totals, showFooterTotals: showFooterTotals && !balanceFooter && !hideDataRows, selectable, visibleColumns, filteredData,
             hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
             hasDimensionsPanel, sessionCurrency,
           })}

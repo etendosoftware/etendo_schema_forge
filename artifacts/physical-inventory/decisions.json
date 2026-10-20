@@ -42,10 +42,12 @@
     },
     "labelOverrides": {
       "en_US": {
-        "Processed": "Status"
+        "Processed": "Status",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "Processed": "Estado"
+        "Processed": "Estado",
+        "C_UOM_ID": "Unidad"
       }
     },
     "menuActions": [
@@ -183,7 +185,7 @@
           "visibility": "readOnly",
           "label": "System Count",
           "grid": true,
-          "gridOrder": 3,
+          "gridOrder": 2,
           "grow": true,
           "gridReadOnly": true,
           "columnWidth": 192,
@@ -193,7 +195,7 @@
           "visibility": "editable",
           "label": "User Count",
           "grid": true,
-          "gridOrder": 4,
+          "gridOrder": 3,
           "grow": true,
           "columnWidth": 192,
           "readOnlyLogic": null
@@ -217,11 +219,11 @@
         "uOM": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 2,
-          "grow": true,
+          "gridOrder": 4,
           "gridReadOnly": true,
           "inputMode": "selector",
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "display": "tag"
         },
         "attributeSetValue": {
           "visibility": "discarded"

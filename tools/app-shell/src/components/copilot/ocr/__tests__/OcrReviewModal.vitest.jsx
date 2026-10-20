@@ -93,6 +93,29 @@ function renderModal(props = {}) {
 }
 
 describe('OcrReviewModal', () => {
+  // CP-7 — informational notice when the invoice prints no recipient tax id; never gates Continue.
+  it('shows the receiver-absent notice only when the flag is set, without gating Continue', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderModal({ receiverTaxIdAbsent: true });
+
+    expect(screen.getByTestId('ocr-review-receiver-absent')).toHaveTextContent('ocrReceiverTaxIdAbsent');
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    await user.click(continueButton());
+    expect(onSubmit).toHaveBeenCalled();
+  });
+
+  it('shows no receiver-absent notice by default, and Continue is unaffected', async () => {
+    renderModal();
+    expect(screen.queryByTestId('ocr-review-receiver-absent')).toBeNull();
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+  });
+
+  it('keeps Continue disabled for a blocking reason even with the notice shown', () => {
+    renderModal({ receiverTaxIdAbsent: true, preResolved: {}, resolving: true });
+    expect(screen.getByTestId('ocr-review-receiver-absent')).toBeInTheDocument();
+    expect(continueButton()).toBeDisabled();
+  });
+
   it('renders extracted and pre-resolved field values, then submits enabled values', async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderModal();
@@ -274,5 +297,44 @@ describe('OcrReviewModal', () => {
 
       await waitFor(() => expect(findDuplicatePurchaseInvoices).toHaveBeenCalledWith(expect.objectContaining({ documentNo: 'edited-documentNo' })));
     });
+  });
+});
+
+// ETP-5654 — first step: no back button; state is snapshotted and restorable.
+describe('OcrReviewModal — state preservation', () => {
+  it('has no back button (it is the first step)', () => {
+    renderModal();
+    expect(screen.queryByTestId('ocr-review-back')).not.toBeInTheDocument();
+  });
+
+  it('reports its state through onStateChange before submitting', async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn();
+    const { onSubmit } = renderModal({ onStateChange });
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    await user.click(continueButton());
+
+    expect(onStateChange).toHaveBeenCalledTimes(1);
+    expect(onStateChange.mock.calls[0][0].vendor).toMatchObject({ enabled: true, value: { id: 'bp-1' } });
+    expect(onSubmit).toHaveBeenCalled();
+  });
+
+  it('restores toggles and values from initialState over the extracted data', async () => {
+    const user = userEvent.setup();
+    const initialState = {
+      vendor: { enabled: true, value: { id: 'bp-9', label: 'Edited Vendor' }, editing: false },
+      documentNo: { enabled: false, value: 'INV-1', editing: false },
+      invoiceDate: { enabled: true, value: '2026-08-02', editing: false },
+    };
+    const { onSubmit } = renderModal({ initialState });
+    expect(screen.getByText('Edited Vendor')).toBeInTheDocument();
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    await user.click(continueButton());
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      vendor: { id: 'bp-9', label: 'Edited Vendor' },
+      documentNo: null,
+      invoiceDate: '2026-08-02',
+    }));
   });
 });

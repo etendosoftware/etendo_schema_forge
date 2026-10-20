@@ -133,7 +133,7 @@ const PROCESS_VALUE = 'Y';
 
 /**
  * The one warehouse the GOClient onboarding dataset provisions for a new
- * tenant: `M_Warehouse.Value = 'AG'`, `Name = 'Almacen Principal'`, with the
+ * tenant: `M_Warehouse.Value = 'AG'`, `Name = 'Almacén Principal'` (`Almacen Principal` on tenants onboarded before ETP-5696 added the accent), with the
  * single default locator `AG-0-0-0`.
  *
  * Named here rather than repeated as a literal in every spec because it is a
@@ -153,14 +153,18 @@ const PROCESS_VALUE = 'Y';
  * provisioning stock at a warehouse the document does not draw from is a
  * silent no-op.
  */
-export const DEFAULT_WAREHOUSE_NAME = 'Almacen Principal';
+export const DEFAULT_WAREHOUSE_NAME = 'Almacén Principal';
 
 function specBase() {
   return `/sws/neo/${SPEC}`;
 }
 
+// Trimmed, case-insensitive AND accent-insensitive: the same warehouse is named `Almacen Principal`
+// on tenants onboarded before the dataset gained its accent and `Almacén Principal` on new ones, and
+// the specs must find it on both. (The server-side `q` search is accent-SENSITIVE, which is why
+// resolveWarehouseId() below lists the warehouses and matches here instead of searching by name.)
 function normalize(value) {
-  return (value ?? '').toString().trim().toLowerCase();
+  return (value ?? '').toString().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 // ETP-4576: the session is no longer readable from localStorage — replay what
@@ -176,9 +180,12 @@ function extractRecord(json) {
   return json?.response?.data?.[0] ?? null;
 }
 
-async function fetchSelectorItems(page, { entity, column, query, headers }) {
+async function fetchSelectorItems(page, { entity, column, query, limit, headers }) {
+  const params = {};
+  if (query !== undefined) params.q = query;
+  if (limit !== undefined) params.limit = limit;
   const res = await page.request.get(`${specBase()}/${entity}/selectors/${column}`, {
-    params: { q: query },
+    params,
     headers,
   });
   if (!res.ok()) {
@@ -194,11 +201,13 @@ async function fetchSelectorItems(page, { entity, column, query, headers }) {
 /**
  * Resolves the AD_Warehouse id for `warehouseName` via the header entity's
  * generic `/selectors/warehouse` endpoint. Matched by exact (trimmed,
- * case-insensitive) label — never positionally.
+ * case- and accent-insensitive) label — never positionally. The selector is listed WITHOUT a
+ * `q` search (a tenant has a handful of warehouses) because the server search is accent-sensitive
+ * and would miss the other spelling of the same name.
  */
 async function resolveWarehouseId(page, { warehouseName, headers }) {
   const items = await fetchSelectorItems(page, {
-    entity: HEADER_ENTITY, column: 'warehouse', query: warehouseName, headers,
+    entity: HEADER_ENTITY, column: 'warehouse', limit: 200, headers,
   });
   const match = items.find((i) => normalize(i.label ?? i.name) === normalize(warehouseName));
   if (!match) {

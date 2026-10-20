@@ -25,6 +25,7 @@ import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
+import { renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
 import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
 import { registerLinesScrollHost, unregisterLinesScrollHost } from '@/lib/linesScrollHost.js';
@@ -833,6 +834,8 @@ function ReadCell({ row, col, locale, t, ui }) {
   const enumRendered = isEnumLikeType(col.type) ? renderEnumReadCell(row, col, ui) : null;
   if (enumRendered) return enumRendered;
   const display = resolveIdentifier(row, col.key);
+  // ETP-5696 — `display: 'tag'`: neutral pill (same component as "Estado doc."), empty when blank.
+  if (col.display === 'tag') return renderNeutralTagCell(display);
   // ETP-5107 (reopened) — a numeric column that is NOT amount/price-shaped (number, decimal,
   // integer, quantity) reaches here, and rendering it bare printed JS's own '.' next to a
   // comma-formatted Precio on the same row: the `% de descuento` = `10.5` vs `Precio` = `44,00`

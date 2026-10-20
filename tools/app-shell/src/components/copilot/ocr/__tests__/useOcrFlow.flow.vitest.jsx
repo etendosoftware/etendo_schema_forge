@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/copilot/ocr/useOcrFlow.jsx
 /**
  * End-to-end flow coverage for useOcrFlow.
  *
@@ -25,13 +26,23 @@ const H = vi.hoisted(() => ({
   reviewSubmitValue: { vendor: 'reviewed-vendor' },
   linesSubmitValue: [{ description: 'reviewed-line' }],
   popupSubmitValue: [{ picked: 'p1' }],
+  reviewState: { vendor: { enabled: true } },
+  linesState: [{ description: 'edited-line' }],
+  popupState: { 0: { id: 'p1' } },
   apiFetch: vi.fn(),
   toastError: vi.fn(),
   toastWarning: vi.fn(),
+  toastDismiss: vi.fn(),
+  findBpLocation: vi.fn(),
+  toIsoDate: vi.fn(),
 }));
 
 vi.mock('sonner', () => ({
-  toast: { error: (...a) => H.toastError(...a), warning: (...a) => H.toastWarning(...a) },
+  toast: {
+    error: (...a) => H.toastError(...a),
+    warning: (...a) => H.toastWarning(...a),
+    dismiss: (...a) => H.toastDismiss(...a),
+  },
 }));
 
 vi.mock('@/auth/useApiFetch.js', () => ({
@@ -54,6 +65,8 @@ vi.mock('../ingest/useBatch', () => ({
 
 vi.mock('../ingest/purchaseInvoiceDescriptor', () => ({
   buildPurchaseInvoiceBatch: (...args) => H.buildBatch(...args),
+  findBpLocation: (...args) => H.findBpLocation(...args),
+  toIsoDate: (...args) => H.toIsoDate(...args),
 }));
 
 vi.mock('../ocrDocTypes', () => ({
@@ -79,9 +92,10 @@ vi.mock('../OcrReviewModal', () => ({
         <span data-testid="review-resolving">{String(props.resolving)}</span>
         <span data-testid="review-pre-resolved">{JSON.stringify(props.preResolved)}</span>
         <span data-testid="review-contacts-base">{String(props.contactsBase)}</span>
-        <button type="button" data-testid="review-submit" onClick={() => props.onSubmit(H.reviewSubmitValue)}>
+        <button type="button" data-testid="review-submit" onClick={() => { props.onStateChange?.(H.reviewState); props.onSubmit(H.reviewSubmitValue); }}>
           submit
         </button>
+        <span data-testid="review-initial-state">{JSON.stringify(props.initialState)}</span>
         <button type="button" data-testid="review-cancel" onClick={() => props.onCancel()}>
           cancel
         </button>
@@ -96,8 +110,12 @@ vi.mock('../OcrLinesReviewModal', () => ({
     return (
       <div data-testid="lines-modal">
         <span data-testid="lines-payload">{JSON.stringify(props.lines)}</span>
-        <button type="button" data-testid="lines-submit" onClick={() => props.onSubmit(H.linesSubmitValue)}>
+        <span data-testid="lines-initial-rows">{JSON.stringify(props.initialRows)}</span>
+        <button type="button" data-testid="lines-submit" onClick={() => { props.onStateChange?.(H.linesState); props.onSubmit(H.linesSubmitValue); }}>
           submit
+        </button>
+        <button type="button" data-testid="lines-back" onClick={() => { props.onStateChange?.(H.linesState); props.onBack(); }}>
+          back
         </button>
         <button type="button" data-testid="lines-cancel" onClick={() => props.onCancel()}>
           cancel
@@ -113,8 +131,12 @@ vi.mock('../ProductResolverPopup', () => ({
     return (
       <div data-testid="popup">
         <span data-testid="popup-unmatched">{JSON.stringify(props.unmatched)}</span>
+        <span data-testid="popup-initial">{JSON.stringify(props.initialSelections)}</span>
         <button type="button" data-testid="popup-submit" onClick={() => props.onSubmit(H.popupSubmitValue)}>
           submit
+        </button>
+        <button type="button" data-testid="popup-back" onClick={() => { props.onStateChange?.(H.popupState); props.onBack(); }}>
+          back
         </button>
         <button type="button" data-testid="popup-cancel" onClick={() => props.onCancel()}>
           cancel
@@ -125,14 +147,17 @@ vi.mock('../ProductResolverPopup', () => ({
 }));
 
 import { useOcrFlow } from '../useOcrFlow.jsx';
+import { BACK } from '../ocrFlowSignals.js';
+
 
 const EVENT = 'ocr:test-event';
 
 /** Renders the hook and exposes its state in the DOM so it can be asserted on. */
 function Harness(props) {
-  const { result, loading, pendingModal } = useOcrFlow(props);
+  const { result, loading, pendingModal, clearResult } = useOcrFlow(props);
   return (
     <div>
+      <button type="button" data-testid="clear-result" onClick={clearResult}>clear</button>
       <span data-testid="loading">{String(loading)}</span>
       <span data-testid="result">{JSON.stringify(result)}</span>
       {pendingModal}
@@ -176,14 +201,20 @@ describe('useOcrFlow — full flow', () => {
     H.reviewSubmitValue = { vendor: 'reviewed-vendor' };
     H.linesSubmitValue = [{ description: 'reviewed-line' }];
     H.popupSubmitValue = [{ picked: 'p1' }];
+    H.reviewState = { vendor: { enabled: true } };
+    H.linesState = [{ description: 'edited-line' }];
+    H.popupState = { 0: { id: 'p1' } };
     for (const key of Object.keys(H.preResolvers)) delete H.preResolvers[key];
     H.showResult.mockReset();
     H.toastError.mockReset();
     H.toastWarning.mockReset();
+    H.toastDismiss.mockReset();
     H.apiFetch.mockReset().mockResolvedValue({
       ok: true,
       json: async () => ({ organization: { taxId: 'B12345674' } }),
     });
+    H.findBpLocation.mockReset().mockResolvedValue('LOC1');
+    H.toIsoDate.mockReset().mockImplementation((value) => value ?? null);
     H.runBatch.mockReset().mockResolvedValue({ committed: true, operations: [] });
     H.buildBatch.mockReset().mockResolvedValue({ ops: [{ id: 'inv' }], unmatched: [] });
   });
@@ -321,15 +352,50 @@ describe('useOcrFlow — full flow', () => {
       await fireOcr({ receiver: { tax_id_raw: 'A99999999' }, issuer: { tax_id_raw: 'C11111111' } });
 
       await waitFor(() => expect(readResult()?.committed).toBe(false));
-      expect(readResult().error).toContain('ocrReceiverTaxIdMismatch');
-      expect(readResult().error).toContain('A99999999');
+      expect(readResult().blocked).toContain('ocrReceiverTaxIdMismatch');
+      expect(readResult().blocked).toContain('A99999999');
       // ETP-5654 — the organization's own tax id is no longer shown in the message.
-      expect(readResult().error).not.toContain('B12345674');
-      expect(H.toastError).toHaveBeenCalledWith(readResult().error);
+      expect(readResult().blocked).not.toContain('B12345674');
+      // Shown inline by the uploader (result.blocked): no toast of any kind, and `error` stays
+      // unset because that field is reserved for failures that already toast via showResult.
+      expect(readResult().error).toBeUndefined();
+      expect(H.toastError).not.toHaveBeenCalled();
+      expect(H.toastDismiss).not.toHaveBeenCalled();
       expect(screen.queryByTestId('review-modal')).toBeNull();
       expect(H.buildBatch).not.toHaveBeenCalled();
       expect(H.showResult).not.toHaveBeenCalled();
       expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    });
+
+    it('drops the blocking message when a new run starts with a valid invoice', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
+      await waitFor(() => expect(readResult()?.blocked).toBeTruthy());
+
+      await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
+      await screen.findByTestId('review-modal');
+      expect(readResult()).toBeNull();
+      expect(H.toastError).not.toHaveBeenCalled();
+    });
+
+    it('clearResult drops the blocking message', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
+      await waitFor(() => expect(readResult()?.blocked).toBeTruthy());
+
+      await userEvent.click(screen.getByTestId('clear-result'));
+      expect(readResult()).toBeNull();
+    });
+
+    it('does not set `blocked` for a non-validation failure', async () => {
+      H.docType = docType();
+      H.buildBatch.mockRejectedValueOnce(new Error('kaboom'));
+      renderFlow();
+      await fireOcr({});
+      await screen.findByTestId('review-modal');
+      await userEvent.click(screen.getByTestId('review-submit'));
+      await waitFor(() => expect(readResult()?.committed).toBe(false));
+      expect(readResult().blocked).toBeUndefined();
     });
 
     it('continues to the review when the ids match despite the country prefix', async () => {
@@ -341,13 +407,90 @@ describe('useOcrFlow — full flow', () => {
       expect(H.toastWarning).not.toHaveBeenCalled();
     });
 
-    it('continues silently, without reading the session, when no receiver id is printed', async () => {
+    // CP-7 — no receiver id printed: the flow continues, without reading the session and without a
+    // toast, and the review modal is told so it can show its non-blocking notice.
+    it.each([
+      ['null', null],
+      ['blank', '  '],
+      ['the "?" placeholder', '?'],
+    ])('flags the review modal and continues when the receiver id is %s', async (_label, raw) => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: raw } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(true);
+      expect(H.apiFetch).not.toHaveBeenCalled();
+      expect(H.toastError).not.toHaveBeenCalled();
+      expect(H.toastWarning).not.toHaveBeenCalled();
+    });
+
+    it('does not flag the review modal when the receiver id matches the organization', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
+    });
+
+    it('does not flag the review modal when the receiver id equals the issuer id', async () => {
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'ESA99999999' }, issuer: { tax_id_raw: 'A99999999' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
+    });
+
+    it('does not flag the review modal when the organization has no tax id', async () => {
+      H.apiFetch.mockResolvedValue({ ok: true, json: async () => ({ organization: { taxId: '?' } }) });
+      renderFlow();
+      await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
+
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
+    });
+
+    it('does not flag the review modal for a doc type without receiver validation', async () => {
+      H.docType = docType({});
       renderFlow();
       await fireOcr({ receiver: { tax_id_raw: null } });
 
       await screen.findByTestId('review-modal');
-      expect(H.apiFetch).not.toHaveBeenCalled();
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
+    });
+
+    it('does not leak the absent flag into the next run once a receiver id matches', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+
+      await fireOcr({ receiver: { tax_id_raw: null } });
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(true);
+      await user.click(screen.getByTestId('review-cancel'));
+      await waitFor(() => expect(readResult()).toEqual({ committed: false, cancelled: true }));
+      await waitFor(() => expect(screen.queryByTestId('review-modal')).toBeNull());
+
+      H.reviewProps = null;
+      await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
       expect(H.toastError).not.toHaveBeenCalled();
+      expect(readResult()?.committed).not.toBe(false);
+    });
+
+    it('flags a later run with no receiver id after a run that had a matching one', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+
+      await fireOcr({ receiver: { tax_id_raw: 'B12345674' } });
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(false);
+      await user.click(screen.getByTestId('review-cancel'));
+      await waitFor(() => expect(screen.queryByTestId('review-modal')).toBeNull());
+
+      H.reviewProps = null;
+      await fireOcr({ receiver: { tax_id_raw: null } });
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.receiverTaxIdAbsent).toBe(true);
     });
 
     it('continues with a warning when the organization has no tax id', async () => {
@@ -356,6 +499,7 @@ describe('useOcrFlow — full flow', () => {
       await fireOcr({ receiver: { tax_id_raw: 'A99999999' } });
 
       await screen.findByTestId('review-modal');
+      // Warnings stay transient: no persistence options.
       expect(H.toastWarning).toHaveBeenCalledWith('ocrOrgTaxIdMissing');
       expect(H.toastError).not.toHaveBeenCalled();
     });
@@ -415,9 +559,9 @@ describe('useOcrFlow — full flow', () => {
 
     it('cancelling the lines review aborts before building the batch', async () => {
       const user = userEvent.setup();
-      H.preResolvers.findTax = vi.fn(async () => ({ id: 'T1', label: 'IVA 21%', rate: 21 }));
+      H.preResolvers.findDefaultTax = vi.fn(async () => ({ id: 'T1', label: 'IVA 21%', rate: 21 }));
       H.docType = docType({
-        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findTax' }],
+        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' }],
       });
 
       renderFlow();
@@ -454,13 +598,238 @@ describe('useOcrFlow — full flow', () => {
     });
   });
 
+  // ETP-5654 — back navigation: BACK is distinct from cancel and restores earlier edits.
+  describe('back navigation', () => {
+    const taxDocType = () => docType({
+      lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' }],
+    });
+    const PAYLOAD = { line_items: [{ description: 'A', tax_label: 'iva' }] };
+
+    beforeEach(() => {
+      H.preResolvers.findDefaultTax = vi.fn(async () => ({ id: 'T1', label: 'IVA 21%', rate: 21 }));
+      H.docType = taxDocType();
+      H.reviewSubmitValue = { vendor: { bpId: 'bp-1' }, invoiceDate: '2026-01-01' };
+    });
+
+    it('lines back reopens the header with its previous state, without cancelling or re-resolving', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+
+      await screen.findByTestId('review-modal');
+      expect(screen.getByTestId('review-initial-state')).toHaveTextContent(JSON.stringify(H.reviewState));
+      expect(screen.getByTestId('review-resolving')).toHaveTextContent('false');
+      expect(readResult()).toBeNull();
+      expect(H.buildBatch).not.toHaveBeenCalled();
+    });
+
+    it('reuses the edited lines when the header inputs are unchanged', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent(JSON.stringify(H.linesState));
+      expect(H.findBpLocation).toHaveBeenCalledTimes(1);
+      expect(H.preResolvers.findDefaultTax).toHaveBeenCalledTimes(1);
+    });
+
+    it('recomputes the lines and drops the stale edits when the vendor or date changed', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      H.reviewSubmitValue = { vendor: { bpId: 'bp-2' }, invoiceDate: '2026-01-01' };
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent('null');
+      expect(H.findBpLocation).toHaveBeenCalledTimes(2);
+      expect(H.preResolvers.findDefaultTax).toHaveBeenCalledTimes(2);
+    });
+
+    it('a descriptor back returns to the lines with the edits restored and builds once more', async () => {
+      const user = userEvent.setup();
+      H.buildBatch.mockResolvedValueOnce({ back: true });
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(1));
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent(JSON.stringify(H.linesState));
+      expect(H.runBatch).not.toHaveBeenCalled();
+      expect(readResult()).toBeNull();
+
+      await user.click(screen.getByTestId('lines-submit'));
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(H.runBatch).toHaveBeenCalled());
+    });
+
+    it('a descriptor back goes straight to the header when no lines step was shown', async () => {
+      const user = userEvent.setup();
+      H.docType = docType();
+      H.buildBatch.mockResolvedValueOnce({ back: true });
+      renderFlow();
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(1));
+      await screen.findByTestId('review-modal');
+      expect(screen.getByTestId('review-initial-state')).toHaveTextContent(JSON.stringify(H.reviewState));
+      expect(H.runBatch).not.toHaveBeenCalled();
+    });
+
+    it('the product popup receives the selections of an earlier visit and back keeps them', async () => {
+      const user = userEvent.setup();
+      let calls = 0;
+      H.buildBatch.mockImplementation(async (_payload, ctx) => {
+        calls += 1;
+        const picks = await ctx.askUserForProducts({ unmatched: [{ idx: 0, description: 'A' }] });
+        return picks === BACK ? { back: true } : { ops: [{ id: 'inv' }], unmatched: [] };
+      });
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+      await user.click(await screen.findByTestId('popup-back'));
+
+      await screen.findByTestId('lines-modal');
+      await user.click(screen.getByTestId('lines-submit'));
+      await screen.findByTestId('popup');
+      expect(calls).toBe(2);
+      expect(screen.getByTestId('popup-initial')).toHaveTextContent(JSON.stringify(H.popupState));
+      expect(readResult()).toBeNull();
+    });
+
+    // Descriptor stand-in: opens the products popup and reports BACK / the picks like the real one.
+    const popupDescriptor = (picksSeen) => async (_payload, ctx) => {
+      const picks = await ctx.askUserForProducts({ unmatched: [{ idx: 0, description: 'A' }] });
+      if (picks === BACK) return { back: true };
+      picksSeen?.push(picks);
+      return { ops: [{ id: 'inv' }], unmatched: [] };
+    };
+
+    it('a product created in the popup comes back as a selected pick after Back and is submitted by id', async () => {
+      const user = userEvent.setup();
+      const created = { 0: { id: 'prod-new', label: 'Widget Created' } };
+      H.popupState = created;
+      H.popupSubmitValue = { 0: 'prod-new' };
+      const picksSeen = [];
+      H.buildBatch.mockImplementation(popupDescriptor(picksSeen));
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+      await user.click(await screen.findByTestId('popup-back'));
+      await user.click(await screen.findByTestId('lines-submit'));
+
+      await screen.findByTestId('popup');
+      expect(screen.getByTestId('popup-initial')).toHaveTextContent(JSON.stringify(created));
+      await user.click(screen.getByTestId('popup-submit'));
+
+      await waitFor(() => expect(H.runBatch).toHaveBeenCalledTimes(1));
+      expect(picksSeen).toEqual([{ 0: 'prod-new' }]);
+    });
+
+    // Documents TODAY's behavior: picks are keyed by row idx and the recompute rule (header changed
+    // -> lines rebuilt) does not clear them, so a vendor change keeps the earlier product picks.
+    it('keeps product picks by row idx after a vendor change rebuilds the lines, and never builds with stale lines', async () => {
+      const user = userEvent.setup();
+      const staleLines = [{ description: 'stale-line' }];
+      const freshLines = [{ description: 'fresh-line' }];
+      H.linesSubmitValue = staleLines;
+      H.buildBatch.mockImplementation(popupDescriptor());
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+      await user.click(await screen.findByTestId('popup-back'));
+      await user.click(await screen.findByTestId('lines-back'));
+      await screen.findByTestId('review-modal');
+      expect(H.buildBatch).toHaveBeenCalledTimes(1);
+
+      H.reviewSubmitValue = { vendor: { bpId: 'bp-2' }, invoiceDate: '2026-01-01' };
+      H.linesSubmitValue = freshLines;
+      await user.click(screen.getByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+      expect(screen.getByTestId('lines-initial-rows')).toHaveTextContent('null');
+      expect(H.buildBatch).toHaveBeenCalledTimes(1);
+      await user.click(screen.getByTestId('lines-submit'));
+
+      await screen.findByTestId('popup');
+      expect(screen.getByTestId('popup-initial')).toHaveTextContent(JSON.stringify(H.popupState));
+      expect(H.buildBatch).toHaveBeenCalledTimes(2);
+      const second = H.buildBatch.mock.calls[1][1];
+      expect(second.reviewedLines).toBe(freshLines);
+      expect(second.reviewedHeader).toBe(H.reviewSubmitValue);
+      expect(H.buildBatch.mock.calls.slice(1).some(([, ctx]) => ctx.reviewedLines === staleLines)).toBe(false);
+    });
+
+    it('cancel from the lines step after backing out of the products popup marks the run cancelled', async () => {
+      const user = userEvent.setup();
+      H.buildBatch.mockImplementation(popupDescriptor());
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-submit'));
+      await user.click(await screen.findByTestId('popup-back'));
+      await user.click(await screen.findByTestId('lines-cancel'));
+
+      await waitFor(() => expect(readResult()).toEqual({ committed: false, cancelled: true }));
+      expect(H.buildBatch).toHaveBeenCalledTimes(1);
+      expect(H.runBatch).not.toHaveBeenCalled();
+      expect(H.showResult).not.toHaveBeenCalled();
+    });
+
+    it('the header step never offers Back, and Continue after Back resubmits the restored header state unchanged', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.onBack).toBeUndefined();
+
+      await user.click(screen.getByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      await screen.findByTestId('review-modal');
+      expect(H.reviewProps.onBack).toBeUndefined();
+      expect(screen.getByTestId('review-initial-state')).toHaveTextContent(JSON.stringify(H.reviewState));
+      await user.click(screen.getByTestId('review-submit'));
+
+      await screen.findByTestId('lines-modal');
+      await user.click(screen.getByTestId('lines-submit'));
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalledTimes(1));
+      expect(H.buildBatch.mock.calls[0][1].reviewedHeader).toEqual({ vendor: { bpId: 'bp-1' }, invoiceDate: '2026-01-01' });
+      expect(H.findBpLocation).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancel after going back still marks the run cancelled', async () => {
+      const user = userEvent.setup();
+      renderFlow();
+      await fireOcr(PAYLOAD);
+      await user.click(await screen.findByTestId('review-submit'));
+      await user.click(await screen.findByTestId('lines-back'));
+      await user.click(await screen.findByTestId('review-cancel'));
+
+      await waitFor(() => expect(readResult()).toEqual({ committed: false, cancelled: true }));
+      expect(H.showResult).not.toHaveBeenCalled();
+    });
+  });
+
   describe('line resolution', () => {
     it('resolves entity line columns and mirrors the tax id/rate aliases', async () => {
       const user = userEvent.setup();
-      H.preResolvers.findTax = vi.fn(async ({ value }) => ({ id: 'T1', label: `IVA(${value})`, rate: 21 }));
+      H.preResolvers.findDefaultTax = vi.fn(async ({ value }) => ({ id: 'T1', label: `IVA(${value})`, rate: 21 }));
       H.docType = docType({
         lineColumns: [
-          { key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findTax' },
+          { key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' },
           { key: 'description', kind: 'text', extractFrom: 'description' },
         ],
       });
@@ -486,9 +855,9 @@ describe('useOcrFlow — full flow', () => {
 
     it('keeps the extracted label and nulls the id when the resolver finds nothing', async () => {
       const user = userEvent.setup();
-      H.preResolvers.findTax = vi.fn(async () => null);
+      H.preResolvers.findDefaultTax = vi.fn(async () => null);
       H.docType = docType({
-        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findTax' }],
+        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' }],
       });
 
       renderFlow();
@@ -547,9 +916,9 @@ describe('useOcrFlow — full flow', () => {
 
     it('skips the lines review when the payload carries no line_items', async () => {
       const user = userEvent.setup();
-      H.preResolvers.findTax = vi.fn(async () => ({ id: 'T1', label: 'IVA', rate: 21 }));
+      H.preResolvers.findDefaultTax = vi.fn(async () => ({ id: 'T1', label: 'IVA', rate: 21 }));
       H.docType = docType({
-        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findTax' }],
+        lineColumns: [{ key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' }],
       });
 
       renderFlow();
@@ -558,7 +927,139 @@ describe('useOcrFlow — full flow', () => {
 
       await waitFor(() => expect(H.buildBatch).toHaveBeenCalled());
       expect(screen.queryByTestId('lines-modal')).not.toBeInTheDocument();
-      expect(H.preResolvers.findTax).not.toHaveBeenCalled();
+      expect(H.preResolvers.findDefaultTax).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('tax preselection context (ETP-5585)', () => {
+    const taxColumn = { key: 'tax', kind: 'entity', extractFrom: 'tax_label', preResolve: 'findDefaultTax' };
+
+    it('builds the tax context from the reviewed vendor and invoice date and hands it to the resolver', async () => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: { bpId: 'BP1', id: 'IGNORED' }, invoiceDate: '2026-03-04' };
+      H.preResolvers.findDefaultTax = vi.fn(async () => null);
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ invoice_date: '01/01/2020', line_items: [{ description: 'A', tax_rate: 21 }] });
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      expect(H.findBpLocation).toHaveBeenCalledWith({ token: 'tok', apiBaseUrl: '/api', bpId: 'BP1' });
+      // The reviewed date wins over the extracted one.
+      expect(H.toIsoDate).toHaveBeenCalledWith('2026-03-04');
+      const arg = H.preResolvers.findDefaultTax.mock.calls[0][0];
+      expect(arg.taxContext).toMatchObject({ partnerAddressId: 'LOC1', invoiceDate: '2026-03-04' });
+      expect(arg.taxContext.cache).toBeInstanceOf(Map);
+      expect(arg.taxContext.noMatch).toBeInstanceOf(Set);
+      expect(arg.extracted.tax_rate).toBe(21);
+    });
+
+    it('falls back to vendor.id and to the extracted invoice date', async () => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: { id: 'BP2' } };
+      H.preResolvers.findDefaultTax = vi.fn(async () => null);
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ invoice_date: '15/03/2026', line_items: [{ description: 'A', tax_rate: 21 }] });
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      expect(H.findBpLocation).toHaveBeenCalledWith(expect.objectContaining({ bpId: 'BP2' }));
+      expect(H.toIsoDate).toHaveBeenCalledWith('15/03/2026');
+    });
+
+    it('does not look up the location when the review holds no vendor id', async () => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: null };
+      H.preResolvers.findDefaultTax = vi.fn(async () => null);
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ line_items: [{ description: 'A', tax_rate: 21 }] });
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      expect(H.findBpLocation).not.toHaveBeenCalled();
+      expect(H.preResolvers.findDefaultTax.mock.calls[0][0].taxContext.partnerAddressId).toBeNull();
+    });
+
+    it('resolves the tax context after the vendor review and before the lines modal opens', async () => {
+      const user = userEvent.setup();
+      const order = [];
+      H.reviewSubmitValue = { vendor: { bpId: 'BP1' } };
+      H.findBpLocation.mockImplementation(async () => { order.push('location'); return 'LOC1'; });
+      H.preResolvers.findDefaultTax = vi.fn(async () => { order.push('tax'); return null; });
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ line_items: [{ description: 'A', tax_rate: 21 }] });
+      expect(H.findBpLocation).not.toHaveBeenCalled();
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      expect(order).toEqual(['location', 'tax']);
+    });
+
+    it('does not build a tax context when there are no lines to review', async () => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: { bpId: 'BP1' } };
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ line_items: [] });
+      await user.click(await screen.findByTestId('review-submit'));
+      await waitFor(() => expect(H.buildBatch).toHaveBeenCalled());
+
+      expect(H.findBpLocation).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['the backend answered without a tax at the rate', true, true],
+      ['the rate is not in noMatch (call failed)', false, false],
+    ])('tax_no_rate_match when %s', async (_name, rateInNoMatch, expected) => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: { bpId: 'BP1' } };
+      H.preResolvers.findDefaultTax = vi.fn(async ({ taxContext }) => {
+        if (rateInNoMatch) taxContext.noMatch.add(21);
+        return null;
+      });
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({ line_items: [{ description: 'A', tax_rate: 21 }] });
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      const [line] = JSON.parse(screen.getByTestId('lines-payload').textContent);
+      expect(line.tax_no_rate_match).toBe(expected ? true : undefined);
+      expect(line.tax_id).toBeNull();
+    });
+
+    it('does not flag a line whose rate is missing or whose tax resolved', async () => {
+      const user = userEvent.setup();
+      H.reviewSubmitValue = { vendor: { bpId: 'BP1' } };
+      H.preResolvers.findDefaultTax = vi.fn(async ({ taxContext, extracted }) => {
+        taxContext.noMatch.add(21);
+        return extracted.description === 'resolved' ? { id: 'T21', label: 'IVA 21', rate: 21 } : null;
+      });
+      H.docType = docType({ lineColumns: [taxColumn] });
+
+      renderFlow();
+      await fireOcr({
+        line_items: [
+          { description: 'resolved', tax_rate: 21 },
+          { description: 'no-rate' },
+        ],
+      });
+      await user.click(await screen.findByTestId('review-submit'));
+      await screen.findByTestId('lines-modal');
+
+      const lines = JSON.parse(screen.getByTestId('lines-payload').textContent);
+      expect(lines[0]).toMatchObject({ tax_id: 'T21' });
+      expect(lines[0].tax_no_rate_match).toBeUndefined();
+      expect(lines[1].tax_no_rate_match).toBeUndefined();
     });
   });
 
@@ -732,6 +1233,22 @@ describe('useOcrFlow — full flow', () => {
         linesFailed: 0,
         unresolved: [],
       }));
+    });
+
+    // ETP-5676 — `_onlyReturnIds` is the import's opt-in; the OCR flow keeps the plain
+    // `{ operations }` body, so runBatch is called with the operations and no options.
+    it('posts the batch without asking for ids only', async () => {
+      const user = userEvent.setup();
+      H.runBatch.mockResolvedValue({ committed: true, operations: [{ id: 'inv', recordId: 'INV-9' }] });
+
+      render(<Harness docTypeId="purchase-invoice" token="tok" apiBaseUrl="/api" />);
+      await fireOcr({ vendor_name: 'Acme' });
+      await user.click(await screen.findByTestId('review-submit'));
+
+      await waitFor(() => expect(H.runBatch).toHaveBeenCalledTimes(1));
+      const args = H.runBatch.mock.calls[0];
+      expect(args).toHaveLength(1);
+      expect(Array.isArray(args[0])).toBe(true);
     });
 
     it('omits contactsBase when no apiBaseUrl is configured', async () => {

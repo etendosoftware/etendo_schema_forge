@@ -3,6 +3,7 @@ import { useUI } from '@/i18n';
 import { BoxIcon } from './ProductListCells';
 import { useNeoImage } from '@/hooks/useNeoImage';
 import GalleryGrid from '@/components/ui/gallery-grid';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 /* eslint-disable react/prop-types */
 
@@ -28,14 +29,20 @@ function ProductCard({ row, onNavigate, token, apiBaseUrl }) {
       </div>
       {/* Text area */}
       <div className="flex flex-col p-3 gap-1">
-        <span className="text-sm font-semibold text-[hsl(var(--foreground))] leading-5 truncate">{row.name}</span>
+        <TruncatedText
+          text={row.name}
+          className="text-sm font-semibold text-[hsl(var(--foreground))] leading-5"
+          data-testid="ProductCard__name" />
         {row.searchKey && (
-          <span className="inline-flex items-center px-2 py-1 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit max-w-full truncate">
-            {row.searchKey}
+          <span className="inline-flex items-center px-2 py-1 bg-[hsl(var(--muted))] rounded-full text-xs text-[hsl(var(--muted-foreground))] leading-4 w-fit max-w-full min-w-0">
+            <TruncatedText text={row.searchKey} data-testid="ProductCard__searchKey" />
           </span>
         )}
         {categoryLabel && (
-          <span className="text-sm text-[hsl(var(--muted-foreground))] leading-5 truncate">{categoryLabel}</span>
+          <TruncatedText
+            text={categoryLabel}
+            className="text-sm text-[hsl(var(--muted-foreground))] leading-5"
+            data-testid="ProductCard__category" />
         )}
       </div>
     </div>

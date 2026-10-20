@@ -26,6 +26,8 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
@@ -117,6 +119,11 @@ const BASE_DECL = {
   status: 'draft', result: null, incidents: { blocking: 0, warning: 0 },
   _precomputed: null, boxes: null, sources: [], history: [],
   manualData: { identification: { tipo_declaracion: 'N', rectificativa: true } },
+  // ETP-5725 (reopened QA fix) — a persisted `rectificativa: true` now also needs a presented
+  // ordinaria sibling to pass the corrective-consistency guard ("Guardar" is gated by it too,
+  // not just "Registrar/Presentar") — this file's own scenarios are about box111's
+  // MIN/ABS formula, not about that guard, so a sibling is simply assumed to exist.
+  _duplicatePeriodPresented: true,
 };
 
 // `boxes: []`/`summary: {}` — not `_precomputed: null` — so the mount effect's own

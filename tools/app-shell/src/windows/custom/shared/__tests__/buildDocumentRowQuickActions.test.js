@@ -6,6 +6,7 @@ import {
   buildMenuActionExecutedHandler,
   buildDocumentRowQuickActionsPostMenu,
 } from '../buildDocumentRowQuickActions.js';
+import { setPeriodRecovery } from '../../../../lib/periodNotAvailable.js';
 
 const UNPOST_ACTION = { key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true };
 const POST_ACTION = { key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' };
@@ -186,6 +187,24 @@ describe('buildDocumentRowQuickActions', () => {
       const handler = buildMenuActionExecutedHandler(fakeUi, () => {});
       handler({ neoAction: 'unpost' }, { success: false });
       assert.equal(errorSpy.mock.calls[0].arguments[0], '__actionFailed__');
+    });
+
+    it('offers the calendar on a Post refused for a period that is not open, dated from the row (ETP-5577)', () => {
+      const errorSpy = mock.method(toast, 'error', () => {});
+      const go = mock.fn();
+      setPeriodRecovery({ labelKey: 'periodNotAvailableOpenCalendar', go });
+      try {
+        const handler = buildMenuActionExecutedHandler(fakeUi, () => {});
+        handler(POST_ACTION, { success: false, message: 'x', messageKeys: ['PeriodNotAvailable'] },
+          { id: 'r1', accountingDate: '2027-01-15' });
+        const [text, options] = errorSpy.mock.calls[0].arguments;
+        assert.equal(text, '__backendError.periodNotAvailable__');
+        assert.equal(options.action.label, '__periodNotAvailableOpenCalendar__');
+        options.action.onClick();
+        assert.deepEqual(go.mock.calls[0].arguments, ['2027-01-15']);
+      } finally {
+        setPeriodRecovery(null);
+      }
     });
 
     it('shows the unpost success key on success', () => {

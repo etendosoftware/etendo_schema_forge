@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 5,
+  "runId": "run-holded",
+  "probeId": "q-product-prices-stock",
+  "attempt": 1,
+  "replaces": null,
+  "mode": "read",
+  "prompt": "p",
+  "startedAt": "2026-10-14T10:00:00Z",
+  "finishedAt": "2026-10-14T10:01:00Z",
+  "effectVerified": true,
+  "effectCheck": null,
+  "silentWrong": false,
+  "finalAnswer": "listo",
+  "usage": {
+    "loop": {
+      "turns": 3,
+      "turnsWithUsage": 3,
+      "inputTokens": 8900,
+      "outputTokens": 100,
+      "totalTokens": 9000,
+      "cachedInputTokens": 0
+    },
+    "report": {
+      "turns": 1,
+      "turnsWithUsage": 1,
+      "inputTokens": 400,
+      "outputTokens": 100,
+      "totalTokens": 500,
+      "cachedInputTokens": 0
+    }
+  },
+  "servedModel": {
+    "models": [
+      "gpt-5.2"
+    ],
+    "systemFingerprints": [
+      "fp_1"
+    ]
+  },
+  "toolCallCount": 3,
+  "toolCalls": [
+    {
+      "id": "c-list_products",
+      "tool": "list_products",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    },
+    {
+      "id": "c-get_product",
+      "tool": "get_product",
+      "args": {},
+      "error": true,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    },
+    {
+      "id": "c-list_services",
+      "tool": "list_services",
+      "args": {},
+      "error": false,
+      "result": "",
+      "resultBytes": 100,
+      "resultTruncated": false
+    }
+  ],
+  "exhausted": false,
+  "setup": [],
+  "teardown": [],
+  "teardownClean": null,
+  "harnessError": null,
+  "verdict": {
+    "schemaVersion": 3,
+    "outcome": "OKAY",
+    "summary": "s",
+    "achieved": "a",
+    "frictions": [
+      {
+        "what": "No stock field on list",
+        "cost": "2 calls",
+        "phase": "read"
+      }
+    ],
+    "failures": [
+      {
+        "tool": "get_product",
+        "payload": {},
+        "error": "e",
+        "recovered": false,
+        "howRecovered": null
+      }
+    ],
+    "wastedCalls": [
+      {
+        "tool": "list_services",
+        "expected": "x",
+        "whatHappened": "y"
+      }
+    ],
+    "suggestions": [
+      {
+        "what": "Return stock in list_products",
+        "kind": "betterMetadata",
+        "wouldHaveSaved": "1 call"
+      }
+    ]
+  }
+}

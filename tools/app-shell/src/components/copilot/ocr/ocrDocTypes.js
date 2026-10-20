@@ -129,12 +129,16 @@ export const OCR_DOC_TYPES = [
         // validation rule needs @DateInvoiced@, which NEO turns into NULL here, so it lists
         // nothing. The invoice tax tab's C_Tax_ID has no rule — every tax of the client.
         selector: 'purchase-invoice/tax/C_Tax_ID',
-        preResolve: 'findTax',
+        // Preselected by the backend `defaultTax` action from the printed rate (ETP-5585),
+        // never by a similarity search on the label.
+        preResolve: 'findDefaultTax',
         emptyOptionLabel: 'ocrLinesTaxDefault',
         searchPlaceholder: 'ocrLinesTaxSearch',
         noMatchesLabel: 'ocrLinesTaxNoMatches',
         clearLabel: 'ocrLinesTaxClear',
-        width: 'w-48',
+        // Fixed layout (OcrLinesReviewModal `table-fixed`): quantity 96 + price 112 + tax 320 leave
+        // the description ~200 of the 728px content width, whatever the tax label length.
+        width: 'w-80',
       },
     ],
     // Header-level fields no review-modal row surfaces, but which pre-fill the

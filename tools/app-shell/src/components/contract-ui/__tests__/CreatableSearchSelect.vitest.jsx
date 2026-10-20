@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/CreatableSearchSelect.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
@@ -360,5 +361,134 @@ describe('CreatableSearchSelect — resize reflow does not throw on Node.contain
     expect(onWindowError).not.toHaveBeenCalled();
     // The dropdown remains functional after the reflow recompute.
     expect(screen.getByTestId('options-financialAccount')).toBeInTheDocument();
+  });
+});
+
+// ETP-5728 — hook-driven lookup mode, `disabled`, and the renderOption / filterFn / chipLabel
+// extension points used by the Finance selectors (ChipSelect wrapper, FundsTransferModal).
+describe('CreatableSearchSelect — lookup mode and extension points (ETP-5728)', () => {
+  const field = { key: 'fx', id: 'fx', clearable: true };
+  const rows = [{ id: 'a', name: 'Alpha' }, { id: 'b', name: 'Beta' }];
+  const base = { field, value: '', displayValue: '', formData: {}, resolvedLabel: 'X' };
+  const open = () => !!screen.queryByTestId('options-fx');
+
+  it('useLookup: rows come from the hook, the query is forwarded and the list is not re-filtered locally', () => {
+    const useLookup = vi.fn(() => ({ results: rows, loading: false }));
+    render(<CreatableSearchSelect {...base} onChange={vi.fn()} useLookup={useLookup} />);
+    fireEvent.focus(screen.getByTestId('field-fx'));
+    expect(screen.getByTestId('option-fx-a')).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('field-fx'), { target: { value: 'zzz' } });
+    expect(useLookup).toHaveBeenLastCalledWith('zzz');
+    // hook decides the result set: both rows still shown although neither matches "zzz"
+    expect(screen.getByTestId('option-fx-b')).toBeInTheDocument();
+  });
+
+  it('useLookup: selecting a row reports id, name and the full row', () => {
+    const onChange = vi.fn();
+    render(<CreatableSearchSelect {...base} onChange={onChange} useLookup={() => ({ results: rows })} />);
+    fireEvent.focus(screen.getByTestId('field-fx'));
+    fireEvent.mouseDown(screen.getByTestId('option-fx-b'));
+    expect(onChange).toHaveBeenCalledWith('b', 'Beta', rows[1]);
+  });
+
+  it('useLookup: never scrolls for more, even with serverSearch set (short result must not page)', () => {
+    const useLookup = () => ({ results: rows, loading: false });
+    render(<CreatableSearchSelect {...base} onChange={vi.fn()} useLookup={useLookup} serverSearch selectorUrl="/x" />);
+    fireEvent.focus(screen.getByTestId('field-fx'));
+    fireEvent.scroll(screen.getByTestId('options-fx'));
+    expect(screen.getByTestId('option-fx-a')).toBeInTheDocument();
+  });
+
+  it('chevron toggles: second click closes the open list', () => {
+    render(<CreatableSearchSelect {...base} onChange={vi.fn()} useLookup={() => ({ results: rows })} />);
+    fireEvent.click(screen.getByTestId('ChevronDown__fx'));
+    expect(open()).toBe(true);
+    fireEvent.click(screen.getByTestId('ChevronDown__fx'));
+    expect(open()).toBe(false);
+  });
+
+  it('chevron has the openOptions aria-label', () => {
+    render(<CreatableSearchSelect {...base} onChange={vi.fn()} useLookup={() => ({ results: rows })} />);
+    expect(screen.getByTestId('ChevronDown__fx').closest('button')).toHaveAttribute('aria-label', 'openOptions');
+  });
+
+  it('disabled: input and chevron disabled, no open; a selected value stays a read-only chip', () => {
+    const { rerender } = render(
+      <CreatableSearchSelect {...base} onChange={vi.fn()} disabled useLookup={() => ({ results: rows })} />,
+    );
+    expect(screen.getByTestId('field-fx')).toBeDisabled();
+    expect(screen.getByTestId('ChevronDown__fx').closest('button')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('ChevronDown__fx'));
+    expect(open()).toBe(false);
+    rerender(
+      <CreatableSearchSelect {...base} value="a" displayValue="Alpha" onChange={vi.fn()} disabled
+        useLookup={() => ({ results: rows })} />,
+    );
+    expect(screen.getByTestId('field-fx-chip')).toBeDisabled();
+  });
+
+  it('renderOption / filterFn / chipLabel customise rows, local filter and the chip label (staticOptions)', () => {
+    const accounts = [
+      { id: 'a', name: 'Main', iban: 'ES11', currencyIso: 'EUR' },
+      { id: 'b', name: 'Other', iban: 'ES99', currencyIso: 'USD' },
+    ];
+    const props = {
+      ...base,
+      onChange: vi.fn(),
+      staticOptions: accounts,
+      renderOption: (o) => <span data-testid={`row-${o.id}`}>{o.name}|{o.iban}</span>,
+      filterFn: (o, q) => o.iban.toLowerCase().includes(q),
+      chipLabel: (o) => `${o.name} · ${o.currencyIso}`,
+    };
+    const { rerender } = render(<CreatableSearchSelect {...props} />);
+    fireEvent.focus(screen.getByTestId('field-fx'));
+    expect(screen.getByTestId('row-a')).toHaveTextContent('Main|ES11');
+    fireEvent.change(screen.getByTestId('field-fx'), { target: { value: 'es99' } });
+    expect(screen.queryByTestId('row-a')).not.toBeInTheDocument();
+    expect(screen.getByTestId('row-b')).toBeInTheDocument();
+    rerender(<CreatableSearchSelect {...props} value="a" displayValue="Main" />);
+    expect(screen.getByTestId('field-fx-chip')).toHaveTextContent('Main · EUR');
+  });
+});
+
+describe('CreatableSearchSelect — Escape inside a modal (document-level handlers)', () => {
+  const field = { key: 'acct', required: false };
+  const staticOptions = [{ id: 'a', name: 'Alpha' }, { id: 'b', name: 'Beta' }];
+  const renderSelect = () => render(
+    <CreatableSearchSelect
+      field={field} value="" displayValue="" formData={{}} resolvedLabel="Acct"
+      selectorUrl={null} selectorContext={{}} token={null}
+      staticOptions={staticOptions} onChange={vi.fn()}
+    />
+  );
+
+  it('Escape with the list open closes only the list: a document capture handler (Radix Dialog) is not reached', () => {
+    const dialogEscape = vi.fn();
+    document.addEventListener('keydown', dialogEscape, { capture: true });
+    try {
+      renderSelect();
+      const input = screen.getByTestId('field-acct');
+      fireEvent.focus(input);
+      expect(screen.getByTestId('option-acct-a')).toBeInTheDocument();
+
+      fireEvent.keyDown(input, { key: 'Escape' });
+
+      expect(dialogEscape).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('option-acct-a')).not.toBeInTheDocument();
+    } finally {
+      document.removeEventListener('keydown', dialogEscape, { capture: true });
+    }
+  });
+
+  it('Escape with the list closed is untouched: it still reaches document handlers', () => {
+    const dialogEscape = vi.fn();
+    document.addEventListener('keydown', dialogEscape, { capture: true });
+    try {
+      renderSelect();
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(dialogEscape).toHaveBeenCalledTimes(1);
+    } finally {
+      document.removeEventListener('keydown', dialogEscape, { capture: true });
+    }
   });
 });

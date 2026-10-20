@@ -4,9 +4,9 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:inventoryLine
 const columns = [
   { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true, lookup: true, grow: true },
-  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true, grow: true, readOnly: true },
   { key: 'bookQuantity', column: 'QtyBook', type: 'number', label: 'System Count', required: true, grow: true, minWidth: 192, readOnly: true },
   { key: 'quantityCount', column: 'QtyCount', type: 'number', label: 'User Count', required: true, grow: true, minWidth: 192 },
+  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', display: 'tag', required: true, readOnly: true },
   { key: 'etgoQtydiff', column: 'EM_Etgo_Qtydiff', type: 'signedDelta', label: 'Difference', grow: true, minWidth: 192, readOnly: true },
 ];
 // @sf-generated-end columns:inventoryLine

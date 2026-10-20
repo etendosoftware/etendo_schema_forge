@@ -56,7 +56,7 @@ import {
   Star,
   IdentificationCard,
   ShareNetwork,
-  TrendUp,
+  ChartLineUp,
   Receipt,
   Bank,
   Package,
@@ -91,7 +91,7 @@ const ICON_MAP = {
   Star,
   Contact2:       IdentificationCard,
   Share2:         ShareNetwork,
-  TrendingUp:     TrendUp,
+  TrendingUp:     ChartLineUp,
   Receipt,
   Building2:      Bank,
   Package,
@@ -165,7 +165,7 @@ function CollapsedGroupPopover({
           className={cn(
             'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
             isGroupActive
-              ? 'bg-accent-highlight text-accent-highlight-foreground'
+              ? 'bg-card text-foreground shadow-sm ring-1 ring-border-control'
               : 'bg-page-bg text-muted-foreground hover:text-foreground'
           )}
         >
@@ -202,7 +202,7 @@ function CollapsedGroupPopover({
                 className={cn(
                   'flex w-full items-center px-3 py-2 text-sm transition-colors',
                   isItemActive
-                    ? 'bg-accent-highlight text-accent-highlight-foreground font-semibold'
+                    ? 'bg-card text-foreground font-semibold shadow-sm ring-1 ring-border-control'
                     : 'text-foreground hover:bg-muted/50'
                 )}
                 data-testid={`menu-item-${item.slug || item.name?.replace(/\s+/g, '-').toLowerCase()}`}>
@@ -256,7 +256,7 @@ function CompanyOption({ env, isCurrent, switching, onSwitch, logoSrc, ui }) {
       )}
       data-testid={`company-option-${env.clientId}`}
     >
-      <img src={logoSrc} alt="" className="mt-0.5 h-6 w-6 shrink-0 rounded-full" />
+      <img src={logoSrc} alt="" className="mt-0.5 h-6 w-6 shrink-0 rounded-lg" />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span
           className={cn(
@@ -268,6 +268,7 @@ function CompanyOption({ env, isCurrent, switching, onSwitch, logoSrc, ui }) {
           {name}
         </span>
         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          {/* Intended (ETP-5047): a canceled productive environment gets the muted chip with the "Productive" label — productive, but not paying. */}
           <span className={cn(
             'rounded-full px-1.5 py-0.5 text-[11px] font-medium',
             isProductiveEnvironment(env)
@@ -323,7 +324,7 @@ function ExpandedDirectLink({ group, singleItem, Icon, showSectionLabel, section
           className={cn(
             'flex w-full items-center gap-2.5 px-3 py-1.5 text-sm transition-colors border-l-[3px] border-transparent',
             isActive
-              ? 'bg-accent-highlight text-accent-highlight-foreground font-medium'
+              ? 'bg-card text-foreground font-medium shadow-sm ring-1 ring-border-control'
               : 'hover:bg-muted/50'
           )}
           data-testid={`menu-item-${singleItem.slug || singleItem.name?.replace(/\s+/g, '-').toLowerCase()}`}>
@@ -343,10 +344,10 @@ function ExpandedDirectLink({ group, singleItem, Icon, showSectionLabel, section
 
 function getGroupHeaderClass(isGroupActive, isOpen) {
   if (isGroupActive && !isOpen) {
-    return 'bg-accent-highlight text-accent-highlight-foreground font-medium border-accent-highlight';
+    return 'bg-card text-foreground font-medium border-border-control shadow-sm';
   } else {
     if (isGroupActive) {
-      return 'font-medium hover:bg-muted/50 border-accent-highlight';
+      return 'bg-card font-medium hover:bg-muted/50 border-border-control';
     } else {
       return 'hover:bg-muted/50 border-transparent';
     }
@@ -633,7 +634,7 @@ export default function SideMenu({
   onToggle,
   onHelpClick,
   unreadCount = 0,
-  logoSrc = '/favicon.png',
+  logoSrc = '/logo-etendo-ai.png',
 }) {
   const { selectedOrg } = useAuth();
   const location = useLocation();
@@ -764,7 +765,7 @@ export default function SideMenu({
                   <img
                     src={logoSrc}
                     alt="Etendo"
-                    className="h-8 w-8 shrink-0 rounded-full"
+                    className="h-8 w-8 shrink-0 rounded-lg"
                   />
                   {/* Two lines so the name gets the whole width: the plan and commercial badges
                       used to sit beside it and left a few characters of a 240px sidebar. The
@@ -823,7 +824,7 @@ export default function SideMenu({
                     <img
                       src={logoSrc}
                       alt=""
-                      className="h-5 w-5 mr-2 rounded-full"
+                      className="h-5 w-5 mr-2 rounded-lg"
                     />
                     <TruncatedText
                       text={selectedOrg?.name || ui('yourCompany')}
@@ -850,23 +851,26 @@ export default function SideMenu({
             <div className="absolute bottom-0 left-3 right-3 border-t border-border/50" />
           </div>
         ) : (
-          <div className="flex flex-row items-center justify-center h-[63px] px-2">
-            <div className="flex items-center w-10 h-full border-b border-[hsl(var(--border-subtle))]">
-              <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
-                <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
-                  <button
-                    type="button"
-                    onClick={onToggle}
-                    aria-label={ui('expandMenu')}
-                    data-testid="sidebar-expand"
-                    className="flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <PanelLeftOpen className="h-5 w-5" data-testid="PanelLeftOpen__247c75" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" data-testid="TooltipContent__247c75">{ui('expandMenu')}</TooltipContent>
-              </Tooltip>
-            </div>
+          <div className="flex h-[96px] shrink-0 flex-col items-center justify-center gap-1 border-b border-[hsl(var(--border-subtle))]">
+            <img
+              src={logoSrc}
+              alt="Etendo AI"
+              className="h-10 w-10 shrink-0 rounded-xl"
+              data-testid="etendo-ai-logo-collapsed" />
+            <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
+              <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
+                <button
+                  type="button"
+                  onClick={onToggle}
+                  aria-label={ui('expandMenu')}
+                  data-testid="sidebar-expand"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  <PanelLeftOpen className="h-5 w-5" data-testid="PanelLeftOpen__247c75" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" data-testid="TooltipContent__247c75">{ui('expandMenu')}</TooltipContent>
+            </Tooltip>
           </div>
         )}
 
@@ -900,7 +904,7 @@ export default function SideMenu({
                           className={cn(
                             'relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
                             isItemActive || isGroupActive
-                              ? 'bg-accent-highlight text-accent-highlight-foreground'
+                              ? 'bg-card text-foreground shadow-sm ring-1 ring-border-control'
                               : 'bg-page-bg text-muted-foreground hover:text-foreground'
                           )}
                           data-testid={`menu-item-${singleItem.slug || singleItem.name?.replace(/\s+/g, '-').toLowerCase()}`}>
@@ -972,7 +976,7 @@ export default function SideMenu({
                   className={cn(
                     'relative flex w-full items-center pl-[52px] pr-4 py-1.5 text-sm transition-colors',
                     isItemActive
-                      ? 'text-accent-highlight-foreground font-semibold'
+                      ? 'bg-card text-foreground font-semibold shadow-sm ring-1 ring-border-control'
                       : 'text-text-primary hover:bg-muted/50'
                   )}
                   data-testid={`menu-item-${item.slug || item.name?.replace(/\s+/g, '-').toLowerCase()}`}>
@@ -981,7 +985,7 @@ export default function SideMenu({
                     isItemActive ? 'bg-card/40' : 'bg-[hsl(var(--border-subtle))]'
                   )} />
                   {isItemActive && (
-                    <span className="absolute left-[33px] right-2 top-0 bottom-0 bg-accent-highlight" />
+                    <span className="absolute left-[33px] right-2 top-0 bottom-0 bg-card" />
                   )}
                   <span className="relative z-10">
                     {isFavorites

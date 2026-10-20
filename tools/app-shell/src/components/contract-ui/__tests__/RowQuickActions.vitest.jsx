@@ -364,6 +364,7 @@ describe('RowQuickActions', () => {
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'custom2' }),
         { handled: true },
+        expect.objectContaining({ id: expect.anything() }), // the row (ETP-5577)
       );
     });
   });
@@ -484,12 +485,82 @@ describe('RowQuickActions', () => {
     // useDocumentAction THROWS on failure (useNeoAction resolves instead), so without
     // forwarding the caught error the host never heard about it and the user saw nothing.
     it('reports a thrown document action to the host instead of only the console', async () => {
-      docActionExecuteMock.mockRejectedValue(new Error('Factura contabilizada'));
+      // ETP-5577 — with the error's identity and the row, so a period refusal can offer the calendar.
+      docActionExecuteMock.mockRejectedValue(
+        Object.assign(new Error('Factura contabilizada'), { messageKeys: ['PeriodNotAvailable'] }),
+      );
       const { onMenuActionExecuted } = await clickReactivate({ row: UNPOSTED_ROW });
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'reactivate' }),
-        { success: false, message: 'Factura contabilizada' },
+        { success: false, message: 'Factura contabilizada', messageKeys: ['PeriodNotAvailable'] },
+        UNPOSTED_ROW,
       );
+    });
+  });
+
+  // ETP-5745 QA follow-up (BUG-1) — the row-hover kebab is a THIRD surface running the
+  // preUnpost-then-reactivate sequence, and list rows are never GET-enriched with
+  // `reactivationBlocked`. `preUnpostGuard` is the generic, domain-agnostic hook point: when
+  // present on a `documentAction` menu entry, it MUST be checked and MUST block both
+  // `runPreUnpost` (neoAction.execute) and `docAction.execute` whenever it resolves to
+  // anything other than exactly `true` — otherwise this surface un-posts the row and THEN
+  // fails, which is the exact side effect ETP-5745 exists to prevent.
+  describe('preUnpostGuard on a documentAction kebab item (ETP-5745 follow-up)', () => {
+    const GUARDED_REACTIVATE = {
+      key: 'reactivate', label: 'Reactivate', documentAction: 'RE', preUnpost: true,
+    };
+    const POSTED_ROW = { id: '9', documentStatus: 'CO', posted: 'Y' };
+
+    async function clickGuardedReactivate(preUnpostGuard, props) {
+      const action = { ...GUARDED_REACTIVATE, preUnpostGuard };
+      const utils = setup({ menuActions: [action], ...props });
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      await user.click(await screen.findByText('Reactivate'));
+      return utils;
+    }
+
+    it('calls preUnpostGuard with the row, the documentAction value, and the ui translator', async () => {
+      const preUnpostGuard = vi.fn().mockResolvedValue(true);
+      await clickGuardedReactivate(preUnpostGuard, { row: POSTED_ROW });
+      expect(preUnpostGuard).toHaveBeenCalledWith(POSTED_ROW, 'RE', expect.any(Function));
+    });
+
+    it('blocks the action: reports failure and never runs runPreUnpost/docAction.execute when the guard resolves to a message', async () => {
+      const preUnpostGuard = vi.fn().mockResolvedValue('reactivation blocked: fiscal rectification');
+      const { onMenuActionExecuted } = await clickGuardedReactivate(preUnpostGuard, { row: POSTED_ROW });
+      expect(onMenuActionExecuted).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'reactivate' }),
+        { success: false, message: 'reactivation blocked: fiscal rectification' },
+      );
+      // The exact side effect ETP-5745 exists to prevent: the row must never be un-posted
+      // (neoAction.execute) nor have its document action run when the guard refuses it.
+      expect(neoActionExecuteMock).not.toHaveBeenCalled();
+      expect(docActionExecuteMock).not.toHaveBeenCalled();
+    });
+
+    it('lets the normal flow run unchanged when the guard resolves to true: preUnpost then docAction.execute, in that order', async () => {
+      const preUnpostGuard = vi.fn().mockResolvedValue(true);
+      const { onMenuActionExecuted } = await clickGuardedReactivate(preUnpostGuard, { row: POSTED_ROW });
+      expect(neoActionExecuteMock).toHaveBeenCalledWith('9', 'unpost');
+      expect(docActionExecuteMock).toHaveBeenCalledWith('9', 'RE');
+      expect(neoActionExecuteMock.mock.invocationCallOrder[0])
+        .toBeLessThan(docActionExecuteMock.mock.invocationCallOrder[0]);
+      expect(onMenuActionExecuted).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'reactivate' }),
+        { ok: true },
+        POSTED_ROW,
+      );
+    });
+
+    it('does not regress other documentAction entries (e.g. Complete) that carry no preUnpostGuard at all', async () => {
+      const menuActions = [{ key: 'complete', label: 'Complete', documentAction: 'CO' }];
+      const { onMenuActionExecuted } = setup({ menuActions });
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      await user.click(screen.getByText('Complete'));
+      expect(docActionExecuteMock).toHaveBeenCalledWith('1', 'CO');
+      expect(onMenuActionExecuted).toHaveBeenCalled();
     });
   });
 
@@ -598,6 +669,7 @@ describe('RowQuickActions', () => {
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'x' }),
         { success: true },
+        expect.objectContaining({ id: expect.anything() }), // the row (ETP-5577)
       );
     });
 
@@ -614,6 +686,7 @@ describe('RowQuickActions', () => {
       expect(onMenuActionExecuted).toHaveBeenCalledWith(
         expect.objectContaining({ key: 'reactivate' }),
         { success: true },
+        expect.objectContaining({ id: expect.anything() }), // the row (ETP-5577)
       );
       expect(toast.error).not.toHaveBeenCalled();
     });

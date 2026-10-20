@@ -1,6 +1,9 @@
 """Setup/teardown steps (D41): loader, reference resolution and the step runner.
 
 Run with `cd mcp-tests && uv run python -m unittest discover -s tests`.
+
+@covers mcp-tests/runner/steps.py
+@covers mcp-tests/runner/suite.py
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ import unittest
 from pathlib import Path
 
 from runner.steps import StepError, parse_steps, resolve_refs, run_steps
-from runner.suite import load_suite
+from runner.suite import attempt_marker, interpolate, interpolate_args, load_suite
 
 
 def _suite(text: str) -> Path:
@@ -55,6 +58,41 @@ class LoaderTest(unittest.TestCase):
         self.assertEqual(probe.setup, ())
         self.assertEqual(probe.teardown, ())
 
+    def test_exclusive_must_be_a_boolean(self):
+        for value in ('"yes"', "1", "[true]"):
+            with self.subTest(exclusive=value), self.assertRaisesRegex(ValueError, "exclusive must be true or false"):
+                load_suite(_suite(f"""
+                    probes:
+                      - id: p
+                        prompt: hi
+                        exclusive: {value}
+                """))
+        probe = load_suite(_suite("""
+            probes:
+              - id: p
+                prompt: hi
+                exclusive: true
+        """)).probe("p")
+        self.assertTrue(probe.exclusive)
+
+    def test_decision_must_be_a_mapping(self):
+        for value in ("1", "[ruleVersion]", '"strict"'):
+            with self.subTest(decision=value), self.assertRaisesRegex(ValueError, "decision must be a mapping"):
+                load_suite(_suite(f"""
+                    decision: {value}
+                    probes:
+                      - id: p
+                        prompt: hi
+                """))
+        suite = load_suite(_suite("""
+            decision: { ruleVersion: 1, callsMargin: 0.3 }
+            probes:
+              - id: p
+                prompt: hi
+        """))
+        self.assertEqual(suite.decision, {"ruleVersion": 1, "callsMargin": 0.3})
+        self.assertIsNone(load_suite(_suite("probes: [{id: p, prompt: hi}]")).decision)
+
     def test_rejects_a_step_without_tool(self):
         with self.assertRaisesRegex(ValueError, r"setup\[0\] needs a `tool`"):
             parse_steps([{"args": {}}], probe_id="p", phase="setup")
@@ -70,6 +108,23 @@ class LoaderTest(unittest.TestCase):
     def test_foreach_must_be_a_single_reference(self):
         with self.assertRaisesRegex(ValueError, "forEach"):
             parse_steps([{"tool": "t", "forEach": "items"}], probe_id="p", phase="teardown")
+
+
+class InterpolateTest(unittest.TestCase):
+    KW = {"run_id": "R", "probe_id": "p", "timestamp": "T"}
+
+    def test_the_default_marker_is_the_pre_repeat_form(self):
+        # Backward compatible: a caller that passes no marker gets `<runId>-<probeId>`.
+        self.assertEqual(interpolate("{{marker}}", **self.KW), "R-p")
+        self.assertEqual(interpolate_args({"a": ["{{marker}}"]}, **self.KW), {"a": ["R-p"]})
+
+    def test_an_attempt_marker_replaces_it_everywhere(self):
+        marker = attempt_marker("R", "p", 2)
+        self.assertEqual(marker, "R-p-a2")
+        self.assertEqual(interpolate("{{marker}} {{runId}} {{probeId}} {{timestamp}}", marker=marker, **self.KW),
+                         "R-p-a2 R p T")
+        self.assertEqual(interpolate_args({"a": [{"b": "x-{{marker}}"}], "n": 3}, marker=marker, **self.KW),
+                         {"a": [{"b": "x-R-p-a2"}], "n": 3})
 
 
 class ResolveRefsTest(unittest.TestCase):
@@ -181,6 +236,134 @@ class RunStepsTest(unittest.TestCase):
                           FakeServer({}), phase="teardown", saved={"pays": {"items": []}})
         self.assertFalse(records[0]["ok"])
         self.assertIn("not a list", records[0]["error"])
+
+
+V2 = """
+schemaVersion: 2
+window: w
+probes:
+  - id: q
+    category: query
+    prompt: "¿Cuánto debe la factura {{marker}}?"
+    platforms:
+      etendo-go:
+        setup: [{ tool: etendo_create, args: { d: "{{marker}}" }, saveAs: inv }]
+        expectAnswer: [{ number: 121, tolerance: 0.01 }]
+        teardown: [{ tool: etendo_delete, args: { id: "{{steps.inv.id}}" } }]
+      holded:
+        notPossible: { kind: setup, reason: "no invoices", missingTools: [create_invoice] }
+"""
+
+
+class SuiteV2Test(unittest.TestCase):
+    """Suite v2 (D45, D46, D49): per-platform blocks and a vendor-neutral prompt."""
+
+    def _load(self, text):
+        return load_suite(_suite(text))
+
+    def test_a_probe_resolves_per_platform(self):
+        suite = self._load(V2)
+        self.assertEqual(suite.schema_version, 2)
+        probe = suite.probes[0]
+        etendo = probe.for_platform("etendo-go")
+        self.assertEqual([s.tool for s in etendo.setup], ["etendo_create"])
+        self.assertEqual(etendo.expect_answer, [{"number": 121, "tolerance": 0.01}])
+        self.assertIsNone(etendo.not_possible)
+        holded = probe.for_platform("holded")
+        self.assertEqual(holded.setup, ())
+        self.assertEqual(holded.not_possible.to_json(),
+                         {"kind": "setup", "reason": "no invoices", "missingTools": ["create_invoice"]})
+        with self.assertRaises(KeyError):
+            probe.for_platform("other")
+
+    def test_the_worked_example_loads(self):
+        suite = load_suite(Path(__file__).resolve().parent.parent / "suites/examples/collect-invoice.v2.yaml")
+        self.assertEqual([p.id for p in suite.probes],
+                         ["collect-full-sales-invoice", "example-invoice-outstanding",
+                          "overpay-purchase-invoice"])
+        refusal = suite.probes[2].for_platform("etendo-go")
+        self.assertEqual((refusal.expect_outcome, refusal.expect_effect.expect), ("refused", "none"))
+        self.assertIsNotNone(suite.probes[0].for_platform("holded").not_possible)
+
+    def test_v1_suites_load_unchanged(self):
+        root = Path(__file__).resolve().parent.parent / "suites"
+        for path in sorted(root.glob("*.yaml")):
+            suite = load_suite(path)
+            self.assertEqual(suite.schema_version, 1, path.name)
+            for probe in suite.probes:
+                self.assertIsNone(probe.platforms)
+                self.assertIs(probe.for_platform("etendo-go"), probe)
+
+    def _rejects(self, fragment, message):
+        with self.assertRaises(ValueError) as ctx:
+            self._load(fragment)
+        self.assertIn(message, str(ctx.exception))
+
+    def test_a_prompt_naming_a_tool_is_refused(self):
+        self._rejects(V2.replace("¿Cuánto debe", "Usá etendo_list: ¿cuánto debe"), "names tool")
+        self._rejects(V2.replace("¿Cuánto debe", "Sin create_invoice, ¿cuánto debe"), "create_invoice")
+
+    def test_the_tool_lint_ignores_case(self):
+        self._rejects(V2.replace("¿Cuánto debe", "Usá Etendo_List: ¿cuánto debe"), "Etendo_List")
+        self._rejects(V2.replace("¿Cuánto debe", "Sin CREATE_INVOICE, ¿cuánto debe"), "create_invoice")
+        from runner.suite import prompt_tool_mentions
+        self.assertEqual(prompt_tool_mentions("usa List_Sales_Orders", ["list_sales_orders"]),
+                         ["list_sales_orders"])
+        # Whole words only: a tool name inside a longer word is not a mention.
+        self.assertEqual(prompt_tool_mentions("relist_sales_orders_x", ["list_sales_orders"]), [])
+
+    def test_every_platform_block_verifies_or_is_not_possible(self):
+        self._rejects(V2.replace("        expectAnswer: [{ number: 121, tolerance: 0.01 }]\n", ""),
+                      "declares no verification")
+
+    def test_block_validation(self):
+        self._rejects(V2.replace("category: query", "category: chat"), "category")
+        self._rejects(V2.replace("kind: setup", "kind: maybe"), "notPossible.kind")
+        self._rejects(V2.replace('reason: "no invoices"', 'reason: ""'), "reason")
+        self._rejects(V2.replace("      holded:", "      sap:"), "unknown platform")
+        self._rejects(V2.replace("[{ number: 121, tolerance: 0.01 }]", "[{ amount: 121 }]"), "exactly one")
+        self._rejects(V2.replace("    platforms:", "    expectOutcome: refused\n    platforms:"),
+                      "belongs inside")
+        self._rejects(V2.replace("expectAnswer: [{ number: 121, tolerance: 0.01 }]",
+                                 "expectOutcome: accepted"), "refused")
+        self._rejects(V2.replace("{{marker}}?", "{{fixture.customer.name}}?"), "declares no `fixture:`")
+        self._rejects(V2.replace("schemaVersion: 2", "schemaVersion: 3"), "not supported")
+
+    def test_a_write_refusal_must_prove_no_effect(self):
+        refusal = V2.replace("    category: query\n", "    category: error\n    mode: write\n").replace(
+            "        expectAnswer: [{ number: 121, tolerance: 0.01 }]",
+            "        expectOutcome: refused")
+        self._rejects(refusal, "needs expectEffect with expect: none")
+        self._rejects(refusal.replace(
+            "        expectOutcome: refused",
+            "        expectOutcome: refused\n        expectEffect: { tool: etendo_list, args: {}, expect: atLeastOne }"),
+            "contradictory")
+        ok = self._load(refusal.replace(
+            "        expectOutcome: refused",
+            "        expectOutcome: refused\n        expectEffect: { tool: etendo_list, args: {}, expect: none }"))
+        self.assertEqual(ok.probes[0].for_platform("etendo-go").expect_outcome, "refused")
+
+    def test_a_read_refusal_may_rest_on_the_report(self):
+        read = V2.replace("    category: query\n", "    category: error\n").replace(
+            "        expectAnswer: [{ number: 121, tolerance: 0.01 }]", "        expectOutcome: refused")
+        self.assertEqual(self._load(read).probes[0].for_platform("etendo-go").expect_outcome, "refused")
+
+    def test_a_small_number_needs_an_anchor(self):
+        self._rejects(V2.replace("[{ number: 121, tolerance: 0.01 }]", "[{ number: 3 }]"), "near:")
+        anchored = self._load(V2.replace("[{ number: 121, tolerance: 0.01 }]",
+                                         '[{ number: 3, near: "unidades" }]'))
+        self.assertEqual(anchored.probes[0].for_platform("etendo-go").expect_answer,
+                         [{"number": 3, "near": "unidades"}])
+
+    def test_where_is_v2_only(self):
+        v1 = """
+        probes:
+          - id: p
+            mode: write
+            prompt: hola
+            expectEffect: { tool: t, args: {}, where: { a: 1 } }
+        """
+        self._rejects(v1, "where")
 
 
 if __name__ == "__main__":

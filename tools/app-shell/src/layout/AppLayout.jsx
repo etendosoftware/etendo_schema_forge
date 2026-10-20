@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { isChromelessEmbed } from '@/lib/embeddedWindow.js';
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Building2, ChevronDown, Loader2, LogOut } from 'lucide-react';
+import { Building2, ChevronDown, Loader2, LogOut, RefreshCw } from 'lucide-react';
 import SideMenu from '@/components/layout/SideMenu';
 import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
@@ -35,12 +35,23 @@ import {
 import { useLogout } from '@/auth/useLogout.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { useEnvironmentAccessGate } from '@/hooks/useEnvironmentAccessGate.js';
+import { useAccessLoadError } from '@/hooks/useAccessLoadError.js';
+import { clearAccessLoadError, recordAccessLoadError } from '@/lib/accessLoadError.js';
 import { useUI } from '@/i18n';
 import { fetchCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 import { WalkthroughProvider } from '@etendosoftware/app-shell-core/walkthrough';
-import { WALKTHROUGH_FLOWS } from '@/walkthrough/flows';
+import { WALKTHROUGH_FLOWS, walkthroughFlowsForPlan } from '@/walkthrough/flows';
 import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js';
+import { periodRecoveryFor, setPeriodRecovery } from '@/lib/periodNotAvailable.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { NEO_BASE } from '@/lib/neoWebhookClient.js';
+import { detectBaseUrl } from '@/components/copilot/copilotApi.js';
+import { canReactivateSubscription, isCanceledSubscription } from '@/lib/environmentPresentation.js';
+import {
+  ReactivateSubscriptionButton,
+  ReactivationPendingNotice,
+} from '@/components/access/SubscriptionReactivation.jsx';
 
 /**
  * ETP-5144 — the engine's `onFinish`, bound to the flow list so the handler can
@@ -180,6 +191,48 @@ function NoAccessScreen() {
   );
 }
 
+// ETP-5489 — shown instead of an empty or unfiltered layout when a request that gates it (role
+// menu, window access map, report access) was answered 401 while the session is still alive.
+// That used to log the user out without revoking the cookie, and /onboarding re-entered the live
+// session and reloaded in a loop. The session is fine, so this offers what actually helps: retry
+// (a reload re-runs every startup request) or log out. Reuses NoAccessScreen's outer layout.
+function AccessLoadErrorScreen() {
+  const ui = useUI();
+  const logout = useLogout();
+  return (
+    <div
+      className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
+      data-testid="AccessLoadErrorScreen__488148"
+    >
+      <p className="text-base font-medium text-foreground" data-testid="access-load-error-title">
+        {ui('accessLoadErrorTitle')}
+      </p>
+      <p className="max-w-md text-sm text-muted-foreground" data-testid="access-load-error-message">
+        {ui('accessLoadErrorMessage')}
+      </p>
+      <div className="mt-4 flex gap-2">
+        <Button
+          type="button"
+          onClick={() => window.location.reload()}
+          data-testid="AccessLoadErrorRetry__488148"
+        >
+          <RefreshCw className="h-4 w-4 mr-2" data-testid="RefreshCw__488148" />
+          {ui('retry')}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={logout}
+          data-testid="AccessLoadErrorLogout__488148"
+        >
+          <LogOut className="h-4 w-4 mr-2" data-testid="LogOut__488148" />
+          {ui('logout')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ETP-5443 follow-up — copy + CTA target per blocking decision. See
 // lib/environmentAccessGate.js for how these two decisions are detected and why
 // MEMBERSHIP_REQUIRED (the third member of EnvironmentAccessPolicy.Decision) is not here.
@@ -198,13 +251,32 @@ const BLOCKED_ACCESS_CONTENT = {
   },
 };
 
+// ETP-5742 — a SUBSCRIPTION_REQUIRED environment whose subscription was CANCELED, not left unpaid:
+// the portal behind "Manage subscription" has nothing to fix there, so the owner re-subscribes the
+// environment instead (ReactivateSubscriptionButton) and an invited member is told to ask the owner.
+const CANCELED_SUBSCRIPTION_CONTENT = {
+  titleKey: 'blockedAccessSubscriptionCanceledTitle',
+  ownerMessageKey: 'blockedAccessSubscriptionCanceledMessage',
+  memberMessageKey: 'blockedAccessSubscriptionCanceledMemberMessage',
+};
+
+/** The paid re-subscription the provider sent the browser back with, if any. */
+function returningReactivationRequestId(searchParams) {
+  return searchParams.get('reactivation') === 'success'
+    ? searchParams.get('requestId') || null
+    : null;
+}
+
 // ETP-5443 follow-up — both routes resolve through the account's own platform token
 // (SubscriptionSection.jsx / UpgradePage.jsx), independent of the blocked tenant NEO
 // session, and are literally where this screen's own CTA sends the user. They must stay
 // reachable while `environmentAccessDecision` is set, so AppLayoutAccessGate falls through
 // to the normal Outlet render (full chrome + routed page) instead of this screen on either
 // path — see the check around BlockedAccessScreen's render below.
-const ENVIRONMENT_GATE_EXEMPT_PATHS = ['/account', '/upgrade'];
+// ETP-5734 — `/companies` ("Mis empresas") joins them for the same reason: it reads only
+// account-level endpoints, and a blocked tenant is exactly when the account needs to see its
+// other companies and enter one of them.
+const ENVIRONMENT_GATE_EXEMPT_PATHS = ['/account', '/upgrade', '/companies'];
 function isEnvironmentGateExemptPath(pathname) {
   return ENVIRONMENT_GATE_EXEMPT_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
@@ -219,13 +291,28 @@ function BlockedAccessScreen({ decision }) {
   const ui = useUI();
   const logout = useLogout();
   const navigate = useNavigate();
-  const { environments, switchTo, switching, currentClientId } = useEnvironmentSwitch();
+  const {
+    environments, loading: environmentsLoading, switchTo, switching, currentClientId,
+  } = useEnvironmentSwitch();
   const companies = [...new Map(
     environments.filter((env) => env.clientId).map((env) => [env.clientId, env])
   ).values()];
   const companyName = companies.find((env) => env.clientId === currentClientId)?.clientName
     || ui('yourCompany');
   const canSwitch = companies.some((env) => env.clientId !== currentClientId);
+  // ETP-5742 — a re-subscription paid in this visit (a second click after paying) or the one the
+  // provider sent the browser back with: either way the screen waits for it to apply.
+  const [searchParams] = useSearchParams();
+  const [paidReactivationId, setPaidReactivationId] = useState(null);
+  const subscriptionBlocked = decision === 'SUBSCRIPTION_REQUIRED';
+  const pendingReactivationId = subscriptionBlocked
+    ? paidReactivationId || returningReactivationRequestId(searchParams)
+    : null;
+  const currentEnvironment = companies.find((env) => env.clientId === currentClientId);
+  const canceled = subscriptionBlocked && isCanceledSubscription(currentEnvironment);
+  // Whether the subscription was canceled or left unpaid is only known once the environment list
+  // has arrived; until then the screen shows neither story, rather than the wrong one first.
+  const awaitingEnvironment = subscriptionBlocked && environmentsLoading;
 
   // AppLayoutAccessGate only renders this for a decision BLOCKED_ACCESS_CONTENT knows
   // about (see isBlockingAccessDecision in lib/environmentAccessGate.js) — this is a
@@ -233,27 +320,56 @@ function BlockedAccessScreen({ decision }) {
   // learned yet.
   const content = BLOCKED_ACCESS_CONTENT[decision];
   if (!content) return null;
+  const owner = canReactivateSubscription(currentEnvironment);
+  const titleKey = canceled ? CANCELED_SUBSCRIPTION_CONTENT.titleKey : content.titleKey;
+  let messageKey = content.messageKey;
+  if (canceled) {
+    messageKey = owner
+      ? CANCELED_SUBSCRIPTION_CONTENT.ownerMessageKey
+      : CANCELED_SUBSCRIPTION_CONTENT.memberMessageKey;
+  }
 
   return (
     <div
       className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
       data-testid="BlockedAccessScreen__488148"
     >
-      <p className="text-base font-medium text-foreground" data-testid="blocked-access-title">
-        {ui(content.titleKey)}
-      </p>
-      <p className="max-w-md text-sm text-muted-foreground" data-testid="blocked-access-message">
-        {ui(content.messageKey)}
-      </p>
-
-      <Button
-        type="button"
-        className="mt-4"
-        onClick={() => navigate(content.ctaPath)}
-        data-testid="blocked-access-cta"
-      >
-        {ui(content.ctaKey)}
-      </Button>
+      {pendingReactivationId && (
+        <ReactivationPendingNotice
+          apiBaseUrl={detectBaseUrl()}
+          requestId={pendingReactivationId}
+          data-testid="ReactivationPendingNotice__488148" />
+      )}
+      {!pendingReactivationId && awaitingEnvironment && (
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground"
+          data-testid="blocked-access-loading" />
+      )}
+      {!pendingReactivationId && !awaitingEnvironment && (
+        <>
+          <p className="text-base font-medium text-foreground" data-testid="blocked-access-title">
+            {ui(titleKey)}
+          </p>
+          <p className="max-w-md text-sm text-muted-foreground" data-testid="blocked-access-message">
+            {ui(messageKey)}
+          </p>
+          {canceled && owner && (
+            <ReactivateSubscriptionButton
+              apiBaseUrl={detectBaseUrl()}
+              onPaid={setPaidReactivationId}
+              data-testid="ReactivateSubscriptionButton__488148" />
+          )}
+          {!canceled && (
+            <Button
+              type="button"
+              className="mt-4"
+              onClick={() => navigate(content.ctaPath)}
+              data-testid="blocked-access-cta"
+            >
+              {ui(content.ctaKey)}
+            </Button>
+          )}
+        </>
+      )}
 
       {/* Same rationale as NoAccessScreen's own switcher: a blocked TENANT session does not
           mean a blocked ACCOUNT — the account may own other, unaffected environments. */}
@@ -521,6 +637,10 @@ function AppLayoutAccessGate({ menuGroups }) {
   // environment's commercial access cut off) is captured here, decoupled from AuthContext's
   // own windowAccess/capabilities/menuAccess shape.
   const environmentAccessDecision = useEnvironmentAccessGate();
+  // ETP-5489 — a gating request answered 401 with the session still alive (see lib/accessLoadError.js).
+  const accessLoadError = useAccessLoadError();
+  // The flag belongs to this mount: a later session (logout, login) must not inherit it.
+  useEffect(() => clearAccessLoadError, []);
   // ETP-5675 — recorded by the core when another tab signed the browser in as another account.
   const sessionConflict = useAuthOptional()?.sessionConflict;
   // AppLayout is rendered inside AppShellRuntime's AuthProvider (same place
@@ -561,7 +681,31 @@ function AppLayoutAccessGate({ menuGroups }) {
   // a tree with no provider must not throw. `undefined` (no provider, or the state not answered
   // yet) fails closed in `filterMenuGroupsByAccess`, which is what stops the entry painting
   // before its state is known.
-  const firstStepsDismissed = useFirstStepsProgressOptional()?.dismissed;
+  const firstStepsProgress = useFirstStepsProgressOptional();
+  const firstStepsDismissed = firstStepsProgress?.dismissed;
+  // ETP-5577 — productive-only tours are hidden on a demo. The plan comes from the First Steps
+  // provider above, which already resolves it for the checklist.
+  const tenantPlan = firstStepsProgress?.plan;
+  const walkthroughFlows = useMemo(() => walkthroughFlowsForPlan(tenantPlan), [tenantPlan]);
+  // ETP-5577 — the action a "period not open" refusal toast offers (see lib/periodNotAvailable.js).
+  const navigate = useNavigate();
+  const calendarReviewPending = Boolean(firstStepsProgress?.calendarReview?.pending);
+  const calendarReviewOwner = Boolean(firstStepsProgress?.calendarReview?.isOwner);
+  // The calendar's periods, read only when "Ir al calendario" is clicked, to open the right year.
+  const periodApiFetch = useApiFetch(`${NEO_BASE}/open-close-period-control`);
+  const loadPeriods = useCallback(async () => {
+    // shortcut: one page of 1000 periods (~76 years); paginate if a calendar ever outgrows it.
+    const res = await periodApiFetch('/periodControl?_startRow=0&_endRow=1000');
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body?.response?.data ?? [];
+  }, [periodApiFetch]);
+  useEffect(() => {
+    setPeriodRecovery(periodRecoveryFor(
+      { pending: calendarReviewPending, isOwner: calendarReviewOwner,
+        firstStepsDismissed: firstStepsDismissed === true }, navigate, loadPeriods));
+    return () => setPeriodRecovery(null);
+  }, [calendarReviewPending, calendarReviewOwner, firstStepsDismissed, navigate, loadPeriods]);
 
   // ETP-5402 QA follow-up — the caller's own Informes-subsection report access
   // (`fetchMyReportAccess()`), used only as a FALLBACK inside `filterMenuGroupsByAccess`'s
@@ -580,9 +724,25 @@ function AppLayoutAccessGate({ menuGroups }) {
     let cancelled = false;
     fetchMyReportAccess()
       .then((res) => { if (!cancelled) setReportAccess(res?.reportAccess ?? {}); })
-      .catch(() => { if (!cancelled) setReportAccess({}); });
+      .catch((error) => {
+        if (cancelled) return;
+        recordAccessLoadError(error); // ETP-5489 — only for the mount that asked
+        setReportAccess({});
+      });
     return () => { cancelled = true; };
   }, [allowedIds]);
+
+  // ETP-5675 — before every other gate: the menu and access maps below may be the other
+  // account's, or never arrive because the backend refuses this tab's requests.
+  if (sessionConflict) {
+    return <SessionConflictScreen data-testid="SessionConflictScreen__488148" />;
+  }
+
+  // ETP-5489 — before the loading gate: a failed gating request must not leave the layout blank
+  // (or, once the menu fails open, unfiltered) while the session is in fact alive.
+  if (accessLoadError) {
+    return <AccessLoadErrorScreen data-testid="AccessLoadErrorScreen__488148" />;
+  }
 
   // ETP-5395 Point 1 Fix B — must run BEFORE filterMenuGroupsByAccess and the
   // NoAccessScreen size-check below: id-less menu items (no
@@ -591,12 +751,6 @@ function AppLayoutAccessGate({ menuGroups }) {
   // passed in, so gating only from the size-check below would still let
   // <Outlet> mount and those routes become reachable while the real Set is
   // in flight. See AppLayoutLoading's JSDoc above for the full story.
-  // ETP-5675 — before every other gate: the menu and access maps below may be the other
-  // account's, or never arrive because the backend refuses this tab's requests.
-  if (sessionConflict) {
-    return <SessionConflictScreen data-testid="SessionConflictScreen__488148" />;
-  }
-
   if (allowedIds === undefined) {
     return <AppLayoutLoading data-testid="AppLayoutLoading__488148" />;
   }
@@ -657,7 +811,7 @@ function AppLayoutAccessGate({ menuGroups }) {
                     flows are pure data (src/walkthrough/flows); the engine
                     itself lives in app-shell-core and is window-agnostic. */}
                 <WalkthroughProvider
-                  flows={WALKTHROUGH_FLOWS}
+                  flows={walkthroughFlows}
                   onFinish={reportWalkthroughFinish}
                   data-testid="WalkthroughProvider__488148">
                   <AppLayoutInner

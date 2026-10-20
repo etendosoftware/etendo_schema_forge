@@ -2598,3 +2598,31 @@ describe('InlineLinesPanel — commitField error toast dedupe (ETP-5073 / DOC-04
     expect(toast.error).toHaveBeenLastCalledWith('networkError');
   });
 });
+
+describe('InlineLinesPanel — display: tag column (neutral pill)', () => {
+  const TAG_COLUMNS = [
+    { key: 'product', label: 'Product', type: 'string' },
+    { key: 'uOM', label: 'Unit', type: 'string', display: 'tag' },
+    { key: 'note', label: 'Note', type: 'string' },
+  ];
+  const TAG_ROWS = [
+    { id: 'T1', product: 'Widget', uOM: 'u1', 'uOM$_identifier': 'Centimeter', note: 'Centimeter' },
+    { id: 'T2', product: 'Gadget', uOM: '', note: 'x' },
+  ];
+
+  it('shows the unit as a pill on a saved line and nothing for an empty value', () => {
+    const { container } = renderPanel({ columns: TAG_COLUMNS, data: TAG_ROWS });
+    const pills = container.querySelectorAll('.status-tag.status-tag--neutral');
+    expect(pills).toHaveLength(1);
+    expect(pills[0]).toHaveTextContent('Centimeter');
+  });
+
+  it('leaves a column without display:tag as plain text (no pill)', () => {
+    const { container } = renderPanel({
+      columns: TAG_COLUMNS.map((c) => (c.key === 'uOM' ? { ...c, display: undefined } : c)),
+      data: TAG_ROWS,
+    });
+    expect(container.querySelector('.status-tag')).toBeNull();
+    expect(screen.getAllByText('Centimeter').length).toBeGreaterThan(0);
+  });
+});
