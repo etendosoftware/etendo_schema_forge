@@ -4,6 +4,7 @@ import {
   Pencil,
   Archive,
   RefreshCw,
+  Cable,
   Unlink2,
   Plug,
   ArrowLeftRight,
@@ -35,6 +36,9 @@ function AccountRowMenuWriteItems({
   const isArchived = account.active === false;
   // Soft-disconnected: not connected, but the bank link survives and can be revived.
   const bankReconnectable = account.bankReconnectable === true;
+  // ETP-5089: still connected, but the connection stopped refreshing — reconnecting fixes it. Its
+  // own flag: unlike `bankReconnectable` it keeps every connected action (sync, disconnect).
+  const bankConnectionStale = bankConnected && account.bankConnectionStale === true;
 
   return (
     <>
@@ -81,6 +85,21 @@ function AccountRowMenuWriteItems({
                   {ui('financeAccountsMenuSyncNow')}
                 </span>
               </DropdownMenuItem>
+              {/* Same reconnect flow as a deactivated account's item below: the popup re-authorizes
+                  the existing connection and its callback refreshes the health that flagged it.
+                  Cable, not that item's RefreshCw: here it sits right under "Sincronizar ahora",
+                  which already uses RefreshCw, so the two must not look alike. */}
+              {bankConnectionStale ? (
+                <DropdownMenuItem
+                  onClick={() => onBankConnectionAction?.('reconnect', account)}
+                  data-testid={`account-row-menu-reconnect-stale-${account.id}`}
+                >
+                  <Cable className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="CableReconnectStale__ffaf9f" />
+                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                    {ui('financeAccountsBankConnectionReconnect')}
+                  </span>
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
               <DropdownMenuItem
                 onClick={() => onBankConnectionAction?.('disconnect', account)}

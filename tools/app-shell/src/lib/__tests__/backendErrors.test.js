@@ -1515,6 +1515,13 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
       + ' proveedor. Sólo se sincronizarán los movimientos de ese período.',
     'backendError.psd2NoActiveConnection':
       'No se encontró una conexión bancaria activa para la cuenta. Conecta la cuenta primero.',
+    // ETP-5089 — kept byte-identical to the real es_ES entries.
+    'backendError.psd2ConnectionStale':
+      'La sincronización de la cuenta {account} está fallando: {reason}.'
+      + ' Por favor, reconecta la cuenta.',
+    'backendError.psd2ConnectionStaleNoReason':
+      'La sincronización de la cuenta {account} está fallando.'
+      + ' Por favor, reconecta la cuenta.',
   });
 
   // The account name is a free-form financial-account identifier: it contains spaces, a dash and
@@ -1532,6 +1539,18 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
   // parameterized matcher.
   const NO_CONNECTION_RAW = 'No active bank connection found for financial account %s.'
     + ' Connect the account first.';
+  // ETP-5089 — `PSD2_ConnectionStaleReconnect`. The reason is the bank's own free text, so it is
+  // chosen to carry a period and a colon of its own: the matcher must not split on either. It also
+  // ends in its own period, as bank messages usually do, which the `%1.` template doubles into the
+  // `later..` below — exactly what crosses the wire.
+  const STALE_RAW = 'The connection for account Fake Demo Bank - Savings account ETP-5109'
+    + ' has not refreshed successfully since it last failed: Error: token expired. Retry later..'
+    + ' Please reconnect the account.';
+  // What the backend sends when Salt Edge gave no fail_message: StringUtils.defaultString(null)
+  // leaves the slot empty, so the separator runs straight into the suffix.
+  const STALE_NO_REASON_RAW = 'The connection for account Fake Demo Bank - Savings account'
+    + ' ETP-5109 has not refreshed successfully since it last failed: . Please reconnect the'
+    + ' account.';
 
   describe('"The connection for account <name> was found inactive..." parameterized match', () => {
     it('translates to es_ES, interpolating the account name', () => {
@@ -1558,6 +1577,46 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
 
     it('returns the original message unchanged when the translation key is missing (guard)', () => {
       assert.equal(translateBackendError(CONSENT_RAW, (k) => k), CONSENT_RAW);
+    });
+  });
+
+  describe('"The connection for account <name> has not refreshed... failed: <reason>." match', () => {
+    it('translates to es_ES, interpolating the account name and the bank reason', () => {
+      assert.equal(
+        translateBackendError(STALE_RAW, es),
+        'La sincronización de la cuenta Fake Demo Bank - Savings account ETP-5109 está fallando:'
+          + ' Error: token expired. Retry later. Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('a reason that is only a period counts as no reason', () => {
+      const raw = 'The connection for account Caja has not refreshed successfully since it last'
+        + ' failed: .. Please reconnect the account.';
+      assert.equal(
+        translateBackendError(raw, es),
+        'La sincronización de la cuenta Caja está fallando.'
+          + ' Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('drops the reason clause when the bank gave none, instead of an empty slot', () => {
+      assert.equal(
+        translateBackendError(STALE_NO_REASON_RAW, es),
+        'La sincronización de la cuenta Fake Demo Bank - Savings account ETP-5109 está fallando.'
+          + ' Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('does not swallow the sibling "was found inactive" message sharing its prefix', () => {
+      assert.equal(
+        translateBackendError(INACTIVE_RAW, es),
+        'La conexión de la cuenta Fake Demo Bank - Savings account ETP-5109 se encontró inactiva'
+          + ' durante la sincronización. Por favor, reconecta la cuenta.',
+      );
+    });
+
+    it('returns the original message unchanged when the translation key is missing (guard)', () => {
+      assert.equal(translateBackendError(STALE_RAW, (k) => k), STALE_RAW);
     });
   });
 

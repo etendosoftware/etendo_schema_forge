@@ -3692,7 +3692,11 @@ finished**, as relative time. Cash, offline/reconnectable and unconnected accoun
 - **Source:** one column, `FIN_Financial_Account.EM_PSD2_Last_Sync_Date` (psd2 module). It is
   stamped only by a sync that finished OK, including one that brought 0 new transactions. It is NOT
   stamped on an error, an expired consent, a connection that went inactive during the sync, a
-  missing API key, an `Import To Date` skip, or when the account has no active connection.
+  **stale** connection that brought nothing (ETP-5089: Salt Edge still says active but its last
+  failed fetch is newer than its last success — stamping it would show a fresh sync over frozen
+  data), a missing API key, an `Import To Date` skip, or when the account has no active connection.
+  The same rule holds on every path: the Classic button and Etendo GO "Sync now"
+  (`fetchAccountTransactions`) and the scheduled process (`BankStatementsSyncService`).
 - **Where it is exposed:**
   - `financial-accounts-page` (page endpoint): `accounts[].lastSyncDate`, see `financial-accounts-page.md`.
   - `GET bank-connection?action=status` and the `sync` response: `lastSyncDate`.

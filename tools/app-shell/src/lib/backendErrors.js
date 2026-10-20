@@ -1141,6 +1141,34 @@ function matchConsentExpired(msg) {
   return account ? { account } : null;
 }
 
+// ETP-5089: `PSD2_ConnectionStaleReconnect`, raised on the same fetchAccountTransactions path when
+// Salt Edge still reports the connection active but its last failed fetch is newer than its last
+// success. Two slots: the account name (%0) and the bank's own failure text (%1). The reason is
+// free text written by the bank — it may carry periods, colons or nothing at all (the backend
+// sends "" when Salt Edge gave no message) — so it is captured as whatever sits between the fixed
+// mid and suffix, and an empty reason still counts as a match. It shares its prefix with
+// CONNECTION_WENT_INACTIVE_PREFIX, which is safe: the two differ in the text right after the name.
+const CONNECTION_STALE_PREFIX = 'The connection for account ';
+const CONNECTION_STALE_MID = ' has not refreshed successfully since it last failed: ';
+const CONNECTION_STALE_SUFFIX = '. Please reconnect the account.';
+
+function matchConnectionStale(msg) {
+  if (!msg.startsWith(CONNECTION_STALE_PREFIX) || !msg.endsWith(CONNECTION_STALE_SUFFIX)) {
+    return null;
+  }
+  const body = msg.slice(CONNECTION_STALE_PREFIX.length, -CONNECTION_STALE_SUFFIX.length);
+  const mid = body.indexOf(CONNECTION_STALE_MID);
+  if (mid <= 0) {
+    return null;
+  }
+  return {
+    account: body.slice(0, mid),
+    // The bank's text usually ends in its own period, and the template supplies the closing one:
+    // drop it so the toast never reads "…del banco.. Por favor".
+    reason: body.slice(mid + CONNECTION_STALE_MID.length).trim().replace(/\.+$/, '').trim(),
+  };
+}
+
 // The AD_MESSAGE template repeats `%0`, so the same day count appears twice in the rendered string.
 // Both occurrences are captured and required to agree — a message whose two numbers differ is not
 // this message and must not be translated as if it were.
@@ -1290,6 +1318,15 @@ function resolveParameterizedMatch(msg) {
       };
     }
     return { key: 'backendError.invalidAccountBpOnly', params: { bp: accountMatch.bp } };
+  }
+
+  // Hand-written for the same reason (ETP-5089): when the bank gave no failure text the sentence
+  // must drop the "último fallo: <reason>" clause, not render it with an empty slot.
+  const staleMatch = matchConnectionStale(msg);
+  if (staleMatch) {
+    return staleMatch.reason
+      ? { key: 'backendError.psd2ConnectionStale', params: { ...staleMatch } }
+      : { key: 'backendError.psd2ConnectionStaleNoReason', params: { account: staleMatch.account } };
   }
 
   for (const [matcher, key] of PARAMETERIZED_MATCHERS) {
