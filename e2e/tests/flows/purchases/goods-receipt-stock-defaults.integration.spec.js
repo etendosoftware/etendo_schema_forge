@@ -1,5 +1,7 @@
 // @covers artifacts/goods-receipt/custom/GoodsReceiptBottomPanel.jsx
 // @covers artifacts/goods-receipt/custom/GoodsReceiptActions.jsx
+// @covers artifacts/goods-receipt/custom/ConfirmGoodsReceiptModal.jsx
+// @covers tools/app-shell/src/components/contract-ui/ConfirmInOutModal.jsx
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import { login, navigateTo } from '../../helpers/auth.js';
@@ -23,7 +25,9 @@ import {
  *          quantity the classic AD callout injects, and (b) a schema_forge_core
  *          pipeline fix so decisions.json's movementQuantity.defaultValue: "1"
  *          actually reaches the generated frontend instead of the raw AD
- *          default of 0.
+ *          default of 0. ETP-5062 later dropped that "1" override on purpose:
+ *          a manually added line now defaults to 0 and the user types the
+ *          quantity. The stock-prefill guard (part a) is what still matters.
  *
  * Flow (single test, same product end to end):
  *   1. Login (real backend)
@@ -32,10 +36,9 @@ import {
  *      Proves Bug 1: confirming must succeed even though the product had no
  *      prior stock / no resolved storage bin.
  *   4. Second goods receipt for the SAME product (now has 10 units of stock)
- *      → assert the Movement Quantity field defaults to 1 right after
- *      selecting the product, NOT the on-hand stock (10) and NOT 0.
- *      Proves Bug 2.
- *   5. Confirm the second receipt too as a final sanity check.
+ *      → assert the Movement Quantity field defaults to 0 right after
+ *      selecting the product, NOT the on-hand stock (10). Proves Bug 2.
+ *   5. Type quantity 1 and confirm the second receipt as a final sanity check.
  *
  * Scope: goods-receipt ONLY (goods-shipment is explicitly out of scope for
  * ETP-4671). Skipped unless E2E_GOODS_RECEIPT_INTEGRATION=1 is set — needs a
@@ -177,9 +180,11 @@ async function fillGoodsReceiptLine(page, { searchKey, quantity } = {}) {
     option,
     `Product search should return the receipt's product ("${searchKey}")`,
   ).toBeVisible({ timeout: 10_000 });
-  // Start listening for callout (price/quantity fill) BEFORE clicking the product
+  // Start listening for callout (price/quantity fill) BEFORE clicking the product.
+  // Matched on `/callout`, not any NEO response: the quantity sample below is only a
+  // Bug 2 proof once the callout that could inject the stock has landed (ETP-5769).
   const productCalloutResponse = page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
+    (resp) => resp.url().includes('/sws/neo/') && resp.url().includes('/callout') && resp.status() < 400,
     { timeout: 15_000 },
   );
   await option.click();
@@ -282,7 +287,15 @@ async function confirmGoodsReceipt(page, { createInvoice = false } = {}) {
   await confirmBtn.click();
   await confirmResponse;
 
-  const stillOpen = await modal.isVisible({ timeout: 1_000 }).catch(() => false);
+  // The first NEO write only starts the confirm chain; the modal keeps showing "Procesando…"
+  // until it ends (ETP-5769). Judge it once settled: closed (success) or its confirm button
+  // re-enabled (loading over, an inline error left on screen).
+  await expect(async () => {
+    const open = await modal.isVisible();
+    expect(!open || await confirmBtn.isEnabled({ timeout: 1_000 })).toBe(true);
+  }, 'Confirm modal should finish processing').toPass({ timeout: 30_000 });
+
+  const stillOpen = await modal.isVisible();
   if (stillOpen) {
     const modalText = await modal.innerText().catch(() => '<could not read>');
     expect(
@@ -341,7 +354,7 @@ test.describe('Goods Receipt — Stock defaults (ETP-4671, integration)', () => 
     'Set E2E_GOODS_RECEIPT_INTEGRATION=1 to run this live goods-receipt stock-defaults integration test.',
   );
 
-  test('receipt confirms with zero prior stock, then defaults quantity to 1 on the next receipt', async ({ page }) => {
+  test('receipt confirms with zero prior stock, then does not prefill the stock as quantity on the next receipt', async ({ page }) => {
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
 
@@ -373,32 +386,26 @@ test.describe('Goods Receipt — Stock defaults (ETP-4671, integration)', () => 
     });
 
     let qtyValueAfterProductSelect;
-    await test.step('Second goods receipt — verify quantity defaults to 1 (Bug 2)', async () => {
+    await test.step('Second goods receipt — verify quantity defaults to 0, not the stock (Bug 2)', async () => {
       // No Guardar: "+ Añadir líneas" saves the header itself, the path a user takes.
       await openGoodsReceiptFirstLine(page, { via: 'emptyState' });
 
       const result = await fillGoodsReceiptLine(page, {
         searchKey,
-        quantity: null, // do NOT touch it — this is the core regression assertion
+        quantity: 1, // typed only AFTER the default is sampled — that sample is the assertion
       });
       qtyValueAfterProductSelect = result.qtyValueAfterProductSelect;
 
+      // ETP-5062 made a manually added line default to 0 (the user types the quantity);
+      // the regression guarded here is pre-filling it with the on-hand stock (10).
       expect(
-        qtyValueAfterProductSelect === '1' || qtyValueAfterProductSelect === '' || qtyValueAfterProductSelect === null,
-        `[Bug 2 regression] Movement Quantity should default to 1 (or render empty), ` +
+        qtyValueAfterProductSelect === '0' || qtyValueAfterProductSelect === '' || qtyValueAfterProductSelect === null,
+        `[Bug 2 regression] Movement Quantity should default to 0 (or render empty), ` +
         `not the product's on-hand stock. Got: "${qtyValueAfterProductSelect}"`,
       ).toBe(true);
-      expect(
-        qtyValueAfterProductSelect,
-        '[Bug 2 regression] Movement Quantity must NOT be pre-filled with the stock value (10)',
-      ).not.toBe('10');
-      expect(
-        qtyValueAfterProductSelect,
-        '[Bug 2 regression] Movement Quantity must NOT be pre-filled with 0',
-      ).not.toBe('0');
     });
 
-    await test.step('Sanity-confirm the second receipt (quantity 1 is valid)', async () => {
+    await test.step('Sanity-confirm the second receipt (typed quantity 1)', async () => {
       await expectLineCount(page, 1);
 
       await confirmGoodsReceipt(page, { createInvoice: false });

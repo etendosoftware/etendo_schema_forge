@@ -48,26 +48,30 @@
           "label": "Business Partner",
           "favname": "Business Partner",
           "hidden": true,
+          "redirect": "/contacts",
           "windowId": "123"
         },
         {
           "name": "deal",
           "label": "Deal",
           "favname": "Deal",
-          "hidden": true
+          "hidden": true,
+          "routeOnly": true
         },
         {
           "name": "activity",
           "label": "Activity",
           "favname": "Activity",
           "hidden": true,
+          "routeOnly": true,
           "windowId": "800060"
         },
         {
           "name": "lead",
           "label": "Lead",
           "favname": "Lead",
-          "hidden": true
+          "hidden": true,
+          "routeOnly": true
         },
         {
           "name": "hr",
@@ -79,13 +83,15 @@
           "name": "employee",
           "label": "Employee",
           "favname": "Employee",
-          "hidden": true
+          "hidden": true,
+          "routeOnly": true
         },
         {
           "name": "absence",
           "label": "Absence",
           "favname": "Absence",
-          "hidden": true
+          "hidden": true,
+          "routeOnly": true
         }
       ]
     },
@@ -222,7 +228,8 @@
           "name": "warehouse-storage-bins",
           "label": "Storage Bin",
           "favname": "Storage Bin",
-          "hidden": true
+          "hidden": true,
+          "routeOnly": true
         },
         {
           "name": "inventory-stock-report",
@@ -242,17 +249,20 @@
         {
           "name": "project",
           "label": "Project",
-          "favname": "Project"
+          "favname": "Project",
+          "routeOnly": true
         },
         {
           "name": "time-tracking",
           "label": "Time Tracking",
-          "favname": "Time Tracking"
+          "favname": "Time Tracking",
+          "routeOnly": true
         },
         {
           "name": "document",
           "label": "Document",
-          "favname": "Document"
+          "favname": "Document",
+          "routeOnly": true
         }
       ]
     },
@@ -284,6 +294,7 @@
           "label": "Match Rule",
           "favname": "Match Rule",
           "hidden": true,
+          "routeOnly": true,
           "windowId": "24963D64E83B4543A7F6BD248CF944EE"
         },
         {
@@ -321,6 +332,7 @@
           "label": "Fiscal Calendar",
           "favname": "Fiscal Calendar",
           "hidden": true,
+          "redirect": "/calendar",
           "windowId": "117"
         },
         {
@@ -328,6 +340,7 @@
           "label": "Periods",
           "favname": "Open/Close Period Control",
           "hidden": true,
+          "redirect": "/calendar",
           "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A"
         },
         {
@@ -364,7 +377,8 @@
           "name": "recurring-invoice",
           "label": "Recurring Invoice",
           "favname": "Recurring Invoice",
-          "hidden": true
+          "hidden": true,
+          "routeOnly": true
         },
         {
           "name": "fiscal-monitor",

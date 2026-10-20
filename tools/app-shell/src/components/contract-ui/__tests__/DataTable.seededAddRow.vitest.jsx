@@ -1,4 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+// @covers tools/app-shell/src/components/contract-ui/DataTable.jsx
+// @covers tools/app-shell/src/lib/auxReference.js
+import { render, screen, within, fireEvent } from '@testing-library/react';
 
 // Mock i18n hooks — every label hook returns the key verbatim (no hardcoded English).
 vi.mock('@/i18n', () => ({
@@ -48,6 +50,17 @@ vi.mock('../ProductStockSearchDrawer.jsx', () => ({
 }));
 vi.mock('../SelectorInput.jsx', () => ({
   SelectorInput: () => <div data-testid="selector-input" />,
+}));
+vi.mock('../InlineSearchCombo.jsx', () => ({
+  InlineSearchCombo: ({ field, onChange }) => (
+    <button
+      type="button"
+      data-testid={`pick-${field.key}`}
+      onClick={() => onChange('P1', 'Widget', { id: 'P1', _aux: globalThis.__pickAux })}
+    >
+      pick
+    </button>
+  ),
 }));
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
@@ -149,5 +162,86 @@ describe('DataTable — seeded inline add-row column', () => {
     expect(rateInput).toHaveValue('');
     // The display column still shows the seeded label.
     expect(screen.getByTestId('inline-add-cell-currency')).toHaveTextContent('EUR');
+  });
+});
+
+describe('DataTable — display:tag derived add-row cell', () => {
+  const TAG_COLUMNS = [
+    { key: 'rate', label: 'Rate', type: 'amount' },
+    { key: 'uOM', label: 'Unit', type: 'string', display: 'tag' },
+    { key: 'currency', label: 'Currency', type: 'string' },
+  ];
+  function renderTag(seedValues) {
+    return render(
+      <DataTable
+        columns={TAG_COLUMNS}
+        data={[]}
+        addRow={{ active: true, fields: FIELDS, onAdd: vi.fn(), onCancel: vi.fn(), catalogs: {}, seedValues }}
+        selectable={false}
+      />
+    );
+  }
+
+  it('renders the pill when the add row holds a unit identifier', () => {
+    renderTag({ uOM: 'u1', 'uOM$_identifier': 'Centimeter' });
+    const cell = screen.getByTestId('inline-add-cell-uOM');
+    expect(within(cell).getByTestId('status-tag')).toHaveTextContent('Centimeter');
+    expect(cell).not.toHaveTextContent(DASH);
+  });
+
+  it('keeps the dash when there is no value yet', () => {
+    renderTag(undefined);
+    const cell = screen.getByTestId('inline-add-cell-uOM');
+    expect(within(cell).queryByTestId('status-tag')).toBeNull();
+    expect(cell).toHaveTextContent(DASH);
+  });
+
+  it('leaves other derived columns as plain text', () => {
+    renderTag({ currency: 'c1', 'currency$_identifier': 'EUR', uOM: 'u1', 'uOM$_identifier': 'Unit' });
+    const cell = screen.getByTestId('inline-add-cell-currency');
+    expect(cell).toHaveTextContent('EUR');
+    expect(within(cell).queryByTestId('status-tag')).toBeNull();
+  });
+});
+
+describe('DataTable — product pick fills display:tag columns from _aux', () => {
+  const PRODUCT_FIELD = { key: 'product', label: 'Product', type: 'selector', entity: 'lines' };
+  function renderPick(columns, aux) {
+    globalThis.__pickAux = aux;
+    render(
+      <DataTable
+        columns={columns}
+        data={[]}
+        apiBaseUrl="/api"
+        entity="lines"
+        addRow={{ active: true, fields: [PRODUCT_FIELD], onAdd: vi.fn(), onCancel: vi.fn(), catalogs: {} }}
+        selectable={false}
+      />
+    );
+    fireEvent.click(screen.getByTestId('pick-product'));
+  }
+  const tagCols = [
+    { key: 'product', label: 'Product', type: 'selector' },
+    { key: 'uOM', label: 'Unit', type: 'string', display: 'tag' },
+  ];
+
+  it('shows the unit pill taken from _aux._UOM', () => {
+    renderPick(tagCols, { _UOM: 'UOM(100) (name: Centimeter)' });
+    expect(within(screen.getByTestId('inline-add-cell-uOM')).getByTestId('status-tag')).toHaveTextContent('Centimeter');
+  });
+
+  it('does not invent a unit from a malformed _aux value', () => {
+    renderPick(tagCols, { _UOM: '12' });
+    const cell = screen.getByTestId('inline-add-cell-uOM');
+    expect(within(cell).queryByTestId('status-tag')).toBeNull();
+    expect(cell).toHaveTextContent(DASH);
+  });
+
+  it('does not touch a same-named column that is not display:tag', () => {
+    renderPick(
+      [tagCols[0], { key: 'uOM', label: 'Unit', type: 'string' }],
+      { _UOM: 'UOM(100) (name: Centimeter)' },
+    );
+    expect(screen.getByTestId('inline-add-cell-uOM')).toHaveTextContent(DASH);
   });
 });

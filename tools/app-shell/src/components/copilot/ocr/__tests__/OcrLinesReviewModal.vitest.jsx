@@ -96,3 +96,38 @@ describe('OcrLinesReviewModal — stable layout', () => {
     screen.getAllByRole('cell').forEach((cell) => expect(cell.className).toContain('min-w-0'));
   });
 });
+
+// ETP-5654 — back navigation and state preservation.
+describe('OcrLinesReviewModal — back navigation', () => {
+  it('renders no back button unless the flow provides onBack', () => {
+    renderModal([{ description: 'A' }]);
+    expect(screen.queryByTestId('ocr-lines-back')).not.toBeInTheDocument();
+  });
+
+  it('reports the current rows through onStateChange and then calls onBack', async () => {
+    const user = userEvent.setup();
+    const onBack = vi.fn();
+    const onStateChange = vi.fn();
+    const { onSubmit, onCancel } = renderModal(
+      [{ description: 'A', tax_id: null, tax_rate: 21 }],
+      { onBack, onStateChange },
+    );
+    await user.click(screen.getByTestId('pick'));
+    await user.click(screen.getByTestId('ocr-lines-back'));
+
+    expect(onStateChange).toHaveBeenCalledTimes(1);
+    expect(onStateChange.mock.calls[0][0][0]).toMatchObject({ description: 'A', tax_id: 'T10' });
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('seeds the rows from initialRows (earlier edits) instead of the fresh lines', () => {
+    renderModal(
+      [{ description: 'fresh', tax_id: null }],
+      { initialRows: [{ description: 'edited', tax_label: 'IVA 10%', tax_id: 'T10', tax_rate: 10, tax_no_rate_match: false, _rowId: 'r1' }] },
+    );
+    expect(screen.getByTestId('value-text')).toHaveTextContent('edited');
+    expect(screen.getByTestId('value-entity')).toHaveTextContent('T10');
+  });
+});
