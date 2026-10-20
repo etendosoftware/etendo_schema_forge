@@ -229,10 +229,10 @@ Generating a Sales Invoice from `GoodsShipmentActions.jsx` (the `topbarRight` co
 close the result modal with a full `window.location.reload()`. `GoodsShipmentActions` now
 accepts the `onRefresh` prop `DetailView.jsx`'s topbar slot already passes it (`() =>
 hook.fetchById(recordId)`) and calls that instead — in the invoice-result `ConfirmResultModal`'s
-`onClose` (skipped when the user navigated to the new invoice instead) and as the `ReturnWizard`
-`onSuccess` fallback when the created return has no id. Since ETP-5729 a created return with an
-id is announced in a second `ConfirmResultModal` (see the ETP-5729 section) whose `onClose`
-applies the same refresh-unless-navigated rule. The **Related Documents**
+`onClose` (skipped when the user navigated to the new invoice instead). For returns, since
+ETP-5729 the refresh runs in the `ReturnWizard` `onSuccess` itself, as soon as the return exists,
+and the return-result `ConfirmResultModal` (see the ETP-5729 section) no longer refreshes on
+close. The **Related Documents**
 tab (`artifacts/goods-shipment/custom/RelatedDocuments.jsx`) needs no separate refetch: it
 derives its chips straight from `data.linkedOrders` / `linkedInvoices` / `returnReceipts`, so
 refreshing the header via `onRefresh` is sufficient to update it — no manual reload required.
@@ -556,10 +556,10 @@ Purchases (`GoodsReceiptActions.jsx`). `GoodsShipmentActions.jsx` used to naviga
 created return (`returnedDoc`) and renders the shared `ConfirmResultModal` with the doc type
 `devolucionVenta` ("Devolución de venta creada" / "Sales return created", card label
 "Devolución de venta", button "Ver devolución"), routed to `/return-material-receipt/<id>`. The
-user chooses: **Ver devolución** navigates to the return; **Cerrar** stays on the shipment and
-calls `onRefresh` so the Documentos section shows the new return chip (ETP-4779 rule, skipped
-when the user navigated). When the action returns no id, no modal is shown and `onRefresh` runs
-directly, as before. The modal's `documentStatus` is the literal `'DR'`: `createReturn` answers only
+user chooses: **Ver devolución** navigates to the return; **Cerrar** stays on the shipment.
+`onRefresh` runs in the wizard `onSuccess`, before the modal is shown, whichever of the two the
+user picks (see *Stale shipment after a return* below). When the action returns no id, no modal
+is shown; the refresh is the same. The modal's `documentStatus` is the literal `'DR'`: `createReturn` answers only
 `{ id, documentNo }` and always creates the return in draft. `devolucionVenta` is a new `TYPE_CONFIG` entry in
 `tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx`, with
 `confirmResultModal.title.devolucionVenta` / `confirmResultModal.docType.devolucionVenta` in
@@ -568,3 +568,37 @@ directly, as before. The modal's `documentStatus` is the literal `'DR'`: `create
 Manual check: on a completed shipment, Crear Devolución → pick a line → Crear Devolución: the
 result modal appears; Cerrar keeps you on the shipment with the return in Documentos; Ver
 devolución opens the return receipt.
+
+### Stale shipment after a return — ETP-5729 follow-up
+
+Two reports, one cause: the shipment record is served from the shared client-side record cache
+(`useEntity` → app-shell-core `queryCache`, `recordStaleTime` 30 s; a non-forced `fetchById` on
+arrival reuses a fresh entry), and nothing marked it stale.
+
+- **After creating a return** the shipment was refreshed only when the result modal was closed
+  with **Cerrar**, and never when the user chose **Ver devolución** (`resultNavigatedRef` skipped
+  it). Coming back within 30 s showed the pre-return shipment: «Crear devolución» visible
+  (`canCreateReturn` still `true`) over a wizard with nothing left to return. Now
+  `GoodsShipmentActions.jsx` calls `onRefresh` (entity-cache invalidation + forced refetch) in the
+  wizard `onSuccess`, so the cache holds the post-return shipment whatever the user does next.
+  The record stays on screen while it reloads (DetailView only blanks out when it has no record).
+- **After deleting (or editing, completing) a return** in `return-material-receipt`, going back
+  to the shipment still listed the deleted return in Documentos and kept «Crear devolución»
+  hidden. `tools/app-shell/src/lib/crossSpecCacheInvalidation.js` now maps
+  `return-material-receipt → goods-shipment` in `WRITE_INVALIDATES_SPECS`, so every successful
+  write to a return marks the cached shipment stale and the next arrival refetches it.
+- **Wizard lines.** Opening the wizard now clears the previous opening's lines and passes
+  `linesLoading` to `CreateReturnWizard.jsx` until `availableShipmentLines` answers: the dialog
+  shows *Cargando...* meanwhile, and *No queda nada por devolver de este documento...*
+  (`backendError.returnNothingLeft`, reused) when the answer is empty, instead of an empty table.
+  A caller that does not pass `linesLoading` (Purchases today) keeps the previous rendering.
+- **Column label.** The wizard's quantity column read «Entregado» (`delivered`), but its value is
+  `movementQuantity` from `availableShipmentLines` / `availableReceiptLines`: shipped minus what
+  non-voided returns (drafts included) already hold. It now reads «Disponible para devolver» /
+  "Available to return" (`availableToReturn`, new in `en_US`, `es_ES`, `es_AR`). Shared with
+  goods-receipt. `delivered` stays in the locales.
+
+Manual check: shipment with 1 line of 4 → return 2 → **Ver devolución** → back: the button is
+still there and the wizard offers 2. Return the other 2 → the button disappears without a
+reload. Delete one of the draft returns → back to the shipment: the return is gone from
+Documentos and the button is back.

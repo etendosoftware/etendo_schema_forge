@@ -40,8 +40,8 @@ vi.mock('@/windows/custom/goods-shipment/useShipmentPdf', () => ({
 }));
 
 vi.mock('@generated/goods-shipment/custom/ReturnWizard', () => ({
-  default: ({ open, onSuccess }) => (
-    <div data-testid="return-wizard">
+  default: ({ open, onSuccess, lines, linesLoading }) => (
+    <div data-testid="return-wizard" data-lines-count={lines?.length ?? 0} data-lines-loading={String(linesLoading)}>
       {open && <button type="button" data-testid="wizard-success" onClick={() => onSuccess({ id: 'rmr-1', documentNo: 'DEV-1' })} />}
       {open && <button type="button" data-testid="wizard-success-no-id" onClick={() => onSuccess({})} />}
     </div>
@@ -136,24 +136,52 @@ describe('GoodsShipmentActions', () => {
       expect(mockNavigate).not.toHaveBeenCalled();
     });
 
-    it('closing the result modal refreshes the shipment; opening the return navigates instead', async () => {
-      vi.useFakeTimers();
-      try {
-        const onRefresh = vi.fn();
-        renderActions({ ...returnable, onRefresh });
-        fireEvent.click(screen.getByText('createReturn'));
-        fireEvent.click(screen.getByTestId('wizard-success'));
-        fireEvent.click(screen.getByTestId('result-modal-close'));
-        act(() => { vi.runAllTimers(); });
-        expect(onRefresh).toHaveBeenCalledTimes(1);
+    // Bug: the shipment was refreshed only when the result modal was CLOSED, and not at all when
+    // the user opened the return from it (resultNavigatedRef skip). The shared record cache then
+    // kept serving the pre-return shipment (canCreateReturn: true, related documents without the
+    // new return) to the next arrival, so «Crear devolución» stayed visible over a wizard with
+    // nothing left to return. The refresh now runs as soon as the return exists.
+    it('refreshes the shipment as soon as the return is created, however the result modal is left', () => {
+      const onRefresh = vi.fn();
+      renderActions({ ...returnable, onRefresh });
+      fireEvent.click(screen.getByText('createReturn'));
+      fireEvent.click(screen.getByTestId('wizard-success'));
+      // Before any interaction with the result modal.
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByTestId('result-modal-close'));
+      // Closing does not refetch a second time.
+      expect(onRefresh).toHaveBeenCalledTimes(1);
 
-        fireEvent.click(screen.getByText('createReturn'));
-        fireEvent.click(screen.getByTestId('wizard-success'));
-        fireEvent.click(screen.getByTestId('result-modal-view'));
-        expect(mockNavigate).toHaveBeenCalledWith('/return-material-receipt/rmr-1');
-      } finally {
-        vi.useRealTimers();
-      }
+      fireEvent.click(screen.getByText('createReturn'));
+      fireEvent.click(screen.getByTestId('wizard-success'));
+      expect(onRefresh).toHaveBeenCalledTimes(2);
+      fireEvent.click(screen.getByTestId('result-modal-view'));
+      expect(mockNavigate).toHaveBeenCalledWith('/return-material-receipt/rmr-1');
+      expect(onRefresh).toHaveBeenCalledTimes(2);
+    });
+
+    // The wizard used to reopen on the PREVIOUS fetch's lines until the new answer arrived (or
+    // forever, when it failed): after a return those are quantities that are no longer returnable.
+    it('reopening the wizard drops the previous lines and flags them as loading until the new answer', async () => {
+      let resolveSecond;
+      globalThis.fetch = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ response: { data: [{ id: 'l1', movementQuantity: 4 }] } }) })
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+      renderActions(returnable);
+      fireEvent.click(screen.getByText('createReturn'));
+      await waitFor(() => expect(screen.getByTestId('return-wizard')).toHaveAttribute('data-lines-count', '1'));
+      expect(screen.getByTestId('return-wizard')).toHaveAttribute('data-lines-loading', 'false');
+      fireEvent.click(screen.getByTestId('wizard-success'));
+
+      fireEvent.click(screen.getByText('createReturn'));
+      expect(screen.getByTestId('return-wizard')).toHaveAttribute('data-lines-count', '0');
+      expect(screen.getByTestId('return-wizard')).toHaveAttribute('data-lines-loading', 'true');
+
+      await act(async () => {
+        resolveSecond({ ok: true, json: async () => ({ response: { data: [] } }) });
+      });
+      expect(screen.getByTestId('return-wizard')).toHaveAttribute('data-lines-count', '0');
+      expect(screen.getByTestId('return-wizard')).toHaveAttribute('data-lines-loading', 'false');
     });
 
     it('falls back to onRefresh with no result modal when the created return has no id', () => {

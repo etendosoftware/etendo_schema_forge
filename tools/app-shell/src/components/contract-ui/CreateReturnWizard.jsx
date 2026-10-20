@@ -81,6 +81,10 @@ export default function CreateReturnWizard({
   onClose,
   sourceData,
   lines = [],
+  // Optional. `true` while the caller is still fetching `lines`; `false` once it has its answer.
+  // Left undefined by a caller that does not report it, which keeps the previous rendering
+  // (no loading row, no empty state) — see showEmpty below.
+  linesLoading,
   base,
   headers,
   onSuccess,
@@ -171,6 +175,11 @@ export default function CreateReturnWizard({
     }
   };
 
+  // Only a caller that reported loading can say "nothing to return": an unreported state may
+  // still be an in-flight fetch, and flashing «nothing left» over it would be a false answer.
+  const showLoading = linesLoading === true && lines.length === 0;
+  const showEmpty = linesLoading === false && lines.length === 0;
+
   const canProceed = selectedLines.length > 0 && selectedLines.every((l) => quantities[l.id] > 0);
 
   const cellStyle = { borderBottom: '0.5px solid hsl(var(--border) / 0.5)' };
@@ -198,6 +207,17 @@ export default function CreateReturnWizard({
 
         {/* Lines to return */}
         <div className="px-6 pb-4 border-b border-border">
+          {showLoading && (
+            <p className="text-sm text-muted-foreground" style={{ marginTop: 16 }} data-testid="CreateReturnWizard__loading">
+              {ui('loading')}
+            </p>
+          )}
+          {showEmpty && (
+            <p className="text-sm text-muted-foreground" style={{ marginTop: 16 }} data-testid="CreateReturnWizard__empty">
+              {ui('backendError.returnNothingLeft')}
+            </p>
+          )}
+          {!showLoading && !showEmpty && (
           <div className="max-h-[280px] overflow-y-auto" style={{ marginTop: 16 }}>
             <table className="w-full" style={{ fontSize: 13, tableLayout: 'fixed' }}>
               <colgroup>
@@ -215,7 +235,7 @@ export default function CreateReturnWizard({
                       data-testid="MiniCheck__955eac" />
                   </th>
                   <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
-                  <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('delivered')}</th>
+                  <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('availableToReturn')}</th>
                   <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('returnQty')}</th>
                 </tr>
               </thead>
@@ -271,6 +291,7 @@ export default function CreateReturnWizard({
               </tbody>
             </table>
           </div>
+          )}
 
           {/* Reason field */}
           <div className="mt-4">

@@ -17479,6 +17479,7 @@
     "reasonForReturn": "Motivo de devolución",
     "delivered": "Entregado",
     "returnQty": "Cant. devolución",
+    "availableToReturn": "Disponible para devolver",
     "reason": "Motivo:",
     "allShipmentsAlreadyInvoiced": "Todos los albaranes seleccionados ya están facturados",
     "selectShipmentsSameCustomer": "Selecciona albaranes del mismo cliente",

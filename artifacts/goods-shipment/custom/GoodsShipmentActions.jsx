@@ -22,6 +22,9 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [returnLines, setReturnLines] = useState([]);
+  // True from the moment the wizard opens until availableShipmentLines answers (or fails), so the
+  // wizard can tell "still loading" apart from "nothing left to return".
+  const [returnLinesLoading, setReturnLinesLoading] = useState(false);
   const [showSend, setShowSend] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [invoiceResult, setInvoiceResult] = useState(null);
@@ -149,6 +152,11 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   useEffect(() => {
     if (!wizardOpen || !recordId || !base) return;
     let cancelled = false;
+    // ETP-5729 — drop the previous opening's lines: after a return they hold quantities that are
+    // no longer returnable, and they used to stay on screen until (or, on a failed request,
+    // instead of) the new answer.
+    setReturnLines([]);
+    setReturnLinesLoading(true);
     (async () => {
       try {
         const res = await apiFetch(
@@ -161,7 +169,9 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         if (!res.ok || cancelled) return;
         const json = await res.json();
         if (!cancelled) setReturnLines(json?.response?.data || []);
-      } catch { /* silent */ }
+      } catch { /* silent */ } finally {
+        if (!cancelled) setReturnLinesLoading(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [wizardOpen, recordId, base, apiFetch]);
@@ -448,16 +458,10 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           // createReturn answers only { id, documentNo } and always creates the return in
           // draft, so the status is stated here instead of read from a field it never sends.
           docs={[{ type: 'devolucionVenta', num: returnedDoc.documentNo, documentStatus: 'DR', route: `/return-material-receipt/${returnedDoc.id}` }]}
-          navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
-          onClose={() => {
-            setReturnedDoc(null);
-            setTimeout(() => {
-              // ETP-4779 — same partial-refresh rationale as the invoice
-              // confirmation panel above.
-              if (!resultNavigatedRef.current) onRefresh?.();
-              resultNavigatedRef.current = false;
-            }, 0);
-          }}
+          // No refresh here: the shipment was already refreshed when the return was created (see
+          // the wizard's onSuccess below), so closing or opening the return needs nothing more.
+          navigate={navigate}
+          onClose={() => setReturnedDoc(null)}
         />,
         document.body,
       )}
@@ -470,19 +474,21 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         onClose={() => setWizardOpen(false)}
         shipmentData={data}
         lines={returnLines}
+        linesLoading={returnLinesLoading}
         base={base}
         onSuccess={(returnData) => {
           setWizardOpen(false);
-          if (returnData?.id) {
-            // ETP-5729 — same as Purchases (GoodsReceiptActions): announce the
-            // created return in ConfirmResultModal and let the user choose to
-            // open it, instead of navigating away automatically.
-            setReturnedDoc(returnData);
-          } else {
-            // ETP-4779 — partial refresh (see rationale above) instead of a full
-            // page reload when there's no id to navigate to.
-            onRefresh?.();
-          }
+          // ETP-5729 — refresh the shipment NOW, not when the result modal closes. Its
+          // canCreateReturn, its returnReceipts chips and (on the next opening) the wizard's lines
+          // all changed with this return. Refreshing only on close skipped the «open the return»
+          // path entirely, and the shared record cache then served the pre-return shipment on the
+          // way back: «Crear devolución» stayed visible over a wizard with nothing to return.
+          // ETP-4779 — partial refresh (onRefresh invalidates the entity cache and refetches the
+          // record), not a page reload; the record stays on screen while it reloads.
+          onRefresh?.();
+          // Same as Purchases (GoodsReceiptActions): announce the created return in
+          // ConfirmResultModal and let the user choose to open it.
+          if (returnData?.id) setReturnedDoc(returnData);
         }}
         onError={(msg) => toast.error(msg)}
       />

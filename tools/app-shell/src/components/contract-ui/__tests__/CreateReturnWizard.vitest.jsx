@@ -109,6 +109,36 @@ describe('CreateReturnWizard', () => {
     expect(screen.getByText(/DOC-001/)).toBeInTheDocument();
   });
 
+  // The quantity column shows `movementQuantity` from availableShipmentLines /
+  // availableReceiptLines: shipped minus what is already returned (drafts included), i.e. what can
+  // still be returned — not what was delivered.
+  it('labels the quantity column as the quantity still available to return', () => {
+    renderWizard();
+    expect(screen.getByText('availableToReturn')).toBeInTheDocument();
+    expect(screen.queryByText('delivered')).not.toBeInTheDocument();
+  });
+
+  describe('lines state: loading and nothing left to return', () => {
+    it('shows the empty state (and no line table) once the caller has loaded zero lines', () => {
+      renderWizard({ lines: [], linesLoading: false });
+      expect(screen.getByTestId('CreateReturnWizard__empty')).toHaveTextContent('backendError.returnNothingLeft');
+      expect(screen.queryByText('product')).not.toBeInTheDocument();
+      expect(screen.getByText('createReturn').closest('button')).toBeDisabled();
+    });
+
+    it('shows a loading row, not the empty state, while the caller is still loading the lines', () => {
+      renderWizard({ lines: [], linesLoading: true });
+      expect(screen.getByTestId('CreateReturnWizard__loading')).toHaveTextContent('loading');
+      expect(screen.queryByTestId('CreateReturnWizard__empty')).not.toBeInTheDocument();
+    });
+
+    it('keeps the pre-existing behaviour (no empty state) for a caller that does not report loading', () => {
+      renderWizard({ lines: [] });
+      expect(screen.queryByTestId('CreateReturnWizard__empty')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('CreateReturnWizard__loading')).not.toBeInTheDocument();
+    });
+  });
+
   describe('auto-selection and defensive quantity seeding on open', () => {
     it('auto-selects every line as soon as the dialog opens', () => {
       renderWizard();
