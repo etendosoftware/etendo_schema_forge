@@ -13,21 +13,38 @@ import { isPostedStatusColumn } from './postedStatus.js';
 // `if` statements — to stay under the cognitive-complexity budget as the type
 // list grows; see `columnFlex`/`columnMinWidthPx` below for how each side of
 // the shared basis is derived.
+//
+// ETP-5833 — per-type default sizing AND expansion. Only DESCRIPTIVE columns (`string`/`text`,
+// the leading selector) absorb leftover width; every other type is fixed (`0 0 <basis>`), so a
+// date, a number or a status never stretches to the width of a description. Bases are constants
+// per type, never measured from content, so sorting or paging cannot move a column.
+//  - `date` (130): dd/mm/yyyy (~80px) + the due-date dot + 24px cell padding; the translated
+//    header wraps (header cells wrap, ETP-5133) and the sort icon sits beside the wrapped label.
+//  - `number` (152): the type the generator emits for every integer/decimal/quantity/price field
+//    (`mapFieldType`); it used to fall to the generic 120px while `quantity` got 152.
+//  - `status` (184): StatusTag pill ("Cobro depositado" is ~153px + padding, ETP-5510). Lines and
+//    list share it, so the two renderers cannot disagree on a status column again.
+//  - `enum`/`select` (224): the value plus the Select chevron; "Use Generic Account No." clipped
+//    at 192px. Codes and states do not expand on top of that.
+// A date WITH time has no tier on purpose: no list/lines column carries one (only the hidden
+// `created`/`updated` audit fields, and the generator maps a visible datetime to `string`), and a
+// `date` column renders date-only. Add its tier together with its renderer if one is ever exposed.
+// `col.minWidth` (decisions `columnWidth`) and `col.grow` still override, see `columnFlex`.
 const FIXED_BASIS_PX = {
   amount: 172,
   price: 152,
   quantity: 152,
   integer: 152,
   decimal: 152,
+  number: 152,
   percent: 152,
   signedDelta: 152,
+  date: 130,
+  status: 184,
+  enum: 224,
+  select: 224,
 };
 
-// Enum/select columns share the string baseline (224px). Their values include
-// the Select's chevron, so long options like "Use Generic Account No." need at
-// least as much room as a plain text input of the same length — settling for
-// the narrower selector tier (192px) clipped the trailing word inside the
-// trigger. `1 1` keeps the column elastic on top.
 // Percent columns render a compact ProgressCircle (~64px of content). The
 // lines/add-row flex layout (`columnFlex`) keeps the 152px FIXED_BASIS_PX tier so
 // InlineLinesPanel rows and DataTable's add-row colgroup stay aligned; only the
@@ -35,26 +52,21 @@ const FIXED_BASIS_PX = {
 // mode) narrows to this basis. An explicit `col.minWidth` still wins.
 const PERCENT_LIST_BASIS_PX = 104;
 
+// Descriptive columns: the only types that absorb the leftover width of a lines grid.
 const ELASTIC_BASIS_PX = {
   string: 224,
   text: 224,
-  enum: 224,
-  select: 224,
-  date: 130,
   // ETP-4610 — the `dimensionsPanel` type used to reserve 320px here (badges +
   // "+N"/"Add dimensions" trigger). It no longer renders as a grid column at all
   // (InlineLinesPanel filters it out of `visibleColumns` before any width lookup
   // happens — see `hasDimensionsPanel` there), so no basis entry is needed.
 };
 
-// ETP-5510 — plain-list-only bases (`columnMinWidthPx`; the lines/add-row flex layout in
-// `columnFlex` is untouched). Both types used to fall through to the generic 120px:
-//  - `status`: a StatusTag pill ("Cobro depositado" is ~153px of text + the cell padding)
-//    was wider than its column and got cut with no ellipsis.
-//  - `multiField`: the identity cell (media + bold title + chip) needs real room; at 120px
-//    the title was unreadable.
+// ETP-5510 — plain-list-only basis (`columnMinWidthPx`; the lines/add-row flex layout in
+// `columnFlex` is untouched). `multiField`: the identity cell (media + bold title + chip)
+// needs real room; at the generic 120px the title was unreadable. (`status`, the other ETP-5510
+// type, moved to FIXED_BASIS_PX by ETP-5833 so lines and list share its 184px.)
 const LIST_BASIS_PX = {
-  status: 184,
   multiField: 240,
 };
 
@@ -190,7 +202,13 @@ export function columnMinWidthPx(col) {
  */
 export function withImplicitGrowColumn(columns) {
   if (columns.length === 0 || columns.some(c => c.grow)) return columns;
-  const idx = columns.findIndex(c => !c.headClass && !c.cellClass);
+  // ETP-5833 — the absorber must be a DESCRIPTIVE column: a leading `date` (Sales Quotation)
+  // stretched to the 320px grow floor once dates became fixed. Falls back to the first
+  // unpinned column when the list has no descriptive one.
+  const unpinned = c => !c.headClass && !c.cellClass;
+  const descriptive = c => unpinned(c) && (c.type in ELASTIC_BASIS_PX || SELECTOR_TYPES.has(c.type) || c.type === 'multiField');
+  let idx = columns.findIndex(descriptive);
+  if (idx === -1) idx = columns.findIndex(unpinned);
   if (idx === -1) return columns;
   return columns.map((c, i) => (i === idx ? { ...c, grow: true } : c));
 }

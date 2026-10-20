@@ -56,6 +56,34 @@ auto-synced when a generated prop's shape changes.
 
 ---
 
+## Default column widths by field type (ETP-5833)
+
+One lookup (`tools/app-shell/src/lib/linesColumnWidth.js`) sizes **and** expands every grid column from its `type`. `columnFlex()` feeds the lines grid (`InlineLinesPanel`) and the add-row colgroup; `columnMinWidthPx()` feeds the plain list (`DataTable` list mode, header + body + `<col>`). Both read the same tables, so the surfaces cannot disagree. Bases are **constants per type, never measured from content**: sorting or paging cannot move a column (ETP-5182), and there is no autofit.
+
+| Type | Width (px) | Expands? | Why |
+|---|---|---|---|
+| `string`, `text` | 224 | **yes** (`1 0`) | descriptive: absorb the leftover width |
+| leading `selector`/`search`/`foreignKey` (idx 0) | 192 | yes | the product/identity column; selectors at idx > 0 are fixed |
+| `date` | 130 | no (`0 0`) | dd/mm/yyyy (~80) + due-date dot + 24 cell padding; the translated header wraps and the sort icon sits beside the label |
+| `amount` / `price` / `quantity` / `integer` / `decimal` / `number` / `signedDelta` | 172 (`amount`), 152 (rest) | no | `number` is the type the generator emits for every numeric field; it used to fall to the 120 default |
+| `percent` | 152 lines / 104 list | no | compact progress circle |
+| `status` | 184 | no | the pill ("Cobro depositado") clips below it; same in lines and list |
+| `enum`, `select` | 224 | no | value + chevron ("Use Generic Account No."); codes/states do not stretch |
+| `boolean` + `badge` | 152 (240 for the Posted status) | no | the pill |
+| `display: 'tag'` | 144 | no | UoM-style grey pill |
+| `multiField` | 240 (list only) | no | media + title + chip |
+| anything else | 120 | no | safe fallback |
+
+Overrides win over the type: `col.minWidth` (decisions `columnWidth`; elastic by the ETP-5332 contract) and `col.grow: true` (decisions `grow`). A plain list always keeps exactly one width-less column to absorb the leftover (`withImplicitGrowColumn`, ETP-5510). On a narrow viewport every column keeps its basis and the scroll container scrolls (`overflow-x: auto`, ETP-5133), so nothing overlaps or becomes unreachable.
+
+**Date with time — documented exception.** There is no `datetime` tier: no list or lines column carries one today (the only `datetime` fields in the contracts are the hidden `created`/`updated` audit columns; the generator maps a visible datetime to `string`, and a `date` column renders date-only). When a datetime column is ever exposed, add its tier together with its renderer (and the generator mapping in `schema_forge_core`).
+
+**Surfaces covered:** the standard list (`ListView` → `DataTable`) and the standard lines grid (`InlineLinesPanel` + the `DataTable` add-row row). **Explicit overrides inventoried** (they keep their own width, unchanged): decisions `columnWidth` in `contacts` (4), `goods-movements`, `internal-consumption`, `physical-inventory` (3), `simple-g-l-journal`; custom `minWidth` in `financial-account/custom/AccountsHeaderTable.jsx` and `sales-invoice/custom/InvoiceHeaderTable.jsx`. **Excluded (bespoke tables, not adapted):** `windows/custom/{amortization,assets,calendar}`, `ReconciliationSplitPanel`, `CreateReturnWizard`, `ListModalWindow`, `OcrLinesReviewModal`, `ReportDrawer`, `AccountTreeView`, and the settings pages (`RolesAccessMatrix`, `ApiKeysPage`, …). No new view persistence or user resizing is part of this; the defaults are the fallback when one is added. Regeneration-safe: the behaviour lives in the shared lib, never in generated output.
+
+Tests: `lib/__tests__/linesColumnWidth.test.js` (basis per type, list = lines basis, "only descriptive types grow"), plus the Playwright geometry specs named in the ETP-5833 PR.
+
+---
+
 ## Customization options reference
 
 ### 1. `window.statusBar` — declarative summary bar

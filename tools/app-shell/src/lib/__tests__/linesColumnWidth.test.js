@@ -56,13 +56,44 @@ describe('linesColumnWidth', () => {
       assert.equal(columnFlex({ type: 'foreignKey' }, 1), '0 0 192px');
     });
 
-    it('enum/select columns → 1 0 224px (string-sized basis so long Select values fit)', () => {
-      assert.equal(columnFlex({ type: 'enum' }, 1), '1 0 224px');
-      assert.equal(columnFlex({ type: 'select' }, 1), '1 0 224px');
+    // ETP-5833 — codes/states keep the 224px room for the value + chevron but no longer
+    // expand like a description.
+    it('enum/select columns → 0 0 224px (string-sized basis so long Select values fit, never grows)', () => {
+      assert.equal(columnFlex({ type: 'enum' }, 1), '0 0 224px');
+      assert.equal(columnFlex({ type: 'select' }, 1), '0 0 224px');
     });
 
-    it('date columns → 1 0 130px', () => {
-      assert.equal(columnFlex({ type: 'date' }, 1), '1 0 130px');
+    it('date columns → 0 0 130px (fixed: a date must not stretch like a description)', () => {
+      assert.equal(columnFlex({ type: 'date' }, 0), '0 0 130px');
+      assert.equal(columnFlex({ type: 'date' }, 1), '0 0 130px');
+    });
+
+    it('number columns (the generator numeric type) → 0 0 152px, same tier as quantity', () => {
+      assert.equal(columnFlex({ type: 'number' }, 1), '0 0 152px');
+      assert.equal(columnFlex({ type: 'number' }, 1), columnFlex({ type: 'quantity' }, 1));
+    });
+
+    it('status columns → 0 0 184px in lines too (pill clips at 120px)', () => {
+      assert.equal(columnFlex({ type: 'status' }, 1), '0 0 184px');
+    });
+
+    // ETP-5833 — expansion audit: across the whole type set, ONLY descriptive types
+    // (string/text) and the leading selector grow by default; an explicit `grow: true`
+    // or `minWidth` still opts any column in.
+    it('only descriptive types grow by default; date/number/amount/status/enum/select/boolean never do', () => {
+      const grows = (col, idx = 1) => columnFlex(col, idx).split(' ')[0] === '1';
+      for (const type of ['string', 'text']) assert.equal(grows({ type }), true, type);
+      for (const type of ['date', 'number', 'amount', 'price', 'quantity', 'integer', 'decimal', 'percent',
+        'signedDelta', 'status', 'enum', 'select', 'boolean', 'custom']) {
+        assert.equal(grows({ type }), false, `${type} must not grow by default`);
+        assert.equal(grows({ type, grow: true }), true, `${type} grows when it opts in with grow:true`);
+      }
+      assert.equal(grows({ type: 'selector' }, 0), true);
+      assert.equal(grows({ type: 'selector' }, 1), false);
+    });
+
+    it('an explicit minWidth on a date still wins and stays elastic (ETP-5332 contract)', () => {
+      assert.equal(columnFlex({ type: 'date', minWidth: 160 }, 1), '1 0 160px');
     });
 
     it('unknown types → 0 0 120px (safe fallback)', () => {
@@ -181,6 +212,8 @@ describe('linesColumnWidth', () => {
         [{ type: 'enum' },        1, 224],
         [{ type: 'select' },      1, 224],
         [{ type: 'date' },        1, 130],
+        [{ type: 'number' },      1, 152],  // ETP-5833
+        [{ type: 'status' },      1, 184],  // ETP-5833: lines and list agree
         [{ type: 'string' },      0, 224],  // idx=0 no longer special — same as idx=1+
         [{ type: 'string' },      1, 224],
         [{ type: 'text' },        0, 224],  // text at idx=0 also 224
@@ -271,10 +304,17 @@ describe('linesColumnWidth', () => {
     });
   });
 
-  describe('list-only bases (status, multiField)', () => {
-    it('status columns get a 184px basis in a list and keep the 120px generic basis in lines', () => {
+  describe('list-only bases (multiField)', () => {
+    it('status columns get the same 184px basis in a list and in lines (ETP-5833)', () => {
       assert.equal(columnMinWidthPx({ type: 'status' }), 184);
-      assert.equal(columnFlex({ type: 'status' }, 1), '0 0 120px');
+      assert.equal(columnFlex({ type: 'status' }, 1), '0 0 184px');
+    });
+
+    // ETP-5833 — a date WITH time has no tier (no list/lines column carries one): an ISO
+    // datetime value in a `date` column sizes exactly like a date.
+    it('a date column sizes the same whatever value it carries (no datetime tier)', () => {
+      assert.equal(columnMinWidthPx({ type: 'date', key: 'orderDate' }), 130);
+      assert.equal(basis(columnFlex({ type: 'date', key: 'orderDate' }, 1)), 130);
     });
 
     it('multiField columns get a 240px basis in a list and keep the 120px generic basis in lines', () => {
@@ -330,6 +370,18 @@ describe('linesColumnWidth', () => {
     it('is the fixed slots alone for an empty list', () => {
       assert.equal(listTableMinWidthPx([], 80), 80);
       assert.equal(listTableMinWidthPx([]), 0);
+    });
+  });
+
+  // ETP-5833 — the implicit grow column must be descriptive, never a fixed date/number.
+  describe('withImplicitGrowColumn picks a descriptive column', () => {
+    it('skips a leading date and grows the first string/selector', () => {
+      const cols = [{ key: 'd', type: 'date' }, { key: 'n', type: 'string' }, { key: 'b', type: 'selector' }];
+      assert.deepEqual(withImplicitGrowColumn(cols).map(c => !!c.grow), [false, true, false]);
+    });
+    it('falls back to the first unpinned column when none is descriptive', () => {
+      const cols = [{ key: 'd', type: 'date' }, { key: 'a', type: 'amount' }];
+      assert.deepEqual(withImplicitGrowColumn(cols).map(c => !!c.grow), [true, false]);
     });
   });
 });
