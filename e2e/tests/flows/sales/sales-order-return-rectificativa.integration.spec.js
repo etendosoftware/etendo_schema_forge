@@ -3,6 +3,7 @@
 // @covers artifacts/sales-order/custom/OrderCreateInvoice.jsx
 // @covers tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx
 // @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
+// @covers artifacts/goods-shipment/custom/GoodsShipmentActions.jsx
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -10,7 +11,7 @@ import { login, navigateTo } from '../../helpers/auth.js';
 import { captureScreenshot } from '../../helpers/captureScreenshot.js';
 import { ensureStockOnHand } from '../../helpers/inventory-helpers.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../../helpers/product-helpers.js';
-import { createDraftWithFirstLine, pickRectifiableInvoice } from '../../helpers/purchase-helpers.js';
+import { createDraftWithFirstLine, openGeneratedDocument, pickRectifiableInvoice } from '../../helpers/purchase-helpers.js';
 import { selectCustomerWithAddress } from '../../helpers/sales-helpers.js';
 import { waitForLoadingIndicatorsGone } from '../../helpers/selectors.js';
 
@@ -267,6 +268,9 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       await createReturnConfirmBtn.click();
       await returnConfirmPromise;
       await slow(page);
+
+      // ETP-5729: a sales return is announced as such («Ver devolución»).
+      await openGeneratedDocument(page, { title: /^(Devolución de venta creada|Sales return created)$/ });
 
       await expect(page).toHaveURL(/\/return-material-receipt\/[a-zA-Z0-9]+/, { timeout: 15_000 });
       await waitForDetailReady(page);
