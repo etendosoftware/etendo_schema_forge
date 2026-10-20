@@ -25,6 +25,8 @@ vi.mock('@/i18n', () => ({
       bulkDeleteConfirmMessage: 'Are you sure you want to delete {count} record(s)?',
       cancel: 'Cancel',
       delete: 'Delete',
+      bulkDeleteInProgress: 'Deleting…',
+      bulkDeleteInProgressMessage: 'Deleting {count} record(s). This may take a few seconds.',
     };
     let text = map[key] || key;
     if (params) Object.keys(params).forEach((p) => { text = text.replace(`{${p}}`, params[p]); });
@@ -124,5 +126,144 @@ describe('DeleteConfirmDialog', () => {
     );
 
     expect(screen.getByTestId('batch-delete-confirm')).not.toBeDisabled();
+  });
+});
+
+// ETP-5758 — the in-progress state lives in this dialog, so every bulk-delete surface reads the
+// same while its DELETEs run and the dialog cannot be dismissed half-way through the batch.
+describe('DeleteConfirmDialog — in-progress state (ETP-5758)', () => {
+  it('shows the spinner and the in-progress label on the destructive button while deleting', () => {
+    render(<DeleteConfirmDialog {...baseProps} deleting />);
+
+    const confirm = screen.getByTestId('batch-delete-confirm');
+    expect(screen.getByTestId('batch-delete-spinner')).toBeInTheDocument();
+    expect(confirm).toContainElement(screen.getByTestId('batch-delete-spinner'));
+    expect(confirm).toHaveTextContent('Deleting…');
+    expect(confirm).not.toHaveTextContent(/^Delete$/);
+  });
+
+  it('switches the description to the count-interpolated in-progress message', () => {
+    render(<DeleteConfirmDialog {...baseProps} count={4} deleting />);
+
+    expect(screen.getByTestId('DialogDescription__batch-delete'))
+      .toHaveTextContent('Deleting 4 record(s). This may take a few seconds.');
+    expect(screen.queryByText('Are you sure you want to delete 4 record(s)?')).not.toBeInTheDocument();
+    // The title stays the same — only the body and the button change.
+    expect(screen.getByText('Delete records')).toBeInTheDocument();
+  });
+
+  it('announces the description politely so a screen reader hears the state change', () => {
+    render(<DeleteConfirmDialog {...baseProps} deleting />);
+
+    expect(screen.getByTestId('DialogDescription__batch-delete')).toHaveAttribute('aria-live', 'polite');
+  });
+
+  it('marks the dialog content aria-busy while deleting, and not otherwise', () => {
+    const { rerender } = render(<DeleteConfirmDialog {...baseProps} />);
+    expect(screen.getByTestId('DialogContent__batch-delete')).not.toHaveAttribute('aria-busy');
+
+    rerender(<DeleteConfirmDialog {...baseProps} deleting />);
+    expect(screen.getByTestId('DialogContent__batch-delete')).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('shows no spinner and the plain Delete label when idle', () => {
+    render(<DeleteConfirmDialog {...baseProps} />);
+
+    expect(screen.queryByTestId('batch-delete-spinner')).not.toBeInTheDocument();
+    expect(screen.getByTestId('batch-delete-confirm')).toHaveTextContent('Delete');
+    expect(screen.getByTestId('batch-delete-confirm')).not.toHaveTextContent('Deleting…');
+  });
+
+  it('Escape closes the idle dialog (control) but is swallowed while deleting', async () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<DeleteConfirmDialog {...baseProps} onClose={onClose} deleting />);
+
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('DialogContent__batch-delete')).toBeInTheDocument();
+
+    rerender(<DeleteConfirmDialog {...baseProps} onClose={onClose} deleting={false} />);
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('a click on the overlay closes the idle dialog (control) but not while deleting', async () => {
+    // The scrim sits under `pointer-events: none` on <body> while the modal is open; skip
+    // user-event's CSS check so the click reaches Radix's outside-pointer handler as in a browser.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    const onCloseBusy = vi.fn();
+    const busy = render(<DeleteConfirmDialog {...baseProps} onClose={onCloseBusy} deleting />);
+    await user.click(screen.getByTestId('DialogOverlay__6a5928'));
+    expect(onCloseBusy).not.toHaveBeenCalled();
+    expect(screen.getByTestId('DialogContent__batch-delete')).toBeInTheDocument();
+    busy.unmount();
+
+    const onCloseIdle = vi.fn();
+    render(<DeleteConfirmDialog {...baseProps} onClose={onCloseIdle} />);
+    await user.click(screen.getByTestId('DialogOverlay__6a5928'));
+    expect(onCloseIdle).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the primitive corner X (the content\'s direct <button> child) only while deleting', () => {
+    const { rerender } = render(<DeleteConfirmDialog {...baseProps} />);
+    const content = screen.getByTestId('DialogContent__batch-delete');
+    const cornerX = screen.getByRole('button', { name: 'Close' });
+    // Precondition for the `[&>button]:hidden` rule: the X is a DIRECT child, the footer buttons are not.
+    expect(cornerX.parentElement).toBe(content);
+    expect(screen.getByTestId('batch-delete-confirm').parentElement).not.toBe(content);
+    expect(content.className).not.toContain('[&>button]:hidden');
+
+    rerender(<DeleteConfirmDialog {...baseProps} deleting />);
+    expect(screen.getByTestId('DialogContent__batch-delete').className).toContain('[&>button]:hidden');
+  });
+
+  it('does not call onConfirm when the disabled destructive button is clicked while deleting', async () => {
+    const onConfirm = vi.fn();
+    render(<DeleteConfirmDialog {...baseProps} onConfirm={onConfirm} deleting />);
+
+    await userEvent.click(screen.getByTestId('batch-delete-confirm'));
+
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+});
+
+describe('DeleteConfirmDialog — testIdScope (ETP-5758)', () => {
+  const SCOPED_IDS = (scope) => [
+    `DialogContent__${scope}`,
+    `DialogHeader__${scope}`,
+    `DialogTitle__${scope}`,
+    `DialogDescription__${scope}`,
+    `DialogFooter__${scope}`,
+    `Button__${scope}-cancel`,
+    `${scope}-confirm`,
+    `${scope}-spinner`,
+  ];
+
+  it('defaults every rendered testid to the batch-delete scope', () => {
+    render(<DeleteConfirmDialog {...baseProps} deleting />);
+
+    for (const id of SCOPED_IDS('batch-delete')) {
+      expect(screen.getByTestId(id)).toBeInTheDocument();
+    }
+  });
+
+  it('applies a custom scope to every rendered testid and drops the default one', () => {
+    render(<DeleteConfirmDialog {...baseProps} deleting testIdScope="lines-bulk-delete" />);
+
+    for (const id of SCOPED_IDS('lines-bulk-delete')) {
+      expect(screen.getByTestId(id)).toBeInTheDocument();
+    }
+    for (const id of SCOPED_IDS('batch-delete')) {
+      expect(screen.queryByTestId(id)).not.toBeInTheDocument();
+    }
+  });
+
+  it('keeps the bulk-delete family ListView / ListModalWindow publish', () => {
+    render(<DeleteConfirmDialog {...baseProps} testIdScope="bulk-delete" />);
+
+    expect(screen.getByTestId('bulk-delete-confirm')).toBeInTheDocument();
+    expect(screen.getByTestId('Button__bulk-delete-cancel')).toBeInTheDocument();
+    expect(screen.getByTestId('DialogContent__bulk-delete')).toBeInTheDocument();
   });
 });
