@@ -45,6 +45,14 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   // `apiBaseUrl`, which it used to chop a segment off. `apiBaseUrl` is still this hook's own
   // base for the existing-record lookup below, and must be the SPEC's URL.
   const { runBatch } = useBatch({ token });
+  // ETP-5676 — the import engine reads only `committed`, each op's `recordId` and the failure
+  // envelope, so every create may skip decorating the record it would echo back. Its rows are
+  // many similar creates that always send the same fields, the case the redundant-callout skip is
+  // for; the OCR flow sends neither option.
+  const postBatch = useCallback(
+    (operations) => runBatch(operations, { onlyReturnIds: true, skipRedundantCallouts: true }),
+    [runBatch],
+  );
   const entity = importConfig?.entity;
   // ETP-5676: core only receives the resolved number; the global flag, if set, beats the window.
   const batchSizeFlag = useNumberFlag(IMPORT_BATCH_SIZE);
@@ -231,7 +239,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
 
   return useMemo(() => ({
     token,
-    postBatch: runBatch,
+    postBatch,
     // ETP-5350: every installed AD language, not just the session one. The endpoint
     // translates the term OUT of the session language before matching the English base
     // rows, so an English value always matched and a Spanish one only matched a Spanish
@@ -243,7 +251,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     existingKeyFetchFn,
     batchSize,
     onImportFinished,
-  }), [token, runBatch, labels, ui, fieldLabelFn, existingKeyFetchFn, batchSize, onImportFinished]);
+  }), [token, postBatch, labels, ui, fieldLabelFn, existingKeyFetchFn, batchSize, onImportFinished]);
 }
 
 export default useWindowImportDialog;

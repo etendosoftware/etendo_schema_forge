@@ -37,7 +37,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:matchedInvoice
 
 // @sf-generated-start requiredHeaderFields:matchedInvoice
-const requiredHeaderFields = ['invoiceLine', 'goodsShipmentLine', 'product', 'quantity', 'transactionDate', 'processed'];
+const requiredHeaderFields = [];
 // @sf-generated-end requiredHeaderFields:matchedInvoice
 
 
@@ -169,7 +169,6 @@ export default function MatchedInvoicePage({ windowName, recordId, ...props }) {
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
           { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}
-        requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />

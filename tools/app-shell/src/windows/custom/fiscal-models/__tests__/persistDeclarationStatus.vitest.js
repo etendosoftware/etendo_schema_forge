@@ -47,9 +47,12 @@ describe('persistDeclarationStatus', () => {
   });
 
   it('returns { ok: false, error: "http_<status>" } when the response is not ok', async () => {
-    fetch.mockResolvedValueOnce({ ok: false, status: 404 });
+    // ETP-5725 (reopened QA fix) — `.text()` is now read on failure too (to extract a
+    // `[reason=...]` tag, see the describe block below), so this mock — like a real fetch
+    // Response — must provide it.
+    fetch.mockResolvedValueOnce({ ok: false, status: 404, text: async () => '' });
     const result = await persistDeclarationStatus('303-2026-T2', 'submitted', OPTS);
-    expect(result).toEqual({ ok: false, error: 'http_404' });
+    expect(result).toEqual({ ok: false, error: 'http_404', reason: undefined });
   });
 
   // ETP-5438 — a presentation echoes the snapshot the backend froze in the same request.
@@ -65,6 +68,50 @@ describe('persistDeclarationStatus', () => {
     expect(await persistDeclarationStatus('a', 'draft', OPTS)).toEqual({ ok: true });
     fetch.mockResolvedValueOnce({ ok: true, json: async () => { throw new SyntaxError('empty'); } });
     expect(await persistDeclarationStatus('a', 'submitted', OPTS)).toEqual({ ok: true });
+  });
+
+  // ETP-5725 (reopened QA fix, UX follow-up) — a 409 from
+  // FiscalDeclCrudHandler#rejectReactivationWithSibling tags its message with a stable
+  // `[reason=...]` marker (the only structured signal available, since this backend's
+  // `sendError` has no JSON-body overload — see that guard's own doc). This parses it out so
+  // FmListPage.jsx's `handleConfirmReactivate` can show a specific toast instead of a generic one.
+  describe('reason extraction from a tagged 409 (ETP-5725)', () => {
+    it('extracts "corrective_sibling_presented" from the error body', async () => {
+      const body = JSON.stringify({
+        error: { message: 'Cannot reactivate [reason=corrective_sibling_presented]: another declaration already exists for this period: decl1', status: 409 },
+      });
+      fetch.mockResolvedValueOnce({ ok: false, status: 409, text: async () => body });
+      const result = await persistDeclarationStatus('decl1', 'draft', OPTS);
+      expect(result).toEqual({ ok: false, error: 'http_409', reason: 'corrective_sibling_presented' });
+    });
+
+    it('extracts "sibling_exists" from the error body', async () => {
+      const body = JSON.stringify({
+        error: { message: 'Cannot reactivate [reason=sibling_exists]: another declaration already exists for this period: decl1', status: 409 },
+      });
+      fetch.mockResolvedValueOnce({ ok: false, status: 409, text: async () => body });
+      const result = await persistDeclarationStatus('decl1', 'draft', OPTS);
+      expect(result).toEqual({ ok: false, error: 'http_409', reason: 'sibling_exists' });
+    });
+
+    it('leaves reason undefined when the body has no [reason=...] tag at all', async () => {
+      const body = JSON.stringify({ error: { message: 'Some other 409', status: 409 } });
+      fetch.mockResolvedValueOnce({ ok: false, status: 409, text: async () => body });
+      const result = await persistDeclarationStatus('decl1', 'draft', OPTS);
+      expect(result).toEqual({ ok: false, error: 'http_409', reason: undefined });
+    });
+
+    it('leaves reason undefined when the body is unparseable JSON', async () => {
+      fetch.mockResolvedValueOnce({ ok: false, status: 409, text: async () => 'not json' });
+      const result = await persistDeclarationStatus('decl1', 'draft', OPTS);
+      expect(result).toEqual({ ok: false, error: 'http_409', reason: undefined });
+    });
+
+    it('leaves reason undefined and does not throw when reading the body itself fails', async () => {
+      fetch.mockResolvedValueOnce({ ok: false, status: 409, text: () => Promise.reject(new Error('stream closed')) });
+      const result = await persistDeclarationStatus('decl1', 'draft', OPTS);
+      expect(result).toEqual({ ok: false, error: 'http_409', reason: undefined });
+    });
   });
 
   it('returns { ok: false, error: "network" } when fetch throws', async () => {

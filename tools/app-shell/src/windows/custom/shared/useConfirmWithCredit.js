@@ -22,11 +22,14 @@ export function useConfirmWithCredit({
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const status = data?.documentStatus;
   // ETP-5381: trust the backend flag. ReturnShipmentUtils computes it over every non-voided
-  // invoice of the return document, which is the same predicate the server-side duplicate guard
-  // uses — so the button and the guard can never disagree. The previous client-side override
-  // counted only 'CO' invoices, so a rectificative invoice still in draft read as "no invoice"
-  // and the create button stayed visible, allowing a second one. The array fallback is kept for
-  // responses that carry returnInvoices without the flag, but with the non-voided predicate.
+  // invoice of the return document (the same query that fills `returnInvoices`). There is NO
+  // server-side duplicate guard: ETP-5381 removed it on purpose and ETP-5712 makes the backend
+  // report the existing ones in `previousReturnInvoices` instead of refusing, so this flag is the
+  // only thing that keeps the SPA from offering a second rectificative invoice. The previous
+  // client-side override counted only 'CO' invoices, so a rectificative invoice still in draft
+  // read as "no invoice" and the create button stayed visible, allowing a second one. The array
+  // fallback is kept for responses that carry returnInvoices without the flag, but with the
+  // non-voided predicate.
   const hasReturnInvoice = typeof data?.hasReturnInvoice === 'boolean'
     ? data.hasReturnInvoice
     : Array.isArray(data?.returnInvoices)

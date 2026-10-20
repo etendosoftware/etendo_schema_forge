@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Goods Receipt",
+    "agentPrompt": "#REF#agent-prompts/goods-receipt/spec.md",
     "menuActions": [
       {
         "key": "post",
@@ -55,10 +56,12 @@
     ],
     "labelOverrides": {
       "en_US": {
-        "EM_ETGO_Currency_ID": "Currency"
+        "EM_ETGO_Currency_ID": "Currency",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "EM_ETGO_Currency_ID": "Moneda"
+        "EM_ETGO_Currency_ID": "Moneda",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -226,13 +229,15 @@
           "required": true,
           "section": "principal",
           "seq": 10,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "gridOrder": 1
         },
         "movementQuantity": {
           "grid": true,
           "section": "principal",
           "seq": 20,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "gridOrder": 2
         },
         "orderQuantity": {
           "grid": true,
@@ -241,14 +246,20 @@
           "visibility": "readOnly",
           "section": "principal",
           "seq": 30,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "gridOrder": 4
         },
         "attributeSetValue": {
           "visibility": "discarded"
         },
         "uOM": {
           "form": false,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 3,
+          "gridReadOnly": true,
+          "display": "tag"
         },
         "storageBin": {
           "form": false,

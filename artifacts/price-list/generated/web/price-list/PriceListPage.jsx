@@ -44,7 +44,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:priceList
 
 // @sf-generated-start requiredHeaderFields:priceList
-const requiredHeaderFields = ['name', 'salesPriceList', 'default', 'active', 'currency'];
+const requiredHeaderFields = ['name', 'salesPriceList', 'default', 'active'];
 // @sf-generated-end requiredHeaderFields:priceList
 
 // @sf-generated-start addLineFields:priceListVersion
@@ -224,6 +224,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         hideMoreMenu
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_PriceList", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
+        showDetailFooterTotals={false}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />

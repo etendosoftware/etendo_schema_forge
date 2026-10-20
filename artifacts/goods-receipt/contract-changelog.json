@@ -1231,5 +1231,21 @@
     ],
     "author": "pipeline",
     "date": "2026-10-13"
+  },
+  {
+    "from": "0.38.0",
+    "to": "0.39.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"product\" property \"gridOrder\" changed from \"undefined\" to \"1\" in frontend (additive)",
+      "Field \"movementQuantity\" property \"gridOrder\" changed from \"undefined\" to \"2\" in frontend (additive)",
+      "Field \"uOM\" property \"grid\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"uOM\" property \"display\" changed from \"undefined\" to \"tag\" in frontend (additive)",
+      "Field \"uOM\" property \"gridOrder\" changed from \"undefined\" to \"3\" in frontend (additive)",
+      "Field \"uOM\" property \"gridReadOnly\" changed from \"undefined\" to \"true\" in frontend (additive)",
+      "Field \"orderQuantity\" property \"gridOrder\" changed from \"undefined\" to \"4\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-10-15"
   }
 ]
