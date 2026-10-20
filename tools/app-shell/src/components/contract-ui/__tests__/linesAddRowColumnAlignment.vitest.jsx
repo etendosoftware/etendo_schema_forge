@@ -272,17 +272,12 @@ describe.each([
   it('grows the same columns from the same bases as the header strip', () => {
     const { headerLayout, addRowLayout } = layoutsFor(columns);
     expect(addRowLayout.growBases).toEqual(headerLayout.growBases);
-    expect(addRowLayout.calcGrowCount ?? 0).toBe(headerLayout.growBases.length);
+    expect(addRowLayout.calcGrowCount).toBe(headerLayout.growBases.length);
   });
 
   it('declares literal <col> px that add up to the total its own calc() assumes', () => {
     const { addRowLayout } = layoutsFor(columns);
-    if (addRowLayout.calcFixedPx === null) {
-      // No calc(): every <col> is literal px, so no column may be growing at all.
-      expect(addRowLayout.growBases).toEqual([]);
-    } else {
-      expect(addRowLayout.fixedPx).toBe(addRowLayout.calcFixedPx);
-    }
+    expect(addRowLayout.fixedPx).toBe(addRowLayout.calcFixedPx);
   });
 
   it('backs every <col> with a real add-row <td>', () => {

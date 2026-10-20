@@ -30,6 +30,11 @@ const DATE_PARTS = new Set(['weekday', 'day', 'month']);
  * @param {Date} [now] reference "today" for the current-year check (injectable for tests)
  * @returns {string} the formatted date, or "—" when missing or invalid
  */
+// ETP-5833 — explicit width for both date columns: this table lives in a narrow side panel and its
+// labels are short, so it keeps the compact 130px instead of the 176px date tier (which pushed the
+// row's download action out of reach).
+const ATTACHMENT_DATE_WIDTH_PX = 130;
+
 export function formatAttachmentDate(value, locale, now = new Date()) {
   if (!value) return '—';
   const date = value instanceof Date ? value : new Date(value);
@@ -245,10 +250,7 @@ export default function AttachmentsTable({
       key: 'uploadedAt',
       label: ui('attachmentsUploadedAt'),
       type: 'date',
-      // ETP-5833 — explicit width: this table lives in a narrow side panel and its labels are
-      // short, so it keeps the compact 130px instead of the 176px date tier (which pushed the
-      // row's download action out of reach).
-      minWidth: 130,
+      minWidth: ATTACHMENT_DATE_WIDTH_PX,
       dot: false,
       render: (row) => (row.uploading ? null : formatAttachmentDate(row.uploadedAt, locale)),
     },
@@ -256,10 +258,7 @@ export default function AttachmentsTable({
       key: 'updatedAt',
       label: ui('attachmentsUpdatedAt'),
       type: 'date',
-      // ETP-5833 — explicit width: this table lives in a narrow side panel and its labels are
-      // short, so it keeps the compact 130px instead of the 176px date tier (which pushed the
-      // row's download action out of reach).
-      minWidth: 130,
+      minWidth: ATTACHMENT_DATE_WIDTH_PX,
       dot: false,
       render: (row) => (row.uploading ? null : formatAttachmentDate(row.updatedAt, locale)),
     },

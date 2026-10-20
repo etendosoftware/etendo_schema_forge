@@ -139,6 +139,13 @@ describe('formatAttachmentDate', () => {
 });
 
 describe('AttachmentsTable — date columns', () => {
+  // ETP-5833 — the side panel is narrow: the two dates keep 130px, not the 176px date tier.
+  it('pins both date columns to 130px (explicit override of the date tier)', () => {
+    renderTable({ items: [{ id: 'a', name: 'a.pdf', size: 1, uploadedAt: '2026-01-05T10:00:00Z' }] });
+    expect(screen.getByTestId('column-header-uploadedAt').style.width).toBe('130px');
+    expect(screen.getByTestId('column-header-updatedAt').style.width).toBe('130px');
+  });
+
   // The cell shows the formatted label, but the sort must use the raw ISO value:
   // these labels sort alphabetically as Mon < Thu < Tue, chronologically as
   // Jan 5 < Mar 3 < Apr 30.
