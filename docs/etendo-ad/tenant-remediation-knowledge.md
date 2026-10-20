@@ -3508,3 +3508,23 @@ CUT not bumped). Fix: `20261016T185257Z__R50-rectificative-dup-tax-and-order-lin
     does NOT, so a DELETE of referenced facts fails. Guard on it. `Fact_Acct` has no triggers.
   - Rectificatives already reported as POSTED by the earlier R50 build on a tenant whose ledger
     row is APPLIED are not revisited by the watermark: re-run with `--fix` once this build ships.
+- **2026-10-20 — Never DELETE a posted M_MatchPO in a data-fix (R50 POSTED_MATCH guard).** Core
+  `C_INVOICE_POST` reactivation (~l.1074-1090) counts `Fact_Acct` rows whose `AD_Table_ID` is
+  M_MatchPO's (`'473'`, looked up by `UPPER(TABLENAME)`) and refuses with `@PostedMatchPO@`
+  before deleting the invoice's M_MatchPO rows; M_MatchSO (`AD_Table_ID`
+  `'1D1EE32EF6354DE7B4654C8D0CC78BE1'`) is deleted unconditionally on the SO branch. Both tables
+  carry a `Posted` column. Locally (2026-10-20) every row is `Posted='N'`, no `Fact_Acct` row
+  exists for either table and `C_AcctSchema_Table` has both inactive — but prod accounting
+  setups may differ. **Apply:** a fix that deletes match rows guards on `Posted <> 'N' OR EXISTS
+  Fact_Acct` for both tables and excludes the WHOLE document (never half of its lines), reporting
+  it under its own reason.
+- **2026-10-20 — Editing an APPLIED fix in place: what the runner actually does (verified in
+  `run.js`).** No checksum is computed or stored (column NULL for all 213 R50 rows), so no
+  warning/mismatch is ever raised. Every tenant with an R50 row (`APPLIED` or
+  `SKIPPED_NOT_NEEDED`) has a watermark >= the fix timestamp, so a normal run skips the edited
+  file silently; only `--fix` re-evaluates it, and the no-downgrade upsert keeps an `APPLIED` row
+  even when the re-check returns `SKIPPED_NOT_NEEDED`. An environment that never ran the fix
+  (prod) just runs the edited body. So an in-place edit is safe for the ledger only when it is
+  stricter than (or equal to) the version already applied — a guard that would have blocked a
+  row the old version already repaired cannot undo it. `--dry-run` never executes `@apply`/`@report`
+  (only `@check`): validate an edited `@apply` in a `BEGIN … ROLLBACK` session instead.

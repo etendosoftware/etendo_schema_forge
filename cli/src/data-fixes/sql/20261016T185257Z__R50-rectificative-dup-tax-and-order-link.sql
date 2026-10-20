@@ -60,7 +60,8 @@
 --   * C_OrderLine.DateInvoiced := latest DateInvoiced among the OTHER processed invoices of that
 --     line (unchanged when there is none);
 --   * DELETE the M_MatchSO / M_MatchPO rows C_INVOICE_POST created for the rect line
---     (M_InOutLine_ID IS NULL — their triggers are no-ops for such rows anyway);
+--     (M_InOutLine_ID IS NULL — their triggers are no-ops for such rows anyway); an invoice
+--     with any posted match row is not repaired at all (POSTED_MATCH guard below);
 --   * C_InvoiceLine.C_OrderLine_ID := NULL.
 --   C_Order.EM_ETGO_Invoice_Status (the "% invoiced" chip, stored computed column, Refresh_Mode
 --   'S') recomputes by itself: its ad_scd_* trigger on C_OrderLine watches QtyInvoiced and is
@@ -114,10 +115,20 @@
 --   CASH_VAT     IsCashVAT='Y' (C_InvoiceTax_CashVAT rows depend on the tax rows).
 --   TAX_REGISTER A duplicated row is referenced by C_TaxRegisterLine (already in a VAT register).
 -- Defect 2 is repaired regardless of posting or period: C_OrderLine_ID plays no part in the invoice's
--- Fact_Acct, so unlinking does not change accounting. It is skipped and reported only when the
--- corrected QtyInvoiced would fall outside [0, QtyOrdered] (product not quantity-variable) —
--- e.g. the "pending" quantity was invoiced AGAIN after the rectificative; undoing the negative
--- line then would over-invoice the order, which needs a human decision.
+-- Fact_Acct, so unlinking does not change accounting. It is skipped and reported when:
+--   POSTED_MATCH The invoice has an order-linked line whose M_MatchPO / M_MatchSO row is posted
+--                (Posted <> 'N') or has Fact_Acct rows (AD_Table looked up by name: M_MatchPO is
+--                '473'). Core refuses to drop a posted M_MatchPO on reactivation
+--                (@PostedMatchPO@, C_INVOICE_POST); deleting it here would orphan its accounting.
+--                M_MatchSO is guarded the same way although core drops it unconditionally (no
+--                accounting is active for it today) — a cheap, conservative symmetry. The WHOLE
+--                invoice is then left out of defect 2 (none of its lines is unlinked and its
+--                quantities are not given back), so a document is never left half-unlinked; its
+--                lines keep counting as invoices of the order line for DateInvoiced.
+--   ORDER_LINE_OVER_INVOICED The corrected QtyInvoiced would fall outside [0, QtyOrdered]
+--                (product not quantity-variable) — e.g. the "pending" quantity was invoiced AGAIN
+--                after the rectificative; undoing the negative line then would over-invoice the
+--                order, which needs a human decision.
 --
 -- Trigger handling
 -- --------------------------------------------------------------------------------------------
@@ -439,9 +450,10 @@ FROM upd_invoice;
 
 -- Step 2 — defect 2 (order link): give the returned quantity back to the original order line
 -- and unlink the rectificative line, for the order lines whose corrected QtyInvoiced stays
--- within [0, QtyOrdered].
-WITH ord_line AS (
-  SELECT il.c_invoiceline_id, il.c_orderline_id, il.qtyinvoiced
+-- within [0, QtyOrdered]. Every order-linked line of an invoice with a POSTED match row
+-- (POSTED_MATCH guard) is left out first — the whole invoice, never half of it.
+WITH ord_line_all AS (
+  SELECT i.c_invoice_id, il.c_invoiceline_id, il.c_orderline_id, il.qtyinvoiced
   FROM c_invoice i
   JOIN c_invoiceline il ON il.c_invoice_id = i.c_invoice_id
   JOIN m_inoutline iol ON iol.m_inoutline_id = il.m_inoutline_id
@@ -458,6 +470,41 @@ WITH ord_line AS (
     AND il.qtyinvoiced < 0
     AND il.c_orderline_id IS NOT NULL
     AND il.c_orderline_id = orig.c_orderline_id
+),
+-- POSTED_MATCH — invoices with at least one order-linked line whose M_MatchPO / M_MatchSO row
+-- is posted (Posted <> 'N') or already has Fact_Acct rows (AD_Table resolved by name, as
+-- C_INVOICE_POST does for @PostedMatchPO@). Deleting such a row would orphan its accounting.
+-- Any order-linked line of the invoice counts (not only the signature ones), so @report can
+-- repeat this predicate verbatim on the post-apply state.
+posted_match_inv AS (
+  SELECT DISTINCT l.c_invoice_id
+  FROM ord_line_all l
+  JOIN c_invoiceline il3 ON il3.c_invoice_id = l.c_invoice_id
+  WHERE il3.ad_client_id = :client_id
+    AND il3.c_orderline_id IS NOT NULL
+    AND (EXISTS (SELECT 1 FROM m_matchpo mp
+                WHERE mp.c_invoiceline_id = il3.c_invoiceline_id
+                  AND mp.ad_client_id = :client_id
+                  AND (mp.posted <> 'N'
+                       OR EXISTS (SELECT 1 FROM fact_acct fa
+                                  JOIN ad_table tb ON tb.ad_table_id = fa.ad_table_id
+                                  WHERE fa.ad_client_id = :client_id
+                                    AND UPPER(tb.tablename) = 'M_MATCHPO'
+                                    AND fa.record_id = mp.m_matchpo_id)))
+     OR EXISTS (SELECT 1 FROM m_matchso ms
+                WHERE ms.c_invoiceline_id = il3.c_invoiceline_id
+                  AND ms.ad_client_id = :client_id
+                  AND (ms.posted <> 'N'
+                       OR EXISTS (SELECT 1 FROM fact_acct fa
+                                  JOIN ad_table tb ON tb.ad_table_id = fa.ad_table_id
+                                  WHERE fa.ad_client_id = :client_id
+                                    AND UPPER(tb.tablename) = 'M_MATCHSO'
+                                    AND fa.record_id = ms.m_matchso_id))))
+),
+ord_line AS (
+  SELECT l.c_invoiceline_id, l.c_orderline_id, l.qtyinvoiced
+  FROM ord_line_all l
+  WHERE NOT EXISTS (SELECT 1 FROM posted_match_inv pm WHERE pm.c_invoice_id = l.c_invoice_id)
 ),
 fixable_ol AS (
   SELECT x.c_orderline_id, x.returned
@@ -672,8 +719,37 @@ order_left AS (
          'ORDER_LINK' AS defect,
          ol.qtyinvoiced AS current_total,
          ol.qtyinvoiced - il.qtyinvoiced AS expected_total,
-         'ORDER_LINE_OVER_INVOICED: order ' || o.documentno || ' line ' || ol.line
-           || ' would exceed the ordered quantity (re-invoiced after the return?)' AS reason
+         CASE
+           -- POSTED_MATCH — same predicate as Step 2's posted_match_inv; @apply never touches
+           -- match rows or Fact_Acct of a blocked invoice, so the post-apply state still shows it.
+           WHEN EXISTS (SELECT 1
+                        FROM c_invoiceline il3
+                        WHERE il3.c_invoice_id = i.c_invoice_id
+                          AND il3.ad_client_id = :client_id
+                          AND il3.c_orderline_id IS NOT NULL
+                          AND (EXISTS (SELECT 1 FROM m_matchpo mp
+                                       WHERE mp.c_invoiceline_id = il3.c_invoiceline_id
+                                         AND mp.ad_client_id = :client_id
+                                         AND (mp.posted <> 'N'
+                                              OR EXISTS (SELECT 1 FROM fact_acct fa
+                                                         JOIN ad_table tb ON tb.ad_table_id = fa.ad_table_id
+                                                         WHERE fa.ad_client_id = :client_id
+                                                           AND UPPER(tb.tablename) = 'M_MATCHPO'
+                                                           AND fa.record_id = mp.m_matchpo_id)))
+                               OR EXISTS (SELECT 1 FROM m_matchso ms
+                                          WHERE ms.c_invoiceline_id = il3.c_invoiceline_id
+                                            AND ms.ad_client_id = :client_id
+                                            AND (ms.posted <> 'N'
+                                                 OR EXISTS (SELECT 1 FROM fact_acct fa
+                                                            JOIN ad_table tb ON tb.ad_table_id = fa.ad_table_id
+                                                            WHERE fa.ad_client_id = :client_id
+                                                              AND UPPER(tb.tablename) = 'M_MATCHSO'
+                                                              AND fa.record_id = ms.m_matchso_id)))))
+             THEN 'POSTED_MATCH: an order match row (M_MatchPO/M_MatchSO) of this invoice is already '
+                  || 'posted, its lines are not unlinked from order ' || o.documentno
+           ELSE 'ORDER_LINE_OVER_INVOICED: order ' || o.documentno || ' line ' || ol.line
+                || ' would exceed the ordered quantity (re-invoiced after the return?)'
+         END AS reason
   FROM c_invoice i
   JOIN c_invoiceline il ON il.c_invoice_id = i.c_invoice_id
   JOIN m_inoutline iol ON iol.m_inoutline_id = il.m_inoutline_id

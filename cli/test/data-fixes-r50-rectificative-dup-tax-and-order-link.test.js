@@ -189,4 +189,27 @@ describe('R50 data-fix — order repair', () => {
     assert.ok(orderStmt.includes('DELETE FROM m_matchpo m'));
     assert.equal((orderStmt.match(/m\.m_inoutline_id IS NULL/g) || []).length, 2);
   });
+
+  it('never drops a posted match row: an invoice with one is left out of the order repair whole', () => {
+    for (const [alias, table, id] of [['mp', 'M_MATCHPO', 'm_matchpo_id'], ['ms', 'M_MATCHSO', 'm_matchso_id']]) {
+      for (const sql of [orderStmt, normReport]) {
+        assert.ok(sql.includes(`${alias}.posted <> 'N'`), `${table}: Posted guard missing`);
+        assert.ok(sql.includes(`UPPER(tb.tablename) = '${table}' AND fa.record_id = ${alias}.${id}`),
+          `${table}: Fact_Acct guard missing`);
+        assert.ok(sql.includes(`${alias}.ad_client_id = :client_id`), `${table} read unscoped`);
+      }
+    }
+    // The exclusion is by invoice (not by line), and ord_line feeds every write of the step.
+    assert.ok(orderStmt.includes(
+      'ord_line AS ( SELECT l.c_invoiceline_id, l.c_orderline_id, l.qtyinvoiced FROM ord_line_all l '
+      + 'WHERE NOT EXISTS (SELECT 1 FROM posted_match_inv pm WHERE pm.c_invoice_id = l.c_invoice_id)',
+    ));
+    assert.ok(orderStmt.includes('fa.ad_client_id = :client_id'));
+  });
+
+  it('reports a POSTED_MATCH invoice before the over-invoiced reason', () => {
+    const posted = normReport.indexOf("'POSTED_MATCH: ");
+    const over = normReport.indexOf("'ORDER_LINE_OVER_INVOICED: ");
+    assert.ok(posted > 0 && over > posted, 'POSTED_MATCH must be the first branch of the order reason');
+  });
 });
