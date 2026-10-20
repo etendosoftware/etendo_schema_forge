@@ -78,8 +78,10 @@ describe('modelRegistry — entries', () => {
     });
     ['303', '349'].forEach(id => expect(getModel(id)).toMatchObject({
       annualDeadline: null, siiWarningOnActivate: false, singleOrdinaryPerYear: false, newDeclWarning: null,
-      selectableYears: null,
     }));
+    expect(getModel('349').selectableYears).toBeNull();
+    // ETP-5716: the 303 also offers 2025 (2025 303s to test the 390 2025 preload).
+    expect(getModel('303').selectableYears()).toEqual([2026, 2025]);
   });
 
   // ETP-5716 — Modelo 390, the annual VAT summary.

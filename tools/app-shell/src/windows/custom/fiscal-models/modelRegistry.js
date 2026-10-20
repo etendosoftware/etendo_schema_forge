@@ -59,7 +59,9 @@ const MODELS = Object.freeze([
     siiWarningOnActivate: false,
     singleOrdinaryPerYear: false,
     newDeclWarning: null,
-    selectableYears: null,
+    // ETP-5716: 2025 303s, to test the 390 2025 preload / cuadre. Revert to `null` to go back to the
+    // shared SELECTABLE_YEARS (current filing year only).
+    selectableYears: () => [2026, 2025],
   }),
   Object.freeze({
     id: '349',

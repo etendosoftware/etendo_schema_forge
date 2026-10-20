@@ -1146,8 +1146,9 @@ describe('NewDeclModal', () => {
       // Regression guard for ETP-5391's SELECTABLE_YEARS/SUPPORTED_YEARS split: a new
       // declaration must only ever be created for the current filing year, even though
       // SUPPORTED_YEARS (layout resolution for existing declarations) still spans back
-      // to 2021.
-      const { container } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
+      // to 2021. A model without a `selectableYears` hook (349) keeps that rule; the 303 and
+      // 390 hooks (ETP-5716) are covered below.
+      const { container } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '349': true }} />);
       openYearMenu(container);
       const options = getYearOptions(container);
       expect(options).toHaveLength(1);
@@ -1532,21 +1533,44 @@ describe('NewDeclModal — annual model (390)', () => {
     expect(screen.getByTestId('NewDeclModal__modelWarning')).toBeTruthy();
   });
 
-  it('a 2025 picked for the 390 falls back to the 303 default when switching to 303', () => {
+  it('a 2025 picked for the 390 falls back to the 349 default when switching to 349', () => {
     const onConfirm = vi.fn();
     const { container } = render(
-      <NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} activeModels={{ '303': true, '390': true }} />,
+      <NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} activeModels={{ '349': true, '390': true }} />,
     );
     openModelMenu(container);
     fireEvent.click(getModelOption(container, '390'));
     selectYear(container, 2025);
     openModelMenu(container);
-    fireEvent.click(getModelOption(container, '303'));
+    fireEvent.click(getModelOption(container, '349'));
     openYearMenu(container);
     expect(getYearOptions(container).map(o => o.textContent.trim())).toEqual(['2026']);
     fireEvent.click(getYearOption(container, 2026));
     fireEvent.click(getCreateBtn(container));
-    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ model: '303', year: 2026 }));
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ model: '349', year: 2026 }));
+  });
+
+  // ETP-5716 — the 303 hook offers 2025 too (2025 303s to test the 390 2025 preload / cuadre).
+  it('the 303 offers 2026 and 2025 and creates quarterly and monthly 2025 declarations', () => {
+    const onConfirm = vi.fn();
+    const { container } = render(<NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} activeModels={{ '303': true }} />);
+    openYearMenu(container);
+    expect(getYearOptions(container).map(o => o.textContent.trim())).toEqual(['2026', '2025']);
+    fireEvent.click(getYearOption(container, 2025));
+    fireEvent.click(getPeriodBtn(container, 'T4'));
+    fireEvent.click(getCreateBtn(container));
+    expect(onConfirm).toHaveBeenLastCalledWith({ model: '303', year: 2025, period: 'T4', status: 'draft' });
+  });
+  it('a 303 2025 keeps its year when switching to the 390 (both offer it)', () => {
+    const onConfirm = vi.fn();
+    const { container } = render(
+      <NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} activeModels={{ '303': true, '390': true }} />,
+    );
+    selectYear(container, 2025);
+    openModelMenu(container);
+    fireEvent.click(getModelOption(container, '390'));
+    fireEvent.click(getCreateBtn(container));
+    expect(onConfirm).toHaveBeenCalledWith({ model: '390', year: 2025, period: '0A', status: 'draft' });
   });
 });
 
