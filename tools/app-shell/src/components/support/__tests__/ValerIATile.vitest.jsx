@@ -2,9 +2,11 @@ import { render } from '@testing-library/react';
 import { ValerIATile } from '../ValerIATile.jsx';
 
 describe('ValerIATile', () => {
-  it('renders an svg logo', () => {
+  it('renders the official Etendo AI logo', () => {
     const { container } = render(<ValerIATile />);
-    expect(container.querySelector('svg')).toBeInTheDocument();
+    const img = container.querySelector('img');
+    expect(img).toBeInTheDocument();
+    expect(img.getAttribute('src')).toBe('/logo-etendo-ai.png');
   });
 
   it('defaults to a 32px size and 8px radius', () => {
@@ -23,10 +25,11 @@ describe('ValerIATile', () => {
     expect(tile.style.borderRadius).toBe('999px');
   });
 
-  it('scales the inner icon to half the tile size', () => {
+  it('fills the tile at any size via object-fit: cover', () => {
     const { container } = render(<ValerIATile size={40} />);
-    const svg = container.querySelector('svg');
-    expect(svg.getAttribute('width')).toBe('20');
-    expect(svg.getAttribute('height')).toBe('20');
+    const img = container.querySelector('img');
+    expect(img.style.width).toBe('100%');
+    expect(img.style.height).toBe('100%');
+    expect(img.style.objectFit).toBe('cover');
   });
 });
