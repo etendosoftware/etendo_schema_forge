@@ -59,14 +59,13 @@ describe('fiscal-models.css — 349 key badge colours grouped by operation type'
   });
 });
 
-// ETP-5716 — the model tags (303 blue, 349 purple, 390 pink) are the design-system tag palette
-// (app-shell-core components/ui/tag-tokens.js VARIANT_STYLES), not colours of their own.
-describe('fiscal-models.css — model tag colours come from the design-system tag palette', () => {
+// The 303 / 349 model tags are the design-system tag palette (app-shell-core
+// components/ui/tag-tokens.js VARIANT_STYLES blue / purple). The 390 keeps its own green.
+describe('fiscal-models.css — 303 / 349 model tag colours come from the design-system tag palette', () => {
   const varOf = (name) => (css.match(new RegExp(`--${name}:\\s*([^;]+);`)) ?? [])[1]?.trim().toUpperCase();
   const PALETTE = {
     303: { background: '#F0FAFF', color: '#0075AD' }, // VARIANT_STYLES.blue
     349: { background: '#F4F1FD', color: '#4316CA' }, // VARIANT_STYLES.purple
-    390: { background: '#FDDDF8', color: '#A5088C' }, // VARIANT_STYLES.pink
   };
   for (const [model, tokens] of Object.entries(PALETTE)) {
     it(`the ${model} tag uses its palette pair`, () => {
