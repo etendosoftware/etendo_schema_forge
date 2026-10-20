@@ -2435,6 +2435,53 @@ A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO
 
 Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
 
+## Import lines into a draft sales invoice over MCP — ETP-5713
+
+An agent fills a DRAFT sales invoice from sales orders and from goods shipments, the way the window's "Create from ..." modals do, with
+six declared actions on `header` (`SalesInvoiceHeaderHandler`): `availableOrders` / `availableOrderLines` / `importOrderLines`
+(`{orderId, lines?:[{sourceLineId, quantity}]}`) and `availableShipments` / `availableShipmentLines` / `importShipmentLines` (`{shipmentId, lines?}`).
+The `id` of every call is the draft sales invoice. `lines` omitted imports everything still pending; given, exactly those lines.
+
+- **Cap = pending including drafts, applied server-side.** From an order: ordered - invoiced - the lines of every
+  DRAFT sales invoice (this one included); the one-step `createDraftInvoice` ignores drafts because it completes the invoice
+  in the same call, an import into a draft cannot. From a shipment: the movement quantity minus completed invoices, match
+  rows and draft invoices (this one included), not the full movement quantity the modal offered. More than pending on any
+  line is a 422 `importQuantityExceedsPending` naming the product, the requested and the pending quantity, and nothing is
+  created. The source lines are locked (`FOR UPDATE`, sorted) before the total is read. The order's invoiced quantity
+  only moves when the sales invoice is completed.
+- **Price, tax and discount** come from the order line through the native `CreateInvoiceLinesFromProcess` (the process
+  of the one-step actions): unit and list price exactly as in the order (no second discount: the lines CRUD, which
+  re-derives amounts, is not used), `EM_Etgo_Discount` carried to the NEW lines only, the gross amount filled when
+  missing. The invoice is never completed by an import.
+- **Order lines with shipments not yet invoiced:** the requested quantity goes first to those completed shipments, oldest first,
+  each up to its own pending (as `importShipmentLines` would offer, drafts included), as lines bound to the shipment so it shows as
+  invoiced; the rest (ordered and not delivered, or already taken by another draft) is invoiced against the order line
+  alone: order 10, shipment 6 already in a draft invoice, import of the order gives one line of 4. The same invoice can be
+  filled from the order or from the shipment and each path counts what the other created; a second import of the same
+  remainder answers `importNothingPending`. Nothing is refused for having deliveries.
+- **Preconditions (422):** draft target (`importTargetNotDraft`) with a price list (`importPriceListRequired`),
+  completed source (`importSourceNotCompleted`) that is not a return, same business partner, currency and direction.
+- **Header.** The invoice's order reference is left by the native process: the order when every line comes from one
+  order, empty when several are mixed. From an order, `etgoTotalDiscount` takes the order's when positive and the
+  invoice has none yet (or the same), as the modal's `afterImport` does; the discount line is materialised when the
+  invoice is completed.
+- **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?}}`.
+- The classic `Createfromorders`, `Createfrominouts` and `CreateFrom` buttons are redirected to the import actions
+  through `MCP_CONFIG`. `createDraftInvoice` on the sales order or the goods shipment (created AND completed in one call) remain the one-step alternatives. The spec prompt (`agent-prompts/sales-invoice/spec.md`)
+  describes the flow.
+
+The window itself is unchanged: its modals still post one line at a time through the lines CRUD (uncapped by the server).
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.34.
+
+Discovery and edge cases of the sales invoice import (ETP-5713 review):
+- A return order and a return document are never importable (422 `importDirectionMismatch`) and never listed.
+- `available*` answers are bounded scans (200 most recent candidates, 50 documents) and carry `hasMore`, `limit` and `scanLimit`; `hasMore:true` means the list may be incomplete.
+- `headerLinked` / `salesOrder` report the truth: the order the header points at now, `headerLinked:true` only when an imported line belongs to it.
+- A shipment imported into the invoice does NOT carry the order's `etgoTotalDiscount`; only the order import does.
+- The gross repair touches only the lines this import added: a deliberate zero line or a negative line already in the draft keeps its gross.
+- The remainder of an order import (ordered and not delivered, or already taken by another draft) is created through the native process with a temporary receipt/shipment marker that is removed right after; a skipped removal rolls the import back (`importQuantityNotHonoured`). `ImportOrderLinesIntoInvoiceHandlerIntegrationTest` runs the real process for the covered-by-draft case.
+- A document of another client answers 404 exactly like a missing one. The source lines are locked with `FOR NO KEY UPDATE`.
+
 ## Unit column in the lines grid (ETP-5696)
 
 The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. facturada**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).

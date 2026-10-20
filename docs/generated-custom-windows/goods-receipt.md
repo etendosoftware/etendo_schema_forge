@@ -723,3 +723,37 @@ now works. Cap rule and error shape: `return-to-vendor-shipment.md` and neo-head
 ## Period not open (ETP-5577)
 
 A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## Import order lines into a draft goods receipt over MCP — ETP-5713
+
+An agent fills a DRAFT goods receipt from purchase orders, the way the window's "Add from order" modal does, with three declared
+actions on `goodsReceipt` (`GoodsReceiptHeaderHandler` through `ImportOrderLinesIntoInOutHandler`): `availableOrders` lists the
+completed purchase orders of the goods receipt's business partner and currency that still have quantity to receive; `availableOrderLines`
+(`{orderId}`) lists an order's pending lines with their `pendingQuantity`; `importOrderLines`
+(`{orderId, lines?:[{sourceLineId, quantity}]}`) adds them. The `id` of every call is the draft goods receipt.
+`lines` omitted imports everything still pending; given, exactly those lines (a line listed twice counts both).
+
+- **Cap = pending including drafts.** pending = ordered - delivered - what any DRAFT goods receipt (this one included) already
+  holds. More than that on any line is a 422 `importQuantityExceedsPending` (naming the product, the requested and the
+  pending quantity) and **nothing is created**; the same order line can be imported again while it stays under the cap.
+  The order's delivered quantity only moves when the goods receipt is completed, so an import lowers the pending, not the delivered.
+- **Preconditions (422, before anything is written):** the goods receipt must be a draft (`importTargetNotDraft`), the order
+  completed (`importSourceNotCompleted`), of the same business partner (`importBusinessPartnerMismatch`), currency
+  (`importCurrencyMismatch`) and direction (`importDirectionMismatch`). A stockable line needs an active storage bin in
+  the goods receipt's warehouse (`importNoStorageBin`).
+- **Header link.** The goods receipt's `salesOrder` is set when every line it holds comes from that one order (the order's
+  Documents panel finds the goods receipt through it) and left empty when several orders are mixed; a link set by an earlier
+  import is cleared when a second order joins. The answer reports `headerLinked` and `salesOrder`.
+- **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?}}`.
+- The classic `Create Lines From` button is redirected to `importOrderLines` through `MCP_CONFIG`. `createGoodsReceipt` on the purchase order remains the
+  one-step alternative. The spec prompt (`agent-prompts/goods-receipt/spec.md`) describes the flow.
+
+The window itself is unchanged: its modal still posts one line at a time through the lines CRUD (uncapped by the server).
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.34.
+
+Discovery and edge cases of the goods receipt import (ETP-5713 review):
+- `availableOrders` is a bounded scan: the 200 most recent completed purchase orders of the partner, client and currency, at most 50 returned. Every `available*` answer carries `hasMore`, `limit` and `scanLimit`; `hasMore:true` means the list may be incomplete (a purchase order not listed can still be imported when its id is known).
+- An over-delivered order line (ordered 5, delivered 7) is neither listed nor imported (its "pending" would be -2); a negative order line keeps its negative pending. The one-step `createGoodsReceipt` shares the underlying factory and still has that flip (follow-up).
+- `headerLinked` / `salesOrder` report the truth: if the header already links purchase order X and the lines come only from purchase order Y, the answer is `headerLinked:false, salesOrder:X` and the link is not changed.
+- A goods receipt or purchase order of another client answers 404 exactly like a missing one.
+- The source lines are locked with `FOR NO KEY UPDATE` (ascending ids), then the order lines are refreshed before the pending is read.
