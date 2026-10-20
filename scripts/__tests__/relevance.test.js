@@ -14,7 +14,7 @@ function run(fn, files) {
   return out.stdout.trim();
 }
 
-const SPEC = 'e2e/tests/flows/account-session-cookie.mocked.spec.js';
+const SPEC = 'e2e/tests/flows/platform/account-session-cookie.mocked.spec.js';
 const OTHER_SPEC = 'e2e/tests/flows/sales/sales-order-confirm-idempotency.mocked.spec.js';
 
 describe('relevance_checks', () => {

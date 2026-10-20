@@ -19,7 +19,8 @@ import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.
 import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
-import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
+import { CELL_RENDERERS, renderNeutralTagCell } from './DataTable.cellRenderers.jsx';
+import { tagColumnsFromAux } from '@/lib/auxReference.js';
 import { resolveFkNavigation } from './fkNavigation.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
@@ -1132,7 +1133,9 @@ function renderDerivedAddCell(col, values) {
   const displayVal = formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived, isNumericDerived);
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className={`text-muted-foreground text-sm${getNumericCellAlignClass(isNumericDerived)}`}>
-      {displayOrDash(displayVal)}
+      {/* ETP-5696 — `display: 'tag'` keeps the grey pill while the line is still being added;
+          no value yet keeps the usual dash. */}
+      {col.display === 'tag' && displayVal ? renderNeutralTagCell(displayVal) : displayOrDash(displayVal)}
     </TableCell>
   );
 }
@@ -1659,6 +1662,11 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         snapshot[key + suffix] = auxVal;
         handleChange(key + suffix, auxVal);
       }
+      // ETP-5696 — fill grey-pill columns (the line's unit) from the selected item's `_aux`.
+      for (const [tagKey, tagVal] of Object.entries(tagColumnsFromAux(columns, selectedItem._aux))) {
+        snapshot[tagKey] = tagVal;
+        handleChange(tagKey, tagVal);
+      }
     }
     // Also fire top-level display fields from selectedItem (mirrors EntityForm behavior).
     // Skips structural/object fields; fires e.g. product_uOM = "Unit" for identifier resolution.
@@ -1683,7 +1691,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         pendingCalloutsRef.current = pendingCalloutsRef.current.filter(p => p !== calloutPromise);
       });
     }
-  }, [handleChange, onFieldChange, values, fieldMap, convertOptimisticPrice]);
+  }, [handleChange, onFieldChange, values, fieldMap, convertOptimisticPrice, columns]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -3065,6 +3073,11 @@ function renderFooterRow({
  *      per-amount-column footer-totals row, regardless of showFooterTotals. Set when a caller
  *      renders a specialized, grid-aligned totals row elsewhere (e.g. InlineLinesPanel's
  *      balanceFooter row) so the two do not stack (ETP-5210).
+ *  - hideDataRows: boolean — also suppresses the generic per-amount-column footer-totals row,
+ *      regardless of showFooterTotals. A data-hidden instance only hosts the add-row form (e.g.
+ *      the companion of InlineLinesPanel in inlineEditable LinesTable), so there are no visible
+ *      rows to total; without this it summed every amount column of the spread lines under the
+ *      add-row (ETP-5771).
  */
 export function DataTable({
   entity,
@@ -3695,7 +3708,7 @@ export function DataTable({
             )}
           </TableBody>
           {renderFooterRow({
-            totals, showFooterTotals: showFooterTotals && !balanceFooter, selectable, visibleColumns, filteredData,
+            totals, showFooterTotals: showFooterTotals && !balanceFooter && !hideDataRows, selectable, visibleColumns, filteredData,
             hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
             hasDimensionsPanel, sessionCurrency,
           })}

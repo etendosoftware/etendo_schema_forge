@@ -148,6 +148,10 @@ keep every spec single-window, and let the custom frontend do the aggregation.
   `docs/walkthrough-flows.md`.
 - The top-level `calendar` entity (`C_Calendar`) itself is not exposed as a browsable tab — most
   tenants have exactly one calendar per organization, provisioned by onboarding, not managed here.
+  The year-closed badge and **Cerrar Año** read `end-year-close/accounting`, an accounting
+  entity: a role without the `showAccountingFields` capability gets `403` there (ETP-5648), so the
+  badge is not shown (`useYearCloseStatus` resolves `null`) and the kebab falls back to offering
+  **Cerrar Año**, as it does for any unknown state. Among the template roles only Finance holds this window.
 
 ## Interaction model
 - Route: `/calendar` for the year list and `/calendar/:recordId` for the year detail.

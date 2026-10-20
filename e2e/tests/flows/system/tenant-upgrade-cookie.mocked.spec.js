@@ -1,5 +1,9 @@
+// @covers tools/app-shell/src/pages/UpgradePage.jsx
+// @covers tools/app-shell/src/lib/upgrade/api.js
 import { test, expect } from '@playwright/test';
 import { login, declareCookieSession } from '../../helpers/auth.js';
+// The upgrade submit stays disabled without a plan catalog (ETP-5046) — see the helper.
+import { installPlansMock, PRODUCTIVE_PLAN } from '../../helpers/plan-catalog-mock.js';
 
 /**
  * Tenant upgrade under the COOKIE session scheme (ETP-5443 follow-up).
@@ -107,6 +111,7 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
     await declareCookieSession(page);
+    await installPlansMock(page);
   });
 
   test('submitting sends the purchase with X-Go-CSRF and no Authorization, then follows checkoutUrl', async ({ page }) => {
@@ -123,9 +128,12 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     expect(requests[0].body).toMatchObject({
       action: 'productive-tenant',
       upgradeAction: 'create-productive',
+      // The auto-selected catalog key — a plan, never a price (ETP-5046).
+      planKey: PRODUCTIVE_PLAN.planKey,
       clientName: 'Acme Productive',
       dataTransfer: { products: true, contacts: true },
     });
+    expect(JSON.stringify(requests[0].body)).not.toMatch(/priceId/i);
     // The whole point of the cookie scheme: the write proof travels in X-Go-CSRF, and there is
     // no bearer token to put in Authorization at all (sessionCredentials.js's `authHeaders()`).
     expect(requests[0].headers['x-go-csrf']).toBe('e2e-cookie-csrf-token');
@@ -147,5 +155,6 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     await expect(page).toHaveURL(/__mock-checkout__/, { timeout: 10_000 });
     expect(requests).toHaveLength(1);
     expect(requests[0].body.dataTransfer).toEqual({ products: false, contacts: false });
+    expect(requests[0].body.planKey).toBe(PRODUCTIVE_PLAN.planKey);
   });
 });

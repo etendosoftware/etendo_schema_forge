@@ -1365,7 +1365,7 @@ The generic `LinesEmptyState` component lives at `tools/app-shell/src/components
 />
 ```
 
-`addLineGuard` receives current form data and must return `true` to enable adding lines. It gates both the button inside the empty state (`canAddLine` prop) and the `+ Add Line` button in the lines table header. Without a guard, adding is always allowed.
+`addLineGuard` receives current form data and must return `true` to enable adding lines. It gates both the button inside the empty state (`canAddLine` prop) and the `+ Add Line` button in the lines table header. Without a guard, the default gate is the generated `requiredHeaderFields` list (`resolveCanAddLines` in `detailViewHelpers.jsx`): adding is allowed once every listed header field holds a value, and always when the list is empty. `generate-frontend.js` builds that list from the header's `required` + `form` fields the user can fill — it excludes `visibility` `discarded`, `system` **and `readOnly`** (ETP-5676), because a readOnly field such as `grandTotalAmount`/`summedLineAmount`, `documentNo` or `docStatus` is filled by the backend after the save and would otherwise hide the button until then. A field that is only locked by `readOnlyLogic` (e.g. after completion) is still editable in draft and stays in the list.
 
 **`window.maxDetailLines` — cap the line count (decisions-driven; `0` = import-only lines):**
 
@@ -1785,7 +1785,7 @@ One more request precedes the paging: the selector **fails closed** (returns an 
 
 Either way the **save/complete gating logic is identical and unaffected** — both paths read `computeBalanceGate()`'s `balanceState` directly, never anything a renderer displays.
 
-**Add-row and `DataTable`'s generic footer-totals (ETP-5210):** for `inlineEditable` windows, when the add-row form is active `GLJournalLineTable` (and every generated `*LineTable.jsx` for this layout) renders `InlineLinesPanel` (existing lines + the balanceFooter row above) **alongside** a second, header/data-hidden `DataTable` instance used only to host the add-row form. `DataTable` has its own, unrelated, longstanding generic footer-totals feature (`showFooterTotals`, on by default whenever amount columns exist) — without a guard, that hidden instance would render a *second*, unformatted totals row directly under the add-row form, stacked below the properly `€`-formatted, column-aligned one from `InlineLinesPanel`. `DataTable` now accepts a `balanceFooter` prop (already threaded through via `{...props}` at the `*LineTable.jsx` call site) whose mere presence forces its own `showFooterTotals` to `false`, regardless of the `showFooterTotals` prop's own value — the specialized row already covers it. Windows without `window.balanceFooter` configured are unaffected: `balanceFooter` is `null`/absent for them, so `DataTable`'s generic footer-totals still renders exactly as before.
+**Add-row and `DataTable`'s generic footer-totals (ETP-5210):** for `inlineEditable` windows, when the add-row form is active `GLJournalLineTable` (and every generated `*LineTable.jsx` for this layout) renders `InlineLinesPanel` (existing lines + the balanceFooter row above) **alongside** a second, header/data-hidden `DataTable` instance used only to host the add-row form. `DataTable` has its own, unrelated, longstanding generic footer-totals feature (`showFooterTotals`, on by default whenever amount columns exist) — without a guard, that hidden instance would render a *second*, unformatted totals row directly under the add-row form, stacked below the properly `€`-formatted, column-aligned one from `InlineLinesPanel`. `DataTable` now accepts a `balanceFooter` prop (already threaded through via `{...props}` at the `*LineTable.jsx` call site) whose mere presence forces its own `showFooterTotals` to `false`, regardless of the `showFooterTotals` prop's own value — the specialized row already covers it. Independently of `balanceFooter`, a `DataTable` rendered with `hideDataRows` never renders the generic footer-totals row either (ETP-5771): it has no visible rows to total, and because the call site spreads the full lines list in as `data`, the row otherwise summed every `amount` column (e.g. unit prices plus a duplicate of the document total) right under the add-row form on windows without `balanceFooter` — exposed once a header summary stopped carrying `amount` fields and the `showDetailFooterTotals` default flipped to `true`. Normal `DataTable`s (no `hideDataRows`) keep rendering the generic footer-totals exactly as before.
 
 **When to use:** manual journals and any double-entry document where lines carry separate debit and credit amount columns that must balance before saving.
 
@@ -1807,7 +1807,7 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 - `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `computeBalanceGate()` produces `balanceState` (gates Save/Complete) and, for `inlineEditable` windows, `buildBalanceFooterGridTotals()` (in `detailViewHelpers.jsx`) formats it into the `balanceFooter` prop threaded into `<DetailTable>` → `InlineLinesPanel`. `renderTotalsBlock()` renders the classic-layout `BalanceFooterPanel` fallback instead of `DocumentTotalsPanel` only when `linesLayout !== "inlineEditable"`.
 - `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — `renderBalanceFooterRow()` renders the column-aligned totals row for `inlineEditable` windows.
 - `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + the classic-layout fallback renderer.
-- `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row (see "Add-row and `DataTable`'s generic footer-totals" above).
+- `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row; `hideDataRows` suppresses it too (ETP-5771) (see "Add-row and `DataTable`'s generic footer-totals" above).
 
 **Real example:** `simple-g-l-journal` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
 
@@ -1865,6 +1865,9 @@ Customer/Vendor Accounting, etc.).
    ETP-4565, and the per-tab `visibleWhenCapability` role gate added in ETP-5116 — used by
    `product`/`asset-group`/`assets`/`warehouse`/`contacts`'s Accounting tab(s) to hide behind
    `showAccountingFields`): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)".
+   A capability-hidden tab is also never fetched in the background (ETP-5648). When the
+   accounting tab is the window's *detail* tab (`detailEntity`, as in `product-category` and
+   `business-partner-category`), gate it with `window.detailVisibleWhenCapability` instead.
    **Cross-group tab ordering (ETP-4415).** `tabOrder` on any tab-strip entry
    (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
    every other entry, not just within its own group — see `docs/decisions-reference.md`'s

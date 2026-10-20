@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth.js';
+import { login } from '../../helpers/auth.js';
 
 /** Browser contract for the server-owned transfer row on a productive environment. */
 const PRODUCTIVE_ENVIRONMENT = {

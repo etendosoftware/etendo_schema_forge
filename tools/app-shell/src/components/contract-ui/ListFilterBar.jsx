@@ -8,6 +8,7 @@ import { compareStatusCodes, statusLabel } from '@/lib/statusBadge.js';
 import { AdvancedFilterBuilder } from './AdvancedFilterBuilder.jsx';
 import { DistinctValuesList } from './DistinctValuesList.jsx';
 import { DateRangePopoverContent } from '@/components/ui/date-range-popover.jsx';
+import { computePresetRange, toIsoDate } from './datePresetFilter.js';
 
 // ETP-5601 — Figma's toolbar type: text-sm/leading-6/font-medium in #121217 for every text
 // control, idle or active. An active filter is told apart by its border alone. `text-[#121217]`
@@ -251,28 +252,6 @@ export function ListFilterBar({
     : isCustomRange
       ? ui('dateRangeCustom')
       : ui('dateRangeAnyTime');
-
-  const computePresetRange = (presetId) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const to = new Date(today);
-    const from = new Date(today);
-    if (presetId === 'today') { /* from = to = today */ }
-    else if (presetId === 'yesterday') { from.setDate(from.getDate() - 1); to.setDate(to.getDate() - 1); }
-    else if (presetId === 'last7') from.setDate(from.getDate() - 6);
-    else if (presetId === 'last30') from.setDate(from.getDate() - 29);
-    else if (presetId === 'last12m') from.setMonth(from.getMonth() - 12);
-    else return null;
-    return { from, to };
-  };
-
-  const toIsoDate = (d) => {
-    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return '';
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
 
   const emitDateFilter = (range, originalValue) => {
     if (!dateCol) return;

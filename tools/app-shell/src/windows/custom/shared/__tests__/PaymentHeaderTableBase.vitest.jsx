@@ -116,11 +116,6 @@ function fmtAmtNorm(val, curr) {
   return fmtAmt(val, curr).replace(/\u00a0/g, ' ');
 }
 
-function thisMonthDate(day = '05') {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${day}`;
-}
-
 const BASE_PROPS = {
   specName: 'payment-in',
   apiBaseUrl: '/sws/neo',
@@ -140,14 +135,37 @@ afterEach(() => {
 
 // --- Tests ---
 
-// Scopes to the hero amount (the 30px figure) so a same-text match elsewhere in the sidebar
-// (breakdown rows, pending widget) can never satisfy a hero assertion.
-const findHero = (sidebar, text) => {
-  const hero = sidebar.getAllByText(text).find((el) => el.style.fontSize === '30px');
-  expect(hero).toBeDefined();
-  return hero;
+// ETP-5778 — the sidebar is fed by `meta.summary` (computed by the backend over the whole
+// filtered set, in the organization currency). It never adds the loaded rows up itself.
+const SUMMARY = {
+  orgCurrencyIso: 'EUR',
+  rowCount: 18,
+  total: { amount: 2400.14, approximate: true, count: 16, missingRateCurrencies: [] },
+  pending: { amount: 193.55, approximate: true, count: 2, missingRateCurrencies: [] },
+  draftCount: 2,
+  byMethod: [
+    { id: 'm-cash', label: 'Efectivo', amount: 1174.06, approximate: true, count: 10 },
+    { id: 'm-transfer', label: 'Transferencia', amount: 1226.08, approximate: false, count: 6 },
+  ],
+  byCurrency: [
+    { currencyIso: 'EUR', total: 2093.79, count: 7 },
+    { currencyIso: 'USD', total: 355.72, count: 9 },
+  ],
 };
 
+const renderSidebar = ({ summary = SUMMARY, columnFilters, ...rest } = {}) => {
+  render(
+    <PaymentHeaderTableBase
+      {...BASE_PROPS}
+      dir="in"
+      data={[]}
+      meta={summary === null ? null : { summary }}
+      columnFilters={columnFilters}
+      onDataMutated={vi.fn()}
+      {...rest} />,
+  );
+  return within(screen.getByTestId('PaymentSidebar__panel'));
+};
 
 describe('PaymentHeaderTableBase — sidebar', () => {
   // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
@@ -155,133 +173,234 @@ describe('PaymentHeaderTableBase — sidebar', () => {
   beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'tok-1' }));
 
   it('draws a 1px top border on the root container (separator below the list toolbar)', () => {
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
+    renderSidebar();
     const root = screen.getByTestId('PaymentSidebar__panel').closest('div[style*="border-top"]');
     expect(root).not.toBeNull();
     expect(root.style.borderTop).toBe('1px solid hsl(var(--border-subtle))');
   });
 
-  it('shows the loading skeleton and placeholder widgets when data is null', () => {
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={null} onDataMutated={vi.fn()} />);
-    expect(screen.getByTestId('PaymentSidebar__panel')).toBeInTheDocument();
-    // Two "—" placeholders (month subtitle absent + widget badges/counts) while data is null.
-    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  it('shows the skeleton and placeholders while there is no summary, and never adds the rows up', () => {
+    // Mixed currencies: the old client-side sum printed "2.463,39 €" here.
+    const rows = [
+      { id: 'p1', status: 'RPR', amount: '2325', 'currency$_identifier': 'EUR', paymentDate: '2026-10-01' },
+      { id: 'p2', status: 'RPR', amount: '138.39', 'currency$_identifier': 'USD', paymentDate: '2026-10-02' },
+    ];
+    const sidebar = renderSidebar({ summary: null, data: rows });
+    expect(sidebar.queryByTestId('payment-summary-total')).not.toBeInTheDocument();
+    expect(sidebar.queryByTestId('payment-summary-by-currency')).not.toBeInTheDocument();
+    expect(sidebar.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('PaymentSidebar__panel').textContent).not.toMatch(/2\.463,39/);
   });
 
-  it('computes and renders stats for dir="in": this-month total, pending total, draft count and per-method breakdown', () => {
-    const rows = [
-      { id: 'p1', status: 'RPR', amount: '120.5', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR', 'paymentMethod$_identifier': 'Transferencia' },
-      { id: 'p2', status: 'RPPC', amount: '30', paymentDate: '2000-01-01', 'currency$_identifier': 'EUR', 'paymentMethod$_identifier': 'Efectivo' },
-      { id: 'p3', status: 'RPAP', amount: '75' },
-      { id: 'p4', status: 'RPVOID', amount: '10' },
-    ];
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
-    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-
-    // Hero: only p1 counts towards "this month" (p2's date is out of range).
-    const hero = findHero(sidebar, fmtAmtNorm(120.5, 'EUR'));
-    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
-    expect(hero.textContent).not.toContain('+');
-
-    // Pending bucket = every non-deposited row (p3 + p4) = 85.
-    expect(sidebar.getByText(`2 porVencer`)).toBeInTheDocument();
-    expect(sidebar.getByText(fmtAmtNorm(85, 'EUR'))).toBeInTheDocument();
-
-    // Per-method breakdown only includes deposited rows.
-    expect(sidebar.getByText('Transferencia')).toBeInTheDocument();
-    expect(sidebar.getByText('Efectivo')).toBeInTheDocument();
-    expect(sidebar.getByText(fmtAmtNorm(30, 'EUR'))).toBeInTheDocument();
+  it('renders the hero total with a muted ≈ and the default foreground colour, no sign', () => {
+    const sidebar = renderSidebar();
+    const total = sidebar.getByTestId('payment-summary-total');
+    expect(total).toHaveAttribute('data-approximate', 'true');
+    expect(total).toHaveTextContent(`≈ ${fmtAmtNorm(2400.14, 'EUR')}`);
+    expect(total.textContent).not.toContain('+');
+    expect(total.closest('[style*="30px"]')).toHaveStyle({ color: 'hsl(var(--foreground))', fontSize: '30px' });
   });
 
-  it('groups thousands in the hero amount (1000-9999 range silently drops the separator without explicit useGrouping) — hardcoded literal, not the self-referential fmtAmt() helper', () => {
-    const rows = [
-      { id: 'p1', status: 'RPR', amount: '1500.5', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
-    ];
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
-    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    // Hardcoded literal — the local fmtAmt() test helper above shares the SAME
-    // missing-useGrouping bug as production, so it can never catch this regression.
-    const hero = findHero(sidebar, '1.500,50 €');
-    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
-    expect(hero.textContent).not.toContain('+');
-    // Ungrouped text would never match the exact string above; assert no ungrouped figure exists anywhere.
+  it('groups thousands in the hero amount — hardcoded literal, not the self-referential fmtAmt() helper', () => {
+    const sidebar = renderSidebar({
+      summary: { ...SUMMARY, total: { ...SUMMARY.total, amount: 1500.5, approximate: false } },
+    });
+    expect(sidebar.getByTestId('payment-summary-total')).toHaveTextContent('1.500,50 €');
     expect(sidebar.queryByText(/1500,50/)).not.toBeInTheDocument();
   });
 
-  it('uses the "pagado" hero label and no method breakdown for dir="out" with no deposited rows (zero amount renders without a sign)', () => {
-    const rows = [{ id: 'p1', status: 'RPAP', amount: '40' }];
-    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
-    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    // No deposited rows this month → thisMonth is 0 → the hero renders sign-less, not "− 0,00 €".
-    expect(sidebar.getByText(fmtAmtNorm(0, 'EUR'))).toBeInTheDocument();
-    expect(sidebar.queryByText(`− ${fmtAmtNorm(0, 'EUR')}`)).not.toBeInTheDocument();
-    // No deposited rows → no per-method breakdown section rendered.
-    expect(sidebar.queryByText('porMetodo')).not.toBeInTheDocument();
+  it('shows no ≈ anywhere when the summary is not approximate (single currency)', () => {
+    const sidebar = renderSidebar({
+      summary: {
+        ...SUMMARY,
+        total: { amount: 100, approximate: false, count: 1, missingRateCurrencies: [] },
+        pending: { amount: 0, approximate: false, count: 0, missingRateCurrencies: [] },
+        byMethod: [{ id: 'm1', label: 'Efectivo', amount: 100, approximate: false, count: 1 }],
+        byCurrency: [{ currencyIso: 'EUR', total: 100, count: 1 }],
+      },
+    });
+    expect(screen.getByTestId('PaymentSidebar__panel').textContent).not.toContain('≈');
+    // The currency breakdown is rendered even with a single currency.
+    expect(sidebar.getByTestId('payment-summary-currency-EUR')).toBeInTheDocument();
   });
 
-  it('shows the hero amount without a sign and in the default foreground colour for dir="out" when this month\'s deposited total is nonzero', () => {
-    const rows = [
-      { id: 'p1', status: 'RPR', amount: '40', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
-    ];
-    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
-    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    const hero = sidebar.getAllByText(fmtAmtNorm(40, 'EUR')).find((el) => el.style.fontSize === '30px');
-    expect(hero).toBeDefined();
-    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
-    expect(sidebar.queryByText(`− ${fmtAmtNorm(40, 'EUR')}`)).not.toBeInTheDocument();
+  it('renders Pendiente with ≈ and the due badge, and Por confirmar from draftCount', () => {
+    const sidebar = renderSidebar();
+    expect(sidebar.getByTestId('payment-summary-pending')).toHaveTextContent(`≈ ${fmtAmtNorm(193.55, 'EUR')}`);
+    expect(sidebar.getByText('2 porVencer')).toBeInTheDocument();
+    expect(sidebar.getByText('sinConfirmar')).toBeInTheDocument();
   });
 
-  it('renders the hero amount with a single sign (not a doubled "− -") when this month\'s deposited total is negative (dir="out")', () => {
-    // Regression test: a negative deposited total must NOT get heroSign ("−")
-    // glued in front of fmtAmt's own leading "-" (which would render "− -40,00 €").
-    const rows = [
-      { id: 'p1', status: 'RPR', amount: '-40', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
-    ];
-    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
-    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    // Both the hero amount AND the per-method breakdown (single "other" method,
-    // same -40 total) must render the sign-less single form.
-    expect(sidebar.getAllByText(fmtAmtNorm(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
-    expect(sidebar.queryByText(`− ${fmtAmtNorm(-40, 'EUR')}`)).not.toBeInTheDocument();
+  it('puts ≈ per method only where the backend flags it', () => {
+    const sidebar = renderSidebar();
+    expect(sidebar.getByTestId('payment-summary-method-m-cash-amount')).toHaveAttribute('data-approximate', 'true');
+    expect(sidebar.getByTestId('payment-summary-method-m-transfer-amount')).toHaveAttribute('data-approximate', 'false');
+    expect(sidebar.getByTestId('payment-summary-method-m-transfer-amount')).toHaveTextContent(fmtAmtNorm(1226.08, 'EUR'));
   });
 
-  it('renders the hero amount with a single sign (not a doubled "+ -") when this month\'s deposited total is negative (dir="in")', () => {
-    const rows = [
-      { id: 'p1', status: 'RPR', amount: '-40', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
-    ];
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
-    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    const hero = findHero(sidebar, fmtAmtNorm(-40, 'EUR'));
-    expect(hero).toHaveStyle({ color: 'hsl(var(--foreground))' });
-    expect(hero.textContent).not.toContain('+');
-    expect(sidebar.queryByText(`+ ${fmtAmtNorm(-40, 'EUR')}`)).not.toBeInTheDocument();
+  it('lists the currency breakdown in the backend order, in original currency and without ≈', () => {
+    const sidebar = renderSidebar();
+    const rows = sidebar.getByTestId('payment-summary-by-currency').querySelectorAll('[data-testid^="payment-summary-currency-"]:not([data-testid$="-amount"])');
+    expect([...rows].map((r) => r.getAttribute('data-testid'))).toEqual([
+      'payment-summary-currency-EUR',
+      'payment-summary-currency-USD',
+    ]);
+    expect(sidebar.getByText('paymentSummaryByCurrency')).toBeInTheDocument();
+    expect(sidebar.getByTestId('payment-summary-currency-USD')).toHaveTextContent(fmtAmtNorm(355.72, 'USD'));
+    expect(sidebar.getByTestId('payment-summary-by-currency').textContent).not.toContain('≈');
   });
 
-  it('renders the hero amount without a +/- sign when this month\'s total is exactly zero (dir="in")', () => {
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
-    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    // Both the hero amount and the "sinDepositar" widget count render as a sign-less zero.
-    expect(sidebar.getAllByText(fmtAmtNorm(0, 'EUR'))).toHaveLength(2);
-    expect(sidebar.queryByText(`+ ${fmtAmtNorm(0, 'EUR')}`)).not.toBeInTheDocument();
-    expect(sidebar.queryByText(`− ${fmtAmtNorm(0, 'EUR')}`)).not.toBeInTheDocument();
+  it('warns about currencies without an exchange rate', () => {
+    const sidebar = renderSidebar({
+      summary: { ...SUMMARY, total: { ...SUMMARY.total, missingRateCurrencies: ['GBP', 'CHF'] } },
+    });
+    expect(sidebar.getByTestId('payment-summary-missing-rate')).toHaveTextContent('financeAccountsBalanceMissingRate');
   });
 
-  it('falls back to a plain grouped number (no currency suffix) when the currency code is invalid', () => {
-    const rows = [{ id: 'p1', status: 'RPR', amount: '10', 'currency$_identifier': '1', paymentDate: thisMonthDate() }];
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
-    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    // formatCurrency()'s catch branch (Intl throws on an invalid ISO code) falls
-    // back to a plain es-ES grouped number — no raw-code suffix, matching the
-    // same contract every other formatCurrency() call site in the app relies on.
-    expect(sidebar.getAllByText(fmtAmtNorm(10, '1')).length).toBeGreaterThanOrEqual(1);
+  it('uses the Cobrado / Pagado title and tooltip per direction', () => {
+    const inSidebar = renderSidebar();
+    expect(inSidebar.getByTestId('payment-summary-title')).toHaveTextContent('paymentSummaryCollected');
+    expect(inSidebar.getByTestId('payment-summary-info-button')).toHaveAttribute('aria-label', 'paymentSummaryCollectedInfo');
   });
 
-  it('renders zeroed widgets for an empty data array', () => {
-    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
-    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
+  it('uses the Pagado title and tooltip for dir="out"', () => {
+    const sidebar = renderSidebar({ specName: 'payment-out', dir: 'out' });
+    expect(sidebar.getByTestId('payment-summary-title')).toHaveTextContent('paymentSummaryPaid');
+    expect(sidebar.getByTestId('payment-summary-info-button')).toHaveAttribute('aria-label', 'paymentSummaryPaidInfo');
+    expect(sidebar.getByTestId('payment-summary-subtitle')).toHaveTextContent('dateRangeAllTime · 18 pagosNoun');
+  });
+
+  it('builds the subtitle from the active date filter', () => {
+    const all = renderSidebar();
+    expect(all.getByTestId('payment-summary-subtitle')).toHaveTextContent('dateRangeAllTime · 18 cobrosNoun');
+  });
+
+  it('subtitles a preset filter with its label', () => {
+    const sidebar = renderSidebar({
+      columnFilters: { paymentDate: { mode: 'date', op: 'range', value: ['2026-09-16', '2026-10-15'], originalValue: 'preset:last30' } },
+    });
+    expect(sidebar.getByTestId('payment-summary-subtitle')).toHaveTextContent('dateRangeLast30Days · 18 cobrosNoun');
+  });
+
+  it('subtitles a custom range as dd/mm/yyyy – dd/mm/yyyy', () => {
+    const sidebar = renderSidebar({
+      columnFilters: { paymentDate: { mode: 'date', op: 'range', value: ['2026-10-01', '2026-10-15'], originalValue: 'custom:2026-10-01:2026-10-15' } },
+    });
+    expect(sidebar.getByTestId('payment-summary-subtitle')).toHaveTextContent('01/10/2026 – 15/10/2026 · 18 cobrosNoun');
+  });
+
+  it('renders a zeroed panel (no method block) for an empty set', () => {
+    const sidebar = renderSidebar({
+      summary: {
+        orgCurrencyIso: 'EUR', rowCount: 0, draftCount: 0, byMethod: [], byCurrency: [],
+        total: { amount: 0, approximate: false, count: 0, missingRateCurrencies: [] },
+        pending: { amount: 0, approximate: false, count: 0, missingRateCurrencies: [] },
+      },
+    });
+    expect(sidebar.getByTestId('payment-summary-total')).toHaveTextContent(fmtAmtNorm(0, 'EUR'));
     expect(sidebar.getByText('0 porVencer')).toBeInTheDocument();
-    // Both the sign-less hero amount and the "sinDepositar" widget count read "0,00 €".
-    expect(sidebar.getAllByText(fmtAmtNorm(0, 'EUR')).length).toBeGreaterThanOrEqual(2);
+    expect(sidebar.queryByText('porMetodo')).not.toBeInTheDocument();
+    expect(sidebar.getByTestId('payment-summary-currency-EUR')).toBeInTheDocument();
+  });
+
+  it('falls back to all time for an unknown preset id without crashing', () => {
+    const sidebar = renderSidebar({
+      columnFilters: { paymentDate: { mode: 'date', op: 'range', value: [], originalValue: 'preset:bogus' } },
+    });
+    expect(sidebar.getByTestId('payment-summary-subtitle')).toHaveTextContent('dateRangeAllTime · 18 cobrosNoun');
+  });
+
+  it('derives the period from value[] for a stale filter without originalValue', () => {
+    const sidebar = renderSidebar({
+      columnFilters: { paymentDate: { mode: 'date', op: 'range', value: ['2026-01-05', '2026-01-31'] } },
+    });
+    expect(sidebar.getByTestId('payment-summary-subtitle')).toHaveTextContent('05/01/2026 – 31/01/2026 · 18 cobrosNoun');
+  });
+
+  it('falls back to all time for an empty filter object', () => {
+    const sidebar = renderSidebar({ columnFilters: { paymentDate: {} } });
+    expect(sidebar.getByTestId('payment-summary-subtitle')).toHaveTextContent('dateRangeAllTime · 18 cobrosNoun');
+  });
+
+  it('keys a method with a null id by its label', () => {
+    const sidebar = renderSidebar({
+      summary: { ...SUMMARY, byMethod: [{ id: null, label: 'Cheque', amount: 50, approximate: false, count: 1 }] },
+    });
+    expect(sidebar.getByTestId('payment-summary-method-Cheque')).toHaveTextContent('Cheque');
+    expect(sidebar.getByTestId('payment-summary-method-Cheque-amount')).toHaveTextContent(fmtAmtNorm(50, 'EUR'));
+  });
+
+  it('renders very large amounts in full without crashing', () => {
+    const big = 123456789012.34;
+    const sidebar = renderSidebar({
+      summary: { ...SUMMARY, total: { ...SUMMARY.total, amount: big, approximate: true } },
+    });
+    expect(sidebar.getByTestId('payment-summary-total')).toHaveTextContent(`≈ ${fmtAmtNorm(big, 'EUR')}`);
+  });
+
+  it('shows ≈ on hero, Pendiente and methods exactly where each approximate flag is true', () => {
+    const sidebar = renderSidebar({
+      summary: {
+        ...SUMMARY,
+        total: { ...SUMMARY.total, approximate: false },
+        pending: { ...SUMMARY.pending, approximate: true },
+        byMethod: [
+          { id: 'a', label: 'A', amount: 1, approximate: true, count: 1 },
+          { id: 'b', label: 'B', amount: 2, approximate: false, count: 1 },
+        ],
+      },
+    });
+    expect(sidebar.getByTestId('payment-summary-total').textContent).not.toContain('≈');
+    expect(sidebar.getByTestId('payment-summary-pending').textContent).toContain('≈');
+    expect(sidebar.getByTestId('payment-summary-method-a-amount').textContent).toContain('≈');
+    expect(sidebar.getByTestId('payment-summary-method-b-amount').textContent).not.toContain('≈');
+  });
+
+  it('treats a missing approximate flag as exact', () => {
+    const sidebar = renderSidebar({
+      summary: { ...SUMMARY, total: { amount: 10 }, pending: { amount: 5 }, byMethod: [{ id: 'z', label: 'Z', amount: 1 }] },
+    });
+    expect(screen.getByTestId('PaymentSidebar__panel').textContent).not.toContain('≈');
+    expect(sidebar.getByTestId('payment-summary-total')).toHaveAttribute('data-approximate', 'false');
+  });
+
+  it('keeps the by-currency card informational: no click target, button role or pointer cursor', () => {
+    const sidebar = renderSidebar();
+    const card = sidebar.getByTestId('payment-summary-by-currency');
+    expect(within(card).queryByRole('button')).not.toBeInTheDocument();
+    for (const el of [card, ...card.querySelectorAll('*')]) {
+      expect(el.getAttribute('role')).toBeNull();
+      expect(el.style.cursor).not.toBe('pointer');
+    }
+  });
+
+  it('renders one row for a single-currency summary', () => {
+    const sidebar = renderSidebar({
+      summary: { ...SUMMARY, byCurrency: [{ currencyIso: 'EUR', total: 100, count: 1 }] },
+    });
+    const card = sidebar.getByTestId('payment-summary-by-currency');
+    expect(card.querySelectorAll('[data-testid^="payment-summary-currency-"]:not([data-testid$="-amount"])')).toHaveLength(1);
+  });
+
+  it('shows the missing-rate warning only when currencies are missing', () => {
+    expect(renderSidebar().queryByTestId('payment-summary-missing-rate')).not.toBeInTheDocument();
+  });
+
+  it('does not change the displayed totals when the loaded rows change but meta.summary does not', () => {
+    const rowsA = [{ id: 'p1', status: 'RPR', amount: '1', 'currency$_identifier': 'EUR', paymentDate: '2026-10-01' }];
+    const rowsB = [...rowsA, { id: 'p2', status: 'RPR', amount: '99999', 'currency$_identifier': 'EUR', paymentDate: '2026-10-02' }];
+    const props = { ...BASE_PROPS, dir: 'in', meta: { summary: SUMMARY }, onDataMutated: vi.fn() };
+    const { rerender } = render(<PaymentHeaderTableBase {...props} data={rowsA} />);
+    const before = screen.getByTestId('PaymentSidebar__panel').textContent;
+    rerender(<PaymentHeaderTableBase {...props} data={rowsB} meta={{ summary: SUMMARY, page: 2 }} />);
+    expect(screen.getByTestId('PaymentSidebar__panel').textContent).toBe(before);
+  });
+
+  it('never signs or colours the hero amount, for either direction', () => {
+    const sidebar = renderSidebar({ specName: 'payment-out', dir: 'out' });
+    const total = sidebar.getByTestId('payment-summary-total');
+    expect(total.textContent).not.toMatch(/[+-]/);
+    expect(total.closest('[style*="30px"]')).toHaveStyle({ color: 'hsl(var(--foreground))' });
   });
 });
 

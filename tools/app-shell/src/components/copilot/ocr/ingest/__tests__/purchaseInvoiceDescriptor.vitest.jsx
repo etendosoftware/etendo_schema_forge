@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/copilot/ocr/ingest/purchaseInvoiceDescriptor.js
+import { BACK } from '../../ocrFlowSignals';
 import { classifyProductMatch, nonBlank, toIsoDate, buildLineOps, findBp, findBpLocation, findDefaultTax, checkBpHasLocation, findDuplicatePurchaseInvoices } from '../purchaseInvoiceDescriptor';
 
 // Mock simSearch to test findBp without network
@@ -457,6 +458,24 @@ describe('purchaseInvoiceDescriptor', () => {
       expect(result.cancelled).toBe(true);
     });
 
+    // ETP-5654 — backing out of the popup is a navigation signal, not a cancel, and builds nothing.
+    it('reports back (not cancelled) when the popup is backed out of', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+      simSearchMock.mockResolvedValue([]);
+
+      const result = await buildPurchaseInvoiceBatch(
+        { line_items: [{ description: 'Unknown product' }] },
+        {
+          token: 'tok',
+          apiBaseUrl: 'http://test/neo/purchase-invoice',
+          reviewedHeader: { vendor: { bpId: 'bp-1' } },
+          askUserForProducts: async () => BACK,
+        },
+      );
+
+      expect(result).toEqual({ back: true });
+    });
+
     // The line's own M_Product_ID selector is ProductSimple (built over product prices), which
     // hides unpriced products; the popup searches the plain product selector instead.
     it('hands the product popup the plain product selector and the product spec', async () => {
@@ -552,7 +571,7 @@ describe('purchaseInvoiceDescriptor', () => {
 
       it('requests several candidates so an ambiguous exact match can be detected', async () => {
         await run('Widget', []);
-        expect(simSearchMock).toHaveBeenCalledWith(expect.objectContaining({ entityName: 'Product', qtyResults: 3, minSimPercent: 30 }));
+        expect(simSearchMock).toHaveBeenCalledWith(expect.objectContaining({ entityName: 'Product', qtyResults: 3, minSimPercent: 50 }));
       });
 
       it('auto-assigns an exact name match ignoring case and surrounding spaces', async () => {
