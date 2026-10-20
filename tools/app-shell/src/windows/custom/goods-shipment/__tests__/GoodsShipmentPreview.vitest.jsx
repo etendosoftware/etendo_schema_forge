@@ -1,4 +1,7 @@
+// @covers tools/app-shell/src/windows/custom/goods-shipment/GoodsShipmentPreview.jsx
 // Mocks must come before imports (Vitest hoisting)
+
+import { dateOnlyWithFormatter } from '@/test/dateOnlyMock.js';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -10,9 +13,9 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (date) => date || '—',
-}));
+// Keep every real `@/lib/dateOnly` export; stub only the formatter (see the helper).
+vi.mock('@/lib/dateOnly', async (importOriginal) =>
+  dateOnlyWithFormatter(importOriginal, (date) => date || '—'));
 
 vi.mock('../useShipmentPdf.js', () => ({
   useShipmentPdf: vi.fn(() => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null })),
