@@ -329,6 +329,24 @@ describe('FmModel390Page — skeleton', () => {
     expect(screen.getByTestId('FmBoxes390__box_92').className).toContain('fm-390-cell--highlight');
   });
 
+  // ETP-5716 — an exercise without its fiscal-calendar periods: never the backend text.
+  it('explains an exercise without calendar periods and offers the fiscal calendar', async () => {
+    fetchBoxes390.mockRejectedValue(Object.assign(new Error('org=X raw'), {
+      serverMessage: 'The fiscal year 2025 of org=X is incomplete', code: 'INCOMPLETE_FISCAL_YEAR',
+      year: 2025, missingPeriods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    }));
+    render(<FmModel390Page decl={makeDecl({ year: 2025, _precomputed: null })} {...props()} />);
+    const empty = await screen.findByTestId('FmModel390Page__empty');
+    await waitFor(() => expect(empty.textContent).toContain('fm.m390.incomplete_year.all'));
+    expect(empty.textContent).not.toContain('org=X');
+    fireEvent.click(screen.getByTestId('FmModel390Page__goToFiscalCalendar'));
+    expect(navigateMock).toHaveBeenCalledWith('/calendar');
+    // Calcular again: a toast with the same text and the calendar action.
+    fireEvent.click(screen.getByTestId('FmModel390Page__emptyCompute'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.m390.incomplete_year.all',
+      expect.objectContaining({ action: expect.objectContaining({ label: 'fm.m390.incomplete_year.go_to_calendar' }) })));
+  });
+
   it('computes on mount when the list handed no payload', async () => {
     render(<FmModel390Page decl={makeDecl({ _precomputed: null })} {...props()} />);
     await waitFor(() => expect(fetchBoxes390).toHaveBeenCalledTimes(1));
@@ -543,6 +561,17 @@ describe('FmModel390Page — Generar fichero / Presentar save first', () => {
     await waitFor(() => expect(generate390File).toHaveBeenCalledTimes(1));
     expect(persistManualData).toHaveBeenCalledTimes(1);
     expect(persistManualData.mock.invocationCallOrder[0]).toBeLessThan(generate390File.mock.invocationCallOrder[0]);
+  });
+
+  it('"Generar" over an exercise without calendar periods toasts the explanation with the calendar action', async () => {
+    generate390File.mockResolvedValue({ ok: false, error: 'incomplete_fiscal_year', year: 2026, missingPeriods: [12] });
+    render(<FmModel390Page decl={makeDecl()} {...props()} />);
+    fireEvent.click(screen.getByTestId('FmModel390Page__generate'));
+    fireEvent.click(screen.getByTestId('FileGenModal390-confirm'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.m390.incomplete_year.months',
+      expect.objectContaining({ action: expect.objectContaining({ label: 'fm.m390.incomplete_year.go_to_calendar' }) })));
+    toast.error.mock.calls.at(-1)[1].action.onClick();
+    expect(navigateMock).toHaveBeenCalledWith('/calendar');
   });
 
   it('a failed save stops the generation', async () => {

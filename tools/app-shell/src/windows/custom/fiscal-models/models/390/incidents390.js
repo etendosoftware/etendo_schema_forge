@@ -13,6 +13,9 @@
 import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
 import { isAeatIncident } from './submission390.js';
 import { parseAmount } from './fm390Layouts.js';
+import {
+  FISCAL_CALENDAR_ROUTE, GO_TO_FISCAL_CALENDAR_KEY, incompleteFiscalYearOf, incompleteFiscalYearText,
+} from './incompleteYear390.js';
 
 /** i18n key prefix of a rule incident's text: `fm.m390.incident.<CODE>`. */
 export const INCIDENT_KEY_PREFIX_390 = 'fm.m390.incident.';
@@ -69,6 +72,9 @@ function displayParams(item, t) {
 export function incidentText390(item, t) {
   const code = item?.origin ?? '';
   if (!code || isAeatIncident(item)) return item?.message ?? '';
+  // The calendar lacks periods: the months by name, never the backend text.
+  const incomplete = incompleteFiscalYearOf(item);
+  if (incomplete) return incompleteFiscalYearText(incomplete, t);
   const key = `${INCIDENT_KEY_PREFIX_390}${code}`;
   const text = t(key, displayParams(item, t));
   return text && text !== key ? text : (item?.message ?? '');
@@ -80,6 +86,7 @@ export function incidentText390(item, t) {
  *   sources      → "Ver facturas"            `{ box }` (the Facturas tab filtered by that box)
  *   organization → "Editar en Organización"  `{ path: '/organization#<anchor>' }`
  *   invoices     → "Ver facturas de venta" / "de compra" `{ path }` (one per non-empty side)
+ *   fiscalCalendar → "Ir a Calendario fiscal" `{ path: FISCAL_CALENDAR_ROUTE }`
  */
 export function incidentActions390(item) {
   const a = item?.action;
@@ -92,6 +99,8 @@ export function incidentActions390(item) {
       return Number.isInteger(box) && box > 0 ? [{ id: 'sources', kind: 'sources', box, labelKey: 'fm.m390.incidents.view_invoices' }] : [];
     case 'organization':
       return [{ id: 'organization', kind: 'navigate', path: organizationPath(a.section), labelKey: 'fm.m390.edit_in_organization' }];
+    case 'fiscalCalendar':
+      return [{ id: 'fiscalCalendar', kind: 'navigate', path: FISCAL_CALENDAR_ROUTE, labelKey: GO_TO_FISCAL_CALENDAR_KEY }];
     case 'invoices': {
       const out = [];
       if (Number(a.sales) > 0) out.push({ id: 'sales', kind: 'navigate', path: INVOICE_LIST_ROUTE.sales, labelKey: 'fm.m390.incidents.view_sales_invoices' });

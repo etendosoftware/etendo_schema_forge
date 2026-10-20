@@ -131,6 +131,8 @@ export function resolveErrorCodeKey(errorCode) {
   if (errorCode === 'ALREADY_SUBMITTED') return 'fm.aeat.error.alreadySubmitted';
   // Modelo 390 only (ETP-5716): the backend refuses a filing with blocking incidents.
   if (errorCode === 'BLOCKING_INCIDENTS') return 'fm.aeat.error.blockingIncidents';
+  // Modelo 390 only (ETP-5716): the exercise has no periods in the fiscal calendar.
+  if (errorCode === 'INCOMPLETE_FISCAL_YEAR') return 'fm.aeat.error.incompleteFiscalYear';
   return null;
 }
 

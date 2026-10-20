@@ -1,5 +1,6 @@
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/incidents390.js
 // @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/fm390Api.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/390/incompleteYear390.js
 //
 // ETP-5716 — Modelo 390 incidents on the frontend: the backend computes the rules
 // (Fiscal390IncidentRules); the page groups them into Bloqueantes / Advertencias, translates each
@@ -18,7 +19,10 @@ import {
   nameWarningsFromIncidents390, ORGANIZATION_SECTION_ANCHOR, INCIDENT_KEY_PREFIX_390,
   incidentOrigin390, normalizeIncidents390,
 } from '../incidents390.js';
-import { validate390, generate390File } from '../fm390Api.js';
+import { validate390, generate390File, fetchBoxes390 } from '../fm390Api.js';
+import {
+  incompleteFiscalYearOf, incompleteFiscalYearText, parseMissingPeriods, FISCAL_CALENDAR_ROUTE,
+} from '../incompleteYear390.js';
 import { ORG_SECTION_ANCHOR } from '@/windows/custom/organization/OrganizationPage.jsx';
 
 /** Every code Fiscal390IncidentRules can produce (com.etendoerp.go). */
@@ -193,5 +197,55 @@ describe('fm390Api — incidents requests', () => {
   it('generate390File keeps the server message of any other failure', async () => {
     apiFetch.mockResolvedValue({ ok: false, status: 409, text: async () => JSON.stringify({ error: { message: 'already submitted' } }) });
     expect(await generate390File(decl, opts)).toEqual({ ok: false, error: 'http_409', serverMessage: 'already submitted' });
+  });
+
+  // ETP-5716 — an exercise without its fiscal-calendar periods (422 INCOMPLETE_FISCAL_YEAR).
+  it('generate390File reports a 422 INCOMPLETE_FISCAL_YEAR with the year and the missing months', async () => {
+    apiFetch.mockResolvedValue({
+      ok: false, status: 422,
+      text: async () => JSON.stringify({ error: { status: 422, code: 'INCOMPLETE_FISCAL_YEAR', message: 'org=X…', year: 2025, missingPeriods: [11, 12] } }),
+    });
+    expect(await generate390File(decl, opts)).toEqual({ ok: false, error: 'incomplete_fiscal_year', year: 2025, missingPeriods: [11, 12] });
+  });
+
+  it('fetchBoxes390 throws an error carrying the structured code, year and months', async () => {
+    apiFetch.mockResolvedValue({
+      ok: false, status: 422,
+      text: async () => JSON.stringify({ error: { status: 422, code: 'INCOMPLETE_FISCAL_YEAR', message: 'm', year: 2025, missingPeriods: [1, 2] } }),
+    });
+    const err = await fetchBoxes390(decl, opts).catch(e => e);
+    expect(err).toMatchObject({ status: 422, code: 'INCOMPLETE_FISCAL_YEAR', year: 2025, missingPeriods: [1, 2] });
+    expect(incompleteFiscalYearOf(err)).toEqual({ year: 2025, missingPeriods: [1, 2] });
+  });
+});
+
+describe('incompleteYear390 — the exercise has no periods in the fiscal calendar', () => {
+  it('recognises the structured error, an incident and nothing else', () => {
+    expect(incompleteFiscalYearOf({ code: 'INCOMPLETE_FISCAL_YEAR', year: '2025', missingPeriods: [12, 1] }))
+      .toEqual({ year: 2025, missingPeriods: [1, 12] });
+    expect(incompleteFiscalYearOf({ origin: 'INCOMPLETE_FISCAL_YEAR', params: { year: '2025', missingPeriods: '3,4' } }))
+      .toEqual({ year: 2025, missingPeriods: [3, 4] });
+    expect(incompleteFiscalYearOf({ code: 'BLOCKING_INCIDENTS' })).toBeNull();
+    expect(incompleteFiscalYearOf(null)).toBeNull();
+    expect(parseMissingPeriods('0,13,x,5,5')).toEqual([5]);
+  });
+
+  it('names the missing months, or "todos los meses" when the 12 (or an unknown list) are missing', () => {
+    expect(incompleteFiscalYearText({ year: 2025, missingPeriods: [11, 12] }, t))
+      .toBe('fm.m390.incomplete_year.months|{"year":2025,"months":"fm.m390.month.11, fm.m390.month.12"}');
+    const all = Array.from({ length: 12 }, (_, i) => i + 1);
+    expect(incompleteFiscalYearText({ year: 2025, missingPeriods: all }, t)).toBe('fm.m390.incomplete_year.all|{"year":2025}');
+    expect(incompleteFiscalYearText({ year: 2025, missingPeriods: [] }, t)).toBe('fm.m390.incomplete_year.all|{"year":2025}');
+  });
+
+  it('the INCOMPLETE_FISCAL_YEAR incident is explained by the helper (never its stored text) and opens the calendar', () => {
+    const item = { origin: 'INCOMPLETE_FISCAL_YEAR', severity: 'block', message: 'The fiscal year 2025 of org=ABC…', params: { year: '2025', missingPeriods: '1,2,3,4,5,6,7,8,9,10,11,12' }, action: { type: 'fiscalCalendar' } };
+    expect(incidentText390(item, t)).toBe('fm.m390.incomplete_year.all|{"year":2025}');
+    expect(incidentActions390(item)).toEqual([{ id: 'fiscalCalendar', kind: 'navigate', path: FISCAL_CALENDAR_ROUTE, labelKey: 'fm.m390.incomplete_year.go_to_calendar' }]);
+  });
+
+  it('has its texts in every locale', () => {
+    ['fm.m390.incomplete_year.months', 'fm.m390.incomplete_year.all', 'fm.m390.incomplete_year.go_to_calendar', 'fm.aeat.error.incompleteFiscalYear']
+      .forEach((k) => [esES, enUS, esAR].forEach(d => expect(d.genericLabels?.[k] ?? d[k], k).toBeTruthy()));
   });
 });

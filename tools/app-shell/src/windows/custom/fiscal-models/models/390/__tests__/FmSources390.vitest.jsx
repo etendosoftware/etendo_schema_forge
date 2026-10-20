@@ -97,6 +97,14 @@ describe('FmSources390 — rows and totals', () => {
     render(<Harness />);
     expect((await screen.findByTestId('FmSources390__error')).textContent).toBe('No tax report');
   });
+
+  it('explains an exercise without calendar periods instead of the server text', async () => {
+    fetchSources390.mockRejectedValue(Object.assign(new Error('x'), {
+      serverMessage: 'org=X raw', code: 'INCOMPLETE_FISCAL_YEAR', year: 2025, missingPeriods: [12],
+    }));
+    render(<Harness />);
+    expect((await screen.findByTestId('FmSources390__error')).textContent).toContain('fm.m390.incomplete_year.months');
+  });
 });
 
 describe('FmSources390 — filters', () => {

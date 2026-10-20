@@ -1332,6 +1332,8 @@
 .fm-empty-state__title { font: 600 14px/20px var(--fm-font-sans, system-ui); color: var(--fm-fg-2); }
 .fm-empty-state__sub   { font: 400 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); }
 .fm-empty-state__cta   { margin-top: 10px; }
+/* 390 empty state: "Ir a Calendario fiscal" next to Calcular (incomplete fiscal year). */
+.fm-390-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 
 /* ─── Timeline ─────────────────────────────────────────────────────── */
 .fm-timeline { display: flex; flex-direction: column; }

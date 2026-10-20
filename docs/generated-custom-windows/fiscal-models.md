@@ -3847,6 +3847,31 @@ what the backend stored.
   code, the two requests), `FmModel390Page.vitest.jsx` "incidents" (recompute on open / save /
   Calcular, frozen when presented, gate toast, shared table, actions, 409 on Generar).
 
+### Exercise without fiscal-calendar periods (`incompleteYear390.js`, ETP-5716)
+
+An annual 390 needs one calendar period per month of the exercise. When some are missing the
+backend answers `422 INCOMPLETE_FISCAL_YEAR` `{ error: { code, year, missingPeriods } }` on
+`boxes` / `sources` / `generate`, stores the blocking incident `INCOMPLETE_FISCAL_YEAR` (action
+`fiscalCalendar`) and, on `submit`, `errorCode = INCOMPLETE_FISCAL_YEAR` (contract:
+`com.etendoerp.go/docs/aeat-390-endpoints.md`, "Annual period"). The page **never shows the
+backend text** for it (that text names the organization id):
+
+- `fm390Api.js` carries `code` / `year` / `missingPeriods` on the thrown error (`requestError`);
+  `generate390File` resolves `{ ok: false, error: 'incomplete_fiscal_year', year, missingPeriods }`.
+- `incompleteFiscalYearText` explains it in the UI language: "El ejercicio 2025 no tiene creados sus
+  periodos en el calendario fiscal (faltan: Noviembre, Diciembre). Créalos antes de calcular el
+  Modelo 390." (`fm.m390.incomplete_year.months`, month names from `fm.m390.month.NN`), or
+  "… (faltan todos los meses) …" (`fm.m390.incomplete_year.all`) when the 12 are missing.
+- **Casillas empty state:** that text as the subtitle plus **Ir a Calendario fiscal**
+  (`FmModel390Page__goToFiscalCalendar`) next to Calcular. **Calcular / Generar:** the same text
+  as an error toast with the "Ir a Calendario fiscal" action. **Facturas tab:** the same text as
+  its error. **Incidencias:** the incident reads the same text and offers the same action.
+  **Presentar** (AEAT flow): `fm.aeat.error.incompleteFiscalYear` (`resolveErrorCodeKey`).
+- The link goes to `/calendar` (`FISCAL_CALENDAR_ROUTE`): the `fiscal-calendar` artifact was merged
+  into the unified Calendar window (ETP-4478) and its own route only redirects there.
+- "Nueva declaración" does not warn about it beforehand: no existing endpoint returns the periods
+  of a fiscal year (`/fiscal-calendar/year` lists years only), so it would need a new one.
+
 ### AeatSubmitFlow model adapters (ETP-5716)
 
 `AeatSubmitFlow` (in `models/303/`) takes an optional `adapter` prop with the per-model rules:
@@ -4500,6 +4525,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | `models/390/fm390Layouts.js` | Modelo 390 declarative layout (11 blocks), search index, `deriveInputBoxes`, `buildManualData390` |
 | `models/390/fm390Api.js` | `/fiscal390/boxes`, `/modified`, `/generate`, `/sources`, `/preload`, `/validate` requests |
 | `models/390/incidents390.js` | Modelo 390 incidents (ETP-5716) — grouping, translated text by code, actions |
+| `models/390/incompleteYear390.js` | Modelo 390 — exercise without fiscal-calendar periods: recognise `INCOMPLETE_FISCAL_YEAR`, its translated text, the fiscal calendar route |
 | `models/390/Incidents390Tab.jsx` | Modelo 390 "Incidencias" tab — Bloqueantes / Advertencias with "Ir a la casilla", "Ver facturas", "Editar en Organización" |
 | `models/390/submission390.js` | Presentation (ETP-5716): `AEAT_SUBMIT_390` adapter, `manualData.submission` helpers, `createSubstitute390` / `substituteManualData` |
 | `models/390/RegisterSubmitted390Modal.jsx` | "Registrar como presentada" step 2: justificante, date, PDF, conformity check |

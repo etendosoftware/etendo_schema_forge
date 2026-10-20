@@ -15,6 +15,7 @@ import { EmptyState } from '../../FmCommon.jsx';
 import { formatAmount, triggerDownload } from '../../fiscalModelsUtils.js';
 import { fetchSources390 } from './fm390Api.js';
 import { parseAmount } from './fm390Layouts.js';
+import { incompleteFiscalYearOf, incompleteFiscalYearText } from './incompleteYear390.js';
 import {
   SOURCES_PAGE_SIZE, SOURCE_TYPES, boxLabel, buildSources390Csv, hasSourcesFilter, pageCount,
   rowBoxAmount, sourceTypeLabel, sourcesCsvFileName, sourcesQueryParams, emptySourcesFilter,
@@ -98,7 +99,11 @@ export default function FmSources390({
         // The unfiltered count is the tab badge (like the 303 "Facturas N").
         if (!hasSourcesFilter(current) && res?.count != null) onCountChange?.(Number(res.count) || 0);
       })
-      .catch(err => { if (!cancelled) setError(err?.serverMessage || t('fm.m390.sources.load_error')); })
+      .catch(err => {
+        if (cancelled) return;
+        const incomplete = incompleteFiscalYearOf(err);
+        setError(incomplete ? incompleteFiscalYearText(incomplete, t) : (err?.serverMessage || t('fm.m390.sources.load_error')));
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [decl.id, decl.year, filterKey, page, refreshKey, isSubmitted, apiBaseUrl, token]);

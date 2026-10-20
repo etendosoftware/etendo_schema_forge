@@ -37,7 +37,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import {
-  Calculator, CircleCheck, ClipboardCheck, Download, FileCheck, Loader2, OctagonAlert, RefreshCw, Save,
+  Calculator, CalendarDays, CircleCheck, ClipboardCheck, Download, FileCheck, Loader2, OctagonAlert, RefreshCw, Save,
   TrendingDown, TrendingUp, TriangleAlert, ReceiptText,
 } from 'lucide-react';
 import { KpiWidget, Tabs } from '../../FmCommon.jsx';
@@ -74,6 +74,9 @@ import { nameWarningsFromIncidents390, normalizeIncidents390 } from './incidents
 import usePreload390 from './usePreload390.js';
 import { applyPreload390, reconcile390, restorePreloaded390 } from './preload390.js';
 import Reconciliation390 from './Reconciliation390.jsx';
+import {
+  FISCAL_CALENDAR_ROUTE, GO_TO_FISCAL_CALENDAR_KEY, incompleteFiscalYearOf, incompleteFiscalYearText,
+} from './incompleteYear390.js';
 import Settlements303Table390 from './Settlements303Table390.jsx';
 import {
   getLayout390, deriveInputBoxes, annualResultOf, toBoxMap, normalizeInputValue,
@@ -235,6 +238,13 @@ export default function FmModel390Page({
   const { preload, loading: preloadLoading, error: preloadError, load: loadPreload } = usePreload390({ decl, token, apiBaseUrl });
   const [payload, setPayload] = useState(() => submittedSnapshotOf(decl) ?? (decl._precomputed?.boxes != null ? decl._precomputed : null));
   const [computeError, setComputeError] = useState(null);
+  // `{ year, missingPeriods }` when the last computation failed for lack of calendar periods.
+  const [incompleteYear, setIncompleteYear] = useState(null);
+  const incompleteYearRef = useRef(null);
+  const goToFiscalCalendar = () => navigate(FISCAL_CALENDAR_ROUTE);
+  const toastIncompleteYear = (info) => toast.error(incompleteFiscalYearText(info, t), {
+    action: { label: t(GO_TO_FISCAL_CALENDAR_KEY), onClick: goToFiscalCalendar },
+  });
   const [computing, setComputing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -284,12 +294,21 @@ export default function FmModel390Page({
   async function compute(inputsForRequest) {
     setComputing(true);
     setComputeError(null);
+    setIncompleteYear(null);
+    incompleteYearRef.current = null;
     try {
       const res = await fetchBoxes390(decl, { token, apiBaseUrl, inputs: inputsForRequest });
       setPayload(res);
       return res;
     } catch (err) {
-      setComputeError(err?.serverMessage || err?.message || t('fm.m390.compute_error'));
+      // An exercise without its calendar periods is explained in the UI language (never the
+      // backend text) and offers the fiscal calendar.
+      const incomplete = incompleteFiscalYearOf(err);
+      incompleteYearRef.current = incomplete;
+      setIncompleteYear(incomplete);
+      setComputeError(incomplete
+        ? incompleteFiscalYearText(incomplete, t)
+        : (err?.serverMessage || err?.message || t('fm.m390.compute_error')));
       return null;
     } finally {
       setComputing(false);
@@ -475,7 +494,8 @@ export default function FmModel390Page({
     if (fresh) applyFreshPreload(fresh);
     const res = await compute(currentManualData().aeatInputs);
     if (!res) {
-      toast.error(t('fm.m390.compute_error'));
+      if (incompleteYearRef.current) toastIncompleteYear(incompleteYearRef.current);
+      else toast.error(t('fm.m390.compute_error'));
       return;
     }
     invalidateFiscalComputeCache(decl.id);
@@ -525,6 +545,8 @@ export default function FmModel390Page({
         toast.error(t('fm.m390.blocked_by_incidents'));
         revalidate();
         setActiveTab('incidents');
+      } else if (result.error === 'incomplete_fiscal_year') {
+        toastIncompleteYear(result);
       } else if (!result.ok) {
         toast.error(result.serverMessage || t('fm.m390.generate_error'));
       }
@@ -839,10 +861,18 @@ export default function FmModel390Page({
                 title={t('fm.m390.empty.title', { year: decl.year })}
                 sub={computeError || t('fm.m390.empty.sub')}
                 cta={!isSubmitted && (
-                  <FmDetailButton onClick={handleCompute} disabled={busy} data-testid="FmModel390Page__emptyCompute">
-                    <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__emptyCta390" />
-                    {t('fm.action.compute')}
-                  </FmDetailButton>
+                  <div className="fm-390-empty-actions">
+                    {incompleteYear && (
+                      <FmDetailButton onClick={goToFiscalCalendar} data-testid="FmModel390Page__goToFiscalCalendar">
+                        <CalendarDays size={16} strokeWidth={1.75} data-testid="CalendarDays__empty390" />
+                        {t(GO_TO_FISCAL_CALENDAR_KEY)}
+                      </FmDetailButton>
+                    )}
+                    <FmDetailButton onClick={handleCompute} disabled={busy} data-testid="FmModel390Page__emptyCompute">
+                      <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__emptyCta390" />
+                      {t('fm.action.compute')}
+                    </FmDetailButton>
+                  </div>
                 )}
                 data-testid="FmModel390Page__empty" />
             )}

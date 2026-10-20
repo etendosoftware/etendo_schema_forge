@@ -6,6 +6,7 @@
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 import { incidentsFromRows, triggerDownload } from '../../fiscalModelsUtils.js';
 import { ANNUAL_PERIOD } from '../../fiscalPeriods.js';
+import { incompleteFiscalYearOf } from './incompleteYear390.js';
 
 /** `error.code` of the 409 `generate` / `submit` answer while a blocking rule holds. */
 export const BLOCKING_INCIDENTS_390 = 'BLOCKING_INCIDENTS';
@@ -23,6 +24,25 @@ function periodParams(decl) {
 // exception prefix and Openbravo `@Key@` delimiters stripped (same rule as the 303/349 helpers).
 export async function readServerMessage(res) {
   return messageOf(await res.text().catch(() => ''));
+}
+
+/**
+ * The Error a failed read throws: the readable message plus `status`, `serverMessage` and, for a
+ * structured answer, `code` / `year` / `missingPeriods` (e.g. INCOMPLETE_FISCAL_YEAR).
+ */
+async function requestError(res, what) {
+  const raw = await res.text().catch(() => '');
+  const message = messageOf(raw);
+  const err = new Error(message || `${what} failed: ${res.status}`);
+  err.status = res.status;
+  err.serverMessage = message;
+  const body = parseJson(raw)?.error;
+  if (body?.code) {
+    err.code = body.code;
+    if (body.year != null) err.year = body.year;
+    if (body.missingPeriods != null) err.missingPeriods = body.missingPeriods;
+  }
+  return err;
 }
 
 function parseJson(raw) {
@@ -59,13 +79,7 @@ export async function fetchBoxes390(decl, { token, apiBaseUrl, inputs } = {}) {
     if (v != null && v !== '') params.set(k, String(v));
   }
   const res = await apiFetch(`${neoRoot(apiBaseUrl)}/fiscal390/boxes?${params}`, { baseUrl: '', token, timeout: 0 });
-  if (!res.ok) {
-    const message = await readServerMessage(res);
-    const err = new Error(message || `boxes fetch failed: ${res.status}`);
-    err.status = res.status;
-    err.serverMessage = message;
-    throw err;
-  }
+  if (!res.ok) throw await requestError(res, 'boxes fetch');
   return res.json();
 }
 
@@ -100,7 +114,8 @@ export function generatedFileName(decl, typed) {
  * ISO-8859-1: it is read as a Blob (never as text) so no byte is re-encoded.
  * Resolves `{ ok: true }`, `{ ok: false, error: 'blocking_incidents', incidents }` (409 — the
  * backend re-evaluates the blocking rules from the stored inputs, ETP-5716) or
- * `{ ok: false, error, serverMessage }` (409 when already submitted).
+ * `{ ok: false, error: 'incomplete_fiscal_year', year, missingPeriods }` (422, the calendar lacks
+ * periods) or `{ ok: false, error, serverMessage }` (409 when already submitted).
  */
 export async function generate390File(decl, { token, apiBaseUrl, fileName } = {}) {
   if (!apiBaseUrl) return { ok: false, error: 'no_token' };
@@ -114,6 +129,8 @@ export async function generate390File(decl, { token, apiBaseUrl, fileName } = {}
       if (res.status === 409 && error?.code === BLOCKING_INCIDENTS_390) {
         return { ok: false, error: 'blocking_incidents', incidents: incidentsFromRows(error.incidents) };
       }
+      const incomplete = incompleteFiscalYearOf(error);
+      if (incomplete) return { ok: false, error: 'incomplete_fiscal_year', ...incomplete };
       return { ok: false, error: `http_${res.status}`, serverMessage: messageOf(raw) };
     }
     const blob = await res.blob();
@@ -137,13 +154,7 @@ export async function fetchSources390(decl, { token, apiBaseUrl, params } = {}) 
     if (v != null && v !== '') query.set(k, String(v));
   }
   const res = await apiFetch(`${neoRoot(apiBaseUrl)}/fiscal390/sources?${query}`, { baseUrl: '', token, timeout: 0 });
-  if (!res.ok) {
-    const message = await readServerMessage(res);
-    const err = new Error(message || `sources fetch failed: ${res.status}`);
-    err.status = res.status;
-    err.serverMessage = message;
-    throw err;
-  }
+  if (!res.ok) throw await requestError(res, 'sources fetch');
   return res.json();
 }
 
@@ -160,13 +171,7 @@ export async function fetchPreload390(decl, { token, apiBaseUrl, monthlyReturn }
   const params = periodParams(decl);
   if (monthlyReturn != null) params.set('monthlyReturn', monthlyReturn ? 'Y' : 'N');
   const res = await apiFetch(`${neoRoot(apiBaseUrl)}/fiscal390/preload?${params}`, { baseUrl: '', token, timeout: 0 });
-  if (!res.ok) {
-    const message = await readServerMessage(res);
-    const err = new Error(message || `preload fetch failed: ${res.status}`);
-    err.status = res.status;
-    err.serverMessage = message;
-    throw err;
-  }
+  if (!res.ok) throw await requestError(res, 'preload fetch');
   return res.json();
 }
 
