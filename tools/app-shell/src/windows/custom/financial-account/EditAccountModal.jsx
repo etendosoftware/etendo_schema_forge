@@ -24,7 +24,7 @@ import { ACCOUNT_TYPE } from '@/components/financial-accounts/tokens';
 import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEligibility.js';
 import { LastSyncLabel } from '@/components/financial-accounts/LastSyncLabel.jsx';
 import { normalizeIban } from '@/lib/validateIban.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { stripTrailingPeriods, translateBackendError } from '@/lib/backendErrors.js';
 import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
 import { formatCalendarDate, calendarISODaysAgo } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
@@ -204,7 +204,7 @@ function isStaleConnection(status) {
 function buildReauthMessage(status, locale, ui) {
   if (isStaleConnection(status)) {
     // The bank's text usually carries its own closing period and the copy supplies another.
-    const reason = String(status.staleMessage ?? '').trim().replace(/\.+$/, '').trim();
+    const reason = stripTrailingPeriods(status.staleMessage);
     return reason
       ? ui('financeAccountsBankConnectionStaleBanner', { reason })
       : ui('financeAccountsBankConnectionStaleBannerNoReason');

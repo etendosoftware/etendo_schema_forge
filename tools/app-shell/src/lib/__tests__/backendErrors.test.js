@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import {
   extractBackendMessageKeys,
   extractBackendMessageParams,
+  stripTrailingPeriods,
   translateBackendError,
   parseBackendErrorMessage,
   parseBackendError,
@@ -1577,6 +1578,44 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
 
     it('returns the original message unchanged when the translation key is missing (guard)', () => {
       assert.equal(translateBackendError(CONSENT_RAW, (k) => k), CONSENT_RAW);
+    });
+  });
+
+  // ETP-5089 — the bank's failure text is dropped into a sentence that supplies its own period.
+  // Written as a backwards scan, not a `/\.+$/` regex (Sonar S5852: super-linear backtracking on a
+  // long run of periods), so the long-input case below is part of the contract.
+  describe('stripTrailingPeriods', () => {
+    it('drops every trailing period and the whitespace around the text', () => {
+      assert.equal(stripTrailingPeriods('Error interno del banco.'), 'Error interno del banco');
+      assert.equal(stripTrailingPeriods('  token expired...  '), 'token expired');
+    });
+
+    it('keeps periods that are not at the end', () => {
+      assert.equal(stripTrailingPeriods('Error: v1.2 failed. Retry.'), 'Error: v1.2 failed. Retry');
+    });
+
+    it('returns an empty string for null, undefined, blank or only periods', () => {
+      for (const empty of [null, undefined, '', '   ', '.', '...']) {
+        assert.equal(stripTrailingPeriods(empty), '', String(empty));
+      }
+    });
+
+    it('only strips the unbroken run at the end, not periods separated by a space', () => {
+      assert.equal(stripTrailingPeriods('a. .'), 'a.');
+    });
+
+    it('stays linear on a very long run of periods', () => {
+      const start = Date.now();
+      const result = stripTrailingPeriods(`x${'.'.repeat(200000)}`);
+      assert.equal(result, 'x');
+      assert.ok(Date.now() - start < 1000, 'must not backtrack');
+    });
+
+    it('stays linear on a long run of periods followed by text', () => {
+      const text = `${'.'.repeat(200000)}x`;
+      const start = Date.now();
+      assert.equal(stripTrailingPeriods(text), text);
+      assert.ok(Date.now() - start < 1000, 'must not backtrack');
     });
   });
 

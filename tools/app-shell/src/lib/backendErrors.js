@@ -1152,6 +1152,27 @@ const CONNECTION_STALE_PREFIX = 'The connection for account ';
 const CONNECTION_STALE_MID = ' has not refreshed successfully since it last failed: ';
 const CONNECTION_STALE_SUFFIX = '. Please reconnect the account.';
 
+/**
+ * Trims a free-text reason and drops the periods it ends with.
+ *
+ * The bank's failure text usually ends in its own period, and the sentence it is dropped into
+ * supplies the closing one, so without this the result reads "…del banco.. Por favor". A plain
+ * backwards scan rather than a `/\.+$/` regex: the text is written by the bank, and that pattern
+ * backtracks super-linearly on a long run of periods (Sonar S5852), while this is linear whatever
+ * it is given.
+ *
+ * @param {unknown} value the reason text; null and undefined count as empty
+ * @returns {string} the trimmed text without trailing periods, or '' when nothing is left
+ */
+export function stripTrailingPeriods(value) {
+  const text = String(value ?? '').trim();
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '.') {
+    end -= 1;
+  }
+  return text.slice(0, end).trim();
+}
+
 function matchConnectionStale(msg) {
   if (!msg.startsWith(CONNECTION_STALE_PREFIX) || !msg.endsWith(CONNECTION_STALE_SUFFIX)) {
     return null;
@@ -1163,9 +1184,7 @@ function matchConnectionStale(msg) {
   }
   return {
     account: body.slice(0, mid),
-    // The bank's text usually ends in its own period, and the template supplies the closing one:
-    // drop it so the toast never reads "…del banco.. Por favor".
-    reason: body.slice(mid + CONNECTION_STALE_MID.length).trim().replace(/\.+$/, '').trim(),
+    reason: stripTrailingPeriods(body.slice(mid + CONNECTION_STALE_MID.length)),
   };
 }
 
