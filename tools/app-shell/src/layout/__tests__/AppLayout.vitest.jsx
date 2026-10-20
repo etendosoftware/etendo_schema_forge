@@ -109,6 +109,14 @@ vi.mock('@/hooks/useEnvironmentAccessGate.js', () => ({
   useEnvironmentAccessGate: vi.fn(() => null),
 }));
 
+// ETP-5489 — AppLayout also reads useAccessLoadError(), the React binding over the store that
+// records "a gating request was answered 401 while the session is alive" (lib/accessLoadError.js).
+// What AppLayout owes the feature is the conditional render, so a bare vi.fn() as above; default
+// `false` leaves every other test in this file unchanged.
+vi.mock('@/hooks/useAccessLoadError.js', () => ({
+  useAccessLoadError: vi.fn(() => false),
+}));
+
 // ETP-5364 — AppLayout now MOUNTS FirstStepsProvider itself (above the allowedIds gate, so the
 // checklist GET starts alongside SFListMenu instead of after it) and threads
 // `useFirstStepsProgressOptional()?.dismissed` into filterMenuGroupsByAccess as the 5th arg.
@@ -245,6 +253,7 @@ import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
 import { useSessionStartTracking } from '@/lib/observability/useSessionStartTracking.js';
 import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { useEnvironmentAccessGate } from '@/hooks/useEnvironmentAccessGate.js';
+import { useAccessLoadError } from '@/hooks/useAccessLoadError.js';
 import { buildMenuGroups } from '@/windows/registry.js';
 import { defaultNavigation, expectedNavigation, navigationPermissions, expectNavigation } from '@/windows/__tests__/navigationExpectations.js';
 import { useLocation, useSearchParams } from 'react-router-dom';
@@ -456,6 +465,63 @@ describe('AppLayout — loading gate (ETP-5395)', () => {
     expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
     expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
     expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+  });
+});
+
+describe('AppLayout — access load error (ETP-5489)', () => {
+  const defaultProps = {
+    menuGroups: [{ group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }] }],
+  };
+  let reloadSpy;
+  const originalLocation = window.location;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    reloadSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, reload: reloadSpy },
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+  });
+
+  it('shows the error screen instead of the layout, even while the menu is still loading', () => {
+    vi.mocked(useAccessLoadError).mockReturnValue(true);
+    vi.mocked(useRoleMenu).mockReturnValueOnce(undefined);
+    try {
+      render(<AppLayout {...defaultProps} />);
+      expect(screen.getByTestId('AccessLoadErrorScreen__488148')).toBeInTheDocument();
+      expect(screen.getByTestId('access-load-error-title')).toHaveTextContent(LABELS.accessLoadErrorTitle);
+      expect(screen.queryByTestId('AppLayoutLoading__488148')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+    } finally {
+      vi.mocked(useAccessLoadError).mockReturnValue(false);
+    }
+  });
+
+  it('retries with a reload and offers logout', async () => {
+    vi.mocked(useAccessLoadError).mockReturnValue(true);
+    try {
+      render(<AppLayout {...defaultProps} />);
+      await userEvent.click(screen.getByTestId('AccessLoadErrorRetry__488148'));
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+      expect(logoutMock).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByTestId('AccessLoadErrorLogout__488148'));
+      expect(logoutMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.mocked(useAccessLoadError).mockReturnValue(false);
+    }
+  });
+
+  it('renders the normal layout when no access-load error is recorded', () => {
+    render(<AppLayout {...defaultProps} />);
+    expect(screen.queryByTestId('AccessLoadErrorScreen__488148')).not.toBeInTheDocument();
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
   });
 });
 
@@ -1148,6 +1214,7 @@ describe('AppLayout — environment access gate (ETP-5443 follow-up)', () => {
     ['/upgrade/checkout', 'an /upgrade sub-route'],
     ['/account', 'the exact /account path'],
     ['/account/subscription', 'an /account sub-route'],
+    ['/companies', 'the My companies page (ETP-5734)'],
   ])('renders the normal Outlet/SideMenu tree instead of any blocking screen on %s (%s)', (pathname) => {
     // Both guards must be skipped, not just the blocked screen: the 402 that sets
     // environmentAccessDecision also folds useRoleMenu()'s allowedIds into a confirmed empty
@@ -1195,6 +1262,11 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     requests = [];
     locationStub = { reload: vi.fn(), assign: vi.fn(), pathname: '/contacts', search: '' };
     Object.defineProperty(window, 'location', { configurable: true, value: locationStub });
+    // Pinned, not inherited: the environment-gate block above leaves its last decision and
+    // pathname behind (clearAllMocks keeps return values), which would put every test here on
+    // top of an accidental SUBSCRIPTION_REQUIRED block. A test that wants one opts in.
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/sales-order/123' });
     useAuthOptionalMock.mockReturnValue({
       sessionConflict: { reason: 'request', accountId: null },
       account: { id: 'acc-B', email: 'b@example.test' },
@@ -1214,6 +1286,7 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     vi.unstubAllGlobals();
     useAuthOptionalMock.mockReturnValue(null);
     vi.mocked(useRoleMenu).mockReturnValue(null);
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
   });
 
   it('replaces the page before any other gate, naming both accounts', async () => {
@@ -1226,6 +1299,27 @@ describe('AppLayout — another account signed in from another tab (ETP-5675)', 
     expect(await screen.findByText(/c@example\.test signed in on this browser/)).toBeInTheDocument();
     expect(screen.getByText(/still open as b@example\.test/)).toBeInTheDocument();
   });
+
+  // A tab whose session another account took over may also hold a commercial-access block
+  // (ETP-5047) recorded for the PREVIOUS account's environment. The conflict wins: the block is
+  // about a tenant this tab no longer speaks for, and its CTA would act on the wrong account.
+  // The access map is resolved (an empty Set, as the 402 leaves it) so the loading gate cannot
+  // be what hides the blocked screen.
+  it.each(['SUBSCRIPTION_REQUIRED', 'DEMO_TRIAL_EXPIRED'])(
+    'shows the conflict, not the blocked-access screen, when %s is also recorded',
+    async (decision) => {
+      vi.mocked(useEnvironmentAccessGate).mockReturnValue(decision);
+      vi.mocked(useRoleMenu).mockReturnValue(new Set());
+
+      render(<AppLayout {...defaultProps} />);
+
+      expect(screen.getByTestId('SessionConflictScreen__488148')).toBeInTheDocument();
+      expect(screen.queryByTestId('BlockedAccessScreen__488148')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('blocked-access-cta')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+      expect(await screen.findByText(/c@example\.test signed in on this browser/)).toBeInTheDocument();
+    },
+  );
 
   it('continues as the other account by reloading, and revokes nothing', async () => {
     const user = userEvent.setup();

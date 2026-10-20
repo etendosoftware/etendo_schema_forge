@@ -13,11 +13,12 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
-import {
-  extractBackendMessageKeys,
-  extractBackendMessageParams,
-  translateBackendError,
-} from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
+
+// ETP-5729 (CP-12) — the createReturn refusals (com.etendoerp.go ReturnableQuantity, 422) that mean
+// the quantities this dialog offered are no longer returnable: another return, a draft one
+// included, took them since the dialog loaded. Retrying cannot succeed, so the dialog closes.
+const STALE_RETURN_ERROR_CODES = new Set(['returnQuantityExceedsAvailable', 'nothingLeftToReturn']);
 
 // Same shape as ImportLinesModal's classifyQtyDraft — a draft is valid when it
 // parses to a finite magnitude in (0, maxQty]. Duplicated locally rather than
@@ -146,26 +147,24 @@ export default function CreateReturnWizard({
       if (!res.ok) {
         // `body?.error?.message` covers the standard `NeoResponse.error(int, String)` envelope
         // (`{"error":{"message","status"}}`) used by most NEO action handlers — same fallback
-        // chain as useNeoAction.js (ETP-4706); without it the real backend message (e.g. "No
-        // valid lines to return") is silently dropped for the generic HTTP reason phrase.
+        // chain as useNeoAction.js (ETP-4706); without it the real backend message (e.g. "Cannot
+        // return 5 of Agua: only 4 can still be returned ...", a 422 returnQuantityExceedsAvailable)
+        // is silently dropped for the generic HTTP reason phrase.
         const rawMessage = body?.error?.message ?? body?.response?.error?.message
           ?? body?.response?.message ?? body?.message ?? `Request failed (${res.status})`;
         const error = new Error(translateBackendError(rawMessage, ui, {
           messageKeys: extractBackendMessageKeys(body),
-          messageParams: extractBackendMessageParams(body),
         }));
-        error.status = res.status;
+        error.code = body?.error?.code;
         throw error;
       }
       onClose();
       if (onSuccess) onSuccess(body?.response?.data);
     } catch (err) {
-      // ETP-5729 (CP-12) — a 409 means the source document's state rules the return out (e.g.
-      // another return, a draft one included, already took the quantity these lines offered, so
-      // this dialog is stale): retrying cannot succeed, so the dialog closes instead of leaving
-      // the user in front of a button that keeps failing; reopening it reloads the quantities
-      // still returnable. Any other error keeps it open so the user can adjust and retry.
-      if (err?.status === 409) onClose();
+      // A stale-quantity refusal closes the dialog instead of leaving the user in front of a
+      // button that keeps failing; reopening it reloads the quantities still returnable. Any
+      // other error keeps it open so the user can adjust and retry.
+      if (STALE_RETURN_ERROR_CODES.has(err?.code)) onClose();
       if (onError) onError(err.message);
     } finally {
       setLoading(false);

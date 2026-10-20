@@ -105,6 +105,22 @@ describe('useCreateMovement', () => {
     expect(result.current.error.status).toBe(400);
   });
 
+  // ETP-5577 — create-payment refuses a never-opened period by identity; the wizard needs the key.
+  it('carries the refusal messageKeys on the thrown error', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'Period not open', messageKeys: ['PeriodNotAvailable'] } }),
+    });
+
+    const { result } = renderHook(() => useCreateMovement());
+
+    await act(async () => {
+      await expect(result.current.createMovement({}))
+        .rejects.toMatchObject({ message: 'Period not open', messageKeys: ['PeriodNotAvailable'] });
+    });
+  });
+
   it('falls back to `HTTP <status>` when the error body has no message', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: false,

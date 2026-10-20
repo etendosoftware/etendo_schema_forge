@@ -289,31 +289,50 @@ describe('CreateReturnWizard', () => {
       globalThis.fetch = vi.fn(() => Promise.resolve({
         ok: false,
         status: 409,
-        json: () => Promise.resolve({ error: { message: 'Cannot return 2 of Product A.', status: 409 } }),
+        json: () => Promise.resolve({ error: { message: 'A return already exists for shipment: DOC-001', status: 409 } }),
       }));
 
       const { props } = await confirmReturn();
 
       await waitFor(() => expect(props.onError).toHaveBeenCalled());
-      expect(props.onError).toHaveBeenCalledWith('Cannot return 2 of Product A.');
+      expect(props.onError).toHaveBeenCalledWith('A return already exists for shipment: DOC-001');
       expect(props.onError).not.toHaveBeenCalledWith(expect.stringContaining('Request failed'));
       expect(props.onSuccess).not.toHaveBeenCalled();
+      expect(props.onClose).not.toHaveBeenCalled();
     });
 
     // ETP-5729 CP-12: a second return of the same shipment is allowed for what remains, so the
-    // only conflict left is quantity — another return (a draft one too) already took what this
-    // dialog offered. The backend sends a stable key plus the numbers; retrying cannot succeed.
-    it('translates the over-return 409 from messageKeys/messageParams and closes the dialog', async () => {
+    // only refusal left is quantity — another return (a draft one too) already took what this
+    // dialog offered. ReturnableQuantity (com.etendoerp.go, ETP-5711) answers 422 with
+    // `error.code` returnQuantityExceedsAvailable / nothingLeftToReturn; retrying cannot succeed.
+    it.each([
+      ['returnQuantityExceedsAvailable',
+        'Cannot return 2 of Product A: only 1 can still be returned from this line (5 on the source document).'],
+      ['nothingLeftToReturn', 'Nothing is left to return from this document.'],
+    ])('closes the dialog on the stale-quantity refusal %s and reports the message', async (code, message) => {
       globalThis.fetch = vi.fn(() => Promise.resolve({
         ok: false,
-        status: 409,
+        status: 422,
+        json: () => Promise.resolve({ error: { status: 422, code, message } }),
+      }));
+
+      const { props } = await confirmReturn();
+
+      await waitFor(() => expect(props.onError).toHaveBeenCalledTimes(1));
+      expect(props.onError).not.toHaveBeenCalledWith(expect.stringContaining('Request failed'));
+      expect(props.onClose).toHaveBeenCalledTimes(1);
+      expect(props.onSuccess).not.toHaveBeenCalled();
+    });
+
+    it('translates the over-return refusal into the UI locale', async () => {
+      globalThis.fetch = vi.fn(() => Promise.resolve({
+        ok: false,
+        status: 422,
         json: () => Promise.resolve({
           error: {
-            status: 409,
-            code: 'RETURN_QTY_EXCEEDS_SHIPPED',
-            message: 'Cannot return 2 of Product A: only 0 of the 5 shipped can still be returned (draft and completed returns count).',
-            messageKeys: ['ETGO_ReturnQtyExceedsShipped'],
-            messageParams: { product: 'Product A', requested: '2', available: '0', shipped: '5' },
+            status: 422,
+            code: 'returnQuantityExceedsAvailable',
+            message: 'Cannot return 2 of Product A: only 1 can still be returned from this line (5 on the source document).',
           },
         }),
       }));
@@ -321,11 +340,7 @@ describe('CreateReturnWizard', () => {
       const { props } = await confirmReturn();
 
       await waitFor(() => expect(props.onError).toHaveBeenCalled());
-      expect(props.onError).toHaveBeenCalledWith(
-        'backendError.returnQtyExceedsShipped:{"product":"Product A","requested":"2","available":"0","shipped":"5"}',
-      );
-      expect(props.onClose).toHaveBeenCalledTimes(1);
-      expect(props.onSuccess).not.toHaveBeenCalled();
+      expect(props.onError.mock.calls[0][0]).toMatch(/^backendError\.returnQuantityExceeds:/);
     });
 
     it('keeps the dialog open on a non-conflict error so the user can adjust and retry', async () => {

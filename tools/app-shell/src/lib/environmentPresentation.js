@@ -5,18 +5,35 @@ export function isProductiveEnvironment(environment) {
 }
 
 /**
+ * ETP-5047 — the backend's lifecycle type says productive. Not the same as the plan: a canceled
+ * subscription makes `plan` read "free" while `environmentType` stays "PRODUCTIVE". An environment
+ * the backend reports no type for (it predates the lifecycle metadata) is not productive here.
+ */
+function hasProductiveType(environment) {
+  return String(environment?.environmentType || '').trim().toUpperCase() === 'PRODUCTIVE';
+}
+
+/**
  * A demo can originate one productive environment. Once it has (the backend reports
  * `associatedWithProductive`), it is no longer offered as a purchase source: a later purchase
- * creates a clean productive environment (ETP-5548).
+ * creates a clean productive environment (ETP-5548). A productive environment is never a source,
+ * including a canceled one whose plan reads "free" (ETP-5047); the backend refuses it too. Neither
+ * is a demo the account was only invited into (`ownedByAccount: false`): it is not the buyer's to
+ * copy (ETP-5743). A backend that predates the field omits it, so only an explicit `false` excludes.
  */
 export function isPurchaseSourceDemo(environment) {
   return Boolean(environment)
     && !isProductiveEnvironment(environment)
-    && environment.associatedWithProductive !== true;
+    && !hasProductiveType(environment)
+    && environment.associatedWithProductive !== true
+    && environment.ownedByAccount !== false;
 }
 
+/** A canceled productive environment keeps its "Productive" badge although its plan reads free. */
 export function environmentPlanLabelKey(environment) {
-  return isProductiveEnvironment(environment) ? 'environmentProductive' : 'environmentDemo';
+  return isProductiveEnvironment(environment) || hasProductiveType(environment)
+    ? 'environmentProductive'
+    : 'environmentDemo';
 }
 
 /** Returns the trial status label only when the backend supplied lifecycle metadata. */

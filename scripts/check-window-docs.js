@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = process.env.SF_ROOT || join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = process.env.SF_ROOT || join(dirname(fileURLToPath(import.meta.url)), '..');
 const SHARED_DOC_FILES = new Set(['INDEX', 'app-shell-functional-flows']);
 const NON_WINDOW_CUSTOM_DIRS = new Set(['shared']);
 

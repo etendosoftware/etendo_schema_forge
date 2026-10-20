@@ -6,6 +6,7 @@ const columns = [
   { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true, lookup: true },
   { key: 'description', column: 'Description', type: 'string', label: 'Description', maxLength: 2000 },
   { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', label: 'Ordered Quantity', required: true },
+  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', display: 'tag', required: true, readOnly: true },
   { key: 'listPrice', column: 'PriceList', type: 'amount', label: 'Net List Price', required: true },
   { key: 'discount', column: 'Discount', type: 'number', label: 'Discount %', min: 0, max: 100 },
   { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', required: true },

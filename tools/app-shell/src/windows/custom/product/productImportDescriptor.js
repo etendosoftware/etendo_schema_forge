@@ -469,6 +469,15 @@ registerImportDescriptor('product', async (row, config) => {
     buildPriceOperation(row.purchasePrice, { opId: 'purchasePrice', wantSales: false, config }),
   ]);
   ops.push(...priceOps.filter(Boolean));
+  // ETP-5676 — the backend seeds a zero price on the default sales and purchase tariffs of every
+  // new product, and ProductPriceHandler then overwrites that row with the price sent here: two
+  // writes, a flush and a price observer per row. The directive names the versions this row prices;
+  // the server skips the seed only for a direction whose default version is one of them. It is not
+  // a boolean on purpose: when a user has cleared the default flag on a direction, `resolvePlv` and
+  // the server's PriceListVersionResolver fall back to different lists, and a version the server
+  // would seed but this row does not price must still get its row.
+  const pricedVersions = priceOps.filter(Boolean).map((op) => op.body.priceListVersion);
+  if (pricedVersions.length) productBody._skipPricesSeed = pricedVersions;
 
   // ETP-5350. Synchronous, unlike the two price ops: a cost needs no price-list-version lookup,
   // since the handler derives the organisation and its currency itself.

@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "generatedAt": "2026-07-29T14:51:09.206Z",
-  "updatedAt": "2026-10-09T16:43:30.475Z",
-  "checksum": "a60311221a333a87",
+  "updatedAt": "2026-10-16T15:28:49.025Z",
+  "checksum": "2740915c9071702f",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -46,13 +46,15 @@
           "Processed": "Status",
           "M_Locator_ID": "Source Warehouse",
           "M_LocatorTo_ID": "Destination Warehouse",
-          "MovementQty": "Quantity"
+          "MovementQty": "Quantity",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
           "Processed": "Estado",
           "M_Locator_ID": "Almacén origen",
           "M_LocatorTo_ID": "Almacén destino",
-          "MovementQty": "Cantidad"
+          "MovementQty": "Cantidad",
+          "C_UOM_ID": "Unidad"
         }
       },
       "listViewOptions": {
@@ -71,7 +73,6 @@
       },
       "noHeaderBorder": true,
       "whiteFormBackground": true,
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "sendDocument": {
         "enabled": false
@@ -86,7 +87,7 @@
           "hintKeys": {
             "D": "goodsMovementsPostedDisabledHint"
           },
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
         }
       ]
     },
@@ -187,6 +188,7 @@
             },
             "explicitType": true,
             "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
             "badgeLabels": {
               "true": {
                 "en_US": "Posted",
@@ -496,7 +498,7 @@
               "source": "1"
             },
             "defaultValue": "1",
-            "gridOrder": 5,
+            "gridOrder": 4,
             "columnWidth": 160,
             "validation": {
               "required": true,
@@ -522,7 +524,9 @@
             "sourceRequired": true,
             "reference": "UOM",
             "inputMode": "selector",
-            "gridOrder": 2,
+            "display": "tag",
+            "gridOrder": 5,
+            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -542,7 +546,7 @@
             "sourceRequired": true,
             "reference": "Locator",
             "inputMode": "selector",
-            "gridOrder": 3,
+            "gridOrder": 2,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -568,7 +572,7 @@
             "reference": "Locator",
             "inputMode": "selector",
             "excludeValueOf": "storageBin",
-            "gridOrder": 4,
+            "gridOrder": 3,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -646,13 +650,15 @@
           "Processed": "Status",
           "M_Locator_ID": "Source Warehouse",
           "M_LocatorTo_ID": "Destination Warehouse",
-          "MovementQty": "Quantity"
+          "MovementQty": "Quantity",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
           "Processed": "Estado",
           "M_Locator_ID": "Almacén origen",
           "M_LocatorTo_ID": "Almacén destino",
-          "MovementQty": "Cantidad"
+          "MovementQty": "Cantidad",
+          "C_UOM_ID": "Unidad"
         }
       },
       "listViewOptions": {
@@ -671,7 +677,6 @@
       },
       "noHeaderBorder": true,
       "whiteFormBackground": true,
-      "listbarPaddingX": "px-2",
       "tablePaddingX": "px-2",
       "sendDocument": {
         "enabled": false
@@ -685,7 +690,7 @@
           "hintKeys": {
             "D": "goodsMovementsPostedDisabledHint"
           },
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
         }
       ]
     },
@@ -1297,13 +1302,15 @@
         "Processed": "Status",
         "M_Locator_ID": "Source Warehouse",
         "M_LocatorTo_ID": "Destination Warehouse",
-        "MovementQty": "Quantity"
+        "MovementQty": "Quantity",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
         "Processed": "Estado",
         "M_Locator_ID": "Almacén origen",
         "M_LocatorTo_ID": "Almacén destino",
-        "MovementQty": "Cantidad"
+        "MovementQty": "Cantidad",
+        "C_UOM_ID": "Unidad"
       }
     }
   },

@@ -28,7 +28,7 @@ const statusField = 'documentStatus';
 
 // @sf-generated-start extraBadges:goodsReceipt
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:goodsReceipt
 
@@ -425,10 +425,12 @@ export const api = {
   },
   "labelOverrides": {
     "en_US": {
-      "EM_ETGO_Currency_ID": "Currency"
+      "EM_ETGO_Currency_ID": "Currency",
+      "C_UOM_ID": "Unit"
     },
     "es_ES": {
-      "EM_ETGO_Currency_ID": "Moneda"
+      "EM_ETGO_Currency_ID": "Moneda",
+      "C_UOM_ID": "Unidad"
     }
   }
 };

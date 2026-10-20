@@ -1,8 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.22.0",
   "generatedAt": "2026-06-26T00:48:58.290Z",
-  "updatedAt": "2026-10-09T16:43:30.620Z",
-  "checksum": "174072b4643f1d82",
+  "updatedAt": "2026-10-15T19:36:08.581Z",
+  "checksum": "737b7730478ad363",
   "frontendContract": {
     "window": {
       "id": "800076",
@@ -40,13 +40,16 @@
       "statusField": "status",
       "labelOverrides": {
         "en_US": {
-          "M_Locator_ID": "Warehouse"
+          "M_Locator_ID": "Warehouse",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
-          "M_Locator_ID": "Almacén"
+          "M_Locator_ID": "Almacén",
+          "C_UOM_ID": "Unidad"
         },
         "es_AR": {
-          "M_Locator_ID": "Almacén"
+          "M_Locator_ID": "Almacén",
+          "C_UOM_ID": "Unidad"
         }
       },
       "listViewOptions": {
@@ -61,7 +64,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -136,6 +139,7 @@
             "defaultValue": "N",
             "explicitType": true,
             "badge": true,
+            "visibleWhenCapability": "showAccountingFields",
             "badgeLabels": {
               "true": {
                 "en_US": "Posted",
@@ -290,6 +294,7 @@
                 ]
               }
             ],
+            "gridOrder": 1,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -315,6 +320,7 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "gridOrder": 2,
             "columnWidth": 160,
             "min": 1,
             "validation": {
@@ -336,6 +342,9 @@
             "form": true,
             "reference": "UOM",
             "inputMode": "selector",
+            "display": "tag",
+            "gridOrder": 3,
+            "gridReadOnly": true,
             "validation": {
               "maxLength": 12
             }
@@ -354,6 +363,7 @@
             "sourceRequired": true,
             "reference": "Locator",
             "inputMode": "search",
+            "gridOrder": 4,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -420,13 +430,16 @@
       "statusField": "status",
       "labelOverrides": {
         "en_US": {
-          "M_Locator_ID": "Warehouse"
+          "M_Locator_ID": "Warehouse",
+          "C_UOM_ID": "Unit"
         },
         "es_ES": {
-          "M_Locator_ID": "Almacén"
+          "M_Locator_ID": "Almacén",
+          "C_UOM_ID": "Unidad"
         },
         "es_AR": {
-          "M_Locator_ID": "Almacén"
+          "M_Locator_ID": "Almacén",
+          "C_UOM_ID": "Unidad"
         }
       },
       "listViewOptions": {
@@ -440,7 +453,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -967,13 +980,16 @@
     },
     "labelOverrides": {
       "en_US": {
-        "M_Locator_ID": "Warehouse"
+        "M_Locator_ID": "Warehouse",
+        "C_UOM_ID": "Unit"
       },
       "es_ES": {
-        "M_Locator_ID": "Almacén"
+        "M_Locator_ID": "Almacén",
+        "C_UOM_ID": "Unidad"
       },
       "es_AR": {
-        "M_Locator_ID": "Almacén"
+        "M_Locator_ID": "Almacén",
+        "C_UOM_ID": "Unidad"
       }
     }
   },

@@ -1,14 +1,15 @@
 {
-  "version": "0.91.0",
-  "generatedAt": "2026-09-17T15:12:05.781Z",
-  "updatedAt": "2026-10-13T13:49:29.304Z",
-  "checksum": "c28a95219dca050e",
+  "version": "0.92.0",
+  "generatedAt": "2026-10-19T17:29:21.531Z",
+  "updatedAt": "2026-10-20T12:04:14.314Z",
+  "checksum": "54952efceac14b13",
   "frontendContract": {
     "window": {
       "id": "167",
       "name": "Sales Invoice",
       "primaryEntity": "header",
       "category": "sales",
+      "agentPrompt": "Sales invoices: customer invoices. Entity `header` is the invoice, `lines` its lines. Two ways to put order or shipment lines on an invoice. FAST PATH, one document in one step: etendo_action `createDraftInvoice` on a completed sales order (spec sales-order) or goods shipment (spec goods-shipment) creates AND completes an invoice with its pending lines. FILLING A DRAFT INVOICE, which also lets one invoice take lines from several documents of the same customer and currency, in this order: (1) create the header with etendo_create on `header` (businessPartner and the rest are defaulted; etendo_schema with view:\"create\" is the authority on what a create needs); (2) from sales orders: etendo_action `availableOrders` on the invoice id lists the customer's completed orders that still have quantity to invoice, `availableOrderLines` with {orderId} lists their pending lines, and `importOrderLines` with {orderId} (everything pending) or {orderId, lines:[{sourceLineId, quantity}]} (exactly those) adds them; from goods shipments: `availableShipments`, `availableShipmentLines` with {shipmentId} and `importShipmentLines` with {shipmentId, lines?} do the same; repeat for each document; (3) complete the invoice with the DocAction button (action documentAction, docAction CO) — importing never completes it. The invoice must be a draft and the source completed, of the same customer and currency. What is pending subtracts what completed invoices AND draft invoices hold, this one included: asking for more answers 422 importQuantityExceedsPending (naming the product, the requested and the pending quantity) and adds nothing. Price, tax and discount are copied from the order line; the order's invoiced quantity only moves when the invoice is completed. From an order, the quantity of a line goes first to its completed shipments not yet invoiced (oldest first, each up to its own pending, linked to the shipment so it shows as invoiced) and the rest, ordered and not delivered or already taken by another draft, is invoiced against the order line alone, so an invoice can be filled from the order or from the shipment (importShipmentLines) alike, whatever the shipment was already invoiced in a draft, and the two never take the same quantity (the pending of an order line counts every draft invoice). The invoice's order reference is set when every line comes from one order and left empty when several are mixed. The classic Create From buttons are redirected to the import actions. etendo_schema with view:\"actions\" returns each action's parameters.",
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
@@ -74,7 +75,8 @@
           "C_DocTypeTarget_ID": "Tipo de documento",
           "PriceList": "Precio",
           "Foreign_Amount": "Importe en Moneda Objetivo",
-          "em_etgo_tbai_status": "Estado TicketBAI"
+          "em_etgo_tbai_status": "Estado TicketBAI",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "OutstandingAmt": "Outstanding Amount",
@@ -82,10 +84,12 @@
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount",
-          "em_etgo_tbai_status": "TicketBAI Status"
+          "em_etgo_tbai_status": "TicketBAI Status",
+          "C_UOM_ID": "Unit"
         },
         "es_AR": {
-          "OutstandingAmt": "Saldo pendiente"
+          "OutstandingAmt": "Saldo pendiente",
+          "C_UOM_ID": "Unidad"
         }
       },
       "subsetFilters": [
@@ -140,7 +144,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -578,9 +582,8 @@
             "visibility": "readOnly",
             "required": true,
             "grid": true,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
-            "section": "summary",
             "businessCritical": true,
             "gridOrder": 6,
             "validation": {
@@ -598,9 +601,8 @@
             "visibility": "readOnly",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "sourceRequired": true,
-            "section": "summary",
             "validation": {
               "required": true,
               "maxLength": 22
@@ -1844,7 +1846,8 @@
           "keepSaveWhenCompletedFields": [
             "accountingDate",
             "project",
-            "costcenter"
+            "costcenter",
+            "aeatsiiErrorRegistral"
           ],
           "editableLineFieldsWhenCompleted": [
             "project",
@@ -1957,7 +1960,7 @@
             "sourceRequired": true,
             "columnType": "amount",
             "section": "principal",
-            "gridOrder": 4,
+            "gridOrder": 5,
             "validation": {
               "required": true,
               "maxLength": 22
@@ -1985,7 +1988,7 @@
             "form": true,
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 5,
+            "gridOrder": 6,
             "min": 0,
             "max": 100,
             "validation": {
@@ -2016,7 +2019,7 @@
               "lineNetAmount"
             ],
             "section": "principal",
-            "gridOrder": 6,
+            "gridOrder": 7,
             "validation": {
               "maxLength": 22
             },
@@ -2038,6 +2041,31 @@
               "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "label": "UOM",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "UOM",
+            "inputMode": "selector",
+            "display": "tag",
+            "gridOrder": 4,
+            "gridReadOnly": true,
+            "validation": {
+              "maxLength": 22
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' | (@UomManagement@='Y' & @Financial_Invoice_Line@='N')",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y') || (record['uomManagement'] === 'Y' && (record['financialInvoiceLine'] !== true && record['financialInvoiceLine'] !== 'Y'))"
             }
           },
           {
@@ -2114,7 +2142,7 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 7,
+            "gridOrder": 8,
             "validation": {
               "maxLength": 12
             }
@@ -2843,6 +2871,7 @@
       "name": "Sales Invoice",
       "primaryEntity": "header",
       "category": "sales",
+      "agentPrompt": "Sales invoices: customer invoices. Entity `header` is the invoice, `lines` its lines. Two ways to put order or shipment lines on an invoice. FAST PATH, one document in one step: etendo_action `createDraftInvoice` on a completed sales order (spec sales-order) or goods shipment (spec goods-shipment) creates AND completes an invoice with its pending lines. FILLING A DRAFT INVOICE, which also lets one invoice take lines from several documents of the same customer and currency, in this order: (1) create the header with etendo_create on `header` (businessPartner and the rest are defaulted; etendo_schema with view:\"create\" is the authority on what a create needs); (2) from sales orders: etendo_action `availableOrders` on the invoice id lists the customer's completed orders that still have quantity to invoice, `availableOrderLines` with {orderId} lists their pending lines, and `importOrderLines` with {orderId} (everything pending) or {orderId, lines:[{sourceLineId, quantity}]} (exactly those) adds them; from goods shipments: `availableShipments`, `availableShipmentLines` with {shipmentId} and `importShipmentLines` with {shipmentId, lines?} do the same; repeat for each document; (3) complete the invoice with the DocAction button (action documentAction, docAction CO) — importing never completes it. The invoice must be a draft and the source completed, of the same customer and currency. What is pending subtracts what completed invoices AND draft invoices hold, this one included: asking for more answers 422 importQuantityExceedsPending (naming the product, the requested and the pending quantity) and adds nothing. Price, tax and discount are copied from the order line; the order's invoiced quantity only moves when the invoice is completed. From an order, the quantity of a line goes first to its completed shipments not yet invoiced (oldest first, each up to its own pending, linked to the shipment so it shows as invoiced) and the rest, ordered and not delivered or already taken by another draft, is invoiced against the order line alone, so an invoice can be filled from the order or from the shipment (importShipmentLines) alike, whatever the shipment was already invoiced in a draft, and the two never take the same quantity (the pending of an order line counts every draft invoice). The invoice's order reference is set when every line comes from one order and left empty when several are mixed. The classic Create From buttons are redirected to the import actions. etendo_schema with view:\"actions\" returns each action's parameters.",
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
@@ -2908,7 +2937,8 @@
           "C_DocTypeTarget_ID": "Tipo de documento",
           "PriceList": "Precio",
           "Foreign_Amount": "Importe en Moneda Objetivo",
-          "em_etgo_tbai_status": "Estado TicketBAI"
+          "em_etgo_tbai_status": "Estado TicketBAI",
+          "C_UOM_ID": "Unidad"
         },
         "en_US": {
           "OutstandingAmt": "Outstanding Amount",
@@ -2916,10 +2946,12 @@
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount",
-          "em_etgo_tbai_status": "TicketBAI Status"
+          "em_etgo_tbai_status": "TicketBAI Status",
+          "C_UOM_ID": "Unit"
         },
         "es_AR": {
-          "OutstandingAmt": "Saldo pendiente"
+          "OutstandingAmt": "Saldo pendiente",
+          "C_UOM_ID": "Unidad"
         }
       },
       "subsetFilters": [
@@ -2973,7 +3005,7 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "_note": "Accounting status pill — visible only with the showAccountingFields capability, inherited from the posted field's visibleWhenCapability (ETP-5684)"
         }
       ]
     },
@@ -4425,7 +4457,7 @@
             "apiKey": "uOM",
             "column": "C_UOM_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -5728,6 +5760,14 @@
       },
       {
         "entity": "lines",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/lines/selectors/uOM"
+      },
+      {
+        "entity": "lines",
         "field": "project",
         "column": "C_Project_ID",
         "reference": "Project",
@@ -6023,7 +6063,8 @@
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
         "Foreign_Amount": "Importe en Moneda Objetivo",
-        "em_etgo_tbai_status": "Estado TicketBAI"
+        "em_etgo_tbai_status": "Estado TicketBAI",
+        "C_UOM_ID": "Unidad"
       },
       "en_US": {
         "OutstandingAmt": "Outstanding Amount",
@@ -6031,10 +6072,12 @@
         "em_etgo_delivery_status": "Delivery Status",
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount",
-        "em_etgo_tbai_status": "TicketBAI Status"
+        "em_etgo_tbai_status": "TicketBAI Status",
+        "C_UOM_ID": "Unit"
       },
       "es_AR": {
-        "OutstandingAmt": "Saldo pendiente"
+        "OutstandingAmt": "Saldo pendiente",
+        "C_UOM_ID": "Unidad"
       }
     }
   },
@@ -7492,6 +7535,14 @@
         "description": "Field 'unitPrice' should be present in lines"
       },
       {
+        "id": "t-field-presence-lines-uOM",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should be present in lines"
+      },
+      {
         "id": "t-field-presence-paymentPlan-amount",
         "category": "field-presence",
         "entity": "paymentPlan",
@@ -8124,6 +8175,14 @@
         "description": "Field 'unitPrice' should have type 'number' in lines"
       },
       {
+        "id": "t-field-type-lines-uOM",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should have type 'string' in lines"
+      },
+      {
         "id": "t-field-type-paymentPlan-amount",
         "category": "field-type",
         "entity": "paymentPlan",
@@ -8620,6 +8679,14 @@
         "description": "Read-only logic for 'unitPrice' in lines should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-lines-uOM",
+        "category": "readonlylogic-evaluable",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Read-only logic for 'uOM' in lines should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-reversedInvoices-aEAT349BPBaseAmount",
         "category": "readonlylogic-evaluable",
         "entity": "reversedInvoices",
@@ -9020,6 +9087,14 @@
         "description": "Read-only logic for 'unitPrice' in lines should be valid JS"
       },
       {
+        "id": "t-readonlylogic-valid-lines-uOM",
+        "category": "readonlylogic-valid",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Read-only logic for 'uOM' in lines should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-reversedInvoices-aEAT349BPBaseAmount",
         "category": "readonlylogic-valid",
         "entity": "reversedInvoices",
@@ -9320,6 +9395,14 @@
         "field": "tax",
         "runner": "node",
         "description": "Selector endpoint for 'tax' in lines should exist"
+      },
+      {
+        "id": "t-selector-endpoint-lines-uOM",
+        "category": "selector-endpoint",
+        "entity": "lines",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Selector endpoint for 'uOM' in lines should exist"
       },
       {
         "id": "t-selector-endpoint-paymentPlan-currency",
@@ -10770,14 +10853,6 @@
         "description": "System field 'taxableAmount' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-uOM",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "uOM",
-        "runner": "node",
-        "description": "System field 'uOM' should exist in backend but not frontend for lines"
-      },
-      {
         "id": "t-system-field-lines-updated",
         "category": "system-field",
         "entity": "lines",
@@ -11030,25 +11105,25 @@
       }
     ],
     "summary": {
-      "total": 626,
+      "total": 630,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
         "default-value-type": 26,
         "displaylogic-evaluable": 32,
         "displaylogic-valid": 32,
-        "field-presence": 79,
-        "field-type": 79,
-        "readonlylogic-evaluable": 50,
-        "readonlylogic-valid": 50,
+        "field-presence": 80,
+        "field-type": 80,
+        "readonlylogic-evaluable": 51,
+        "readonlylogic-valid": 51,
         "rule-declared": 10,
         "searchable-filters": 6,
-        "selector-endpoint": 21,
-        "system-field": 205,
+        "selector-endpoint": 22,
+        "system-field": 204,
         "visibility": 5
       },
       "byRunner": {
-        "node": 626,
+        "node": 630,
         "junit": 0
       }
     }

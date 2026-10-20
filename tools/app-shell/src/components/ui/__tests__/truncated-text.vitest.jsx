@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/ui/truncated-text.jsx
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TruncatedText } from '../truncated-text.jsx';
 
@@ -68,6 +69,41 @@ describe('TruncatedText', () => {
 
     fireEvent.blur(span);
     expect(screen.queryByTestId('desc-tooltip')).toBeNull();
+  });
+
+  // ETP-5510 — multi-line mode wraps, clamps via inline style and measures HEIGHT, not width.
+  describe('lines={2}', () => {
+    const setHeights = (el, scrollHeight, clientHeight) => {
+      Object.defineProperty(el, 'scrollHeight', { configurable: true, value: scrollHeight });
+      Object.defineProperty(el, 'clientHeight', { configurable: true, value: clientHeight });
+    };
+    const renderTwo = () => {
+      render(<TruncatedText text={LONG} lines={2} data-testid="desc" />);
+      return screen.getByTestId('desc');
+    };
+
+    it('wraps instead of truncating and applies a 2-line clamp', () => {
+      const span = renderTwo();
+      expect(span).toHaveClass('block', 'w-full', 'whitespace-normal', 'break-words');
+      expect(span).not.toHaveClass('truncate');
+      expect(span.style.webkitLineClamp).toBe('2');
+      expect(span.style.overflow).toBe('hidden');
+    });
+
+    it('shows the tooltip only when the height is clipped', () => {
+      const span = renderTwo();
+      setHeights(span, 80, 40);
+      fireEvent.focus(span);
+      expect(screen.getByTestId('desc-tooltip')).toHaveTextContent(LONG);
+    });
+
+    it('stays silent when the text fits in the clamped height, even if it is wide', () => {
+      const span = renderTwo();
+      setHeights(span, 40, 40);
+      setMetrics(span, 640, 320);
+      fireEvent.focus(span);
+      expect(screen.queryByTestId('desc-tooltip')).toBeNull();
+    });
   });
 
   // It carries its own provider so it works in any tree — no caller setup required.

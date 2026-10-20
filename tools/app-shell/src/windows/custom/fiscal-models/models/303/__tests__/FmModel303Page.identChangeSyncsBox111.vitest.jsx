@@ -17,6 +17,8 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
@@ -188,6 +190,10 @@ describe('FmModel303Page — handleIdentChange syncs box111 immediately (ETP-543
       _precomputed: null, boxes: [{ num: 68, value: 5 }, { num: 70, value: 20 }],
       sources: [], history: [],
       manualData: { identification: { tipo_declaracion: 'N', rectificativa: false } },
+      // ETP-5725 (reopened QA fix) — "Guardar" is now gated by the corrective-consistency
+      // guard too: checking rectificativa needs a presented ordinaria sibling to save at all.
+      // This test is about box111's sync timing, not that guard, so a sibling is assumed.
+      _duplicatePeriodPresented: true,
     };
     render(<FmModel303Page decl={decl} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
 

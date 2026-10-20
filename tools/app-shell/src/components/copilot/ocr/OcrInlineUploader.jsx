@@ -8,11 +8,29 @@ import { useCopilot } from '@/components/CopilotContext';
 import { getOcrDocType } from './ocrDocTypes';
 import { uploadAndMarkMainAttachment } from './listAttachments';
 import { buildOcrSchema } from './buildOcrSchema';
-import { useOcrExtraction, OCR_NO_DATA_ERROR } from './useOcrExtraction';
+import {
+  useOcrExtraction,
+  OCR_NO_DATA_ERROR,
+  OCR_TIMEOUT_ERROR,
+  OCR_NETWORK_ERROR,
+  OCR_SESSION_CHANGED_ERROR,
+} from './useOcrExtraction';
 import { hasExtractedData } from './hasExtractedData';
 import { useOcrFlow } from './useOcrFlow';
 
 /* eslint-disable react/prop-types */
+
+// Sentinel → translated message. Every other value is shown as is.
+const ERROR_MESSAGE_KEYS = {
+  [OCR_NO_DATA_ERROR]: 'ocrNoDataExtracted',
+  [OCR_TIMEOUT_ERROR]: 'ocrExtractTimeout',
+  // Same text core puts in a NetworkError's message (request-policy.md, ETP-5424).
+  [OCR_NETWORK_ERROR]: 'networkErrorRetry',
+  [OCR_SESSION_CHANGED_ERROR]: 'ocrExtractSessionChanged',
+};
+// Manual retry only: after a gateway timeout the server may still be running the first
+// extraction, and a stale-session response must never be replayed on its own.
+const RETRYABLE_ERRORS = new Set([OCR_TIMEOUT_ERROR, OCR_NETWORK_ERROR, OCR_SESSION_CHANGED_ERROR]);
 
 export default function OcrInlineUploader({
   docTypeId,
@@ -54,7 +72,7 @@ export default function OcrInlineUploader({
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  const { result, loading: applying, pendingModal } = useOcrFlow({
+  const { result, loading: applying, pendingModal, clearResult } = useOcrFlow({
     docTypeId,
     token,
     apiBaseUrl,
@@ -110,11 +128,13 @@ export default function OcrInlineUploader({
       setFile(null);
       setPickError(ui('ocrInlinePdfOnly'));
       reset();
+      clearResult();
       return;
     }
     setPickError(null);
     setFile(picked);
     reset();
+    clearResult();
   };
 
   const handleDrop = (event) => {
@@ -129,6 +149,8 @@ export default function OcrInlineUploader({
     // reads this ref to attach the PDF to the new record; it cannot use the
     // `file` state directly because the component unmounts on navigation.
     fileAtExtractRef.current = file;
+    // A blocking message from the previous run must not stay on screen during a new extraction.
+    clearResult();
     try {
       const payload = await extract(file);
       window.dispatchEvent(new CustomEvent(docType.eventName, { detail: payload }));
@@ -140,6 +162,7 @@ export default function OcrInlineUploader({
   const clearFile = () => {
     setFile(null);
     reset();
+    clearResult();
   };
 
   let buttonLabel;
@@ -243,7 +266,24 @@ export default function OcrInlineUploader({
       {status === 'error' && (
         <div className="flex items-start gap-2 text-xs text-destructive">
           <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
-          <span>{error === OCR_NO_DATA_ERROR ? ui('ocrNoDataExtracted') : (error || ui('ocrFailed'))}</span>
+          <span>{ERROR_MESSAGE_KEYS[error] ? ui(ERROR_MESSAGE_KEYS[error]) : (error || ui('ocrFailed'))}</span>
+          {file && RETRYABLE_ERRORS.has(error) && (
+            <button
+              type="button"
+              onClick={handleExtract}
+              className="shrink-0 font-medium underline hover:no-underline"
+              data-testid="ocr-retry"
+            >
+              {ui('retry')}
+            </button>
+          )}
+        </div>
+      )}
+      {/* ETP-5654 — the blocking receiver-tax-id mismatch, inline like the extraction error. */}
+      {result?.blocked && !applying && (
+        <div className="flex items-start gap-2 text-xs text-destructive" data-testid="ocr-blocked-message">
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
+          <span>{result.blocked}</span>
         </div>
       )}
       {pickError && (

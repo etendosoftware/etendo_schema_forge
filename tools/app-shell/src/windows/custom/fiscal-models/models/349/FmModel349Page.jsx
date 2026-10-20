@@ -714,7 +714,11 @@ function isSustitutivaChecked(identChecks) {
 
 // ETP-5597 (W4) — `isBusy` also locks it while a manual-data save / generate / present is in
 // flight, so no Tipo edit can land mid-save.
-function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = false, t }) {
+// ETP-5725 — `lockNormalOption`: true while the period's latest sibling declaration is already
+// presented (`decl._duplicatePeriodPresented`). "Normal" becomes unselectable (the AEAT rule
+// this period now requires is Sustitutiva) — only that option is disabled, "Sustitutiva" stays
+// clickable, mirroring how 303 only locks its single "rectificativa" checkbox.
+function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = false, lockNormalOption = false, t }) {
   const sustitutiva = isSustitutivaChecked(identChecks);
   const options = [
     { value: false, labelKey: 'fm.m349.type.normal', fallback: 'Normal', testId: 'normal' },
@@ -733,15 +737,16 @@ function DeclarationTypeControl({ identChecks, onChange, isSubmitted, isBusy = f
       >
         {options.map(o => {
           const active = sustitutiva === o.value;
+          const optionDisabled = isSubmitted || isBusy || (lockNormalOption && o.value === false);
           return (
             <button
               key={o.testId}
               type="button"
               role="radio"
               aria-checked={active}
-              disabled={isSubmitted || isBusy}
+              disabled={optionDisabled}
               className={`fm-newdecl-segmented__btn${active ? ' fm-newdecl-segmented__btn--active' : ''}`}
-              onClick={() => { if (!active) onChange('sustitutiva', o.value); }}
+              onClick={() => { if (!active && !optionDisabled) onChange('sustitutiva', o.value); }}
               data-testid={`FmModel349Page__type_${o.testId}`}
             >
               {t(o.labelKey) ?? o.fallback}
@@ -897,7 +902,31 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // `manualData.identification`, hydrated once from `decl.manualData` and flushed explicitly by
   // "Guardar" — no debounce/autosave, see `handleSave` below). 349 has no box-override state to
   // race against, so this skips 303's `useRecordWriteQueue` machinery entirely.
-  const [identChecks, setIdentChecks] = useState(decl.manualData?.identification ?? {});
+  // ETP-5725 — same auto-default rule as 303's `rectificativa`: a brand-new declaration (no
+  // persisted `sustitutiva` either way) opened for a period whose latest sibling is already
+  // presented (`decl._duplicatePeriodPresented`, set by FmListPage.jsx) defaults to "Sustitutiva"
+  // instead of "Normal". A period with no prior declaration keeps the untouched default (Normal)
+  // — `_duplicatePeriodPresented` is false there. An explicit persisted value always wins.
+  const [identChecks, setIdentChecks] = useState(() => {
+    const persisted = decl.manualData?.identification ?? {};
+    // ETP-5725 (reopened QA fix, critical regression) — same root cause as the Bug 3 fix already
+    // applied to FmListPage.jsx's `resolveDeclTypeLabel`: `persisted.sustitutiva === undefined`
+    // is NOT the same thing as "this declaration was never saved" — a genuinely persisted,
+    // presented ordinaria that was never explicitly toggled ALSO has `sustitutiva === undefined`
+    // in its persisted identification (the toggle simply has nothing to write at its default).
+    // Without the `decl.status === 'draft'` gate, OPENING that ordinaria after a sibling becomes
+    // presented re-triggered this auto-default and showed "Sustitutiva" selected on an
+    // already-submitted, correctly-ordinaria record — confirmed display-only (see the PUT-
+    // reachability audit in this file's git history / the handoff report), but still wrong and
+    // alarming. Only a `draft` declaration can legitimately be in the "never decided yet" state
+    // this auto-default exists for; once a row leaves draft its persisted identification is
+    // authoritative and must be rendered as-is, however that identification looks.
+    if (decl.status === 'draft' && persisted.sustitutiva === undefined
+        && Boolean(decl._duplicatePeriodPresented)) {
+      return { ...persisted, sustitutiva: true };
+    }
+    return persisted;
+  });
   const hasPendingEditRef = useRef(false);
   // ETP-5597 (W4) — bumped on every edit. A save only clears `hasPendingEditRef` when no edit
   // happened after it started (same version on success), so an edit racing an in-flight save
@@ -1049,6 +1078,21 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   }
 
   async function handleSave() {
+    // ETP-5725 (reopened QA fix) — "Guardar" PERSISTS `manualData.identification`, so it must be
+    // gated by the same corrective/ordinaria consistency rule as "Registrar/Presentar" and
+    // "Generar fichero". Server-side is the authoritative gate
+    // (FiscalDeclCrudHandler#checkCorrectiveConsistency, now run on every PUT); this only gives
+    // earlier feedback. See FmModel303Page.jsx's `handleSave` for the symmetric 303 guard.
+    if (isSustitutivaChecked(identChecks) && !Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+      toast.error(t('fm.duplicate_period.requires_ordinaria')
+        ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+      return;
+    }
+    if (!isSustitutivaChecked(identChecks) && Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+      toast.error(t('fm.duplicate_period.ordinaria_exists')
+        ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+      return;
+    }
     const pending = persistIdentChecks();
     const { ok } = pending ? await pending : { ok: true };
     if (ok) {
@@ -1081,6 +1125,25 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
     // declaration cannot be presented without its 13-digit former-declaration identifier.
     if (formerStatementInvalid) {
       toast.error(t('fm.m349.present_disabled.former_statement') ?? 'Introduce el identificador de la declaración anterior (13 dígitos) para presentar una declaración sustitutiva.');
+      return;
+    }
+    // ETP-5725 (reopened QA fix, Bug 1) — UX-only mirror of the authoritative backend guard
+    // (`FiscalDeclCrudHandler#checkCorrectiveConsistency`): "Sustitutiva" selected
+    // with no sibling for this period in the submitted family at all means there is no ordinaria
+    // on file to substitute — see FmModel303Page.jsx's `correctiveWithoutPresentedOrdinaria` for
+    // the full rationale (`decl._duplicatePeriodPresented` as the "a presented ordinaria exists"
+    // proxy). The backend is what actually enforces this; this only gives earlier feedback.
+    if (isSustitutivaChecked(identChecks) && !Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+      toast.error(t('fm.duplicate_period.requires_ordinaria')
+        ?? 'No se puede presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+      return;
+    }
+    // ETP-5725 (reopened QA fix) — mirror of the check above: "Solo puede haber una ordinaria
+    // por periodo". Same `decl._duplicatePeriodPresented` proxy, inverted: "Normal" selected
+    // while a presented sibling already exists.
+    if (!isSustitutivaChecked(identChecks) && Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+      toast.error(t('fm.duplicate_period.ordinaria_exists')
+        ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva.');
       return;
     }
     // ETP-5597 (bug) — flush unsaved Tipo/identifier BEFORE the status change, same as 303's
@@ -1283,6 +1346,22 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
       toast.error(t('fm.validation.already_submitted') ?? 'Esta declaración ya ha sido presentada.');
       return;
     }
+    // ETP-5725 (reopened QA fix) — "Generar fichero 349" produces the literal AEAT submission
+    // artifact (what the user uploads to the AEAT portal), not a preview, so it must be gated by
+    // the same corrective/ordinaria consistency rule as "Guardar"/"Registrar/Presentar". Server
+    // side is the authoritative gate (the flush below already goes through
+    // FiscalDeclCrudHandler#checkCorrectiveConsistency on its own PUT, and Fiscal349BoxesHandler's
+    // own `generate` dispatch re-checks independently); this only gives earlier feedback.
+    if (isSustitutivaChecked(identChecks) && !Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+      toast.error(t('fm.duplicate_period.requires_ordinaria')
+        ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+      return;
+    }
+    if (!isSustitutivaChecked(identChecks) && Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+      toast.error(t('fm.duplicate_period.ordinaria_exists')
+        ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+      return;
+    }
     // ETP-5597 (bug) — persist unsaved Tipo/identifier first (same flush as Registrar/Presentar),
     // so the declaration record never disagrees with the file just generated from it.
     if (hasPendingEditRef.current && !(await flushBeforeAction())) return;
@@ -1443,6 +1522,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                 onChange={handleIdentChange}
                 isSubmitted={isSubmitted}
                 isBusy={actionBusy}
+                // ETP-5725 (review B1) — only lock "Normal" while Sustitutiva is CURRENTLY
+                // checked, mirroring 303's `lockRectificativaChecked` guard
+                // (FmModel303Page.jsx). Without `isSustitutivaChecked(identChecks)` here, a
+                // legacy declaration saved with `sustitutiva: false` while a sibling is
+                // presented would have "Normal" disabled from the start; if the user then
+                // clicked Sustitutiva (even by accident) they could never click back to Normal,
+                // since the lock doesn't depend on the current value. This way the lock only
+                // ever reinforces an already-true value — it never traps a false one.
+                lockNormalOption={Boolean(decl._duplicatePeriodPresented) && !isSubmitted && isSustitutivaChecked(identChecks)}
                 t={t}
                 data-testid="DeclarationTypeControl__346dd5" />
             </>
@@ -1457,7 +1545,26 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
               </FmDetailButton>
               {/* ETP-5597 (W4) — Generar / Guardar / Registrar are locked while any of them is in
                   flight (`actionBusy`), so no Tipo edit can land mid-save. */}
-              <FmDetailButton onClick={() => setShowFilegen(true)} disabled={actionBusy} data-testid="FmModel349Page__generate">
+              <FmDetailButton
+                onClick={() => {
+                  // ETP-5725 (reopened QA fix, UX follow-up) — mirrors FmModel303Page.jsx's own
+                  // "Generar fichero" onClick exactly: block BEFORE opening FileGenModal, not
+                  // only inside generateNow (the modal's own onConfirm). Same fix shape as the
+                  // "Registrar/Presentar" button above.
+                  if (isSustitutivaChecked(identChecks) && !Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+                    toast.error(t('fm.duplicate_period.requires_ordinaria')
+                      ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+                    return;
+                  }
+                  if (!isSustitutivaChecked(identChecks) && Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+                    toast.error(t('fm.duplicate_period.ordinaria_exists')
+                      ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+                    return;
+                  }
+                  setShowFilegen(true);
+                }}
+                disabled={actionBusy}
+                data-testid="FmModel349Page__generate">
                 <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
                 {t('fm.action.gen349') ?? 'Generar fichero 349'}
               </FmDetailButton>
@@ -1478,7 +1585,26 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
               </FmDetailButton>
               <FmDetailButton
                 primary
-                onClick={() => setShowPresent(true)}
+                onClick={() => {
+                  // ETP-5725 (reopened QA fix, UX follow-up) — mirrors FmModel303Page.jsx's own
+                  // "Registrar/Presentar" onClick exactly: block BEFORE opening PresentModal, not
+                  // only inside presentNow (which only runs after the user picks a submission
+                  // mode and confirms). Previously 349 was the only one of the two models whose
+                  // button opened the modal unconditionally — the modal would open, the user
+                  // would pick con/sin acuse and confirm, and ONLY THEN get rejected by
+                  // presentNow's own check (still kept below, belt-and-braces, same as 303).
+                  if (isSustitutivaChecked(identChecks) && !Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+                    toast.error(t('fm.duplicate_period.requires_ordinaria')
+                      ?? 'No se puede guardar, generar el fichero ni presentar una declaración rectificativa/sustitutiva para este período hasta que exista una declaración ordinaria ya presentada.');
+                    return;
+                  }
+                  if (!isSustitutivaChecked(identChecks) && Boolean(decl._duplicatePeriodPresented) && !isSubmitted) {
+                    toast.error(t('fm.duplicate_period.ordinaria_exists')
+                      ?? 'Ya existe una declaración ordinaria presentada para este período. Solo puede haber una ordinaria por período — marca esta como rectificativa/sustitutiva antes de guardar, generar el fichero o presentar.');
+                    return;
+                  }
+                  setShowPresent(true);
+                }}
                 // ETP-5597 — a substitute declaration needs a valid former-declaration identifier.
                 disabled={formerStatementInvalid || actionBusy}
                 title={formerStatementInvalid

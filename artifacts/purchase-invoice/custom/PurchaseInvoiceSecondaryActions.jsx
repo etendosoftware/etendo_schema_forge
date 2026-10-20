@@ -1,5 +1,4 @@
 import DocumentSecondaryActions from '@/windows/custom/shared/DocumentSecondaryActions';
-import SendToSifButton from '@/windows/custom/shared/SendToSifButton.jsx';
 
 /**
  * Adapts the shared `DocumentSecondaryActions` group to purchase-invoice (ETP-5260).
@@ -15,45 +14,21 @@ import SendToSifButton from '@/windows/custom/shared/SendToSifButton.jsx';
  * `actionLabelKey` props were never actually read by `CloneOrderModal` — dead
  * props, not carried over here).
  *
- * `SendToSifButton` (send invoice to SII/TBAI) is NOT the generic "send by
- * email" action `DocumentSecondaryActions.showSend` models — it is a
- * fiscal-compliance action specific to invoices, with its own gating
- * (`status === 'CO'` + pending SII/TBAI targets) and its own modal. It is
- * rendered here, after Clone, matching the DF's "Enviar" position in the
- * secondary group, while staying a window-specific concern (not folded into
- * the shared component).
+ * The fiscal send action (send invoice to SII / Batuz) used to render here,
+ * after Clone. ETP-5700 removed it from the form topbar: in the form view it
+ * lives only in the kebab (`SifSendMenuItem`, `window.customComponents.
+ * moreMenuContent`), whose modal is hosted by `SifSendModalHost`.
  *
  * The payment-status badge stays in `PurchaseInvoiceTopbar` (topbarRight),
  * unaffected by this migration — it is a primary/status indicator that
  * belongs at the extreme right, after Save/Confirm.
- *
- * ETP-5272 follow-up: "Enviar a SIF" must flush pending header edits before
- * sending (see SifSendingModal.jsx's `handleSend`). `onSave`/`isDirty` are
- * part of DetailView's shared topbarSecondary/topbarRight prop contract
- * (`renderSlotAction`, ETP-5260) and already reach this component via
- * `{...props}` — they just need forwarding to `SendToSifButton` unchanged,
- * mirroring how `SalesInvoiceTopbar` forwards them to `InvoiceTopbarExtra`.
  */
 export default function PurchaseInvoiceSecondaryActions(props) {
-  const { data, recordId, apiBaseUrl, onSave, isDirty, windowReadOnly } = props;
-
   return (
     <DocumentSecondaryActions
       {...props}
       windowName="purchase-invoice"
       clone={{ errorKey: 'cloneInvoiceError', processingKey: 'invoiceProcessing' }}
-      data-testid="PurchaseInvoiceSecondaryActions">
-      <SendToSifButton
-        data={data}
-        recordId={recordId}
-        apiBaseUrl={apiBaseUrl}
-        status={data?.documentStatus}
-        onSave={onSave}
-        isDirty={isDirty}
-        // ETP-5700: the Solo Lectura tier, NOT isDocumentReadOnly (true on every
-        // completed invoice through the processed lock) — see SendToSifButton.jsx.
-        windowReadOnly={windowReadOnly}
-        data-testid="SendToSifButton__PurchaseInvoiceSecondaryActions" />
-    </DocumentSecondaryActions>
+      data-testid="PurchaseInvoiceSecondaryActions" />
   );
 }

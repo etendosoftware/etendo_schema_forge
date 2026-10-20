@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/rowVisuals.js
 /**
  * Integration test for InlineLinesPanel — renders the component in jsdom
  * with minimal mocks. No server, no DB, no browser needed.
@@ -9,6 +10,13 @@ import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import React, { createRef } from 'react';
 
 // --- Mocks (one block, no spreading across files) ---
+
+// The line delete button renders the Iconic trash from the core custom-icons barrel;
+// the published core may predate it, so stub it while keeping every other icon real.
+vi.mock('@/components/ui/custom-icons', async (importOriginal) => ({
+  ...(await importOriginal()),
+  IconicTrashIcon: (props) => <svg data-icon="iconic-trash" {...props} />,
+}));
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -355,7 +363,7 @@ describe('InlineLinesPanel', () => {
     const actions = within(row).getByTestId('line-actions');
     // Edit (pencil) must still render — only delete is gated.
     expect(within(actions).queryByTestId('Pencil__3b7ec2')).toBeInTheDocument();
-    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeNull();
+    expect(within(actions).queryByTestId('IconicTrashIcon__3b7ec2')).toBeNull();
     expect(within(actions).queryByRole('button', { name: /delete/i })).toBeNull();
   });
 
@@ -366,7 +374,88 @@ describe('InlineLinesPanel', () => {
       await userEvent.hover(row);
     });
     const actions = within(row).getByTestId('line-actions');
-    expect(within(actions).queryByTestId('Trash2__3b7ec2')).toBeInTheDocument();
+    expect(within(actions).queryByTestId('IconicTrashIcon__3b7ec2')).toBeInTheDocument();
+  });
+
+  // The line action buttons are the list quick actions' Figma Icon Button sm: 32x32
+  // round, a #828FA3 neutral icon with the #121217 @ 5% hover overlay, and a
+  // destructive delete that tints to the light destructive background on hover.
+  describe('Figma action buttons in the line hover strip', () => {
+    async function hoverRow(id) {
+      const row = screen.getByTestId(`line-row-${id}`);
+      await act(async () => { await userEvent.hover(row); });
+      return row;
+    }
+
+    const NEUTRAL_TOKENS = ['h-8', 'w-8', 'rounded-full', 'text-[#828FA3]', 'hover:bg-[rgba(18,18,23,0.05)]'];
+    const DESTRUCTIVE_TOKENS = [
+      'h-8', 'w-8', 'rounded-full',
+      'text-[var(--status-destructive-fg)]', 'hover:bg-[var(--status-destructive-bg)]', 'disabled:opacity-50',
+    ];
+
+    it.each([
+      ['extra action', (row) => within(row).getByTestId('line-action-archive')],
+      ['edit', (row) => within(row).getByRole('button', { name: 'editLineTooltip' })],
+    ])('the %s button carries the neutral tokens and no destructive ones', async (_label, pick) => {
+      renderPanel({
+        rowActions: [{ key: 'archive', icon: (p) => <span {...p} />, tooltip: 'Archive', onClick: vi.fn(), testId: 'line-action-archive' }],
+      });
+      const btn = pick(await hoverRow('L1'));
+      expect(btn).toHaveClass(...NEUTRAL_TOKENS);
+      expect(btn).not.toHaveClass('text-[var(--status-destructive-fg)]');
+      expect(btn).not.toHaveClass('hover:bg-[var(--status-destructive-bg)]');
+    });
+
+    it('sizes the edit and extra-action icons at 20px', async () => {
+      renderPanel({
+        rowActions: [{ key: 'archive', icon: (p) => <span {...p} />, tooltip: 'Archive', onClick: vi.fn() }],
+      });
+      const row = await hoverRow('L1');
+      expect(within(row).getByTestId('Pencil__3b7ec2')).toHaveClass('h-5', 'w-5');
+      expect(within(row).getByTestId('archiveIcon__3b7ec2')).toHaveClass('h-5', 'w-5');
+    });
+
+    it('the delete button carries the destructive tokens and renders the Iconic trash', async () => {
+      renderPanel();
+      const row = await hoverRow('L1');
+      const del = within(row).getByRole('button', { name: 'deleteRowTooltip' });
+      expect(del).toHaveClass(...DESTRUCTIVE_TOKENS);
+      expect(del).not.toHaveClass('text-[#828FA3]');
+      const icon = within(del).getByTestId('IconicTrashIcon__3b7ec2');
+      expect(icon).toHaveAttribute('data-icon', 'iconic-trash');
+      expect(icon).toHaveClass('h-5', 'w-5');
+    });
+
+    it('disables the delete button while the delete is in flight and re-enables it after', async () => {
+      let resolveDelete;
+      const onDeleteRow = vi.fn(() => new Promise((resolve) => { resolveDelete = resolve; }));
+      renderPanel({ onDeleteRow });
+      const row = await hoverRow('L1');
+      const del = within(row).getByRole('button', { name: 'deleteRowTooltip' });
+      expect(del).not.toBeDisabled();
+
+      await act(async () => { await userEvent.click(del); });
+      expect(onDeleteRow).toHaveBeenCalledWith(ROWS[0]);
+      expect(within(row).getByRole('button', { name: 'deleteRowTooltip' })).toBeDisabled();
+
+      await act(async () => { resolveDelete(); });
+      expect(within(row).getByRole('button', { name: 'deleteRowTooltip' })).not.toBeDisabled();
+    });
+
+    it('keeps the hover overlay at rest only on the edit button of the line being edited', async () => {
+      renderPanel();
+      const rowL1 = await hoverRow('L1');
+      const editL1 = within(rowL1).getByRole('button', { name: 'editLineTooltip' });
+      expect(editL1).not.toHaveClass('bg-[rgba(18,18,23,0.05)]');
+
+      await act(async () => { await userEvent.click(editL1); });
+      expect(within(rowL1).getByRole('button', { name: 'editLineTooltip' })).toHaveClass('bg-[rgba(18,18,23,0.05)]');
+
+      const rowL2 = await hoverRow('L2');
+      const editL2 = within(rowL2).getByRole('button', { name: 'editLineTooltip' });
+      expect(editL2).toHaveClass('hover:bg-[rgba(18,18,23,0.05)]');
+      expect(editL2).not.toHaveClass('bg-[rgba(18,18,23,0.05)]');
+    });
   });
 
   it('numeric column headers are right-aligned', () => {
@@ -2504,5 +2593,33 @@ describe('InlineLinesPanel — commitField error toast dedupe (ETP-5073 / DOC-04
     await editAndBlurProduct(row, 'Changed');
 
     expect(toast.error).toHaveBeenLastCalledWith('networkError');
+  });
+});
+
+describe('InlineLinesPanel — display: tag column (neutral pill)', () => {
+  const TAG_COLUMNS = [
+    { key: 'product', label: 'Product', type: 'string' },
+    { key: 'uOM', label: 'Unit', type: 'string', display: 'tag' },
+    { key: 'note', label: 'Note', type: 'string' },
+  ];
+  const TAG_ROWS = [
+    { id: 'T1', product: 'Widget', uOM: 'u1', 'uOM$_identifier': 'Centimeter', note: 'Centimeter' },
+    { id: 'T2', product: 'Gadget', uOM: '', note: 'x' },
+  ];
+
+  it('shows the unit as a pill on a saved line and nothing for an empty value', () => {
+    const { container } = renderPanel({ columns: TAG_COLUMNS, data: TAG_ROWS });
+    const pills = container.querySelectorAll('.status-tag.status-tag--neutral');
+    expect(pills).toHaveLength(1);
+    expect(pills[0]).toHaveTextContent('Centimeter');
+  });
+
+  it('leaves a column without display:tag as plain text (no pill)', () => {
+    const { container } = renderPanel({
+      columns: TAG_COLUMNS.map((c) => (c.key === 'uOM' ? { ...c, display: undefined } : c)),
+      data: TAG_ROWS,
+    });
+    expect(container.querySelector('.status-tag')).toBeNull();
+    expect(screen.getAllByText('Centimeter').length).toBeGreaterThan(0);
   });
 });

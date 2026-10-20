@@ -116,33 +116,33 @@ describe('track', () => {
 });
 
 describe('addFeatureFlagEvaluation', () => {
-  it('forwards only to initialized providers with feature flag capability', async () => {
+  it('forwards through the gateway to the providers that implement it', async () => {
     const obs = createObservability();
     const datadog = makeProvider('datadog', {
-      capabilities: ['featureFlagTracking'],
       addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
     });
-    const other = makeProvider('mixpanel', {
-      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
-    });
+    const other = makeProvider('mixpanel');
     await obs.initObservability({ providers: [datadog, other] });
 
     await obs.addFeatureFlagEvaluation('sample_flag', true);
 
     expect(datadog.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
-    expect(other.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+    expect(other.addFeatureFlagEvaluation).toBeUndefined();
   });
 
-  it('does not load or call providers before initialization', async () => {
+  it('holds evaluations made before initialization and sends them once it happens', async () => {
     const obs = createObservability();
     const provider = makeProvider('datadog', {
-      capabilities: ['featureFlagTracking'],
       addFeatureFlagEvaluation: vi.fn(),
     });
 
+    await obs.addFeatureFlagEvaluation('sample_flag', false);
     await obs.addFeatureFlagEvaluation('sample_flag', true);
-
     expect(provider.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+
+    await obs.initObservability({ providers: [provider] });
+    expect(provider.addFeatureFlagEvaluation).toHaveBeenCalledTimes(1);
+    expect(provider.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
   });
 });
 
@@ -174,8 +174,16 @@ describe('identify', () => {
     const obs = createObservability();
     const p = makeProvider();
     await obs.initObservability({ providers: [p] });
-    await obs.identify('user1', { role: 'admin' });
-    expect(p.identify).toHaveBeenCalledWith('user1', { role: 'admin' }, expect.any(Object));
+    await obs.identify('user1', { status: 'active' });
+    expect(p.identify).toHaveBeenCalledWith('user1', { status: 'active' }, expect.any(Object));
+  });
+
+  it('drops traits outside the host allowlist before they reach a provider (ETP-4578)', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.identify('user1', { status: 'active', role: 'admin' });
+    expect(p.identify).toHaveBeenCalledWith('user1', { status: 'active' }, expect.any(Object));
   });
 
   it('does nothing before init', async () => {
@@ -197,11 +205,11 @@ describe('group', () => {
     const obs = createObservability();
     const p = makeProvider();
     await obs.initObservability({ providers: [p], context: { locale: 'es' } });
-    await obs.group('account_id', 'client-1', { tier: 'gold' });
+    await obs.group('account_id', 'client-1', { category: 'gold' });
     expect(p.group).toHaveBeenCalledWith(
       'account_id',
       'client-1',
-      { tier: 'gold' },
+      { category: 'gold' },
       expect.objectContaining({ context: expect.objectContaining({ locale: 'es' }) }),
     );
   });
@@ -251,13 +259,29 @@ describe('groupSet', () => {
     const obs = createObservability();
     const p = makeProvider();
     await obs.initObservability({ providers: [p], context: { locale: 'es' } });
-    await obs.groupSet('account_id', 'client-1', { $name: 'Acme' });
+    await obs.groupSet('account_id', 'client-1', { category: 'gold' });
     expect(p.groupSet).toHaveBeenCalledWith(
       'account_id',
       'client-1',
-      { $name: 'Acme' },
+      { category: 'gold' },
       expect.objectContaining({ context: expect.objectContaining({ locale: 'es' }) }),
     );
+  });
+
+  it('does not send the organization name unless the host approves $name (ETP-4578, D6)', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.groupSet('account_id', 'client-1', { $name: 'Acme' });
+    expect(p.groupSet).toHaveBeenCalledWith('account_id', 'client-1', {}, expect.any(Object));
+  });
+
+  it('sends $name when the host adds it to the allowlist', async () => {
+    const obs = createObservability({ allowedKeys: ['$name'] });
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.groupSet('account_id', 'client-1', { $name: 'Acme' });
+    expect(p.groupSet).toHaveBeenCalledWith('account_id', 'client-1', { $name: 'Acme' }, expect.any(Object));
   });
 
   it('defaults properties to an empty object when omitted', async () => {
@@ -304,8 +328,21 @@ describe('captureException', () => {
     const obs = createObservability();
     const p = makeProvider();
     await obs.initObservability({ providers: [p] });
-    await obs.captureException(new Error('test'), { extra: 'info' });
-    expect(p.captureException).toHaveBeenCalledWith(expect.any(Error), { extra: 'info' }, expect.any(Object));
+    await obs.captureException(new Error('test'), { reason: 'info' });
+    expect(p.captureException).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Error', message: 'test' }),
+      { reason: 'info' },
+      expect.any(Object),
+    );
+  });
+
+  it('hands providers a sanitized summary, never the Error itself (ETP-4578)', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    const error = new Error('boom');
+    await obs.captureException(error);
+    expect(p.captureException.mock.calls[0][0]).not.toBe(error);
   });
 
   it('does nothing before init', async () => {
@@ -380,13 +417,13 @@ describe('callProvider error handling', () => {
     expect(logger.warn.mock.calls[0][0]).toContain('broken.track failed');
   });
 
-  it('uses "unknown-provider" when provider has no name', async () => {
+  it('uses "unknown-adapter" when provider has no name', async () => {
     const logger = { warn: vi.fn() };
     const obs = createObservability({ logger });
     const p = { enabled: true, track: vi.fn().mockRejectedValue(new Error('x')) };
     await obs.initObservability({ providers: [p], logger });
     await obs.track('event');
-    expect(logger.warn.mock.calls[0][0]).toContain('unknown-provider');
+    expect(logger.warn.mock.calls[0][0]).toContain('unknown-adapter');
   });
 
   it('handles logger without warn method', async () => {

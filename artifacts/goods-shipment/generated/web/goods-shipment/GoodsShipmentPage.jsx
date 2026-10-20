@@ -31,7 +31,7 @@ const statusField = 'documentStatus';
 
 // @sf-generated-start extraBadges:goodsShipment
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:goodsShipment
 
@@ -47,7 +47,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:goodsShipment
 
 // @sf-generated-start requiredHeaderFields:goodsShipment
-const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etblkpAccountingstatus', 'etblkpBulkposting', 'etgoCurrency'];
+const requiredHeaderFields = ['warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etgoCurrency'];
 // @sf-generated-end requiredHeaderFields:goodsShipment
 
 // @sf-generated-start addLineFields:goodsShipmentLine
@@ -184,6 +184,14 @@ export const api = {
     },
     {
       "entity": "goodsShipmentLine",
+      "field": "uOM",
+      "column": "C_UOM_ID",
+      "reference": "UOM",
+      "inputMode": "selector",
+      "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/uOM"
+    },
+    {
+      "entity": "goodsShipmentLine",
       "field": "project",
       "column": "C_Project_ID",
       "reference": "Project",
@@ -313,10 +321,12 @@ export const api = {
   },
   "labelOverrides": {
     "en_US": {
-      "EM_ETGO_Currency_ID": "Currency"
+      "EM_ETGO_Currency_ID": "Currency",
+      "C_UOM_ID": "Unit"
     },
     "es_ES": {
-      "EM_ETGO_Currency_ID": "Moneda"
+      "EM_ETGO_Currency_ID": "Moneda",
+      "C_UOM_ID": "Unidad"
     }
   }
 };

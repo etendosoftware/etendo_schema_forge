@@ -11,8 +11,9 @@ import { t } from '../../helpers/i18n.js';
  * The wizard is a single step: pick lines and quantities, then "Crear Devolución" posts
  * createReturn directly (no confirmation step, no prices). On success the sales return is
  * announced in ConfirmResultModal (type devolucionVenta, draft badge, "Ver devolución" opens
- * /return-material-receipt/<id>) instead of navigating away. A 409 over-return refusal closes
- * the wizard and shows the translated backend message.
+ * /return-material-receipt/<id>) instead of navigating away. The over-return refusal
+ * (com.etendoerp.go ReturnableQuantity: 422, error.code returnQuantityExceedsAvailable) closes the
+ * wizard and shows the translated backend message.
  *
  * No backend required — all API calls are intercepted after login() (LIFO order).
  * Copy is read from the locale JSON through t(), never hardcoded.
@@ -208,16 +209,15 @@ test.describe('Goods Shipment — Create Return wizard (one step)', () => {
     await expect(page).toHaveURL(/\/return-material-receipt\/ret-001/, { timeout: 8_000 });
   });
 
-  test('a 409 over-return refusal closes the wizard and shows the translated message', async ({ page }) => {
-    const messageParams = { requested: '5', product: 'Producto A', shipped: '5', available: '2' };
+  test('a 422 over-return refusal closes the wizard and shows the translated message', async ({ page }) => {
+    const messageParams = { requested: '5', product: 'Producto A', available: '2', total: '5' };
     await openShipmentWithReturnMock(page, {
-      status: 409,
+      status: 422,
       body: {
         error: {
-          status: 409,
-          message: 'Cannot return 5 of Producto A',
-          messageKeys: ['ETGO_ReturnQtyExceedsShipped'],
-          messageParams,
+          status: 422,
+          code: 'returnQuantityExceedsAvailable',
+          message: 'Cannot return 5 of Producto A: only 2 can still be returned from this line (5 on the source document).',
         },
       },
     });
@@ -225,7 +225,7 @@ test.describe('Goods Shipment — Create Return wizard (one step)', () => {
 
     await wizard.getByRole('button', { name: t('createReturn') }).click();
 
-    await expect(page.getByText(t('backendError.returnQtyExceedsShipped', messageParams))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(t('backendError.returnQuantityExceeds', messageParams))).toBeVisible({ timeout: 8_000 });
     await expect(wizard).toBeHidden();
     await expect(page.getByTestId('confirm-result-modal')).toHaveCount(0);
   });

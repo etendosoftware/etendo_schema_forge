@@ -482,7 +482,7 @@ export default function RecordCreateModal({
                 onClick={finishFromWindow}
                 disabled={!windowRecordId}
                 data-testid="record-create-finish"
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:bg-[hsl(var(--foreground))] enabled:hover:bg-[hsl(var(--accent-highlight))] enabled:hover:text-[hsl(var(--accent-highlight-foreground))]"
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:hover:bg-primary/90"
               >
                 {ui('done')}
               </button>
@@ -499,9 +499,11 @@ export default function RecordCreateModal({
                 variant, same menu dictionary — so the popup is not a lookalike of the
                 window but literally the same control.
               */}
-              <div className="flex items-center gap-2" data-testid="record-create-tabs">
-                {renderPrimaryTabButtons(target.tabsVariant, tabs, setActiveTab, activeTab, tMenu)}
-              </div>
+              {tabs.length > 1 && (
+                <div className="flex items-center gap-2" data-testid="record-create-tabs">
+                  {renderPrimaryTabButtons(target.tabsVariant, tabs, setActiveTab, activeTab, tMenu)}
+                </div>
+              )}
               {/*
                 Both panels stay MOUNTED — the inactive one is only hidden. Unmounting it
                 would fire EntityForm's registerFields cleanup and silently drop that tab's
@@ -624,7 +626,7 @@ export default function RecordCreateModal({
             onClick={createdRecord ? finish : submit}
             disabled={saving || loading || !FormComponent}
             data-testid={createdRecord ? 'record-create-finish' : 'record-create-submit'}
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:bg-[hsl(var(--foreground))] enabled:hover:bg-[hsl(var(--accent-highlight))] enabled:hover:text-[hsl(var(--accent-highlight-foreground))]"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:hover:bg-primary/90"
           >
             {resolveActionLabel({ ui, saving, createdRecord })}
           </button>

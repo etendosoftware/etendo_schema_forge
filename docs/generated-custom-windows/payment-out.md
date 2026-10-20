@@ -146,7 +146,7 @@ both sides plus the rate that was actually booked:
 
 ```
 Importe del pago
-− 21,34 $
+21,34 $   (default colour, no sign)
   (0,680272)  14,52 €
 ```
 
@@ -469,3 +469,53 @@ acceptance line about the "New" button staying visible does not apply to this wi
 
 Manual verification: open `/payment-out` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
 runs under the toolbar, above both the sidebar and the grid, across the full width of the card.
+
+## List summary panel (ETP-5778)
+
+The left panel of the Payment Out (Payments) list ("Pagado") is fed by `meta.summary`, which the backend computes over the
+**whole filtered set** (every page, every active filter), not over the rows loaded so far. It is identical on
+every page of the same query. While the summary is missing the panel shows a skeleton; the rows are never
+added up in the browser, because they may be in different currencies.
+
+- **Title:** fixed "Pagado" plus an info tooltip (same blue tooltip as the Cuentas "Saldo"). The old "este mes" wording is gone.
+- **Subtitle:** `<period> · <N> pagos`. The period is the active `paymentDate` filter: a preset shows its own label
+  ("Hoy", "Últimos 30 días", ...), no filter or "Cualquier fecha" shows "Todo el tiempo", and a custom range shows
+  `dd/mm/yyyy – dd/mm/yyyy`. N counts every non-voided payment in the period, drafts included.
+- **Total (Pagado):** deposited payments (`DEPOSITED_STATUSES`, which includes PPM), converted to the organization
+  currency at **today's rate**, as Cuentas does. A currency with no rate is left out of the total and flagged with
+  the "No incluye: ... (sin tasa de cambio)" warning.
+- **Pendiente / Por confirmar:** every non-deposited, non-voided payment (drafts and ETGOERR). Pendiente is converted;
+  Por confirmar is the count.
+- **Por método de pago:** deposited payments converted per method.
+- **Detalle por moneda:** the deposited payments of each currency in their original currency (never converted),
+  organization currency first, then by amount descending. Informational only: no hover, no click, no filtering. It is
+  always shown, even with a single currency.
+- **Voided payments (RPVOID) are excluded** from every bucket.
+- **`≈`:** shown (muted, in front of the amount) on the total, on Pendiente and on each method when a non-zero subtotal
+  in a currency other than the organization's was converted. "Detalle por moneda" and the grid rows never show it.
+- Each subtotal is converted and rounded separately, so the methods can add up to a cent away from the total.
+
+Implementation: `PaymentSidebar` in `PaymentHeaderTableBase.jsx` (shared by both windows), period text in
+`paymentSummaryPeriod.js`, shared pieces (`CurrencyBreakdown`, `InfoTooltipButton`, `buildBalanceDisplay`) in
+`components/currency-summary/`, which the Cuentas sidebar also uses.
+
+## Amount sign and colour — ETP-5728
+
+Payment Out amounts carry no sign and use the default (black) text colour (`hsl(var(--foreground))`),
+exactly like Payment In: the list Amount column (`PaymentHeaderTableBase.buildColumns`, including
+deposited/reconciled rows), the list sidebar hero ("Pagado", see the summary panel section) and the detail sidebar hero
+(`PaymentDetailSidebarBase`). Neither direction is green or red; the direction is conveyed by the
+window itself (Receipts vs Payments), not by a sign or a colour. `formatCurrency` still prints its own
+`-` for genuinely negative values; nothing is prefixed on top of it. See also `payment-in.md`.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- The activity history of the payment sidebar (`windows/custom/shared/PaymentDetailSidebarBase.jsx`) omits the "Asiento contabilizado" entry.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Default date filter: Last 30 days — ETP-5778
+
+The list opens with the date filter on "Últimos 30 días" (`window.listViewOptions.defaultDatePreset: "last30"` in `decisions.json`, applied to `dateFilterKey: paymentDate`). Choosing "Cualquier fecha"/"Todo el tiempo" is honoured and kept while the user stays in the window; a saved session view wins over the default. See `docs/decisions-reference.md` (Default date preset).

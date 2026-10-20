@@ -25,7 +25,7 @@ const statusField = 'documentStatus';
 
 // @sf-generated-start extraBadges:gLJournal
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', visibleWhenCapability: 'showAccountingFields' },
 ];
 // @sf-generated-end extraBadges:gLJournal
 
@@ -46,7 +46,7 @@ const draftMode = {
 // @sf-generated-end draftMode:gLJournal
 
 // @sf-generated-start requiredHeaderFields:gLJournal
-const requiredHeaderFields = ['description', 'accountingDate', 'period', 'currency', 'opening', 'multigeneralLedger'];
+const requiredHeaderFields = ['description', 'accountingDate', 'period', 'opening', 'multigeneralLedger'];
 // @sf-generated-end requiredHeaderFields:gLJournal
 
 // @sf-generated-start addLineFields:gLJournalLine

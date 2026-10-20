@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal';
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
+import { documentPeriodDate } from '@/lib/periodNotAvailable.js';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useConfirmWithCredit } from './useConfirmWithCredit';
 
@@ -98,6 +99,7 @@ export default function ConfirmWithCreditButtonBase({
           defaultCreateInvoice={!isFullyInvoiced}
           rectifiableInvoicesUrl={rectifiableInvoicesUrl}
           token={token}
+          periodDate={documentPeriodDate(data)}
           title={confirmModalTitle}
           docInfo={{ bpName: data?.['businessPartner$_identifier'], documentNo: data?.documentNo }}
           infoRowPre={infoRowPre}

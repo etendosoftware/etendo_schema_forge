@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { ZoomIn, ZoomOut, Maximize2, Upload, Trash2, X } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, Upload, Trash2, X } from 'lucide-react';
 import { Dialog, DialogPortal, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import PdfViewer, { usePdfZoom } from './PdfViewer.jsx';
@@ -112,7 +112,7 @@ function LightboxBody({ file, onReplace, onDelete, actionsDisabled }) {
             title={ui('pdfViewerFitToPage')}
             data-testid="file-lightbox-fit"
           >
-            <Maximize2 size={18} data-testid="Maximize2__c75ca8" />
+            <Maximize size={18} data-testid="Maximize__c75ca8" />
           </button>
           <button
             type="button"
@@ -175,6 +175,7 @@ function LightboxBody({ file, onReplace, onDelete, actionsDisabled }) {
             url={file.objectUrl}
             zoom={zoom}
             hideToolbar
+            fitIcon={Maximize}
             onNumPages={setPageCount}
             data-testid="PdfViewer__c75ca8" />
         )}

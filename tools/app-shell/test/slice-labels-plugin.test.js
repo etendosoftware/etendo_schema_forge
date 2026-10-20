@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import sliceLabelsPlugin from '../vite-plugins/slice-labels.js';
+import sliceLabelsPlugin, { sliceAllLabels } from '../vite-plugins/slice-labels.js';
 
 // ETP-4300: the plugin is a thin adapter — it wires the pure `sliceAll()` slicer
 // into Vite's `buildStart`. These smoke tests assert the plugin contract without
@@ -16,6 +16,17 @@ describe('sliceLabelsPlugin', () => {
     const plugin = sliceLabelsPlugin();
     assert.equal(typeof plugin.buildStart, 'function');
     assert.equal(plugin.buildStart.constructor.name, 'AsyncFunction');
+  });
+
+  // ETP-5695 — vitest imports the slices too, so its global setup runs the same slicer
+  // instead of depending on an earlier `vite build` (pwa.test.js used to provide one in CI).
+  it('exports the slicer that vitest\'s global setup runs before any test file', async () => {
+    assert.equal(typeof sliceAllLabels, 'function');
+    assert.equal(sliceAllLabels.constructor.name, 'AsyncFunction');
+    const setup = await readFile(new URL('../src/test/global-setup.js', import.meta.url), 'utf8');
+    assert.match(setup, /import \{ sliceAllLabels \} from '\.\.\/\.\.\/vite-plugins\/slice-labels\.js'/);
+    const config = await readFile(new URL('../vitest.config.js', import.meta.url), 'utf8');
+    assert.match(config, /globalSetup: \['\.\/src\/test\/global-setup\.js'\]/);
   });
 
   // ETP-4830 — buildStart alone only re-slices once, at dev-server boot. Editing a

@@ -53,7 +53,15 @@ max_steps = 25
 # `resultBytes`, truncated or not.
 max_result_chars = 20000
 
+# Attempts in flight per target (D44) — read by `make mcp-compare` ONLY
+# (default 4). `make mcp-test` ignores it and stays sequential unless
+# CONCURRENCY= (--concurrency) is given on the command line.
+# concurrency = 4
+
 # --- targets -----------------------------------------------------------------
+# `platform` says what a target IS ("etendo-go" | "holded"); it is required to
+# take part in `make mcp-compare` and never guessed. A target may also set
+# `concurrency` to CAP the global value lower (rate limits), never higher.
 # `bearer` and `oauth` (authorization code + PKCE) are implemented.
 # `oauth_client_credentials` is NOT: there is no IdP to test it against, and an
 # untested auth path is worse than an absent one — it raises rather than
@@ -71,10 +79,12 @@ max_result_chars = 20000
 # direct to it is what skips the mechanism.
 url  = "http://localhost:3100/mcp"
 auth = "oauth"
+platform = "etendo-go"
 
 [targets.experimental]
 url  = "https://go.experimental.etendo.cloud/mcp"
 auth = "oauth"
+platform = "etendo-go"
 # Optional. Defaults to the scopes the authorization server advertises.
 scopes = "etendo:read etendo:write"
 # Optional. The loopback redirect port, which is registered with the server and
@@ -84,6 +94,17 @@ redirect_port = 8765
 [targets.staging]
 url  = "https://go.staging.etendo.cloud/mcp"
 auth = "oauth"
+platform = "etendo-go"
+
+# The reference for `make mcp-compare TARGETS=local,holded` (plan §5.2). Decided
+# (plan §9): the Holded API key as a bearer first. UNVERIFIED against the live
+# server as of 2026-10-14 — if Holded rejects it, switch to `auth = "oauth"`
+# (drop token_env) and record which one worked here.
+[targets.holded]
+url  = "https://mcp.holded.com/mcp"
+auth = "bearer"
+token_env = "MCP_TEST_TARGET_HOLDED_TOKEN"
+platform = "holded"
 
 # A target you already hold a token for. No credentials in config: the token
 # lives in the environment and only its variable name is written down.

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/warehouse/WarehouseSummary.jsx
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => params ? `${key}(${JSON.stringify(params)})` : key,
   useMenuLabel: () => (key) => key,
@@ -91,5 +92,22 @@ describe('WarehouseSummary', () => {
   it('renders without crashing when data prop is undefined', () => {
     useWarehouseStock.mockReturnValue({ loading: true, error: null, products: [], transactions: [] });
     expect(() => render(<WarehouseSummary token="t" apiBaseUrl="/api" />)).not.toThrow();
+  });
+
+  it('ignores no-cost products (null valuation counts as 0) and never yields NaN', () => {
+    useWarehouseStock.mockReturnValue({
+      loading: false,
+      error: null,
+      products: [
+        { qty: 5, valuation: null },
+        { qty: 2, valuation: undefined },
+        { qty: 3, valuation: 250 },
+      ],
+      transactions: [],
+    });
+    render(<WarehouseSummary data={{ id: 'wh-1' }} token="t" apiBaseUrl="/api" />);
+    expect(formatCurrency).toHaveBeenCalledWith('USD', 250);
+    expect(formatCurrency).not.toHaveBeenCalledWith('USD', NaN);
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
   });
 });

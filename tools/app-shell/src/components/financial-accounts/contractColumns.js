@@ -48,6 +48,9 @@ export function getContractGridColumns(entityName) {
       // header into N independently sortable segments. Only the Tipo column uses it here
       // (type + iBAN); every other column leaves it undefined.
       multiField: f.multiField,
+      // ETP-5684 — the capability gate from decisions.json, so a hand-rolled grid can hide a
+      // column (e.g. the reconciliations' `posted`) from a role without that capability.
+      visibleWhenCapability: f.visibleWhenCapability,
     }));
 }
 

@@ -75,6 +75,12 @@ No current evidence shows:
 
 Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears only when exactly one row is selected — hidden with 0 or 2+ rows selected. In the detail topbar, `Copy link` is visible whenever the record has a persisted `recordId` (not the unsaved `'new'` sentinel), with no selection gate since detail always represents a single record. Both copy `{origin}/{windowName}/{recordId}` to the clipboard, show a `Link copied` / `Enlace copiado` toast, and display a `Copy link` / `Copiar enlace` tooltip on hover. The legacy dead link icon previously shown in the idle-state (no-selection) grid toolbar is now hidden via the `hideLink` prop passed to `<ListView>`.
 
+## MCP agent actions — ETP-5709
+
+The MCP publishes `documentAction`, `createPurchaseInvoice` and `cloneRecord` for this window (declared by `GoodsReceiptHeaderHandler`). `documentAction` is declared with `docAction` restricted to `CO` (complete the draft receipt/shipment: DR to CO; no void or any other action is offered, and a completed document is corrected with a return). It is declared because AD hides `DocAction` on this window (`IsDisplayed=N`), which made the MCP list it as not invokable although the call works; a declared contract replaces that listing. The SPA posts the same flat `{docAction: 'CO'}` body, and contract validation runs only on the MCP path. `createPurchaseInvoice` takes optional `receiptIds[]` (invoice several receipts of one partner together), optional `priceListId` and optional `lines[{receiptLineId, quantity}]` for partial invoicing, and creates AND completes a purchase invoice in the same call. Source-document preconditions: the source must be completed (`CO`), otherwise the call answers 400 naming the document and its status and creates nothing. A closed (`CL`) source is refused on purpose, not by omission: a closed order has nothing pending (closing sets ordered = delivered) and a closed receipt/shipment is not a supported source; the 400 names the number and the status. This applies to the receipt and to every id of `receiptIds`. The classic `invoicefromshipment` button is redirected to `createPurchaseInvoice`: on a purchase receipt the classic process creates a SALES invoice, does not mark the receipt as invoiced and can report success without creating anything. (`goods-shipment` keeps it: it is the legitimate sales path.) The receipt itself, when generated from a purchase order, uses the draft-aware pending quantity described in the purchase-order guide. `cloneRecord` clones into a NEW DRAFT with a new document number and none of the source's related documents (declared, no parameters; calling it twice creates two copies) The copied lines are reset to not-invoiced (`QtyInvoiced = 0`, `IsInvoiced = N`, in `CloneShipmentHook`): a clone of a fully invoiced document no longer looks invoiced although it has no invoice line. Reference: `modules/com.etendoerp.go/docs/neo-headless.md` (ETP-5709 paragraphs of §4.12.9 and the `actions` table). `createPurchaseInvoice` invoices only the pending quantity of each receipt line (draft invoices count) and answers 400 when nothing is pending, for a single receipt and for `receiptIds` alike; an explicit `lines[{receiptLineId, quantity}]` quantity above what is pending for that line (or for a line with nothing pending) is a 400 naming the line and its pending quantity, never a silent cap.
+
+**Partial invoicing is scoped to the receipt's own lines (ETP-5709).** `createPurchaseInvoice` emits ONE entry per receipt line, bound to that receipt line (`shipmentInOutLine`), at the explicit `lines` quantity or the line's pending quantity. Before this, entries were folded per order line without that binding and the native process replaced them with every not-yet-invoiced receipt line of the order line at full quantity: a receipt lowered to 3 with `lines:[{receiptLineId, quantity:1}]` produced an invoice of 3, and other receipts of the same order line were dragged into the invoice. Now a receipt of 3 with quantity 1 gives an invoice of 1 and other receipts are untouched; the multi-receipt (`receiptIds`) and no-purchase-order paths already honoured `lines`. The SPA bodies (`{priceListId}`, `{receiptIds, priceListId}`) carry no `lines`, so they invoice each line's pending quantity as before. An invoice generated from a receipt cannot have its quantities edited afterwards (reactivating it refuses with "No se puede modificar la cantidad de una línea de factura reactivada que esté relacionada con una línea de albarán"), so a partial quantity has to be given at creation.
+
 ## Gap assessment
 
 - The business semantics suggest that confirming a goods receipt should finalize vendor delivery intake, but the current evidence only proves draft processing is wired through `documentAction=CO`; it does not prove the exact status transitions, stock effects, or downstream accounting effects after confirmation.
@@ -678,3 +684,76 @@ now a thin wrapper over `RelatedDocumentsSection`) and the preview's `RelatedDoc
 purchase invoices and return-to-vendor shipments (`linkedOrders` / `linkedInvoices` / `linkedReturns`).
 The backend injects these on the detail GET only, so the preview no longer reads them from the list
 row (which left the card empty): it loads the detail record itself. See `docs/ui-customization.md` §7.a.
+
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped). The custom list columns in `windows/custom/goods-receipt/index.jsx` (`HEADER_COLUMNS`) carry the same gate — they are what the list actually renders.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Unit column in the lines grid (ETP-5696)
+
+The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. movida** and before **Cant. pedido**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
+
+- **Declaration (`decisions.json`, entity `lines`, field `uOM`):** `visibility: "readOnly"`, `grid: true`, `gridOrder: 3 (all four grid columns now carry an explicit `gridOrder`: product 1, movementQuantity 2, uOM 3, orderQuantity 4)`, `gridReadOnly: true`, `display: "tag"` — it had no visibility declared (`form: false`). The column is the real AD column `C_UOM_ID`, not a synthetic one. `window.labelOverrides` carries `C_UOM_ID` → `Unidad` (es_ES) / `Unit` (en_US), because the AD label is the untranslated "UOM".
+- **Where the value comes from:** the unit of the line's product. In the add row the pill appears as soon as the product is chosen: this window's line callout answers `uOM` with an empty object, so the unit is taken from the selected item's `_aux` (`_UOM`, serialised as `UOM(<id>) (name: <name>)`) by `lib/auxReference.js`; the backend then stores the same unit on save.
+- **Width:** a `display: "tag"` column is fixed at 144px and never grows (`lib/linesColumnWidth.js`), so the space goes to Product/Description; `columnWidth` in `decisions.json` overrides the pixel value.
+- **Read-only:** the unit cannot be edited in the line (inline edit or add row); it only changes when the line's product changes.
+- **Not part of this change:** no sorting or filtering was added — the inline lines grid offers neither for any column.
+- **Generic mechanism:** `display: "tag"` (`DataTable.cellRenderers.jsx` `renderNeutralTagCell`, `InlineLinesPanel` `ReadCell`, `DataTable` `renderDerivedAddCell`), the add-row fill from the selector's `_aux` (`lib/auxReference.js`) and the fixed width are documented in `docs/decisions-reference.md` (`display`).
+- **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
+
+**Manual verification:** open a draft receipt; confirm `Unidad` sits between Cant. movida and Cant. pedido; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## Return to vendor from the receipt (`createPurchaseReturn`) — ETP-5711
+
+`createPurchaseReturn` is now declared to MCP by `GoodsReceiptHeaderHandler.actionContracts()` (after
+`createPurchaseInvoice`). Body, both optional: `lines: [{lineId, returnQuantity}]` and `reason` (kept as the
+return's description). **Omit `lines` to return everything still returnable**; with `lines`, exactly those (a line
+listed twice counts both; a `lineId` that is not on the receipt is a 422 `returnLineNotInDocument`). The receipt must
+be completed (422 `sourceNotCompleted`). The return is **always left in draft**; the 201 answers `{id, documentNo,
+documentStatus, lines:[{id, product, productName, returnedQuantity, originalQuantity, sourceLineId}]}` so the linkage
+can be reported. More than is returnable is a 422 `returnQuantityExceedsAvailable` and nothing is created; nothing
+left at all is 422 `nothingLeftToReturn`. The SPA wizard sends explicit lines and is unchanged; a second partial return
+now works. Cap rule and error shape: `return-to-vendor-shipment.md` and neo-headless.md §4.12.32.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## Import order lines into a draft goods receipt over MCP — ETP-5713
+
+An agent fills a DRAFT goods receipt from purchase orders, the way the window's "Add from order" modal does, with three declared
+actions on `goodsReceipt` (`GoodsReceiptHeaderHandler` through `ImportOrderLinesIntoInOutHandler`): `availableOrders` lists the
+completed purchase orders of the goods receipt's business partner and currency that still have quantity to receive; `availableOrderLines`
+(`{orderId}`) lists an order's pending lines with their `pendingQuantity`; `importOrderLines`
+(`{orderId, lines?:[{sourceLineId, quantity}]}`) adds them. The `id` of every call is the draft goods receipt.
+`lines` omitted imports everything still pending; given, exactly those lines (a line listed twice counts both).
+
+- **Cap = pending including drafts.** pending = ordered - delivered - what any DRAFT goods receipt (this one included) already
+  holds. More than that on any line is a 422 `importQuantityExceedsPending` (naming the product, the requested and the
+  pending quantity) and **nothing is created**; the same order line can be imported again while it stays under the cap.
+  The order's delivered quantity only moves when the goods receipt is completed, so an import lowers the pending, not the delivered.
+- **Preconditions (422, before anything is written):** the goods receipt must be a draft (`importTargetNotDraft`), the order
+  completed (`importSourceNotCompleted`), of the same business partner (`importBusinessPartnerMismatch`), currency
+  (`importCurrencyMismatch`) and direction (`importDirectionMismatch`). A stockable line needs an active storage bin in
+  the goods receipt's warehouse (`importNoStorageBin`).
+- **Header link.** The goods receipt's `salesOrder` is set when every line it holds comes from that one order (the order's
+  Documents panel finds the goods receipt through it) and left empty when several orders are mixed; a link set by an earlier
+  import is cleared when a second order joins. The answer reports `headerLinked` and `salesOrder`.
+- **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?}}`.
+- The classic `Create Lines From` button is redirected to `importOrderLines` through `MCP_CONFIG`. `createGoodsReceipt` on the purchase order remains the
+  one-step alternative. The spec prompt (`agent-prompts/goods-receipt/spec.md`) describes the flow.
+
+The window itself is unchanged: its modal still posts one line at a time through the lines CRUD (uncapped by the server).
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.34.
+
+Discovery and edge cases of the goods receipt import (ETP-5713 review):
+- `availableOrders` is a bounded scan: the 200 most recent completed purchase orders of the partner, client and currency, at most 50 returned. Every `available*` answer carries `hasMore`, `limit` and `scanLimit`; `hasMore:true` means the list may be incomplete (a purchase order not listed can still be imported when its id is known).
+- An over-delivered order line (ordered 5, delivered 7) is neither listed nor imported (its "pending" would be -2); a negative order line keeps its negative pending. The one-step `createGoodsReceipt` shares the underlying factory and still has that flip (follow-up).
+- `headerLinked` / `salesOrder` report the truth: if the header already links purchase order X and the lines come only from purchase order Y, the answer is `headerLinked:false, salesOrder:X` and the link is not changed.
+- A goods receipt or purchase order of another client answers 404 exactly like a missing one.
+- The source lines are locked with `FOR NO KEY UPDATE` (ascending ids), then the order lines are refreshed before the pending is read.

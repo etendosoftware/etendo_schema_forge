@@ -28,6 +28,8 @@ let activeLocale = 'es_ES';
 
 const navigateMock = vi.fn();
 
+// Receipt tab out of scope here — stub the attachments boundary (see the helper).
+vi.mock('@/components/attachments', () => import('../../../__tests__/testUtils/attachmentsBoundaryMock.js'));
 vi.mock('@/i18n', () => ({ useUI: () => activeUi, useLocaleSwitch: () => ({ locale: activeLocale }) }));
 
 // ETP-5584 — the TopBar kebab's two contexts (favourites, support chat), shared stand-in.

@@ -58,6 +58,12 @@ Use this window to register and complete outbound customer shipments. The functi
 - No explicit shipment-level tax, discount, or financial recalculation behavior is visible in the current evidence. The only observed financial reaction is invoice preview total calculation based on selected shipment lines and sales-order prices.
 - Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears only when exactly one row is selected — hidden with 0 or 2+ rows selected. In the detail topbar, `Copy link` is visible whenever the record has a persisted `recordId` (not the unsaved `'new'` sentinel), with no selection gate since detail always represents a single record. Both copy `{origin}/{windowName}/{recordId}` to the clipboard, show a `Link copied` / `Enlace copiado` toast, and display a `Copy link` / `Copiar enlace` tooltip on hover. The legacy dead link icon previously shown in the idle-state (no-selection) grid toolbar is now hidden via the `hideLink` prop passed to `<ListView>`.
 
+## MCP agent actions — ETP-5709
+
+The MCP publishes `documentAction` and `cloneRecord` for this window (declared by `GoodsShipmentHeaderHandler`). `documentAction` is declared with `docAction` restricted to `CO` (complete the draft receipt/shipment: DR to CO; no void or any other action is offered, and a completed document is corrected with a return). It is declared because AD hides `DocAction` on this window (`IsDisplayed=N`), which made the MCP list it as not invokable although the call works; a declared contract replaces that listing. The SPA posts the same flat `{docAction: 'CO'}` body, and contract validation runs only on the MCP path. `cloneRecord` clones into a NEW DRAFT with a new document number and none of the source's related documents (declared, no parameters; calling it twice creates two copies) The copied lines are reset to not-invoiced (`QtyInvoiced = 0`, `IsInvoiced = N`, in `CloneShipmentHook`): a clone of a fully invoiced document no longer looks invoiced although it has no invoice line. `createDraftInvoice` on this window (shipment to sales invoice, classic `Invoicefromshipment`) is the legitimate sales path and is NOT redirected; it stays served but undeclared. Reference: `modules/com.etendoerp.go/docs/neo-headless.md` (ETP-5709 paragraphs of §4.12.9). The shipment-to-sales-invoice call (`createDraftInvoice` on this window, served but undeclared): a multi-shipment call skips lines already invoiced and answers 400 when nothing is pending, and an explicit `lines` quantity above the pending one is a 400 naming the line. With no `lines` on a single shipment with a linked order, the quantity is decided by Etendo core, which invoices the shipped, not-yet-invoiced quantity (an order of 5 with a shipment of 3 invoices 3, verified live).
+
+**Invoice from ONE shipment with a linked order is scoped to that shipment (ETP-5709).** `createDraftInvoice` emits ONE entry per shipment line, bound to it (`shipmentInOutLine`), at the line's pending quantity (draft invoices count) or the explicit `lines` quantity, and creates the invoice header/pricing through the order as before. Order of 5, shipment of 3 completed, body `{priceListId}` still gives an invoice of 3. Changed behaviour: invoicing a shipment that has nothing pending now answers 400 `No hay líneas pendientes de facturar en este albarán` and creates nothing (it used to invoice the order line's remaining, never shipped quantity), and invoicing shipment A of an order shipped in A and B no longer invoices B. The bulk popup with one selected shipment takes this same path. An invoice generated from a shipment cannot have its quantities edited afterwards (reactivating it refuses), so give any partial quantity at creation. `createDraftInvoice` is now declared to the MCP (`GoodsShipmentHeaderHandler.actionContracts()`, optional `shipmentIds[]`, `priceListId` and `lines[{shipmentLineId, quantity}]`; the SPA bodies satisfy it), and the classic `Invoicefromshipment` button is redirected to it through MCP_CONFIG, because the classic process bypasses the guards above. The shipment(s) must be completed (400 naming number and status, nothing created); a closed (`CL`) shipment is refused on purpose, as it is not a supported source. A partial quantity is honoured exactly at creation.
+
 ## Gap assessment
 
 - **Resolved by ETP-5429** — the return workflow is fully backed by stable observed behavior: `createReturn` (called from the now-shared `tools/app-shell/src/components/contract-ui/CreateReturnWizard.jsx`, wrapped by `ReturnWizard.jsx`) creates a real `return-material-receipt` document end-to-end, and, since ETP-5729, a second return of the same shipment allowed for the quantity that remains, with a translated 409 only when the request exceeds it (see the ETP-5729 section below). The amount-column pricing of the old step 2 was removed in ETP-5729. The related-documents tab also correctly surfaces the created return receipt back on the source shipment (`RelatedDocuments.jsx`'s `returnReceipts` chip, confirmed populated by the backend). No longer a gap.
@@ -428,6 +434,79 @@ toolbar row with clear space between "Filtros" and the sort button; narrow the w
 and confirm the filter buttons wrap onto a second line while the actions stay on the right with
 the same gap.
 
+## Accounting visibility — "Show Accounting Fields" (ETP-5684)
+
+A role whose `capabilities.showAccountingFields` is not `true` (`AD_Role.EM_ETGO_Show_Acct_Fields`, derived from the Finance template; admins and client admins always have it) sees no posting state and no posting action here.
+
+- Contabilizar / Descontabilizar are hidden from the form kebab, the row kebab and the bulk toolbar by the shared renderer gate (no declaration needed).
+- The `posted` field carries `"visibleWhenCapability": "showAccountingFields"` in `decisions.json`, so the list column and the form status pill are hidden, and `ListView` drops "Contabilizado" from the advanced filter, the sort menu and the export (a restored filter/sort on it is stripped). The custom list columns in `windows/custom/goods-shipment/index.jsx` (`COLUMNS`) carry the same gate.
+
+Full convention: `docs/ui-customization.md` §5, *Posting actions follow "Show Accounting Fields"*.
+
+## Unit column in the lines grid (ETP-5696)
+
+The lines grid shows the **unit of measure** of every line in a new read-only column, `Unidad` / `Unit`, placed right after **Cant. movida** and before **Cant. pedido**. It is drawn as the same grey pill the "Estado doc." column uses (`StatusTag`, neutral tone fixed — never coloured by the value) with the unit's name (e.g. `Unidad`, `Centimeter`); a line with no product shows nothing (and the add row keeps its usual dash).
+
+- **Declaration (`decisions.json`, entity `lines`, field `uOM`):** `visibility: "readOnly"`, `grid: true`, `gridOrder: 3 (all four grid columns now carry an explicit `gridOrder`: product 1, movementQuantity 2, uOM 3, orderQuantity 4)`, `gridReadOnly: true`, `display: "tag"` — it was `system` (hidden). The unit is also available in the line form (`GoodsShipmentLineForm.jsx`). The column is the real AD column `C_UOM_ID`, not a synthetic one. `window.labelOverrides` carries `C_UOM_ID` → `Unidad` (es_ES) / `Unit` (en_US), because the AD label is the untranslated "UOM".
+- **Where the value comes from:** the unit of the line's product. In the add row the pill appears as soon as the product is chosen: this window's line callout answers `uOM` with an empty object, so the unit is taken from the selected item's `_aux` (`_UOM`, serialised as `UOM(<id>) (name: <name>)`) by `lib/auxReference.js`; the backend then stores the same unit on save.
+- **Width:** a `display: "tag"` column is fixed at 144px and never grows (`lib/linesColumnWidth.js`), so the space goes to Product/Description; `columnWidth` in `decisions.json` overrides the pixel value.
+- **Read-only:** the unit cannot be edited in the line (inline edit or add row); it only changes when the line's product changes.
+- **Not part of this change:** no sorting or filtering was added — the inline lines grid offers neither for any column.
+- **Generic mechanism:** `display: "tag"` (`DataTable.cellRenderers.jsx` `renderNeutralTagCell`, `InlineLinesPanel` `ReadCell`, `DataTable` `renderDerivedAddCell`), the add-row fill from the selector's `_aux` (`lib/auxReference.js`) and the fixed width are documented in `docs/decisions-reference.md` (`display`).
+- **MCP:** unchanged for this window — `etendo_create` of a line without a unit returns the product's unit; changing the product of an existing line through `etendo_update` is rejected by the server (`Unit of Measure mismatch`), a pre-existing behaviour (see `docs/plans/2026-10-15-etp-5696-unified-product-sheet-and-uom-column.md` §8.9).
+
+**Manual verification:** open a draft shipment; confirm `Unidad` sits between Cant. movida and Cant. pedido; add a line choosing a product whose unit is not the default (e.g. Teclado 01 → `Centimeter`): the pill appears as soon as the product is chosen and the saved line keeps it; edit a line's product and confirm the unit follows (the unit refreshes right after the change); a line with no product shows no pill.
+
+## Return from the shipment (`createReturn`) — ETP-5711
+
+`createReturn` is now declared to MCP by `GoodsShipmentHeaderHandler.actionContracts()` (after `createDraftInvoice`).
+Same contract as `createPurchaseReturn` on the goods receipt: optional `lines: [{lineId, returnQuantity}]` and
+`reason`; omit `lines` to return everything still returnable; the return (`return-material-receipt`) is always left in
+draft and the 201 lists its lines with their `sourceLineId`. The old 409 "A return already exists for shipment" is gone
+(it blocked a second partial return); the cap is *returnable = shipped − what non-voided returns, drafts included,
+already hold*, refused with 422 `returnQuantityExceedsAvailable` / `nothingLeftToReturn`. See
+`return-material-receipt.md` and neo-headless.md §4.12.32.
+
+## Period not open (ETP-5577)
+
+A refusal because the document's date has no open accounting period (`PeriodNotAvailable`) reads "El período contable de la fecha del documento no está abierto." The Confirm modal (form and grid row) shows the refusal under its error with an **Ir al calendario** link, dated by the movement date. See `calendar.md` ("New productive tenants start with every period never-opened") for the recovery rules: the action opens `/calendar/<yearId>` of the fiscal year containing the date, or sends the owner to the calendar review while it is pending.
+
+## Import order lines into a draft goods shipment over MCP — ETP-5713
+
+An agent fills a DRAFT goods shipment from sales orders, the way the window's "Add from order" modal does, with three declared
+actions on `goodsShipment` (`GoodsShipmentHeaderHandler` through `ImportOrderLinesIntoInOutHandler`): `availableOrders` lists the
+completed sales orders of the goods shipment's business partner and currency that still have quantity to ship; `availableOrderLines`
+(`{orderId}`) lists an order's pending lines with their `pendingQuantity`; `importOrderLines`
+(`{orderId, lines?:[{sourceLineId, quantity}]}`) adds them. The `id` of every call is the draft goods shipment.
+`lines` omitted imports everything still pending; given, exactly those lines (a line listed twice counts both).
+
+- **Cap = pending including drafts.** pending = ordered - delivered - what any DRAFT goods shipment (this one included) already
+  holds. More than that on any line is a 422 `importQuantityExceedsPending` (naming the product, the requested and the
+  pending quantity) and **nothing is created**; the same order line can be imported again while it stays under the cap.
+  The order's delivered quantity only moves when the goods shipment is completed, so an import lowers the pending, not the delivered.
+- **Preconditions (422, before anything is written):** the goods shipment must be a draft (`importTargetNotDraft`), the order
+  completed (`importSourceNotCompleted`), of the same business partner (`importBusinessPartnerMismatch`), currency
+  (`importCurrencyMismatch`) and direction (`importDirectionMismatch`). A stockable line needs an active storage bin in
+  the goods shipment's warehouse (`importNoStorageBin`).
+- **Header link.** The goods shipment's `salesOrder` is set when every line it holds comes from that one order (the order's
+  Documents panel finds the goods shipment through it) and left empty when several orders are mixed; a link set by an earlier
+  import is cleared when a second order joins. The answer reports `headerLinked` and `salesOrder`.
+- **Answer:** `{data:{importedCount, lines:[{id, sourceLineId, product, productName, quantity}], headerLinked, salesOrder?}}`.
+- The classic `Create Lines From` button is redirected to `importOrderLines` through `MCP_CONFIG`. `createShipment` on the sales order remains the
+  one-step alternative. The spec prompt (`agent-prompts/goods-shipment/spec.md`) describes the flow.
+
+The window itself is unchanged: its modal still posts one line at a time through the lines CRUD (uncapped by the server).
+Reference: `modules/com.etendoerp.go/docs/neo-headless.md` §4.12.34.
+
+**Follow-up:** the SPA's sales shipment modal (`ImportFromSalesOrderModal`) does not link the header `salesOrder`, unlike the receipt one; the import action does. Not changed here.
+
+Discovery and edge cases of the goods shipment import (ETP-5713 review):
+- `availableOrders` is a bounded scan: the 200 most recent completed sales orders of the partner, client and currency, at most 50 returned. Every `available*` answer carries `hasMore`, `limit` and `scanLimit`; `hasMore:true` means the list may be incomplete (a sales order not listed can still be imported when its id is known).
+- An over-delivered order line (ordered 5, delivered 7) is neither listed nor imported (its "pending" would be -2); a negative order line keeps its negative pending. The one-step `createShipment` shares the underlying factory and still has that flip (follow-up).
+- `headerLinked` / `salesOrder` report the truth: if the header already links sales order X and the lines come only from sales order Y, the answer is `headerLinked:false, salesOrder:X` and the link is not changed.
+- A goods shipment or sales order of another client answers 404 exactly like a missing one.
+- The source lines are locked with `FOR NO KEY UPDATE` (ascending ids), then the order lines are refreshed before the pending is read.
+
 ## Create return — single step and repeat returns by quantity — ETP-5729
 
 **One step (QA CP-15).** The shared `CreateReturnWizard.jsx` used to have a read-only step 2
@@ -442,28 +521,17 @@ the backend per line. `fetchPrices`, `showAmountColumn`, `docTypeLabelKey` and
 `docTypeDescriptionKey` are gone from the wizard API. **The wizard is shared with goods-receipt
 (`PurchaseReturnWizard.jsx`), so the purchase return dialog lost its step 2 too.**
 
-**Second return from the same shipment (QA CP-12) — allowed, capped by quantity.** The
-"a return already exists" 409 is gone (`findExistingReturnDocumentNo` / `ETGO_ReturnAlreadyExists`
-removed from `NeoReturnReceiptService`, and `backendError.returnAlreadyExistsForShipment` from the
-SPA). A shipment is returned like it is invoiced: as many times as needed, for whatever quantity
-remains. Per shipment line, returnable = shipped − every non-voided return line pointing at it
-(**draft returns count**, voided ones never do) — the rule `canCreateReturn` and the wizard's
-`availableShipmentLines` quantities already displayed. Since ETP-5729 the backend enforces it, in
-com.etendoerp.go `ReturnableQuantityGuard`, on every sales-return write path and every channel
-(REST, batch, MCP): the goods-shipment `createReturn` action, return-material-receipt
-`importShipmentLines`, and a return-line create/edit (editing a draft return line excludes the
-line's own current quantity). An excess answers 409 `error.code = "RETURN_QTY_EXCEEDS_SHIPPED"`,
-`messageKeys = ["ETGO_ReturnQtyExceedsShipped"]`, `messageParams = { product, requested,
-available, shipped, sourceLineId }`; `backendErrors.js` maps it to
-`backendError.returnQtyExceedsShipped` ("No se pueden devolver {requested} de {product}: de lo
-enviado ({shipped}) solo quedan {available} por devolver, contando también las devoluciones en
-borrador." / "Cannot return {requested} of {product}: of the {shipped} shipped, only {available}
-can still be returned, counting draft returns too."; es_AR carries the same text — es_AR does
-**not** fall back to es_ES, a missing key there renders the backend English). `createReturn` also refuses a request with
-no line of the shipment (400 "No valid lines to return") before creating the header, so a refused
-request never leaves an empty return. On a 409 the dialog **closes** and the toast shows the
-message — its quantities were stale, and reopening it reloads what is still returnable. Any other
-error keeps the dialog open so the user can adjust the lines or cancel.
+**Second return from the same shipment (QA CP-12) — allowed, capped by quantity.** The server
+side is ETP-5711 (see *Return from the shipment (`createReturn`) — ETP-5711* above and
+`return-material-receipt.md`): the "a return already exists" 409 is gone and every return path is
+capped at *returnable = shipped − what non-voided returns, drafts included, already hold*, refused
+with 422 `returnQuantityExceedsAvailable` / `nothingLeftToReturn` and translated by the SPA
+(`backendError.returnQuantityExceeds`, `backendError.returnNothingLeftOnLine`,
+`backendError.returnNothingLeft`). What ETP-5729 adds is the wizard's reaction: on one of those two
+refusals the dialog **closes** and the toast shows the translated message — its quantities were
+stale (another return, a draft one included, took them since it loaded), and reopening it reloads
+what is still returnable (`STALE_RETURN_ERROR_CODES` in `CreateReturnWizard.jsx`, read from
+`error.code`). Any other error keeps the dialog open so the user can adjust the lines or cancel.
 
 Manual checks: (1) return 2 of 5 from a completed shipment and leave the return in draft → Crear
 Devolución again offers 3; return 3 → created. (2) With returns covering all 5 (a draft one
