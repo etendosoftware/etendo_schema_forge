@@ -662,7 +662,45 @@ launch several batches over the same rows. It now uses the generic action,
 whose dialog stays open and read-only (buttons disabled, no Esc/overlay close)
 until the batch settles, while the toolbar button is `disabled={bulkDeleting}`.
 A window that opts out with `hideBulkDelete` and rolls its own bulk delete must
-give it the same in-flight guard.
+give it the same in-flight guard — in practice, by building it on
+`useBatchDeleteDialog` (below) rather than by hand.
+
+**One implementation for every bulk delete (ETP-5758).** `useBatchDeleteDialog`
+(`tools/app-shell/src/hooks/useBatchDeleteDialog.jsx`) + `DeleteConfirmDialog`
+are the app's single "selection → confirm-with-count → batch delete → one outcome
+toast" implementation. `useBulkRowDelete` is now a thin wrapper over it that only
+supplies the per-row `DELETE /{entity}/{id}` (with the backend message and the
+HTTP status on failure) and the `bulk-delete` testid scope; its public shape
+(`requestBulkDelete`, `bulkDeleteDialog`, `deleting`) is unchanged. Every
+multi-record delete goes through the generic hook:
+
+| Surface | How |
+|---|---|
+| `ListView` / `ListModalWindow` "Delete selected" (every generated grid, Contacts, Cuentas financieras…) | `useBulkRowDelete` → `useBatchDeleteDialog`, testids `bulk-delete-*` |
+| Financial Account → Movimientos / Extractos importados | `useBatchDeleteDialog` directly, testids `batch-delete-*` |
+| `DetailView` lines bulk delete — primary lines (classic toolbar **and** inlineEditable toolbar) and every secondary table tab | ONE `useBatchDeleteDialog` per DetailView; each request carries its own `deleteOneFn` (`buildChildRowDeleteFn` in `lib/batchDelete.js`) and `onOutcome`, testids `lines-bulk-delete-*` |
+| `amortization` lines table, `assets` Amortización panel | `useBatchDeleteDialog` directly, testids `batch-delete-*` |
+
+`requestBatchDelete(items, { deleteOneFn, onOutcome })` — the optional second
+argument overrides the hook-level functions for that request only, which is how
+one DetailView dialog serves the primary lines and every secondary tab.
+
+**The in-progress state lives in `DeleteConfirmDialog` (ETP-5758).** After the
+user confirms, the dialog does **not** close: the destructive button turns into
+a 14px spinner + *"Eliminando…"* (`bulkDeleteInProgress`), the description
+becomes *"Eliminando {count} registro(s). Esto puede tardar unos segundos."*
+(`bulkDeleteInProgressMessage`), Cancel is disabled, the corner X is hidden,
+Escape / overlay clicks are swallowed, and the dialog content carries
+`aria-busy="true"`. It closes only once the whole batch has settled, and then the
+single outcome toast fires. A double click on confirm cannot start a second batch
+(ref-guarded in the hook, not just `disabled`), and a `requestBatchDelete` made while a
+batch is running is ignored. If the host's `onOutcome` throws, the hook logs it, shows the
+generic `networkError` toast and still closes the dialog and releases the lock. Before ETP-5758 the DetailView
+lines bulk delete (primary + secondary tabs) went through the promise-based
+`confirmDelete` prompt, which closed **before** the DELETEs ran — the same bug
+Contacts had; `confirmDelete` now only serves single-line deletes. The
+amortization lines table and the assets Amortización panel deleted with **no
+confirmation at all**; they now ask first.
 
 **`listViewOptions.hideListBar` gates only the IDLE list bar — never the
 selection bar (ETP-4658 regression fix).** `hideListBar` exists for windows whose
@@ -821,8 +859,10 @@ carries `status`. Two hooks do both — `useBatchDeleteDialog` (Financial Accoun
 Extractos importados tabs) has since ETP-5085, and the generic **`useBulkRowDelete`** since ETP-5111
 (it previously threw a bare `new Error(extractErrorMessage(...))` and omitted `errors`, so every
 `ListView` grid multi-select — Cuentas included — degraded a single-row refusal to the counter
-message and discarded the server's own 409). Callers that build the toast themselves (`DetailView`,
-`contacts`, `AmortizationLinesTable`) pass no `errors` at all and are unaffected either way. So
+message and discarded the server's own 409). Since ETP-5758 no caller builds the toast itself any
+more: `DetailView`'s lines bulk delete (`buildChildRowDeleteFn`), `AmortizationLinesTable` and
+`AssetsAmortizationPanel` all go through `useBatchDeleteDialog` and reject with `status`, so a
+one-row refusal there names the backend's reason too. So
 ETP-5111's narrowing has one blast radius (`useBatchDeleteDialog`, which could previously show a
 reason for a multi-row batch) while its `useBulkRowDelete` fix *adds* the single-row reason to every
 generic grid that never had it.
@@ -1244,6 +1284,15 @@ Lifted verbatim out of `useBatchDeleteDialog` — same markup, same i18n keys
 and a bulk delete of the same record are not two dialogs that merely resemble each other; they are
 this component, rendered twice. The hook now renders it (output byte-identical), and the Movimientos
 row kebab renders it directly with `count={1}`.
+
+Props: `open`, `count`, `deleting`, `onConfirm`, `onClose`, and `testIdScope` (ETP-5758, default
+`batch-delete`). The scope prefixes every testid — `Dialog__<scope>`, `DialogContent__<scope>`,
+`DialogTitle__<scope>`, `DialogDescription__<scope>`, `Button__<scope>-cancel`, `<scope>-confirm`,
+`<scope>-spinner` — so `useBulkRowDelete` keeps publishing the `bulk-delete-*` family ListView's
+specs use while the financial-account surfaces keep `batch-delete-*`. While `deleting` is true it
+renders the in-progress state described in §9c (spinner + *"Eliminando…"*, progress description,
+`aria-busy`, not dismissible) — a single-record caller such as the Movimientos kebab or Modelos
+fiscales gets it too, with `count={1}`.
 
 It is deliberately **presentational**: no selection state, no delete call, no outcome toast. The
 caller owns what confirming means. That is what lets the row kebab keep its own per-row success

@@ -17109,6 +17109,8 @@
     "deleteBlockedByReferences": "This record cannot be deleted because it has associated records.",
     "bulkDeleteConfirmTitle": "Delete records",
     "bulkDeleteConfirmMessage": "Are you sure you want to delete {count} record(s)? This action cannot be undone.",
+    "bulkDeleteInProgress": "Deleting…",
+    "bulkDeleteInProgressMessage": "Deleting {count} record(s). This may take a few seconds.",
     "bulkDeleteSelected": "Delete selected",
     "bulkDeleteAllSucceeded": "{count} record(s) deleted successfully.",
     "bulkDeletePartialFailure": "{succeeded} of {total} record(s) deleted. {failed} could not be deleted.",

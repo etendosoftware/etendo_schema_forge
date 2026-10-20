@@ -4,7 +4,6 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Button} from '@/components/ui/button.jsx';
 import {Trash2} from 'lucide-react';
-import {toast} from 'sonner';
 import PaymentLifecycleConfirmModal from '@/windows/custom/shared/PaymentLifecycleConfirmModal';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import BalanceFooterPanel from './BalanceFooterPanel.jsx';
@@ -14,7 +13,6 @@ import {formatCurrency} from '@/lib/formatCurrency.js';
 import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
 import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
-import {deleteSelectedChildRows, toastBatchDeleteOutcome} from '@/lib/batchDelete.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
 import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 import { resolveOnSelectMappings } from './DataTable.jsx';
@@ -957,8 +955,7 @@ export function getDeleteChildButtonLabel(deletingChildren, ui) {
 export function renderDetailBulkActionBar({
   visible, closing, linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows,
   detailProcesses, ui, executingDetailProcess, setDetailParamDialogProcess, executeDetailProcessImpl,
-  detailProcessDeps, tMenu, deletingChildren, setDeletingChildren, confirmDelete, apiBaseUrl, token,
-  hook, selectedLine, setSelectedLine, setSelectedChildRows,
+  detailProcessDeps, tMenu, deletingChildren, onBulkDelete, setSelectedChildRows,
 }) {
   return (
     <SelectionToolbar
@@ -993,25 +990,9 @@ export function renderDetailBulkActionBar({
             disabled={deletingChildren}
             title={getDeleteChildButtonLabel(deletingChildren, ui)}
             aria-label={getDeleteChildButtonLabel(deletingChildren, ui)}
-            onClick={async () => {
-              if (!(await confirmDelete())) return;
-              setDeletingChildren(true);
-              try {
-                const {succeeded, failed} = await deleteSelectedChildRows({
-                  selectedChildRows, api, detailEntity, apiBaseUrl, token,
-                });
-                for (const row of succeeded) {
-                  hook.handleDeleteChild(row.id);
-                  if (selectedLine?.id === row.id) setSelectedLine(null);
-                }
-                setSelectedChildRows([]);
-                toastBatchDeleteOutcome(ui, {succeeded, failed, total: selectedChildRows.length});
-              } catch (err) {
-                toast.error(err.message || ui('networkError'));
-              } finally {
-                setDeletingChildren(false);
-              }
-            }}
+            // ETP-5758 — opens DetailView's shared bulk-delete dialog (useBatchDeleteDialog), which
+            // stays open and locked until the batch settles and owns the outcome toast.
+            onClick={onBulkDelete}
             className="inline-flex items-center justify-center rounded-md p-2 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
             data-testid="detail-bulk-delete-button"
           >

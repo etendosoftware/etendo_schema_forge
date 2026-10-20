@@ -1499,3 +1499,10 @@ within its 30 s stale time.
 behavior itself is covered generically in `hooks/__tests__/useBulkRowDelete.vitest.jsx`. The
 E2E bulk-delete step in `e2e/tests/flows/contacts/contacts-integration.spec.js` now drives the
 generic `bulk-delete-selected` / `bulk-delete-confirm` testids.
+
+**In-progress state (ETP-5758, QA follow-up).** While the batch runs, the generic dialog's
+destructive button shows a spinner and *"Eliminando…"*, the description switches to
+*"Eliminando {count} registro(s). Esto puede tardar unos segundos."*, Cancel is disabled and the
+dialog carries `aria-busy`. This lives in the shared `DeleteConfirmDialog`, which every bulk delete
+in the app now goes through (`useBulkRowDelete` became a thin wrapper over `useBatchDeleteDialog`),
+so Contacts needs no window code for it — see `docs/ui-customization.md` §9c.

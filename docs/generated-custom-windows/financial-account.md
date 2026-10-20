@@ -3404,7 +3404,7 @@ path** — no bespoke bulk-delete code in this window:
 | Row checkboxes | `DataTable`'s own `selectable` column (its default, `true`) |
 | Selection state | `ListView` (`selectedRows`, `clearSelectionCounter`, `deselectTrigger`, `deselectRowIds`) — forwarded read-only to the slot as `selectedRows` |
 | Selection bar (floating `SelectionToolbar`, ETP-4972) + icon-only delete | `ListView`, portaled to `document.body`, viewport-fixed bottom-center — not part of the `AccountsHeaderTable` slot's own DOM |
-| Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` → `lib/batchDelete.js` |
+| Confirm dialog + batch DELETE + 3-outcome toast | `hooks/useBulkRowDelete.jsx` (thin wrapper since ETP-5758) → `hooks/useBatchDeleteDialog.jsx` → `DeleteConfirmDialog` + `lib/batchDelete.js` |
 
 **How the flow behaves.** Tick one or more row checkboxes → `ListView`'s floating
 `SelectionToolbar` pill appears bottom-center of the viewport (ETP-4972 — a true
