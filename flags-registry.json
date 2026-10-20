@@ -712,6 +712,51 @@
       }
     },
     {
+      "id": "environment-access-enforcement-kill-switch",
+      "description": "Operational kill switch for commercial environment-access enforcement (ETP-5047): the HTTP 402 that NEO (every credential scheme), the NEO_DATA surfaces (favorites, fiscal test mode, report selectors, OAuth2 API keys), MCP, the /sws/go tenant-session endpoints and the legacy GET /sws/go/login?userId= answer once a demo trial has expired or a subscription's payment grace has elapsed. Enforcement is ON by default and stays on when the flag is unset or the control plane is unreachable; only an explicit true switches the refusal off, and the would-be denial is then logged at INFO. The enforcement itself (EnvironmentAccessGuard, the 402 body, the entry-point checks) is unconditional and is not owned by this entry.",
+      "owner": "mtaal",
+      "jira": "ETP-5047",
+      "created": "2026-09-25",
+      "flag": {
+        "key": "environment-access-enforcement-off",
+        "defaultValue": false,
+        "ttl": "2027-03-31",
+        "ttlNote": "PLACEHOLDER, not a commitment: an incident switch for a check that went live without one. Revisit once enforcement has run a full billing cycle in production without an incident; at that point decide with the team between retiring it (the guard stays, the switch goes) and keeping it as a standing operational toggle, which would then need its own justification here.",
+        "symbols": [
+          "environment-access-enforcement-off",
+          "FLAG_ENVIRONMENT_ACCESS_ENFORCEMENT_OFF",
+          "ETGO_FLAG_ENVIRONMENT_ACCESS_ENFORCEMENT_OFF",
+          "etendo.go.flags.environment-access-enforcement-off",
+          "EnvironmentAccessEnforcementFlag",
+          "isEnforcementSwitchedOff",
+          "enforcementSwitchedOff"
+        ],
+        "$symbolsComment": "Backend-only flag with an inverted polarity on purpose: GoFeatureFlags resolves every failure to false, and false here means enforcing. No key exists in flag-keys.js and none must be added: the SPA follows the 402. EnvironmentAccessGuard is the only caller of EnvironmentAccessEnforcementFlag; it holds the switch as the Predicate field enforcementSwitchedOff, which is how a test substitutes it. Per-tenant switching is a ConfigCat rule on the clientId attribute and leaves no grep trail here."
+      },
+      "paths": {
+        "frontend": [],
+        "backend": [
+          "src/com/etendoerp/go/payment/EnvironmentAccessEnforcementFlag.java"
+        ]
+      },
+      "$pathsComment": "Owned code only: the flag gate. Shared toggle point, NOT owned: EnvironmentAccessGuard.java (the enforcementSwitchedOff predicate and its kill-switch INFO log line), which stays when the flag retires because it is the enforcement itself. GoFeatureFlags.java carries the constant and is framework code.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/EnvironmentAccessEnforcementFlagTest.java",
+            "note": "Unset flag, a non-boolean value and a provider failure all read as NOT switched off; only a value resolving to true (locally true, Y, yes or 1, case-insensitive) switches off; the clientId attribute reaches the evaluation context (asserted on the FeatureFlagContext and end to end through a per-tenant stub provider)."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/EnvironmentAccessGuardTest.java",
+            "note": "Decision x switch matrix: ALLOWED and null never consult the switch; a denial with the switch off is refused, with it on is allowed and logged at INFO; error body shape; checkAsSystem hands the caller its context back."
+          }
+        ],
+        "e2e": []
+      }
+    },
+    {
       "id": "unified-calendar-poc",
       "description": "PROOF OF CONCEPT. Unified Calendar page: one month view overlaying several event sources (purchase invoice due dates, holidays, employee vacations) toggled from a side panel driven by a pluggable source registry. All events are static mock data; the page makes no backend request. Exists to validate the UX before any real source is wired.",
       "owner": "valenvivaldi",

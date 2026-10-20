@@ -270,12 +270,14 @@ export const api = {
     "es_ES": {
       "sourceReceiptDocNo": "Albarán origen",
       "MovementQty": "Cant. a devolver",
-      "QuantityOrder": "Cant. pedida"
+      "QuantityOrder": "Cant. pedida",
+      "C_UOM_ID": "Unidad"
     },
     "en_US": {
       "sourceReceiptDocNo": "Source Receipt",
       "MovementQty": "Return Qty",
-      "QuantityOrder": "Ordered Qty"
+      "QuantityOrder": "Ordered Qty",
+      "C_UOM_ID": "Unit"
     }
   }
 };

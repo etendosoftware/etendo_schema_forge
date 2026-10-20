@@ -1,3 +1,4 @@
+// @covers cli/src/data-fixes/parse-fix.js
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
 import {
@@ -178,6 +179,47 @@ describe('parseFix', () => {
   it('does not require @report for a sql fix (optional section)', () => {
     const text = ['-- @check', 'SELECT 1;', '-- @apply', 'UPDATE foo SET x = 1;'].join('\n');
     assert.doesNotThrow(() => parseFix(text, 'fix-optional-report'));
+  });
+});
+
+describe('parseFix — @optIn header', () => {
+  const body = ['-- @check', 'SELECT 1;', '-- @apply', 'UPDATE foo SET x = 1;'];
+
+  it('defaults optIn to false when the header is absent (an ordinary chain fix)', () => {
+    assert.equal(parseFix(body.join('\n'), 'fix-plain').optIn, false);
+  });
+
+  it('parses "-- @optIn: true" as an opt-in fix', () => {
+    const fix = parseFix(['-- @id: R9-switch', '-- @optIn: true', ...body].join('\n'), '20261001T120000Z__R9-switch');
+    assert.equal(fix.optIn, true);
+    assert.equal(fix.id, 'R9-switch');
+  });
+
+  it('accepts the value and the key in any case', () => {
+    assert.equal(parseFix(['-- @OPTIN: TRUE', ...body].join('\n'), '20261001T120000Z__fix-upper').optIn, true);
+    assert.equal(parseFix(['-- @optIn: False', ...body].join('\n'), 'fix-false').optIn, false);
+  });
+
+  it('rejects any value other than true/false, so a typo never silently re-enters the chain', () => {
+    assert.throws(
+      () => parseFix(['-- @optIn: yes', ...body].join('\n'), 'fix-typo'),
+      /fix-typo: invalid @optIn "yes" \(expected true\|false\)/,
+    );
+  });
+
+  it('rejects an opt-in fix whose file name has no parseable timestamp (it could never be gated)', () => {
+    assert.throws(
+      () => parseFix(['-- @optIn: true', ...body].join('\n'), 'fix-no-stamp'),
+      /fix-no-stamp: an @optIn fix needs a <YYYYMMDDThhmmssZ>__ timestamp prefix/,
+    );
+    // An ordinary chain fix keeps accepting such an id, exactly as before.
+    assert.equal(parseFix(body.join('\n'), 'fix-no-stamp').optIn, false);
+  });
+
+  it('only reads @optIn from the header region, never from inside a section body', () => {
+    const fix = parseFix(['-- @check', '-- @optIn: true', 'SELECT 1;', '-- @apply', 'UPDATE foo SET x = 1;'].join('\n'), 'fix-body');
+    assert.equal(fix.optIn, false);
+    assert.match(fix.check, /@optIn: true/);
   });
 });
 

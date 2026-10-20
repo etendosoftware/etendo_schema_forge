@@ -24,6 +24,11 @@ import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 export const UPGRADE_ERROR_CODES = {
   checkoutUnavailable: 'upgradeCheckoutUnavailable',
   checkoutCreationFailed: 'upgradeCheckoutCreationFailed',
+  plansUnavailable: 'upgradePlansUnavailable',
+  // The server answered PLAN_NOT_AVAILABLE: the key this page sent is not for sale any more. The
+  // usual innocent cause is a plan list loaded before it changed (e.g. the legacy price fallback
+  // retired by the first priced plan), so the copy tells the user to reload.
+  planNotAvailable: 'upgradePlanNotAvailable',
   purchaseAlreadyExists: 'upgradePurchaseAlreadyExists',
   sessionExpired: 'upgradeSessionExpired',
   // ETP-5443 REVIEW N3: a failed READ of the subscription, or a failed portal-session
@@ -47,11 +52,43 @@ function isClientNameInUse(response, data) {
 }
 
 /**
+ * Reads the server's plan catalog — the list of things that are actually purchasable.
+ *
+ * This exists because checkout sells plans by key: without a catalog the browser has no way to
+ * learn one, so there is no client-side list of keys to fall back on. Guessing a key here would be
+ * a purchase nobody reviewed, so a failed lookup raises instead, and the page disables checkout.
+ * While the server's legacy price fallback is active (no priced plan exists yet) the catalog is
+ * exactly the grandfathered `legacy-productive` plan, quoted from the configured Stripe price, and
+ * the page auto-selects it like any single plan.
+ *
+ * The server never sends a provider price id, and this client never sends one either.
+ *
+ * @returns {Promise<Array<{planKey: string, name: string, description: string,
+ *   displayPrice: string, currency: string, billingInterval: string}>>} possibly empty — an
+ *   empty catalog is an answer, not a failure.
+ */
+export async function fetchPlans(baseUrl) {
+  const response = await apiFetch('/sws/go/plans', { baseUrl, on401: 'ignore' });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.plansUnavailable, data?.error?.message || data?.message, response.status);
+  }
+  return Array.isArray(data?.plans) ? data.plans : [];
+}
+
+/**
  * Creates a provider-hosted checkout session for a known paid action.
  *
  * The browser sends product intent only. Pricing, currency, Stripe Price IDs,
  * and payment confirmation are server-owned. The returned URL is safe to use
  * as a redirect target because it is issued by the authenticated backend.
+ *
+ * `planKey` names a row in the server's plan catalog — a KEY, never a price.
+ * The server resolves it to a Stripe Price ID; there is no request field for a
+ * price and no code path that reads one, so a price added to this body would be
+ * ignored rather than honoured. A missing key asks for the server's legacy price
+ * fallback and is refused `PLAN_NOT_AVAILABLE` once a priced plan exists (ETP-5046).
  */
 export async function createCheckoutSession(baseUrl, input = {}) {
   const response = await apiFetch('/sws/go/checkout/sessions', {
@@ -61,6 +98,7 @@ export async function createCheckoutSession(baseUrl, input = {}) {
     body: JSON.stringify({
       action: input.action || 'productive-tenant',
       upgradeAction: input.upgradeAction || 'create-productive',
+      ...(input.planKey ? { planKey: input.planKey } : {}),
       ...(input.clientName ? { clientName: input.clientName } : {}),
       ...(input.language ? { language: input.language } : {}),
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),
@@ -73,8 +111,8 @@ export async function createCheckoutSession(baseUrl, input = {}) {
     if (isClientNameInUse(response, data)) {
       throw buildError(UPGRADE_ERROR_CODES.tenantNameInUse, data.error.message, response.status);
     }
-    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
+    throw buildError(checkoutFailureCode(response, data), data?.error?.message || data?.message,
+      response.status);
   }
   if (!data?.checkoutUrl || !data?.requestId) {
     throw buildError(UPGRADE_ERROR_CODES.checkoutUnavailable);
@@ -99,6 +137,9 @@ export async function createBillingPurchase(baseUrl, input = {}) {
     body: JSON.stringify({
       action: input.action || 'productive-tenant',
       upgradeAction: input.upgradeAction || 'create-productive',
+      // A catalog KEY, never a price: pricing is server-owned and the browser has no field that
+      // could influence it. Without one the server only sells under its legacy price fallback.
+      ...(input.planKey ? { planKey: input.planKey } : {}),
       ...(input.demoClientId ? { demoClientId: input.demoClientId } : {}),
       ...(input.dataTransfer && Object.keys(input.dataTransfer).length > 0
         ? { dataTransfer: input.dataTransfer }
@@ -130,8 +171,8 @@ function billingPurchaseError(response, data) {
   if (isClientNameInUse(response, data)) {
     return buildError(UPGRADE_ERROR_CODES.tenantNameInUse, data.error.message, response.status);
   }
-  return buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-    : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
+  return buildError(checkoutFailureCode(response, data), data?.error?.message || data?.message,
+    response.status);
 }
 
 export async function getCheckoutStatus(baseUrl, requestId) {
@@ -264,6 +305,13 @@ function consumeOnboardingLines(lines, onMessage, result) {
   return result;
 }
 
+
+/** Maps a refused checkout write onto the code the page translates. */
+function checkoutFailureCode(response, data) {
+  if (response.status === 401) return UPGRADE_ERROR_CODES.sessionExpired;
+  if (data?.error?.code === 'PLAN_NOT_AVAILABLE') return UPGRADE_ERROR_CODES.planNotAvailable;
+  return UPGRADE_ERROR_CODES.checkoutCreationFailed;
+}
 
 function buildError(code, message, status) {
   const error = new Error(message || code);
