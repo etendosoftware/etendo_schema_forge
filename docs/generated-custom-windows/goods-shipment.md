@@ -476,10 +476,11 @@ return, edit a line's quantity above what remains → the save is refused with t
 **Locale keys retired with step 2.** `followingDocumentsWillBeCreated`, `stockMovementToWarehouse`,
 `purchaseReturnReceipt` and `returnStockToVendor` had no reader left anywhere in the repo
 (`artifacts/`, `e2e/`, `tools/`) and were removed from `en_US.json`, `es_ES.json` and
-`es_AR.json`. `stepOf`, `back`, `next`, `amount`, `total`, `delivered` and `returnReceipt` stay:
-other components still read them, and `stepOf` is still referenced by the stale mocked spec
-`e2e/tests/flows/sales/goods-shipment-return-wizard.mocked.spec.js`, which still drives the
-removed step 2 and has to be rewritten for the one-step dialog.
+`es_AR.json`, and so was `stepOf` once the mocked spec
+`e2e/tests/flows/sales/goods-shipment-return-wizard.mocked.spec.js` was rewritten for the
+one-step dialog (it was its last reader; the core keeps its own copy in its generated locale).
+`back`, `next`, `amount`, `total`, `delivered` and `returnReceipt` stay: other components still
+read them.
 
 **After the return is created — result modal, no auto-navigation.** Sales now behaves like
 Purchases (`GoodsReceiptActions.jsx`). `GoodsShipmentActions.jsx` used to navigate straight to
